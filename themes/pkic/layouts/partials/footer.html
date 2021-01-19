@@ -1,7 +1,7 @@
     <footer class="bg-dark">
         <div class="container">
             {{ with .File }}
-                <a href="{{$.Site.Params.siteSource}}edit/master/content/{{.File.Path}}" class="btn btn-sm btn-outline-light align-top float-end m-3">Improve this page</a>
+                <a href="{{$.Site.Params.siteSource}}/content/{{ .File.Path }}" class="btn btn-sm btn-outline-light align-top float-end m-3">Improve this page</a>
             {{ end }}
             <div class="text-muted py-5">
                 {{ partial "social.html" .Site.Params.social }}
