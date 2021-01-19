@@ -9,4 +9,9 @@ heroTitle = "Consortium Members"
 heroDescription = "Public Key Infrastructure (PKI) Consortium members"
 
 [menu.main]
+
+# The membership list is automatically created from the membership data,
+# please check the folder `data/members`.
+#
+# https://github.com/pkic/pkic.github.io/tree/main/data/members
 +++
