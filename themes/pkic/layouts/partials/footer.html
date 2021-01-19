@@ -1,0 +1,28 @@
+    <footer class="bg-dark">
+        <div class="container">
+            {{ with .File }}
+                <a href="{{$.Site.Params.siteSource}}edit/master/content/{{.File.Path}}" class="btn btn-sm btn-outline-light align-top float-end m-3">Improve this page</a>
+            {{ end }}
+            <div class="text-muted py-5">
+                {{ partial "social.html" .Site.Params.social }}
+            </div>
+
+            <div class="text-muted py-2">
+                <p class="float-end">
+                    <a href="#" title="Back to top" class="m-3">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#fff" class="bi bi-chevron-up" viewBox="0 0 16 16">
+                            <path fill-rule="evenodd" d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6z"/>
+                        </svg>
+                    </a>
+                </p>
+                <p>© {{ now.Format "2006" }} {{ .Site.Copyright }}</p>
+            </div>
+
+        </div>
+    </footer>
+
+    {{ if .Site.GoogleAnalytics }}
+    {{ template "_internal/google_analytics_async.html" . }}
+    {{ end }}
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.0.0-beta1/dist/js/bootstrap.bundle.min.js" integrity="sha384-ygbV9kiqUc6oa4msXn9868pTtWMgiQaeYH7/t7LECLbyPA2x65Kgf80OJFdroafW" crossorigin="anonymous"></script>

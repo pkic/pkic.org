@@ -1,0 +1,18 @@
+---
+title: CA Day in Berlin
+authors: [Dean Coclin]
+date: 2014-01-24T18:00:26+00:00
+dsq_thread_id:
+  - 2154752063
+
+
+---
+&ldquo;CA Day&rdquo; (also known as CA Conformity Assessment) was hosted by the German company TuVIT in Berlin on January 16, 2014. In attendance were approximately 100 people from mostly European CAs. Under the European regulatory framework, CAs are included in a group referred to as &ldquo;Trust Service Providers&rdquo; or &ldquo;TSPs.&rdquo; CASC members in attendance at CA Day were Symantec, Digicert and Comodo. The dominant theme for this CA Day was the draft Regulation on Electronic identification and trust services for electronic transactions in the internal market (eIDAS) and upcoming changes in EU regulations for Qualified Certificates, which was briefed by Gerard Galler from the European Commission and discussed in greater detail by several European TSPs. eIDAS includes a proposal for EU Qualified Website certificates (i.e. SSL) using the Extended Validation certificate as a regulatory baseline. Under proposed Article 37, qualified website certificates could only be issued by EU Qualified CAs which have been audited according to ETSI (European Telecommunications Standards Institute) standards by an approved auditor. If promulgated by the European Parliament, the Commission would be empowered to give EU Qualified EV SSL certificates the &ldquo;backing&rdquo; of EU law. 
+
+The two motivations behind the eIDAS regulation are (1) the outdated nature of the existing EU directive on electronic signatures (Directive 1999/93/EC, which will be repealed) and (2) the Diginotar incident from 2011, which highlighted for the Dutch Government how PKI weaknesses can disrupt commercial and government regulatory activity. The Dutch Government took over Diginotar and Diginotar declared bankruptcy. The new regulation is intended to create a better pan-European regulatory environment for TSPs. 
+
+What is interesting about the proposed Article 37 for web site certificates is that commercial entities will not be **required** to use Qualified SSL certificates, however The EU Commission will **recommend** their use for government applications. Hence, the market for such certificates is unclear. Also, while the EU Parliament and Commission support qualified web site certificates as part of this regulation, there are other parties against it, so passage of Article 37 is not guaranteed. Opponents of this language question whether such certificates will cause more confusion in an online environment that is global in nature, given that industry standards already exist and are commonly used. It will be interesting to see where this goes.
+
+Another presentation by Microsoft on updates to its root program indicated that they will begin monitoring certificate &ldquo;hygiene&rdquo; via telemetry data to search for non-compliant (BR) certificates and to create reputation data for CAs. Any non-compliant certificates found may be brought to the attention of the CA. Repeated violations may result in more serious action against the CA. Microsoft will also remove support for RSA 1024-bit roots in 2014 from the Microsoft root program. It was also noted that if RSA 1024 is compromised before then, Microsoft will take immediate action to shut down those roots. Microsoft also discussed their SHA-2 implementation plans which had been previously announced. They seem to be serious about eliminating support for old algorithms and hashing functions.
+
+All of the presentations from the conference can be found here: [https://www.tuvit.de/de/unternehmen/downloads-1898.htm](https://www.tuvit.de/de/unternehmen/downloads-1898.htm)

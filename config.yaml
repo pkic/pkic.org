@@ -1,0 +1,84 @@
+baseURL: https://pkic.org/
+languageCode: en-us
+title: Public Key Infrastructure (PKI) Consortium
+theme: pkic
+
+copyright: PKI Consortium, Inc. All Rights Reserved
+googleAnalytics:
+
+permalinks:
+  blog: /:year/:month/:day/:title/
+
+#canonifyurls: true
+buildDrafts: false
+enableRobotsTXT: true
+disableHugoGeneratorInject: true
+enableInlineShortcodes: true
+rssLimit: 30
+
+taxonomies:
+  tag: tags
+  series: series
+  author: authors
+
+# disableKinds:
+#   - RSS
+#   - taxonomyTerm
+
+# menu:
+#   main:
+#      -
+#        name: Example page
+#        identifier: example
+#        weight: -100
+#        url: https://www.example.com
+
+params:
+  name: Public Key Infrastructure (PKI) Consortium
+  shortName: PKI Consortium
+  company: PKI Consortium, Inc.
+  email: feedback@pkic.org
+  website: https//pkic.org
+  about: The CA Security Council is comprised of leading Certificate Authorities that are committed to improve, create and collaborate on generic, industry or use-case specific policies, procedures, best practices, standards and tools that advance trust in assets and communication for everyone and everything using Public Key Infrastructure (PKI) as well as the security of the internet in general. By engaging with users, regulators, supervisory bodies and other interested or relying parties the council can address actual issues.
+  vision: Trusted digital assets and communication for everyone and everything
+  siteSource: https://github.com/pkic/pkic.org/tree/master/
+
+  social:
+    twitter: https://twitter.com/PKIConsortium
+    facebook: https://www.facebook.com/#todo
+    linkedin: https://www.linkedin.com/groups/4852478/
+    github: https://github.com/pkic
+
+# https://gohugo.io/content-management/related/#default-configuration
+related:
+  includeNewer: true
+  indices:
+  - name: keywords
+    weight: 100
+  - name: date
+    weight: 10
+  threshold: 10
+  toLower: false
+
+privacy:
+  disqus:
+    disable: false
+  googleAnalytics:
+    anonymizeIP: true
+    disable: false
+    respectDoNotTrack: true
+    useSessionStorage: false
+  instagram:
+    disable: false
+    simple: false
+  twitter:
+    disable: false
+    enableDNT: true
+    simple: false
+  vimeo:
+    disable: false
+    enableDNT: true
+    simple: false
+  youtube:
+    disable: false
+    privacyEnhanced: true

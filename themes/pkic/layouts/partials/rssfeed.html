@@ -1,0 +1,27 @@
+{{ with . }}
+  {{ $url := printf "https://api.rss2json.com/v1/api.json?rss_url=%s" .}}
+  {{ $rssJ := getJSON  $url }}
+
+
+  {{ range first 3 $rssJ.items }}
+      {{ $post := . }}
+          <!-- {{ $authors := slice }}
+          {{ $authors = $authors | append $post.author }} -->
+          <div class="card mb-3">
+              <div class="row g-0">
+                {{ with $post.image }}
+                <div class="col-md-3">
+                  <img src="{{ $post.image.url }}" title="{{ $post.image.title }}">
+                </div>
+                {{ end }}
+                <div class="col">
+                  <div class="card-body">
+                    <h5 class="card-title"><a href="{{ $post.link }}" target="_blank" alt="{{ $post.title }}">{{ $post.title }}</a></h5>
+                    <p class="card-text">{{ $post.description | safeHTML | truncate 120 }}</p>
+                    <p class="card-text"><small class="text-muted">{{ $post.pubDate }} by {{ $post.author }}</small></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+  {{ end }}
+{{ end }}

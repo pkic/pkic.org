@@ -1,0 +1,34 @@
+# This file contains a list of authors who:
+# - not listed on the membership pages
+# - are not a member
+# - have been a member
+
+# Authors might no longer represent an organization, in that case posts during
+# a period can be attributed by including a from/till data range.
+
+# Globalsign, former member
+- name: GlobalSign
+  description:
+  website: https://www.globalsign.com
+  representatives:
+    - name: Patrick Nohe
+      role: Senior Product Marketing Manager
+    - name: Doug Beattie
+      role: VP Product Management
+
+# DigiCert, former member
+- name: DigiCert
+  description:
+  website: https://www.digicert.com
+  representatives:
+   - name: Corey Bonnell
+     role: Principal Industry Liaison
+
+- name: Oracle
+  description:
+  website: https://www.oracle.com
+  representatives:
+   - name: Erik Costlow
+     role: Principal Product Manager
+     from: 2013-07-01
+     till: 2016-11-30

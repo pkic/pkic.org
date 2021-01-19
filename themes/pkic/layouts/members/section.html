@@ -1,0 +1,42 @@
+
+{{ define "main" }}
+<section class="py-5 text-center container">
+    <div class="row py-lg-5">
+      <div class="col-lg-7 col-md-8 mx-auto">
+        <h1 class="fw-light">{{ $.Param "heroTitle" }}</h1>
+        <p class="lead text-muted">{{ $.Param "heroDescription" }}</p>
+        <p>
+          <a href="/join/" class="btn btn-primary my-2" title="Join the {{.Site.Params.name}}">Click here to join the {{.Site.Params.name}}</a>
+        </p>
+      </div>
+    </div>
+  </section>
+
+<div class="py-5">
+    <div id="content" class="container">
+        {{ .Content }}
+
+        <!-- we might want to shuffle the order, but this can't be done with a map -->
+        {{ range $.Site.Data.members }}
+        <a href="/members/{{.id}}/" title="{{.name}} is a member of the PKI Consortium" class="linkArea">
+          <div class="row featurette">
+            <div class="col-md-9 order-md-2">
+              <h2 class="featurette-heading">{{.name}}</h2>
+              <h3 class="text-muted">{{.slogan}}</h3>
+              <p class="lead">{{.description}}</p>
+              <div class="text-end">{{ partial "social.html" .social }}</div>
+            </div>
+            <div class="col-md-3 order-md-1">
+              {{ $title := (printf "%s is a member of the %s" .name $.Site.Params.name ) }}
+              {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
+              {{ with $img}}
+              <img height="100" style="height:auto; max-width: 80%;" class="m-4" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
+              {{ end }}
+            </div>
+          </div>
+        </a>
+       <hr class="featurette-divider">
+        {{ end }}
+    </div>
+</div>
+{{ end }}

@@ -1,0 +1,82 @@
+{{ define "main" }}
+<div class="py-3 bg-light"></div>
+  <section class="text-center container">
+      <div class="row pt-5">
+        <div class="col-lg-7 col-md-8 mx-auto">
+          <h1 class="fw-light">{{.Title}}</h1>
+          <p class="lead text-muted">
+            <h4> {{ .PublishDate.Format "Monday January 2, 2006" }}</h4>
+            {{if not (.Lastmod.Equal .PublishDate) }}<small>Last updated on {{ .Lastmod.Format "Monday January 2, 2006" }}</small>{{end}}
+          </p>
+        </div>
+      </div>
+    </section>
+</div>
+
+<div class="py-5">
+    <div class="container">
+        <div class="row">
+          <div class="col-md-9 order-md-1">
+            <article id="content">
+            {{ .Content }}
+            </article>
+          </div>
+
+          <div class="col-md-3 order-md-2 px-md-5">
+            <p>Reading time: <strong>{{.ReadingTime}} minutes</strong></p>
+            
+            <h4>Authors</h4>
+            <p>{{ partial "authors.html" . }}</p>
+
+            
+
+            {{ $related := .Site.RegularPages.Related . | first 5 }}
+            {{ with $related }}
+            <h4>Related Articles</h4>
+            <ul>
+              {{ range . }}
+                <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
+              {{ end }}
+            </ul>
+            {{ end }}
+        
+            {{ with .Params.tags }}
+            <h4>Related Topics</h4>
+            <ul></ul>
+              {{ partial "tags.html" . }}
+            </ul>
+            {{ end }}
+          </div>
+          
+      </div>
+    </div>
+</div>
+
+
+<div class="py-5 bg-light">
+  <div class="container">
+
+    <div class="text-center">
+      {{ with .PrevInSection }}
+        <a class="btn btn-primary my-2" title="Previous article" href="{{.Permalink}}">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+          </svg>
+          {{.Title}}
+        </a>
+      {{ end }}
+      {{ with .NextInSection }}
+        <a class="btn btn-primary my-2" title="Next article" href="{{.Permalink}}">
+          {{.Title}}
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
+            <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+          </svg>
+        </a>
+      {{ end }}
+    </div>
+
+  </div>
+</div>
+
+
+{{ end }}

@@ -1,0 +1,54 @@
+---
+title: The Latest on Certification Authority Authorization
+authors: [Jeremy Rowley]
+date: 2017-03-21T20:40:22+00:00
+dsq_thread_id:
+  - 5653305703
+
+
+---
+Things are certainly heating up at the CA/Browser with exciting proposals surrounding inclusion of the Wi-Fi Alliance (WFA) as a subjectAltName otherName, new validation methods, and debates over how the CAB Forum will continue operating. One of these newly passed ballots requires all CAs to check and process a domain name’s DNS Certification Authority Authorization (CAA) resource record prior to issuing a digital certificate.
+
+## Background
+
+RFC 6844 created CAA records as a method for domain owners to specify a policy on which certificate authorities are authorized to issue certificates for the associated domain. The basic concept is that immediately prior to issuance, the certificate authority (CA) will check the CAA record and determine whether policy permits creation of the certificate. Issuance is permitted if either a CAA record does not exist for the domain or the CAA record lists a string specified by the CA as authorizing the CA to issue the certificate. Using CAA records, the domain owner is able to control policy at a more granular level, including specifying which CA can issue wildcard certificates and how to report issues. Note, that CAA record checking is an additional requirement that occurs after the CA completes the normal domain verification process required by the CA/Browser Forum’s baseline requirements under Section 3.2.2.
+
+The push for CAA record checking was driven by the increasing number of entities embedding roots in the browser, with over 60 entities currently operating embedded roots. Most of these CAs permit customers to issue a publicly trusted certificate regardless of the server’s location or internal certificate policies. Prior to CAA an attacker can request each CA to issue a certificate. If even one of those validation attempts passes (regardless of whether this is a mistake on the server operators side or a lapse in the CA’s validation practices), the attacker can get the certificate issued. On the contrary, with all CAs respecting CAA records, the attack vector is theoretically limited to those CAs listed in the relevant CAA record.
+
+After CAA record checking is adopted as a requirement, and assuming the CA logs their certificates to CT log, the CA issuance process looks like the following:
+
+{{< figure src="/uploads/2017/03/caa-graphic.jpg" >}} 
+
+Although CAA record checking appears fairly straight-forward, there are complexities in the process. For example, a CAA record is permitted at any label within a fully qualified domain name (FQDN), requiring the CA to check each label within the FQDN until a CAA record is found. The first record encountered when following the labels controls policy, meaning CAA policy can be applied on granular level by the DNS operator. For some devices the FQDN often looks similar to the following: [randomID].[customerID].secure.IoT.domain.com. In this case a CA would start by checking [randomID]. This usually lacks a DNS listing, moving the CAA check to customerID, followed by secure, then IoT, then domain. If no records are found, the CA issues the certificate. If a CAA record is found, the first record encountered will dictate authorization. Another complexity is the CA must check each record twice if a response from the DNS is not received. For domain names with large labels of non-resolvable labels, this results in wasted cycles.
+
+Although CAA record checking provides greater control over certificate issuance to domain owners, there are several benefits and concerns worth considering when assessing this proposal.
+
+## Benefits
+
+The most obvious benefit of the ballot is that CAA record checking will become a uniformly deployed method of communicating policy to CAs. Effective September 2017, all CAs will be required to check and abide by CAA records. Prior to this requirement, CAs implemented CAA checking on an opt-in basis, which meant that CAA lacked any real protection for server operators. With all CAs checking CAA records, the server operator can limit their universe of known certificates to a handful (or one) CA.
+
+A positive outcome of CAA record checking is that enterprises can utilize CAA to force their organization into a uniform issuance policy that is enforced by the CAs. For example, if Company ABC acquires Company XYZ, Company ABC can add a CAA record to Company XZY’s DNS to require the acquired company to move to their certificate policies. This is a significant benefit for larger organizations where business divisions and new acquisitions may not be aware of the parent’s organizational PKI structure or relationships. Although a business division could get around the policy by intentionally creating a CAA record at a higher label, CAA will help enterprises prevent policy violations caused through ignorance.
+
+The other positive is the speed at which CAA record checking occurs. CAA record checking takes about 7ms per record, which isn’t an incredible tax on most systems.  Customers with the most complicated FQDNs will likely not see longer issuance times, assuming their CAA records are correctly configured.
+
+## Concerns
+
+Mandatory CAA record checking presents valid concerns and some potentially undesirable outcomes.  The biggest of these is the lack of a clearly defined policy on how CAA checking works with CNAME records.  Section 4 of the RFC specifies that a record check should trace through aliases but does not specify how this tracing occurs. For example, if a record is created for mail.example.com CNAME secure.example.net, where mail.example.com has a CAA record of certificateAuthorityA and example.net has a CAA record of certificateAuthorityB, the specification is unclear on which CAA record should control.
+
+A second issue is that software supporting CAA is scarce at both the DNS and CA level. At the end of 2016, most off-the-shelf CA software did not natively support CAA checking prior to issuance. Many CAs are at the mercy of their software provider for making the necessary changes. September 2017 is a short implementation deadline considering most CA software is designed to support private PKI implementations, a market where CAA is not required. CAA record-checking deployment may be problematic for small CAs lacking the resources to build their own automated tools.
+
+Very few DNS records currently include a CAA record. Recently, DNS providers have expanded support, and CAA record creation is possible in the latest version of BIND, NSD, Knot, and PowerDNS.  Despite CAA expansion, we still haven’t encountered a substantial number of records. Regardless of whether the lack of records is caused by a lack of software support or a lack of perceived value, CAA records aren’t being used by enterprises. CAs will be spending a lot of time and energy to set up and start checking records that don’t exist. There’s also an issue of what happens when DNS fails to properly resolve. Although this is rare, a CA could abort the check rather than retry, further increasing delays in certificate issuance.
+
+Another challenge is the difficulty in determining whether a CA is properly checking CAA records.  Unlike CT, which publicly discloses issued certificates, CAA is a point in time check by the CA.  A public record of the CA’s check is not available. Provided the CA doesn’t issue for high profile domains, a bad-acting (or ignorant) CA could ignore CAA records and not get caught.
+
+A final concern is that the DNS operator may not be the individual ordering certificates and, with large multi-national enterprise, may not have clear communication on which CAs are used internally. This could unintentionally limit contract obligations already in place, halt ongoing projects, and prevent an organization from getting the certificates needed to conduct e-commerce &#8211; negatively affecting the bottom line. CAA records ignore all previous relationships and communications between the organization ordering the certificate and CA, meaning a single DNS administrator could undermine months of negotiation. Even worse, a malicious or disgruntled DNS administrator could stall a company by setting a large DNS record TTL and entering garbage in the CAA record, effectively eliminating the company’s ability to obtain certificates from any CA until the TTL expires.
+
+## Where do We Stand
+
+Initially, when the CAA ballot was introduced, we were concerned about processing times and CPU usage. However, as stated above, our tests showed that the average CAA record check completed within 7 ms. Although many domains may have five or more labels, that still only adds a latency of 35 ms. Mozilla’s proposal further reduced processing power concerns by exempting technically constrained intermediates from performing the check.
+
+Our second  question involved the new authority granted DNS operators. Although permitting DNS operators to set policy is part of the CAA design, CAA records trumping legal agreements, previous arrangements, and potentially blocking all certificates seemed like a potentially problematic practice. However, considering the low rate of CAA records, the requirement that the first encountered CAA record controls, and the difficulty to add CAA records, we decided the malicious attack was sufficiently mitigated.
+
+For some, the CAA record checking might be slightly redundant to the authorization step involved in getting an Organization Validated (OV) certificate. During the OV process, a CA’s validation staff check that the certificate is authorized for issuance.  With CAA, this approval is added directly to the DNS.  Though this information important identity information is provided as it is in an OV certificate, though not all browsers recognize OV certificates directly.  Their support for CAA is an important step in recognizing the need to identify the certificate holder and the certificate holder’s authority to obtain the certificate.  CAA checks are a nice technical way to add this authority check through the DNS.  We look forward to other creative ways to introduce more robust OV checks like CAA on other subject information fields. CAA is definitely shows that the identity of the certificate holder and certificate holder’s authorization are just as important as encryption.
+
+We also invite domain operators to provide their input as to how this works in actual deployment and how CAA can be improved. Please send your feedback to <questions@casecurity.org>, and we will happily pass it along to the CAB Forum in the interest of continual improvement.

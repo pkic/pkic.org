@@ -1,0 +1,21 @@
+{{ define "main" }}
+<div class="py-2 bg-light">
+</div>
+
+{{ with $.Param "heroTitle" }}
+<section class="py-4 text-center container">
+    <div class="row py-lg-4">
+        <div class="col-lg-7 col-md-8 mx-auto">
+        <h1 class="fw-light">{{ $.Param "heroTitle" }}</h1>
+        <p class="lead text-muted">{{ $.Param "heroDescription" }}</p>
+        </div>
+    </div>
+</section>
+{{ end }}
+
+<div class="py-5">
+    <div class="container">
+        {{ .Content }}
+    </div>
+</div>
+{{ end }}

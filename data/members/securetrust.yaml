@@ -1,0 +1,43 @@
+id: securetrust
+name: Secure Trust
+slogan: A TrustWave Company
+website: https://www.securetrust.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: SecureTrust helps businesses fight cybercrime, protect data and reduce security risk. With cloud and managed security services, integrated technologies and a team of security experts, ethical hackers and researchers, we enable businesses to transform the way they manage their information security and compliance programs.
+
+# membership
+memerSince:
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog: https://www.securetrust.com/category/blog/
+blogFeed: https://www.securetrust.com/feed/
+
+# Press Releases
+press: https://www.securetrust.com/category/resources/news/
+pressFeed:
+
+# Careers
+careers: https://jobs.jobvite.com/securetrust-inc/
+careersFeed:
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/securetrust/
+  youtube: 
+
+# Here you can list those who represent the member
+representatives:
+  - name: Andrea Holland
+    role: Lead Quality Assurance Engineer
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/andrea-h-58b72931/
+    description:
+      Andrea is the Lead Quality Assurance Engineer at SecureTrust and represents the organization at the PKI Consortium.

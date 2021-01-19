@@ -1,0 +1,43 @@
+id: ssldotcom
+name: SSL.com
+slogan: Trust is what we do
+website: https://www.ssl.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: SSL.com is a publicly-trusted commercial certificate authority expanding the boundaries of encryption and authentication relied upon by users worldwide.
+
+# membership
+memerSince:
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog: https://www.ssl.com/blog/
+#blogFeed: https://www.ssl.com/feed/
+
+# Press Releases
+press: 
+pressFeed:
+
+# Careers
+careers: https://www.ssl.com/careers/
+careersFeed: 
+
+# Social media
+social:
+  twitter: https://twitter.com/sslcorp
+  facebook: https://www.facebook.com/sslcorp
+  instagram: 
+  linkedin: https://www.linkedin.com/company/ssl-com/
+  youtube: https://www.youtube.com/channel/UC2S1NiPt3QTMGyiH4auvlMQ
+
+# Here you can list those who represent the member
+representatives:
+  - name: Chris Kemmerer
+    role: Manager Compliance
+    social:
+      twitter:
+      linkedin:
+    description:
+      Chris Kemmerer joined SSL.com in 2014 and is currently Manager of Compliance. In addition to representing SSL.com at the CA/Browser Forum and participating in various ballot initiatives, he is pleased to work as part of the CA Security Council to address issues facing Certificate Authorities and the community of relying parties.

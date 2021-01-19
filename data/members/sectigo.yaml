@@ -1,0 +1,53 @@
+id: sectigo
+name: Sectigo
+slogan: Over 20 Years of Established Leadership
+website: https://www.sectigo.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Sectigo partners with organizations of all sizes to deliver automated public and private PKI solutions for securing web servers, user access, connected devices, and applications. Recognized for its award-winning innovation and best-in-class global customer support, Sectigo has the proven performance needed to secure the digital landscape of today and tomorrow.
+
+# membership
+memerSince: 2013-02-14
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog: https://sectigo.com/resource-library/blog-posts
+blogFeed: https://sectigo.com/feed/blog
+
+# Press Releases
+press: https://sectigo.com/resource-library/press-releases
+pressFeed:
+
+# Careers
+careers: https://sectigo.com/about/careers
+careersFeed:
+
+# Social media
+social:
+  twitter: https://twitter.com/xxxx
+  facebook: https://www.facebook.com/xxxx
+  instagram: https://www.instagram.com/xxxx/
+  linkedin: https://www.linkedin.com/company/xxxx
+  youtube: https://www.youtube.com/c/xxxx
+
+# Here you can list those who represent the member
+representatives:
+  - name: Tim Callan
+    role: Chief Compliance Officer at Sectigo
+    social:
+      linkedin: https://www.linkedin.com/in/tim-callan
+      soundcloud: https://soundcloud.com/tim-callan/tracks
+    description:
+      Tim Callan is responsible for ensuring the company’s CA practices conform to industry and regulatory requirements and the company’s published Certificate Practices. Tim has more than twenty years’ experience as a strategy and product leader for successful B2B software and SaaS companies, with fifteen years’ experience in the SSL and PKI technology spaces.
+
+  - name: Robin Alden
+    role: Chief Compliance Officer
+    hidden: true
+
+  - name: Abul Salek
+    role: Director of Product Management
+    hidden: true
+    from: 2018-03-01
+     

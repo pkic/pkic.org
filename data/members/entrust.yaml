@@ -1,0 +1,87 @@
+id: entrust
+name: Entrust
+slogan: Securing a world in motion
+website: https://www.entrust.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Entrust is dedicated to securing identities, data, and transactions around the globe
+
+# membership
+memerSince: 2013-02-14
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog: https://blog.entrust.com/
+blogFeed: https://blog.entrust.com/feed/
+
+# Press Releases
+press: https://www.entrust.com/newsroom/press-releases
+pressFeed:
+
+# Careers
+careers: https://www.entrust.com/careers
+careersFeed:
+
+# Social media
+social:
+  twitter: https://twitter.com/Entrust_Corp
+  facebook: https://www.facebook.com/DiscoverEntrust
+  instagram: https://www.instagram.com/discoverentrust/
+  linkedin: https://www.linkedin.com/company/Entrust
+  youtube: https://www.youtube.com/c/EntrustVideo
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Bruce Morton
+    role: Director, Certificate Technology & Standards
+    social:
+      twitter: https://twitter.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    description:
+      Bruce Morton has a background in project management and systems integration. He currently serves as the CA operations manager at Entrust Certificate Services (ECS), where he promotes security, governance and risk management.
+
+      Mr. Morton has been working in public key infrastructure (PKI) since 1996. He has worked with customers deploying PKI and has been overseeing operations of the ECS PKI since 2005. He was Entrust’s representative on the CA/Browser Forum for seven years and now supports projects within the IETF.
+
+      Mr. Morton monitors the SSL industry and provides insight into digital certificates through the Entrust Insights blog.
+
+      Mr. Morton is a graduate of University of Waterloo, where he received an undergraduate degree in electrical engineering. He also holds a master’s degree in business administration from Concordia University.
+
+  - name: Chris Bailey
+    role: VP of Strategy and Business Development – Certificate Services
+    social:
+      twitter:
+      linkedin:
+    description:
+      Chris Bailey is Vice President of Strategy and Business Development at Entrust, a global leader in the identity-based digital information security market for nearly two decades.
+
+      Previously Bailey was the General Manager of Trend Micro SSL and Business Incubation for Trend Micro SSL, which was purchased Entrust. Before that, Bailey served as the CEO and co-founder of the certification authority AffirmTrust, which was acquired by Trend Micro in 2011, and as co-founder and CTO of GeoTrust, a major world Certification Authority acquired by VeriSign in 2006.
+
+  - name: Paul van Brouwershaven
+    role: Director, Technology Solutions
+    social:
+      twitter: https://twitter.com/vanbroup
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    description: Paul van Brouwershaven is Director of Technology Compliance for Entrust’s certification authority. Paul served in the industry for over twenty years and is an active member of industry standards and regulatory groups such as the CA/B Forum and the CA Security Counsel. Paul has been actively promoting public awareness for internet security and industry best practices prior to the widespread move to adopt security by default.
+
+  - name: Kirk Hal
+    role: Director, Policy & Compliance
+    hidden: true
+
+  - name: Diana Gruhn
+    role: Director of Product Marketing
+    hidden: true
+
+  - name: Jay Schiavo
+    role: Vice President, ECS Products and Markets
+    hidden: true
+
+  - name: Clayton Smith
+    role: Software Security Architect
+    hidden: true
+    from: 2005-10-01
+    till: 2015-02-28

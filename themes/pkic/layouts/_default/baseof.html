@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    {{ partial "header.html" . }}
+    {{ partial "styles.html" . }}
+  </head>
+  <body>
+    {{ partial "navbar.html" . }}
+
+    {{ block "main" . }}
+    <div class="album py-5 bg-light">
+        <div class="container">
+            {{ .Content }}
+        </div>
+    </div>
+    {{ end }}
+
+    {{ partial "members.html" . }}
+
+    {{ block "footer" . }}
+    {{ partial "footer.html" . }}
+    {{ end }}
+  </body>
+</html>

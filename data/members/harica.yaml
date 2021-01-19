@@ -1,0 +1,43 @@
+id: harica
+name: Harica
+slogan: Hellenic Academic and Research Institutions Certification Authority
+website: https://www.harica.gr/
+
+# Short description, longer content can be placed in `content/members/`
+description: HARICA is the Hellenic Academic & Research Institutions Certification Authority. It participates in all major Global 'ROOT CA' Trust Programs, and operates as a 'Trust Anchor' in widely used Application Software and Operating Systems.
+
+# membership
+memerSince:
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog: 
+blogFeed:
+
+# Press Releases
+press: 
+pressFeed:
+
+# Careers
+careers: 
+careersFeed:
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram:
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent the member
+representatives:
+  - name: Dimitris Zacharopoulos
+    role: Head of IT Security Department
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/dzacharo/
+    description:
+      Dimitris Zacharopoulos was the CA/Browser Forum Chair from 2019 till end 2020.
