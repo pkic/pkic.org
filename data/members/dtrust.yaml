@@ -1,0 +1,45 @@
+id: dtrust
+name: D-Trust
+slogan: Paving the way for social and economic progress
+website: https://www.d-trust.net/en/
+
+# Short description, longer content can be placed in `content/members/`
+description: Berlin-based D-TRUST is a member of the Bundesdruckerei Group. D-TRUST is a pioneer in secure digital identities, delivering technologically mature solutions.
+
+# membership
+memerSince: 
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog: 
+blogFeed:
+
+# Press Releases
+press: https://www.bundesdruckerei.de/en/Newsroom/Press-Releases
+pressFeed: 
+
+# Careers
+careers: https://www.bundesdruckerei.de/en/d-trust-careers
+careersFeed:
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/bundesdruckerei/
+  youtube: https://www.youtube.com/channel/UCM8BovTkjFVVgRcsbwIZWDQ
+  xing: https://www.xing.com/companies/bundesdruckereigmbh
+
+# Here you can list those who represent the member
+representatives:
+  - name: Enrico Entschew
+    role: Senior Technical Product Manager PKI
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/enrico-entschew-252b9811/
+      xing: https://www.xing.com/profile/Enrico_Entschew
+    description:
+      Enrico Entschew is Senior Technical Product Manager PKI at D-TRUST and represents the organization at the PKI Consortium.
