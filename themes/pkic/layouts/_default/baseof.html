@@ -6,14 +6,16 @@
   </head>
   <body>
     {{ partial "navbar.html" . }}
-
+    
+    <main>
     {{ block "main" . }}
-    <div class="album py-5 bg-light">
+    <div class="py-5 bg-light">
         <div class="container">
             {{ .Content }}
         </div>
     </div>
     {{ end }}
+    </main>
 
     {{ partial "members.html" . }}
 
