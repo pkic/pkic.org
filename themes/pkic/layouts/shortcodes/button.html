@@ -1,1 +1,1 @@
-<a href="{{ .Get `link` }}" class="btn btn-{{ .Get `type` }} my-2">{{ .Get `label` }}</a>
+<a href="{{ .Get `link` }}" class="btn btn-{{ with .Get `type`}}{{ . }}{{ else }}success{{ end }} my-2">{{ .Get `label` }}</a>

@@ -1,10 +1,30 @@
 <style>
 @import url(https://fonts.googleapis.com/css?family=Roboto:400,300,700);
+:root {
+    --color: rgb(25, 135, 84);
+    --pagination-color: $color !important;
+}
+
 html, body {
     display: flex;
     flex-direction: column;
     min-height: 100vh;  
     font-family: 'Roboto', sans-serif !important;
+}
+
+a {
+    color: var(--color);
+}
+
+a:hover {
+    color:var(--color);
+    filter: opacity(60%);
+}
+
+.badge:hover {
+    color: white!important;
+    background-color: var(--color) !important;
+    filter: none;
 }
 
 main {

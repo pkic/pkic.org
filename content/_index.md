@@ -14,7 +14,7 @@ menu:
     weight: -500
 ---
 
-{{< alert type="success" >}}
+{{< alert >}}
 The CA Security Council (CASC) is restructured and renamed to the **The Public Key Infrastructure Consortium (PKI Consortium)**, [membership-fees have been dropped](/join/) and the focus is being shifted to engagement and participation.
 {{< /alert >}}
 
