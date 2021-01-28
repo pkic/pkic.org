@@ -1,6 +1,11 @@
 name: Publish
 
 on:
+  # Rebuild and publish the site every day to:
+  # - Update information from external sources such as rss feeds
+  # - Shuffle member logo's and listings
+  schedule:
+    - cron: "6 8 * * *"
   push:
     branches:
       - main

@@ -1,6 +1,12 @@
 <div id="members" class="container">
 <div class="row py-5 justify-content-center text-center">
+    <!-- shuffle members  -->
+    {{ $members := slice }}
     {{ range $.Site.Data.members }}
+    {{ $members = $members | append . }}
+    {{ end }}
+
+    {{ range (shuffle $members) }}
     <div class="col py-4 px-5">
         {{ $title := (printf "%s, %s - A member of the %s" .name .slogan $.Site.Params.name ) }}
         <a href="/members/{{ .id }}/" title="{{ $title }}">
