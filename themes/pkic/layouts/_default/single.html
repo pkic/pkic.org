@@ -6,14 +6,21 @@
 <section class="py-4 text-center container">
     <div class="row py-lg-4">
         <div class="col-10 mx-auto">
-        <h1 class="fw-light">{{ $.Param "heroTitle" }}</h1>
-        <p class="lead text-muted">{{ $.Param "heroDescription" }}</p>
+            {{ with $.Param "heroImage" }}
+            <p><img style="height:150px; max-width: 60%;" class="py-3" alt="{{ $.Param `heroTitle` }}" title="{{ $.Param `heroTitle` }}" src="{{ . }}"></p>
+            {{ end }}
+
+            <h1 class="fw-light">{{ $.Param "heroTitle" }}</h1>
+            <p class="lead text-muted">{{ $.Param "heroDescription" }}</p>
         </div>
     </div>
 </section>
 {{ end }}
 
-<div class="py-5">
+<div class="py-2 bg-light">
+</div>
+
+<div class="py-3">
     <div class="container">
         {{ .Content }}
     </div>

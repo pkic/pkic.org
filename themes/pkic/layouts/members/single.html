@@ -1,16 +1,14 @@
 {{ define "main" }}
 {{$member := index $.Site.Data.members ($.Param "id")}}
-<section class="py-5 text-center container">
-    <div class="row py-lg-3">
+<section class="py-4 text-center container">
+    <div class="row py-lg-2">
       <div class="col-10 mx-auto">
-        <p>
-          {{ $title := (printf "%s is a member of the %s" $member.name $.Site.Params.name ) }}
-          {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id $member.id) }}
-          {{ with $img}}
-          <img style="height:150px; max-width: 60%;" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
-          {{ end }}
-        </p>
-
+        {{ $title := (printf "%s is a member of the %s" $member.name $.Site.Params.name ) }}
+        {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id $member.id) }}
+        {{ with $img}}
+        <p><img style="height:150px; max-width: 60%;" class="py-3" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}"></p>
+        {{ end }}
+        
         <h1 class="fw-light"><strong>{{.Title}}</strong> is a member of the {{ $.Site.Params.shortName }}</h1>
         <p class="lead text-muted">{{ $member.description }}</p>
       </div>

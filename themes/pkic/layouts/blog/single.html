@@ -1,17 +1,18 @@
 {{ define "main" }}
-<div class="py-3 bg-light"></div>
-  <section class="text-center container">
-      <div class="row pt-5">
-        <div class="col-10 mx-auto">
-          <h1 class="fw-light">{{.Title}}</h1>
-          <p class="lead text-muted">
-            <h4> {{ .PublishDate.Format "Monday January 2, 2006" }}</h4>
-            {{if not (.Lastmod.Equal .PublishDate) }}<small>Last updated on {{ .Lastmod.Format "Monday January 2, 2006" }}</small>{{end}}
-          </p>
-        </div>
-      </div>
-    </section>
+<div class="py-2 bg-light">
 </div>
+
+<section class="text-center container">
+    <div class="row pt-5">
+      <div class="col-10 mx-auto">
+        <h1 class="fw-light">{{.Title}}</h1>
+        <p class="lead text-muted">
+          {{ .PublishDate.Format "Monday January 2, 2006" }}
+          {{if not (.Lastmod.Equal .PublishDate) }}<small>Last updated on {{ .Lastmod.Format "Monday January 2, 2006" }}</small>{{end}}
+        </p>
+      </div>
+    </div>
+</section>
 
 <div class="py-5">
     <div class="container">
