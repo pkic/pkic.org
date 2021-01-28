@@ -7,7 +7,7 @@
 3. Add the logo in SVG format in the folder `assets/images/members`, the filename must correspondent with id of the member (e.g., `member.svg`)
 
 ## How to add a new author?
-- For member authors, add a representative in the `data/members/memer.yaml` file.
+- For member authors, add a representative in the `data/members/member.yaml` file.
 - For authors that are not associated with a member, add a listing in `data/authors.yaml`.
 
 ## Formatting content
