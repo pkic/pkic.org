@@ -6,11 +6,14 @@ dsq_thread_id:
   - 1938037391
 categories:
   - Press Releases
+tags: [Certificate Authority, SSL, EV SSL, Digital Certificates, Revocation, OCSP Stapling]
 
 ---
 **San Francisco, CA. &ndash; February 14, 2013 &ndash;** Leading global certificate authorities announced the creation of the Certificate Authority Security Council (CASC), an advocacy group, committed to the exploration and promotion of best practices that advance the security of websites and online transactions. Through public education, collaboration, and advocacy, the CASC strives to improve understanding of critical policies and their potential impact on the internet infrastructure. Members of the CASC include Comodo, DigiCert, Entrust, GlobalSign, Go Daddy, Symantec, and Trend Micro. 
 
-[**Click to Tweet**][1]**:** World&rsquo;s leading Certificate Authorities join together to form the Certificate Authority Security Council: <http://bit.ly/VaZNek>
+> World's leading Certificate Authorities join together to form the **Certificate Authority Security Council**
+
+[**Click here to share on Twitter**][1]
 
 Amid increasing threats from sophisticated hacker networks, global cybercriminal organizations and state-sponsored espionage, the CASC is coming together to promote advanced security standards, encourage best practices, and ultimately improve the deployment of a continually trustworthy SSL ecosystem. In addition, the CASC supports the efforts of the CA/Browser Forum and other standards-setting bodies in their important work, and will continue to help develop reasonable and practical enhancements that improve trusted Secure Sockets Layer (SSL) and certificate authority (CA) operations.
 
@@ -60,12 +63,6 @@ The backbone of Internet security for nearly two decades, the SSL protocol and c
 
 The Certificate Authority Security Council is comprised of leading global Certificate Authorities that are committed to the exploration and promotion of best practices that advance trusted SSL deployment and CA operations as well as the security of the internet in general. While not a standards-setting organization, the CASC works collaboratively to improve understanding of critical policies and their potential impact on the internet infrastructure. More information is available at <https://casecurity.org>.
 
-
-  ###
-
-
-## Technorati Tags
-Certificate Authority, SSL, EV SSL, Digital Certificates, Revocation, OCSP Stapling
 
  [1]: http://bit.ly/XLX7QP
  [2]: http://bit.ly/VQCIZc
