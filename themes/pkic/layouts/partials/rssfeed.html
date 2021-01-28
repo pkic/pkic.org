@@ -18,7 +18,7 @@
                   <div class="card-body">
                     <h5 class="card-title"><a href="{{ $post.link }}" target="_blank" alt="{{ $post.title }}">{{ $post.title }}</a></h5>
                     <p class="card-text">{{ $post.description | safeHTML | truncate 120 }}</p>
-                    <p class="card-text"><small class="text-muted">{{ $post.pubDate }} by {{ $post.author }}</small></p>
+                    <p class="card-text"><small class="text-muted">Published on {{ dateFormat "Monday January 2, 2006" $post.pubDate }}</small></p>
                   </div>
                 </div>
               </div>

@@ -1,0 +1,50 @@
+{{ $items := slice }}
+
+{{ range $.Site.Data.members }}
+  {{ with .blogFeed }}
+    {{ $url := printf "https://api.rss2json.com/v1/api.json?rss_url=%s" .}}
+    {{ $rssJ := getJSON  $url }}
+    {{ $items = $items | append $rssJ.items }}
+  {{ end }}
+{{ end }}
+
+<div id="carouselExampleControls" class="carousel slide" data-bs-ride="carousel">
+  <div class="carousel-inner">
+
+    <!-- ( sort $items.pubDate ) -->
+    {{ range $i, $post := first 25 ( sort $items "pubDate" "desc" ) }}
+      {{ $url := urls.Parse $post.link }}
+            <!-- {{ $authors := slice }}
+            {{ $authors = $authors | append $post.author }} -->
+            <div class="carousel-item{{ if lt $i 1 }} active{{ end }}">
+
+              <div class="card d-block w-100">
+                <div class="row g-0">
+                  {{ with $post.image }}
+                  <div class="col-md-3">
+                    <img src="{{ $post.image.url }}" title="{{ $post.image.title }}">
+                  </div>
+                  {{ end }}
+                  <div class="col">
+                    <div class="card-body">
+                      <h5 class="card-title"><a href="{{ $post.link }}" target="_blank" alt="{{ $post.title }}">{{ $post.title }}</a></h5>
+                      <p class="card-text">{{ $post.description | safeHTML | truncate 120 }}</p>
+                      <p class="card-text"><small class="text-muted">Published on {{ dateFormat "Monday January 2, 2006" $post.pubDate }} at <a href="https://{{ $url.Host }}/" target="_blank">{{ $url.Host }}</a></small></p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+    {{ end }}
+
+  </div>
+  <a class="carousel-control-prev" href="#carouselExampleControls" role="button" data-bs-slide="prev">
+    <span class="carousel-control-prev-icon" aria-hidden="true"></span>
+    <span class="visually-hidden">Previous</span>
+  </a>
+  <a class="carousel-control-next" href="#carouselExampleControls" role="button" data-bs-slide="next">
+    <span class="carousel-control-next-icon" aria-hidden="true"></span>
+    <span class="visually-hidden">Next</span>
+  </a>
+</div>
