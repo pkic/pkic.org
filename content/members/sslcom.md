@@ -1,7 +1,7 @@
 ---
 date: 2021-01-08T14:49:10Z
 draft: false
-id: ssldotcom
+id: sslcom
 title: SSL.com
 
 ---
