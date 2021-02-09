@@ -11,7 +11,6 @@ permalinks:
 
 #canonifyurls: true
 buildDrafts: false
-enableRobotsTXT: true
 disableHugoGeneratorInject: true
 enableInlineShortcodes: true
 rssLimit: 30
@@ -81,3 +80,8 @@ privacy:
   youtube:
     disable: false
     privacyEnhanced: true
+
+outputFormats:
+  rss:
+    mediatype: application/rss
+    path: feed
