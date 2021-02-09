@@ -1,4 +1,6 @@
-{{ range . }}
+{{ with . }}
+{{ range sort . }}
 {{ $href := print (absURL "tags/") (urlize .) }}
 <a href="{{ $href }}/" class="badge bg-secondary">{{ . }}</a>
+{{ end }}
 {{ end }}
