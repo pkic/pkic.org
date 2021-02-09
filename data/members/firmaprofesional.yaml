@@ -1,0 +1,50 @@
+id: firmaprofesional
+name: Firmaprofesional
+slogan: We innovate to create secure and efficient transaction environments
+website: https://www.firmaprofesional.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: With a long history of supplying digital ID and payment solutions, Firmaprofesional provides a safer and simpler working day for both individuals and companies.
+
+# membership
+memerSince: 2021-02-03
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog:
+  url: https://www.firmaprofesional.com/blog/
+  feed: https://www.firmaprofesional.com/feed/
+  language: es_ES
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
+
+# Social media
+social:
+  twitter: https://twitter.com/FIRMAPRO
+  facebook: 
+  instagram: 
+  linkedin: http://www.linkedin.com/company/firmaprofesional
+  youtube: 
+
+# Here you can list those who represent the member
+representatives:
+  - id: chema-lopez
+    name: Chema López
+    role: Director Área Innovación, Cumplimiento y Tecnología
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/chemalogo/
+    description:
+     Chema López is the Director Área Innovación and Cumplimiento y Tecnología at Firmaprofesional and represents the organization at the PKI Consortium.
