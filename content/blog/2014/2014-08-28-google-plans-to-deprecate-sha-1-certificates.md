@@ -4,7 +4,7 @@ authors: [CA Security Council]
 date: 2014-08-28T14:07:44+00:00
 dsq_thread_id:
   - 2966836432
-
+tags: [Google, SHA1]
 
 ---
 On August 19, [Google announced a new policy][1] that accelerates the deprecation of SHA-1 certificates, potentially causing websites using SHA-1 certificates to display warnings in the near future. With the change, Chrome 39 will show a warning for sites that have a SHA-1 certificate expiring in 2016 and require a click through warning for sites with a SHA-1 certificate expiring in 2017 or later. This proposal is scheduled for Chrome 39, which could be released as early as 12 weeks from now.

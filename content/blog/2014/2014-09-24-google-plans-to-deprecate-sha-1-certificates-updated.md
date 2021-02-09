@@ -4,7 +4,7 @@ authors: [CA Security Council]
 date: 2014-09-24T18:26:09+00:00
 dsq_thread_id:
   - 3050286741
-
+tags: [Google, SHA1]
 
 ---
 {{< figure src="/uploads/2014/09/sha1-certificates.png" >}}

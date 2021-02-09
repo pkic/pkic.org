@@ -4,8 +4,7 @@ authors: [Bruce Morton, Jeremy Rowley]
 date: 2013-10-16T18:16:21+00:00
 dsq_thread_id:
   - 1937106327
-
-  - Initiative
+tags: [Code signing]
 
 ---
 Code signing certificates from publicly trusted Certification Authorities (CAs) fulfill a vital need for authentication of software distributed over the Internet in our interconnected world. As the commonly referred to &ldquo;Internet of things&rdquo; continues to grow, consumers have access to millions of applications for their desktops, laptops, and mobile devices. Creative software engineers provide us with applications to cover any of our potential needs or interests. Cybercriminals and others with malicious intent recognize this as an opportunity and seek to trick us into installing malicious software (malware) &mdash; programs that hijack our computers, steal our money, or try to inflict harm.

@@ -4,7 +4,7 @@ authors: [Rick Andrews]
 date: 2013-04-17T18:29:25+00:00
 dsq_thread_id:
   - 1942473929
-
+tags: [NIST]
 
 ---
 On April 10 and 11, NIST held a workshop in Maryland to bring together many parties (industry, research and academia communities, and government sectors) to examine &ldquo;technical and administrative efforts to increase trust online by improving the Public Key Infrastructure certificate marketplace supporting SSL and TLS.&rdquo;

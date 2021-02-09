@@ -4,7 +4,7 @@ authors: [CA Security Council]
 date: 2013-02-25T15:32:34+00:00
 dsq_thread_id:
   - 2037505082
-
+tags: [CASC, RSA]
 
 ---
 We are excited to have members of the CASC attending and speaking at this year’s RSA Conference. The events and panels will cover various topics that revolve around the security of the Internet and CAs as a whole. You can follow the CASC on Twitter for more information and news at [@CertCouncil](http://bit.ly/X3x9XB), as well as see some of the presentations after the events on our [SlideShare](http://slidesha.re/Ye2dFf) page. Please join us for the following CASC member events:

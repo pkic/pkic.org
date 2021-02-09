@@ -4,7 +4,7 @@ authors: [CA Security Council]
 date: 2015-04-02T19:47:41+00:00
 dsq_thread_id:
   - 3649974504
-
+tags: [Certificate Transparency, CAA, Public Key Pinning]
 
 ---
 Once again Browsers and Certificate Authorities are in the news over the reported mis-issuance of an SSL server certificate to a google.com domain. Discovered by Google most likely via technology known as key pinning and discussed by Google&rsquo;s Adam Langley in this [blog][1], a Chinese certificate authority, CNNIC (Chinese Internet Network Information Center), apparently issued an intermediate certificate to an Egyptian company called MCS Holdings. Because the CNNIC root certificate is included in the root store of most major browsers, users would not see any warnings on sites that have certificates issued by CNNIC or MCS Holdings. When MCS installed their intermediate into a Man in the Middle (MITM) proxy device, that device could then issue certificates for sites which users connected to that proxy would visit. (MITM is described in more detail in our previous blog here: <https://casecurity.org/2015/01/08/gogo-found-spoofing-google-ssl-certificates/>)

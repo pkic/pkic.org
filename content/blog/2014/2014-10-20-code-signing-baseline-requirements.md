@@ -4,7 +4,7 @@ authors: [Jeremy Rowley]
 date: 2014-10-20T17:00:00+00:00
 dsq_thread_id:
   - 3132033613
-
+tags: [Code signing]
 
 ---
 Code signing certificates are used to sign software objects to authenticate that they originated from a verified source, allowing developers to avoid warnings commonly displayed by application software vendors such as Microsoft operating systems and Java. A fraudulent code signing certificate can wreak havoc on networks, spreading malware and adware without restraint. Certificate Authorities are tasked with ensuring that code signing applicants are legitimate entities and provide accountability for use of the certificate.

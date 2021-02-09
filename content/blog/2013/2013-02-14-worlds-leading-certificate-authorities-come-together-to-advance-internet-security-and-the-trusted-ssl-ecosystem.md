@@ -6,7 +6,7 @@ dsq_thread_id:
   - 1938037391
 categories:
   - Press Releases
-tags: [Certificate Authority, SSL, EV SSL, Digital Certificates, Revocation, OCSP Stapling]
+tags: [CASC, Certificate Authority, SSL, EV SSL, Digital Certificates, Revocation, OCSP Stapling]
 
 ---
 **San Francisco, CA. &ndash; February 14, 2013 &ndash;** Leading global certificate authorities announced the creation of the Certificate Authority Security Council (CASC), an advocacy group, committed to the exploration and promotion of best practices that advance the security of websites and online transactions. Through public education, collaboration, and advocacy, the CASC strives to improve understanding of critical policies and their potential impact on the internet infrastructure. Members of the CASC include Comodo, DigiCert, Entrust, GlobalSign, Go Daddy, Symantec, and Trend Micro. 

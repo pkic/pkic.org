@@ -4,7 +4,7 @@ authors: [Rick Andrews]
 date: 2013-03-14T21:12:28+00:00
 dsq_thread_id:
   - 1958594618
-
+tags: [RC4]
 
 ---
 The [latest published attacks][1] target specific algorithms used within SSL/TLS. Those algorithms are used when a client connects to a server via SSL/TLS; they&rsquo;re not used when a Certificate Authority signs a certificate. The attacks demonstrate potential weaknesses in the use of the algorithms.

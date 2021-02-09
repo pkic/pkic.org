@@ -4,6 +4,7 @@ authors: [Bruce Morton]
 date: 2018-01-06T14:31:22+00:00
 dsq_thread_id:
   - 6395462745
+tags: [CAA, SHA1, Public Key Pinning, Certificate Transparency]
 
 
 ---

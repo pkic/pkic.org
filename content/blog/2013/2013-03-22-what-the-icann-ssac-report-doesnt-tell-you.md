@@ -4,7 +4,7 @@ authors: [CA Security Council]
 date: 2013-03-22T17:19:51+00:00
 dsq_thread_id:
   - 1939516730
-
+tags: [ICANN]
 
 ---
 The CA Security Council, which comprises seven of the largest CAs, read with interest the article titled, &ldquo;[**Internal-use SSL certificates pose security risk for upcoming domain extensions**][1].&rdquo; As a group in one of the best positions to understand the impact of the new gTLDs on organizational security infrastructure and the Internet as a whole, we felt it appropriate to comment on this and related stories which summarize the ICANN Security and Stability Advisory Committee (SSAC) report _sac 045 Invalid Top Level Domain Queries at the Root Level of the Domain Name System_.

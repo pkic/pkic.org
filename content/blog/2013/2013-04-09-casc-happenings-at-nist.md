@@ -4,7 +4,7 @@ authors: [CA Security Council]
 date: 2013-04-10T01:48:03+00:00
 dsq_thread_id:
   - 2232565486
-
+tags: [CASC, NIST]
 
 ---
 This week members of the CASC will be attending and speaking at the NIST Workshop on Improving Trust in the Online Marketplace. You can also follow the CASC on Twitter for more information and news at [@CertCouncil](https://twitter.com/CertCouncil), as well as see some of the presentations after the events on our [SlideShare](http://slidesha.re/Ye2dFf) page. Even if you can&rsquo;t make it to Maryland, you can still watch the event via the live [webcast](http://www.nist.gov/itl/csd/ct/workshop-on-improving-trust-in-the-online-marketplace-webcast.cfm). Please join us for the following CASC member events:
