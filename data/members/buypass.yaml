@@ -1,0 +1,43 @@
+id: buypass
+name: Buypass
+slogan: We bring you a safer digital world
+website: https://www.buypass.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: With a long history of supplying digital ID and payment solutions, Buypass provides a safer and simpler working day for both individuals and companies.
+
+# membership
+memerSince: 2020-04-22
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog: 
+blogFeed:
+
+# Press Releases
+press: https://www.buypass.com/news
+pressFeed:
+
+# Careers
+careers: https://www.buypass.com/the-company/work-with-us
+careersFeed:
+
+# Social media
+social:
+  twitter: https://twitter.com/buypass
+  facebook: https://www.facebook.com/buypassCA
+  instagram: 
+  linkedin: https://www.linkedin.com/company/buypass-as
+  youtube: 
+
+# Here you can list those who represent the member
+representatives:
+  - name: Mads Henriksveen
+    role: Trust Service Manager
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/mads-henriksveen-48948941/
+    description:
+      Mads Henriksveen is the Trust Service Manager at Buypass and represents the organization at the PKI Consortium.
