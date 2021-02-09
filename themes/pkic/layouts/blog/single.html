@@ -21,6 +21,13 @@
             <article id="content">
             {{ .Content }}
             </article>
+
+            {{ if lt .PublishDate (time "2021-02-01") }}
+            <div class="alert alert-success">
+              <p>This article was originally published by the "<strong>CA Security Council</strong>". In 2021 the CASC was restructred and renamed to the "<strong>Public Key Infrastructure Consortium</strong>" shortly "<strong>PKI Consortium</strong>".</p>
+              <a href="/about/" title="About the PKI Consortium">Learn more about the PKI Consortium</a>
+            </div>
+            {{ end }}
           </div>
 
           <div class="col-md-3 order-md-2 px-md-5">
