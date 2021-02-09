@@ -14,15 +14,21 @@ workingGroups:
 
 # Blog posts
 blog: 
-blogFeed:
+  url:
+  feed: 
+  language:
 
 # Press Releases
-press: https://www.bundesdruckerei.de/en/Newsroom/Press-Releases
-pressFeed: 
+press: 
+  url: https://www.bundesdruckerei.de/en/Newsroom/Press-Releases
+  feed: 
+  language:
 
 # Careers
-careers: https://www.bundesdruckerei.de/en/d-trust-careers
-careersFeed:
+careers: 
+  url: https://www.bundesdruckerei.de/en/d-trust-careers
+  feed: 
+  language:
 
 # Social media
 social:

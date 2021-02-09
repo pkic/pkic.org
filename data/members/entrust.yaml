@@ -13,16 +13,22 @@ workingGroups:
   - CA
 
 # Blog posts
-blog: https://blog.entrust.com/
-blogFeed: https://blog.entrust.com/feed/
+blogFeed: 
+  url: https://blog.entrust.com/
+  feed: https://blog.entrust.com/feed/
+  language: en_US
 
 # Press Releases
-press: https://www.entrust.com/newsroom/press-releases
-pressFeed:
+press: 
+  url: https://www.entrust.com/newsroom/press-releases
+  feed: 
+  language: en_US
 
 # Careers
-careers: https://www.entrust.com/careers
-careersFeed:
+careers: 
+  url: https://www.entrust.com/careers
+  feed: 
+  language: en_US
 
 # Social media
 social:

@@ -32,13 +32,13 @@
         <small>
           {{ with $member.memerSince }}<strong>Member since:</strong> {{ dateFormat "January 2006" $member.memerSince }}<br />{{ end }}
           {{ with $member.website }}<strong>Website:</strong> <a href="{{ $member.website }}" target="_blank">{{ $member.website }}</a><br />{{ end }}
-          {{ with $member.press }}<strong>Press:</strong> <a href="{{ $member.press }}" target="_blank">{{ $member.press }}</a><br />{{ end }}
-          {{ with $member.careers }}<strong>Careers:</strong> <a href="{{ $member.careers }}" target="_blank">{{ $member.careers }}</a><br />{{ end }}
-          {{ with $member.blog }}<strong>Blog:</strong> <a href="{{ $member.blog }}" target="_blank">{{ $member.blog }}</a><br />{{ end }}
+          {{ with $member.press.url }}<strong>Press:</strong> <a href="{{ $member.press.url }}" target="_blank">{{ $member.press.url }}</a><br />{{ end }}
+          {{ with $member.careers.url }}<strong>Careers:</strong> <a href="{{ $member.careers.url }}" target="_blank">{{ $member.careers.url }}</a><br />{{ end }}
+          {{ with $member.blog.url }}<strong>Blog:</strong> <a href="{{ $member.blog.url }}" target="_blank">{{ $member.blog.url }}</a><br />{{ end }}
         </small>
         <p>
-          {{ with $member.blogFeed }}
-          {{ partial "rssfeed.html" $member.blogFeed }}
+          {{ with $member.blog.feed }}
+          {{ partial "rssfeed.html" $member.blog.feed }}
           {{ end }}
         </p>
       </div>
@@ -61,7 +61,7 @@
           </div>
           <div class="col-md-3 order-md-1">
             {{ $title := (printf "%s is %s at %s" .name .role $member.name) }}
-            {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id (.name | urlize | safeURL)) }}
+            {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id (default (.name | urlize | safeURL) .id)) }}
             {{ with $img}}
             {{ $img = $img.Resize "x350" }}
             <img class="img-thumbnail" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">

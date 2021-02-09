@@ -13,16 +13,22 @@ workingGroups:
   - CA
 
 # Blog posts
-blog: https://sectigo.com/resource-library/blog-posts
-blogFeed: https://sectigo.com/feed/blog
+blogFeed: 
+  url: https://sectigo.com/resource-library/blog-posts
+  feed: https://sectigo.com/feed/blog
+  language: en_US
 
 # Press Releases
-press: https://sectigo.com/resource-library/press-releases
-pressFeed:
+press: 
+  url: https://sectigo.com/resource-library/press-releases
+  feed: 
+  language: en_US
 
 # Careers
-careers: https://sectigo.com/about/careers
-careersFeed:
+careers: 
+  url: https://sectigo.com/about/careers
+  feed: 
+  language: en_US
 
 # Social media
 social:

@@ -1,10 +1,12 @@
 {{ $items := slice }}
 
 {{ range $.Site.Data.members }}
-  {{ with .blogFeed }}
-    {{ $url := printf "https://api.rss2json.com/v1/api.json?rss_url=%s" .}}
-    {{ $rssJ := getJSON  $url }}
-    {{ $items = $items | append $rssJ.items }}
+  {{ if eq (default "en" (substr .blog.language 0 2) ) "en" }}
+    {{ with .blog.feed }}
+      {{ $url := printf "https://api.rss2json.com/v1/api.json?rss_url=%s" .}}
+      {{ $rssJ := getJSON  $url }}
+      {{ $items = $items | append $rssJ.items }}
+    {{ end }}
   {{ end }}
 {{ end }}
 

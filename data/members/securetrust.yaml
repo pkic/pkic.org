@@ -13,16 +13,22 @@ workingGroups:
   - CA
 
 # Blog posts
-blog: https://www.securetrust.com/category/blog/
-blogFeed: https://www.securetrust.com/feed/
+blog:
+  url: https://www.securetrust.com/category/blog/
+  feed: https://www.securetrust.com/feed/
+  language: en_US
 
 # Press Releases
-press: https://www.securetrust.com/category/resources/news/
-pressFeed:
+press: 
+  url: https://www.securetrust.com/category/resources/news/
+  feed: 
+  language: en_US
 
 # Careers
-careers: https://jobs.jobvite.com/securetrust-inc/
-careersFeed:
+careers: 
+  url: https://jobs.jobvite.com/securetrust-inc/
+  feed: 
+  language: en_US
 
 # Social media
 social:

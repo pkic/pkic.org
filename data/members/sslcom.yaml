@@ -13,16 +13,22 @@ workingGroups:
   - CA
 
 # Blog posts
-blog: https://www.ssl.com/blog/
-#blogFeed: https://www.ssl.com/feed/
+blog: 
+  url: https://www.ssl.com/blog/
+  feed: 
+  language: en_US
 
 # Press Releases
 press: 
-pressFeed:
+  url:
+  feed: 
+  language:
 
 # Careers
-careers: https://www.ssl.com/careers/
-careersFeed: 
+careers: 
+  url: https://www.ssl.com/careers/
+  feed: 
+  language: en_US
 
 # Social media
 social:

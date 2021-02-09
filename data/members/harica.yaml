@@ -14,15 +14,21 @@ workingGroups:
 
 # Blog posts
 blog: 
-blogFeed:
+  url:
+  feed: 
+  language:
 
 # Press Releases
 press: 
-pressFeed:
+  url:
+  feed: 
+  language:
 
 # Careers
 careers: 
-careersFeed:
+  url:
+  feed: 
+  language:
 
 # Social media
 social:
