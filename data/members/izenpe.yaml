@@ -1,0 +1,50 @@
+id: izenpe
+name: Izenpe
+slogan: Electronic identification of the Basque Country
+website: https://www.izenpe.eus/
+
+# Short description, longer content can be placed in `content/members/`
+description: "Izenpe is a public limited company incorporated in 2002 and is a project promoted by the Basque Government and the Provincial Councils, incorporated through its it companies: EJIE, LANTIK, IZFE and CCASA."
+
+# membership
+memerSince: 2021-02-12
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: 
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: http://www.linkedin.com/company/izenpe
+  youtube: 
+
+# Here you can list those who represent the member
+representatives:
+  - id: oscar-garcia
+    name: Oscar García
+    role: Responsable de Seguridad (CISO)
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/oscar-garc%C3%ADa-42204416/
+    description:
+     Oscar García is the Responsable de Seguridad (CISO) at Izenpe and represents the organization at the PKI Consortium.
