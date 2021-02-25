@@ -40,6 +40,13 @@ social:
 
 # Here you can list those who represent the member
 representatives:
+  - name: Toni Saez Gonzalez
+    role: Chief Technical Officer (CTO)
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/toni-saez-gonzalez-25355121/
+    description:
+     Toni Saez Gonzalez is the Chief Technical Officer (CTO) at Izenpe and represents the organization at the PKI Consortium.
   - id: oscar-garcia
     name: Oscar García
     role: Responsable de Seguridad (CISO)
