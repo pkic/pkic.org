@@ -1,9 +1,33 @@
 ---
-title: Google Certificate Transparency (CT) to Expand to All Certificates Types
-authors: [Jeremy Rowley]
-date: 2016-11-08T17:50:31+00:00
+authors:
+- Jeremy Rowley
+date: "2016-11-08T17:50:31+00:00"
 dsq_thread_id:
-  - 5288911081
+- 5288911081
+keywords:
+- tls
+- ietf
+- extended validation
+- domain validated
+- ca/browser forum
+- chrome
+- ssl
+- organization validated
+- announcement
+- google
+- policy
+tags:
+- SSL/TLS
+- IETF
+- EV
+- DV
+- CA/Browser Forum
+- Chrome
+- OV
+- Announcement
+- Google
+- Policy
+title: Google Certificate Transparency (CT) to Expand to All Certificates Types
 
 
 ---

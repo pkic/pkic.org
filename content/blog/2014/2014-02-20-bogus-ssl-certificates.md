@@ -1,9 +1,21 @@
 ---
-title: Bogus SSL Certificates
-authors: [Bruce Morton]
-date: 2014-02-20T22:30:12+00:00
+authors:
+- Bruce Morton
+date: "2014-02-20T22:30:12+00:00"
 dsq_thread_id:
-  - 2295077894
+- 2295077894
+keywords:
+- google
+- attack
+- mitm
+- ssl
+- https
+tags:
+- Google
+- Attack
+- MITM
+- SSL/TLS
+title: Bogus SSL Certificates
 
 
 ---

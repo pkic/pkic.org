@@ -1,9 +1,24 @@
 ---
-title: Trust on the Public Web – The Consequences of Covert Action
-authors: [Dean Coclin]
-date: 2016-11-11T20:38:03+00:00
+authors:
+- Dean Coclin
+date: "2016-11-11T20:38:03+00:00"
 dsq_thread_id:
-  - 5297030218
+- 5297030218
+keywords:
+- mozilla
+- apple
+- firefox
+- chrome
+- ssl
+- mis-issued
+tags:
+- Mozilla
+- Apple
+- Firefox
+- Chrome
+- SSL/TLS
+- Mis-issued
+title: Trust on the Public Web – The Consequences of Covert Action
 
 
 ---

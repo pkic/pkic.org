@@ -1,9 +1,58 @@
 ---
-title: 2016 – Looking Back, Moving Forward
-authors: [Bruce Morton]
-date: 2015-12-14T19:53:24+00:00
+authors:
+- Bruce Morton
+date: "2015-12-14T19:53:24+00:00"
 dsq_thread_id:
-  - 4403870208
+- 4403870208
+keywords:
+- google
+- microsoft
+- attack
+- policy
+- rc4
+- openssl
+- encryption
+- tls
+- tls 1.3
+- tls 1.2
+- dh
+- ietf
+- vulnerabilities
+- caa
+- revocation
+- md5
+- mitm
+- rsa
+- firefox
+- ca/browser forum
+- chrome
+- ssl
+- code signing
+- vulnerability
+tags:
+- Google
+- Microsoft
+- Attack
+- Policy
+- RC4
+- OpenSSL
+- Encryption
+- SSL/TLS
+- TLS 1.3
+- TLS 1.2
+- DH
+- IETF
+- Vulnerability
+- CAA
+- Revocation
+- Hash Function
+- MITM
+- RSA
+- Firefox
+- CA/Browser Forum
+- Chrome
+- Code Signing
+title: 2016 – Looking Back, Moving Forward
 
 
 ---

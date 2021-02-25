@@ -1,13 +1,23 @@
 ---
-title: Java Secures Supply Chains Through Code Signing
-authors: [Bruce Morton, Erik Costlow]
-date: 2013-12-09T16:00:15+00:00
+authors:
+- Bruce Morton
+- Erik Costlow
+date: "2013-12-09T16:00:15+00:00"
 dsq_thread_id:
-  - 2030893091
+- 2030893091
+keywords:
+- pdf
+- identity
+- code signing
+tags:
+- PDF
+- Identity
+- Code Signing
+title: Java Secures Supply Chains Through Code Signing
 
 
 ---
-We have recently discussed the benefits of code signing in two posts: [Securing Software Distribution with Digital Signatures][1] and [Improving Code Signing][2]. These posts covered the role of code signatures as a &ldquo;digital shrinkwrap&rdquo; designed to answer a simple question: Did the software I am about to run actually come from the author or has someone changed it along the way?
+We have recently discussed the benefits of code signing in two posts: [Securing Software Distribution with Digital Signatures][1] and [Improving Code Signing][2]. These posts covered the role of code signatures as a “digital shrinkwrap” designed to answer a simple question: Did the software I am about to run actually come from the author or has someone changed it along the way?
 
 As software is downloaded, assembled, copied, distributed and redistributed, it can be [modified at any point along the supply chain][3]. Some modifications are designed to insert advertising into software, others add tracking capabilities, and others could be more nefarious, such as compromising the entire host or stealing data.
 
@@ -19,7 +29,7 @@ Code signatures protect all parties from this threat. End-users can validate the
   * Protects end-users from applications where identity cannot be verified
   * Ensures indications where legitimate applications have been tampered with (i.e., tampering would break the signature).
 
-Oracle has also made improvements in Java&rsquo;s code signatures, such as separating the role of identity and permissions. In the past, signed applets affected the level of permissions to determine what an applet could do: unsigned applets ran in a sandbox and signed applets were granted all-permissions. As of [Java 7 update 21][5] (April 2013), Oracle separated the role of identity and authorization to allow signing of sandboxed code. By doing this, software publishers can use the same cryptographic signatures of sandbox applications used to protect high-privileged ones.
+Oracle has also made improvements in Java’s code signatures, such as separating the role of identity and permissions. In the past, signed applets affected the level of permissions to determine what an applet could do: unsigned applets ran in a sandbox and signed applets were granted all-permissions. As of [Java 7 update 21][5] (April 2013), Oracle separated the role of identity and authorization to allow signing of sandboxed code. By doing this, software publishers can use the same cryptographic signatures of sandbox applications used to protect high-privileged ones.
 
 The expanding importance of code signatures also pertains to software assembly and defends against attacks like [Cross-Build Injection][6]. As applications have grown to [involve more third-party][7], open-source or commercial components, there is concern to ensure that the binary artifacts that run are the same as what the publisher provided. While the Java changes discussed previously focus on protecting both end-users and developers of Applet & Web Start applications, the code-signing techniques can also be applied for back-end and server-side applications.
 

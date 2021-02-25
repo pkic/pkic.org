@@ -1,9 +1,58 @@
 ---
+authors:
+- Bruce Morton
+date: "2019-01-03T14:24:26+00:00"
+keywords:
+- domain validation
+- elliptic curve
+- tls 1.0
+- rsa
+- pki
+- ca/browser forum
+- qualified
+- chrome
+- ssl
+- https
+- identity
+- mis-issued
+- code signing
+- vulnerability
+- phishing
+- attack
+- policy
+- forward secrecy
+- certificate expiry
+- tls
+- tls 1.3
+- vulnerabilities
+- extended validation
+- revocation
+tags:
+- DV
+- ECC
+- TLS 1.0
+- RSA
+- PKI
+- CA/Browser Forum
+- Qualified
+- Chrome
+- SSL/TLS
+- Identity
+- Mis-issued
+- Code Signing
+- Vulnerability
+- Phishing
+- Attack
+- Policy
+- Forward Secrecy
+- Certificate Expiry
+- TLS 1.3
+- EV
+- Revocation
 title: 2019 – Looking Back, Moving Forward
-authors: [Bruce Morton]
-date: 2019-01-03T14:24:26+00:00
 
 
+---
 ---
 ## Looking Back at 2018
 
@@ -99,20 +148,7 @@ In 2019 and moving into 2020, we will see the deprecation of TLS 1.0 and 1.1 and
 In 2018, TLS 1.0 version of the protocol was deprecated by PCI and further deprecation of both TLS 1.0 and 1.1 was seen throughout the ecosystem. For November 2018, Netcraft provided the following breakdown as seen from over 46 million servers:
 
 |SSL/TLS Protocol Version |	Percentage |
-|-------------------------|------------|
-|SSL 3.0                	|          0 |
-|TLS 1.0	                |       1.29 |
-|TLS 1.1	                |       0.02 |
-|TLS 1.2	                |      89.93 |
-|TLS 1.3	                |       8.76 |
-|Total	                  |        100 |
-
-
-The browsers have also stated that they will [deprecate the use of TLS 1.0 and 1.1 starting in 2020][22]. With the rapid growth of TLS 1.3, we should see the mitigation of many known protocol vulnerabilities.
-
-## Most Phishing Sites Will Use HTTPS
-
-[Half of all phishing sites now use HTTPS][23]. The rate has grown since browsers began removing the positive indicator for HTTPS security and replacing it with the negative indication of no security with HTTP. The trend will probably escalate to meet the same use level of HTTPS on all page loads, which is [currently about 77 percent][24]. The rapid increase can also be correlated to the availability of free DV certificates that are issued to anonymous entities.
+|w use HTTPS][23]. The rate has grown since browsers began removing the positive indicator for HTTPS security and replacing it with the negative indication of no security with HTTP. The trend will probably escalate to meet the same use level of HTTPS on all page loads, which is [currently about 77 percent][24]. The rapid increase can also be correlated to the availability of free DV certificates that are issued to anonymous entities.
 
 The downside is users will not be able to mitigate their risk of being phished by trusting an HTTPS site. Site owners should consider using EV certificates, which on many browsers will provide more trust information for users to determine if a site has a confirmed identity – verifying authenticity.
 

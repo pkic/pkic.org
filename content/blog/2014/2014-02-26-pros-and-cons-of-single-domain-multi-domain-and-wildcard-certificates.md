@@ -1,18 +1,26 @@
 ---
-title: Pros and Cons of Single-Domain, Multi-Domain, and Wildcard Certificates
-authors: [Wayne Thayer]
-date: 2014-02-26T17:30:34+00:00
+authors:
+- Wayne Thayer
+date: "2014-02-26T17:30:34+00:00"
 dsq_thread_id:
-  - 2295145224
+- 2295145224
+keywords:
+- microsoft
+- ssl
 tags:
-  - Wildcard Certificates
-  - Multi-Domain Certificates
-  - SSL/TLS
+- Microsoft
+- SSL/TLS
+title: Pros and Cons of Single-Domain, Multi-Domain, and Wildcard Certificates
+
 
 ---
-We have previously written about the [different types of SSL certificates][1], but in that article we focused on validation levels. A recent [post on LinkedIn][2] highlighted the fact that there is another dimension that we haven&rsquo;t yet explored.
+---
+We have previously written about the [different types of SSL certificates][1], but in that article we focused on validation levels. A recent [post on LinkedIn][2] highlighted the fact that there is another dimension that we haven’t yet explored.
 
-SSL certificates come in three basic packages: &ldquo;single-domain&rdquo; certificates that can only be used on one specific website, &ldquo;multi-domain&rdquo; certificates that can be used on more than one website, and &ldquo;wildcard&rdquo; certificates that can be used on any website within a specific domain name. Multi-domain certificates are often called &ldquo;unified communications&rdquo; or &ldquo;UC&rdquo; certificates. This is a reference to one common use of these certificates, which is to secure Microsoft messaging products such as Exchange and Lync. The table below shows examples of the number and types of websites that each of these packages can protect:
+SSL certificates come in three basic packages: “single-domain” certificates that can only be used on one specific website, “multi-domain” certificates that can be used on more than one website, and “wildcard” certificates that can be used on any website within a specific domain name. Multi-domain certificates are often called “unified communications” or “UC” certificates. This is a reference to one common use of these certificates, which is to secure Microsoft messaging products such as Exchange and Lync. The table below shows examples of the number and types of websites that each of these packages can protect:
+
+| Type of Certificate | Example Websites Protected | 
+|
 
 | Type of Certificate | Example Websites Protected | 
 |---------------------|----------------------------|

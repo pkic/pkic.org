@@ -1,11 +1,30 @@
 ---
-title: Ten Steps to Take If Your Website Is Compromised
-authors: [Wayne Thayer]
-date: 2014-02-12T20:00:50+00:00
+authors:
+- Wayne Thayer
+date: "2014-02-12T20:00:50+00:00"
 dsq_thread_id:
-  - 2248652651
+- 2248652651
+keywords:
+- encryption
+- csr
+- vulnerabilities
+- certificate signing request
+- ssh
+- malware
+- ssl
+- https
+- vulnerability
+- google
 tags:
-  - Malware
+- Encryption
+- CSR
+- Vulnerability
+- SSH
+- Malware
+- SSL/TLS
+- Google
+title: Ten Steps to Take If Your Website Is Compromised
+
 
 ---
 After the news broke that [40 million credit card numbers were stolen from Target][1] in a data breach of epic proportions, many of their customers went to work checking their accounts for fraudulent purchases and replacing cards we’d used recently at Target. These have become standard responses to news of this sort. In much the same way, there are some common actions that you should be aware of if your website becomes compromised.
@@ -63,9 +82,9 @@ Once you are confident that your site is clean, you should again change all pass
   
 ## Ask Google to Delist Your Site
   
-If your site ended up on the Google blacklist while it was infected, you can log into Google Webmaster Tools, select the website, and &lsquo;[Request a review](https://support.google.com/webmasters/answer/168328?hl=en).&rsquo; If Google finds that your site is free of malware, the warning should be removed within &ldquo;a day or so&rdquo;. A similar process is available for [Bing](http://www.bing.com/toolbox/webmaster/).
+If your site ended up on the Google blacklist while it was infected, you can log into Google Webmaster Tools, select the website, and ‘[Request a review](https://support.google.com/webmasters/answer/168328?hl=en).’ If Google finds that your site is free of malware, the warning should be removed within “a day or so”. A similar process is available for [Bing](http://www.bing.com/toolbox/webmaster/).
     
-## Make Sure It Doesn&rsquo;t Happen Again
+## Make Sure It Doesn’t Happen Again
   
 We recommend that you regularly scan your website for vulnerabilities that can lead to an infection. The same services that perform website malware scanning will also scan for vulnerabilities. By scheduling recurring vulnerability scans, you will be alerted when new vulnerabilities are found, and will likely be able to fix them by patching software before another infection strikes. An alternative to patching your site is to subscribe to a Web Application Firewall (WAF) service. This will act to protect your site even if vulnerabilities are present.
   

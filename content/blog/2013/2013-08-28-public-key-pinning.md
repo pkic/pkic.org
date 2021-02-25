@@ -1,11 +1,27 @@
 ---
-title: Public Key Pinning
-authors: [Bruce Morton]
-date: 2013-08-28T16:29:19+00:00
+authors:
+- Bruce Morton
+date: "2013-08-28T16:29:19+00:00"
 dsq_thread_id:
-  - 1937101463
+- 1937101463
+keywords:
+- chrome
+- ssl
+- mis-issued
+- google
+- sha1
+- ietf
+- android
 tags:
+- Chrome
+- SSL/TLS
+- Mis-issued
+- Google
+- SHA1
 - IETF
+- Android
+title: Public Key Pinning
+
 
 ---
 The current browser-certification authority (CA) trust model allows a website owner to obtain its SSL certificate from any one of a number of CAs. That flexibility also means that a certificate mis-issued by a CA other than the authorized CA chosen by the website owner, would also be accepted as trustworthy by browsers.
@@ -18,9 +34,9 @@ So what is public key pinning? Public key pinning allows the website owner to ma
   * Signed by a CA with this public key
   * Hierarchal-trust to a CA with this public key
 
-If a certificate for the website owner&rsquo;s domain is issued by a CA that is not listed (i.e., not pinned), then a browser that supports public key pinning will provide a trust dialogue warning. Please note that website owners can pin multiple keys from multiple CAs if desired, and all will be treated as valid by the browsers.
+If a certificate for the website owner’s domain is issued by a CA that is not listed (i.e., not pinned), then a browser that supports public key pinning will provide a trust dialogue warning. Please note that website owners can pin multiple keys from multiple CAs if desired, and all will be treated as valid by the browsers.
 
-The website owner trusts that its chosen, specified CAs will not mistakenly issue a certificate for the owner&rsquo;s domain. These CAs often restrict who can request the issuance of a certificate for the owner&rsquo;s specific domains, which provides additional security against mis-issuance of certificates to an unauthorized party.
+The website owner trusts that its chosen, specified CAs will not mistakenly issue a certificate for the owner’s domain. These CAs often restrict who can request the issuance of a certificate for the owner’s specific domains, which provides additional security against mis-issuance of certificates to an unauthorized party.
 
 Unfortunately, the public key pinning that Google implemented in 2011 is not scalable as it requires the public keys for each domain to be added to the browser.
 

@@ -1,10 +1,25 @@
 ---
+authors:
+- Bruce Morton
+date: "2019-12-06T16:52:24+00:00"
+keywords:
+- firefox
+- mixed content
+- chrome
+- https
+- attack
+- policy
+tags:
+- Firefox
+- Mixed Content
+- Chrome
+- SSL/TLS
+- Attack
+- Policy
 title: Chrome Kills Mixed Content for HTTPS
-authors: [Bruce Morton]
-date: 2019-12-06T16:52:24+00:00
-tags: [SSL/TLS, Chrome]
----
 
+
+---
 In a phased approach, Chrome plans to block mixed content on secure websites to improve user security. [Most browsers already block some mixed content such as scripts and iframes by default.][1] Chrome is amping it up by gradually taking steps to also block images, audio recordings and videos, according to a recent [Google Security blog][2]. Preventing mixed content to load will eventually result in HTTPS websites losing their security indicator downgrading the site to HTTP, which alerts visitors that the site is not secure.
 
 Mixed content happens when a website that is secured by HTTPS provides some content over HTTP. For example, the site might load scripts, iframes, images, audio or video over HTTP. Sometimes the insecure content is distributed from a third party. [Achieving HTTPS means securing all website content][3]. The issue with mixed content is that it is vulnerable to an attack. A bad actor could manipulate the insecure content to impart false information or possibly inject malicious code that could harm website users.

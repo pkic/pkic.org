@@ -1,15 +1,32 @@
 ---
-title: CAs Support Standards and Regulations
-authors: [Bruce Morton]
-date: 2013-05-10T19:40:27+00:00
+authors:
+- Bruce Morton
+date: "2013-05-10T19:40:27+00:00"
 dsq_thread_id:
-  - 1997020829
+- 1997020829
+keywords:
+- ssl
+- etsi
+- cica
+- casc
+- extended validation
+- webtrust
+- ca/browser forum
+tags:
+- SSL/TLS
+- ETSI
+- CICA
+- CASC
+- EV
+- WebTrust
+- CA/Browser Forum
+title: CAs Support Standards and Regulations
 
 
 ---
 There is an industry myth that certification authorities (CAs) are not regulated. In fact publicly-trusted SSL CAs support the development of industry regulations and have been audited annually to ensure compliance to the many requirements.
 
-To provide some history, SSL CAs have always self-policed themselves by having external audits performed. In the &lsquo;90s, the CAs wrote certificate policies and certification practice statements requiring annual compliance audits. Since there were no CA audit criteria, the CAs contracted for [SAS 70 audits][1].
+To provide some history, SSL CAs have always self-policed themselves by having external audits performed. In the ‘90s, the CAs wrote certificate policies and certification practice statements requiring annual compliance audits. Since there were no CA audit criteria, the CAs contracted for [SAS 70 audits][1].
 
 In 2000, the [AICPA and CICA developed the WebTrust for CA audit criteria][2]. The CAs switched to being audited to meet the WebTrust criteria and many browsers required successful WebTrust for CA audits to maintain root certificates embedded in their software.
 

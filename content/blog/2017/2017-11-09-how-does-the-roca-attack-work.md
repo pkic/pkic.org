@@ -1,9 +1,22 @@
 ---
-title: How Does the ROCA Attack Work?
-authors: [Tim Hollebeek]
-date: 2017-11-09T19:08:25+00:00
+authors:
+- Tim Hollebeek
+date: "2017-11-09T19:08:25+00:00"
 dsq_thread_id:
-  - 6273427852
+- 6273427852
+keywords:
+- pki
+- web pki
+- attack
+- roca
+- rsa
+tags:
+- PKI
+- Web PKI
+- Attack
+- ROCA
+- RSA
+title: How Does the ROCA Attack Work?
 
 
 ---

@@ -1,9 +1,22 @@
 ---
-title: CA/B Forum Istanbul 2015
-authors: [Dean Coclin]
-date: 2015-11-10T16:20:14+00:00
+authors:
+- Dean Coclin
+date: "2015-11-10T16:20:14+00:00"
 dsq_thread_id:
-  - 4306254477
+- 4306254477
+keywords:
+- qualified
+- chrome
+- root program
+- eidas
+- webtrust
+tags:
+- Qualified
+- Chrome
+- Root Program
+- eIDAS
+- WebTrust
+title: CA/B Forum Istanbul 2015
 
 
 ---

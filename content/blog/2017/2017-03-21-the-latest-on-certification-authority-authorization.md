@@ -1,9 +1,32 @@
 ---
-title: The Latest on Certification Authority Authorization
-authors: [Jeremy Rowley]
-date: 2017-03-21T20:40:22+00:00
+authors:
+- Jeremy Rowley
+date: "2017-03-21T20:40:22+00:00"
 dsq_thread_id:
-  - 5653305703
+- 5653305703
+keywords:
+- qualified
+- organization validated
+- identity
+- attack
+- policy
+- encryption
+- cab forum
+- ov certificate
+- caa
+- pki
+- ca/browser forum
+tags:
+- Qualified
+- OV
+- Identity
+- Attack
+- Policy
+- Encryption
+- CA/Browser Forum
+- CAA
+- PKI
+title: The Latest on Certification Authority Authorization
 
 
 ---
@@ -41,7 +64,7 @@ Very few DNS records currently include a CAA record. Recently, DNS providers hav
 
 Another challenge is the difficulty in determining whether a CA is properly checking CAA records.  Unlike CT, which publicly discloses issued certificates, CAA is a point in time check by the CA.  A public record of the CA’s check is not available. Provided the CA doesn’t issue for high profile domains, a bad-acting (or ignorant) CA could ignore CAA records and not get caught.
 
-A final concern is that the DNS operator may not be the individual ordering certificates and, with large multi-national enterprise, may not have clear communication on which CAs are used internally. This could unintentionally limit contract obligations already in place, halt ongoing projects, and prevent an organization from getting the certificates needed to conduct e-commerce &#8211; negatively affecting the bottom line. CAA records ignore all previous relationships and communications between the organization ordering the certificate and CA, meaning a single DNS administrator could undermine months of negotiation. Even worse, a malicious or disgruntled DNS administrator could stall a company by setting a large DNS record TTL and entering garbage in the CAA record, effectively eliminating the company’s ability to obtain certificates from any CA until the TTL expires.
+A final concern is that the DNS operator may not be the individual ordering certificates and, with large multi-national enterprise, may not have clear communication on which CAs are used internally. This could unintentionally limit contract obligations already in place, halt ongoing projects, and prevent an organization from getting the certificates needed to conduct e-commerce – negatively affecting the bottom line. CAA records ignore all previous relationships and communications between the organization ordering the certificate and CA, meaning a single DNS administrator could undermine months of negotiation. Even worse, a malicious or disgruntled DNS administrator could stall a company by setting a large DNS record TTL and entering garbage in the CAA record, effectively eliminating the company’s ability to obtain certificates from any CA until the TTL expires.
 
 ## Where do We Stand
 

@@ -1,9 +1,24 @@
 ---
-title: SSL Certificate Validity Periods Limited to 39 Months Starting in April
-authors: [Jeremy Rowley]
-date: 2015-02-19T23:52:18+00:00
+authors:
+- Jeremy Rowley
+date: "2015-02-19T23:52:18+00:00"
 dsq_thread_id:
-  - 3531096319
+- 3531096319
+keywords:
+- webtrust
+- ca/browser forum
+- ssl
+- policy
+- etsi
+- vulnerabilities
+tags:
+- WebTrust
+- CA/Browser Forum
+- SSL/TLS
+- Policy
+- ETSI
+- Vulnerability
+title: SSL Certificate Validity Periods Limited to 39 Months Starting in April
 
 
 ---

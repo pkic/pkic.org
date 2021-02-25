@@ -1,9 +1,26 @@
 ---
-title: TLS 1.3 Includes Improvements to Security and Performance
-authors: [Tim Shirley]
-date: 2018-04-10T17:55:05+00:00
+authors:
+- Tim Shirley
+date: "2018-04-10T17:55:05+00:00"
 dsq_thread_id:
-  - 6606123721
+- 6606123721
+keywords:
+- internet engineering task force
+- https
+- forward secrecy
+- tls
+- tls 1.3
+- tls 1.2
+- ietf
+- vulnerabilities
+tags:
+- IETF
+- SSL/TLS
+- Forward Secrecy
+- TLS 1.3
+- TLS 1.2
+- Vulnerability
+title: TLS 1.3 Includes Improvements to Security and Performance
 
 
 ---
@@ -11,7 +28,7 @@ Last month saw the final adoption, after 4 years of work, of TLS version 1.3 by 
 
 ## Security
 
-All cipher suites that do not provide forward secrecy have been eliminated from TLS 1.3. This is a very important security property, because without forward secrecy, if a server&#8217;s private key is compromised today, any previously-recorded conversations with that server dating back as long as the key was in use could be decrypted. While it is possible (and highly recommended) to configure a server with TLS 1.2 to prefer (or only support) cipher suites that provide forward secrecy, under TLS 1.3 these are the only option. Other cryptographic modernizations in TLS 1.3 include the elimination of DSA, custom DHE groups, and compression.
+All cipher suites that do not provide forward secrecy have been eliminated from TLS 1.3. This is a very important security property, because without forward secrecy, if a server’s private key is compromised today, any previously-recorded conversations with that server dating back as long as the key was in use could be decrypted. While it is possible (and highly recommended) to configure a server with TLS 1.2 to prefer (or only support) cipher suites that provide forward secrecy, under TLS 1.3 these are the only option. Other cryptographic modernizations in TLS 1.3 include the elimination of DSA, custom DHE groups, and compression.
 
 TLS 1.3 features a new version downgrade protection to guard against vulnerabilities like [POODLE][1]. Specifically, if a client claims to only support an earlier version of TLS, the server is required to include a defined value in its handshake response, and TLS 1.3-supporting clients are required to reject handshakes that include the defined value. This protects against an active attacker triggering a version downgrade, since this data is signed and thus cannot be modified by an attacker without detection.
 

@@ -1,13 +1,31 @@
 ---
-title: Self-Signed Certificates Don’t Deliver Trust
-authors: [Bruce Morton]
-date: 2013-04-02T20:48:10+00:00
+authors:
+- Bruce Morton
+date: "2013-04-02T20:48:10+00:00"
 dsq_thread_id:
-  - 1937101464
+- 1937101464
+keywords:
+- domain validated
+- crl
+- nist
+- ssl
+- https
+- policy
+- ocsp
+- extended validation
+tags:
+- DV
+- CRL
+- NIST
+- SSL/TLS
+- Policy
+- OCSP
+- EV
+title: Self-Signed Certificates Don’t Deliver Trust
 
 
 ---
-We&rsquo;ve heard the argument that website operators could just use [self-signed certificates](https://en.wikipedia.org/wiki/Self-signed_certificate). They are easy to issue and they are &ldquo;free.&rdquo; Before issuing self-signed certificates, it&rsquo;s a good idea to examine the trust and security model. You should also compare self-signed certificates to the publicly trusted certification authority (CA) model; and then make your own decision.
+We’ve heard the argument that website operators could just use [self-signed certificates](https://en.wikipedia.org/wiki/Self-signed_certificate). They are easy to issue and they are “free.” Before issuing self-signed certificates, it’s a good idea to examine the trust and security model. You should also compare self-signed certificates to the publicly trusted certification authority (CA) model; and then make your own decision.
 
 ## Self-Signed Certificate Model
 

@@ -1,14 +1,32 @@
 ---
-title: Benefits of Elliptic Curve Cryptography
-authors: [Wayne Thayer]
-date: 2014-06-10T14:30:44+00:00
+authors:
+- Wayne Thayer
+date: "2014-06-10T14:30:44+00:00"
 dsq_thread_id:
-  - 2751146927
+- 2751146927
+keywords:
+- ecdsa
+- rsa
+- ca/browser forum
+- ecdh
+- ssl
+- encryption
+- ecc
+- elliptic curve
 tags:
-  - ECC
+- ECDSA
+- RSA
+- CA/Browser Forum
+- ECDH
+- SSL/TLS
+- Encryption
+- ECC
+title: Benefits of Elliptic Curve Cryptography
+
 
 ---
-Elliptic Curve Cryptography (ECC) has existed since the mid-1980s, but it is still looked on as the newcomer in the world of SSL, and has only begun to gain adoption in the past few years. ECC is a fundamentally different mathematical approach to encryption than the venerable RSA algorithm. An elliptic curve is an algebraic function (y2 = x3 + ax + b) which looks like a symmetrical curve parallel to the x axis when plotted. (See figures below.) As with other forms of public key cryptography, ECC is based on a one-way property in which it is easy to perform a calculation but infeasible to reverse or invert the results of the calculation to find the original numbers. ECC uses different mathematical operations than RSA to achieve this property. The easiest way to explain this math is &mdash; for an elliptic curve, a line will only pass through three points along the curve (P, Q, and R), and that by knowing two of the points (P and Q), the other (R) can be calculated easily, but with just R, the other two, P and Q, cannot be derived.
+---
+Elliptic Curve Cryptography (ECC) has existed since the mid-1980s, but it is still looked on as the newcomer in the world of SSL, and has only begun to gain adoption in the past few years. ECC is a fundamentally different mathematical approach to encryption than the venerable RSA algorithm. An elliptic curve is an algebraic function (y2 = x3 + ax + b) which looks like a symmetrical curve parallel to the x axis when plotted. (See figures below.) As with other forms of public key cryptography, ECC is based on a one-way property in which it is easy to perform a calculation but infeasible to reverse or invert the results of the calculation to find the original numbers. ECC uses different mathematical operations than RSA to achieve this property. The easiest way to explain this math is — for an elliptic curve, a line will only pass through three points along the curve (P, Q, and R), and that by knowing two of the points (P and Q), the other (R) can be calculated easily, but with just R, the other two, P and Q, cannot be derived.
 
 
 {{< figure src="/uploads/2014/06/elliptic-curve-1.jpg" title="Elliptic Curve #1" >}}
@@ -18,14 +36,10 @@ ECC is used in both digital signatures via Elliptic Curve DSA (ECDSA), and in ke
 
 ## Benefits
 
-The foremost benefit of ECC is that it&rsquo;s simply stronger than RSA for key sizes in use today. The typical ECC key size of 256 bits is equivalent to a 3072-bit RSA key and 10,000 times stronger than a 2048-bit RSA key! To stay ahead of an attacker&rsquo;s computing power, RSA keys must get longer. The CA/Browser Forum and leading browser vendors officially ended support for 1024-bit RSA keys after 2013, so all new SSL certificates must use keys that are twice as long. Moreover, as shown in the table below, future RSA key sizes quickly expand while ECC key lengths increase linearly with strength.
+The foremost benefit of ECC is that it’s simply stronger than RSA for key sizes in use today. The typical ECC key size of 256 bits is equivalent to a 3072-bit RSA key and 10,000 times stronger than a 2048-bit RSA key! To stay ahead of an attacker’s computing power, RSA keys must get longer. The CA/Browser Forum and leading browser vendors officially ended support for 1024-bit RSA keys after 2013, so all new SSL certificates must use keys that are twice as long. Moreover, as shown in the table below, future RSA key sizes quickly expand while ECC key lengths increase linearly with strength.
 
 | Symmetric Key Size (bits) | RSA and DSA Key Size (bits) | ECC Key Size (bits) |
-|---------------------------|-----------------------------|---------------------|
-| 80 | 1024 | 160 |
-| 112 | 2048 | 224 |
-| 128 | 3072 | 256 |
-| 192 | 7680 | 384 |
+|92 | 7680 | 384 |
 | 56 | 15360 | 512 |
 
 Source: NIST 800-57, Table 2 ([http://csrc.nist.gov/publications/nistpubs/800-57/sp800-57_part1_rev3_general.pdf](http://csrc.nist.gov/publications/nistpubs/800-57/sp800-57_part1_rev3_general.pdf))

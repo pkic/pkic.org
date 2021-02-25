@@ -1,18 +1,46 @@
 ---
-title: Leading Certificate Authorities and Microsoft Introduce New Standards to Protect Consumers Online
-authors: [CA Security Council]
-date: 2016-12-08T21:05:41+00:00
-dsq_thread_id:
-  - 5366004868
+authors:
+- CA Security Council
 categories:
-  - Press Releases
+- Press Releases
+date: "2016-12-08T21:05:41+00:00"
+dsq_thread_id:
+- 5366004868
+keywords:
+- tls
+- casc
+- fips
+- time-stamping
+- revocation
+- tsa
+- hsm
+- malware
+- ssl
+- code signing
+- identity
+- microsoft
+- certificate authority security council
+tags:
+- SSL/TLS
+- CASC
+- FIPS
+- TSA
+- Revocation
+- HSM
+- Malware
+- Code Signing
+- Identity
+- Microsoft
+title: Leading Certificate Authorities and Microsoft Introduce New Standards to Protect
+  Consumers Online
+
 
 ---
 <h3 style="text-align: center; margin-bottom: 1em;">
   The CASC’s Minimum Requirements for Code Signing Certificates enables a common vetting process for all CAs
 </h3>
 
-**San Francisco –December 8, 2016 –** the Certificate Authority Security Council (CASC), an advocacy group committed to the advancement web security, today announced the Code Signing Working Group has released new Minimum Requirements for Code Signing for use by all Certificate Authorities (CA). These requirements represent the first-ever standardized code signing guidelines. Code signing is the method of using a certificate-based digital signature to sign executables and scripts in order to verify the author&#8217;s identity and ensure that the code has not been changed or corrupted. Helping to verify software authenticity and avoid downloading malware and other malicious software is critical to protecting consumers’ online interactions. Microsoft is the first applications software vendor to adopt these guidelines, with others expected to follow.
+**San Francisco –December 8, 2016 –** the Certificate Authority Security Council (CASC), an advocacy group committed to the advancement web security, today announced the Code Signing Working Group has released new Minimum Requirements for Code Signing for use by all Certificate Authorities (CA). These requirements represent the first-ever standardized code signing guidelines. Code signing is the method of using a certificate-based digital signature to sign executables and scripts in order to verify the author’s identity and ensure that the code has not been changed or corrupted. Helping to verify software authenticity and avoid downloading malware and other malicious software is critical to protecting consumers’ online interactions. Microsoft is the first applications software vendor to adopt these guidelines, with others expected to follow.
 
 The Code Signing Working Group was created as a voluntary group of CAs, Internet browser software vendors, and suppliers of other applications that use X.509 v.3 digital certificates for SSL/TLS and code signing. Once the code signing draft was completed, it was endorsed by the CA Security Council members and others.  The CA Security Council website is now the repository for the document and the group will continue to work with others in the industry to ensure it is kept up to date.
 

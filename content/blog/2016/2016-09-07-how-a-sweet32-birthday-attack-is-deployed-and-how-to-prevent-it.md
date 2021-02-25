@@ -1,9 +1,27 @@
 ---
-title: How a SWEET32 Birthday Attack is Deployed and How to Prevent It
-authors: [Bruce Morton]
-date: 2016-09-07T17:02:37+00:00
+authors:
+- Bruce Morton
+date: "2016-09-07T17:02:37+00:00"
 dsq_thread_id:
-  - 5126635769
+- 5126635769
+keywords:
+- attack
+- rc4
+- encryption
+- tls
+- 3des
+- ssh
+- tls 1.0
+- https
+tags:
+- Attack
+- RC4
+- Encryption
+- SSL/TLS
+- 3DES
+- SSH
+- TLS 1.0
+title: How a SWEET32 Birthday Attack is Deployed and How to Prevent It
 
 
 ---
@@ -13,7 +31,7 @@ Details surrounding the [SWEET32: Birthday attacks on 64-bit block ciphers in TL
 
 Certain scenarios are pre-disposed to a SWEET32 Birthday attack. For HTTPS, most susceptible are websites that support the 3DES algorithm and sustain long lived connections.
 
-Short block sizes such as 64-bits are vulnerable to birthday attacks. The birthday attack suggests that a brute force attack can be drastically reduced. Therefore, a collision attack against encryption using 64-bit ciphers can happen when around 2<sup>64/2 </sup>or 2<sup>32</sup> bytes of encrypted cipher text are created. This would translate to 32 GB of data, which can easily be reached in practice.
+Short block sizes such as 64-bits are vulnerable to birthday attacks. The birthday attack suggests that a brute force attack can be drastically reduced. Therefore, a collision attack against encryption using 64-bit ciphers can happen when around 2⁶⁴ᐟ² or 2³² bytes of encrypted cipher text are created. This would translate to 32 GB of data, which can easily be reached in practice.
 
 Popular solutions that use block ciphers with 64-bit blocks include:
 

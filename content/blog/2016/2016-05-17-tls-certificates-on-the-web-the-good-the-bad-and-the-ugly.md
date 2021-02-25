@@ -1,9 +1,33 @@
 ---
-title: TLS Certificates on the Web – The Good, The Bad and The Ugly
-authors: [Rick Andrews]
-date: 2016-05-17T14:30:47+00:00
+authors:
+- Rick Andrews
+date: "2016-05-17T14:30:47+00:00"
 dsq_thread_id:
-  - 4831856515
+- 4831856515
+keywords:
+- tls
+- ecc
+- extended validation
+- md5
+- rsa
+- pki
+- ca/browser forum
+- ssl
+- code signing
+- policy
+- encryption
+tags:
+- SSL/TLS
+- ECC
+- EV
+- Hash Function
+- RSA
+- PKI
+- CA/Browser Forum
+- Code Signing
+- Policy
+- Encryption
+title: TLS Certificates on the Web – The Good, The Bad and The Ugly
 
 
 ---
@@ -15,7 +39,7 @@ In the last few years, we’ve endured three major certificate-based migrations:
   * Away from small RSA keys to 2048-bit keys or larger
   * Away from the SHA-1 hash algorithm to SHA-256
 
-What’s driving these migrations? Primarily, it’s the relentless march of attacks. As Bruce Schneier [says][1], &#8220;Attacks always get better; they never get worse.&#8221; To stay ahead of these attacks, Certification Authorities and browser vendors joined together several years ago to form the CA/Browser Forum, and published several requirements documents: the [Baseline Requirements][2], the [EV SSL Guidelines][3] and the [EV Code Signing Requirements][4].
+What’s driving these migrations? Primarily, it’s the relentless march of attacks. As Bruce Schneier [says][1], “Attacks always get better; they never get worse.” To stay ahead of these attacks, Certification Authorities and browser vendors joined together several years ago to form the CA/Browser Forum, and published several requirements documents: the [Baseline Requirements][2], the [EV SSL Guidelines][3] and the [EV Code Signing Requirements][4].
 
 What’s slowing these migrations? Primarily, it’s the use of of SSL/TLS in non-browser applications. These include mail, XMPP and other non-web servers, Point-of-Sale (POS) and other devices. These applications and devices lack the auto-update capabilities that were developed by web browser vendors. In addition, there’s considerable institutional inertia. Your average server machine is not frequently updated (except perhaps for OS security patches). Companies wait years to perform a server or even application refresh, because they’re busy with more important things. A common attitude is “if it ain’t broke, don’t fix it.”
 

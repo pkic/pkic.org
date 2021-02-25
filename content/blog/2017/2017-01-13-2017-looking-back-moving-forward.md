@@ -1,19 +1,68 @@
 ---
-title: 2017 – Looking Back, Moving Forward
-authors: [Bruce Morton]
-date: 2017-01-13T21:11:15+00:00
+authors:
+- Bruce Morton
+date: "2017-01-13T21:11:15+00:00"
 dsq_thread_id:
-  - 5460572678
+- 5460572678
+keywords:
+- tls
+- tls 1.3
+- 3des
+- vulnerabilities
+- caa
+- time-stamping
+- revocation
+- ssl 3.0
+- mitm
+- apple
+- rsa
+- malware
+- firefox
+- ca/browser forum
+- cps
+- chrome
+- ssl
+- code signing
+- https
+- identity
+- vulnerability
+- google
+- attack
+- policy
+- encryption
+tags:
+- SSL/TLS
+- TLS 1.3
+- 3DES
+- Vulnerability
+- CAA
+- TSA
+- Revocation
+- SSL 3.0
+- MITM
+- Apple
+- RSA
+- Malware
+- Firefox
+- CA/Browser Forum
+- Policy
+- Chrome
+- Code Signing
+- Identity
+- Google
+- Attack
+- Encryption
+title: 2017 – Looking Back, Moving Forward
 
 
 ---
 ### Looking Back at 2016
 
-Fortunately, 2016 was not a year full of SSL/TLS vulnerabilities. Although some researchers did prove old cryptography algorithms should be put out to pasture. The year showed the end of public-trusted SHA-1 SSL/TLS certificates. It also showed more transparency should be considered due to issues discovered with a few certification authorities (CAs). The great news is HTTPS is no longer the minority &#8212; after 20 years, connections using [HTTPS has surpassed HTTP][1].
+Fortunately, 2016 was not a year full of SSL/TLS vulnerabilities. Although some researchers did prove old cryptography algorithms should be put out to pasture. The year showed the end of public-trusted SHA-1 SSL/TLS certificates. It also showed more transparency should be considered due to issues discovered with a few certification authorities (CAs). The great news is HTTPS is no longer the minority — after 20 years, connections using [HTTPS has surpassed HTTP][1].
 
 ## Vulnerabilities
 
-Researchers terminated the use of the SSL 2.0 version of the protocol after a vulnerability called Decrypting RSA with Obsolete and Weakened eNcryption; otherwise known as [DROWN][2] was discovered. The vulnerability takes advantage of SSL 2.0&rsquo;s weak anti-Bleichenbacher countermeasure and weak export ciphers. The attack can be performed in about 8 hours for a cost of about $440 on Amazon EC2. Administrators should not support SSL 2.0 (or SSL 3.0) on your servers.
+Researchers terminated the use of the SSL 2.0 version of the protocol after a vulnerability called Decrypting RSA with Obsolete and Weakened eNcryption; otherwise known as [DROWN][2] was discovered. The vulnerability takes advantage of SSL 2.0’s weak anti-Bleichenbacher countermeasure and weak export ciphers. The attack can be performed in about 8 hours for a cost of about $440 on Amazon EC2. Administrators should not support SSL 2.0 (or SSL 3.0) on your servers.
 
 [HEIST][3] was announced, which allows known compression-based attacks such as BREACH and CRIME to be performed directly in the browser with no network access required. The vulnerability is easier to implement because a man-in-the-middle (MitM) position is not required. HEIST is based on the fact that SSL/TLS encryption will leak data through compression. This attack would most likely be implemented through the use of third-party cookies. Site operators should ensure they trust their third-party content.
 
@@ -33,13 +82,13 @@ Finally, the time of public trust certificates with unregistered domain names ha
 
 Affiliate CAs, [WoSign and Startcom had some issues in 2016][7]. WoSign was caught backdating certificate issuing dates to meet the SHA-1 deprecation requirements. WoSign also purchased Startcom without disclosure to the browsers or the CA/Browser Forum. Through analysis using certificate transparency (CT), Mozilla determined certificate issues and removed trust from new certificates issued by WoSign and Startcom. Apple and Google also made similar conclusions. The result seems to be the browser requirement to increase the use of CT to monitor all certificates issued by CAs.
 
-## HTTPS &#8211; More than Half-way There
+## HTTPS – More than Half-way There
 
 Mozilla telemetry and Google transparency report shows that after 20 years, HTTPS is used more than HTTP. Growth in HTTPS has come from the large push to move to Always-On SSL or HTTPS Everywhere. This has also been [encouraged by the browsers][8] by requiring HTTPS to be used for HTTP/2 deployment, and browser privileged services such as geolocation, device motion/orientation and encrypted media extension (EME). Many corporations, such as Blogspot, Reddit, Flickr, Wikimedia, WordPress, Bitly and Shopify, have set their default to HTTPS. The result should be a more secure Internet, greater privacy and new policies to push HTTPS to 100-percent.
 
 ### To 2017 and Beyond
 
-In 2017, we will see more progress with SSL/TLS. Chrome will show &ldquo;Not secure&rdquo; on some sites and CT will be implemented for most new certificates. We may also see new requirements for CAA and the start of TLS 1.3. Code signing will also be improved with the deployment of a new standard for minimum requirements.
+In 2017, we will see more progress with SSL/TLS. Chrome will show “Not secure” on some sites and CT will be implemented for most new certificates. We may also see new requirements for CAA and the start of TLS 1.3. Code signing will also be improved with the deployment of a new standard for minimum requirements.
 
 ## Deprecation
 
@@ -49,7 +98,7 @@ EV also established a 27-month certificate validity maximum, but for non-EV cert
 
 Finally, we started deprecating the SHA-1 hashing algorithm in 2013. As stated above, the CAs stopped signing with SHA-1 at the end of 2016 and in 2017 the browsers will show trust issues with SHA-1 signed certificates.
 
-The good news is that we have moved through all of the foreseen deprecation. Since 2048-bit RSA and SHA-256 are acceptable to 2030, hopefully the industry won&rsquo;t put certificate subscribers through similar changes they have seen over the last six years.
+The good news is that we have moved through all of the foreseen deprecation. Since 2048-bit RSA and SHA-256 are acceptable to 2030, hopefully the industry won’t put certificate subscribers through similar changes they have seen over the last six years.
 
 ## Minimum Requirements for Code Signing Certificate
 
@@ -57,7 +106,7 @@ Over the last few years, the browsers and the CAs have worked to document the Mi
 
 ## Not Secure
 
-Google will start to discourage website visitors from using unprotected sites by [indicating &ldquo;Not secure&rdquo;][11] in the status bar. Chrome 56 to be launched in January will indicate &ldquo;Not secure&rdquo; for a site that presents password and credit card fields that is not secured by an SSL/TLS certificate. Site operators should consider this to be an early warning as Google will plan to use &ldquo;Not secure&rdquo; with a red triangle for all HTTP pages in the future.
+Google will start to discourage website visitors from using unprotected sites by [indicating “Not secure”][11] in the status bar. Chrome 56 to be launched in January will indicate “Not secure” for a site that presents password and credit card fields that is not secured by an SSL/TLS certificate. Site operators should consider this to be an early warning as Google will plan to use “Not secure” with a red triangle for all HTTP pages in the future.
 
 ## Certificate Transparency for All Certificates
 

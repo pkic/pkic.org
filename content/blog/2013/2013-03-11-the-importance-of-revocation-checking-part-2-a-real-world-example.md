@@ -1,9 +1,30 @@
 ---
-title: 'The Importance of Revocation Checking Part 2: A Real World Example'
-authors: [Wayne Thayer]
-date: 2013-03-11T16:00:08+00:00
+authors:
+- Wayne Thayer
+date: "2013-03-11T16:00:08+00:00"
 dsq_thread_id:
-  - 1937734354
+- 1937734354
+keywords:
+- revocation
+- malware
+- crl
+- ssl
+- identity
+- code signing
+- attack
+- ocsp
+- encryption
+tags:
+- Revocation
+- Malware
+- CRL
+- SSL/TLS
+- Identity
+- Code Signing
+- Attack
+- OCSP
+- Encryption
+title: 'The Importance of Revocation Checking Part 2: A Real World Example'
 
 
 ---
@@ -11,7 +32,7 @@ Just last week, a new security incident related to certificate revocation checki
 
 Java supports the use of code signing certificates issued by Certificate Authorities. When Java code is signed with one of these certificates, it includes identifying information about the publisher of the code and is referred to as a signed application. Because signed applications are considered to be safer, Java typically allows them to be run without issuing the warning described above. Unfortunately, there are times when a code signing certificate needs to be revoked. A typical example is when someone with access to the certificate’s private key leaves the company and should no longer be able to sign code using the company’s identity. When a code signing certificate is revoked, any application that’s signed after the revocation date should not be trusted. Just like SSL, this revocation information is published by CAs in the form of Certificate Revocation Lists (CRLs) or made available via an Online Certificate Status Protocol (OCSP) service.
 
-By default, Java doesn’t check to determine if a certificate has been revoked. The certificate used in last week’s attack had indeed been revoked, but without revocation checking it didn’t matter &#8211; the attack could be carried out without warning to the user, resulting in malware being installed on their computer. If this isn’t a good example of the importance of revocation checking, then nothing is!
+By default, Java doesn’t check to determine if a certificate has been revoked. The certificate used in last week’s attack had indeed been revoked, but without revocation checking it didn’t matter – the attack could be carried out without warning to the user, resulting in malware being installed on their computer. If this isn’t a good example of the importance of revocation checking, then nothing is!
 
 With only a little bit of effort, Java allows users to enable revocation checking and reduce this risk. Select the Advanced tab of the Java Control Panel (accessible from the Control Panel in Windows) and scroll down to the Security section. There you’ll find two settings that you should enable:
 

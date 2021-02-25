@@ -1,7 +1,37 @@
 ---
+authors:
+- Tim Callan
+date: "2019-08-01T15:00:04+00:00"
+keywords:
+- qualified
+- ssl
+- identity
+- code signing
+- vulnerability
+- encryption
+- etsi
+- casc
+- vulnerabilities
+- revocation
+- webtrust
+- malware
+- pki
+- ca/browser forum
+tags:
+- Qualified
+- SSL/TLS
+- Identity
+- Code Signing
+- Vulnerability
+- Encryption
+- ETSI
+- CASC
+- Revocation
+- WebTrust
+- Malware
+- PKI
+- CA/Browser Forum
 title: 9 Common Myths About CAs
-authors: [Tim Callan]
-date: 2019-08-01T15:00:04+00:00
 
 
 ---
@@ -40,7 +70,7 @@ Fact: Having formed the backbone of internet security for more than 20 years, ce
 
 ## Myth #7: There are more than 600 CAs – too many to handle, and SSL is a commodity business
 
-Fact: Although hundreds of intermediate certs may exist worldwide, [Mozilla’s root store][1] lists just 65 proprietary holders or trusted root certificates, and more than 99 percent of all SSL certificates issued originate from the root certificates of the world’s seven largest providers. Each of these leading companies is WebTrust-audited by an accredited third-party accounting firm and subject to standards passed by the CA/Browser Forum and other bodies. Each CA is accountable to both its customers and the browser root store operators. Because of the leadership of responsible CAs, the SSL industry has always stayed ahead of evolving threats. Recent examples of CA evolution include the deprecation of internal host names, deployment of SHA-2 and 2048-bit certs, and enhanced security guidelines. The CAs&#8217; ability to evolve is what will create a secure internet for many years to come.
+Fact: Although hundreds of intermediate certs may exist worldwide, [Mozilla’s root store][1] lists just 65 proprietary holders or trusted root certificates, and more than 99 percent of all SSL certificates issued originate from the root certificates of the world’s seven largest providers. Each of these leading companies is WebTrust-audited by an accredited third-party accounting firm and subject to standards passed by the CA/Browser Forum and other bodies. Each CA is accountable to both its customers and the browser root store operators. Because of the leadership of responsible CAs, the SSL industry has always stayed ahead of evolving threats. Recent examples of CA evolution include the deprecation of internal host names, deployment of SHA-2 and 2048-bit certs, and enhanced security guidelines. The CAs’ ability to evolve is what will create a secure internet for many years to come.
 
 ## Myth #8: Certificate revocation is either unnecessary or broken. Its benefits do not outweigh the potential browser performance issues that it causes
 

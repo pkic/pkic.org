@@ -1,9 +1,24 @@
 ---
-title: Chrome to Show HTTP Sites as Not Secure
-authors: [Bruce Morton]
-date: 2016-09-15T18:59:31+00:00
+authors:
+- Bruce Morton
+date: "2016-09-15T18:59:31+00:00"
 dsq_thread_id:
-  - 5147064909
+- 5147064909
+keywords:
+- chrome
+- ssl
+- https
+- google
+- tls
+- vulnerabilities
+- hsts
+tags:
+- Chrome
+- SSL/TLS
+- Google
+- Vulnerability
+- HSTS
+title: Chrome to Show HTTP Sites as Not Secure
 
 
 ---

@@ -1,9 +1,34 @@
 ---
-title: CASC Announces Launch of London Protocol to Improve Identity Assurance and Minimize Phishing on Identity Websites
-authors: [CA Security Council]
-date: 2018-06-27T13:00:44+00:00
+authors:
+- CA Security Council
 categories:
-  - Press Releases
+- Press Releases
+date: "2018-06-27T13:00:44+00:00"
+keywords:
+- domain validated
+- ca/browser forum
+- ssl
+- organization validated
+- identity
+- phishing
+- attack
+- certificate authority security council
+- casc
+- ev certificate
+- extended validation
+tags:
+- DV
+- CA/Browser Forum
+- SSL/TLS
+- OV
+- Identity
+- Phishing
+- Attack
+- CASC
+- EV
+title: CASC Announces Launch of London Protocol to Improve Identity Assurance and
+  Minimize Phishing on Identity Websites
+
 
 ---
 **LONDON – (June 27, 2018) –** The Certificate Authority Security Council (CASC), an advocacy group committed to the advancement of the security of websites and online transactions, announced at the CA/Browser Forum event in London the launch of the London Protocol – an initiative to improve identity assurance and minimize the possibility of phishing activity on websites encrypted with organization validated (OV) and extended validation (EV) certificates, which contain organization identity information (Identity Certificates).
@@ -14,12 +39,12 @@ Participating CAs include Comodo CA, Entrust Datacard, GlobalSign, GoDaddy and S
 
 The London Protocol will be implemented in three phases over a 10-month period:
 
-  * **Phase 1 (June &#8211; August 2018):** Participating CAs develop Protocol details and research feasibility of implementation and may begin to implement some basic procedures.
-  * **Phase 2 (September &#8211; November 2018):** Participating CAs apply Protocol concepts to their own customers’ Identity Websites according to their own policies and procedures, share feedback with other participating CAs, refine Protocol as warranted by experience.
-  * **Phase 3 (December 2018 &#8211; February 2019):** Participating CAs update Protocol policies and procedures and approve plan for uniform policies and procedures to be applied by all participating CAs on a voluntary basis.
+  * **Phase 1 (June – August 2018):** Participating CAs develop Protocol details and research feasibility of implementation and may begin to implement some basic procedures.
+  * **Phase 2 (September – November 2018):** Participating CAs apply Protocol concepts to their own customers’ Identity Websites according to their own policies and procedures, share feedback with other participating CAs, refine Protocol as warranted by experience.
+  * **Phase 3 (December 2018 – February 2019):** Participating CAs update Protocol policies and procedures and approve plan for uniform policies and procedures to be applied by all participating CAs on a voluntary basis.
   * **Phase 4 (March 2019)** Participating CAs forward report and recommendations to [CA/Browser Forum][1] for possible changes to Baseline Requirements.
 
-“At its core, the London Protocol is designed to get back to the root of what EV and OV certificates were created for – providing online consumers better trust and assurance,&#8221; said Tony Perez, head of security products at GoDaddy.
+“At its core, the London Protocol is designed to get back to the root of what EV and OV certificates were created for – providing online consumers better trust and assurance,” said Tony Perez, head of security products at GoDaddy.
 
 Once the third phase of the Protocol is complete, the result of the London Protocol will be released to improve processes, maintain the integrity of authentic websites and increase user awareness, particularly when it comes to identifying an authentic website from a phishing attack.
 

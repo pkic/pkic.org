@@ -1,9 +1,34 @@
 ---
-title: IETF 88 – Pervasive Surveillance
-authors: [Bruce Morton]
-date: 2013-11-26T19:00:04+00:00
+authors:
+- Bruce Morton
+date: "2013-11-26T19:00:04+00:00"
 dsq_thread_id:
-  - 2001652975
+- 2001652975
+keywords:
+- pki
+- crl
+- ssl
+- web pki
+- vulnerability
+- attack
+- forward secrecy
+- encryption
+- ietf
+- revocation
+- hsts
+tags:
+- PKI
+- CRL
+- SSL/TLS
+- Web PKI
+- Vulnerability
+- Attack
+- Forward Secrecy
+- Encryption
+- IETF
+- Revocation
+- HSTS
+title: IETF 88 – Pervasive Surveillance
 
 
 ---
@@ -11,11 +36,11 @@ dsq_thread_id:
 
 The big news at [IETF 88 in Vancouver][1] was the technical plenary on [Hardening the Internet][2] which discussed the issue of pervasive surveillance. Pervasive surveillance is a mass surveillance of an entire or a substantial fraction of a population. The surveillance is usually carried out by government, is not targeted and its occurrence may not be overt. It was noted that pervasive surveillance, of the kind revealed in the Snowden-sourced documents, constitutes a misguided and damaging attack on civic society in general and the Internet in particular.
 
-The session was headlined by security guru [Bruce Schneier][3]. In Schneier&rsquo;s presentation he stated, &ldquo;The goal is to make eavesdropping expensive. That&rsquo;s the way to think about this, is to force the NSA to abandon wholesale collection in favor of targeted collection of information.&rdquo;
+The session was headlined by security guru [Bruce Schneier][3]. In Schneier’s presentation he stated, “The goal is to make eavesdropping expensive. That’s the way to think about this, is to force the NSA to abandon wholesale collection in favor of targeted collection of information.”
 
 Pervasive surveillance is an attack on the Internet and must be treated as an attack. This is not an attack of the cryptography as it was pointed out that the math is good and encryption works if properly implemented. However, there are far too many end-point security issues impacting the implementation of encryption and end-to-end security.
 
-Security Area Director Stephen Farrell stated, &ldquo;While there are challenges isolating the specific areas of attack that IETF protocols can mitigate, all of the working groups that considered the topic have started planning to address the threat using IETF tools that can mitigate aspects of the problem.&rdquo;
+Security Area Director Stephen Farrell stated, “While there are challenges isolating the specific areas of attack that IETF protocols can mitigate, all of the working groups that considered the topic have started planning to address the threat using IETF tools that can mitigate aspects of the problem.”
 
 In the end, the Internet technical community continued reviewing what they can do to take action, such as:
 

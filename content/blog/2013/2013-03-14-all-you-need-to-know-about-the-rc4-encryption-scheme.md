@@ -1,17 +1,35 @@
 ---
-title: All You Need to Know About the RC4 Encryption Scheme
-authors: [Rick Andrews]
-date: 2013-03-14T21:12:28+00:00
+authors:
+- Rick Andrews
+date: "2013-03-14T21:12:28+00:00"
 dsq_thread_id:
-  - 1958594618
-tags: [RC4]
+- 1958594618
+keywords:
+- ssl
+- attack
+- rc4
+- encryption
+- tls
+- casc
+- vulnerabilities
+- rsa
+tags:
+- SSL/TLS
+- Attack
+- RC4
+- Encryption
+- CASC
+- Vulnerability
+- RSA
+title: All You Need to Know About the RC4 Encryption Scheme
+
 
 ---
-The [latest published attacks][1] target specific algorithms used within SSL/TLS. Those algorithms are used when a client connects to a server via SSL/TLS; they&rsquo;re not used when a Certificate Authority signs a certificate. The attacks demonstrate potential weaknesses in the use of the algorithms.
+The [latest published attacks][1] target specific algorithms used within SSL/TLS. Those algorithms are used when a client connects to a server via SSL/TLS; they’re not used when a Certificate Authority signs a certificate. The attacks demonstrate potential weaknesses in the use of the algorithms.
 
-While interesting, the attacks don&rsquo;t represent an immediate practical threat to users of SSL/TLS (including online banking, e-commerce, social networking, etc.). Such attacks require an attacker to run malicious software on a user&rsquo;s computer which would connect to a particular web site and send the same message over and over again many times. In fact, if the attacker&rsquo;s software could send the same message over and over 10 times per second, it would still take more than 3 years for the attack to succeed.
+While interesting, the attacks don’t represent an immediate practical threat to users of SSL/TLS (including online banking, e-commerce, social networking, etc.). Such attacks require an attacker to run malicious software on a user’s computer which would connect to a particular web site and send the same message over and over again many times. In fact, if the attacker’s software could send the same message over and over 10 times per second, it would still take more than 3 years for the attack to succeed.
 
-The designers of the SSL/TLS protocol anticipated that algorithms would become weaker over time, so the protocol was designed to support the easy addition of new algorithms. Hence a weakness in one algorithm does not mean that SSL/TLS is broken. Newer, stronger algorithms have already been developed and incorporated into the latest implementations of SSL/TLS. What&rsquo;s needed now is for users of web server and browser software to update to the newest versions to minimize or eliminate the use of weakened algorithms.
+The designers of the SSL/TLS protocol anticipated that algorithms would become weaker over time, so the protocol was designed to support the easy addition of new algorithms. Hence a weakness in one algorithm does not mean that SSL/TLS is broken. Newer, stronger algorithms have already been developed and incorporated into the latest implementations of SSL/TLS. What’s needed now is for users of web server and browser software to update to the newest versions to minimize or eliminate the use of weakened algorithms.
 
 The fact remains, SSL/TLS is still the most scalable, efficient cryptographic protocol available now and, with the number of researchers focused on its protocols, will only continue to get stronger in the future.
 

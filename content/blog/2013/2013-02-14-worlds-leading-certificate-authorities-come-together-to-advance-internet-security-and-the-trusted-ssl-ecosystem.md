@@ -1,15 +1,33 @@
 ---
-title: World’s Leading Certificate Authorities Come Together to Advance Internet Security and the Trusted SSL Ecosystem
-authors: [CA Security Council]
-date: 2013-02-14T13:00:06+00:00
-dsq_thread_id:
-  - 1938037391
+authors:
+- CA Security Council
 categories:
-  - Press Releases
-tags: [CASC, Certificate Authority, SSL, EV SSL, Digital Certificates, Revocation, OCSP Stapling]
+- Press Releases
+date: "2013-02-14T13:00:06+00:00"
+dsq_thread_id:
+- 1938037391
+keywords:
+- certificate authority security council
+- ocsp
+- tls
+- casc
+- revocation
+- ca/browser forum
+- crl
+- ssl
+tags:
+- CASC
+- OCSP
+- SSL/TLS
+- Revocation
+- CA/Browser Forum
+- CRL
+title: World’s Leading Certificate Authorities Come Together to Advance Internet Security
+  and the Trusted SSL Ecosystem
+
 
 ---
-**San Francisco, CA. &ndash; February 14, 2013 &ndash;** Leading global certificate authorities announced the creation of the Certificate Authority Security Council (CASC), an advocacy group, committed to the exploration and promotion of best practices that advance the security of websites and online transactions. Through public education, collaboration, and advocacy, the CASC strives to improve understanding of critical policies and their potential impact on the internet infrastructure. Members of the CASC include Comodo, DigiCert, Entrust, GlobalSign, Go Daddy, Symantec, and Trend Micro. 
+**San Francisco, CA. – February 14, 2013 –** Leading global certificate authorities announced the creation of the Certificate Authority Security Council (CASC), an advocacy group, committed to the exploration and promotion of best practices that advance the security of websites and online transactions. Through public education, collaboration, and advocacy, the CASC strives to improve understanding of critical policies and their potential impact on the internet infrastructure. Members of the CASC include Comodo, DigiCert, Entrust, GlobalSign, Go Daddy, Symantec, and Trend Micro. 
 
 > World's leading Certificate Authorities join together to form the **Certificate Authority Security Council**
 
@@ -25,15 +43,15 @@ The backbone of Internet security for nearly two decades, the SSL protocol and c
 
 ## CASC Quote
 
-  * &ldquo;SSL remains today the most widely deployed and successful cryptography system in the world,&rdquo; said Dean Coclin, Steering Committee, Certificate Authority Security Council. &ldquo;As a unified group of the world&rsquo;s leading SSL providers, we&rsquo;re collaborating on matters of highest priority, while also recognizing the value of previous and recent work to continually evolve the standards, and create an industry that understands the issues involved and is committed to making the necessary enhancements.&rdquo; 
+  * “SSL remains today the most widely deployed and successful cryptography system in the world,” said Dean Coclin, Steering Committee, Certificate Authority Security Council. “As a unified group of the world’s leading SSL providers, we’re collaborating on matters of highest priority, while also recognizing the value of previous and recent work to continually evolve the standards, and create an industry that understands the issues involved and is committed to making the necessary enhancements.” 
 
 ## Industry Influencer
 
-  * &ldquo;The CASC is a group of global trust anchors, who understand the necessity for continually evolving security that meets the needs of web sites and their users,&rdquo; said Yngve Pettersen, Independent Researcher. &ldquo;The creation of the CASC is a step in the right direction to making practical, scalable improvements to the current SSL/TLS ecosystem while promoting security standards and better education among users.&rdquo;
+  * “The CASC is a group of global trust anchors, who understand the necessity for continually evolving security that meets the needs of web sites and their users,” said Yngve Pettersen, Independent Researcher. “The creation of the CASC is a step in the right direction to making practical, scalable improvements to the current SSL/TLS ecosystem while promoting security standards and better education among users.”
 
 ## CA/Browser Forum
 
-  * &ldquo;The CASC members are working actively with browsers and other parties to further improve existing methods that effectively balance performance and security while providing a trusted experience for all internet users,&rdquo; said Ben Wilson, Chair, CA/Browser Forum. &ldquo;These collaborative efforts have led to important steps forward that help improve security practices, self-regulation, and globalize the adoption and implementation of stricter, more universal standards. We look forward to working with the CASC to set quality standards that raise the bar for everyone.&rdquo;
+  * “The CASC members are working actively with browsers and other parties to further improve existing methods that effectively balance performance and security while providing a trusted experience for all internet users,” said Ben Wilson, Chair, CA/Browser Forum. “These collaborative efforts have led to important steps forward that help improve security practices, self-regulation, and globalize the adoption and implementation of stricter, more universal standards. We look forward to working with the CASC to set quality standards that raise the bar for everyone.”
 
 ### Additional Resources
 

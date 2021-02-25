@@ -1,7 +1,26 @@
 ---
+authors:
+- Arvid Vermote
+date: "2020-02-24T13:38:54+00:00"
+keywords:
+- encryption
+- tls
+- malware
+- pki
+- iso
+- identity
+- code signing
+- microsoft
+tags:
+- Encryption
+- SSL/TLS
+- Malware
+- PKI
+- ISO
+- Identity
+- Code Signing
+- Microsoft
 title: 5 Ways to Keep Up with Authentication Certificates
-authors: [Arvid Vermote]
-date: 2020-02-24T13:38:54+00:00
 
 
 ---

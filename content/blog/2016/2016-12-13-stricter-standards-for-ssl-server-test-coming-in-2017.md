@@ -1,9 +1,29 @@
 ---
-title: Stricter Standards for SSL Server Test Coming in 2017
-authors: [Bruce Morton]
-date: 2016-12-13T16:32:08+00:00
+authors:
+- Bruce Morton
+date: "2016-12-13T16:32:08+00:00"
 dsq_thread_id:
-  - 5377516116
+- 5377516116
+keywords:
+- tls
+- tls 1.3
+- 3des
+- casc
+- vulnerabilities
+- ssl
+- https
+- vulnerability
+- rc4
+- forward secrecy
+tags:
+- SSL/TLS
+- TLS 1.3
+- 3DES
+- CASC
+- Vulnerability
+- RC4
+- Forward Secrecy
+title: Stricter Standards for SSL Server Test Coming in 2017
 
 
 ---

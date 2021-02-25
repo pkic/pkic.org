@@ -1,7 +1,41 @@
 ---
+authors:
+- Tim Callan
+- Kirk Hall
+date: "2019-08-27T16:48:46+00:00"
+keywords:
+- ev certificate
+- extended validation
+- dv certificate
+- mozilla
+- domain validated
+- malware
+- firefox
+- ca/browser forum
+- chrome
+- ssl
+- https
+- identity
+- google
+- phishing
+- gdpr
+- encryption
+- tls
+tags:
+- EV
+- DV
+- Mozilla
+- Malware
+- Firefox
+- CA/Browser Forum
+- Chrome
+- SSL/TLS
+- Identity
+- Google
+- Phishing
+- GDPR
+- Encryption
 title: Why Are You Removing Website Identity, Google and Mozilla?
-authors: [Tim Callan, Kirk Hall]
-date: 2019-08-27T16:48:46+00:00
 
 
 ---
@@ -101,7 +135,7 @@ We think that this analysis misses the following:
   1. **The internet today has a clear signal of a site’s safety for the end user in the EV indicators.** Browsers should see this as an opportunity to educate users, not to take away useful information.
   2. **Users are not a single homogenous group, and they don’t all behave the same.** Most of the people reading this blog post do, in fact, notice whether or not an EV indicator is there. Providing this evidence to some users is better than providing it to no one.
   3. **User behavior changes based on context.** Day to day, a site visitor may suffer from “interface blindness” when everything is going well. But when something suspicious occurs, they become hyper aware. And, the presence of an EV cert gives the likes of law enforcement a clear path forward when pursuing perpetrators of online crime.
-  4. **Positive security indicators work in many other contexts where expectations are predictable – and with standards and education would work better in browsers as well.** Let’s take an offline example &#8212; the seat belt. Most of us expect the feel of a seat belt across their laps and shoulders when in a moving car, and without it we feel uncomfortable. That is a positive security indicator. We miss it when it’s absent is because it is consistent, ubiquitous, obvious, and important to us.
+  4. **Positive security indicators work in many other contexts where expectations are predictable – and with standards and education would work better in browsers as well.** Let’s take an offline example — the seat belt. Most of us expect the feel of a seat belt across their laps and shoulders when in a moving car, and without it we feel uncomfortable. That is a positive security indicator. We miss it when it’s absent is because it is consistent, ubiquitous, obvious, and important to us.
 
 There is no reason why an identity security indicator cannot meet these same criteria. Unfortunately, EV security indicators in browsers have been inconsistent and subject to changes over time, making it hard to successfully educate users. These disadvantages are all addressable, if companies like major browser and OS vendors treat doing so as a priority.
 
@@ -109,7 +143,7 @@ There is no reason why an identity security indicator cannot meet these same cri
 
 Without the EV identity indicator in Chrome or Firefox, users will have to rely on the URL and an interstitial warning, if and when a phishing site is identified. But [as Google security researchers have stated][10], “People have a really hard time understanding URLs. They’re hard to read, it’s hard to know which part of them is supposed to be trusted, and in general I don’t think URLs are working as a good way to convey site identity.”
 
-An EV UI does not require users to scrutinize the URL– &#8212; it simply identifies the website owners and assures the users that this site has been authenticated, and is likely to be safe from phishing.
+An EV UI does not require users to scrutinize the URL– — it simply identifies the website owners and assures the users that this site has been authenticated, and is likely to be safe from phishing.
 
 ## Some opponents of the EV user interface say it should go away because users don’t understand or know how to evaluate the specific organization information that’s displayed.
 

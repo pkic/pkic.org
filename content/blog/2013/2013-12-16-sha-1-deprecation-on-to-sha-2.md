@@ -1,9 +1,24 @@
 ---
-title: SHA-1 Deprecation, On to SHA-2
-authors: [Bruce Morton]
-date: 2013-12-16T20:00:27+00:00
+authors:
+- Bruce Morton
+date: "2013-12-16T20:00:27+00:00"
 dsq_thread_id:
-  - 2054334092
+- 2054334092
+keywords:
+- pki
+- ssl
+- code signing
+- microsoft
+- sha1
+- policy
+tags:
+- PKI
+- SSL/TLS
+- Code Signing
+- Microsoft
+- SHA1
+- Policy
+title: SHA-1 Deprecation, On to SHA-2
 
 
 ---

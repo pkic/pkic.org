@@ -1,15 +1,29 @@
 ---
-title: What Is Certificate Transparency and How Does It Propose to Address Certificate Mis-Issuance?
-authors: [CA Security Council]
-date: 2013-09-09T15:00:52+00:00
+authors:
+- CA Security Council
+date: "2013-09-09T15:00:52+00:00"
 dsq_thread_id:
-  - 1942941130
+- 1942941130
+keywords:
+- timestamp
+- tls
+- revocation
+- ssl
+- mis-issued
+- attack
+- ocsp
 tags:
-- Certificate Transparency
-- OCSP
+- TSA
 - SSL/TLS
----
+- Revocation
+- Mis-issued
+- Attack
+- OCSP
+title: What Is Certificate Transparency and How Does It Propose to Address Certificate
+  Mis-Issuance?
 
+
+---
 As originally architected by Netscape and others in the mid-1990s, the certificate issuance process envisioned that the CA would present the certificate and its contents to the named subject who would review and accept the certificate first. Then the CA would publish the certificate to a repository. That process would establish that the certificate’s subject was aware of certificate issuance. (Otherwise, an unscrupulous CA could sign a subscriber’s public key and create a certificate for the subscriber without its knowledge.) The repository was also an independent means of obtaining and verifying the public key prior to initiating secure, authenticated communication without having to obtain it solely from the server during session negotiation. 
 
 Certificate Transparency proposes a new way of publicizing certificate issuance and provides brand owners and their online customers with a method of identifying a certificate that has not been properly issued. A CA creates what is called a “pre-certificate” and sends it to a Log Server that keeps track of the certificate contents before the certificate is officially issued by the CA. The logging service returns a “signed certificate timestamp” (SCT) to the CA, which can either be embedded in the official certificate or provided by other means. See [http://tools.ietf.org/html/rfc6962#section-3](http://tools.ietf.org/html/rfc6962#section-3). The SCT serves as a kind of pointer to where that certificate was registered in the log, thereby establishing that the CA published the certificate as evidence for review. 

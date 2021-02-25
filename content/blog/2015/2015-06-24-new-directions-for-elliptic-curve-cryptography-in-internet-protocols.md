@@ -1,9 +1,27 @@
 ---
-title: New Directions for Elliptic Curve Cryptography in Internet Protocols
-authors: [Rick Andrews]
-date: 2015-06-24T18:15:52+00:00
+authors:
+- Rick Andrews
+date: "2015-06-24T18:15:52+00:00"
 dsq_thread_id:
-  - 3875121772
+- 3875121772
+keywords:
+- rsa
+- nist
+- ssl
+- internet engineering task force
+- tls
+- ietf
+- ecc
+- elliptic curve
+- ecdsa
+tags:
+- RSA
+- NIST
+- SSL/TLS
+- IETF
+- ECC
+- ECDSA
+title: New Directions for Elliptic Curve Cryptography in Internet Protocols
 
 
 ---

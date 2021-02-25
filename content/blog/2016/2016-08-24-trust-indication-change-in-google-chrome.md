@@ -1,9 +1,23 @@
 ---
-title: Trust Indication Change in Google Chrome
-authors: [Bruce Morton]
-date: 2016-08-24T15:52:59+00:00
+authors:
+- Bruce Morton
+date: "2016-08-24T15:52:59+00:00"
 dsq_thread_id:
-  - 5091713830
+- 5091713830
+keywords:
+- tls
+- extended validation
+- iso
+- chrome
+- https
+- google
+tags:
+- SSL/TLS
+- EV
+- ISO
+- Chrome
+- Google
+title: Trust Indication Change in Google Chrome
 
 
 ---

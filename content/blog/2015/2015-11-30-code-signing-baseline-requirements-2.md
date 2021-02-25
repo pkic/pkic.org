@@ -1,9 +1,22 @@
 ---
-title: Code Signing Baseline Requirements
-authors: [CA Security Council]
-date: 2015-11-30T17:51:30+00:00
+authors:
+- CA Security Council
+date: "2015-11-30T17:51:30+00:00"
 dsq_thread_id:
-  - 4363586650
+- 4363586650
+keywords:
+- casc
+- malware
+- ca/browser forum
+- code signing
+- identity
+tags:
+- CASC
+- Malware
+- CA/Browser Forum
+- Code Signing
+- Identity
+title: Code Signing Baseline Requirements
 
 
 ---

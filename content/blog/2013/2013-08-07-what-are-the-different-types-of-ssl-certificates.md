@@ -1,14 +1,29 @@
 ---
-title: What Are the Different Types of SSL Certificates?
-authors: [Dean Coclin]
-date: 2013-08-07T18:18:01+00:00
-dsq_thread_id:
-  - 1980218040
+authors:
+- Dean Coclin
+date: "2013-08-07T18:18:01+00:00"
 dsq_needs_sync:
-  - 1
+- 1
+dsq_thread_id:
+- 1980218040
+keywords:
+- domain validated
+- ssl
+- identity
+- phishing
+- encryption
+- ev certificate
 tags:
-  - SSL/TLS
+- DV
+- SSL/TLS
+- Identity
+- Phishing
+- Encryption
+- EV
+title: What Are the Different Types of SSL Certificates?
 
+
+---
 ---
 ## Domain Validation (DV)
 
@@ -20,7 +35,7 @@ For OV certificates, CAs must validate the company name, domain name and other i
 
 ## Extended Validation (EV)
 
-EV Certificates are only issued once an entity passes a strict authentication procedure. These checks are much more stringent than OV certificates. The objectives are twofold: First, **identify the legal entity that controls a website:** Provide a reasonable assurance to the user of an Internet browser that the website the user is accessing is controlled by a specific legal entity identified in the EV Certificate by name, address of place of business, jurisdiction of incorporation or registration and registration number or other disambiguating information.&nbsp; Second, **enable encrypted communications with a website:** Facilitate the exchange of encryption keys in order to enable the encrypted communication of information over the Internet between the user of an Internet browser and a website (same as OV and DV).
+EV Certificates are only issued once an entity passes a strict authentication procedure. These checks are much more stringent than OV certificates. The objectives are twofold: First, **identify the legal entity that controls a website:** Provide a reasonable assurance to the user of an Internet browser that the website the user is accessing is controlled by a specific legal entity identified in the EV Certificate by name, address of place of business, jurisdiction of incorporation or registration and registration number or other disambiguating information.  Second, **enable encrypted communications with a website:** Facilitate the exchange of encryption keys in order to enable the encrypted communication of information over the Internet between the user of an Internet browser and a website (same as OV and DV).
 
 The secondary purposes of an EV Certificate are to help establish the legitimacy of a business claiming to operate a website or distribute executable code, and to provide a vehicle that can be used to assist in addressing problems related to phishing, malware, and other forms of online identity fraud. By providing more reliable third-party verified identity and address information regarding the business, EV Certificates may help to:
 
@@ -33,7 +48,7 @@ Because of the strict vetting procedures that CAs use to check the information a
 ##  Features of the three types of certificates
 
 |Type of cert|Domain validated?|Company Name Validated?|Address Validated?|Pad Lock Displayed in Browser User Interface?|Green address bar and other special treatment?|Typical relative price|
-|------------|-----------------|-----------------------|------------------|---------------------------------------------|----------------------------------------------|----------------------|
+|------------|:---------------:|:---------------------:|:----------------:|:-------------------------------------------:|:--------------------------------------------:|:--------------------:|
 | **DV**     |      X          |                       |                  |                   X                         |                                              |      $               |
 | **OV**     |      X          |           X           |        X         |                   X                         |                                              |      $$              |
 | **EV**     |      X          |           X           |        X         |                   X                         |                      X                       |      $$$             |

@@ -1,9 +1,19 @@
 ---
-title: Why We Need to Move to SHA-2
-authors: [Bruce Morton, Clayton Smith]
-date: 2014-01-30T18:30:55+00:00
+authors:
+- Bruce Morton
+- Clayton Smith
+date: "2014-01-30T18:30:55+00:00"
 dsq_thread_id:
-  - 2193146291
+- 2193146291
+keywords:
+- ssl
+- attack
+- md5
+tags:
+- SSL/TLS
+- Attack
+- SHA2
+title: Why We Need to Move to SHA-2
 
 
 ---
@@ -13,17 +23,17 @@ In the context of SSL, the purpose of a hashing algorithm is to reduce a message
 
 Hash attacks are described as follows, in increasing order of difficulty for an attacker:
 
-  * [**Collision**][6] &ndash; A collision attack occurs when it is possible to find two different messages that hash to the same value. A collision attack against a CA happens at the time of certificate issuance. In a past [attack against MD5][7], the attacker was able to produce a pair of colliding messages, one of which represented the contents of a benign end-entity certificate, and the other of which formed the contents of a malicious CA certificate. Once the end-entity certificate was signed by the CA, the attacker reused the digital signature to produce a fraudulent CA certificate. The attacker then used their CA certificate to issue fraudulent end-entity certificates for any domain. Collision attacks can be mitigated by putting entropy into the certificate, which makes it difficult for the attacker to guess the exact content of the certificate that will be signed by the CA. Entropy is typically found in the certificate serial number or in the validity periods. SHA-1 is known to have weaknesses in collision resistance.
-  * [**Second-preimage**][8] &ndash; In a second-preimage attack, a second message can be found that hashes to the same value as a given message. This allows the attacker to create fraudulent certificates at any time, not just at the time of certificate issuance. SHA-1 is currently resistant to second-preimage attacks.
-  * [**Preimage**][8] &ndash; A preimage attack is against the one-way property of a hash function. In a preimage attack, a message can be determined that hashes to a given value. This could allow a password attack, where the attacker can determine a password based on the hash of the password found in a database. SHA-1 is currently resistant to preimage attacks.
+  * [**Collision**][6] – A collision attack occurs when it is possible to find two different messages that hash to the same value. A collision attack against a CA happens at the time of certificate issuance. In a past [attack against MD5][7], the attacker was able to produce a pair of colliding messages, one of which represented the contents of a benign end-entity certificate, and the other of which formed the contents of a malicious CA certificate. Once the end-entity certificate was signed by the CA, the attacker reused the digital signature to produce a fraudulent CA certificate. The attacker then used their CA certificate to issue fraudulent end-entity certificates for any domain. Collision attacks can be mitigated by putting entropy into the certificate, which makes it difficult for the attacker to guess the exact content of the certificate that will be signed by the CA. Entropy is typically found in the certificate serial number or in the validity periods. SHA-1 is known to have weaknesses in collision resistance.
+  * [**Second-preimage**][8] – In a second-preimage attack, a second message can be found that hashes to the same value as a given message. This allows the attacker to create fraudulent certificates at any time, not just at the time of certificate issuance. SHA-1 is currently resistant to second-preimage attacks.
+  * [**Preimage**][8] – A preimage attack is against the one-way property of a hash function. In a preimage attack, a message can be determined that hashes to a given value. This could allow a password attack, where the attacker can determine a password based on the hash of the password found in a database. SHA-1 is currently resistant to preimage attacks.
 
-Attacks against hash functions are measured against the length of time required to perform a brute-force attack, in which messages are selected at random and hashed until a collision or preimage is found. Thanks to the [birthday paradox][9], the time required to find a collision by brute force is approximately _2<sup>n/2</sup>_, where _n_ is the bit length of the hash. To find a preimage or second-preimage by brute force, approximately _2n_ messages must be hashed. Thus, a hash function is weakened if a collision can be found in less time than that needed to compute _2<sup>n/2</sup>_ hashes, or if a preimage or second-preimage can be found in less time than would be needed to compute _2n_ hashes. For common hashes the bit length is: MD5 (128 bits), SHA-1 (160 bits) and SHA-2 (224, 256, 384, or 512 bits).
+Attacks against hash functions are measured against the length of time required to perform a brute-force attack, in which messages are selected at random and hashed until a collision or preimage is found. Thanks to the [birthday paradox][9], the time required to find a collision by brute force is approximately _2ⁿᐟ²_, where _n_ is the bit length of the hash. To find a preimage or second-preimage by brute force, approximately _2n_ messages must be hashed. Thus, a hash function is weakened if a collision can be found in less time than that needed to compute _2ⁿᐟ²_ hashes, or if a preimage or second-preimage can be found in less time than would be needed to compute _2n_ hashes. For common hashes the bit length is: MD5 (128 bits), SHA-1 (160 bits) and SHA-2 (224, 256, 384, or 512 bits).
 
-The time required to perform a brute-force attack keeps getting shorter due to increases in available computing power (see [Moore&rsquo;s Law][10]). As such, increases in hash function lengths are necessary to maintain an acceptable margin of security. In the past, an attack threshold of _2<sup>64</sup>_ operations was considered acceptable for some uses, but [NIST recommendations][11] now set the bar at _2<sup>80</sup>_, and this will soon move up to _2<sup>112</sup>_.
+The time required to perform a brute-force attack keeps getting shorter due to increases in available computing power (see [Moore’s Law][10]). As such, increases in hash function lengths are necessary to maintain an acceptable margin of security. In the past, an attack threshold of _2⁶⁴_ operations was considered acceptable for some uses, but [NIST recommendations][11] now set the bar at _2⁸⁰_, and this will soon move up to _2¹¹²_.
 
-Using the formula _2<sup>n/2</sup>_, we can see that a brute-force attack against SHA-1 would require _2<sup>80</sup>_ computations. Unfortunately, security researchers have discovered an attack strategy that requires only _2<sup>61</sup>_ computations. This would make the time required to perform an attack below current standards. In fact, [Bruce Schneier has estimated][12] that the cost of a performing SHA-1 collision attack will be within the range of organized crime by 2018 and for a university project by 2021.
+Using the formula _2ⁿᐟ²_, we can see that a brute-force attack against SHA-1 would require _2⁸⁰_ computations. Unfortunately, security researchers have discovered an attack strategy that requires only _2⁶¹_ computations. This would make the time required to perform an attack below current standards. In fact, [Bruce Schneier has estimated][12] that the cost of a performing SHA-1 collision attack will be within the range of organized crime by 2018 and for a university project by 2021.
 
-The bottom line is SHA-1&rsquo;s collision resistance is weak and the cost of an attack is dropping; as such, SHA-1 must be replaced with SHA-2.
+The bottom line is SHA-1’s collision resistance is weak and the cost of an attack is dropping; as such, SHA-1 must be replaced with SHA-2.
 
 Certificate owners are encouraged to test and deploy certificates signed with SHA-2. If your application does not support SHA-2, please inform your product vendor and your CA.
 

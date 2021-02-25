@@ -1,9 +1,25 @@
 ---
-title: SSL 2.0 and DROWN
-authors: [Bruce Morton]
-date: 2016-04-04T18:41:33+00:00
+authors:
+- Bruce Morton
+date: "2016-04-04T18:41:33+00:00"
 dsq_thread_id:
-  - 4719900263
+- 4719900263
+keywords:
+- vulnerability
+- attack
+- openssl
+- tls
+- ietf
+- ssl 3.0
+- ssl
+tags:
+- Vulnerability
+- Attack
+- OpenSSL
+- SSL/TLS
+- IETF
+- SSL 3.0
+title: SSL 2.0 and DROWN
 
 
 ---

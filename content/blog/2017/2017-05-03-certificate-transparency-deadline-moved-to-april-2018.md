@@ -1,9 +1,22 @@
 ---
-title: Certificate Transparency Deadline Moved to April 2018
-authors: [Bruce Morton]
-date: 2017-05-03T15:42:21+00:00
+authors:
+- Bruce Morton
+date: "2017-05-03T15:42:21+00:00"
 dsq_thread_id:
-  - 5782832850
+- 5782832850
+keywords:
+- google
+- policy
+- tls
+- ietf
+- chrome
+tags:
+- Google
+- Policy
+- SSL/TLS
+- IETF
+- Chrome
+title: Certificate Transparency Deadline Moved to April 2018
 
 
 ---

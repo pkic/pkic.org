@@ -1,7 +1,22 @@
 ---
+authors:
+- Doug Beattie
+date: "2019-07-18T18:16:24+00:00"
+keywords:
+- revocation
+- mozilla
+- crl
+- ssl
+- https
+- vulnerability
+- tls
+tags:
+- Revocation
+- Mozilla
+- CRL
+- SSL/TLS
+- Vulnerability
 title: The Advantages of Short-Lived SSL Certificates for the Enterprise
-authors: [Doug Beattie]
-date: 2019-07-18T18:16:24+00:00
 
 
 ---
@@ -19,7 +34,7 @@ So why did Sandstorm choose to use short-lived certificates instead of regular c
 
 [Benefits of using short validity period or short-lived certificates][4]
 
-Using individual certificates for each customer is far superior to using large shared multi-SAN (Subject Alternative Name) certificates, where SANs from multiple sites, applications, or users are visible in the shared certificates.  This limits the exposure of the keys to each customer which can put security conscious customers’ at ease. In Sandstorm&#8217;s case, each customer controls their own private key.
+Using individual certificates for each customer is far superior to using large shared multi-SAN (Subject Alternative Name) certificates, where SANs from multiple sites, applications, or users are visible in the shared certificates.  This limits the exposure of the keys to each customer which can put security conscious customers’ at ease. In Sandstorm’s case, each customer controls their own private key.
 
 ## Short-lived certificates can be managed easily
 

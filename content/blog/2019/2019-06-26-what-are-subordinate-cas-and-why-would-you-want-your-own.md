@@ -1,7 +1,48 @@
 ---
+authors:
+- Doug Beattie
+date: "2019-06-26T16:04:51+00:00"
+keywords:
+- tls
+- ecc
+- extended validation
+- revocation
+- hsm
+- eidas
+- rsa
+- pki
+- ca/browser forum
+- crl
+- chrome
+- ssl
+- s/mime
+- https
+- identity
+- code signing
+- microsoft
+- policy
+- ocsp
+- encryption
+tags:
+- SSL/TLS
+- ECC
+- EV
+- Revocation
+- HSM
+- eIDAS
+- RSA
+- PKI
+- CA/Browser Forum
+- CRL
+- Chrome
+- S/MIME
+- Identity
+- Code Signing
+- Microsoft
+- Policy
+- OCSP
+- Encryption
 title: What Are Subordinate CAs and Why Would You Want Your Own?
-authors: [Doug Beattie]
-date: 2019-06-26T16:04:51+00:00
 
 
 ---
@@ -13,16 +54,16 @@ As PKI usage has expanded, conversation has moved beyond just the number and typ
 
 Before we get into intermediate / subordinate CAs, it’s probably helpful to do a little refresher on CA hierarchies in general. As we know, CAs are entities that issue digital certificates, but what might be less known is that a CA is actually made up a series of CAs. This CA hierarchy creates a chain of trust that all end entity certificates rely upon.
 
-<figure id="attachment_1917" aria-describedby="caption-attachment-1917" style="width: 1226px" class="wp-caption aligncenter">{{< figure src="/uploads/2019/06/subordinate-cas-1.png" >}}<figcaption id="caption-attachment-1917" class="wp-caption-text">Example CA hierarchies</figcaption></figure>
+{{< figure src="/uploads/2019/06/subordinate-cas-1.png" title="Example CA hierarchies" >}}
 
 The number of tiers between the root and the end entity certificates and overall complexity of the hierarchy can vary greatly depending on the environment. For example, some organizations in the IoT and industrial internet space that are building device identity certificates into their manufacturing processes have implemented custom hierarchies involving cross-trust, separate subordinate CAs for each component in the supply chain, location-specific CAs and more. No matter how complex the overall hierarchy though, they are still made up of three main components:
 
   * **Root CA** – The root CA is the highest level of the hierarchy and serves as the trust anchor. In order for an end entity certificate to be trusted, the root CA it chains up to must be embedded in the operating system, browser, device, or whatever is validating the certificate. Root CAs are heavily secured and kept offline (more on this below).
   * **Subordinate CAs** – These live between the root and end entity certificates and their main purpose is to define and authorize the types of certificates that can be requested from the root CA. For example, on public hierarchies, you must separate SSL and S/MIME Subordinate CAs. Another common scenario is separate Subordinates for different locations or you might have one for certificates with ECC keys and one for RSA keys. 
-    **_Note_**_: That there may be one or more subordinate CAs between a root CA and end entity certificates. Subordinates that live between the root CA and another subordinate are sometimes called intermediate CAs (see right-most branch in the diagram above)._</li> 
+    **_Note_**_: That there may be one or more subordinate CAs between a root CA and end entity certificates. Subordinates that live between the root CA and another subordinate are sometimes called intermediate CAs (see right-most branch in the diagram above)._
     
       * **End entity certificates** – These are the certificates installed on servers, machines, cryptographic hardware and devices (e.g. SSL/TLS issued to servers, code signing, client certificates issued to individuals for email encryption, digital signing, authentication). 
-        Each entity is signed by the one above it in the hierarchy to create the chain of trust I mentioned before. The root CA is self-signed and signs all subordinate CAs immediately below it. These in turn sign the entities below them, either additional subordinate CAs or the ultimate end entity certificates.</li> </ul> 
+        Each entity is signed by the one above it in the hierarchy to create the chain of trust I mentioned before. The root CA is self-signed and signs all subordinate CAs immediately below it. These in turn sign the entities below them, either additional subordinate CAs or the ultimate end entity certificates.
         
         You can actually view this hierarchy in action by viewing the details of any certificate. For example, if you go to a website that uses SSL/TLS (look for the HTTPS at the beginning of the address bar) and look at the certificate, you can find the certificate path. In the example below, you can see:
         
@@ -36,7 +77,7 @@ The number of tiers between the root and the end entity certificates and overall
         
         You may be wondering why we need this chain of trust in the first place. After all, any CA in the hierarchy is capable of issuing certificates, so why don’t we just issue right from the root? Why bother maintaining all these separate entities?
         
-        This comes down to what happens if a CA is compromised.  This should not be possible with proper controls in place, but in the unfortunate event it does, the CA itself and anything “below” it &#8211; any subordinate CAs and all issued certificates &#8211; have to be revoked. This poses a particularly difficult problem for root CAs because, as the trust anchors, they are the ones that have to be distributed and embedded everywhere. This means in order for any new end entity certificates to be trusted again, you’d have to reapply to individual root programs run by Microsoft, Mozilla, Google, Apple (and the rest), which can be quite the undertaking. If you need that root to be publicly trusted, you’re looking at distributing to every browser, operating system, device, console, email client, application suite, etc. – that’s quite the list! Adding to this is the issue that updating roots that are hard coded into devices or on devices that are not remotely accessibly may be problematic (e.g. point of sale systems, ATMs, networked phones, etc).
+        This comes down to what happens if a CA is compromised.  This should not be possible with proper controls in place, but in the unfortunate event it does, the CA itself and anything “below” it – any subordinate CAs and all issued certificates – have to be revoked. This poses a particularly difficult problem for root CAs because, as the trust anchors, they are the ones that have to be distributed and embedded everywhere. This means in order for any new end entity certificates to be trusted again, you’d have to reapply to individual root programs run by Microsoft, Mozilla, Google, Apple (and the rest), which can be quite the undertaking. If you need that root to be publicly trusted, you’re looking at distributing to every browser, operating system, device, console, email client, application suite, etc. – that’s quite the list! Adding to this is the issue that updating roots that are hard coded into devices or on devices that are not remotely accessibly may be problematic (e.g. point of sale systems, ATMs, networked phones, etc).
         
         For this reason, it’s best practice to issue end entity certificates from the subordinates instead (and for publicly trusted roots, the CA/Browser Forum prohibits issuing from roots entirely). This way in the event of a compromise, you are minimizing what needs to be revoked and ultimately replaced. If one of your subordinate CAs is compromised, you “only” have to revoke it and the certificates underneath. Certificates issued from other subordinates would still be okay and you wouldn’t need to re-distribute your trust anchors (i.e. Root CAs). This is also the reason for the extreme security safeguards put in place around root CAs and why they should be kept offline – if something happens to your root CA, you’re going to have a bad time. They should only be activated when needed to sign a new subordinate or Certificate Revocation List (CRL).
         
@@ -64,7 +105,7 @@ The number of tiers between the root and the end entity certificates and overall
         
         For companies that offer certificates to their end customers or bundle them into their services, having a dedicated subordinate CA in their name can offer some additional branding opportunities. We see this most often with organizations who offer SSL/TLS Certificates to their end customers (e.g. hosting companies, website builders, ecommerce platforms) where having their own publicly trusted subordinate CA means they can provide branded ordering pages and certificates.
         
-        ## How to Get Your Own Subordinate CA &#8211; In-House vs. Hosted PKI
+        ## How to Get Your Own Subordinate CA – In-House vs. Hosted PKI
         
         If having your own subordinate CA sounds like the answer to your problems, the next logical question is how to get one. For this, like so many [other aspects of technology][3] nowadays, you have the option to build your own or use a SaaS solution.
         

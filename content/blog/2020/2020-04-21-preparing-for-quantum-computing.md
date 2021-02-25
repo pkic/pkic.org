@@ -1,14 +1,25 @@
 ---
-title: Preparing for Quantum Computing
-summary: Quantum computing is advancing, and while experts are not sure when there will be a quantum computer powerful enough to break the RSA and ECC cryptographic algorithms that are currently in use, many are operating under the assumption that this can happen within a 10-15 year timeframe.
-authors: [Diana Gruhn]
-date: 2020-04-21T17:09:27+00:00
+authors:
+- Diana Gruhn
+date: "2020-04-21T17:09:27+00:00"
+keywords:
+- rsa
+- nist
+- quantum
+- ietf
+- ecc
+summary: Quantum computing is advancing, and while experts are not sure when there
+  will be a quantum computer powerful enough to break the RSA and ECC cryptographic
+  algorithms that are currently in use, many are operating under the assumption that
+  this can happen within a 10-15 year timeframe.
 tags:
+- RSA
+- NIST
 - Quantum
 - IETF
-- Crypto Agility
-- RSA
 - ECC
+title: Preparing for Quantum Computing
+
 
 ---
 Quantum computing is advancing, and while experts are not sure when there will be a quantum computer powerful enough to break the RSA and ECC cryptographic algorithms that are currently in use, many are operating under the assumption that this can happen within a 10-15 year timeframe. This is a general timeline because there is no way to know when this will occur – it could happen sooner or it could happen later.

@@ -1,9 +1,27 @@
 ---
-title: 'Quantum Computing: Real or Exaggerated Threat to the Web PKI?'
-authors: [Dean Coclin, Tim Hollebeek]
-date: 2017-08-30T20:14:03+00:00
+authors:
+- Dean Coclin
+- Tim Hollebeek
+date: "2017-08-30T20:14:03+00:00"
 dsq_thread_id:
-  - 6108064630
+- 6108064630
+keywords:
+- https
+- quantum
+- encryption
+- rsa
+- pki
+- qubit
+- ssl
+- web pki
+tags:
+- SSL/TLS
+- Quantum
+- Encryption
+- RSA
+- PKI
+- Web PKI
+title: 'Quantum Computing: Real or Exaggerated Threat to the Web PKI?'
 
 
 ---

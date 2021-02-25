@@ -1,12 +1,28 @@
 ---
+authors:
+- Corey Bonnell
+date: "2020-06-02T14:30:09+00:00"
+keywords:
+- https
+- identity
+- phishing
+- tls
+- site seal
+- caa
+summary: With secure HTTP — aka HTTPS (the “S” is short for “secure”) — swiftly becoming
+  universal on the Internet, it is important to know how to configure HTTPS for your
+  website the right way. The payoff for properly securing your website has many benefits.
+tags:
+- SSL/TLS
+- Identity
+- Phishing
+- Site Seal
+- CAA
 title: How to do HTTPS … The Right Way
-summary: With secure HTTP — aka HTTPS (the “S” is short for “secure”) — swiftly becoming universal on the Internet, it is important to know how to configure HTTPS for your website the right way. The payoff for properly securing your website has many benefits.
-authors: [Corey Bonnell]
-date: 2020-06-02T14:30:09+00:00
-tags: [SSL/TLS, CAA, Site Seal]
+
 
 ---
-With secure HTTP &mdash; aka HTTPS (the “S” is short for “secure”) &mdash; swiftly becoming universal on the Internet, it is important to know how to configure HTTPS for your website the right way. The payoff for properly securing your website has many benefits, a few of which are:
+With secure HTTP — aka HTTPS (the “S” is short for “secure”) — swiftly becoming universal on the Internet, it is important to know how to configure HTTPS for your website the right way. The payoff for properly securing your website has many benefits, a few of which are:
 
 - Secure transmission of sensitive information. HTTPS protects the sensitive information of your website visitors– whether that be personal profile information, passwords, payment information, etc. Additionally, electronic payment standards such as [PCI DSS](https://securetrust.blog/2020/04/27/apply-critical-thinking-to-security-and-compliance/) mandate the use of HTTPS when collecting payment information.
 - Increased customer confidence. Browsers commonly display padlock icons or the word “Secure” when secured with HTTPS, giving visitors confidence to purchase products online. Conversely, browsers also display warnings to users when a non-HTTPS website is visited. Such warnings scare off potential customers and can lead to lost sales.

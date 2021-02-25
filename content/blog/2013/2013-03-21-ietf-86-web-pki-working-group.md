@@ -1,17 +1,33 @@
 ---
-title: IETF 86 – Web PKI Working Group
-authors: [Bruce Morton]
-date: 2013-03-21T19:07:22+00:00
+authors:
+- Bruce Morton
+date: "2013-03-21T19:07:22+00:00"
 dsq_thread_id:
-  - 1957162553
-
+- 1957162553
+keywords:
+- pki
+- crl
+- ssl
+- web pki
+- https
+- google
+- policy
+- ocsp
+- tls
+- ietf
+- revocation
 tags:
-  - CRL
-  - IETF
-  - OCSP
-  - Trust Models
-  - Web PKI
-  - WPKOPS
+- PKI
+- CRL
+- SSL/TLS
+- Web PKI
+- Google
+- Policy
+- OCSP
+- IETF
+- Revocation
+title: IETF 86 – Web PKI Working Group
+
 
 ---
 At the [IETF 86 meeting in Orlando](https://www.ietf.org/meeting/86/index.html) last week, there was a working group meeting discussing the operations of the Web PKI. At the previous IETF 85 meeting a [birds-of-a-feather](http://ssl.entrust.net/blog/?p=1591) was held to discuss the purpose of having such a group. The result of the meeting was an established group with the [charter](https://datatracker.ietf.org/wg/wpkops/charter/) that states purposes such as:
@@ -25,7 +41,7 @@ The meeting discussed the charter and the four following deliverables. More info
 
 ## Trust Models
 
-The trust model document will discuss how the root store providers support the trust between the end entities Web server and the relying party&rsquo;s browser. The CAs play a trusted third party (TTP) in the model where they comply to the root store providers certificate policy, provide certificates to the end-entities and provide certificate status to the relying parties.
+The trust model document will discuss how the root store providers support the trust between the end entities Web server and the relying party’s browser. The CAs play a trusted third party (TTP) in the model where they comply to the root store providers certificate policy, provide certificates to the end-entities and provide certificate status to the relying parties.
 
 What makes the case interesting is that there are many parties in each role in the model. The trust model for the Web PKI has to consolidate certificate policies from many root store providers. The trust has to work for many servers and many browsers. There are many CAs globally providing TTP to the model.
 

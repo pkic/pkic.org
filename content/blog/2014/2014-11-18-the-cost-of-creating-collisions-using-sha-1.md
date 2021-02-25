@@ -1,10 +1,21 @@
 ---
-title: The Cost of Creating Collisions Using SHA-1
-authors: [Rick Andrews]
-date: 2014-11-18T18:30:21+00:00
-excerpt: SHA-1 is a cryptographic hash algorithm that is most commonly used today in TLS/SSL certificates on the Internet. It has almost completely replaced older algorithms like MD2, MD4 and MD5, which were phased out when practical attacks against those algorithms became widely known.
+authors:
+- Rick Andrews
+date: "2014-11-18T18:30:21+00:00"
 dsq_thread_id:
-  - 3238327616
+- 3238327616
+excerpt: SHA-1 is a cryptographic hash algorithm that is most commonly used today
+  in TLS/SSL certificates on the Internet. It has almost completely replaced older
+  algorithms like MD2, MD4 and MD5, which were phased out when practical attacks against
+  those algorithms became widely known.
+keywords:
+- attack
+- tls
+- ssl
+tags:
+- Attack
+- SSL/TLS
+title: The Cost of Creating Collisions Using SHA-1
 
 
 ---

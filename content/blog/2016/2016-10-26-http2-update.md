@@ -1,11 +1,21 @@
 ---
-title: HTTP/2 Update
-authors: [Wayne Thayer]
-date: 2016-10-26T17:04:21+00:00
-dsq_thread_id:
-  - 5255176211
+authors:
+- Wayne Thayer
 categories:
-  - General
+- General
+date: "2016-10-26T17:04:21+00:00"
+dsq_thread_id:
+- 5255176211
+keywords:
+- google
+- tls
+- ssl
+- https
+tags:
+- Google
+- SSL/TLS
+title: HTTP/2 Update
+
 
 ---
 I wrote about the [next version of the HTTP protocol][1] 18 months ago. Since then, HTTP/2 has gained significant traction, but not without generating some controversy along the way.

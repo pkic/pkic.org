@@ -1,9 +1,29 @@
 ---
-title: What Will Happen With SHA-1 and Browser Users on January 1st, 2016?
-authors: [Bruce Morton]
-date: 2016-01-05T19:50:25+00:00
+authors:
+- Bruce Morton
+date: "2016-01-05T19:50:25+00:00"
 dsq_thread_id:
-  - 4464620153
+- 4464620153
+keywords:
+- tls
+- vulnerabilities
+- android
+- mozilla
+- apple
+- firefox
+- chrome
+- ssl
+- google
+tags:
+- SSL/TLS
+- Vulnerability
+- Android
+- Mozilla
+- Apple
+- Firefox
+- Chrome
+- Google
+title: What Will Happen With SHA-1 and Browser Users on January 1st, 2016?
 
 
 ---

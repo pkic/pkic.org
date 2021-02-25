@@ -1,9 +1,31 @@
 ---
-title: Minimum Requirements for Code Signing Certificates
-authors: [Bruce Morton]
-date: 2016-07-20T20:47:02+00:00
+authors:
+- Bruce Morton
+date: "2016-07-20T20:47:02+00:00"
 dsq_thread_id:
-  - 5001214862
+- 5001214862
+keywords:
+- code signing
+- microsoft
+- casc
+- fips
+- time-stamping
+- revocation
+- tsa
+- hsm
+- malware
+- ca/browser forum
+tags:
+- Code Signing
+- Microsoft
+- CASC
+- FIPS
+- TSA
+- Revocation
+- HSM
+- Malware
+- CA/Browser Forum
+title: Minimum Requirements for Code Signing Certificates
 
 
 ---

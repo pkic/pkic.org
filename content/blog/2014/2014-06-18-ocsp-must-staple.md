@@ -1,22 +1,31 @@
 ---
-title: OCSP Must-Staple
-authors: [Rick Andrews, Bruce Morton]
-date: 2014-06-18T18:50:27+00:00
+authors:
+- Rick Andrews
+- Bruce Morton
+date: "2014-06-18T18:50:27+00:00"
 dsq_thread_id:
-  - 2775942548
+- 2775942548
+keywords:
+- ssl
+- announcement
+- revocation
 tags:
-- OCSP
+- SSL/TLS
+- Announcement
+- Revocation
+title: OCSP Must-Staple
 
+
+---
 ---
 With the announcement of the Heartbleed bug and the resulting need to revoke large numbers of SSL certificates, the topic of certificate revocation has, once again, come to the fore.
 
-There have been many issues with how revocation information is provided to the browsers. First let&rsquo;s review how SSL certificate status may currently be obtained:
+There have been many issues with how revocation information is provided to the browsers. First let’s review how SSL certificate status may currently be obtained:
 How
 
 
 | How | Definition | Pros | Cons |
-|-----|------------|------|------|
-| **Certificate Revocation List (CRL)** | A signed list of the serial numbers of all revoked certificates that were signed by the CA’s certificate. | A single point of reference for the status of all certificates issued by the CA’s certificate. | Over time, CRLs might become very large, resulting in unacceptable latency. An attacker may be in a position to block the CRL delivery. |
+| signed list of the serial numbers of all revoked certificates that were signed by the CA’s certificate. | A single point of reference for the status of all certificates issued by the CA’s certificate. | Over time, CRLs might become very large, resulting in unacceptable latency. An attacker may be in a position to block the CRL delivery. |
 | **Online Certificate Status Protocol (OCSP)** | A signed response containing the status of one certificate. | An OCSP response is small and does not grow. As such, there is no latency due to size. | Browsers have to obtain an OCSP response for each certificate in the Web server’s certificate chain, requiring it to open additional connections, thereby impacting page load time. Privacy issues may be a concern as the CA can determine which websites a user is visiting. An attacker may be in a position to block the OCSP delivery. |
 | **OCSP Stapling** | A signed response, fetched by the Web server, with the status of its certificate. The OCSP response is then provided by the Web server to the browser. | No privacy issues, as the CA does not know which user has asked for the OCSP response. | Need Web servers and browsers that support OCSP Stapling. An attacker may be in a position to block the OCSP delivery. |
 | **Blacklist (for example, CTLs or CRLSets)** | A list of certificates that should not be trusted (whether or not they were revoked), distributed by the browser supplier. | The blacklist is distributed by the browser supplier as part of the browser executable. | Any certificate on the blacklist can be rejected without any additional checks. | For practical reasons, the list is incomplete. |

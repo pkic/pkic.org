@@ -1,9 +1,30 @@
 ---
-title: Extra Trips are for Frequent Flyers, Not SSL/TLS Performance
-authors: [Wayne Thayer]
-date: 2014-10-30T16:15:01+00:00
+authors:
+- Wayne Thayer
+date: "2014-10-30T16:15:01+00:00"
 dsq_thread_id:
-  - 3171194704
+- 3171194704
+keywords:
+- revocation
+- hsts
+- rsa
+- firefox
+- ssl
+- https
+- google
+- ocsp
+- forward secrecy
+- tls
+tags:
+- Revocation
+- HSTS
+- RSA
+- Firefox
+- SSL/TLS
+- Google
+- OCSP
+- Forward Secrecy
+title: Extra Trips are for Frequent Flyers, Not SSL/TLS Performance
 
 
 ---

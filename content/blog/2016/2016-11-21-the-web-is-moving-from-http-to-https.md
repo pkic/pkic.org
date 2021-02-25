@@ -1,11 +1,23 @@
 ---
-title: The Web Is Moving From HTTP to HTTPS
-authors: [Dean Coclin]
-date: 2016-11-21T17:56:09+00:00
+authors:
+- Dean Coclin
+date: "2016-11-21T17:56:09+00:00"
 dsq_thread_id:
-  - 5321741303
+- 5321741303
+keywords:
+- chrome
+- ssl
+- https
+- google
+- encryption
+- tls
 tags:
- - SSL/TLS
+- Chrome
+- SSL/TLS
+- Google
+- Encryption
+title: The Web Is Moving From HTTP to HTTPS
+
 
 ---
 The four letters, “http”, are known to technical and non-technical users alike as the beginning of any web address. These have been ubiquitous for many years. But things are about to change. Pretty soon, you won’t be able to go to many popular websites just by using those 4 letters. You will need to add an “s” at the end (https). Why is this happening? What are the reasons for this change?

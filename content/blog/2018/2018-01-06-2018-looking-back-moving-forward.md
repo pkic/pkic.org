@@ -1,10 +1,50 @@
 ---
-title: 2018 – Looking Back, Moving Forward
-authors: [Bruce Morton]
-date: 2018-01-06T14:31:22+00:00
+authors:
+- Bruce Morton
+date: "2018-01-06T14:31:22+00:00"
 dsq_thread_id:
-  - 6395462745
-tags: [CAA, SHA1, Public Key Pinning, Certificate Transparency]
+- 6395462745
+keywords:
+- roca
+- tls
+- tls 1.3
+- ov certificate
+- caa
+- elliptic curve
+- rsa
+- pki
+- ca/browser forum
+- chrome
+- ssl
+- mis-issued
+- https
+- vulnerability
+- google
+- microsoft
+- attack
+- encryption
+- certificate expiry
+- pdf
+tags:
+- ROCA
+- SSL/TLS
+- TLS 1.3
+- OV
+- CAA
+- ECC
+- RSA
+- PKI
+- CA/Browser Forum
+- Chrome
+- Mis-issued
+- Vulnerability
+- Google
+- Microsoft
+- Attack
+- Encryption
+- Certificate Expiry
+- PDF
+title: 2018 – Looking Back, Moving Forward
 
 
 ---
@@ -18,7 +58,7 @@ Google and CWI announced [SHAttered][1], an attack on the SHA-1 cryptographic
 
 [Return of Coppersmith’s Attack (ROCA)][2] is a vulnerability in the generation of RSA keys used by a software library adopted in cryptographic smartcards, security tokens and other secure hardware chips. ROCA was found in a cryptographic library used in a wide range of cryptographic chips produced by Infineon Technologies AG. The vulnerability was disclosed to Infineon in the first week of February with an agreement to an 8 month period before public disclosure. Major vendors including Microsoft, Google, HP, Lenovo and Fujitsu released the software updates and guidelines for mitigation. A scan of certificate transparency logs showed that few SSL/TLS certificates were impacted.
 
-The [Return Of Bleichenbacher&#8217;s Oracle Threat (ROBOT) attack][3] was announced at the end of 2017. ROBOT is a 19-year-old vulnerability that allows performing RSA decryption and signing operations with the private key of an SSL/TLS server. ROBOT only affects SSL/TLS cipher modes that use RSA encryption. Most modern SSL/TLS connections use an Elliptic Curve Diffie Hellman key exchange and need RSA only for signatures. It is recommended that RSA encryption modes be disabled.
+The [Return Of Bleichenbacher’s Oracle Threat (ROBOT) attack][3] was announced at the end of 2017. ROBOT is a 19-year-old vulnerability that allows performing RSA decryption and signing operations with the private key of an SSL/TLS server. ROBOT only affects SSL/TLS cipher modes that use RSA encryption. Most modern SSL/TLS connections use an Elliptic Curve Diffie Hellman key exchange and need RSA only for signatures. It is recommended that RSA encryption modes be disabled.
 
 ## SHA-1 Deprecation
 

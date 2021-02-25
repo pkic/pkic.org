@@ -1,9 +1,26 @@
 ---
-title: The Insecurity of Mobile Applications
-authors: [Rick Andrews]
-date: 2015-06-11T18:30:23+00:00
+authors:
+- Rick Andrews
+date: "2015-06-11T18:30:23+00:00"
 dsq_thread_id:
-  - 3838882351
+- 3838882351
+keywords:
+- ssl
+- vulnerability
+- attack
+- openssl
+- tls
+- vulnerabilities
+- mitm
+- android
+tags:
+- SSL/TLS
+- Vulnerability
+- Attack
+- OpenSSL
+- MITM
+- Android
+title: The Insecurity of Mobile Applications
 
 
 ---

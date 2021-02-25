@@ -1,9 +1,22 @@
 ---
-title: Certificate Reputation
-authors: [Bruce Morton]
-date: 2014-03-28T14:00:37+00:00
+authors:
+- Bruce Morton
+date: "2014-03-28T14:00:37+00:00"
 dsq_thread_id:
-  - 2526284372
+- 2526284372
+keywords:
+- pki
+- ssl
+- microsoft
+- ocsp
+- mitm
+tags:
+- PKI
+- SSL/TLS
+- Microsoft
+- OCSP
+- MITM
+title: Certificate Reputation
 
 
 ---
@@ -19,18 +32,18 @@ One goal of this effort will be to flag potential man-in-the-middle (MITM) attac
   * Website presents a different certificate in only certain regions
   * Significant change in the fields of a certificate that a CA usually issues, such as the OCSP responder location
 
-Currently, Google and Microsoft are each advancing their own non-conflicting solutions to certificate trust. Google is promoting Certificate Transparency (CT) as a solution &mdash; looking to require CAs to support CT for EV SSL certificates in 2015. This dual approach by these two companies may be good for the public from a defense-in-depth perspective. For comparison, Certificate Reputation supports the following:
+Currently, Google and Microsoft are each advancing their own non-conflicting solutions to certificate trust. Google is promoting Certificate Transparency (CT) as a solution — looking to require CAs to support CT for EV SSL certificates in 2015. This dual approach by these two companies may be good for the public from a defense-in-depth perspective. For comparison, Certificate Reputation supports the following:
 
-  * **Privacy** &ndash; When a certificate subscriber purchases a certificate for its internal domain name, this domain name will not be available publicly. Data will also be sent encrypted to Microsoft and no personally identifiable information is retained.
-  * **Certificate Monitor** &ndash; Domain owners could be notified by email when new certificates are issued with their domain names.
-  * **Scalable** &ndash; The Certificate Reputation solution is already being implemented and scales without requiring effort or cooperation from any third parties such as website operators or CAs. Microsoft can enhance functionality to its system as needed. 
-  * **Deployment** &ndash; Similarly, Certificate Reputation should be easy to deploy as it will only require efforts from Microsoft. The solution will not rely on changes being performed by third parties such as CAs, subscribers, Web server developers, or OCSP developers.
+  * **Privacy** – When a certificate subscriber purchases a certificate for its internal domain name, this domain name will not be available publicly. Data will also be sent encrypted to Microsoft and no personally identifiable information is retained.
+  * **Certificate Monitor** – Domain owners could be notified by email when new certificates are issued with their domain names.
+  * **Scalable** – The Certificate Reputation solution is already being implemented and scales without requiring effort or cooperation from any third parties such as website operators or CAs. Microsoft can enhance functionality to its system as needed. 
+  * **Deployment** – Similarly, Certificate Reputation should be easy to deploy as it will only require efforts from Microsoft. The solution will not rely on changes being performed by third parties such as CAs, subscribers, Web server developers, or OCSP developers.
 
 Security experts also say there are some disadvantages:
 
-  * **No Public Log** &ndash; Microsoft will own the database and it will not be made publicly available, nor available for audit.
-  * **Sensitivity** &ndash; Attacks that are highly targeted may be difficult to detect.
-  * **All Certificates Not Covered** &ndash; The solution will rely on the telemetry gathered by the use of IE 11 (and later). This means it is targeted at certificates that Microsoft browsers encounter and not other applications or browsers. There is also the opt-out issue, where an organization might not provide data back to Microsoft; in this case, the solution will be deprecated for those sites.
+  * **No Public Log** – Microsoft will own the database and it will not be made publicly available, nor available for audit.
+  * **Sensitivity** – Attacks that are highly targeted may be difficult to detect.
+  * **All Certificates Not Covered** – The solution will rely on the telemetry gathered by the use of IE 11 (and later). This means it is targeted at certificates that Microsoft browsers encounter and not other applications or browsers. There is also the opt-out issue, where an organization might not provide data back to Microsoft; in this case, the solution will be deprecated for those sites.
 
  [1]: https://casecurity.org/2013/09/25/what-is-certification-authority-authorization/
  [2]: https://casecurity.org/2013/08/28/public-key-pinning/

@@ -1,9 +1,24 @@
 ---
-title: Microsoft Deploys Certificate Reputation
-authors: [Bruce Morton]
-date: 2015-04-09T19:00:24+00:00
+authors:
+- Bruce Morton
+date: "2015-04-09T19:00:24+00:00"
 dsq_thread_id:
-  - 3662223644
+- 3662223644
+keywords:
+- ssl
+- identity
+- mis-issued
+- google
+- microsoft
+- extended validation
+tags:
+- SSL/TLS
+- Identity
+- Mis-issued
+- Google
+- Microsoft
+- EV
+title: Microsoft Deploys Certificate Reputation
 
 
 ---
@@ -11,7 +26,7 @@ As we have stated previously, website owners have a concern that an attacker can
 
 At the start of 2015, most certification authorities (CAs) support CT as [requested by Google][3]. CT works for extended validation (EV) SSL certificates and will allow all EV certificates to be monitored.
 
-In March 2015, Microsoft deployed Certificate Reputation. Through the use of Windows, Internet Explorer and other applications, certificate data for all types of SSL certificates is collected and provided to Microsoft. In addition, Microsoft has stated that they don&rsquo;t collect any information that could be used to identify the user.
+In March 2015, Microsoft deployed Certificate Reputation. Through the use of Windows, Internet Explorer and other applications, certificate data for all types of SSL certificates is collected and provided to Microsoft. In addition, Microsoft has stated that they don’t collect any information that could be used to identify the user.
 
 The certificate data is only provided to users who can confirm [ownership of the domain][4]. The data is provided through [Bing Webmaster Tools][5] and shows data similar to the image below.
 

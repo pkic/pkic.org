@@ -1,21 +1,64 @@
 ---
+authors:
+- Paul Walsh
+date: "2019-10-10T15:52:09+00:00"
+lastmod: "2019-10-16T15:52:09+00:00"
+keywords:
+- chrome
+- ssl
+- identity
+- https
+- google
+- microsoft
+- phishing
+- attack
+- policy
+- encryption
+- w3c
+- vulnerabilities
+- ev certificate
+- extended validation
+- revocation
+- android
+- dv certificate
+- mozilla
+- domain validation
+- 2fa
+- malware
+- firefox
+tags:
+- Chrome
+- SSL/TLS
+- Identity
+- Google
+- Microsoft
+- Phishing
+- Attack
+- Policy
+- Encryption
+- W3C
+- Vulnerability
+- EV
+- Revocation
+- Android
+- DV
+- Mozilla
+- 2FA
+- Malware
+- Firefox
 title: The Insecure Elephant in the Room
-authors: [Paul Walsh]
-date: 2019-10-10T15:52:09+00:00
 
 
 ---
 {{< figure src="/uploads/2019/10/insecure-elephant-1.png" >}}
 
-[Update: October 16, 2019]
-
 ## The purpose of this article
 
 The purpose of this article is to demonstrate why I believe browser-based UI for website identity can make the web safer for everyone. I explain in great detail, the reasons why the UI and UX didn’t work in the past. And what’s left is only making the problem worse instead of better.
 
-Some people seem to find it difficult to consume my thoughts about the enforcement of &#8220;HTTPS EVERYWHERE”, free DV certs and the browser padlock. Please assume that I support all of these things. My article covers controversial opinions about the undesirable impact that these things have had in the past, and have today. 
+Some people seem to find it difficult to consume my thoughts about the enforcement of “HTTPS EVERYWHERE”, free DV certs and the browser padlock. Please assume that I support all of these things. My article covers controversial opinions about the undesirable impact that these things have had in the past, and have today. 
 
-Some people even questioned my motives. It might help to read my bio at the end before reading the article &#8211; you will then be less likely to assume I’m biased. 
+Some people even questioned my motives. It might help to read my bio at the end before reading the article – you will then be less likely to assume I’m biased. 
 
 I have used a lot of data from which to draw my conclusions. If you disagree with my conclusions and decide to take the debate to Twitter as some people have already, please try to reference what you disagree with and why. 
 
@@ -146,7 +189,7 @@ Every Certificate Authority issues DV certificates. Most CAs charge for them. Bu
 
 I highly recommend that you [read this amazing post](http://this.how/googleAndHttp/), written by the founder of podcasting, blogging and RSS, and open web advocate, Dave Winer. He explains why the enforcement of “HTTPS Everywhere” is bad for the web. As a significant contributor to W3C Standards and an open web advocate myself, I agree with everything Dave says.
 
-<figure id="attachment_1963" aria-describedby="caption-attachment-1963" style="width: 1998px" class="wp-caption aligncenter">{{< figure src="/uploads/2019/10/insecure-elephant-8.png" >}}<figcaption id="caption-attachment-1963" class="wp-caption-text">I&#8217;d like to thank Patrick Nohe from [hashedout](https://www.thesslstore.com) for allowing me to use the graph above</figcaption></figure>
+{{< figure src="/uploads/2019/10/insecure-elephant-8.png" title="I’d like to thank Patrick Nohe from thesslstore.com for allowing me to use the graph above" >}}
 
 It is clear from the data that cybercriminals favor free and easy-to-acquire DV certificates when building counterfeit websites for the purpose of attacking organizations, government agencies and consumers.
 

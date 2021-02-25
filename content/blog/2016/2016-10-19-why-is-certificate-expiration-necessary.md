@@ -1,13 +1,37 @@
 ---
-title: Why Is Certificate Expiration Necessary?
-authors: [Bruce Morton]
-date: 2016-10-19T16:26:21+00:00
+authors:
+- Bruce Morton
+date: "2016-10-19T16:26:21+00:00"
 dsq_thread_id:
-  - 5236047018
+- 5236047018
+keywords:
+- rsa
+- ca/browser forum
+- ssl
+- identity
+- attack
+- policy
+- ocsp
+- tls
+- vulnerabilities
+- extended validation
+- md5
+tags:
+- RSA
+- CA/Browser Forum
+- SSL/TLS
+- Identity
+- Attack
+- Policy
+- OCSP
+- Vulnerability
+- EV
+- Hash Function
+title: Why Is Certificate Expiration Necessary?
 
 
 ---
-## _The Long Life Certificate &#8211; Why It Doesn’t Exist_
+## _The Long Life Certificate – Why It Doesn’t Exist_
 
 Why is certificate expiration even necessary? Wouldn’t it be better if I could just buy a certificate with a long life before expiration? It would really simplify certificate management if it could be installed and forgotten. Simple, no management required, just file-and-forget.
 
@@ -38,4 +62,4 @@ To help ensure that all certificates are using the latest security standards and
 
 When you request a certificate, select a validity period that meets your security policy and count on your reliable CA to provide expiration notices to help you to avoid security lapses. Partnering with a CA maximizes security and minimizes administrative tasks associated with certificate management, bringing you close to a file-and-forget experience throughout the certificate lifecycle.
 
-&nbsp;
+ 

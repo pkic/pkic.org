@@ -1,7 +1,33 @@
 ---
+authors:
+- Patrick Nohe
+date: "2019-10-21T18:11:11+00:00"
+keywords:
+- ev certificate
+- extended validation
+- mozilla
+- apple
+- ca/browser forum
+- chrome
+- ssl
+- identity
+- code signing
+- google
+- phishing
+- encryption
+tags:
+- EV
+- Mozilla
+- Apple
+- CA/Browser Forum
+- Chrome
+- SSL/TLS
+- Identity
+- Code Signing
+- Google
+- Phishing
+- Encryption
 title: 'Online Identity Is Important: Let’s Upgrade Extended Validation'
-authors: [Patrick Nohe]
-date: 2019-10-21T18:11:11+00:00
 
 
 ---
@@ -48,7 +74,7 @@ Where some CAs are making a mistake – and please excuse our candor here – is
 
 The extent of EV’s relationship with phishing is debatable, but continuing to harp on this distracts from the better part of the argument – that a mechanism for asserting identity is critical for the internet’s trust ecosystem. 
 
-That point is a lot harder to contend with, which brings us to &hellip;
+That point is a lot harder to contend with, which brings us to …
 
 ## Criticisms of EV
 
@@ -64,7 +90,7 @@ And again, each one of those criticisms has some validity. So, we’re going to 
 
 This is a criticism first leveled by Google during deliberations at the CA/B Forum. 
 
-_So the whole premise for why there should be \*any\* UI treatment is predicated on 2.1.2 (2), which clearly spells out that EV is a marketing tool, wrapped in the guise of a security tool. I do not feel you can offer a more charitable read of that section &hellip; Literally the entire value proposition of EV reduces to “CAs want to sell billboards in the browser’s security UI”. And the fundamental point is that such UI is security critical – it’s the line of death between trustworthy and untrustworthy content._
+_So the whole premise for why there should be \*any\* UI treatment is predicated on 2.1.2 (2), which clearly spells out that EV is a marketing tool, wrapped in the guise of a security tool. I do not feel you can offer a more charitable read of that section … Literally the entire value proposition of EV reduces to “CAs want to sell billboards in the browser’s security UI”. And the fundamental point is that such UI is security critical – it’s the line of death between trustworthy and untrustworthy content._
 
 What Google’s rep just alluded to is a concept that is fairly sacrosanct to many in the browser community. [Eric Lawrence elaborates on in a blog post][1]:
 
@@ -82,7 +108,7 @@ As Lawrence terms it, an attacker has control over all the zones in red, leaving
 
 That’s totally fair. 
 
-And we’ve taken that into considering with what we’re proposing. I think it’s a bit cynical to say the CAs just want to sell billboards, but that’s pretty on-brand for the CA/B Forum. Moving on &hellip;
+And we’ve taken that into considering with what we’re proposing. I think it’s a bit cynical to say the CAs just want to sell billboards, but that’s pretty on-brand for the CA/B Forum. Moving on …
 
 ### People don’t notice or don’t know to look for EV UI
 
@@ -92,7 +118,7 @@ And the rest of the Forum talks about whether the EV indicator is useful like it
 
 Here’s the thing: it hasn’t.
 
-Measuring whether or not people notice or use a trust indicator is incredibly difficult to quantify. You can’t do it with a survey.&nbsp; 
+Measuring whether or not people notice or use a trust indicator is incredibly difficult to quantify. You can’t do it with a survey.  
 
 The human brain can process images it sees for as little as 13 milliseconds. As Nicholas Rule, a social psychologist that teaches at the University of Toronto, writes in the Association for Psychological Science’s Observer Magazine:
 
@@ -106,7 +132,7 @@ The human brain can process images it sees for as little as 13 milliseconds. As 
 
 As Karin B. Jensen – who has a PHD in Neuroscience and teaches Psychiatry at Harvard – wrote in the International Review of Neurobiology just last year:
 
-> Subliminal means that a stimulus is presented below (sub) the threshold (limen) for conscious recognition, yet the stimulus can still affect behavior as it has been registered at a basic level of perception &hellip;
+> Subliminal means that a stimulus is presented below (sub) the threshold (limen) for conscious recognition, yet the stimulus can still affect behavior as it has been registered at a basic level of perception …
 
 The point I’m making is NOT that EV registers on a subliminal level. It’s that WE DON’T KNOW.
 
@@ -114,7 +140,7 @@ I’ve just cited science that was rigorously researched and reviewed by experts
 
 > To motivate the need for new security indicators, we critique existing browser security indicators and survey 1,329 people about Google Chrome’s indicators.
 
-So, to be clear, this is just a survey. Conducted by Google polling its own customers. And the phrasing “to motivate the need for &hellip;” sort of feels like Google already knew what it was hoping to find before it even started its survey. This would be considered tainted if it had come from the CAs. But petty grievances aside, this is far from scientific. It’s tough to get exact figures on how many users Google Chrome has. But its mobile app alone has been downloaded more than 5 billion times. I mention this because 1,329 people is an infinitesimal sample size. And it’s not measuring any of the cognitive aspects of the decision.
+So, to be clear, this is just a survey. Conducted by Google polling its own customers. And the phrasing “to motivate the need for …” sort of feels like Google already knew what it was hoping to find before it even started its survey. This would be considered tainted if it had come from the CAs. But petty grievances aside, this is far from scientific. It’s tough to get exact figures on how many users Google Chrome has. But its mobile app alone has been downloaded more than 5 billion times. I mention this because 1,329 people is an infinitesimal sample size. And it’s not measuring any of the cognitive aspects of the decision.
 
 Asking someone “did you notice this” is unreliable. That’s why witnesses are often discounted in criminal trials. There’s a proven disparity between what we process and what we remember. Even the godfather of user research himself, Jakob Nielson (no relation to Leslie) once wrote:
 
@@ -145,7 +171,7 @@ Now, please show me the data if I’m wrong, but that last part really hasn’t 
 
 While the validation portion of EV (and pretty much all SSL) could do with some tweaking and improvements, you really do need to jump through a number of hoops to exploit it. (And many of those hoops require government filings, which criminals typically try to avoid.) And the point where things broke down with Carroll’s POC was with the UK Companies House – not the CAs. 
 
-The other criticism is that sometimes the information provided by EV can be confusing. Carroll’s exploit was confusing because it created a name collision with the Stripe payment company. The SSL Store&#x2122; deals with this, too. The SSL Store&#x2122; is a DBA, so our EV name plate says “Rapid Web Services, LLC.” 
+The other criticism is that sometimes the information provided by EV can be confusing. Carroll’s exploit was confusing because it created a name collision with the Stripe payment company. The SSL Store™ deals with this, too. The SSL Store™ is a DBA, so our EV name plate says “Rapid Web Services, LLC.” 
 
 ## Our proposal: Mouse-over UI with LEIs included
 
@@ -177,7 +203,7 @@ Unfortunately, in its current iteration you have to click on the padlock, then o
 
 But if you start showing this data the first time someone mouses over the address bar they’ll start looking for it. Aesthetically the browsers can do it however they want, but if we at least partially standardize this approach some of the education takes care of itself, once people notice it’s there they’ll find it useful. 
 
-That brings us to &hellip;
+That brings us to …
 
 ### Educational messages on browser start pages
 
@@ -201,7 +227,7 @@ Given the overlap between issuing digital certificates and issuing LEIs, a numbe
 
 It’s hard to understand why. An LEI can help prevent collisions and confusion. As Stephan Wolf of GLEIF wrote in a recent CA/B Forum email:
 
-> The whole point of including an LEI is efficiency so organizations have a uniform, globally recognized and standards based unique 20 digit identifier that is machine readable, will never be reused,&nbsp;and can be used to access other data using the same number.
+> The whole point of including an LEI is efficiency so organizations have a uniform, globally recognized and standards based unique 20 digit identifier that is machine readable, will never be reused, and can be used to access other data using the same number.
 
 Now, I can already hear the objections percolating, that, like confusing organizational names, people won’t know what to do with an LEI number. But there are several workarounds for that. 
 
@@ -221,11 +247,11 @@ _Members of the CA/Browser Forum have worked closely together in defining the gu
 
 And here’s the thing, nobody that’s advocating for the end of EV has any kind of constructive suggestions for how to accomplish what it was designed for. And what EV is trying to do is pretty universally regarded as a good thing. It’s just a matter of its efficacy. 
 
-If there was a competing approach that was being served as a replacement that would be one thing. But eliminating it without any vision towards a replacement does not make the internet safer or more secure. And that’s not in line with the Forum’s stated goals. It seems like discarding EV with no viable alternative just sets the whole internet backwards. &nbsp;
+If there was a competing approach that was being served as a replacement that would be one thing. But eliminating it without any vision towards a replacement does not make the internet safer or more secure. And that’s not in line with the Forum’s stated goals. It seems like discarding EV with no viable alternative just sets the whole internet backwards.  
 
 The internet can’t afford to wait for us to figure something else out. Again, identity has never been more critical. If you have another way to approach authentication and ID online, let’s hear it. Otherwise, we should start figuring out how to fix EV. Most of the CAs want to have that conversation. Whether or not it actually gets discussed – and earnestly – is up to the browsers. 
 
-_As always, leave any comments or questions below &hellip;_
+_As always, leave any comments or questions below …_
 
 * * *
 

@@ -1,9 +1,24 @@
 ---
-title: CA/Browser Forum Governance Reform
-authors: [Dean Coclin]
-date: 2018-05-18T12:17:14+00:00
+authors:
+- Dean Coclin
+date: "2018-05-18T12:17:14+00:00"
 dsq_thread_id:
-  - 6677876230
+- 6677876230
+keywords:
+- tls
+- apple
+- ca/browser forum
+- s/mime
+- code signing
+- policy
+tags:
+- SSL/TLS
+- Apple
+- CA/Browser Forum
+- S/MIME
+- Code Signing
+- Policy
+title: CA/Browser Forum Governance Reform
 
 
 ---

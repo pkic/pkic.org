@@ -1,18 +1,40 @@
 ---
-title: Lenovo Enables Man-in-the-Middle Attacks Via Superfish Adware
-authors: [Doug Beattie]
-date: 2015-02-20T22:27:36+00:00
+authors:
+- Doug Beattie
+date: "2015-02-20T22:27:36+00:00"
 dsq_thread_id:
-  - 3534027017
+- 3534027017
+- General
+keywords:
+- malware
+- firefox
+- mixed content
+- ssl
+- code signing
+- https
+- vulnerability
+- microsoft
+- attack
+- mitm
+tags:
+- Malware
+- Firefox
+- Mixed Content
+- SSL/TLS
+- Code Signing
+- Vulnerability
+- Microsoft
+- Attack
+- MITM
+title: Lenovo Enables Man-in-the-Middle Attacks Via Superfish Adware
 
-  - General
 
 ---
-Lenovo is [selling computers][1] that contain the Superfish application which &#8220;supplements&#8221; the user&#8217;s SSL sessions to enable their adware application to deliver content transparently; however, due to poor security design this leaves users vulnerable to man-in-the-middle attacks.
+Lenovo is [selling computers][1] that contain the Superfish application which “supplements” the user’s SSL sessions to enable their adware application to deliver content transparently; however, due to poor security design this leaves users vulnerable to man-in-the-middle attacks.
 
 ## How it was supposed to work
 
-Superfish uses the program &#8220;Visual Discovery&#8221; to process images in browser content and then displays ads for similar goods and services. This sounds like any other adware application, but in order to maintain SSL sessions and not alert users with security warnings, Superfish is serving up these images over https. They were able to do this by creating SSL certificates on the fly that imitate the certificates on the “real” websites they have intercepted and using them in a local SSL proxy to deliver content from the Visual Discovery server over the same apparent domain, without clearly revealing what they have done.  This is a classic “man in the middle” or MITM process.
+Superfish uses the program “Visual Discovery” to process images in browser content and then displays ads for similar goods and services. This sounds like any other adware application, but in order to maintain SSL sessions and not alert users with security warnings, Superfish is serving up these images over https. They were able to do this by creating SSL certificates on the fly that imitate the certificates on the “real” websites they have intercepted and using them in a local SSL proxy to deliver content from the Visual Discovery server over the same apparent domain, without clearly revealing what they have done.  This is a classic “man in the middle” or MITM process.
 
 ## How typical MITM attacks work
 
@@ -34,13 +56,13 @@ Now that the private key is widely available, attackers can generate SSL certifi
 
 ## What about code signing attacks?
 
-Since the Superfish root is marked for all key usages, it can also be used to sign and silently install malware on these Lenovo devices.  While no reports of malware have been disclosed, it&#8217;s only a matter of time and this makes remediation all that much more urgent.
+Since the Superfish root is marked for all key usages, it can also be used to sign and silently install malware on these Lenovo devices.  While no reports of malware have been disclosed, it’s only a matter of time and this makes remediation all that much more urgent.
 
-## How to tell if you&#8217;re affected
+## How to tell if you’re affected
 
 The scope of the problem, according to Lenovo, is small and should only affect users that purchased [these][4] systems shipped between October and December of 2014, some of which are still [on the shelves][5], as reported by Chris Palmer. However, other reports have surfaced saying that Superfish appeared on some systems as early as [mid-2014][6].
 
-If you have a Lenovo system, start by looking in the Microsoft Root CA key store (in IE go to Tools => Internet options => Content => Certificates => Trusted root certificates) and look for the Superfish CA.  If you see the [Superfish root certificate][5], then you should be concerned and should immediately &#8220;Remove&#8221; the root.  You can also go [here][7] to test your system.
+If you have a Lenovo system, start by looking in the Microsoft Root CA key store (in IE go to Tools => Internet options => Content => Certificates => Trusted root certificates) and look for the Superfish CA.  If you see the [Superfish root certificate][5], then you should be concerned and should immediately “Remove” the root.  You can also go [here][7] to test your system.
 
 ## How to minimize your security risk
 

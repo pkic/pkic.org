@@ -1,7 +1,21 @@
 ---
+authors:
+- Tim Callan
+date: "2019-06-14T18:13:34+00:00"
+keywords:
+- tls
+- casc
+- vulnerabilities
+- extended validation
+- firefox
+- ssl
+tags:
+- SSL/TLS
+- CASC
+- Vulnerability
+- EV
+- Firefox
 title: What the Latest Firefox Update Means for SSL Certificates
-authors: [Tim Callan]
-date: 2019-06-14T18:13:34+00:00
 
 
 ---

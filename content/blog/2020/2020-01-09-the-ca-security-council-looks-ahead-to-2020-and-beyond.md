@@ -1,7 +1,58 @@
 ---
+authors:
+- Patrick Nohe
+- Doug Beattie
+date: "2020-01-09T21:00:24+00:00"
+keywords:
+- policy
+- encryption
+- forward secrecy
+- microsoft edge
+- cab forum
+- tls
+- tls 1.2
+- tls 1.3
+- extended validation
+- ssl 3.0
+- tls 1.1
+- mozilla
+- apple
+- tls 1.0
+- firefox
+- pki
+- qualified
+- chrome
+- ssl
+- web pki
+- identity
+- google
+- microsoft
+- gdpr
+tags:
+- Policy
+- Encryption
+- Forward Secrecy
+- Edge
+- CA/Browser Forum
+- SSL/TLS
+- TLS 1.2
+- TLS 1.3
+- EV
+- SSL 3.0
+- TLS 1.1
+- Mozilla
+- Apple
+- TLS 1.0
+- Firefox
+- PKI
+- Qualified
+- Chrome
+- Web PKI
+- Identity
+- Google
+- Microsoft
+- GDPR
 title: The CA Security Council Looks Ahead to 2020 and Beyond
-authors: [Patrick Nohe, Doug Beattie]
-date: 2020-01-09T21:00:24+00:00
 
 
 ---

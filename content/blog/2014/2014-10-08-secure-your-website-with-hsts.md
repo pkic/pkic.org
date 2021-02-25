@@ -1,9 +1,30 @@
 ---
-title: Secure Your Website with HSTS
-authors: [Bruce Morton]
-date: 2014-10-08T15:05:10+00:00
+authors:
+- Bruce Morton
+date: "2014-10-08T15:05:10+00:00"
 dsq_thread_id:
-  - 3096189901
+- 3096189901
+keywords:
+- firefox
+- chrome
+- ssl
+- https
+- google
+- attack
+- policy
+- encryption
+- tls
+- hsts
+tags:
+- Firefox
+- Chrome
+- SSL/TLS
+- Google
+- Attack
+- Policy
+- Encryption
+- HSTS
+title: Secure Your Website with HSTS
 
 
 ---

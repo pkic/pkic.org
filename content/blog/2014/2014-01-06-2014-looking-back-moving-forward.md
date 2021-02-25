@@ -1,9 +1,57 @@
 ---
-title: 2014 – Looking Back, Moving Forward
-authors: [Bruce Morton]
-date: 2014-01-06T20:00:12+00:00
+authors:
+- Bruce Morton
+date: "2014-01-06T20:00:12+00:00"
 dsq_thread_id:
-  - 2095825837
+- 2095825837
+keywords:
+- code signing
+- https
+- beast
+- microsoft
+- sha1
+- attack
+- policy
+- rc4
+- forward secrecy
+- encryption
+- tls
+- tls 1.2
+- ietf
+- ecc
+- caa
+- hsts
+- mitm
+- mozilla
+- elliptic curve
+- rsa
+- pki
+- ca/browser forum
+- icann
+- ssl
+tags:
+- Code Signing
+- SSL/TLS
+- BEAST
+- Microsoft
+- SHA1
+- Attack
+- Policy
+- RC4
+- Forward Secrecy
+- Encryption
+- TLS 1.2
+- IETF
+- ECC
+- CAA
+- HSTS
+- MITM
+- Mozilla
+- RSA
+- PKI
+- CA/Browser Forum
+- ICANN
+title: 2014 – Looking Back, Moving Forward
 
 
 ---
@@ -39,10 +87,10 @@ In 2014, [Always-on SSL][8] should be a consideration for all website operators.
 
 When we suggest Always-on SSL, we mean taking consideration of the latest technologies and the best practices when deploying SSL. As such, website operators should consider the following:
 
-  * [**HTTP Strict Transport Security (HSTS)**][9] &#8211; Allows the website owner to advise end-users that the website is only available in HTTPS mode. Browsers that support HSTS will provide an error when the site is accessed in HTTP-only mode.
-  * [**2048-Bit RSA keys**][10] &#8211; As 1024-bit keys are no longer permitted, website operators will have to deploy certificates with 2048-bit keys. Website operators may also want to look into ECC keys or implementations with servers that concurrently support both RSA and ECC.
+  * [**HTTP Strict Transport Security (HSTS)**][9] – Allows the website owner to advise end-users that the website is only available in HTTPS mode. Browsers that support HSTS will provide an error when the site is accessed in HTTP-only mode.
+  * [**2048-Bit RSA keys**][10] – As 1024-bit keys are no longer permitted, website operators will have to deploy certificates with 2048-bit keys. Website operators may also want to look into ECC keys or implementations with servers that concurrently support both RSA and ECC.
   * [**TLS 1.2**][11] – Uses the latest ciphers and will mitigate BEAST and RC4 attacks.
-  * [**Perfect Forward Secrecy**][12] &#8211; Will mitigate pervasive surveillance. Perfect Forward Secrecy can be deployed by ensuring your server supports  and prefers cipher suites with Diffie-Hellman ephemeral (DHE) or Elliptic Curve Diffie-Hellman ephemeral (ECDHE).
+  * [**Perfect Forward Secrecy**][12] – Will mitigate pervasive surveillance. Perfect Forward Secrecy can be deployed by ensuring your server supports  and prefers cipher suites with Diffie-Hellman ephemeral (DHE) or Elliptic Curve Diffie-Hellman ephemeral (ECDHE).
   * [**SSL/TLS Deployment Best Practices**][13] – Qualys SSL Labs has documented a set of SSL/TLS best practices. These practices provide advice on private keys, certificates, server configuration, performance and application design.
 
 ## Deprecation of SHA-1
@@ -55,7 +103,7 @@ Microsoft will review this policy in 2015 and consider changing the deadlines ba
 
 We may see consideration for new standards or policy requirements to address the following:
 
-  * [**Public Key Pinning**][15] &#8211; Allows a certificate Subscriber to designate a key as trusted for certificates protecting each website.
+  * [**Public Key Pinning**][15] – Allows a certificate Subscriber to designate a key as trusted for certificates protecting each website.
   * [**Certificate Transparency**][16] – Where issued SSL certificates will be recorded in a log server. The log server will allow domain owners to monitor whether fraudulent certificates were issued to their domain names. Supporting browsers will also be able to notify end-users when they find a website with a fraudulent certificate.
   * [**Code Signing Baseline Requirements**][17] – The CA/Browser Forum is working on a Code Signing Baseline Requirements standard. This standard will specify the minimum requirements for a CA that issues code signing certificates. It will provide requirements to mitigate threats, such as private key protection, identity verification and threat detection.
   * [**Certification Authority Authorization (CAA)**][18] – Allows the CA to make a [DNS][19] check to see if it is authorized or unauthorized to issue a certificate for the requested domain. When the CA is unauthorized, they can request permission from the domain owner or indicate to the owner that there is a potential attack on their domain.

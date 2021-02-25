@@ -1,7 +1,34 @@
 ---
+authors:
+- Sebastian Schulz
+date: "2020-05-01T17:00:58+00:00"
+keywords:
+- etsi
+- tls
+- enisa
+- trust service providers
+- eidas
+- qualified trust service providers
+- qualified
+- ssl
+- trust list
+- phishing
+- attack
+- european union agency for cybersecurity
+- policy
+tags:
+- ETSI
+- SSL/TLS
+- ENISA
+- TSP
+- eIDAS
+- QTSP
+- Qualified
+- Trust List
+- Phishing
+- Attack
+- Policy
 title: Digital Trust Is Elusive – Are Qualified Trust Services A Solution?
-authors: [Sebastian Schulz]
-date: 2020-05-01T17:00:58+00:00
 
 
 ---
@@ -11,7 +38,7 @@ While I wouldn’t completely agree, the idea isn’t wrong. In real life trust 
 
 This poses a problem in the digital world, though. The factors we rely on for deciding whether to trust someone or something are completely different from the real world. We cannot judge by appearance if we do not see the other person, we cannot judge by tone of voice if we do not hear them, and titles and ranks are deceiving enough in the real world already. Online, we are often forced to decide whether to trust some other party within split seconds. This stands in contrast to real life, where one can take the time to verify whether the other party can really be trusted. The lack of information on which we normally base our trust, as well as the pressure to make a quick decision, leads to frequent errors in judgement. Those errors can be substantial – and costly. For example, you may fall victim to a phishing attack or another form of fraud, something that has emerged in recent years as a very critical issue online.
 
-{{< figure src="/uploads/2020/04/digital-trust-1.png" title="Figure 1: From the 2019 Proofpoint report &#8220;State of Phish.” While we have come a long way in learning to be cautious online, phishing remains an ever-growing problem." >}}
+{{< figure src="/uploads/2020/04/digital-trust-1.png" title="Figure 1: From the 2019 Proofpoint report “State of Phish.” While we have come a long way in learning to be cautious online, phishing remains an ever-growing problem." >}}
 
 ## Introducing eIDAS  
 

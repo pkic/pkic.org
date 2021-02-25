@@ -1,9 +1,20 @@
 ---
-title: What Kind of SSL/TLS Certificate do You Need?
-authors: [Ben Wilson]
-date: 2016-05-12T17:00:17+00:00
+authors:
+- Ben Wilson
+date: "2016-05-12T17:00:17+00:00"
 dsq_thread_id:
-  - 4819537197
+- 4819537197
+keywords:
+- ev certificate
+- extended validation
+- dv certificate
+- ssl
+- tls
+tags:
+- EV
+- DV
+- SSL/TLS
+title: What Kind of SSL/TLS Certificate do You Need?
 
 
 ---

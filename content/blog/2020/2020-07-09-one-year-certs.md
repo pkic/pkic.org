@@ -1,10 +1,40 @@
 ---
+authors:
+- Patrick Nohe
+categories: null
+date: "2020-07-09T18:43:06+00:00"
+keywords:
+- apple
+- domain validation
+- root program
+- pki
+- ca/browser forum
+- sha2
+- ssl
+- identity
+- sha1
+- google
+- microsoft
+- policy
+- tls
+summary: Starting on September 1st, SSL/TLS certificates cannot be issued for longer
+  than 13 months (397 days). This change was first announced by Apple at the CA/Browser
+  Forum Spring Face-to-Face event in Bratislava back in March.
+tags:
+- Apple
+- DV
+- Root Program
+- PKI
+- CA/Browser Forum
+- SHA2
+- SSL/TLS
+- Identity
+- SHA1
+- Google
+- Microsoft
+- Policy
 title: One Year Certs
-summary: Starting on September 1st, SSL/TLS certificates cannot be issued for longer than 13 months (397 days). This change was first announced by Apple at the CA/Browser Forum Spring Face-to-Face event in Bratislava back in March.
-authors: [Patrick Nohe]
-date: 2020-07-09T18:43:06+00:00
-categories:
-tags: [SSL/TLS, CA/Browser Forum]
+
 
 ---
 ## Maximum SSL/TLS Certificate Validity is Now One Year

@@ -51,12 +51,16 @@ params:
 related:
   includeNewer: true
   indices:
-  - name: keywords
+  - name: tags
     weight: 100
+  - name: keywords
+    weight: 60
+  - name: title
+    weight: 30
   - name: date
     weight: 10
-  threshold: 10
-  toLower: false
+  threshold: 90
+  toLower: true
 
 privacy:
   disqus:

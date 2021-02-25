@@ -1,9 +1,53 @@
 ---
+authors:
+- Chris Bailey
+- Bruce Morton
+- Jay Schiavo
+date: "2018-12-06T18:07:15+00:00"
+keywords:
+- attack
+- encryption
+- tls
+- tls 1.2
+- tls 1.3
+- casc
+- ietf
+- extended validation
+- apple
+- tls 1.0
+- domain validated
+- malware
+- firefox
+- chrome
+- ssl
+- https
+- identity
+- google
+- microsoft
+- phishing
+tags:
+- Attack
+- Encryption
+- SSL/TLS
+- TLS 1.2
+- TLS 1.3
+- CASC
+- IETF
+- EV
+- Apple
+- TLS 1.0
+- DV
+- Malware
+- Firefox
+- Chrome
+- Identity
+- Google
+- Microsoft
+- Phishing
 title: 'CA Security Council (CASC) 2019 Predictions: The Good, the Bad, and the Ugly'
-authors: [Chris Bailey, Bruce Morton, Jay Schiavo]
-date: 2018-12-06T18:07:15+00:00
 
 
+---
 ---
 As the legendary coach of the NY Yankees Yogi Berra allegedly said, “It’s difficult to make predictions, especially about the future.”  But we’re going to try.
 
@@ -23,7 +67,7 @@ According to Firefox Telemetry, 77 percent of all page loads via Firefox are now
 > **Prediction:** TLS 1.3 will have an impressive growth of over 30% by the end of 2019
 
 
-TLS 1.3, a critical overhaul of TLS or transport layer security, was approved by the IETF as an official standard last August (RFC 8446) after four years of work.  The IETF Task Force responsible for the revision described it as “a major revision designed for the modern Internet,&#8221; which contains &#8220;major improvements in the areas of security, performance, and privacy.&#8221;  This upgrade will make it much harder for eavesdroppers to decrypt intercepted traffic &#8211; a major driver in the design of the new protocol was the mass surveillance of internet communications by the US National Security Agency (NSA) revealed in 2013 by Edward Snowden.  Unlike TLS 1.2, as of today there are no identified security holes in the algorithms used in TLS 1.3.
+TLS 1.3, a critical overhaul of TLS or transport layer security, was approved by the IETF as an official standard last August (RFC 8446) after four years of work.  The IETF Task Force responsible for the revision described it as “a major revision designed for the modern Internet,” which contains “major improvements in the areas of security, performance, and privacy.”  This upgrade will make it much harder for eavesdroppers to decrypt intercepted traffic – a major driver in the design of the new protocol was the mass surveillance of internet communications by the US National Security Agency (NSA) revealed in 2013 by Edward Snowden.  Unlike TLS 1.2, as of today there are no identified security holes in the algorithms used in TLS 1.3.
 
 So what needs to happen now?  Implementation, of course.  How fast will the use of TLS 1.3 grow? Let’s check the math:
 
@@ -34,7 +78,7 @@ So what needs to happen now?  Implementation, of course.  How fast will the us
 
 OK, so maybe it is hard to do the math, but the bottom line is the majority or the browsers support TLS 1.3 and the large CDNs have deployed TLS 1.3 to receive its benefits. We will also expect large cloud providers to support TLS in 2019.
 
-Let’s assume that it will take some time for the traditional web servers to be upgraded to support TLS 1.3, but maybe the browsers will indirectly help with this issue. The browsers have stated that they will stop supporting TLS 1.0 and 1.1 starting in 2020 &#8211; this message will likely cause server administrators to turn-off these versions of the protocol. When they do, they just might turn on TLS 1.3.
+Let’s assume that it will take some time for the traditional web servers to be upgraded to support TLS 1.3, but maybe the browsers will indirectly help with this issue. The browsers have stated that they will stop supporting TLS 1.0 and 1.1 starting in 2020 – this message will likely cause server administrators to turn-off these versions of the protocol. When they do, they just might turn on TLS 1.3.
 
 With the Internet moving to CDNs and cloud providers, the rate of growth of TLS 1.3 will be much faster than the growth to TLS 1.2. With the fact that TLS 1.3 is more secure and more sufficient, we think that its usage will grow to more than 30 percent in 2019.
 
@@ -60,9 +104,9 @@ It’s not too dramatic to say there has been an explosion of phishing sites usi
   * Major retailers present larger targets for cyber criminals. One of the top 20 U.S. retailers has _over 12,000 look-alike domains_ targeting its customers.
   * The growth in phishing sites seems to be connected to the availability of anonymous and free TLS certificates called domain validated certificates which make up 98% of phishing sites.
 
-&nbsp;
+ 
 
-{{< figure src="/uploads/2018/12/good-bad-ugly-2018-4-1.png" title="Source: [Venafi](https://www.venafi.com/) Research Brief &#8211; <https://www.venafi.com/blog/venafi-retail-research-will-holiday-shoppers-be-duped-look-alike-domains>">}}
+{{< figure src="/uploads/2018/12/good-bad-ugly-2018-4-1.png" title="Source: [Venafi](https://www.venafi.com/) Research Brief – <https://www.venafi.com/blog/venafi-retail-research-will-holiday-shoppers-be-duped-look-alike-domains>">}}
 
 What’s the solution?  Unfortunately, there isn’t one at present.  While browser filters such as Microsoft Smart Screen and Google Safe Browsing do a good job at detecting many phishing sites, they don’t find them all.  The latest studies by NSS Labs shows that it takes two full days for the three leading browser filters to block 95% of phishing sites – in contrast, by Day 1 only 77.0% of phishing sites were blocked by Firefox, 79.0% by Chrome, and 89.0% by Edge.
 
@@ -108,9 +152,3 @@ How could this potential “black swan” event occur?  By concentrated denial 
 The possibility of such an attack seems more real by the apparent DOS attack on all Google CT logs for over an hour on November 30, 2018 – the post-mortem on the incident is still underway, and no public information is presently available. [1]  Because Google’s CT program requires every certificate be logged to at least one Google CT log in order to be trusted in Chrome, an outage among all Google CT logs effectively means no certificates can be issued by any CA during such an outage.
 
 Will such a black swan event as a major state-sponsored attack on Certificate Transparency (CT) logs cause Internet outages in 2019 – we don’t know, but given recent events it seems like a possibility.  Stay tuned to CASC’s website for further details.
-
----
-
-[1] Source: [https://groups.google.com/a/chromium.org/forum/#!msg/ct-policy/fJwd8x7LFlA/BAF37ODNCwAJ][1]
-
- [1]: https://groups.google.com/a/chromium.org/forum/#!msg/ct-policy/fJwd8x7LFlA/BAF37ODNCwAJ

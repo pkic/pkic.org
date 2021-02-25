@@ -1,9 +1,26 @@
 ---
-title: Chrome Will Show Not Secure for all HTTP Sites Starting July 2018
-authors: [Bruce Morton]
-date: 2018-02-15T18:30:48+00:00
+authors:
+- Bruce Morton
+date: "2018-02-15T18:30:48+00:00"
 dsq_thread_id:
-  - 6482214748
+- 6482214748
+keywords:
+- hsts
+- android
+- chrome
+- https
+- phishing
+- google
+- vulnerabilities
+tags:
+- HSTS
+- Android
+- Chrome
+- SSL/TLS
+- Phishing
+- Google
+- Vulnerability
+title: Chrome Will Show Not Secure for all HTTP Sites Starting July 2018
 
 
 ---

@@ -1,9 +1,40 @@
 ---
-title: Certificate Authority Audits and Browser Root Program Requirements
-authors: [Kirk Hall]
-date: 2013-10-15T16:00:25+00:00
+authors:
+- Kirk Hall
+date: "2013-10-15T16:00:25+00:00"
 dsq_thread_id:
-  - 1937611668
+- 1937611668
+keywords:
+- root program
+- webtrust
+- itu
+- ca/browser forum
+- iso
+- cps
+- qualified
+- ssl
+- https
+- microsoft
+- policy
+- etsi
+- aicpa
+- casc
+- extended validation
+tags:
+- Root Program
+- WebTrust
+- ITU
+- CA/Browser Forum
+- ISO
+- Policy
+- Qualified
+- SSL/TLS
+- Microsoft
+- ETSI
+- AICPA
+- CASC
+- EV
+title: Certificate Authority Audits and Browser Root Program Requirements
 
 
 ---
@@ -13,7 +44,7 @@ One answer is because of the multiple layers of standards and tough requirements
 
 ### Early Technical Standards
 
-In the 1990s, CA were chiefly governed by applicable technical standards for interoperability established by such documents as RFC 1422, 2459, 2527 (which was included in Annex A of Draft ANSI X9.79), and 2560. Other standards documents such as the ISO/IEC 9594-8/ITU-T Recommendation X.509, &#8220;Information Technology &#8211; Open Systems Interconnection: The Directory: Authentication Framework&#8221; and the American Bar Association’s Digital Signature Guidelines: Legal Infrastructure for Certification Authorities and Electronic Commerce suggested a framework for compliance by CAs, including establishment of a detailed and public Certification Practice Statement (CPS) with security procedures the CA would be obliged to follow. See [http://www.americanbar.org/groups/science_technology/digital_signatures.html](http://www.americanbar.org/groups/science_technology/digital_signatures.html). But compliance with these rules was essentially voluntary by the CA because confirmation of compliance under the AICPA’s Type II SAS 70 Audit Report allowed CAs to define their own control objectives and so was considered too weak .
+In the 1990s, CA were chiefly governed by applicable technical standards for interoperability established by such documents as RFC 1422, 2459, 2527 (which was included in Annex A of Draft ANSI X9.79), and 2560. Other standards documents such as the ISO/IEC 9594-8/ITU-T Recommendation X.509, “Information Technology – Open Systems Interconnection: The Directory: Authentication Framework” and the American Bar Association’s Digital Signature Guidelines: Legal Infrastructure for Certification Authorities and Electronic Commerce suggested a framework for compliance by CAs, including establishment of a detailed and public Certification Practice Statement (CPS) with security procedures the CA would be obliged to follow. See [http://www.americanbar.org/groups/science_technology/digital_signatures.html](http://www.americanbar.org/groups/science_technology/digital_signatures.html). But compliance with these rules was essentially voluntary by the CA because confirmation of compliance under the AICPA’s Type II SAS 70 Audit Report allowed CAs to define their own control objectives and so was considered too weak .
 
 ### WebTrust for CAs
 

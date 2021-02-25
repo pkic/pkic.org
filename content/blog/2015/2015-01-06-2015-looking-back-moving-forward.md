@@ -1,9 +1,67 @@
 ---
-title: 2015 – Looking Back, Moving Forward
-authors: [Bruce Morton]
-date: 2015-01-06T16:30:28+00:00
+authors:
+- Bruce Morton
+date: "2015-01-06T16:30:28+00:00"
 dsq_thread_id:
-  - 3392720280
+- 3392720280
+keywords:
+- tls
+- tls 1.2
+- tls 1.3
+- ietf
+- vulnerabilities
+- caa
+- ev certificate
+- ssl 3.0
+- mitm
+- mozilla
+- apple
+- tls 1.0
+- rsa
+- malware
+- firefox
+- pki
+- ca/browser forum
+- chrome
+- ssl
+- code signing
+- https
+- vulnerability
+- google
+- microsoft
+- sha1
+- attack
+- policy
+- openssl
+- forward secrecy
+tags:
+- SSL/TLS
+- TLS 1.2
+- TLS 1.3
+- IETF
+- Vulnerability
+- CAA
+- EV
+- SSL 3.0
+- MITM
+- Mozilla
+- Apple
+- TLS 1.0
+- RSA
+- Malware
+- Firefox
+- PKI
+- CA/Browser Forum
+- Chrome
+- Code Signing
+- Google
+- Microsoft
+- SHA1
+- Attack
+- Policy
+- OpenSSL
+- Forward Secrecy
+title: 2015 – Looking Back, Moving Forward
 
 
 ---
@@ -41,7 +99,7 @@ Google also announced its version of OpenSSL called [BoringSSL][11]. Google is s
 
 ## POODLE
 
-Google also announced the [POODLE vulnerability][14]. With POODLE, an attacker can downgrade the SSL/TLS session to SSL 3.0. Once SSL 3.0 has been agreed, then through a padding oracle attack, it will allow items such as &ldquo;secure&rdquo; HTTP cookies or HTTP authorization header contents to be stolen. The result was the ability to use SSL 3.0 was removed from many servers and browsers. In addition, some servers were patched to prevent the fallback to SSL 3.0.
+Google also announced the [POODLE vulnerability][14]. With POODLE, an attacker can downgrade the SSL/TLS session to SSL 3.0. Once SSL 3.0 has been agreed, then through a padding oracle attack, it will allow items such as “secure” HTTP cookies or HTTP authorization header contents to be stolen. The result was the ability to use SSL 3.0 was removed from many servers and browsers. In addition, some servers were patched to prevent the fallback to SSL 3.0.
 
 It was later revealed [POODLE could also be used against the TLS versions of the protocol][15]. In this case, padding was performed incorrectly in about 10 percent of the web servers. The impacted server vendors then had to release patches to mitigate POODLE.
 
@@ -73,7 +131,7 @@ Subscribers using these certificates are encouraged to change their systems to s
 
 ## TLS 1.3
 
-With the POODLE elimination of SSL 3.0 and the vulnerabilities of TLS 1.0 and 1.1, the best implementation of the SSL/TLS protocol is TLS 1.2. So what&rsquo;s next? [TLS 1.3 is on the horizon][22].
+With the POODLE elimination of SSL 3.0 and the vulnerabilities of TLS 1.0 and 1.1, the best implementation of the SSL/TLS protocol is TLS 1.2. So what’s next? [TLS 1.3 is on the horizon][22].
 
 Hopefully in 2015 we will see the release of TLS 1.3 which will allow browser and server vendors to implement. We will also want to push for TLS 1.3 deployment in order to mitigate an attack against TLS 1.2.
 

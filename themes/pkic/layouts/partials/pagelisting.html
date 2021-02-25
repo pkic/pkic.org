@@ -3,7 +3,7 @@
     {{ $customDateFormat := "January 2, 2006" }}
     {{ with .Site.Params.customDateFormat }}{{ $customDateFormat = . }}{{ end }}
     <br>
-    <small class="text-secondary">{{ .PublishDate.Format $customDateFormat }} by {{ partial "authors.html" . }}
+    <small class="d-inline-block text-secondary text-truncate overflow-hidden" style="max-width: 95%">{{ .PublishDate.Format $customDateFormat }} by {{ partial "authors.html" . }}
     {{ partial "tags" .Params.tags }}</small>
     <br>
     {{ .Summary }}
