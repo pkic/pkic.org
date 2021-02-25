@@ -13,7 +13,7 @@ workingGroups:
   - CA
 
 # Blog posts
-blogFeed: 
+blog: 
   url: https://sectigo.com/resource-library/blog-posts
   feed: https://sectigo.com/feed/blog
   language: en_US

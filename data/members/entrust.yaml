@@ -13,7 +13,7 @@ workingGroups:
   - CA
 
 # Blog posts
-blogFeed: 
+blog: 
   url: https://blog.entrust.com/
   feed: https://blog.entrust.com/feed/
   language: en_US
