@@ -1,0 +1,49 @@
+id: cleverbase
+name: Cleverbase
+slogan: Securely e-sign your documents
+website: https://www.cleverbase.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: "Cleverbase enables you to put qualified electronic signatures on documents using a special mobile app and a personal pin code, after a one-time registration."
+
+# membership
+memerSince: 2021-02-18
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: 
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: http://www.linkedin.com/company/cleverbase
+  youtube: 
+
+# Here you can list those who represent the member
+representatives:
+  - name: Niels Schoumans
+    role: Security Officer
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/niels-schoumans-50047234/
+    description:
+      Niels Schoumans is the Security Officer at Cleverbase and represents the organization at the PKI Consortium.
