@@ -1,0 +1,142 @@
+<form id="memberApplication" action="https://pkic.org/forms" method="POST" class="row g-3 my-2 needs-validation" novalidate>
+    <div class="col-md-6">
+        <label for="firstName" class="form-label">First Name</label>
+        <input type="text" class="form-control" id="firstName" required>
+    </div>
+    <div class="col-md-6">
+        <label for="lastName" class="form-label">Last Name</label>
+        <input type="text" class="form-control" id="lastName" required>
+    </div>
+    <div class="col-12">
+        <label for="role" class="form-label">Job Title</label>
+        <input type="text" class="form-control" id="role" required>
+    </div>
+    <div class="col-12">
+        <label for="email" class="form-label">Email</label>
+        <input type="email" class="form-control" id="email" required>
+    </div>
+    <div class="col-12">
+        <label for="organization" class="form-label">Organization Name</label>
+        <input type="text" class="form-control" id="organization" required>
+    </div>
+    <div class="col-12">
+        <label for="website" class="form-label">Website</label>
+        <input type="link" class="form-control" id="website" placeholder="https://" required>
+    </div>
+
+
+    <div class="col-md-12">
+        Organization type
+    </div>
+
+    <div class="col-md-6">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="category[]" value="CA" id="category1">
+            <label class="form-check-label" for="category1">Certificate Authority (CA)</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="category[]" value="TSP" id="category2">
+            <label class="form-check-label" for="category2">eIDAS Trust Service Provider (TSP)</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="category[]" value="Supervisory body or auditor" id="category3">
+            <label class="form-check-label" for="category3">Supervisory body or Auditor</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="category[]" value="Standards body" id="category4">
+            <label class="form-check-label" for="category4">Standards body</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="category[]" value="Regulator / Government" id="category5">
+            <label class="form-check-label" for="category5">Regulator / Government</label>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="category[]" value="Software or Hardware vendor" id="category6">
+            <label class="form-check-label" for="category6">Software or Hardware vendor</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="category[]" value="Service provider or Integrator" id="category7">
+            <label class="form-check-label" for="category7">Service provider or Integrator</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="category[]" value="Other" id="categoryOther">
+            <label class="form-check-label" for="categoryOther">Other</label>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="mb-3">
+            <label for="freeText" class="form-label">Please let us know why you want to join the PKI Consortium</label>
+            <textarea class="form-control" id="freeText" rows="3" required></textarea>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="agreeBylaws" required>
+            <label class="form-check-label" for="agreeBylaws">
+                I agree with and will adhere to the Bylaws
+            </label>
+            <a href="/bylaws/" target="_blank">(view here)</a>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="agreeCondeOfConduct" required>
+            <label class="form-check-label" for="agreeCondeOfConduct">
+                I agree with and will adhere to the Code of Conduct
+            </label>
+            <a href="/code-of-conduct/" target="_blank">(view here)</a>
+        </div>
+
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="warrantAuthority" required>
+            <label class="form-check-label" for="warrantAuthority">
+                I represent and warrant that I have the necessary authority to submit this membership application and have full right, power and authority to enter this agreement and to be legally bound by these terms and conditions.
+            </label>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <input type="hidden" id="Subject" value="Membership application">
+        <button type="submit" class="btn btn-success">Submit application to join the PKI Consortium</button>
+    </div>
+</form>
+
+<div id="memberApplicationSuccess" class="alert alert-success visually-hidden" role="alert">
+    Thanks, your membership application has been received.
+</div>
+<div id="memberApplicationError" class="alert alert-danger visually-hidden" role="alert">
+    Sorry, something went wrong, please try again or contact feedback (at) pkic.org.
+</div>
+
+<script>
+(function () {
+  'use strict'
+
+  // Fetch all the forms we want to apply custom Bootstrap validation styles to
+  var forms = document.querySelectorAll('.needs-validation')
+
+  // Loop over them and prevent submission
+  Array.prototype.slice.call(forms)
+    .forEach(function (form) {
+      form.addEventListener('submit', function (event) {
+        if (!form.checkValidity()) {
+          event.preventDefault()
+          event.stopPropagation()
+        }
+
+        form.classList.add('was-validated')
+      }, false)
+    })
+
+    let params = new URLSearchParams(document.location.search.substring(1));
+    if (params.get("status") === 'success') {
+        document.getElementById("memberApplication").classList.add("visually-hidden");
+        document.getElementById("memberApplicationSuccess").classList.remove("visually-hidden");
+    } else if (params.get("status") === 'error') {
+        document.getElementById("memberApplication").classList.add("visually-hidden");
+        document.getElementById("memberApplicationError").classList.remove("visually-hidden");
+    }
+})()
+</script>
