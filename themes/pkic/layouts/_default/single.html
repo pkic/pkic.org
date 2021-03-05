@@ -2,20 +2,7 @@
 <div class="py-2 bg-light">
 </div>
 
-{{ with $.Param "heroTitle" }}
-<section class="py-4 text-center container">
-    <div class="row py-lg-4">
-        <div class="col-10 mx-auto">
-            {{ with $.Param "heroImage" }}
-            <p><img style="height:150px; max-width: 60%;" class="py-3" alt="{{ $.Param `heroTitle` }}" title="{{ $.Param `heroTitle` }}" src="{{ . }}"></p>
-            {{ end }}
-
-            <h1 class="fw-light">{{ $.Param "heroTitle" }}</h1>
-            <p class="lead text-muted">{{ $.Param "heroDescription" }}</p>
-        </div>
-    </div>
-</section>
-{{ end }}
+{{ partial "hero.html" . }}
 
 <div class="py-2 bg-light">
 </div>

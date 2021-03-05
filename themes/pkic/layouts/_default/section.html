@@ -2,15 +2,14 @@
 <div class="py-2 bg-light">
 </div>
 
-<div class="album py-5">
-    <div class="container">
-        {{ range .Paginator.Pages }}
-        {{ partial "pagelisting.html" . }}
-        {{ end }}
+{{ partial "hero.html" . }}
 
-        <div class="pagination justify-content-center mt-5">
-        {{ template "_internal/pagination.html" . }}
-        </div>
+<div class="py-2 bg-light">
+</div>
+
+<div class="py-3">
+    <div class="container">
+        {{ .Content }}
     </div>
 </div>
 {{ end }}
