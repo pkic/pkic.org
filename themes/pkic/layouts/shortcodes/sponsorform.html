@@ -1,0 +1,63 @@
+<form id="inputForm" action="https://pkic.org/forms" method="POST" class="row g-3 my-2 needs-validation" novalidate>
+    <div class="col-md-6">
+        <label for="firstName" class="form-label">First Name</label>
+        <input type="text" class="form-control" id="firstName" name="First Name" required>
+    </div>
+    <div class="col-md-6">
+        <label for="lastName" class="form-label">Last Name</label>
+        <input type="text" class="form-control" id="lastName" name="Last Name" required>
+    </div>
+    <div class="col-12">
+        <label for="role" class="form-label">Job Title</label>
+        <input type="text" class="form-control" id="role" name="Role" required>
+    </div>
+    <div class="col-12">
+        <label for="email" class="form-label">Email</label>
+        <input type="email" class="form-control" id="email" name="Email" required>
+    </div>
+    <div class="col-12">
+        <label for="organization" class="form-label">Organization Name</label>
+        <input type="text" class="form-control" id="organization" name="Organization" required>
+    </div>
+    <div class="col-12">
+        <label for="website" class="form-label">Website</label>
+        <input type="link" class="form-control" id="website" name="Website" placeholder="https://">
+    </div>
+
+    <div class="col-12">
+        <label for="sponsorType" class="form-label">How would you like to sponsor?</label>
+        <select id="sponsorType" class="form-select" name="Sponsoring type" required>
+            <option selected>Select how you would like to sponsor</option>
+            <option value="Diamond">We would like to become a Diamond sponsor</option>
+            <option value="Titanium">We would like to become a Titanium sponsor</option>
+            <option value="Platinum">We would like to become a Platinum sponsor</option>
+            <option value="Gold">We would like to become a Gold sponsor</option>
+            <option value="Silver">We would like to become a Silver sponsor</option>
+            <option value="Bronze">We would like to become a Bronze sponsor</option>
+            <option value="Donation">We would like to make a donation</option>
+            <option value="To be decided">We would like to decide later</option>
+            <option value="Other">Other (specify below)</option>
+        </select>
+    </div>
+
+    <div class="col-12">
+        <div class="mb-3">
+            <label for="freeText" class="form-label">Comments</label>
+            <textarea class="form-control" id="freeText" name="Comments" rows="3"></textarea>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <input type="hidden" name="Subject" value="Sponsor interest">
+        <button type="submit" class="btn btn-success">Submit your interest to sponsor the PKI Consortium</button>
+    </div>
+</form>
+
+<div id="formSuccess" class="alert alert-success visually-hidden" role="alert">
+    Thanks, your sponsor interest has been received.
+</div>
+<div id="formError" class="alert alert-danger visually-hidden" role="alert">
+    Sorry, something went wrong, please try again or contact feedback (at) pkic.org.
+</div>
+
+{{ partial "formscript.html" . }}

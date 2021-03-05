@@ -28,4 +28,4 @@ The Public Key Infrastructure Consortium is comprised of leading organizations t
 Membership is currently available to publicly trusted Certificate Authorities, we are preparing to admit non CA members such as regulators, supervisory bodies and other interested parties. More information on how to become a member can be found at [here]({{< ref "/join.md" >}}).
 
 ## Sponsors
-To support the activities of the PKI Consortium we accept sponsors and donations. Sponsors will be listed on the website but dot not gain any other special treatment or rights. Sponsors can support the development of specific projects but will never be permitted to influence the outcome or a policy.
+To support the activities of the PKI Consortium we accept sponsors and donations. Sponsors will be listed on the website but do not gain any other special treatment or rights. Sponsors can support the development of specific projects but will never be permitted to influence the outcome or a policy. More information on how to become a sponsor can be found at [here]({{< ref "/sponsors/" >}}).

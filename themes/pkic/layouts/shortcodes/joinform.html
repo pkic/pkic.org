@@ -1,4 +1,4 @@
-<form id="memberApplication" action="https://pkic.org/forms" method="POST" class="row g-3 my-2 needs-validation" novalidate>
+<form id="inputForm" action="https://pkic.org/forms" method="POST" class="row g-3 my-2 needs-validation" novalidate>
     <div class="col-md-6">
         <label for="firstName" class="form-label">First Name</label>
         <input type="text" class="form-control" id="firstName" name="First Name" required>
@@ -103,40 +103,11 @@
     </div>
 </form>
 
-<div id="memberApplicationSuccess" class="alert alert-success visually-hidden" role="alert">
+<div id="formSuccess" class="alert alert-success visually-hidden" role="alert">
     Thanks, your membership application has been received.
 </div>
-<div id="memberApplicationError" class="alert alert-danger visually-hidden" role="alert">
+<div id="formError" class="alert alert-danger visually-hidden" role="alert">
     Sorry, something went wrong, please try again or contact feedback (at) pkic.org.
 </div>
 
-<script>
-(function () {
-  'use strict'
-
-  // Fetch all the forms we want to apply custom Bootstrap validation styles to
-  var forms = document.querySelectorAll('.needs-validation')
-
-  // Loop over them and prevent submission
-  Array.prototype.slice.call(forms)
-    .forEach(function (form) {
-      form.addEventListener('submit', function (event) {
-        if (!form.checkValidity()) {
-          event.preventDefault()
-          event.stopPropagation()
-        }
-
-        form.classList.add('was-validated')
-      }, false)
-    })
-
-    let params = new URLSearchParams(document.location.search.substring(1));
-    if (params.get("status") === 'success') {
-        document.getElementById("memberApplication").classList.add("visually-hidden");
-        document.getElementById("memberApplicationSuccess").classList.remove("visually-hidden");
-    } else if (params.get("status") === 'error') {
-        document.getElementById("memberApplication").classList.add("visually-hidden");
-        document.getElementById("memberApplicationError").classList.remove("visually-hidden");
-    }
-})()
-</script>
+{{ partial "formscript.html" . }}

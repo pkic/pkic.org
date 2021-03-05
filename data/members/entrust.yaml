@@ -12,6 +12,10 @@ memberType: CA
 workingGroups:
   - CA
 
+# sponsor
+sponsor:
+  level: Platinum
+
 # Blog posts
 blog: 
   url: https://blog.entrust.com/
