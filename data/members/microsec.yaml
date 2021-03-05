@@ -1,0 +1,58 @@
+id: microsec
+name: Microsec
+slogan: Digital legally binding & user friendly solutions
+website: https://www.microsec.hu/en
+
+# Short description, longer content can be placed in `content/members/`
+description: Microsec Ltd. has been an active player on the Hungarian IT market since its founding in 1984. As a trust service provider we provide high quality services for E-Szignó business solutions based on the technology of electronically authentic documents and documents with probative value, as well as electronic signature (PKI).
+
+# membership
+memerSince: 2021-03-02
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog:
+  url: https://www.microsec.hu/en/pki-blog
+  feed: 
+  language: 
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url: https://www.microsec.hu/en/career
+  feed: 
+  language:
+
+# Social media
+social:
+  twitter: https://twitter.com/MicrosecTSP
+  facebook: https://www.facebook.com/microsec.hu
+  instagram: 
+  linkedin: https://www.linkedin.com/company/microsec-ltd
+  youtube: 
+
+# Here you can list those who represent the member
+representatives:
+  - id: sandor-szoke
+    name: Sándor Szőke
+    role: Deputy Director of eIDAS Trust Services
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/s%C3%A1ndor-sz%C5%91ke-05b28749/
+    description:
+      Dr. Sándor Szőke is the Deputy Director of eIDAS Trust Services at Microsec and represents the organization at the PKI Consortium.
+  - id: gabor-monori
+    name: Gábor Monori
+    role: Business Development Executive
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/gabormonori/
+    description:
+      Gábor Monori is the Business Development Executive at Microsec and represents the organization at the PKI Consortium.
