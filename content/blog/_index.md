@@ -1,13 +1,11 @@
 ---
 date: 2021-01-08T14:44:10Z
 draft: false
-title: "Blog"
+title: Blog
 
-heroTitle: "Consortium Blog"
-heroDescription: "Public Key Infrastructure (PKI) Consortium Blog"
+heroTitle: Consortium Blog
+heroDescription: Public Key Infrastructure (PKI) Consortium Blog
 
 menu:
     main:
-        name: Blog
-        weight: -400
 ---
