@@ -1,10 +1,10 @@
 id: izenpe
 name: Izenpe
-slogan: Electronic identification of the Basque Country
+slogan: Qualified Trusted Service Provider in the Basque Country
 website: https://www.izenpe.eus/
 
 # Short description, longer content can be placed in `content/members/`
-description: "Izenpe is a public limited company incorporated in 2002 and is a project promoted by the Basque Government and the Provincial Councils, incorporated through its it companies: EJIE, LANTIK, IZFE and CCASA."
+description: "Izenpe is a project promoted by the Basque Government and the Basque Provincial Councils for the promotion of e-government and e-government in the Basque Country."
 
 # membership
 memerSince: 2021-02-12
@@ -40,18 +40,19 @@ social:
 
 # Here you can list those who represent the member
 representatives:
-  - name: Toni Saez Gonzalez
-    role: Chief Technical Officer (CTO)
-    social:
-      twitter:
-      linkedin: https://www.linkedin.com/in/toni-saez-gonzalez-25355121/
-    description:
-     Toni Saez Gonzalez is the Chief Technical Officer (CTO) at Izenpe and represents the organization at the PKI Consortium.
   - id: oscar-garcia
     name: Oscar García
-    role: Responsable de Seguridad (CISO)
+    role: Chief Security Officer (CISO)
     social:
       twitter:
       linkedin: https://www.linkedin.com/in/oscar-garc%C3%ADa-42204416/
     description:
-     Oscar García is the Responsable de Seguridad (CISO) at Izenpe and represents the organization at the PKI Consortium.
+      Oscar Garcia is responsible for the Information Security of Izenpe, as for the compliance of industry and standard requirements. He represents Izenpe at the PKI Consortium and at the CABForum.
+  - id: toni-saez
+    name: Toni Sáez
+    role: Technical Department Manager (CTO)
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/toni-saez-gonzalez-25355121/
+    description:
+      Toni Saez is the Izenpe Technical Manager and represents Izenpe at the PKI Consortium.

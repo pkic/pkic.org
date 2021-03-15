@@ -6,17 +6,17 @@ title: Izenpe
 
 ---
 
-## A certification and services company
+## Certification and services Company
 
-Izenpe is a public limited company incorporated in 2002 and is a project promoted by the Basque Government and the Provincial Councils, incorporated through its it companies: EJIE, LANTIK, IZFE and CCASA.
+Izenpe is a public limited company set up in 2002. It’s a project promoted by the Basque Government and the Provincial Councils, constituted through their IT companies: EJIE, LANTIK, IZFE and CCASA.
 
-We are a Trust Service Provider, that is, an organization that provides electronic signature services. Electronic signatureing can be defined as a set of technical and legal procedures that allow to "replace" the conventional manual signature in order to be able to carry out through the Internet and the telephone procedures that before they had to be done in person.
+One of the fundamental objectives of Izenpe is to provide organizations with the necessary means to enable citizens and companies to relate to each other and to the Administrations by accessing public services with guarantees of integrity, confidentiality, non-repudiation and authenticity, with electronic identification and signature being an essential element in the implementation of these services.
 
-## Izenpe's goals, mission and vision
+This comprehensive management is been achieved through the synergy of various products, services and technological platforms that jointly and complementarily guarantee the level of service.
 
-- Promoting the use and enhancing of the development of electronic government over telecommunications networks with the necessary guarantees of security, confidentiality, authenticity and irrevocability of transactions.
-- The provision, in the field of institutions that make up the Basque public sector, security services, technical and administrative, in communications through electronic, computer and telematic techniques and means.
-- The issuance, manufacture and supply of the titles or user certificates or card media necessary for public or private persons or entities.
-- The issuance, manufacture and supply of server titles or certificates.
-- Consulting services related to the promotion of electronic government.
-- Izenpe and its management also want to make public their social commitment to equality between men and women, and to make known to their users, customers and suppliers the company's policy to combat sexual and sexist harassment and, in particular, the existence of this protocol, indicating the need for its strict compliance.
+As a provider of Trusted Services for the Basque administrations, we offer various services to promote e-government:
+- Issuance and management of electronic identification means and electronic certificates necessary in remote relationships between citizens, entities, companies and public administrations.
+- We manage the identity federation platforms for the authentication and signature of Basque citizens and professionals, Giltza; as well as the signature services platform, Zain.
+- We provide technological services and products complementary to the management of digital identity and electronic signatures.
+- Assistance and support for citizens and users to facilitate their use and processing.
+- Applications and tools for management, signature, verification and time stamping, freely available and free of charge.
