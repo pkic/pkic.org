@@ -73,7 +73,7 @@ To support the activities of the PKI Consortium we accept sponsors and donations
 | Silver          |                $5,000 |
 | Bronze          |                $2,500 |
 
-- _Single donations can be made at any amount.
+- Single donations can be made at any amount.
 - This list of sponsors will be updated as soon as feasible, but at least within three months.
 - A 10% discount is given to when a sponsor committing a sponsorship for three or more years.
 
