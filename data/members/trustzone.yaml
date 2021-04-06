@@ -1,0 +1,68 @@
+id: trustzone
+name: TRUSTZONE
+slogan: Encrypt, Authenticate, Automate
+website: https://www.trustzone.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: TRUSTZONE is Scandinavia’s largest SSL/TLS certificate supplier and a leading provider of scalable PKI and IoT solutions for encryption, authentication, and automated certificate lifecycle management.
+
+# membership
+memerSince: 2021-03-25
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog: 
+  url: https://trustzone.com/insights/news-articles-overview-page/
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language:
+
+# Social media
+social:
+  twitter: 
+  facebook: https://www.facebook.com/thisistrustzone
+  instagram: https://www.instagram.com/discoverentrust/
+  linkedin: https://www.linkedin.com/trustzone
+  youtube: https://www.youtube.com/channel/UCIgXVHR9icaQDnfIqGSz4HA
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jacob Højmark Nielsen
+    role: Chief Executive Officer
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/jnielsen4/
+    description:
+      Jacob Højmark Nielsen is one of Chief Executive Officers at TRUSTZONE and co-owner of the company. He represents the organization at the PKI Consortium.
+
+  - name: Svein Tuven
+    role: Senior Vetting Officer
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/svein-tuven-a522a815/
+    description:
+      Svein Tuven is the Senior Vetting Officer at TRUSTZONE and represents the organization at the PKI Consortium.
+
+  - name: Christian Brandenburg
+    role: Sales Engineer
+    social:
+      twitter: https://twitter.com/vanbroup
+      linkedin: https://www.linkedin.com/in/christian-brandenburg-1b5b9754/
+    description:
+      Christian Brandenburg is a Sales Engineer at TRUSTZONE and represents the organization at the PKI Consortium.     
