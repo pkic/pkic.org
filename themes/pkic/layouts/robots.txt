@@ -1,2 +1,6 @@
 User-agent: *
+{{ if eq .Hugo.Environment "production" }}
 Sitemap: {{ .Site.BaseURL}}/sitemap.xml
+{{ else }}
+Disallow: /
+{{ end }}

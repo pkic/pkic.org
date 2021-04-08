@@ -10,6 +10,7 @@ permalinks:
   blog: /:year/:month/:day/:title/
 
 #canonifyurls: true
+enableRobotsTXT: true
 buildDrafts: false
 disableHugoGeneratorInject: true
 enableInlineShortcodes: true
