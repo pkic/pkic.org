@@ -1,13 +1,13 @@
 id: primekey
 name: PrimeKey
-slogan: Creating trust for the conncted society
+slogan: Creating trust for the connected society
 website: https://www.primekey.com/
 
 # Short description, longer content can be placed in `content/members/`
 description: PrimeKey develops open source products for PKI, digital signatures and cryptography
 
 # membership
-memerSince: 2021-04-07
+memerSince: 2021-04-14
 memberType: Vendor
 workingGroups:
   - 
