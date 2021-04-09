@@ -12,7 +12,7 @@ PrimeKey is a leading PKI and signing solutions providers and develops products 
 
 With our foundation in in open-source security software, PrimeKey provides global businesses and organizations the ability to implement security solutions using PKI, digital signatures and cryptography, with FIPS and Common Criteria certified products.
 
-Products include EJBCA® Enterprise, SignServer Enterprise, PKI Appliance, PrimeKey SEE, Identity Authority Manager and the Bouncy Castle Cryptography APIs.
+Products include EJBCA® Enterprise and SignServer Enterprise, PrimeKey SEE, Identity Authority Manager and the Bouncy Castle Cryptography APIs. For our software products you can choose a deployment that best suits your needs; as software, hardware, in the cloud or SaaS.
 
 ### Global presence
 
