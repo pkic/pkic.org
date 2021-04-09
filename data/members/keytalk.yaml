@@ -1,0 +1,64 @@
+id: keytalk
+name: Keytalk
+slogan: CA Independent Certificate implementation, distribution and management
+website: https://keytalk.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: It is the Keytalk mission to make PKI Management not only as best as possible, but also as simple as possible. Due to what some organizations are doing to themselves…
+
+# membership
+memerSince: 2021-03-29
+memberType: Vendor
+workingGroups:
+
+# sponsor
+#sponsor:
+#  level: 
+
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://keytalk.com/media
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/keytalk/
+  youtube: https://www.youtube.com/channel/UCeskp9Of7XdpYDHd0m0qVZg
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Michael van der Sman
+    role: CTO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/ms2441b32/
+    description:
+      Michael is the CEO KeyTalk and represents the organization at the PKI Consortium.
+
+  - name: Bas von Barnau Sythoff
+    role: Sales Director
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/bas-von-barnau-sythoff-302180/
+    description:
+      Bas is the Sales Director at KeyTalk and represents the organization at the PKI Consortium.
