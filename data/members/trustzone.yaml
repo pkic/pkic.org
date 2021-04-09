@@ -1,0 +1,57 @@
+id: trustzone
+name: TRUSTZONE
+slogan: No. 1 in the North
+website: https://trustzone.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: TRUSTZONE is Scandinavia’s largest SSL/TLS certificate supplier and a leading provider of scalable PKI and IoT solutions for encryption, authentication, and automated certificate lifecycle management.
+
+# membership
+memerSince: 2021-03-23
+memberType: Vendor
+workingGroups:
+
+# sponsor
+#sponsor:
+#  level: 
+
+
+# Blog posts
+blog: 
+  url: https://trustzone.com/news/
+  feed: https://trustzone.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://trustzone.career.emply.com/en/open-vacancies
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/trustzone
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - id: jhnielsen
+    name: Jacob Højmark Nielsen
+    role: CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/jnielsen4/
+    description:
+      Jacob is the CEO and one of the founders of TRUSTZONE, he represents the organization at the PKI Consortium.
