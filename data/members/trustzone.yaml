@@ -1,11 +1,10 @@
 id: trustzone
 name: TRUSTZONE
-slogan: No. 1 in the North
+slogan: Encrypt, Authenticate, Automate™
 website: https://trustzone.com/
 
 # Short description, longer content can be placed in `content/members/`
 description: TRUSTZONE is Scandinavia’s largest SSL/TLS certificate supplier and a leading provider of scalable PKI and IoT solutions for encryption, authentication, and automated certificate lifecycle management.
-
 # membership
 memerSince: 2021-03-23
 memberType: Vendor
@@ -19,7 +18,7 @@ workingGroups:
 # Blog posts
 blog: 
   url: https://trustzone.com/news/
-  feed: https://trustzone.com/feed/
+  feed: 
   language: en_US
 
 # Press Releases
@@ -37,10 +36,10 @@ careers:
 # Social media
 social:
   twitter: 
-  facebook:
+  facebook: https://www.facebook.com/thisistrustzone
   instagram:
   linkedin: https://www.linkedin.com/company/trustzone
-  youtube: 
+  youtube: https://www.youtube.com/channel/UCIgXVHR9icaQDnfIqGSz4HA
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,9 +48,18 @@ social:
 representatives:
   - id: jhnielsen
     name: Jacob Højmark Nielsen
-    role: CEO
+    role: Chief Executive Officer
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/jnielsen4/
     description:
-      Jacob is the CEO and one of the founders of TRUSTZONE, he represents the organization at the PKI Consortium.
+      Jacob is the CEO and Co-founder of TRUSTZONE and represents the organization at the PKI Consortium.
+
+  - id: stuven
+    name: Svein Tuven
+    role: Senior Vetting Officer
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/svein-tuven-a522a815/
+    description:
+      Svein is a Senior Vetting Officer at TRUSTZONE and represents the organization at the PKI Consortium. 
