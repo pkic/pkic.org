@@ -29,9 +29,9 @@
                   {{ end }}
                   <div class="col">
                     <div class="card-body">
-                      <h5 class="card-title"><a href="{{ $post.link }}" target="_blank" alt="{{ $post.title }}" class="text-truncate text-nowrap">{{ $post.title }}</a></h5>
+                      <h5 class="card-title"><a href="{{ $post.link }}" target="_blank" alt="{{ $post.title }}" class="text-truncate text-nowrap">{{ $post.title | plainify | htmlUnescape }}</a></h5>
                       <p class="card-text">
-                        {{ $post.description | safeHTML | truncate 120 }}
+                        {{ $post.description | plainify | htmlUnescape | truncate 120 }}
                         <small class="text-muted">Published on {{ dateFormat "Monday January 2, 2006" $post.pubDate }} at <a href="https://{{ $url.Host }}/" target="_blank">{{ $url.Host }}</a></small>
                       </p>
                     </div>
