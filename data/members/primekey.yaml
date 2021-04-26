@@ -1,0 +1,57 @@
+id: primekey
+name: PrimeKey
+slogan: Creating trust for the connected society
+website: https://www.primekey.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: PrimeKey develops open source products for PKI, digital signatures and cryptography
+
+# membership
+memerSince: 2021-04-14
+memberType: Vendor
+workingGroups:
+  - 
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://www.primekey.com/news/
+  feed: https://www.primekey.com/news/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://www.primekey.com/news/
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.primekey.com/career/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/primekeyPKI
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/primekey-solutions-ab/
+  youtube: https://www.youtube.com/user/ejbca
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Tomas Gustavsson
+    role: CTO
+    social:
+      twitter: https://twitter.com/primetomas
+      linkedin: https://www.linkedin.com/in/tgustavsson/
+    description:
+      Tomas Gustavsson has a MSc from KTH in Stockholm and has been researching and implementing PKI systems since 1994. He is the founder of and still a developer of the open source enterprise PKI project EJBCA and a contributor to numerous open source projects. As a co-founder of PrimeKey, Tomas is passionate about helping users worldwide find the best possible PKI and digital signature solutions. He has worked with customers deploying PKI solutions across the world during the last 20 years.
+
