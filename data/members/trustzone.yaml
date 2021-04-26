@@ -18,7 +18,7 @@ workingGroups:
 # Blog posts
 blog: 
   url: https://trustzone.com/news/
-  feed: 
+  feed: https://trustzone.com/feed/ 
   language: en_US
 
 # Press Releases
@@ -53,9 +53,8 @@ representatives:
       twitter: 
       linkedin: https://www.linkedin.com/in/jnielsen4/
     description:
-      Jacob is the CEO and Co-founder of TRUSTZONE and represents the organization at the PKI Consortium.
+      Jacob is the CEO and one of the co-founders of TRUSTZONE and represents the organization at the PKI Consortium.
 
-  - id: stuven
     name: Svein Tuven
     role: Senior Vetting Officer
     social:
