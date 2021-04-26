@@ -1,0 +1,57 @@
+id: ascertia
+name: Ascertia
+slogan: Identity Proven, Trust Delivered
+website: https://www.ascertia.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Since 2001, Ascertia has been a global leader in delivering high-trust e-security solutions focusing on Digital Signatures, Timestamps, Evidence Archiving and OCSP Validation.
+
+# membership
+memerSince: 2021-04-26
+memberType: Vendor
+workingGroups:
+  - 
+
+# sponsor
+sponsor:
+  level: Bronze
+
+# Blog posts
+blog: 
+  url: https://blog.ascertia.com/
+  feed: https://blog.ascertia.com/rss.xml
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://www.ascertia.com/news-events/
+  feed: https://www.ascertia.com/feed/
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/Ascertia
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/ascertia
+  youtube: https://www.youtube.com/user/ESIGNwithAscertia
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Mike Hathaway
+    role: Chief Technology Officer
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/mike-hathaway-7844905/
+    description:
+      Mike Hathaway is a seasoned PKI specialist with over 20 years’ experience. Mike spent more than a decade at Entrust and has held positions at EDS working as part of the Atlas consortium and at PriceWaterHouseCoopers beTRUSTed. He brings his extensive expertise and knowledge to the Ascertia team and applies his experience to drive further PKI innovation.
+
