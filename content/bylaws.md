@@ -40,7 +40,8 @@ Organizations are eligible to join the PKI Consortium upon either of the followi
 - **(a)** They are CA Members (Certificate Issuer Members) of the CA/Browser Forum (CABF), or;
 - **(b)** They are included on the eIDAS Trusted List, or;
 - **(c)** They are relevant and recognized supervisory bodies or regulators, or;
-- **(d)** They provide, built or manage PKI based products, services or solutions.
+- **(d)** They provide PKI based services (e.g., consultancy, support, solutions);
+- **(e)** They built PKI related products.
 
 ### Working groups
 
@@ -91,7 +92,8 @@ The officers of PKIC shall be a Chair and a Vice Chair (who will act as Chair wh
 
 Except as otherwise required by these Bylaws, PKIC will attempt to reach all decisions by consensus (as determined by the Chair) of all members. In the event that consensus cannot be reached (or upon the request of any voting member), PKIC will submit the matter for a vote. Unless otherwise required by these Bylaws, the matter will be decided by majority vote of members who cast a vote. In the case of a tie vote, the matter will not be approved.
 
-## 8. Antitrust Policy: From time to time at PKIC meetings, the following antitrust policy statement will be read allowed to Members. All Members agree to follow this policy at all times.
+## 8. Antitrust Policy
+From time to time at PKIC meetings, the following antitrust policy statement will be read allowed to Members. All Members agree to follow this policy at all times.
 
 “As you know, this meeting includes companies that compete against one another. This meeting is intended to discuss activities relating to the Purposes of the Public Key Infrastructure Consortium without restricting competition in developing and marketing such products and/or services. This meeting is not intended to share competitively-sensitive information among competitors, and therefore all participants agree not to discuss or exchange information related to:
 
