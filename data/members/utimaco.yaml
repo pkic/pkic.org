@@ -1,0 +1,75 @@
+id: utimaco
+name: Utimaco
+slogan: Creating Trust in the Digital Society
+website: https://www.utimaco.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Utimaco is a global platform solution provider of trusted Cybersecurity and Compliance solutions and services. 
+Utimaco develops on-premises and cloud-based hardware security modules and key management solutions as well as compliance solutions for telecommunication providers in the field of regulation.
+We create innovative solutions and services to protect data, identities and communication networks with responsibility for global customers and citizens.
+Customers and partners in many different industries value the reliability and long-term investment security of UTIMACO's high-security products and solutions.
+
+# membership
+memerSince: 
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog: 
+  url: https://www.utimaco.com/current-topics/blog
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://www.utimaco.com/current-topics/press-releases
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.utimaco.com/careers
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/utimaco
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/utimaco/
+  youtube: https://www.youtube.com/channel/UCfijxhh9f0LDnj0W3FJOfFw
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Chris Meyer
+    role: Product Manager
+    social:
+      twitter: 
+      linkedin: https://de.linkedin.com/in/christopher-meyer-de
+    description: 
+      
+  - name: Dieter Bong 
+    role: Head of Product Management - HSM
+    social:
+      twitter:
+      linkedin: https://de.linkedin.com/in/dieter-bong-37b1151
+    description: Dieter Bong has more than 30 years of experience in IT security in the areas of encryption and digital signatures, network security, public key infrastructure and hardware security modules. Dieter currently heads Product Management for General Purpose Hardware Security Modules at Utimaco.
+
+  - name: Nicholas Kondamudi
+    role: Product Manager
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/nicholas-kondamudi/
+    description: In my role as Product Manager I am responsible for identifying market problems that are pervasive, persistent, and need to be solved. I am responsible for assessing exactly where we should focus our efforts to address the needs of our customers and solve the right problems in the right way
+
+  - name: Alfonso Concellón
+    role: Business Development Manager
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/alfonso-concell%C3%B3n-293317133/
+    description: He has more than 20 years of experience in IT security in the areas of public key infrastructure, digital signature services, hardware security modules as well as ITMS and IT services. He is responsible for PKI strategic approach and  identifying market problems that are pervasive, persistent, and need to be solved. Assessing exactly where we should focus our efforts to address the needs of our customers and solve the right problems in the right way.
