@@ -5,15 +5,11 @@ website: https://www.utimaco.com/
 
 # Short description, longer content can be placed in `content/members/`
 description: Utimaco is a global platform solution provider of trusted Cybersecurity and Compliance solutions and services. 
-Utimaco develops on-premises and cloud-based hardware security modules and key management solutions as well as compliance solutions for telecommunication providers in the field of regulation.
-We create innovative solutions and services to protect data, identities and communication networks with responsibility for global customers and citizens.
-Customers and partners in many different industries value the reliability and long-term investment security of UTIMACO's high-security products and solutions.
 
 # membership
-memerSince: 
-memberType: CA
+memerSince: 2021-06-21
+memberType: Vendor
 workingGroups:
-  - CA
 
 # Blog posts
 blog: 
@@ -67,7 +63,8 @@ representatives:
       linkedin: https://www.linkedin.com/in/nicholas-kondamudi/
     description: In my role as Product Manager I am responsible for identifying market problems that are pervasive, persistent, and need to be solved. I am responsible for assessing exactly where we should focus our efforts to address the needs of our customers and solve the right problems in the right way
 
-  - name: Alfonso Concellón
+  - id: alfonso-concellon
+    name: Alfonso Concellón
     role: Business Development Manager
     social:
       twitter: 
