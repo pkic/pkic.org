@@ -22,7 +22,7 @@ To enable these objectives, as the PKIC we are expanding our membership to colle
 
 If you are interested in joining the PKI Consortium, please fill out the following application here: https://pkic.org/join/
 
-{{< members date="2021-07-12" >}}
+{{< members date="2021-12-31" >}}
 
 *{{< sub class="text-center" >}}(some members have requested not to be listed on the website, including several government organizations){{</ sub >}}*
 
