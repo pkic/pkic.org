@@ -17,10 +17,10 @@
     {{ end }}
     </main>
 
-    {{ partial "members.html" . }}
+    {{ partialCached "members.html" . }}
 
     {{ block "footer" . }}
-    {{ partial "footer.html" . }}
+    {{ partialCached "footer.html" . }}
     {{ end }}
   </body>
 </html>

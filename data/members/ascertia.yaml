@@ -7,7 +7,7 @@ website: https://www.ascertia.com/
 description: Since 2001, Ascertia has been a global leader in delivering high-trust e-security solutions focusing on Digital Signatures, Timestamps, Evidence Archiving and OCSP Validation.
 
 # membership
-memerSince: 2021-04-26
+memberSince: 2021-04-26
 memberType: Vendor
 workingGroups:
   - 

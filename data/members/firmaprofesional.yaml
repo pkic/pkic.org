@@ -7,7 +7,7 @@ website: https://www.firmaprofesional.com/
 description: With a long history of supplying digital ID and payment solutions, Firmaprofesional provides a safer and simpler working day for both individuals and companies.
 
 # membership
-memerSince: 2021-02-03
+memberSince: 2021-02-03
 memberType: CA
 workingGroups:
   - CA

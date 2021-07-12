@@ -6,7 +6,7 @@ website: https://trustzone.com/
 # Short description, longer content can be placed in `content/members/`
 description: TRUSTZONE is Scandinavia’s largest SSL/TLS certificate supplier and a leading provider of scalable PKI and IoT solutions for encryption, authentication, and automated certificate lifecycle management.
 # membership
-memerSince: 2021-03-23
+memberSince: 2021-03-23
 memberType: Vendor
 workingGroups:
 

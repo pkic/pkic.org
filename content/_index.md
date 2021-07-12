@@ -1,11 +1,11 @@
 ---
 date: 2021-01-08T14:44:10Z
 draft: false
-title: PKI Consortium
+title: PKI Consortium (Public Key Infrastructure Consortium)
 description: Trusted digital assets and communication for everyone and everything
-keywords: ["trust","identity","pki","tls","ssl","crypto","iot","devices"]
+keywords: ["pkic", "trust","identity","pki","tls","ssl","crypto","iot","devices", "consortium"]
 
-heroTitle: Public Key Infrastructure (PKI) Consortium
+heroTitle: Public Key Infrastructure Consortium (PKI Consortium)
 heroDescription: Trusted digital assets and communication for everyone and everything
 
 menu:
@@ -15,7 +15,7 @@ menu:
 ---
 
 {{< alert >}}
-The CA Security Council (CASC) is restructured and renamed to the **The Public Key Infrastructure Consortium (PKI Consortium)**, [membership-fees have been dropped](/join/) and the focus is being shifted to engagement and participation.
+[The CA Security Council (CASC) is restructured and renamed to the **The Public Key Infrastructure Consortium (PKI Consortium)**](/2021/07/12/from-casc-to-the-public-key-infrastructure-consortium/), [membership-fees have been dropped](/join/) and the focus is being shifted to engagement and participation.
 {{< /alert >}}
 
 {{< figure src="/img/logo-black.svg" alt="Logo of the PKI Consortium" >}}

@@ -7,7 +7,7 @@ website: https://www.securetrust.com/
 description: SecureTrust helps businesses fight cybercrime, protect data and reduce security risk. With cloud and managed security services, integrated technologies and a team of security experts, ethical hackers and researchers, we enable businesses to transform the way they manage their information security and compliance programs.
 
 # membership
-memerSince:
+memberSince: 2014-11-13
 memberType: CA
 workingGroups:
   - CA

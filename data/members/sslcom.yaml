@@ -7,7 +7,7 @@ website: https://www.ssl.com/
 description: SSL.com is a publicly-trusted commercial certificate authority expanding the boundaries of encryption and authentication relied upon by users worldwide.
 
 # membership
-memerSince:
+memberSince: 2020-04-22
 memberType: CA
 workingGroups:
   - CA

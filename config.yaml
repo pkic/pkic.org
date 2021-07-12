@@ -1,6 +1,6 @@
 baseURL: https://pkic.org
 languageCode: en-us
-title: Public Key Infrastructure (PKI) Consortium
+title: PKI Consortium
 theme: pkic
 
 copyright: PKI Consortium, Inc. All Rights Reserved
@@ -34,7 +34,7 @@ taxonomies:
 #        url: https://www.example.com
 
 params:
-  name: Public Key Infrastructure (PKI) Consortium
+  name: PKI Consortium (Public Key Infrastructure Consortium)
   shortName: PKI Consortium
   company: PKI Consortium, Inc.
   email: feedback@pkic.org
@@ -42,6 +42,11 @@ params:
   about: The CA Security Council is comprised of leading Certificate Authorities that are committed to improve, create and collaborate on generic, industry or use-case specific policies, procedures, best practices, standards and tools that advance trust in assets and communication for everyone and everything using Public Key Infrastructure (PKI) as well as the security of the internet in general. By engaging with users, regulators, supervisory bodies and other interested or relying parties the council can address actual issues.
   vision: Trusted digital assets and communication for everyone and everything
   siteSource: https://github.com/pkic/pkic.github.io/edit/main
+
+  images:
+    - /img/pkic-og.png
+    - /img/pkic-colors.png
+    - /img/pkic-logo.jpg
 
   social:
     twitter: https://twitter.com/PKIConsortium

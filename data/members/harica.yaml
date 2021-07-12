@@ -7,7 +7,7 @@ website: https://www.harica.gr/
 description: HARICA is the Hellenic Academic & Research Institutions Certification Authority. It participates in all major Global 'ROOT CA' Trust Programs, and operates as a 'Trust Anchor' in widely used Application Software and Operating Systems.
 
 # membership
-memerSince:
+memberSince: 2019-09-30
 memberType: CA
 workingGroups:
   - CA

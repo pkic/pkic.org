@@ -7,7 +7,7 @@ website: https://www.izenpe.eus/
 description: "Izenpe is a project promoted by the Basque Government and the Basque Provincial Councils for the promotion of e-government and e-government in the Basque Country."
 
 # membership
-memerSince: 2021-02-12
+memberSince: 2021-02-12
 memberType: CA
 workingGroups:
   - CA
