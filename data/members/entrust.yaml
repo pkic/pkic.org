@@ -7,7 +7,7 @@ website: https://www.entrust.com/
 description: Entrust is dedicated to securing identities, data, and transactions around the globe
 
 # membership
-memerSince: 2013-02-14
+memberSince: 2013-02-14
 memberType: CA
 workingGroups:
   - CA

@@ -7,7 +7,7 @@ website: https://www.sectigo.com/
 description: Sectigo partners with organizations of all sizes to deliver automated public and private PKI solutions for securing web servers, user access, connected devices, and applications. Recognized for its award-winning innovation and best-in-class global customer support, Sectigo has the proven performance needed to secure the digital landscape of today and tomorrow.
 
 # membership
-memerSince: 2013-02-14
+memberSince: 2013-02-14
 memberType: CA
 workingGroups:
   - CA

@@ -7,7 +7,7 @@ website: https://www.cleverbase.com/
 description: Cleverbase offers a mobile app which, after a one-time registration, you can use to place qualified electronic signatures on documents, and exchange these securely.
 
 # membership
-memerSince: 2021-02-18
+memberSince: 2021-02-18
 memberType: CA
 workingGroups:
   - CA

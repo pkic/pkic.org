@@ -7,7 +7,7 @@ website: https://www.primekey.com/
 description: PrimeKey develops open source products for PKI, digital signatures and cryptography
 
 # membership
-memerSince: 2021-04-14
+memberSince: 2021-04-14
 memberType: Vendor
 workingGroups:
   - 

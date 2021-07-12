@@ -7,7 +7,7 @@ website: https://www.microsec.hu/en
 description: Microsec Ltd. is a mid-sized qualified trust service provider (QTSP) and a PKI technology expert independent software vendor (ISV), located in Budapest, Hungary, founded in 1984. The product range includes a Certificate Authority software family and a security framework for the vehicle-to-everything communication.
 
 # membership
-memerSince: 2021-03-02
+memberSince: 2021-03-02
 memberType: CA
 workingGroups:
   - CA
