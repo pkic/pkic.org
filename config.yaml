@@ -44,7 +44,9 @@ params:
   siteSource: https://github.com/pkic/pkic.github.io/edit/main
 
   images:
-    - /img/pkic.png
+    - /img/pkic-og.png
+    - /img/pkic-colors.png
+    - /img/pkic-logo.jpg
 
   social:
     twitter: https://twitter.com/PKIConsortium
