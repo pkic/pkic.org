@@ -15,7 +15,7 @@ menu:
 ---
 
 {{< alert >}}
-[The CA Security Council (CASC) is restructured and renamed to the **The Public Key Infrastructure Consortium (PKI Consortium)**](/2021/07/12/from-casc-to-the-public-key-infrastructure-consortium/), [membership-fees have been dropped](/join/) and the focus is being shifted to engagement and participation.
+[The CA Security Council (CASC) is restructured and renamed to the **Public Key Infrastructure Consortium (PKI Consortium)**](/2021/07/12/from-casc-to-the-public-key-infrastructure-consortium/), [membership-fees have been dropped](/join/) and the focus is being shifted to engagement and participation.
 {{< /alert >}}
 
 {{< figure src="/img/logo-black.svg" alt="Logo of the PKI Consortium" >}}
