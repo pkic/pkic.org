@@ -1,7 +1,7 @@
 ---
 date: 2021-01-08T14:44:10Z
 draft: false
-title: PKI Consortium
+title: PKI Consortium (Public Key Infrastructure Consortium)
 description: Trusted digital assets and communication for everyone and everything
 keywords: ["pkic", "trust","identity","pki","tls","ssl","crypto","iot","devices", "consortium"]
 
