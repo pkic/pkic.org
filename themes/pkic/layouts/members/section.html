@@ -21,7 +21,7 @@
               <p class="lead">{{.description}}</p>
               <div class="text-end">{{ partial "social.html" .social }}</div>
             </div>
-            <div class="col-md-3 order-md-1">
+            <div class="col-md-3 order-md-1 text-center">
               {{ $title := (printf "%s is a member of the %s" .name $.Site.Params.name ) }}
               {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
               {{ with $img}}
