@@ -1,0 +1,53 @@
+id: nlmod
+name: Dutch Ministry of Defence
+slogan: Protecting what we value
+website: https://english.defensie.nl/
+
+# Short description, longer content can be placed in `content/members/`
+description: The Dutch Ministry of Defence (NL-MoD) has created an internal publicly trusted CA certified according eIDAS. The only subscriber is the NL-MoD. All subjects are bound to NL-MoD by contracts or treaties. The main purpose is to establish scalable public trust for all possible business applications to be able to reach out to governments, contractors and society that must rely on public trust.
+
+# membership
+memberSince: 2021-07-06
+memberType: CA
+workingGroups:
+  - CA
+  
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://werkenbijdefensie.nl/
+  feed: 
+  language: nl_NL
+
+# Social media
+social:
+  twitter: https://twitter.com/defensie
+  facebook: https://www.facebook.com/MinvanDefensie
+  instagram: http://www.instagram.com/minvandefensie
+  linkedin: 
+  youtube: http://youtube.com/defensie
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Fekke Bakker
+    role: Operational TSP Manager
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/ing-fekke-bakker-msc-cgeit-cissp-cisa-28024912/
+    description: 
+      Fekke Bakker is the Operational TSP Manager at the Dutch Ministry of Defence and represents the organization at the PKI Consortium.
+      
