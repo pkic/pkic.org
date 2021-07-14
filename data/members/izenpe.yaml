@@ -40,14 +40,6 @@ social:
 
 # Here you can list those who represent the member
 representatives:
-  - id: oscar-garcia
-    name: Oscar García
-    role: Chief Security Officer (CISO)
-    social:
-      twitter:
-      linkedin: https://www.linkedin.com/in/oscar-garc%C3%ADa-42204416/
-    description:
-      Oscar Garcia is responsible for the Information Security of Izenpe, as for the compliance of industry and standard requirements. He represents Izenpe at the PKI Consortium and at the CABForum.
   - id: toni-saez
     name: Toni Sáez
     role: Technical Department Manager (CTO)
@@ -56,3 +48,14 @@ representatives:
       linkedin: https://www.linkedin.com/in/toni-saez-gonzalez-25355121/
     description:
       Toni Saez is the Izenpe Technical Manager and represents Izenpe at the PKI Consortium.
+      
+  - id: oscar-garcia
+    name: Oscar García
+    role: Chief Security Officer (CISO)
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/oscar-garc%C3%ADa-42204416/
+    description:
+      Oscar Garcia is responsible for the Information Security of Izenpe, as for the compliance of industry and standard requirements. He represents Izenpe at the PKI Consortium and at the CABForum.
+    from: 2021-02-12
+    till: 2021-07-16
