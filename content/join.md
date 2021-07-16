@@ -19,7 +19,8 @@ Organizations are eligible to join the PKI Consortium upon either of the followi
 - **(a)** They are CA Members (Certificate Issuer Members) of the CA/Browser Forum (CABF), or;
 - **(b)** They are included on the eIDAS Trusted List, or;
 - **(c)** They are relevant and recognized supervisory bodies or regulators, or;
-- **(d)** They provide, built or manage PKI based products, services or solutions.
+- **(d)** They provide PKI based services (e.g., consultancy, support, solutions);
+- **(e)** They built PKI related products.
 
 ## Terms and Conditions
 You agree with and follow the Bylaws at all times, including the Antitrust Policy and Code of Conduct, in all dealings with the PKI Consortium and its members. To report an issue or concern under the Code of Conduct, contact `feedback (at) pkic.org`.
