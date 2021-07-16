@@ -1,0 +1,58 @@
+id: bakertilly
+name: Baker Tilly
+slogan: Now, for tomorrow
+website: https://www.bakertilly.my/
+
+# Short description, longer content can be placed in `content/members/`
+description: Baker Tilly ranks among the largest accounting and business advisory firms in Malaysia, with 50 Partners and Directors, 6 offices across Malaysia and an office in Phnom Penh, Cambodia, and a staff force of over 800 professionals.
+
+# membership
+memberSince: 2021-07-20
+memberType: Auditor
+workingGroups:
+  - 
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://www.bakertilly.my/news-and-press-release
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.bakertilly.my/career/application
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/BTMalaysia
+  facebook: https://www.facebook.com/BakerTillyMalaysia/
+  instagram: https://www.instagram.com/bakertillymy/
+  linkedin: https://www.linkedin.com/company/baker-tilly-malaysia
+  youtube: https://www.youtube.com/channel/UCLZu97SF9mdlbR7fs-iGTSg
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: HuckHai Lim
+    role: Managing Director
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/huckhai-lim-847234a/
+    description: |
+      Huck Hai has over 30 years of experience in management consulting, cyber, technology security and GRC. Prior to joining Baker Tilly, he was an advisory partner with KPMG and founded Moore Stephens Advisory Sdn Bhd which is now traded under ACPM IT.
+
+      Huck Hai is an elected VP of Association of Certified Fraud Examiner - Malaysia Chapter and was a council member of Malaysian Institute of Accountants in 2000 and council member of the Malaysia Chapters of CPA Australia and ISACA USA in early 2000.
