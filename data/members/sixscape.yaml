@@ -7,7 +7,7 @@ website: https://www.sixscape.com/
 description: Sixscape is dedicated to making Cryptographic Authentication and Secure Messaging Simple, to enable secure digital transformation, IoT deployment and allow 5G to be fully and securely exploited.
 
 # membership
-memberSince: 2021-07-14
+memberSince: 2021-07-20
 memberType: Vendor
 workingGroups:
 
@@ -24,7 +24,7 @@ blog:
 # Press Releases
 press: 
   url: https://sixscape.com/news/
-  feed: 
+  feed: https://sixscape.com/feed/
   language: en_US
 
 # Careers
