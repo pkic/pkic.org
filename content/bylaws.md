@@ -35,13 +35,13 @@ The primary purpose of the consortium is to realize our vision, stating:
 
 ### Eligibility
 
-Organizations are eligible to join the PKI Consortium upon either of the following conditions:
+Organizations are eligible to join the PKI Consortium if they can demonstrate expert PKI knowledge or another significant value for the consortium and upon either of the following conditions:
 
-- **(a)** They are CA Members (Certificate Issuer Members) of the CA/Browser Forum (CABF), or;
-- **(b)** They are included on the eIDAS Trusted List, or;
-- **(c)** They are relevant and recognized supervisory bodies or regulators, or;
-- **(d)** They provide PKI based services (e.g., consultancy, support, solutions);
-- **(e)** They built PKI related products.
+- **(a)** They are included on a list of the [List of Trust Lists](/activities/list-of-trust-lists/), or;
+- **(b)** They are relevant and recognized standard or supervisory bodies, regulators, or;
+- **(c)** They provide PKI based services (e.g., consultancy, support, solutions), or;
+- **(d)** They built PKI related products, or;
+- **(e)** They perform PKI related research (e.g., universities);
 
 ### Working groups
 
@@ -90,7 +90,7 @@ The officers of PKIC shall be a Chair and a Vice Chair (who will act as Chair wh
 
 ## 7. Voting
 
-Except as otherwise required by these Bylaws, PKIC will attempt to reach all decisions by consensus (as determined by the Chair) of all members. In the event that consensus cannot be reached (or upon the request of any voting member), PKIC will submit the matter for a vote. Unless otherwise required by these Bylaws, the matter will be decided by majority vote of members who cast a vote. In the case of a tie vote, the matter will not be approved.
+Except as otherwise required by these Bylaws, PKIC will attempt to reach all decisions by consensus (as determined by the Chair) across all members and eligibility member categories. In the event that consensus cannot be reached (or upon the request of any voting member), PKIC will submit the matter for a vote. Unless otherwise required by these Bylaws, the matter will be decided by majority vote of the eligibility member categories who cast a vote. The vote of the eligibility member category will be decided by majority vote of members who cast a vote in that category. In the case of a tie vote, the matter will not be approved.
 
 ## 8. Antitrust Policy
 From time to time at PKIC meetings, the following antitrust policy statement will be read allowed to Members. All Members agree to follow this policy at all times.
