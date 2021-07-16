@@ -7,7 +7,7 @@
             {{ end }}
 
             <h1 class="fw-light">{{ $.Param "heroTitle" }}</h1>
-            <p class="lead text-muted">{{ $.Param "heroDescription" }}</p>
+            <p class="lead text-muted">{{ $.Param "heroDescription" | markdownify }}</p>
             {{ with $.Param "heroButton" }}
             <p>
                 <a href="{{ $.Param "heroButton.link" }}" class="btn btn-success my-2" title="{{ $.Param "heroButton.label" }}">{{ $.Param "heroButton.label" }}</a>
