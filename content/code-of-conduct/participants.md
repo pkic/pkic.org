@@ -1,18 +1,20 @@
 ---
 date: 2021-03-25T13:49:10Z
 draft: false
-title: PKI Consortium Code of Conduct
+title: Code of Conduct for Participants
+weight: 10
 
 heroTitle: Code of Conduct (the “Code”)
-heroDescription: 
+heroDescription: This page must be read together with the other parts of the [Code of Conduct of the PKI Consortium](../).
 
 ---
 
+## Introduction
 The PKI Consortium (the “PKIC”) is comprised of a global group of professionals with differences in language, skills, expertise, experience, and backgrounds. Participants include PKIC Members and third parties (non-members). To maintain a professional and productive environment, it is necessary Participants of the PKIC to follow the letter and spirit of this Code. This Code applies to all official PKIC activities, such as meetings, teleconferences, mailing lists, conferences, and other PKIC functions. The PKIC is committed to maintaining a professional and respectful environment.
 
 All Participant representatives are expected to behave in a collegial and professional manner in accordance with this Code. Participants will familiarize their representatives with this Code and require them to comply with the letter and spirit of this Code.
 
-## I. Conduct. 
+## Conduct. 
 
 The PKIC is committed to providing a friendly, safe, and welcoming environment for all, regardless of gender, gender identity and expression, sexual orientation, disability, personal appearance, body size, race, ethnicity, age, religion, nationality, or other similar characteristic. The PKIC recognizes and appreciates that its participants have diverse languages, backgrounds, experience, and expertise, and expects that all participants will be treated with respect by all other participants. 
 
@@ -38,7 +40,7 @@ The PKIC is committed to providing a friendly, safe, and welcoming environment f
 
 4. PKIC participants should stick to ideological, conceptual discussions and avoid engaging in offensive or sensitive personal discussions, particularly if they’re off topic; such personal discussions can lead to unnecessary arguments, hurt feelings, and damaged trust.
 
-## II. Moderation
+## Moderation
 
 These are the policies for upholding the Code.
 
@@ -50,7 +52,7 @@ These are the policies for upholding the Code.
 
 4. Participants agree to take appropriate action in the event any of their representatives violate the Code. Such action could include warning, reprimanding, suspending, removing or replacing the representative who has violated the Code, depending on the severity of the violation. Depending on the number and severity of violations, the PKIC may impose consequences such as excluding a representative from certain meetings, removing or banning a representative from a (online) discussion, and suspending a representative from certain PKIC activities.
 
-## III. Maintaining Civil Discourse Among Participants
+## Maintaining Civil Discourse Among Participants
 Members of the PKI Consortium (PKIC) wish to promote the organizations success by maintaining a constructive character in all PKIC discussions. They observe the character of some of the (online) discussions and at meetings, and conclude that sarcasm and ad hominem attacks impede progress by discouraging the sharing of ideas and encouraging the entrenchment of positions. For these reasons, the participants want to take active steps to avoid these behaviors in their own communications.
 It is recognized that it will be difficult to find the right balance between the need for free expression of ideas and the desire to conduct discussions with civility. Nevertheless, the members want to seek that balance.
 
