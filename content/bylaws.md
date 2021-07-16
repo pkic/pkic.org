@@ -12,7 +12,7 @@ These Bylaws are intended to supplement the provisions of the Articles of Incorp
 
 ## 1. Purpose of PKI Consortium 
 
-The primary purpose of the consortium is to realize our vison, stating:
+The primary purpose of the consortium is to realize our vision, stating:
 
 > Trusted digital assets and communication for everyone and everything
 
