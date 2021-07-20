@@ -1,6 +1,5 @@
 ---
 date: 2021-07-14T17:21:10Z
-draft: true
 id: sixscape
 title: Sixscape
 
