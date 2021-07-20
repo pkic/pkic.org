@@ -1,0 +1,71 @@
+id: sixscape
+name: Sixscape Communications
+slogan: Cryptographic Authentication & Identity
+website: https://www.sixscape.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Sixscape is dedicated to making Cryptographic Authentication and Secure Messaging Simple, to enable secure digital transformation, IoT deployment and allow 5G to be fully and securely exploited.
+
+# membership
+memberSince: 2021-07-20
+memberType: Vendor
+workingGroups:
+
+# sponsor
+#sponsor:
+#  level:
+
+# Blog posts
+blog: 
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://sixscape.com/news/
+  feed: https://sixscape.com/feed/
+  language: en_US
+
+# Careers
+careers: 
+  url: https://sixscape.com/careers/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/sixscape_comm
+  linkedin: https://www.linkedin.com/company/sixscape-communications-global/
+  youtube: https://www.youtube.com/channel/UCWpFFKtkP5HUybYxqmp4ATQ
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Dean J. Bell
+    role: Chief Executive Officer
+    social:
+      linkedin: https://www.linkedin.com/in/deanbell
+    description:
+      Dean is the CEO of Sixscape Communications and is responsible for driving growth and all strategic initiatives of the company. Prior to Sixscape, Dean spent the last 24 years setting up and growing the international presence for a number of US and European Cybersecurity companies, focusing on enterprise, government, and service provider markets. 
+      
+      His background includes stints in the UK, Middle East, Australia and Singapore in general management and senior executive roles for both direct sales and channel-based go-to-market security vendors with successful exits with BorderWare Technologies, Scanit, BlueCat Networks. He represents Sixscape at the PKI Consortium.
+
+  - name: Ram Kishore
+    role: Head of Research & Development
+    social:
+      linkedin: https://www.linkedin.com/in/rramkishore
+    description:
+      Ram Kishore is the Head of research and product development at Sixscape. Ram has served in the PKI industry for over 10 years and had worked as PKI Specialist and software developer for major public CA’s and security software product companies. He represents Sixscape at the PKI Consortium.
+
+  - name: Chin Wee Tan
+    role: Director, Sales
+    social:
+      linkedin: https://www.linkedin.com/in/chin-wee-tan-48515238
+    description: Chin Wee heads up sales at Sixscape and is a specialist with specific domain based knowledge of PKI and CA sales for both direct and channel go to market. Extensive experience in international sales and business development in addition to building worldwide alliances with technology vendors. He represents Sixscape at the PKI Consortium.
+
+  - name: Jian Sheng Lin (JS)
+    role: Technical Directory
+    description: JS is Sixscape’s Technical Director and drives our partner and customer technical initiatives from solution design to pre and post-sales engagements, partner enablement and training. He brings to the table, significant domain knowledge from a number of years with Netrust and Gemalto working in PKI and encryption. He represents Sixscape at the PKI Consortium.
