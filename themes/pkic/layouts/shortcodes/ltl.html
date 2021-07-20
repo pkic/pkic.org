@@ -1,0 +1,57 @@
+{{ $latest := getJSON "https://api.github.com/repos/pkic/ltl/releases/latest" }}
+{{ $ltl := getJSON (printf "https://github.com/pkic/ltl/releases/download/%s/ltl.json" $latest.tag_name) }}
+
+{{ range $ltl }}
+    <h2 id="{{ .name | safeURL }}">{{ .name }}
+        {{ partial "anchor.html" .name }}
+        {{ partial "contribute.html" (dict "url" (printf "https://github.com/pkic/ltl/edit/main/%s.yaml" (lower .name)) "title" (printf "Improve information for %s" .name)) }}
+    </h2>
+    <p><small><a href="{{.website}}">{{.website}}</a></small></p>
+
+    <p>{{ .description }}</p>
+
+    <p>
+    {{ with (index . "trust-lists") }}
+    
+    {{ with .info }}<strong>List info:</strong> {{ . }}<br />{{ end }}
+    {{ with .policy }}<strong>List policy:</strong> {{ . }}<br />{{ end }}
+
+    <ul>
+    {{ range .trust }}
+
+        <li>
+            <strong>{{ delimit .purposes ", " }}</strong>
+
+            {{ with .list }}
+            <ul>
+                <li>
+                    View or download list:
+                    {{ range . }}
+                    <a href="{{ .url }}/" class="badge bg-secondary" target="_blank">{{ .type }}</a>
+                    {{ end }}
+                </li>
+            </ul>
+            {{ end }}
+
+            {{ with .audit }}
+            <ul>
+                <li>
+                    Audit scheme:
+                    {{ range . }}
+                    <span class="badge bg-primary">{{ .name }}</span>
+                    {{ end }}
+                </li>
+            </ul>
+            {{ end }}
+
+        </li> 
+
+    {{ end }}
+    </ul>
+
+    {{ end }}
+    </p>
+
+    <br />
+    <hr />
+{{ end }}
