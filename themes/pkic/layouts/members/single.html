@@ -49,8 +49,13 @@
 
 <div class="py-5 bg-light">
   <div class="container">
-      {{ range $member.representatives }}
-      {{ if not .hidden }}
+      {{ range where $member.representatives "hidden" "==" nil}}
+      {{ $date := (time "9999-01-01") }}
+      {{ with .till }}
+        {{ $date = (time .) }}
+      {{ end }}
+
+      {{ if time.Now.Before $date }}
         <div class="row mb-5">
           <div class="col-md-9 order-md-2">
             <h2 id="{{ .name | urlize | safeURL }}" class="featurette-heading">{{.name}} {{ partial "social.html" .social }}
