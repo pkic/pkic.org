@@ -1,14 +1,14 @@
-id: ECAC
+id: ecac
 name: ECAC
-slogan: 
+slogan: Electronic Certification Accreditation Council
 website: https://www.ecac.org.pk
 
 # Short description, longer content can be placed in `content/members/`
-description: Electronic Certification Accreditation Council, Government of Pakistan is a regulatory body for Certificate Service Providers.
+description: ECAC, Government of Pakistan is a regulatory body for Certificate Service Providers
 
 # membership
-memberSince: 2021-07-16
-memberType: CA
+memberSince: 2021-07-20
+memberType: Regulator
 workingGroups:
   - 
 
