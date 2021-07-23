@@ -17,7 +17,7 @@
 <div class="py-5">
     <div class="container">
         <div class="row">
-          <div class="col-md-9 order-md-1">
+          <div class="col-lg-9 order-lg-1">
             <article id="content">
             {{ .Content }}
             </article>
@@ -30,7 +30,7 @@
             {{ end }}
           </div>
 
-          <div class="col-md-3 order-md-2 px-md-5">
+          <div class="col-lg-3 order-lg-2 px-lg-5">
             <p>Reading time: <strong>{{.ReadingTime}} minutes</strong></p>
             
             <h4>Authors</h4>
@@ -54,6 +54,32 @@
               {{ partial "tags.html" . }}
             </ul>
             {{ end }}
+
+            <div class="sticky-lg-top my-5 pt-4 pb-5 bg-light rounded-3 text-center" style="top: 80px;">
+              <p class="px-4"><small>We thank our sponsors for their ongoing support of the PKI Consortium</small></p>
+
+              {{ .Scratch.Set "class" "img-fluid" }}
+              {{ .Scratch.Set "max-height" "80" }}
+ 
+              {{ .Scratch.Set "level" "Diamond" }}
+              {{ partial "sponsors.html" . }}
+ 
+              {{ .Scratch.Set "level" "Titanium" }}
+              {{ partial "sponsors.html" . }}
+ 
+              {{ .Scratch.Set "level" "Platinum" }}
+              {{ partial "sponsors.html" . }}
+ 
+              {{ .Scratch.Set "max-height" "60" }}
+              {{ .Scratch.Set "level" "Gold" }}
+              {{ partial "sponsors.html" . }}
+ 
+              {{ .Scratch.Set "level" "Silver" }}
+              {{ partial "sponsors.html" . }}
+ 
+              {{ .Scratch.Set "level" "Bronze" }}
+              {{ partial "sponsors.html" . }} 
+            </div>
           </div>
           
       </div>

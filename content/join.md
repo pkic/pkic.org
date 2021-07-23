@@ -3,6 +3,9 @@ date: 2021-01-08T14:49:10Z
 draft: false
 title: Join the PKI Consortium
 
+menu: 
+    footer:
+        name: Become a member
 ---
 
 # Join the PKI Consortium

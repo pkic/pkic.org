@@ -1,3 +1,9 @@
+    <div class="container members text-nowrap overflow-hidden my-4 text-center">
+        <div class="banner">
+            {{ partialCached "members.html" . }}
+        </div>
+    </div>
+
     <div id="participate" class="py-3 bg-success">
         <div class="container">
             Participate in our <a href="https://github.com/pkic/community/discussions" target="_blank">community</a> discussions and/or <a href="/join/">join</a> the consortium
@@ -9,8 +15,15 @@
             {{ with .File }}
                 <a href="{{$.Site.Params.siteSource}}/content/{{ .File.Path }}" class="btn btn-sm btn-outline-light align-top float-end m-3">Improve this page</a>
             {{ end }}
-            <div class="text-muted py-5">
+            <div class="text-muted pt-3 pb-5">
                 {{ partial "social.html" .Site.Params.social }}
+            </div>
+
+            <div class="text-muted py-2">
+                {{ range $id, $menu := .Site.Menus.footer }}
+                <a class="text-white text-muted" title="{{ $menu.Title }}" href="{{ $menu.URL }}">{{ $menu.Name }}</a> 
+                {{ if lt (add $id 1) (len $.Site.Menus.footer) }} | {{end}}
+                {{ end }}
             </div>
 
             <div class="text-muted py-2">

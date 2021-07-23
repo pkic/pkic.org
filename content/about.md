@@ -11,7 +11,7 @@ menu:
 ---
 
 ## About us
-{{< figure src="/img/logo-black.svg" alt="Logo of the PKI Consortium" height="100" class="float-md-end" >}}
+{{< figure src="/img/logo-black.svg" alt="Logo of the PKI Consortium" height="100" class="float-lg-end" >}}
 
 The Public Key Infrastructure Consortium is comprised of leading organizations that are committed to improve, create and collaborate on generic, industry or use-case specific policies, procedures, best practices, standards and tools that advance trust in assets and communication for everyone and everything using Public Key Infrastructure (PKI) as well as the security of the internet in general. By engaging with users, regulators, supervisory bodies and other interested or relying parties the consortium can address actual issues. 
 

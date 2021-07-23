@@ -1,0 +1,36 @@
+{{ $level := "all" }}
+{{ with $.Scratch.Get "level" }}
+    {{ $level = . }}
+{{ end }}
+
+{{ $sponsors := slice }}
+
+{{ range $.Site.Data.members }}
+    {{ if or 
+        (and (eq $level "all") (isset .sponsor "level") (ne .sponsor.level nil))
+        (eq .sponsor.level $level)
+    }}
+        {{ $sponsors = $sponsors | append . }}
+    {{ end }}
+{{ end }}
+
+{{ range $.Site.Data.sponsors }}
+    {{ if or (eq $level "all") (eq .level $level) }}
+        {{ $sponsors = $sponsors | append . }}
+    {{ end }}
+{{ end }}
+
+<div class="sponsors">
+{{ if gt (len $sponsors) 0 }}
+        {{ range (shuffle $sponsors) }}
+            {{ $title := (printf "%s is a %s sponsor for the %s" .name .sponsor.level $.Site.Params.name ) }}
+            <a href="{{ .website }}" title="{{ $title }}" target="_blank">
+                <!-- check sponsors and members resources -->
+                {{ $img := resources.GetMatch (printf "/images/**/%s/%s.*" .id .id) }}
+                {{ with $img}}
+                <img style="{{ with $.Scratch.Get `max-height` }}max-height: {{ . }}px;{{ end }}{{ with $.Scratch.Get `height` }}height: {{ . }}px;{{ end }}" class="sponsor-logo{{ with $.Scratch.Get `class` }} {{ . }}{{ end }}" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
+                {{ end }}
+            </a>
+        {{ end }}
+{{ end }}
+</div>

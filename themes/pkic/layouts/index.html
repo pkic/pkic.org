@@ -8,24 +8,31 @@
     </div>
   </section>
 
-<div class="album pt-4 bg-light">
+<div class="pt-4 bg-light">
     <div class="container">
       <div class="row">
-        <div class="col-md-7 order-md-1 pb-4">
+        <div class="col-lg-7 order-lg-1 pb-4">
           {{ .Content }}
         </div>
-        <div class="col-md-5 order-md-2 pb-4">
-          {{ range first 4 (where .Site.RegularPages "Type" "blog") }}
+        <div class="col-lg-5 order-lg-2 pb-4">
+          {{ range first 3 (where .Site.RegularPages "Type" "blog") }}
           {{ partial "pagelisting.html" . }}
           {{ end }}
   
-          <a class="btn btn-success btn-sm" href="/blog/" title="{{.Site.Params.name}} Blog">More on the {{.Site.Params.name}} blog</a>
+          <a class="btn btn-success btn-sm" href="/blog/" title="{{.Site.Params.name}} Blog">More on the PKI Consortium blog</a>
+          
+          <div class="mt-4 text-center">
+            <small>We thank our <a href="/sponsors/">sponsors</a> for their ongoing support of the PKI Consortium</small>
+            {{ .Scratch.Set "height" "50" }}
+            {{ partial "sponsors.html" . }}
+          </div>
+
         </div>
       </div>
     </div>
 </div>
 
-<div class="album pt-4">
+<div class="pt-4">
   <div class="container">
 {{ partial "rssfeedcarousel.html" . }}
   </div>

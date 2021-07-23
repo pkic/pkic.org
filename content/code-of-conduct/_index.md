@@ -6,5 +6,8 @@ title: Code of Conduct
 heroTitle: Code of Conduct (the “Code”)
 heroDescription: All members of the PKI Consortium are required to accept and to adhere to the Code of Conduct
 
+menu: 
+    footer:
+    
 ---
 

@@ -11,8 +11,10 @@
     <div class="container">
         {{ .Content }}
 
-        {{ range .Data.Pages }}
-        {{ partial "pagelisting.html" . }}
+        {{ if not .Params.noPages}}
+            {{ range .Data.Pages }}
+            {{ partial "pagelisting.html" . }}
+            {{ end }}
         {{ end }}
     </div>
 </div>

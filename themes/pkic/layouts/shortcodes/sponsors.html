@@ -1,31 +1,9 @@
-<!-- shuffle sponsors and sponsoring members  -->
-{{ $sponsors := slice }}
-{{ range $.Site.Data.members }}
-    {{ if eq .sponsor.level ($.Get "level") }}
-        {{ $sponsors = $sponsors | append . }}
-    {{ end }}
-{{ end }}
-
-{{ range $.Site.Data.sponsors }}
-    {{ $sponsors = $sponsors | append . }}
-{{ end }}
-
-{{ if gt (len $sponsors) 0 }}
-<div id="members" class="container">
-    <div class="row py-5 justify-content-center text-center">
-    
-        {{ range (shuffle $sponsors) }}
-        <div class="col py-4 px-5">
-            {{ $title := (printf "%s is a %s sponsor for the %s" .name .sponsor.level $.Site.Params.name ) }}
-            <a href="{{ .website }}" title="{{ $title }}" target="_blank">
-                <!-- check sponsors and members resources -->
-                {{ $img := resources.GetMatch (printf "/images/**/%s/%s.*" .id .id) }}
-                {{ with $img}}
-                <img class="mx-auto" style="height: {{ with $.Get `height`}}{{ . }}{{ else }}80{{ end }}px;" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
-                {{ end }}
-            </a>
-        </div>
-        {{ end }}
+{{ .Scratch.Set "level" (.Get "level") }}
+{{ .Scratch.Set "height" (.Get "height") }}
+{{ .Scratch.Set "class" (.Get "class") }}
+<div class="container">
+    <div class="pb-4 justify-content-center text-center">
+    <!-- shuffle sponsors and sponsoring members  -->
+    {{ partial "sponsors.html" . }}
     </div>
 </div>
-{{ end }}

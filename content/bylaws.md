@@ -1,11 +1,14 @@
 ---
 date: 2021-03-25T13:49:10Z
 draft: false
-title: Bylaws of the Public Key Infrastructure Consortium
+title: Bylaws
 
 heroTitle: Bylaws of the Public Key Infrastructure Consortium
 heroDescription: 
 
+menu: 
+    footer:
+    
 ---
 
 These Bylaws are intended to supplement the provisions of the Articles of Incorporation for the PKI Consortium, Inc. (Public Key Infrastructure Consortium or PKIC), a Utah, USA non-profit corporation. In the event of any conflict between the Articles of Incorporation and these Bylaws, the Articles of Incorporation shall prevail.

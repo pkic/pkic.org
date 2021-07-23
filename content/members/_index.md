@@ -13,6 +13,8 @@ heroButton:
 
 menu:
   main:
+  footer:
+    name: List of members
 
 # The membership list is automatically created from the membership data,
 # please check the folder `data/members`.

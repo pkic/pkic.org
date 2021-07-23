@@ -1,7 +1,7 @@
 {{ define "main" }}
 <section class="py-4 text-center container">
     <div class="row py-lg-4">
-        <div class="col-lg-7 col-md-8 mx-auto">
+        <div class="col-lg-7 col-lg-8 mx-auto">
             <h1 class="fw-light">{{ $.Site.Params.shortName }} blog</h1>
             {{ if eq .Kind "term" }}
             <p class="lead text-muted">Posts by <a href="../{{.Data.Plurar }}">{{.Data.Singular }}</a> <strong>{{.Data.Term }}</strong></p>

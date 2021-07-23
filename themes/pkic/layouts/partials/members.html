@@ -3,26 +3,20 @@
     {{ $date = (time .) }}
 {{ end }}
 
-<div id="members" class="container">
-<div class="row py-5 justify-content-center text-center">
-    <!-- shuffle members  -->
-    {{ $members := slice }}
-    {{ range $.Site.Data.members }}
-        {{ if $date.After (time .memberSince)  }}
-        {{ $members = $members | append . }}
-        {{ end }}
+<!-- shuffle members  -->
+{{ $members := slice }}
+{{ range $.Site.Data.members }}
+    {{ if $date.After (time .memberSince)  }}
+    {{ $members = $members | append . }}
     {{ end }}
+{{ end }}
 
-    {{ range (shuffle $members) }}
-    <div class="col py-4 px-5">
-        {{ $title := (printf "%s, %s - A member of the %s" .name .slogan $.Site.Params.name ) }}
-        <a href="/members/{{ .id }}/" title="{{ $title }}">
-            {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
-            {{ with $img}}
-            <img class="mx-auto member-logo" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
-            {{ end }}
-        </a>
-    </div>
-    {{ end }}
-</div>
-</div>
+{{ range (shuffle $members) }}
+    {{ $title := (printf "%s, %s - A member of the %s" .name .slogan $.Site.Params.name ) }}
+    <a href="/members/{{ .id }}/" title="{{ $title }}">
+        {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
+        {{ with $img}}
+        <img class="member-logo" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
+        {{ end }}
+    </a>
+{{ end }}

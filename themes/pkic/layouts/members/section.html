@@ -15,13 +15,13 @@
         {{ range (shuffle $members) }}
         <a href="/members/{{.id}}/" title="{{.name}} is a member of the PKI Consortium" class="linkArea">
           <div class="row featurette">
-            <div class="col-md-9 order-md-2">
+            <div class="col-lg-9 order-lg-2">
               <h2 class="featurette-heading">{{.name}}</h2>
               <h3 class="text-muted">{{.slogan}}</h3>
               <p class="lead">{{.description}}</p>
               <div class="text-end">{{ partial "social.html" .social }}</div>
             </div>
-            <div class="col-md-3 order-md-1 text-center">
+            <div class="col-lg-3 order-lg-1 text-center">
               {{ $title := (printf "%s is a member of the %s" .name $.Site.Params.name ) }}
               {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
               {{ with $img}}
