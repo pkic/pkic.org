@@ -44,7 +44,8 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Dean J. Bell
+  - id: dean-bell
+    name: Dean J. Bell
     role: Chief Executive Officer
     social:
       linkedin: https://www.linkedin.com/in/deanbell
@@ -66,6 +67,7 @@ representatives:
       linkedin: https://www.linkedin.com/in/chin-wee-tan-48515238
     description: Chin Wee heads up sales at Sixscape and is a specialist with specific domain based knowledge of PKI and CA sales for both direct and channel go to market. Extensive experience in international sales and business development in addition to building worldwide alliances with technology vendors. He represents Sixscape at the PKI Consortium.
 
-  - name: Jian Sheng Lin (JS)
+  - id: jian-sheng
+    name: Jian Sheng Lin (JS)
     role: Technical Director
     description: JS is Sixscape’s Technical Director and drives our partner and customer technical initiatives from solution design to pre and post-sales engagements, partner enablement and training. He brings to the table, significant domain knowledge from a number of years with Netrust and Gemalto working in PKI and encryption. He represents Sixscape at the PKI Consortium.
