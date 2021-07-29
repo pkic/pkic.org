@@ -108,4 +108,4 @@ From time to time at PKIC meetings, the following antitrust policy statement wil
 
 ## 9. Amendments to Bylaws 
 
-These Bylaws may be amended by a vote of the voting Members. 
+These Bylaws may be amended by a vote of the voting Members.
