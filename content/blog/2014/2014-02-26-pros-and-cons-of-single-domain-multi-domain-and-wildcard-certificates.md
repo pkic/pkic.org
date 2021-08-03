@@ -7,23 +7,26 @@ dsq_thread_id:
 keywords:
 - microsoft
 - ssl
+- tls
+- multi-domain
+- server
+- website
+- wildcard 
+- certificates
+- single-domain
 tags:
 - Microsoft
 - SSL/TLS
 title: Pros and Cons of Single-Domain, Multi-Domain, and Wildcard Certificates
 
+---
 
----
----
 We have previously written about the [different types of SSL certificates][1], but in that article we focused on validation levels. A recent [post on LinkedIn][2] highlighted the fact that there is another dimension that we haven’t yet explored.
 
 SSL certificates come in three basic packages: “single-domain” certificates that can only be used on one specific website, “multi-domain” certificates that can be used on more than one website, and “wildcard” certificates that can be used on any website within a specific domain name. Multi-domain certificates are often called “unified communications” or “UC” certificates. This is a reference to one common use of these certificates, which is to secure Microsoft messaging products such as Exchange and Lync. The table below shows examples of the number and types of websites that each of these packages can protect:
 
 | Type of Certificate | Example Websites Protected | 
-|
-
-| Type of Certificate | Example Websites Protected | 
-|---------------------|----------------------------|
+|:--------------------|:---------------------------|
 | Single-domain       | https://www.firstwebsite.com |
 | Multi-domain (UCC)  | https://www.firstwebsite.com https://www.secondwebsite.com https://www.thirdwebsite.com |
 | Wildcard (*)        | https://blog.firstwebsite.com https://www.firstwebsite.com https://shop.firstwebsite.com (unlimited number of subdomains) |
