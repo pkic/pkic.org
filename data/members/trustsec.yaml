@@ -1,0 +1,76 @@
+id: trustsec
+name: TrustSEC
+slogan: A Polish company established by the hands of Security experts
+website: https://trustsec.net/
+
+# Short description, longer content can be placed in `content/members/`
+description: TrustSec is founded by internationally recognized information security and cryptography experts. Launched in 2016, the company aims to fill the gap in the cybersecurity market, Securing data assets, and digital identity against unauthorized access, cyber-attacks, hacking, through its state-of-the-art and innovative products and solutions.
+
+# membership
+memberSince: 2021-08-02
+memberType: Vendor
+workingGroups:
+  -
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://trustsec.net/blog/
+  feed: https://trustsec.net/feed
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/Trustsec_inc
+  facebook: https://www.facebook.com/Trustsecinc/
+  instagram:
+  linkedin: https://www.linkedin.com/company/trustsecinc/
+  youtube:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Magdy Sharawy
+    role: CEO & Founder
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/magdysharawy/
+    description: Entrepreneur and technology visionary who played a key role in developing innovative encryption solutions in the middle east as the founder and CEO of Softlock. With more than 25 years of experience in cryptography, Magdy founded TrustSec to be a leader in the European market, with international presence, that stands out for providing top-quality information security solutions.
+
+  - name: Konstantin Papaxanthis
+    role: Board chairman
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/konstantin-papaxanthis-aa64393/
+    description: Entrepreneur with a 20 year long successful career within IT Security/ICT. Double degrees in Business Administration, Economics from the University of Stockholm. Extensive experience in complex business development, strategies & sales, operations, interim management with an international network that spans over 60 countries. As a team builder, turnaround- and growth specialist with broad experience from innovation management and a strong visionary.
+
+  - name: Hans Graux
+    role: Vice chairman
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/hans-graux-9977a9/
+    description: Trustsec legal arm ensuring compliance, alignment with EU policies and the management of intellectual property rights. as an ICT lawyer, Hans has been working on electronic signatures and trust services for more than a decade, and also as an advisor to the European Commission, various European governments and private sector clients.
+
+  - name: Stein Eitrheim
+    role: Board member
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/stein-eitrheim-bb0183a/
+    description: Professional leader with extensive international experience as board representative, operational executive, project director and financial director. Background and experience from Strategic planning and execution, operational management, and business development. Documented excellent results in growing business, performance improvement and business management.
