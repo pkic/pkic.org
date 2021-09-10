@@ -1,0 +1,56 @@
+id: 3keycompany
+name: 3Key Company
+slogan: security | data intelligence | consulting
+website: https://www.3key.company
+
+# Short description, longer content can be placed in `content/members/`
+description: 3Key Company provides PKI consulting and develops digital signature and certificate management software.
+
+# membership
+memberSince: 2021-08-27
+memberType: Vendor
+workingGroups:
+  - 
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://www.3key.company/blog/
+  feed: https://www.3key.company/blog/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.3key.company/career
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/3key-company
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Roman Cinkais
+    role: Co-founder and CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/roman-cinkais
+    description:
+      Roman Cinkais has master degree from mathematical method of information security from Charles University in Prague. Roman has over 15 years of professional experience with a focus on information security IT projects across various industries (financial, retail, banking, telco, postal). Roman has profound knowledge of cyber security and risk management framework, regulation, and standards like GDPR, ISO, NIST, ANSI, PCI, ETSI, Common Criteria, and practical experience with integrated management system minimizing efforts for security controls and compliance.
