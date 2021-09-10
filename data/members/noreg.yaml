@@ -1,0 +1,56 @@
+id: noreg
+name: Noreg
+slogan: More than 20 years in PKI
+website: https://noreg-inc.eu/
+
+# Short description, longer content can be placed in `content/members/`
+description: Noreg is a Hungarian private company dedicated to provide IT security solutions to its customers.
+
+# membership
+memberSince: 2021-09-02
+memberType: Vendor
+workingGroups:
+  - 
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/noreg
+  youtube: https://www.youtube.com/user/NoregHU
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Zsolt Koros
+    role: CEO
+    social:
+      linkedin: https://www.linkedin.com/in/k%C5%91r%C3%B6s-zsolt-88615685/
+    description:
+      Zsolt Kőrös is the CEO at Noreg and represents the company in the PKI Consortium.
+
