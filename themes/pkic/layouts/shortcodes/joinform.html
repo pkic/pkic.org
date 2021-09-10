@@ -39,26 +39,38 @@
             <label class="form-check-label" for="category2">eIDAS Trust Service Provider (TSP)</label>
         </div>
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="Supervisory body or auditor" id="category3">
-            <label class="form-check-label" for="category3">Supervisory body or Auditor</label>
+            <input class="form-check-input" type="checkbox" name="Category[]" value="Auditor / Conformity Assessment Body" id="category3">
+            <label class="form-check-label" for="category3">Auditor / Conformity Assessment Body</label>
         </div>
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="Standards body" id="category4">
-            <label class="form-check-label" for="category4">Standards body</label>
+            <input class="form-check-input" type="checkbox" name="Category[]" value="Supervisory authority" id="category4">
+            <label class="form-check-label" for="category4">Supervisory authority</label>
         </div>
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="Regulator / Government" id="category5">
-            <label class="form-check-label" for="category5">Regulator / Government</label>
+            <input class="form-check-input" type="checkbox" name="Category[]" value="Standards body" id="category5">
+            <label class="form-check-label" for="category5">Standards body</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="Category[]" value="Government" id="category6">
+            <label class="form-check-label" for="category6">Government</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="Category[]" value="Regulator" id="category7">
+            <label class="form-check-label" for="category7">Regulator</label>
         </div>
     </div>
     <div class="col-lg-6">
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="Software or Hardware vendor" id="category6">
-            <label class="form-check-label" for="category6">Software or Hardware vendor</label>
+            <input class="form-check-input" type="checkbox" name="Category[]" value="PKI Software vendor" id="category8">
+            <label class="form-check-label" for="category8">PKI Software vendor</label>
         </div>
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="Service provider or Integrator" id="category7">
-            <label class="form-check-label" for="category7">Service provider or Integrator</label>
+            <input class="form-check-input" type="checkbox" name="Category[]" value="PKI Hardware vendor" id="category9">
+            <label class="form-check-label" for="category9">PKI Hardware vendor</label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" name="Category[]" value="Service provider or Integrator" id="category10">
+            <label class="form-check-label" for="category10">Service provider or Integrator</label>
         </div>
         <div class="form-check">
             <input class="form-check-input" type="checkbox" name="Category[]" value="Other" id="categoryOther">
@@ -68,11 +80,55 @@
 
     <div class="col-12">
         <div class="mb-3">
-            <label for="freeText" class="form-label">Please let us know why you want to join the PKI Consortium</label>
-            <textarea class="form-control" id="freeText" name="Reason" rows="3" required></textarea>
+            <label for="about" class="form-label">Please describe your organization</label>
+            <textarea class="form-control" id="about" name="About" rows="3" required></textarea>
         </div>
     </div>
 
+    <div class="col-12">
+        <div class="mb-3">
+            <label for="reason" class="form-label">Why do you want to join the PKI Consortium?</label>
+            <textarea class="form-control" id="reason" name="Reason" rows="3" required></textarea>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <strong>Members are not required to be present at every meeting or participate in all activities but we appreciate active members</strong>
+        <div class="form-check">
+            <input class="form-check-input" type="radio" id="contribute1" name="Contribution">
+            <label class="form-check-label" for="contribute1">
+                We will actively contribute the consortium and its mission
+            </label>
+        </div>
+        <div class="form-check">
+            <input class="form-check-input" type="radio" id="contribute2" name="Contribution">
+            <label class="form-check-label" for="contribute2">
+                We will be an observer and not actively contribute the consortium and its mission
+            </label>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <strong>We would like to get to know our new members. Would you want to present your organization and how or on what topics you will be participating in the consortium?</strong>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="contribute" name="Want to present itself">
+            <label class="form-check-label" for="contribute">
+                We would like to present ourself and our goals for this membership to the consortium
+            </label>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <strong>We have no membership fees but we hope you want to consider sponsoring the consortium as we rely on sponsors and donations.</strong>
+        <div class="form-check">
+            <input class="form-check-input" type="checkbox" id="sponsoring" name="Sponsoring">
+            <label class="form-check-label" for="sponsoring">
+                We would like to sponsor or make a donation to the consortium 
+            </label>
+        </div>
+    </div>
+
+    <hr />
     <div class="col-12">
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="agreeBylaws" name="Agreed with Bylaws" required>
