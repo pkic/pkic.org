@@ -47,7 +47,8 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Zsolt Koros
+  - id: zsolt-koros
+    name: Zsolt Kőrös
     role: CEO
     social:
       linkedin: https://www.linkedin.com/in/k%C5%91r%C3%B6s-zsolt-88615685/

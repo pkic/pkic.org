@@ -10,6 +10,6 @@ Noreg is an expert of information security technologies and services providing t
 
 In the las 20 years we designed and implemented numerous PKI systems of various sizes and types, even adding custom developed modules for them. We are proud of our award-winning self-developed card management system called MARGARETA which has many satisfied Hungarian and international users.
 
-As one of the funding member of the Hungarian Association for Electronic Signature, we are ready to take active part in the development of this industry.
+As one of the founding members of the Hungarian Association for Electronic Signature, we are ready to take active part in the development of this industry.
 
 {{< youtube iWut3PVc_wA >}}
