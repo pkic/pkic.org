@@ -20,4 +20,4 @@ menu:
 {{< sponsors level="Platinum" height="125" >}}
 {{< sponsors level="Gold" height="100" >}}
 {{< sponsors level="Silver" height="75" >}}
-{{< sponsors level="Bronze" height="50" >}}
+{{< sponsors level="Bronze" height="50" max-width="150" >}}
