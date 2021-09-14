@@ -28,7 +28,7 @@
                 <!-- check sponsors and members resources -->
                 {{ $img := resources.GetMatch (printf "/images/**/%s/%s.*" .id .id) }}
                 {{ with $img}}
-                <img style="{{ with $.Scratch.Get `max-height` }}max-height: {{ . }}px;{{ end }}{{ with $.Scratch.Get `height` }}height: {{ . }}px;{{ end }}" class="sponsor-logo{{ with $.Scratch.Get `class` }} {{ . }}{{ end }}" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
+                <img style="{{ with $.Scratch.Get `max-height` }}max-height: {{ . }}px;{{ end }}{{ with $.Scratch.Get `max-width` }}max-width: {{ . }}px;{{ end }}{{ with $.Scratch.Get `height` }}height: {{ . }}px;{{ end }}" class="sponsor-logo{{ with $.Scratch.Get `class` }} {{ . }}{{ end }}" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
                 {{ end }}
             </a>
         {{ end }}
