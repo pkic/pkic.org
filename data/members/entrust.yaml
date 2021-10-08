@@ -76,7 +76,11 @@ representatives:
     social:
       twitter: https://twitter.com/vanbroup
       linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
-    description: Paul van Brouwershaven is Director of Technology Compliance for Entrust’s certification authority. Paul served in the industry for over twenty years and is an active member of industry standards and regulatory groups such as the CA/B Forum and the CA Security Counsel. Paul has been actively promoting public awareness for internet security and industry best practices prior to the widespread move to adopt security by default.
+    description: 
+      Paul van Brouwershaven is Director of Technology Compliance for Entrust’s certification authority and chair of the PKI Consortium. 
+  
+      Paul served in the industry for over twenty years and is an active member of industry standards and regulatory groups such as the CA/B Forum. 
+      Paul has been actively promoting public awareness for internet security and industry best practices prior to the widespread move to adopt security by default.
 
   - name: Kirk Hal
     role: Director, Policy & Compliance
