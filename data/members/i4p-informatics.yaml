@@ -1,0 +1,66 @@
+id: i4p-informatics
+name: i4p informatics
+slogan: Developer of applied cryptography solutions with 100+ years of man experience
+website: https://www.i4p.com
+
+# Short description, longer content can be placed in `content/members/`
+description: i4p is a Hungarian company, who is first to offer secure multi-party cryptography (MPC) in the certified HSM. Their products are Common Criteria EAL4+ certified while their QSCD is eIDAS listed.
+
+# membership
+memberSince: 2021-08-27
+memberType: Vendor
+workingGroups:
+  - 
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/i4p-informatics/
+  youtube: https://www.youtube.com/channel/UCFmsk2a8x1IWaIo6IqoEm2A
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - id: zsolt-rozsahegyi
+    name: Zsolt Rózsahegyi
+    role: CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/rozsahegyizsolt/
+    description:
+      Zsolt Rózsahegyi is the CEO at i4p informatics and represents the organization at the PKI Consortium
+
+  - id: ferenc-peto
+    name: Ferenc Pető
+    role: CTO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/ferenc-pet%C5%91-94667438/
+    description:
+      Ferenc Pető is the CTO at i4p informatics and represents the organization at the PKI Consortium
