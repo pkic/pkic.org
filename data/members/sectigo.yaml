@@ -15,7 +15,7 @@ workingGroups:
 # Blog posts
 blog: 
   url: https://sectigo.com/resource-library/blog-posts
-  feed: https://sectigo.com/feed/blog
+  feed: 
   language: en_US
 
 # Press Releases

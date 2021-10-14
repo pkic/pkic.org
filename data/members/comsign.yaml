@@ -1,0 +1,56 @@
+id: comsign
+name: ComSign
+slogan: Israel’s oldest and largest CA with over 20 years of experience in PKI solutions
+website: https://www.comsigntrust.com
+
+# Short description, longer content can be placed in `content/members/`
+description: ComSign has vast experience in providing digital signature and PKI solutions to any sized organizations
+
+# membership
+memberSince: 2021-08-27
+memberType: CA
+workingGroups:
+  - CA
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://blog.comsigntrust.com/
+  feed: https://blog.comsigntrust.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://www.comsigntrust.com/comsigntrust-press-kit/
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: https://www.facebook.com/comsign99/
+  instagram: 
+  linkedin: https://www.linkedin.com/company/comsign/
+  youtube: https://www.youtube.com/channel/UCGK4OeeJhZz1oZyjeno8TsA
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Yair Eisenstein
+    role: Business Development & Project Department Manager
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/yaireisenstein/
+    description:
+      Yair Eisenstein is the Business Development & Project Department Manager at ComSign and represents the organization at the PKI Consortium
