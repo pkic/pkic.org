@@ -2,7 +2,7 @@
   {{ $url := printf "https://api.rss2json.com/v1/api.json?rss_url=%s" .}}
   {{ $rssJ := getJSON  $url }}
 
-
+  {{ with $rssJ }}
   {{ range first 3 $rssJ.items }}
       {{ $post := . }}
           <!-- {{ $authors := slice }}
@@ -23,5 +23,6 @@
                 </div>
               </div>
             </div>
+  {{ end }}
   {{ end }}
 {{ end }}
