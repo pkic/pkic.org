@@ -1,0 +1,34 @@
+{{- $items := slice -}}
+{{- range $.Site.Data.members -}}
+  {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
+    {{- with .blog.feed -}}
+      {{- $url := printf "https://api.rss2json.com/v1/api.json?rss_url=%s" . -}}
+      {{- $rssJ := getJSON  $url -}}
+      {{- $items = $items | append $rssJ.items -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- printf "<?xml version=\"1.0\" encoding=\"utf-8\" standalone=\"yes\"?>" | safeHTML }}
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+<channel>
+  <title>News by the members of the PKI Consortium</title>
+  <link>{{ .Site.BaseURL}}</link>
+  <description>Recent news from the members of the PKI Consortium</description>{{ with .Site.LanguageCode }}
+  <language>{{.}}</language>{{end}}{{ with .Site.Author.email }}
+  <managingEditor>{{.}}{{ with $.Site.Author.name }} ({{.}}){{end}}</managingEditor>{{end}}{{ with .Site.Author.email }}
+  <webMaster>{{.}}{{ with $.Site.Author.name }} ({{.}}){{end}}</webMaster>{{end}}{{ with .Site.Copyright }}
+  <copyright>Members of {{.}}</copyright>{{end}}{{ if not .Date.IsZero }}
+  <lastBuildDate>{{ .Date.Format "Mon, 02 Jan 2006 15:04:05 -0700" | safeHTML }}</lastBuildDate>{{ end }}
+    {{- range $i, $post := first 25 ( sort $items "pubDate" "desc" ) -}}
+      {{- $url := urls.Parse $post.link -}}
+    <item>
+      <title>{{- $post.title | plainify | htmlUnescape -}}</title>
+      <link>{{- $post.link -}}</link>
+      <pubDate>{{- dateFormat "Mon, 02 Jan 2006 15:04:05 -0700" $post.pubDate -}}</pubDate>
+      <author>{{- $url.Host -}}</author>
+      <guid>{{- $post.link -}}</guid>
+      <description>{{- $post.description | plainify | htmlUnescape -}}</description>
+    </item>
+    {{- end -}}
+  </channel>
+</rss>

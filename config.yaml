@@ -95,3 +95,18 @@ outputFormats:
   rss:
     mediatype: application/rss
     path: feed
+  news:
+    baseName: index
+    path: /news/feed/
+    isPlainText: false
+    mediaType: application/rss
+
+outputs:
+  home:
+  - HTML
+  - news
+  page:
+  - HTML
+  section:
+  - HTML
+  - RSS  

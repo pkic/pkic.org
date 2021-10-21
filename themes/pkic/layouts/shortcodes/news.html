@@ -1,0 +1,32 @@
+{{- $items := slice -}}
+{{- range $.Site.Data.members -}}
+  {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
+    {{- with .blog.feed -}}
+      {{- $url := printf "https://api.rss2json.com/v1/api.json?rss_url=%s" . -}}
+      {{- $rssJ := getJSON  $url -}}
+      {{- $items = $items | append $rssJ.items -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- range $i, $post := first 25 ( sort $items "pubDate" "desc" ) -}}
+{{- $url := urls.Parse $post.link -}}
+    <!-- {{ $authors := slice }}
+    {{ $authors = $authors | append $post.author }} -->
+    <div class="card mb-3">
+        <div class="row g-0">
+          {{ with $post.image }}
+          <div class="col-lg-3">
+            <img src="{{ $post.image.url }}" title="{{ $post.image.title }}">
+          </div>
+          {{ end }}
+          <div class="col">
+            <div class="card-body">
+              <h5 class="card-title"><a href="{{ $post.link }}" target="_blank" alt="{{ $post.title }}">{{ $post.title | plainify | htmlUnescape  }}</a></h5>
+              <p class="card-text">{{ $post.description | plainify | htmlUnescape | truncate 120 }}</p>
+              <p class="card-text"><small class="text-muted">Published on {{ dateFormat "Monday January 2, 2006" $post.pubDate }}</small></p>
+            </div>
+          </div>
+        </div>
+      </div>
+{{- end -}}
