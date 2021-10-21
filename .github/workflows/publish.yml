@@ -24,6 +24,11 @@ jobs:
           hugo-version: 'latest'
           # extended: true
 
+      - uses: actions/cache@v2
+        with:
+          path: /tmp/hugo_cache
+          key: ${{ runner.os }}-hugo-cache
+
       - name: Build
         run: hugo --minify
 

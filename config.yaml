@@ -110,3 +110,8 @@ outputs:
   section:
   - HTML
   - RSS  
+
+caches:
+  getjson:
+    dir: :cacheDir/:project
+    maxAge: 28800
