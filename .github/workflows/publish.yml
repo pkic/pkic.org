@@ -26,11 +26,11 @@ jobs:
 
       - uses: actions/cache@v2
         with:
-          path: ${{ env.RUNNER_TEMP }}/hugo_cache/
+          path: ${{ runner.temp }}/hugo_cache/
           key: ${{ runner.os }}-hugo-cache
 
       - name: Build
-        run: hugo --minify --cacheDir ${{ env.RUNNER_TEMP }}/hugo_cache/
+        run: hugo --minify --cacheDir ${{ runner.temp }}/hugo_cache/
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
