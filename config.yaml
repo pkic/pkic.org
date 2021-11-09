@@ -16,6 +16,9 @@ disableHugoGeneratorInject: true
 enableInlineShortcodes: true
 rssLimit: 30
 
+# it can take some time to query the rss feeds
+timeout: 120s
+
 taxonomies:
   tag: tags
   series: series
