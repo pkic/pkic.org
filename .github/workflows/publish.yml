@@ -10,9 +10,6 @@ on:
     branches:
       - main
 
-env:
-  cacheDir: ${{ runner.temp }}/hugo_cache/
-
 jobs:
   deploy:
     runs-on: ubuntu-18.04
@@ -30,12 +27,12 @@ jobs:
 
       - uses: actions/cache@v2
         with:
-          path: ${{ env.cacheDir }}
+          path: ${{ runner.temp }}/hugo_cache/
           key: ${{ runner.os }}-hugo-cache-${{ github.run_id }}
           restore-keys: ${{ runner.os }}-hugo-cache
 
       - name: Build
-        run: hugo --minify --cacheDir ${{ env.cacheDir }}
+        run: hugo --minify --cacheDir ${{ runner.temp }}/hugo_cache/
 
       - name: Deploy
         uses: peaceiris/actions-gh-pages@v3
