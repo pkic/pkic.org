@@ -1,0 +1,63 @@
+id: directtrust
+name: DirectTrust
+slogan: Instilling Trust in Exchange
+website: https://directtrust.org/
+
+# Short description, longer content can be placed in `content/members/`
+description: A pioneer in offering technical trust and confidence in the secure exchange of health information, DirectTrust is committed to collaboration for advancing secure communication. As a non-profit trade alliance, DirectTrust operates not only as a membership organization, but also as an ANSI-accredited standards body, a trust framework supported by policy, and an accreditor for reliable and trusted exchange across the DirectTrust network.
+
+# membership
+memberSince: 2021-10-22
+memberType: Standards defining organization
+workingGroups:
+  - 
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://directtrust.org/blog
+  feed: https://directtrust.org/blog/category/blog/feed
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://directtrust.org/blog/featured_post/press-releases
+  feed: https://directtrust.org/blog/featured_post/press-releases/feed
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/directtrustorg
+  facebook: https://www.facebook.com/DirectTrustOrg
+  instagram: 
+  linkedin: https://www.linkedin.com/company/directtrust/
+  youtube: https://www.youtube.com/channel/UCH_g10ZMrzslZ_dif9B8cFQ
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Scott Stuewe
+    role: President and CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/scottstuewe/
+    description:
+      Scott Stuewe is a 25+ year veteran of the healthcare information technology industry. As President and CEO of DirectTrust, Scott drives visibility and utilization of the Direct Standard™ to contribute to nationwide interoperability. Under his tenure, the organization achieved the landmark milestone of two billion Direct Secure Messages sent and received over the DirectTrust Network. Previously, Stuewe was Director of Strategy and Interoperability at DataFile Technologies, a health information management company, and served more than 24 years at Cerner, including as Cerner Network’s Director of National Interoperability Strategy, where he drove participation in the CommonWell Health Alliance and the bridge with Carequality.
+  - name: Kyle Neuman
+    role: Director, Trust Framework Development
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/kylepneuman/
+    description:
+      Kyle Neuman actively develops new and existing technical standards on public-key cryptography, blockchain cryptography, key management, and multi-factor authentication for both government and private sectors. His passion for cryptography lies within the vision of the future and enabling trusted digital identity between geographical regions and political regimes for the benefit of humanity as we transcend into an increasingly digital way of life.
