@@ -1,5 +1,5 @@
 {{ with . }}
-  {{ $url := printf "https://api.rss2json.com/v1/api.json?rss_url=%s" .}}
+  {{ $url := printf "https://pkic.org/rss2json?url=%s" .}}
   {{ $rssJ := getJSON  $url }}
 
   {{ with $rssJ }}
