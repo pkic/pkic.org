@@ -16,6 +16,9 @@ disableHugoGeneratorInject: true
 enableInlineShortcodes: true
 rssLimit: 30
 
+# not great, but it's not a big deal if some rss feeds fail
+ignoreErrors: ["error-remote-getjson"]
+
 # it can take some time to query the rss feeds
 timeout: 120s
 
