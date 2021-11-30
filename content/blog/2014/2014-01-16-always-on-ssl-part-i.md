@@ -30,6 +30,8 @@ title: Always-On SSL, Part I
 ---
 There is no doubt that content owners and publishers have a duty to encourage trust and the confidence during internet usage by adopting security best practices. If a customer believes that their data and identity are safe and protected, they are more inclined to continue their online transactions. Industry best practices for website protection should be vendor-neutral, easy to implement, and globally accessible. Websites should take all the reasonable steps possible to adopt best practices in secure design and implementation, and this includes using Always-On SSL across the entire website.
 
+{{< button type="success" link="/uploads/2014/01/Always-On-SSL.pdf" label="Download our Always-On SSL Whitepaper" >}}
+
 ### The 2 Big Myths of Always-On SSL
 
 **_SSL is computationally expensive._** Some organizations haven’t implemented Always-On SSL because of the misunderstanding about increasing web operational overhead and costs. On a high-volume website, the reasonable assumption has been that the additional computation of adding encryption/decryption will require a new hardware investment. Researchers at Google performed extensive research on the computational load associated with Always-On SSL, and determined that for their high-volume site, there was no need for additional hardware to implement in their IT ecosystem. It is recommended that organizations consider testing the performance of Always-On SSL on their own web server to see any possible performance impacts in their unique environment.
