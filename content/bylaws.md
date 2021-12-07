@@ -59,7 +59,7 @@ Applications must be approved by the Executive Council after feedback from the M
 
 Members may withdraw at any time upon providing written or email notice to the Executive Council. A Member who fails to meet the membership criteria stated, or fails to adhere to any part of the Bylaws (including the Antitrust Policy), Code of Conduct, or IPR Policy, may be subject to consequences such as a warning, reprimand, or suspension by the Executive Council, or the Member may lose its membership status following a written or email proposal by at least three (3) Members to withdraw membership status from the Member and approval of the proposal by an affirmative vote of two-thirds (⅔) of the Executive Council (not including the Member who is the subject of the proposal to withdraw membership, who is not entitled to vote on the proposal). 
 
-Changes in Membership Criteria: The membership eligibility criteria may be changed from time to time upon an affirmative vote of two-thirds of the Members.
+Changes in Membership Criteria: The membership eligibility criteria may be changed from time to time upon an affirmative vote of two-thirds (⅔) of the Executive Council after consultation withof the Members.
 
 ## 3. Membership Fees
 
