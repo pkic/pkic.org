@@ -86,7 +86,7 @@ PKIC may establish a bank account or may deposit funds with a third-party compan
 
 ## 5. Board of Directors
 
-PKIC shall maintain a Board of Directors with on odd number of at least three (3) Directors but not more than seven (7). Directors shall serve three-year terms and may be reelected. The Board of Directors may approve amendments to the Articles of Incorporation and take such other actions as the Articles of Incorporation provide.
+PKIC shall maintain a Board of Directors with an odd number of at least three (3) Directors but not more than seven (7). Directors shall serve three-year terms and may be reelected. The Board of Directors may approve amendments to the Articles of Incorporation and take such other actions as the Articles of Incorporation provide.
 
 When the term of a Director expires, the Board of Directors may nominate a new Director (or re-nominate the existing Director for a new term), and the nomination will be subject to approval by the voting Members.
 
