@@ -49,6 +49,12 @@
             "x" 70 "y" $summaryY
             "font" $robotoLight ))               
     -}}
+
+    <meta name="twitter:card" content="summary_large_image"/>
+    <meta name="twitter:title" content="{{ .Title }}"/>
+    <meta name="twitter:description" content="{{ $summary }}"/>
+    <meta name="twitter:site" content="@PKIConsortium"/>
+    <meta name="twitter:image" content="{{ $img.Permalink }}"/>
+
     <meta property="og:image" content="{{- $img.Permalink -}}"/>
-    <meta name="twitter:image" content="{{- $img.Permalink -}}"/>
 {{- end -}}
