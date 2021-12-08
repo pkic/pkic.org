@@ -49,11 +49,6 @@ params:
   vision: Trusted digital assets and communication for everyone and everything
   siteSource: https://github.com/pkic/pkic.github.io/edit/main
 
-  images:
-    - /img/pkic-og.png
-    - /img/pkic-colors.png
-    - /img/pkic-logo.jpg
-
   social:
     twitter: https://twitter.com/PKIConsortium
     linkedin: https://www.linkedin.com/groups/4852478/
