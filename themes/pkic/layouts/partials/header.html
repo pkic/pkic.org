@@ -2,6 +2,10 @@
 
     <title>{{ .Title }}{{ if eq .IsHome false }} | {{ .Site.Title }}{{ end }}</title>
 
+    {{- with $.Param "robots" -}}
+    <meta name="robots" content="{{.}}">
+    {{- end -}}
+
     <meta http-equiv="Content-Security-Policy" content="
         default-src 'none'; img-src 'self' data:; form-action 'self'; base-uri 'self';
         block-all-mixed-content;
