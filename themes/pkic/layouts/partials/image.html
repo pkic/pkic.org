@@ -4,10 +4,10 @@
     {{- $summaryTruncate := 400 -}}
 
     {{- $summary := " " -}}
-    {{- if .Summary -}}
-        {{- $summary = .Summary -}}
-    {{- else if .Description -}}
+    {{- if .Description -}}
         {{- $summary = .Description -}}
+    {{- else if .Summary -}}
+        {{- $summary = .Summary -}}
     {{- else if eq .Data.Singular "author" -}}
         {{- $summary = (printf "View all articles authored by %s" .Data.Term ) -}}
     {{- else if eq .Data.Singular "tag" -}}
