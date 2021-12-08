@@ -1,28 +1,24 @@
 {{ with . }}
-  {{ $url := printf "https://pkic.org/rss2json?url=%s" .}}
-  {{ $rssJ := getJSON  $url }}
-
-  {{ with $rssJ }}
-  {{ range first 3 $rssJ.items }}
-      {{ $post := . }}
-          <!-- {{ $authors := slice }}
-          {{ $authors = $authors | append $post.author }} -->
-          <div class="card mb-3">
-              <div class="row g-0">
-                {{ with $post.image }}
-                <div class="col-lg-3">
-                  <img src="{{ $post.image.url }}" title="{{ $post.image.title }}">
-                </div>
-                {{ end }}
-                <div class="col">
-                  <div class="card-body">
-                    <h5 class="card-title"><a href="{{ $post.link }}" target="_blank" alt="{{ $post.title | plainify | htmlUnescape }}">{{ $post.title | plainify | htmlUnescape  }}</a></h5>
-                    <p class="card-text">{{ $post.description | plainify | htmlUnescape | truncate 120 }}</p>
-                    <p class="card-text"><small class="text-muted">Published on {{ dateFormat "Monday January 2, 2006" $post.pubDate }}</small></p>
-                  </div>
+  {{ with resources.Get . | transform.Unmarshal }}
+    {{- with .channel.item -}}
+      {{ range first 3 . }}
+        <div class="card mb-3">
+            <div class="row g-0">
+              {{ with .image }}
+              <div class="col-lg-3">
+                <img src="{{ .image.url }}" title="{{ .image.title }}">
+              </div>
+              {{ end }}
+              <div class="col">
+                <div class="card-body">
+                  <h5 class="card-title"><a href="{{ .link }}" target="_blank" alt="{{ .title | plainify | htmlUnescape }}">{{ .title | plainify | htmlUnescape  }}</a></h5>
+                  <p class="card-text">{{ .description | plainify | htmlUnescape | truncate 120 }}</p>
+                  <p class="card-text"><small class="text-muted">Published on {{ dateFormat "Monday January 2, 2006" .pubDate }}</small></p>
                 </div>
               </div>
             </div>
-  {{ end }}
+          </div>
+      {{ end }}
+    {{ end }}
   {{ end }}
 {{ end }}
