@@ -18,8 +18,8 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: https://blog.comsigntrust.com/
-  feed: https://blog.comsigntrust.com/feed/
+  url: 
+  feed: 
   language: en_US
 
 # Press Releases

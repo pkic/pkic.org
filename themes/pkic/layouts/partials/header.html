@@ -14,10 +14,12 @@
     ">
 
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    {{ if .Description }}<meta content="{{ .Summary }}" name="description">{{ end }}
+
+    {{ if (or .Description .Summary)}}<meta content="{{ with .Description }}{{ . }}{{ else }}{{ with .Summary }}{{ . }}{{ end }}{{ end }}" name="description">{{ end }}
     {{ if .Keywords }}<meta content="{{ delimit .Keywords "," }}" name="keywords">{{ end }}
     {{ with $.Param "redirect" }}<meta http-equiv="refresh" content="0; url={{ . }}" />{{ end }}
-    
+
+    {{ partial "image.html" . }}
     {{ template "_internal/opengraph.html" . }}
     {{ template "_internal/twitter_cards.html" . }}
 
