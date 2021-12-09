@@ -1,0 +1,9 @@
+Contact: mailto:feedback@pkic.org
+
+# For issues regarding pkic.org that can be publicly reported:
+Contact: https://github.com/pkic/pkic.github.io/issues
+
+# For other topics that can be publicly discussed:
+Contact: https://github.com/pkic/community/discussions
+
+Preferred-Languages: en
