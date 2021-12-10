@@ -6,17 +6,6 @@
     <meta name="robots" content="{{.}}">
     {{- end -}}
 
-    <meta http-equiv="Content-Security-Policy" content="
-        default-src 'none'; img-src 'self' data:; form-action 'self'; base-uri 'self';
-        block-all-mixed-content;
-        style-src 'unsafe-inline' 'self' https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/css/bootstrap.min.css https://fonts.googleapis.com/css;
-        font-src https://fonts.gstatic.com/s/roboto/;
-        script-src 'self' https://cdn.jsdelivr.net/npm/bootstrap@5.0.2/dist/js/bootstrap.bundle.min.js;
-        frame-src https://www.youtube-nocookie.com/ https://player.vimeo.com/;
-        media-src https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4;
-        {{if eq hugo.Environment "development"}}connect-src ws://localhost:1313/livereload;{{end}}
-    ">
-
     <meta name="viewport" content="width=device-width, initial-scale=1">
 
     {{ if (or .Description .Summary)}}<meta content="{{ with .Description }}{{ . }}{{ else }}{{ with .Summary }}{{ . }}{{ end }}{{ end }}" name="description">{{ end }}
