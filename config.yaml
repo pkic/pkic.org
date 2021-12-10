@@ -47,7 +47,7 @@ params:
   website: https//pkic.org
   about: The CA Security Council is comprised of leading Certificate Authorities that are committed to improve, create and collaborate on generic, industry or use-case specific policies, procedures, best practices, standards and tools that advance trust in assets and communication for everyone and everything using Public Key Infrastructure (PKI) as well as the security of the internet in general. By engaging with users, regulators, supervisory bodies and other interested or relying parties the council can address actual issues.
   vision: Trusted digital assets and communication for everyone and everything
-  siteSource: https://github.com/pkic/pkic.github.io/edit/main
+  siteSource: https://github.com/pkic/pkic.org/edit/main
 
   social:
     twitter: https://twitter.com/PKIConsortium
