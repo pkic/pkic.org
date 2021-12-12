@@ -3,4 +3,6 @@ User-agent: *
 Sitemap: {{ .Site.BaseURL}}/sitemap.xml
 {{ else }}
 Disallow: /
+
+# Environment {{ hugo.Environment }}
 {{ end }}
