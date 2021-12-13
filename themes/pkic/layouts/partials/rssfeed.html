@@ -1,24 +1,28 @@
 {{ with . }}
   {{ with resources.Get . | transform.Unmarshal }}
-    {{- with .channel.item -}}
-      {{ range first 3 . }}
-        <div class="card mb-3">
-            <div class="row g-0">
-              {{ with .image }}
-              <div class="col-lg-3">
-                <img src="{{ .image.url }}" title="{{ .image.title }}">
-              </div>
-              {{ end }}
-              <div class="col">
-                <div class="card-body">
-                  <h5 class="card-title"><a href="{{ .link }}" target="_blank" alt="{{ .title | plainify | htmlUnescape }}">{{ .title | plainify | htmlUnescape  }}</a></h5>
-                  <p class="card-text">{{ .description | plainify | htmlUnescape | truncate 120 }}</p>
-                  <p class="card-text"><small class="text-muted">Published on {{ dateFormat "Monday January 2, 2006" .pubDate }}</small></p>
+    {{ with .Err }}
+      {{ warnf "%s" . }}
+    {{ else }}
+      {{- with .channel.item -}}
+        {{ range first 3 . }}
+          <div class="card mb-3">
+              <div class="row g-0">
+                {{ with .image }}
+                <div class="col-lg-3">
+                  <img src="{{ .image.url }}" title="{{ .image.title }}">
+                </div>
+                {{ end }}
+                <div class="col">
+                  <div class="card-body">
+                    <h5 class="card-title"><a href="{{ .link }}" target="_blank" alt="{{ .title | plainify | htmlUnescape }}">{{ .title | plainify | htmlUnescape  }}</a></h5>
+                    <p class="card-text">{{ .description | plainify | htmlUnescape | truncate 120 }}</p>
+                    <p class="card-text"><small class="text-muted">Published on {{ dateFormat "Monday January 2, 2006" .pubDate }}</small></p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-      {{ end }}
+        {{ end }}
+      {{ end}}
     {{ end }}
   {{ end }}
 {{ end }}

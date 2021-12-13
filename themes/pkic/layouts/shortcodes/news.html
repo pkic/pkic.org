@@ -3,15 +3,29 @@
   {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
     {{- with .blog.feed -}}
       {{- with resources.Get . | transform.Unmarshal -}}
-        {{- with .channel.item -}}
-          {{- $items = $items | append . -}}
+        {{ with .Err }}
+          {{ warnf "%s" . }}
+        {{ else }}
+          {{- range $i, $item := .channel.item -}}
+            {{- $newItem := dict -}}
+            {{- range $k, $v := $item -}}
+              {{- if eq $k "pubDate" -}}
+                {{- $newItem = merge $newItem (dict $k (time $v)) -}}
+              {{- else -}}
+                {{- $newItem = merge $newItem (dict $k $v) -}}
+              {{- end -}}
+            {{- end -}}
+            {{- $items = $items | append $newItem -}}
+          {{- end -}}
         {{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
 
-{{- range $i, $post := first 25 ( sort $items "pubDate" "desc" ) -}}
+{{- $items = sort $items "pubDate" "desc" -}}
+
+{{- range $i, $post := first 25 $items -}}
 {{- $url := urls.Parse $post.link -}}
     <!-- {{ $authors := slice }}
     {{ $authors = $authors | append $post.author }} -->

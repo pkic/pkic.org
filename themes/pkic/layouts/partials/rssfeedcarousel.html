@@ -1,16 +1,29 @@
-{{ $items := slice }}
-
-{{ range $.Site.Data.members }}
-  {{ if eq (default "en" (substr .blog.language 0 2) ) "en" }}
-    {{ with .blog.feed }}
+{{- $items := slice -}}
+{{- range $.Site.Data.members -}}
+  {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
+    {{- with .blog.feed -}}
       {{- with resources.Get . | transform.Unmarshal -}}
-        {{- with .channel.item -}}
-          {{- $items = $items | append . -}}
+        {{ with .Err }}
+          {{ warnf "%s" . }}
+        {{ else }}
+          {{- range $i, $item := .channel.item -}}
+            {{- $newItem := dict -}}
+            {{- range $k, $v := $item -}}
+              {{- if eq $k "pubDate" -}}
+                {{- $newItem = merge $newItem (dict $k (time $v)) -}}
+              {{- else -}}
+                {{- $newItem = merge $newItem (dict $k $v) -}}
+              {{- end -}}
+            {{- end -}}
+            {{- $items = $items | append $newItem -}}
+          {{- end -}}
         {{- end -}}
       {{- end -}}
-    {{ end }}
-  {{ end }}
-{{ end }}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $items = sort $items "pubDate" "desc" -}}
 
 <div id="rssfeedcarousel" class="carousel slide" data-bs-ride="carousel">
   <a class="carousel-control-prev" style="width: 20px;" href="#rssfeedcarousel" role="button" data-bs-slide="prev">
@@ -18,7 +31,7 @@
   </a>
 
   <div class="col carousel-inner">
-    {{ range $i, $post := first 25 ( sort $items "pubDate" "desc" ) }}
+    {{ range $i, $post := first 25 $items }}
       {{ $url := urls.Parse $post.link }}
             <div class="carousel-item{{ if lt $i 1 }} active{{ end }}">
 
