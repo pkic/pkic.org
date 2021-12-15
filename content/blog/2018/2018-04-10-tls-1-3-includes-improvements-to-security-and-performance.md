@@ -22,6 +22,8 @@ tags:
 - Vulnerability
 title: TLS 1.3 Includes Improvements to Security and Performance
 
+aliases:
+- /2018/04/10/tls-1.3-includes-improvements-to-security-and-performance/
 
 ---
 Last month saw the final adoption, after 4 years of work, of TLS version 1.3 by the Internet Engineering Task Force (IETF). This latest iteration of the protocol for secure communications on the internet boasts several noteworthy improvements to both security and performance:
