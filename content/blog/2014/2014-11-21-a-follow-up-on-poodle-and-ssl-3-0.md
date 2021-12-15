@@ -33,6 +33,8 @@ tags:
 - IETF
 title: A Follow-up on POODLE and SSL 3.0
 
+aliases:
+- a-follow-up-on-poodle-and-ssl-3-0
 
 ---
 In October 2014, [Google announced POODLE][1], an SSL 3.0 protocol attack.

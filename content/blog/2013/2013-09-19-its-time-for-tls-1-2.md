@@ -38,7 +38,7 @@ tags:
 title: It’s Time for TLS 1.2
 
 aliases:
-- /2013/09/19/its-time-for-tls-1-2/
+- its-time-for-tls-1-2
 
 ---
 In a previous post titled _[Getting the Most Out of SSL Part 2][1]_, we touched on the recommendation that Web servers be configured to prefer Transport Layer Security (TLS) version 1.2. With the planned release of Firefox 24 and recent release of Chrome 29 adding support for TLS 1.2, now is a great time for website administrators to make the switch.

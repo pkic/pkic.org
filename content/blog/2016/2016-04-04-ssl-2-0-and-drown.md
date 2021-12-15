@@ -21,6 +21,8 @@ tags:
 - SSL 3.0
 title: SSL 2.0 and DROWN
 
+aliases:
+- ssl-2-0-and-drown
 
 ---
 A team of researchers has announced a vulnerability with [SSL 2.0][1] called **D**ecrypting **R**SA with **O**bsolete and **W**eakened e**N**cryption; otherwise known as [DROWN][2].
