@@ -2,7 +2,7 @@
 {{- range $.Site.Data.members -}}
   {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
     {{- with .blog.feed -}}
-      {{- with resources.Get . | transform.Unmarshal -}}
+      {{- with resources.GetRemote . | transform.Unmarshal -}}
         {{ with .Err }}
           {{ warnf "%s" . }}
         {{ else }}

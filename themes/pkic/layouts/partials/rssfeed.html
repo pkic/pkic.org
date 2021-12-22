@@ -1,5 +1,5 @@
 {{ with . }}
-  {{ with resources.Get . | transform.Unmarshal }}
+  {{ with resources.GetRemote . | transform.Unmarshal }}
     {{ with .Err }}
       {{ warnf "%s" . }}
     {{ else }}
