@@ -33,7 +33,15 @@
     {{- end -}}
     
     {{- $robotoBlack := resources.GetRemote "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Black.ttf" -}}
+    {{- with $robotoBlack.Err -}}
+        {{- errorf "Failed to load font: %s" . -}}
+    {{- end -}}
+
     {{- $robotoLight := resources.GetRemote "https://github.com/google/fonts/raw/main/apache/roboto/static/Roboto-Light.ttf" -}}
+    {{- with $robotoLight.Err -}}
+        {{- errorf "Failed to load font: %s" . -}}
+    {{- end -}}
+
     {{- $img := resources.Get "/images/pkic-og.png"  -}}
     {{- $img = $img | images.Filter (
     images.Text .Title (dict 
