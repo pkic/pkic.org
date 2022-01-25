@@ -8,16 +8,16 @@
         <input type="text" class="form-control" id="lastName" name="Last Name" required>
     </div>
     <div class="col-12">
-        <label for="role" class="form-label">Job Title</label>
-        <input type="text" class="form-control" id="role" name="Role" required>
+        <label for="role" class="form-label">Job Title (if applicable)</label>
+        <input type="text" class="form-control" id="role" name="Role">
     </div>
     <div class="col-12">
         <label for="email" class="form-label">Email</label>
         <input type="email" class="form-control" id="email" name="Email" required>
     </div>
     <div class="col-12">
-        <label for="organization" class="form-label">Organization Name</label>
-        <input type="text" class="form-control" id="organization" name="Organization" required>
+        <label for="organization" class="form-label">Organization Name (if applicable)</label>
+        <input type="text" class="form-control" id="organization" name="Organization">
     </div>
     <div class="col-12">
         <label for="website" class="form-label">Website</label>
@@ -26,61 +26,61 @@
 
 
     <div class="col-lg-12">
-        Organization type
-    </div>
-
-    <div class="col-lg-6">
+        <label for="category" class="form-label">Choose the most appropriate Eligibility Category</label>
+        
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="CA" id="category1">
-            <label class="form-check-label" for="category1">Certificate Authority (CA)</label>
+            <input class="form-check-input" type="radio" name="category" id="category-a" required>
+            <label class="form-check-label" for="category-a">
+                <strong>(a)</strong> Certification Authorities / Trust Service Providers included on the list of trust lists maintained by the PKI Consortium
+            </label>
         </div>
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="TSP" id="category2">
-            <label class="form-check-label" for="category2">eIDAS Trust Service Provider (TSP)</label>
+            <input class="form-check-input" type="radio" name="category" id="category-b" required>
+            <label class="form-check-label" for="category-b">
+                <strong>(b)</strong> Entities that supervise and maintain a list contained in the list of trust lists maintained by the PKI Consortium
+            </label>
         </div>
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="Auditor / Conformity Assessment Body" id="category3">
-            <label class="form-check-label" for="category3">Auditor / Conformity Assessment Body</label>
+            <input class="form-check-input" type="radio" name="category" id="category-c" required>
+            <label class="form-check-label" for="category-c">
+                <strong>(c)</strong> Industry regulators, supervisory bodies
+            </label>
         </div>
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="Supervisory authority" id="category4">
-            <label class="form-check-label" for="category4">Supervisory authority</label>
+            <input class="form-check-input" type="radio" name="category" id="category-d" required>
+            <label class="form-check-label" for="category-d">
+                <strong>(d)</strong> Conformity assessment bodies and auditors
+            </label>
         </div>
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="Standards body" id="category5">
-            <label class="form-check-label" for="category5">Standards body</label>
+            <input class="form-check-input" type="radio" name="category" id="category-e" required>
+            <label class="form-check-label" for="category-e">
+                <strong>(e)</strong> Standards defining organizations
+            </label>
         </div>
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="Government" id="category6">
-            <label class="form-check-label" for="category6">Government</label>
+            <input class="form-check-input" type="radio" name="category" id="category-f" required>
+            <label class="form-check-label" for="category-f">
+                <strong>(f)</strong> Organizations that build PKI software, cryptographic devices
+            </label>
         </div>
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="Regulator" id="category7">
-            <label class="form-check-label" for="category7">Regulator</label>
-        </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="PKI Software vendor" id="category8">
-            <label class="form-check-label" for="category8">PKI Software vendor</label>
+            <input class="form-check-input" type="radio" name="category" id="category-f" required>
+            <label class="form-check-label" for="category-f">
+                <strong>(g)</strong> Organizations that build software used by relying parties
+            </label>
         </div>
         <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="PKI Hardware vendor" id="category9">
-            <label class="form-check-label" for="category9">PKI Hardware vendor</label>
-        </div>
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="Service provider or Integrator" id="category10">
-            <label class="form-check-label" for="category10">Service provider or Integrator</label>
-        </div>
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" name="Category[]" value="Other" id="categoryOther">
-            <label class="form-check-label" for="categoryOther">Other</label>
+            <input class="form-check-input" type="radio" name="category" id="category-f" required>
+            <label class="form-check-label" for="category-f">
+                <strong>(h)</strong> Interested parties that are organizations or individuals that contribute to PKI based services or perform PKI related research (e.g., consultancy, universities, research institutions, security researchers). Members in this category are not eligible to vote or to be elected for the Executive Council or Board of Directors.
+            </label>
         </div>
     </div>
 
     <div class="col-12">
         <div class="mb-3">
-            <label for="about" class="form-label">Please describe your organization</label>
+            <label for="about" class="form-label">Please describe yourself and the organization (if applicable)</label>
             <textarea class="form-control" id="about" name="About" rows="3" required></textarea>
         </div>
     </div>
@@ -97,19 +97,19 @@
         <div class="form-check">
             <input class="form-check-input" type="radio" id="contribute1" name="Contribution">
             <label class="form-check-label" for="contribute1">
-                We will actively contribute the consortium and its mission
+                We (or I) will actively contribute the consortium and its mission
             </label>
         </div>
         <div class="form-check">
             <input class="form-check-input" type="radio" id="contribute2" name="Contribution">
             <label class="form-check-label" for="contribute2">
-                We will be an observer and not actively contribute the consortium and its mission
+                We (or I) will be an observer and not actively contribute the consortium and its mission
             </label>
         </div>
     </div>
 
     <div class="col-12">
-        <strong>We would like to get to know our new members. Would you want to present your organization and how or on what topics you will be participating in the consortium?</strong>
+        <strong>We would like to get to know our new members. Would you want to present yourself and your organization (if applicable) and how or on what topics you will be participating in the consortium?</strong>
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="contribute" name="Want to present itself">
             <label class="form-check-label" for="contribute">
@@ -129,21 +129,42 @@
     </div>
 
     <hr />
+
     <div class="col-12">
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="agreeBylaws" name="Agreed with Bylaws" required>
-            <label class="form-check-label" for="agreeBylaws">
-                I agree with and will adhere to the Bylaws
-            </label>
-            <a href="/bylaws/" target="_blank">(view here)</a>
-        </div>
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="agreeCodeOfConduct" name="Agreed with Code of Conduct" required>
-            <label class="form-check-label" for="agreeCodeOfConduct">
-                I agree with and will adhere to the Code of Conduct
-            </label>
-            <a href="/code-of-conduct/" target="_blank">(view here)</a>
-        </div>
+        {{ range (slice "/bylaws" "/code-of-conduct" "/ipr") }}
+            {{ with $.Site.GetPage . }}
+            <div class="card position-relative">
+                <div class="card-header">
+                    <small>Please read the <a href="{{ .RelPermalink }}" target="_blank">{{ .Title }}</a> and agree to the terms (<a href="#agree{{ .Title | urlize }}">at the bottom</a>)</small>
+                </div>
+                <div class="card-body overflow-auto" style="height: 250px;">
+                    <div style="font-size: 80%;">
+                        {{ range .Pages }}
+                            <h2>{{ .Title }}</h2>
+                            {{ .Content }}
+                        {{ end }}
+
+                        {{ .Content }}
+                    </div>  
+
+                    <div class="container-fluid bg-light">
+                        <div class="p-3 form-check">
+                            <input class="form-check-input" type="checkbox" id="agree{{ .Title | urlize }}" name="Agreed with the {{ .Title }}" required>
+                            <label class="form-check-label" for="agree{{ .Title | urlize }}">
+                                <strong>I and my organization (if applicable) agree with and will adhere to the {{ .Title }} of the PKI Consortium</strong>
+                            </label>
+                            <div class="invalid-feedback">
+                                <a href="#agree{{ .Title | urlize }}" class="position-absolute top-0 end-0 translate-middle-y" style="margin-right: -10px;">
+                                    <span class="badge bg-danger">You must read and agree to these terms</span>
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <br />
+            {{ end }}
+        {{ end }}
 
         <div class="form-check">
             <input class="form-check-input" type="checkbox" id="warrantAuthority" name="Warranted Authority" required>

@@ -11,3 +11,4 @@ menu:
     
 ---
 
+To report an issue or concern under the Code of Conduct, contact `feedback (at) pkic.org`.
