@@ -40,7 +40,7 @@ The primary purpose of the consortium is to realize our vision, stating:
 
 Organizations are eligible to join the PKI Consortium as members if they can demonstrate expert PKI knowledge or another significant value for the consortium and meet any of the following categories:
 
-- **(a)** Certification Authorities / Trust Service Providers included on the list of trust lists maintained by the PKI Consortium;
+- **(a)** Certification Authorities / Trust Service Providers included on the [list of trust lists](/ltl/) maintained by the PKI Consortium;
 - **(b)** Entities that supervise and maintain a list contained in the list of trust lists maintained by the PKI Consortium;
 - **(c)** Industry regulators, supervisory bodies;
 - **(d)** Conformity assessment bodies and auditors;
