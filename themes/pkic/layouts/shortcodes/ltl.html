@@ -4,7 +4,7 @@
 {{ range $ltl }}
     <h2 id="{{ .name | safeURL }}">{{ .name }}
         {{ partial "anchor.html" .name }}
-        {{ partial "contribute.html" (dict "url" (printf "https://github.com/pkic/ltl/edit/main/data/%s.yaml" (lower .name)) "title" (printf "Improve information for %s" .name)) }}
+        {{ partial "contribute.html" (dict "url" (printf "https://github.com/pkic/ltl/edit/main/data/%s.yaml" .id) "title" (printf "Improve information for %s" .name)) }}
     </h2>
     <p><small><a href="{{.website}}">{{.website}}</a></small></p>
 
