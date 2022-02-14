@@ -18,8 +18,8 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: https://blog.entrust.com/
-  feed: https://blog.entrust.com/feed/
+  url: https://www.entrust.com/blog/
+  feed: https://www.entrust.com/blog/feed/
   language: en_US
 
 # Press Releases
