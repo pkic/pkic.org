@@ -19,7 +19,8 @@ sponsor:
 # Blog posts
 blog: 
   url: https://directtrust.org/blog
-  feed: https://directtrust.org/blog/category/blog/feed
+  # disabled, feed does not validate
+  #feed: https://directtrust.org/blog/category/blog/feed
   language: en_US
 
 # Press Releases
