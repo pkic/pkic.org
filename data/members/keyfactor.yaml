@@ -1,10 +1,10 @@
-id: primekey
-name: PrimeKey
-slogan: Creating trust for the connected society
-website: https://www.primekey.com/
+id: keyfactor
+name: Keyfactor
+slogan: The machine and IoT identity platform for modern enterprises
+website: https://www.keyfactor.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: PrimeKey develops open source products for PKI, digital signatures and cryptography
+description: Keyfactor develops products for PKI, digital signatures and cryptography
 
 # membership
 memberSince: 2021-04-14
@@ -18,28 +18,28 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: https://www.primekey.com/news/
-  feed: https://www.primekey.com/news/feed/
+  url: https://www.keyfactor.com/newsroom/
+  feed:
   language: en_US
 
 # Press Releases
 press: 
-  url: https://www.primekey.com/news/
+  url: https://www.keyfactor.com/newsroom/
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: https://www.primekey.com/career/
+  url: https://www.keyfactor.com/careers/
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: https://twitter.com/primekeyPKI
+  twitter: https://twitter.com/KeyfactorComm
   facebook: 
   instagram: 
-  linkedin: https://www.linkedin.com/company/primekey-solutions-ab/
+  linkedin: https://www.linkedin.com/company/wearekeyfactor/mycompany/
   youtube: https://www.youtube.com/user/ejbca
 
 # Here you can list those who represent or have represented the member.
@@ -48,7 +48,7 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Tomas Gustavsson
-    role: CTO
+    role: Chief PKI Officer
     social:
       twitter: https://twitter.com/primetomas
       linkedin: https://www.linkedin.com/in/tgustavsson/
