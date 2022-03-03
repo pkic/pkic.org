@@ -1,7 +1,7 @@
 ---
 title: PKI Consortium & ETSI sign Memorandum of Understanding (MoU)
 summary: On 26 January PKI Consortium and ETSI signed a Memorandum of Understanding (MoU) to structure and strengthen the relationship between both organizations and foster a closer relationship.
-authors: [Szőke Sándor]
+authors: [Sándor Szőke]
 date: 2022-03-03T11:00:00+00:00
 categories:
 tags: [PKIC, ETSI]
