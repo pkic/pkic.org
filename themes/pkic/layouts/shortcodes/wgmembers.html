@@ -1,0 +1,5 @@
+{{ range $.Site.Data.members }}
+    {{ if in .workingGroups "PKIMM" }}
+    <a href="/members/{{ .id }}/" title="{{.name}} - {{ .slogan }}">{{ .name }}</a>, 
+    {{ end }}
+{{ end }}
