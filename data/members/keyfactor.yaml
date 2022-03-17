@@ -1,6 +1,6 @@
 id: keyfactor
 name: Keyfactor
-slogan: The machine and IoT identity platform for modern enterprises
+slogan: The machine and IoT identity platform for modern enterprises
 website: https://www.keyfactor.com/
 
 # Short description, longer content can be placed in `content/members/`
@@ -14,7 +14,7 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level: Silver
 
 # Blog posts
 blog: 
