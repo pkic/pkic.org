@@ -4,7 +4,7 @@ draft: false
 title: Bylaws
 
 heroTitle: Bylaws of the Public Key Infrastructure Consortium
-heroDescription: "Effective as of: [date of adoption]"
+heroDescription: "Effective as of: January 24, 2022"
 
 menu: 
     footer:
