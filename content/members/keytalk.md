@@ -4,6 +4,8 @@ draft: false
 id: keytalk
 title: KeyTalk
 
+aliases:
+ - primekey
 ---
 
 **The need for certificates, identity management, access control, account authorisation and that’s all that we need to explain to you – it goes without saying. The incredible amount of work that this entails for some organisations? That’s certainly not self-evident.**
