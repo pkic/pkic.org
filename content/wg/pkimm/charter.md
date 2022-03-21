@@ -19,7 +19,7 @@ This Working Group Charter has been created according to the [â€œWorking Groupsâ
 | **Name** |  PKI Maturity Model |
 | **Abbreviation** | PKIMM |
 | **Mission** | To build a PKI maturity model that will be recognized around the globe as a standard for evaluation, planning, and comparison between different PKI implementations |
-| **Chair(s)** | Roman Cikais (3Key Company) |
+| **Chair(s)** | Roman Cinkais (3Key Company) |
 | **Communication** | Private mailing list, Virtual meetings, [Community discussions](https://github.com/pkic/community/discussions/categories/pki-maturity-model-pkimm), [GitHub](https://github.com/pkic/pkimm) |
 | **Meeting schedule** | Virtual meetings: approximately 1 per month |
 | **Membership eligibility** | All Member types of the PKIC that express the interest in this Working Group |
