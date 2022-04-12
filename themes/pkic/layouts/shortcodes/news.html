@@ -3,25 +3,29 @@
   {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
     {{- with .blog.feed -}}
       {{- $feedURL := urls.Parse . -}}
-      {{- with resources.GetRemote . | transform.Unmarshal -}}
-        {{ with .Err }}
-          {{ warnf "%s" . }}
-        {{ else }}
-          {{- range $i, $item := .channel.item -}}
-            {{- $newItem := dict -}}
-            {{- range $k, $v := $item -}}
-              {{- if eq $k "pubDate" -}}
-                {{- $newItem = merge $newItem (dict $k (time $v)) -}}
-              {{- else if eq $k "link" -}}
-                {{- if hasPrefix $v "/" -}}
-                  {{- $v = printf "https://%s%s" $feedURL.Host $v -}}
+      {{- with resources.GetRemote . -}}
+        {{- with .Err -}}
+          {{- warnf "%s" . -}}
+        {{- else -}}
+          {{- if strings.HasSuffix .MediaType "rss+xml" -}}
+            {{- with . | transform.Unmarshal -}}
+              {{- range $i, $item := .channel.item -}}
+                {{- $newItem := dict -}}
+                {{- range $k, $v := $item -}}
+                  {{- if eq $k "pubDate" -}}
+                    {{- $newItem = merge $newItem (dict $k (time $v)) -}}
+                  {{- else if eq $k "link" -}}
+                    {{- if hasPrefix $v "/" -}}
+                      {{- $v = printf "https://%s%s" $feedURL.Host $v -}}
+                    {{- end -}}
+                    {{- $newItem = merge $newItem (dict $k $v) -}}
+                  {{- else -}}
+                    {{- $newItem = merge $newItem (dict $k $v) -}}
+                  {{- end -}}
                 {{- end -}}
-                {{- $newItem = merge $newItem (dict $k $v) -}}
-              {{- else -}}
-                {{- $newItem = merge $newItem (dict $k $v) -}}
+                {{- $items = $items | append $newItem -}}
               {{- end -}}
             {{- end -}}
-            {{- $items = $items | append $newItem -}}
           {{- end -}}
         {{- end -}}
       {{- end -}}
