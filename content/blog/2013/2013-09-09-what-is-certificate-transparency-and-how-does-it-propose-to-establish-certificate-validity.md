@@ -19,9 +19,9 @@ tags:
 - Mis-issued
 - Attack
 - OCSP
-title: What Is Certificate Transparency and How Does It Propose to Address Certificate
-  Mis-Issuance?
-
+title: What Is Certificate Transparency and How Does It Propose to Address Certificate Mis-Issuance?
+aliases:
+- /2013/09/09/what-is-certificate-transparency-and-how-does-it-propose-to-establish-certificate-validity/
 
 ---
 As originally architected by Netscape and others in the mid-1990s, the certificate issuance process envisioned that the CA would present the certificate and its contents to the named subject who would review and accept the certificate first. Then the CA would publish the certificate to a repository. That process would establish that the certificate’s subject was aware of certificate issuance. (Otherwise, an unscrupulous CA could sign a subscriber’s public key and create a certificate for the subscriber without its knowledge.) The repository was also an independent means of obtaining and verifying the public key prior to initiating secure, authenticated communication without having to obtain it solely from the server during session negotiation. 
