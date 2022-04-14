@@ -33,7 +33,8 @@ tags:
 - Microsoft
 title: Leading Certificate Authorities and Microsoft Introduce New Standards to Protect
   Consumers Online
-
+aliases:
+- /2016/12/08/leading-certificate-authorities-and-microsoft-introduce-new-standards-to-protect-consumers-online/
 
 ---
 <h3 style="text-align: center; margin-bottom: 1em;">
