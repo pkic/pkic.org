@@ -44,7 +44,8 @@ tags:
 - OCSP
 title: In the Wake of Unauthorized Certificate Issuance by the Indian CA NIC, can
   Government CAs Still be Considered “Trusted Third Parties”?
-
+aliases:
+- /2014/07/24/unauthorized-certificate-issuance/
 
 ---
 **Short answer:** Government CAs can still be considered “trusted third parties,” provided that they follow the rules applicable to commercial CAs.
