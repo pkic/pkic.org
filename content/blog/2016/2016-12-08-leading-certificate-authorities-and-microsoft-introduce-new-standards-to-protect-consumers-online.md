@@ -31,10 +31,7 @@ tags:
 - Code Signing
 - Identity
 - Microsoft
-title: Leading Certificate Authorities and Microsoft Introduce New Standards to Protect
-  Consumers Online
-aliases:
-- /2016/12/08/leading-certificate-authorities-and-microsoft-introduce-new-standards-to-protect-consumers-online/
+title: Leading Certificate Authorities and Microsoft Introduce New Standards to Protect Consumers Online
 
 ---
 <h3 style="text-align: center; margin-bottom: 1em;">
@@ -77,8 +74,6 @@ Microsoft will require CAs that issue code signing certificates for Windows plat
 ## About the CASC
 
 The Certificate Authority Security Council is comprised of leading global Certificate Authorities that are committed to the exploration and promotion of best practices that advance trusted SSL deployment and CA operations as well as the security of the internet in general. While not a standards-setting organization, the CASC works collaboratively to improve understanding of critical policies and their potential impact on the internet infrastructure. More information is available at [https://casecurity.org][10].
-
----
 
  [1]: https://www.netmarketshare.com/operating-system-market-share.aspx?qprid=10&qpcustomd=0
  [2]: /uploads/2016/12/Code-Signing-Endorsement.pdf
