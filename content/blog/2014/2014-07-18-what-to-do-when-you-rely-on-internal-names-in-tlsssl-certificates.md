@@ -26,7 +26,8 @@ tags:
 - ICANN
 - Qualified
 title: What To Do When You Rely on Internal Names in TLS/SSL Certificates
-
+aliases:
+- /2014/07/18/what-to-do-when-you-rely-on-internal-names-in-tlsssl-certificates/
 
 ---
 A deadline set by the CA/Browser Forum for the use of Internal Names is quickly approaching, and many system administrators need to understand how best to adapt to this change. At the same time, hundreds of new top-level domains are being launched, which redefines what constitutes an Internal Name. In this post we’ll explain what the changes are, why they’re being made, and how you can update your systems in response to the problem.
