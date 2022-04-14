@@ -21,7 +21,8 @@ tags:
 - RSA
 - SHA2
 title: 'Getting the Most Out of SSL Part 1: Choose the Right Certificate'
-
+aliases:
+- /2013/05/24/getting-the-most-out-of-ssl-part-1-choose-the-right-certificate/
 
 ---
 SSL and HTTPS are two of the most common security technologies on the internet today, but at the same time their use can be complex and challenging to get right. Over the next few weeks, we’ll be publishing a series of articles aimed at identifying some of the decisions that need to be made when buying, installing, and using SSL certificates. In this first installment, I’ll discuss some of the issues to consider when buying and requesting a certificate.
