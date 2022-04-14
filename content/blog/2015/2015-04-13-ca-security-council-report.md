@@ -22,7 +22,8 @@ tags:
 - Identity
 title: 'CA Security Council Report: Consumers Don’t Know Much About Security,  But
   They Trust the Padlock and Green Bar When Shopping Online'
-
+aliases:
+ - /2015/04/13/ca-security-council-report/
 
 ---
 <h3 style="text-align: center; margin-bottom: 1em;">
