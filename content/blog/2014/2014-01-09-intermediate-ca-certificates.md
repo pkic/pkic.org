@@ -24,8 +24,9 @@ tags:
 - MITM
 - Root Program
 - Firefox
-title: Intermediate CA Certificates and Their Potential For Misuse For Man-In-The-Middle
-  Attacks
+title: Intermediate CA Certificates and Their Potential For Misuse For Man-In-The-Middle Attacks
+aliases:
+- /2014/01/09/intermediate-ca-certificates/
 
 
 ---
