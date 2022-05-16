@@ -1,0 +1,55 @@
+id: camerfirma
+name: Camerfirma
+slogan: "Qualified Trust Service Provider: Digital Identity / Digital Signature / PSD2 Compliance"
+website: https://www.camerfirma.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Camerfirma is the digital certification and electronic signature authority of the Chambers of Commerce. The operations carried out with the Camerfirma digital certificate guarantee the identity, integrity and confidentiality of the information and the non-repudiation of the transactions.
+
+# membership
+memberSince: 2022-05-06
+memberType: CA
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/camerfirma
+  facebook: https://www.facebook.com/camerfirmaes
+  instagram: 
+  linkedin: https://www.linkedin.com/company/ca-camerfirma-s.a./
+  youtube: https://www.youtube.com/channel/UCqQusYEacC1YxgWZhJBc25A
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+   - name: Juan Angel Martin
+     role: Consultant PKI technical compliance
+     social:
+       twitter: 
+       linkedin: https://www.linkedin.com/in/acarrata/
+     description:
+      
