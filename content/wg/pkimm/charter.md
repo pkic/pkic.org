@@ -25,7 +25,7 @@ This Working Group Charter has been created according to the [â€œWorking Groupsâ
 | **Membership eligibility** | All Member types of the PKIC that express the interest in this Working Group |
 | **Voting structure** | According to the PKIC Bylaws |
 | **Expiration** | This Working Group is chartered indefinitely until it is dissolved |
-| **Members** | {{< wgmembers PKIMM >}} Logius, US Federal PKI |
+| **Members** | {{< wgmembers PKIMM >}} |
 
 ## Introduction
 
