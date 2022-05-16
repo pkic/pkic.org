@@ -5,8 +5,8 @@ title: "Members"
 description: Trusted digital assets and communication for everyone and everything
 keywords: ["pkic", "members"]
 
-heroTitle: Consortium Members
-heroDescription: Public Key Infrastructure (PKI) Consortium members
+heroTitle: Members of the PKI Consortium
+heroDescription: Decisions within the PKI Consortium are taken by substantial consensus of the members [as specified in our bylaws](/bylaws/#10-voting). Substantial consensus among members does not necessarily mean that all members share the same view or opinion. 
 heroButton: 
     label: Click here to join the PKI Consortium
     link: /join/
