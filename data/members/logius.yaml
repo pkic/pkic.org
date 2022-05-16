@@ -1,0 +1,21 @@
+id: logius
+name: Logius
+slogan: Public Key Infrastructure for the Dutch government
+website: https://www.logius.nl/english
+
+# Short description, longer content can be placed in `content/members/`
+description: Logius manages PKIoverheid, which is the name for the PKI designed for trustworthy electronic communication within and with the Dutch government. To reach this goal a national PKI certificate hierarchy has been realized.
+
+# membership
+memberSince: 2022-05-16
+memberType: Government
+workingGroups:
+  - PKIMM 
+
+# Social media
+social:
+  twitter: https://twitter.com/logius_minbzk
+  facebook: 
+  instagram: 
+  linkedin: https://nl.linkedin.com/company/logius
+  youtube: 
