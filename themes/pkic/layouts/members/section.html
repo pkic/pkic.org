@@ -13,7 +13,7 @@
         {{ end }}
 
         {{ range (shuffle $members) }}
-        <a href="{{ with $.Site.GetPage (printf "/members/%s" .id) }}{{ .Permalink }}{{ else }}#{{ end }}" title="{{.name}} is a member of the PKI Consortium" class="linkArea">
+        <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{.name}} is a member of the PKI Consortium" class="linkArea">
           <div class="row featurette">
             <div class="col-lg-9 order-lg-2">
               <h2 class="featurette-heading">{{.name}}</h2>
