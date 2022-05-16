@@ -1,0 +1,55 @@
+id: certisur
+name: CertiSur
+slogan: Specialists in User Authentication, SSL Certificates, Digital and Biometric Signature
+website: https://www.certisur.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: CertiSur offers a wide range of Products and Services that enable and ensure electronic business processes. From digital certificates for secure websites to Consulting Services on Workflow of secure electronic documents and Digital Signature.
+
+# membership
+memberSince: 2022-04-25
+memberType: Vendor
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://www.certisur.com/en/news/
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/CertiSur
+  facebook: https://www.facebook.com/CertiSur
+  instagram: https://www.instagram.com/certisursa/
+  linkedin: https://www.linkedin.com/company/certisur
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+   - name: Armando Carratala
+     role: CTO
+     social:
+       twitter: 
+       linkedin: https://www.linkedin.com/in/acarrata/
+     description:
+      
