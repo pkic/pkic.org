@@ -1,10 +1,11 @@
 ---
 date: 2021-03-25T13:49:10Z
+lastmod: 2022-05-01T00:00:00Z
 draft: false
 title: Bylaws
 
 heroTitle: Bylaws of the Public Key Infrastructure Consortium
-heroDescription: "Effective as of: January 24, 2022"
+heroDescription: "Effective as of: May 1, 2022"
 
 menu: 
     footer:
@@ -49,6 +50,14 @@ Organizations are eligible to join the PKI Consortium as members if they can dem
 - **(g)** Organizations that build software used by relying parties;
 - **(h)** Interested parties that are organizations or individuals that contribute to PKI based services or perform PKI related research (e.g., consultancy, universities, research institutions, security researchers). Members in this category are not eligible to vote or to be elected for the Executive Council or Board of Directors.
 
+All members will be listed on the PKIC website with name and logo (if any). Individuals will be listed by name and can be linked to a personal website or profile such as on LinkedIn. Profile pages (for organizations) and brief descriptions are optional but recommended and can help to describe the organization and the objective of the membership.
+
+The member page or footer of the site can contain a disclaimer in substantially this form:
+
+> Decisions within the PKI Consortium are taken by substantial consensus of the members [as specified in our bylaws](#10-voting). Substantial consensus among members does not necessarily mean that all members share the same view or opinion. 
+
+From time to time the PKIC may create a position paper or public letter on matters of interest to the PKIC. Approval of such a paper or letter will follow the PKIC’s rules on discussion and reaching substantial consensus among members as described in Article 10, or upon final approval by vote of the Executive Council if substantial consensus cannot be achieved among the members.
+
 ### Process for Admitting New Members
 
 In order to admit new Members, all membership applications must agree to follow these Bylaws (including the Antitrust Policy), the PKI Consortium Code of Conduct located at https://pkic.org/code-of-conduct and the PKI Consortium Intellectual Property Rights Agreement located at https://pkic.org/ipr.
@@ -86,7 +95,7 @@ PKIC may establish a bank account or may deposit funds with a third-party compan
 
 ## 5. Board of Directors
 
-PKIC shall maintain a Board of Directors with an odd number of at least three (3) Directors but not more than seven (7). Directors shall serve three-year terms and may be reelected. The Board of Directors may approve amendments to the Articles of Incorporation and take such other actions as the Articles of Incorporation provide.
+PKIC shall maintain a Board of Directors with an odd number of at least three (3) Directors but not more than seven (7). Directors will be elected for a two (2) year term commencing on July 1 and may be reelected. The Board of Directors may elect its own officers and approve amendments to the Articles of Incorporation and take such other actions as the Articles of Incorporation provide.
 
 When the term of a Director expires, the Board of Directors may nominate a new Director (or re-nominate the existing Director for a new term), and the nomination will be subject to approval by the voting Members.
 
@@ -94,11 +103,11 @@ The Board of Directors shall meet at least annually to discuss PKIC activities a
 
 ## 6. Officers
 
-The officers of PKIC shall be a Chair and a Vice Chair (who will act as Chair when the Chair is absent). Each officer will be elected for a 12-month term and may be elected to successive terms. Prior to election, the voting Member representatives will be asked who is interested in being elected to the positions. If there is only one candidate for an officer position, the election will occur by consensus. Otherwise, the election will be held by vote (one vote per Member). If there are only two candidates, then the candidate with the most votes wins. If there are more than two candidates, then there will be successive ballots (with the candidate with the fewest votes eliminated each time) until an officer is elected by at least 50% of the votes plus one vote.
+The officers of PKIC shall be a Chair and a Vice Chair (who will act as Chair when the Chair is absent). Each officer will be elected for a two (2) year term commencing on July 1 and may be elected to successive terms. Prior to election, the voting Member representatives will be asked who is interested in being elected to the positions. If there is only one candidate for an officer position, the election will occur by consensus. Otherwise, the election will be held by vote (one vote per Member). If there are only two candidates, then the candidate with the most votes wins. If there are more than two candidates, then there will be successive ballots (with the candidate with the fewest votes eliminated each time) until an officer is elected by at least 50% of the votes plus one vote.
 
 ## 7. Executive Council
 
-The Board of Directors shall nominate an Executive Council with an odd number of up to fifteen (15) Member representatives from those voting Members who have been most active on PKIC projects, giving priority to those Member representatives who are active on PKIC activities and meetings.  Directors may serve on the Executive Council. Executive Council nominations are subject to approval by the Members. The Executive Council may elect a chair to conduct its meetings.  Member representatives may not serve on the Executive Council after they are no longer associated with the Member.  
+The Board of Directors shall nominate an Executive Council with an odd number of up to fifteen (15) Member representatives from those voting Members who have been most active on PKIC projects, giving priority to those Member representatives who are active on PKIC activities and meetings. Executive Council members will be elected for a two (2) year term starting on July 1 and may be reelected. Directors may serve on the Executive Council. Executive Council nominations are subject to approval by the Members. The Executive Council may elect a chair to conduct its meetings. Member representatives may not serve on the Executive Council after they are no longer associated with the Member.
 
 ## 8. Indemnification
 
