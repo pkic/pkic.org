@@ -4,7 +4,8 @@ summary: PKI Consortium established PKI Maturity Model Working Group to build a 
 authors: [Roman Cinkais]
 date: 2022-06-14T09:00:00+00:00
 categories:
-tags: [PKIC, PKIMM]
+keyword: [pki, maturity, model, assessment, improvement, evaluation, comparison, performance, capability, ability]
+tags: [PKIC, PKIMM, Maturity]
 
 ---
 
