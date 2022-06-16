@@ -1,0 +1,21 @@
+id: nimbus
+name: Nimbus
+slogan: 
+website: https://www.nimbus-berlin.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Nimbus Technologieberatung GmbH has been the model for forward thinking, engaged and effective leadership and consultancy since 1999.
+
+# membership
+memberSince: 2021-07-06
+memberType: H
+workingGroups:
+
+# Social media
+social:
+  twitter: 
+  facebook:
+  instagram: 
+  linkedin: https://www.linkedin.com/company/nimbus-technologieberatung-gmbh/
+  youtube: 
+

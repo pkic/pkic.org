@@ -1,0 +1,21 @@
+id: nationwide
+name: Nationwide
+slogan: We focus on customers and value people
+website: https://www.nationwide.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: 
+
+# membership
+memberSince: 2022-04-11
+memberType: H
+workingGroups:
+
+# Social media
+social:
+  twitter: https://twitter.com/nationwide
+  facebook: https://www.facebook.com/nationwide
+  instagram: https://www.instagram.com/nationwide/
+  linkedin: https://www.linkedin.com/company/2340/
+  youtube: https://www.youtube.com/nationwide
+

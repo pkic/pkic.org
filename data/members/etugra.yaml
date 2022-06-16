@@ -1,0 +1,22 @@
+id: etugra
+name: E-Tugra
+slogan: 
+website: https://e-tugra.com.tr/en/
+
+# Short description, longer content can be placed in `content/members/`
+description: E-Tugra produces more than 3 million Digital Certificates, over 500,000 individual, government and large-scale corporate firms rely on E-Tugra's technology.
+
+# membership
+memberSince: 2022-05-23
+memberType: CA
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://twitter.com/etugra
+  facebook: https://www.facebook.com/eTugram
+  instagram: 
+  linkedin: https://www.linkedin.com/company/etugra
+  youtube: https://www.youtube.com/channel/UCT2p5mmROw7oD8IyPAsq3cQ
+

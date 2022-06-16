@@ -1,0 +1,21 @@
+id: indeed-id
+name: UAB Indeed Identity
+slogan: 
+website: https://indeed-id.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Indeed Identity is a cybersecurity software vendor with HQ in Lithuania, Vilnius. It develops a software product, Indeed Certificate Manager, which is a card management system that manages and automates the full lifecycle of digital certificates and smart cards. Indeed Certificate Manager addresses all complex and various tasks connected with PKI management and improvement of PKI efficiency.
+
+# membership
+memberSince: 2022-03-17
+memberType: Vendor
+workingGroups:
+
+# Social media
+social:
+  twitter: https://twitter.com/IdentityIndeed
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/indeed-id
+  youtube: https://www.youtube.com/channel/UCQDAlTS45Fnn5SR8X8USMVw
+
