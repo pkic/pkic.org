@@ -17,6 +17,13 @@
     {{ end }}
     </main>
 
+    {{- if .Page.Store.Get "hasMermaid" -}}
+      <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+      <script>
+        mermaid.initialize({ startOnLoad: true });
+      </script>
+    {{- end -}}
+
     {{ block "footer" . }}
     {{ partial "footer.html" . }}
     {{ end }}
