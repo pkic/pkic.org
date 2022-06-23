@@ -27,3 +27,7 @@ Some basic git knowledge is required, please check https://guides.github.com/ to
 The content lives in `content/` and is written as markdown because of it's simple content format. We do not allow the usage of HTML, this to enforce uniform and structured content, but there are times when Markdown falls short. For some of these reusable cases you can use built-in [shortcodes](https://gohugo.io/content-management/shortcodes/) or use/create a custom [shortcode](https://gohugo.io/templates/shortcode-templates/).
 
 - [Basic Markdown Syntax](https://www.markdownguide.org/basic-syntax/)
+- [Diagrams](https://gohugo.io/content-management/diagrams/)
+  - [GoAT](https://github.com/bep/goat) (rendered on server)
+  - [Mermaid](https://mermaid-js.github.io/) (rendered using JavaScript on client)
+
