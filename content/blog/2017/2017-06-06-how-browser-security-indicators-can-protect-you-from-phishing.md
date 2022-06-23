@@ -48,9 +48,9 @@ Morris points out that an EV or Extended Validation certificate on a website mea
 
 Here are two screen shots showing the difference between a fake DV PayPal.com login page, and the real EV Paypal.com login page, as described in Morris’ article:
 
-
 | FAKE | REAL |
-|ertificate in Chrome. Actual site name for this example is **paypal.com`.summary-spport.com`** | PayPal login page secured by EV certificate in Chrome. Notice the EV UI indicator with confirmed website identity “PayPal, Inc. [US]” |
+|------|------|
+| Certificate in Chrome. Actual site name for this example is **paypal.com`.summary-spport.com`** | PayPal login page secured by EV certificate in Chrome. Notice the EV UI indicator with confirmed website identity “PayPal, Inc. [US]” |
 | {{< figure src="/uploads/2017/06/pp1.jpg" >}} | {{< figure src="/uploads/2017/06/pp2.jpg" >}} |
 
 The lesson from this is that EV certificates, and their distinct UI display in the browsers, is more important than ever today for user protection.  Browsers, Certification Authorities, and the media should work together to train users to look for the EV security indicator in the upper left of their screen before deciding to trust a website with their sensitive personal information.
