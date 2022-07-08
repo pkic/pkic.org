@@ -1,15 +1,15 @@
 ---
-title: What is PKI maturity model and how you can contribute?
-summary: PKI Consortium established PKI Maturity Model Working Group to build a PKI maturity model that will be recognized around the globe as a standard for evaluation, planning, and comparison between different PKI implementations.
+title: What is the PKI Maturity Model (PKIMM) and how you can contribute?
+summary: The PKI Consortium recently established the PKI Maturity Model Working Group to build a PKI maturity model that will be recognized around the globe as a standard for evaluation, planning, and comparison between different PKI implementations. In this blog post we will tell you more about why we are building the model and how you can contribute to it.
 authors: [Roman Cinkais]
 date: 2022-07-11T09:00:00+00:00
 categories:
 keyword: [pki, maturity, model, assessment, improvement, evaluation, comparison, performance, capability, ability]
-tags: [PKIC, PKIMM, Maturity]
+tags: [PKIC, PKIMM, Maturity model]
 
 ---
 
-Recently the PKI Consortium established [PKI Maturity Model Working Group](/wg/pkimm/) to build a PKI maturity model for evaluation, planning, and comparison between different PKI implementations.
+Recently the PKI Consortium established the [PKI Maturity Model Working Group](/wg/pkimm/) to build a PKI maturity model for evaluation, planning, and comparison between different PKI implementations.
 
 Whereas publicly trusted PKI and certification authorities adhere to  internationally recognized standards such as WebTrust and eIDAS or defined by organizations such as The CA/Browser Forum,, it does not mean that the PKI implementation is necessarily fully mature and there may still be areas of improvement.
 
@@ -26,7 +26,7 @@ The PKI Maturity Model is a technologically independent model that evaluates asp
 Each category is tailored to provide a deterministic approach to calculate the maturity based on the expert system, questions and responses supported by inputs and evidence.
 
 The overall PKI maturity level is therefore calculated from partial maturity levels of categories.
-See the following diagram representing the calculation of overall maturity level:
+See the following diagram representing the calculation of the overall maturity level:
 
 ```goat
              .------------------.
@@ -34,8 +34,8 @@ See the following diagram representing the calculation of overall maturity level
              '------------------'
                         ^
                         |
-     .--------------+---+-----------------.
-     |              |                     |
+      .--------------+--+------------------.
+      |              |                     |
 .-----+-----.  .-----+-----.         .-----+-----.
 | Category1 |  | Category2 |   ···   | CategoryN |
 '-----------'  '-----------'         '-----------'
@@ -48,9 +48,10 @@ See the following diagram representing the calculation of overall maturity level
    '-----------'  '-----------'         '-----------'
          ^              ^                     ^
          |              |                     |
-         .--------------+------+--------------.
+         .--------------+---------------------.
+                               ^
                                |
-                   .----------------------.
+                   .-----------+----------.
                   | Inputs, evidence, etc. |
                    '----------------------'
 ```
@@ -72,14 +73,14 @@ The PKI maturity model should provide the following:
 
 Anyone is more than welcome to contribute to the PKI maturity model. The model is open and available for anyone to use.
 
-The following public resource are available:
+The following public resources are available:
 
 | Resource                                                                                                | Description                                                                                                                                     |
 |---------------------------------------------------------------------------------------------------------|-------------------------------------------------------------------------------------------------------------------------------------------------|
-| [PKI MM working group charter](https://pkic.org/wg/pkimm/charter)                                       | PKI Maturity Model Working Group Charter describing our objectives and activities.                                                              |
-| [PKI MM on GitHub](https://github.com/pkic/pkimm)                                                       | Primary repository for the model. You can find here the current documentation of the model, assessment methodology, and other.                  |
-| [PKI MM discussions](https://github.com/pkic/community/discussions/categories/pki-maturity-model-pkimm) | Discussion forum for the PKI maturity model, open to anyone, if you would like to start discussion or just ask a question related to the model. |
+| [Charter](https://pkic.org/wg/pkimm/charter)                                       | PKI Maturity Model Working Group Charter describing our objectives and activities.                                                              |
+| [GitHub](https://github.com/pkic/pkimm)                                                       | Primary repository for the model. You can find here the current documentation of the model, assessment methodology, and other.                  |
+| [Discussions](https://github.com/pkic/community/discussions/categories/pki-maturity-model-pkimm) | Discussion forum for the PKI maturity model, open to anyone, if you would like to start a discussion or just ask a question related to the model. |
 
-The PKI maturity model is not targeting a specific PKI, it serves as a standard for PKI maturity assessments and helps to identify areas for improvement, unrelated to the scope and whether the PKI is private, public, shared, bridged, etc. It is therefore important for the PKI Consortium to make the model available to the public, free of charge , and establish a community of people who are interested in the model.
+The PKI maturity model is not targeting a specific PKI, it serves as a standard for PKI maturity assessments and helps to identify areas for improvement, unrelated to the scope and whether the PKI is private, public, shared, bridged, etc. It is therefore important for the PKI Consortium to make the model available to the public, free of charge, and establish a community of people who are interested in the model.
 
 Feedback and continuous improvement is the key to the success of the PKI Maturity Model.
