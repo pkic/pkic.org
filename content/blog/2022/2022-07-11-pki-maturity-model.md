@@ -2,7 +2,7 @@
 title: What is the PKI Maturity Model (PKIMM) and how you can contribute?
 summary: The PKI Consortium recently established the PKI Maturity Model Working Group to build a PKI maturity model that will be recognized around the globe as a standard for evaluation, planning, and comparison between different PKI implementations. In this blog post we will tell you more about why we are building the model and how you can contribute to it.
 authors: [Roman Cinkais]
-date: 2022-07-11T09:00:00+00:00
+date: 2022-07-11T08:00:00+00:00
 categories:
 keyword: [pki, maturity, model, assessment, improvement, evaluation, comparison, performance, capability, ability]
 tags: [PKIC, PKIMM, Maturity model]
