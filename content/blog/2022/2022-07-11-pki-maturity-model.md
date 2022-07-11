@@ -81,6 +81,6 @@ The following public resources are available:
 | [GitHub](https://github.com/pkic/pkimm)                                                       | Primary repository for the model. You can find here the current documentation of the model, assessment methodology, and other.                  |
 | [Discussions](https://github.com/pkic/community/discussions/categories/pki-maturity-model-pkimm) | Discussion forum for the PKI maturity model, open to anyone, if you would like to start a discussion or just ask a question related to the model. |
 
-The PKI maturity model is not targeting a specific PKI, it serves as a standard for PKI maturity assessments and helps to identify areas for improvement, unrelated to the scope and whether the PKI is private, public, shared, bridged, etc. It is therefore important for the PKI Consortium to make the model available to the public, free of charge, and establish a community of people who are interested in the model.
+The PKI maturity model does not target a specific PKI, it serves as a standard for PKI maturity assessments and helps to identify areas for improvement, unrelated to the scope and whether the PKI is private, public, shared, bridged, etc. It is therefore important for the PKI Consortium to make the model available to the public, free of charge, and establish a community of people who are interested in the model.
 
-Feedback and continuous improvement is the key to the success of the PKI Maturity Model.
+Feedback and continuous improvement are the key to the success of the PKI Maturity Model.
