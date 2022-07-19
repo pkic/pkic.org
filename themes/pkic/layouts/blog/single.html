@@ -6,7 +6,7 @@
     <div class="row pt-5">
       <div class="col-10 mx-auto">
         <h1 class="fw-light">{{.Title}}</h1>
-        <p class="lead text-muted">
+        <p class="lead text-muted" data-pagefind-meta="date:{{ .PublishDate.Format "2006-01-02" }}">
           {{ .PublishDate.Format "Monday January 2, 2006" }}
           {{if not (.Lastmod.Equal .PublishDate) }}<small>Last updated on {{ .Lastmod.Format "Monday January 2, 2006" }}</small>{{end}}
         </p>
@@ -18,25 +18,23 @@
     <div class="container">
         <div class="row">
           <div class="col-lg-9 order-lg-1">
-            <article id="content">
+            <article id="content" data-pagefind-body>
             {{ .Content }}
             </article>
 
             {{ if lt .PublishDate (time "2021-02-01") }}
-            <div class="alert alert-success">
+            <div class="alert alert-success" data-pagefind-ignore>
               <p>This article was originally published by the "<strong>CA Security Council</strong>". In 2021 the CASC was restructred and renamed to the "<strong>Public Key Infrastructure Consortium</strong>" shortly "<strong>PKI Consortium</strong>".</p>
               <a href="/about/" title="About the PKI Consortium">Learn more about the PKI Consortium</a>
             </div>
             {{ end }}
           </div>
 
-          <div class="col-lg-3 order-lg-2 px-lg-5">
+          <div class="col-lg-3 order-lg-2 px-lg-5" data-pagefind-ignore>
             <p>Reading time: <strong>{{.ReadingTime}} minutes</strong></p>
             
             <h4>Authors</h4>
             <p>{{ partial "authors.html" . }}</p>
-
-            
 
             {{ $related := .Site.RegularPages.Related . | first 5 }}
             {{ with $related }}

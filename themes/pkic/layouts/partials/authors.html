@@ -7,7 +7,7 @@
     {{ range .representatives }}
         {{ if in $.Params.authors .name }}
             {{ $found = $found | append .name }}
-            <a href="/members/{{ $member.id }}/#{{ .name | urlize }}" title="{{ .role }} at {{ $member.name }}">{{ .name }}</a>
+            <a href="/members/{{ $member.id }}/#{{ .name | urlize }}" title="{{ .role }} at {{ $member.name }}" data-pagefind-filter="author">{{ .name }}</a>
             (<a href="{{ $member.website }}" title="{{ $member.description }}" target="_blank">{{ $member.name }}</a>){{ if lt (len $found) (len $.Params.authors) }}, {{end}}
             <!--{{ partial "social.html" .social }}-->
         {{ end }}
@@ -22,7 +22,7 @@
             {{ range .representatives }}
                 {{ if in $.Params.authors .name }}
                     {{ $found = $found | append .name }}
-                    <span title="{{ .role }} at {{ $organization.name }}">{{ .name }}</span>
+                    <span title="{{ .role }} at {{ $organization.name }}" data-pagefind-filter="author">{{ .name }}</span>
                     (<a href="{{ $organization.website }}" title="{{ $organization.description }}" target="_blank">{{ $organization.name }}</a>){{ if lt (len $found) (len $.Params.authors) }}, {{end}}
                 {{ end }}
             {{ end }}
@@ -34,6 +34,6 @@
 {{ range $.Params.authors }}
     {{ if not (in $found .) }}
         {{ $found = $found | append . }}
-        {{ . }}{{ if lt (len $found) (len $.Params.authors) }}, {{end}}
+        <span data-pagefind-filter="author">{{ . }}{{ if lt (len $found) (len $.Params.authors) }}, {{end}}</span>
     {{ end }}
 {{ end }}

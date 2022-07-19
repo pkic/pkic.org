@@ -17,6 +17,7 @@
     {{ end }}
     </main>
 
+    <div data-pagefind-ignore>
     {{- if .Page.Store.Get "hasMermaid" -}}
       <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
       <script>
@@ -27,5 +28,6 @@
     {{ block "footer" . }}
     {{ partial "footer.html" . }}
     {{ end }}
+    </div>
   </body>
 </html>

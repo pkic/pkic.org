@@ -11,6 +11,18 @@
     </div>
 </section>
 
+<div class="container">
+    <link href="/_pagefind/pagefind-ui.css" rel="stylesheet">
+    <script src="/_pagefind/pagefind-ui.js" type="text/javascript"></script>
+
+    <div id="search"></div>
+    <script>
+        window.addEventListener('DOMContentLoaded', (event) => {
+            new PagefindUI({ element: "#search" });
+        });
+    </script>
+</div>
+
 <div class="album py-5">
     <div class="container">
         {{ range .Paginator.Pages }}
