@@ -1,5 +1,6 @@
 {{ define "main" }}
 {{$member := index $.Site.Data.members ($.Param "id")}}
+<div data-pagefind-body>
 <section class="py-4 text-center container">
     <div class="row py-lg-2">
       <div class="col-10 mx-auto">
@@ -76,6 +77,7 @@
       {{ end }}
       {{ end }}
   </div>
+</div>
 </div>
 
 {{ end }}
