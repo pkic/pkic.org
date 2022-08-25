@@ -7,7 +7,7 @@
         {{ $title := (printf "%s is a member of the %s" $member.name $.Site.Params.name ) }}
         {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id $member.id) }}
         {{ with $img}}
-        <p><img style="height:150px; max-width: 60%;" class="py-3" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}"></p>
+        <p><img style="height:150px; max-width: 60%;" class="py-3" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}" data-pagefind-meta="image[src]"></p>
         {{ end }}
         
         <h1 class="fw-light"><strong>{{.Title}}</strong> is a member of the {{ $.Site.Params.shortName }}</h1>

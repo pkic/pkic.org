@@ -23,7 +23,7 @@
             </article>
 
             {{ if lt .PublishDate (time "2021-02-01") }}
-            <div class="alert alert-success" data-pagefind-ignore>
+            <div class="alert alert-success" data-pagefind-ignore="all">
               <p>This article was originally published by the "<strong>CA Security Council</strong>". In 2021 the CASC was restructred and renamed to the "<strong>Public Key Infrastructure Consortium</strong>" shortly "<strong>PKI Consortium</strong>".</p>
               <a href="/about/" title="About the PKI Consortium">Learn more about the PKI Consortium</a>
             </div>
@@ -53,7 +53,7 @@
             </ul>
             {{ end }}
 
-            <div class="sticky-lg-top my-5 pt-4 pb-5 bg-light rounded-3 text-center" style="top: 80px;">
+            <div class="sticky-lg-top my-5 pt-4 pb-5 bg-light rounded-3 text-center" style="top: 80px;" data-pagefind-ignore="all">
               <p class="px-4"><small>We thank our sponsors for their ongoing support of the PKI Consortium</small></p>
 
               {{ .Scratch.Set "class" "img-fluid" }}
