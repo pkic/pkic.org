@@ -1,0 +1,22 @@
+id: firmadigital
+name: Firma.Digital # Trust Service Provider SPA (TSP SpA)
+slogan: Digital experience with 100% human quality
+website: https://www.firma.digital/
+
+# Short description, longer content can be placed in `content/members/`
+description: Firma.Digital is a trust service provider authorized by Minister of Finance of the Government of Chile to authenticate, authorize, and issue digital certificates to contributors to pay taxes and issue tributary documents.
+
+# membership
+memberSince: 2022-08-25
+memberType: CA
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
