@@ -1,0 +1,55 @@
+id: calm
+name: CALM Oy
+slogan: "Providing high quality and secure solutions for organizations around the world"
+website: https://www.calm.fi/
+
+# Short description, longer content can be placed in `content/members/`
+description: CALM Oy is provider of consulting services and producer of CLM Certificate Lifecycle Management SaaS -service offering.
+
+# membership
+memberSince: 2022-09-22
+memberType: Vendor
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://clm.fi/blogs/news
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/calmoy
+  facebook: https://www.facebook.com/calmfioy/
+  instagram: 
+  linkedin: https://www.linkedin.com/company/calm-oy
+  youtube:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+   - name: Tommi Grönlund
+     role: CEO
+     social:
+       twitter: 
+       linkedin: https://twitter.com/tomgron
+     description: Managing director of CALM Oy
+      
