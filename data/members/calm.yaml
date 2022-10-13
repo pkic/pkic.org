@@ -1,14 +1,14 @@
 id: calm
-name: CALM Oy
+name: CALM
 slogan: "Providing high quality and secure solutions for organizations around the world"
 website: https://www.calm.fi/
 
 # Short description, longer content can be placed in `content/members/`
-description: CALM Oy is provider of consulting services and producer of CLM Certificate Lifecycle Management SaaS -service offering.
+description: CALM is provider of consulting services and producer of CLM Certificate Lifecycle Management SaaS -service offering.
 
 # membership
 memberSince: 2022-09-22
-memberType: Vendor
+memberType: H
 workingGroups:
 
 # sponsor
@@ -17,8 +17,8 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: https://clm.fi/blogs/news
-  feed: 
+  url: https://clm.fi/blogs/news/
+  feed: https://clm.fi/blogs/news.atom
   language: en_US
 
 # Press Releases
@@ -51,5 +51,5 @@ representatives:
      social:
        twitter: 
        linkedin: https://twitter.com/tomgron
-     description: Managing director of CALM Oy
+     description: Managing director of CALM Oy. I have been implementing multiple security related applications in enterprises around the world and one of the innovators of clm.fi which helps organizations to maintain their certificate lifecycle.
       
