@@ -6,7 +6,7 @@
         {{- with .Err -}}
           {{- warnf "%s" . -}}
         {{- else -}}
-          {{- if strings.HasSuffix .MediaType "rss+xml" -}}
+          {{- if or (strings.HasSuffix .MediaType "rss+xml") (strings.HasSuffix .MediaType "atom+xml") -}}
             {{- with . | transform.Unmarshal -}}
               {{- range $i, $item := .channel.item -}}
                 {{- $newItem := dict -}}
