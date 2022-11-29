@@ -3,7 +3,7 @@
     {{- with .Err -}}
       {{- warnf "%s" . -}}
     {{- else -}}
-      {{- if strings.HasSuffix .MediaType "rss+xml" -}}
+      {{- if or (strings.HasSuffix .MediaType "rss+xml") (strings.HasSuffix .MediaType "atom+xml") -}}
         {{- with . | transform.Unmarshal -}}
           {{- with .channel.item -}}
             {{- range first 3 . -}}
