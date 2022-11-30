@@ -15,7 +15,8 @@ workingGroups:
 # Blog posts
 blog:
   url: https://www.firmaprofesional.com/blog/
-  feed: https://www.firmaprofesional.com/feed/
+  # disabled, feed does not validate
+  #feed: https://www.firmaprofesional.com/feed/
   language: es_ES
 
 # Press Releases
