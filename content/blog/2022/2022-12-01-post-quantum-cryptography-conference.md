@@ -22,9 +22,11 @@ We invite industry professionals, researchers, policy makers, and everyone else 
 
 The conference will take place at the [Brookstreet Hotel](https://www.brookstreethotel.com/) in [Ottawa, Ontario, Canada](https://g.page/brookstreetottawa) and will be streamed for remote attendees and participants.
 
-Both in-person and remote participants are required to register to attend this conference, we encourage in-person participation wherever possible but remember that in-person registration may be limited based on room size.
+Both in-person and remote participants are required to register to attend this conference.  
 
-A limited number of rooms at the conference location is available at a conference discount. A reservation link will be provided after registration.
+We encourage in-person participation wherever possible but remember that in-person registration may be limited based on room size.
+
+A limited number of rooms at the conference location are available at a conference discount. A reservation link will be provided after registration.
   
 No PQC products or services will be promoted at this conference.  
 
