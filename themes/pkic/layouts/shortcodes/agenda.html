@@ -1,0 +1,42 @@
+{{- with $.Page.Params.agenda -}}
+<div class="list-group w-auto my-2">
+    {{- range . -}}
+    {{- if not .speakers -}}
+    <div class="list-group-item list-group-item-action d-flex gap-3 py-3 bg-secondary text-white" aria-current="true">
+        <small class="opacity-50 text-nowrap">{{ .time }}</small>
+        <p class="mb-0 fs-5 fw-bold">{{ .title }}</p>
+    </div>
+    {{- else -}}
+    <span anchor="#{{ .title | urlize }}" class="list-group-item list-group-item-action d-flex gap-3 py-3"
+        aria-current="true">
+        <small class="opacity-50 text-nowrap">{{ .time }}</small>
+        <div class="d-flex gap-2 w-100">
+            <div class="w-100">
+                <p class="mb-0 fw-bold">{{ .title }}</p>
+                <div class="mb-2 text-secondary fw-light opacity-25">
+                    {{- range .speakers -}}
+                    {{ $speaker := . }}
+                        {{- range $.Page.Params.speakers -}}
+                            {{ if eq $speaker .name }}
+                            <strong>
+                                {{ if .website }}
+                                    <a href="{{ .website }}" title="{{ .bio }}" target="_blank">{{ .name }}</a>
+                                {{ else if .social.linkedin }}
+                                    <a href="{{ .social.linkedin }}" title="{{ .bio }}" target="_blank">{{ .name }}</a>
+                                {{ else }}
+                                    <span title="{{ .bio }}">{{ .name }}</span>
+                                {{end}}
+                            </strong> - <span>{{ .title }}</span><br />
+                            {{- end -}}    
+                        {{- end -}}
+                    {{- end -}}
+                </div>
+                <p class="opacity-75">{{ .description }}</p>
+
+            </div>
+        </div>
+    </span>
+    {{- end -}}
+    {{- end -}}
+</div>
+{{- end -}}

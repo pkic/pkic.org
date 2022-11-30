@@ -16,7 +16,7 @@ menu:
 ---
 
 {{< alert >}}
-[The CA Security Council (CASC) is restructured and renamed to the **Public Key Infrastructure Consortium (PKI Consortium)**](/2021/07/12/from-casc-to-the-public-key-infrastructure-consortium/), [membership-fees have been dropped](/join/) and the focus is being shifted to engagement and participation.
+[The PKI Consortium is pleased to announce its first **Post-Quantum Cryptography Conference**, to be held in Ottawa and Online on Friday March 3, 2023](/events/2023/post-quantum-cryptography-conference/)
 {{< /alert >}}
 
 {{< figure src="/img/logo-black.svg" alt="Logo of the PKI Consortium" >}}
