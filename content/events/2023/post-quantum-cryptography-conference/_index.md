@@ -89,7 +89,7 @@ agenda:
     title: Break
 
   - time: "10:15"
-    title: PQC at Internet Engineering Task Force (IETF)
+    title: PQC at the Internet Engineering Task Force (IETF)
     description:
     speakers: 
       - Mike Ounsworth
@@ -167,12 +167,12 @@ The conference is **not limited** to the members of the PKI Consortium and is op
 
 ## Date and location
 
-**Date:** Friday March 3, 2023  
+**Date:** Friday March 3, 2023 (09:00-15:30 Eastern time)  
 **Location:** [Brookstreet Hotel](https://www.brookstreethotel.com/), Ottawa, Ontario, Canada  
 **Registration:** [Click here](https://forms.gle/KsFYv9bmJ85ZKdpq5)  
 
 * _This event can be attended in person or remotely, we strongly recommend to attend in person where possible._
-* _A limited number of rooms at the conference location is available at a conference discount. A reservation link will be provided after registration._
+* _A limited number of rooms at the conference location are available at a conference discount. A reservation link will be provided after registration._
 * _There are no costs to register or attend the conference. Travel, accommodation and living expenses are not covered, all attendees are responsible to cover their own expenses._
 
 {{< button link="https://forms.gle/KsFYv9bmJ85ZKdpq5" label="Register for this conference" type="dark" >}}  
