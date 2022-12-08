@@ -1,0 +1,23 @@
+id: wellsfargo
+name: Wells Fargo
+slogan: 
+website: https://www.wellsfargo.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Wells Fargo is a financial institution that operates its own private PKI and relies on many public PKI, with a strong interest in industry standards (e.g. ASC X9, ISO TC68), and leading the industry towards the inevitable post-quantum cryptography (PQC) transition.
+
+# membership
+memberSince: 2022-12-08
+memberType: H
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://www.twitter.com/wellsfargo/
+  facebook: https://www.facebook.com/wellsfargo/
+  instagram: https://www.instagram.com/wellsfargo/
+  pinterest: https://www.pinterest.com/wellsfargo/
+  linkedin: https://www.linkedin.com/company/wellsfargo/
+  youtube: https://www.youtube.com/user/wellsfargo/
+
