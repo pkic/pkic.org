@@ -21,7 +21,8 @@ speakers:
       linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
   - name: Rene Peralta
     title: Scientist with the Computer Security Division at NIST
-    bio:
+    bio: |
+        René Peralta received a B.A. in Economics from Hamilton College in 1978. In 1980 he received a M.S. in Mathematics from the State University of New York at Binghamton. In 1985 he received a Ph.D. in Computer Science from the University of California at Berkeley. For the next 20 years he held various positions in academia, mostly as a professor of cryptology, algorithmics and computational number theory. In 2005 he moved to NIST. He is currently a scientist with the Computer Security Division. Among the projects he is currently involved in are The NIST Randomness Beacon, Circuit Complexity, Privacy Enhancing Cryptography, and Post-Quantum Cryptography.
     social:
       linkedin: https://www.linkedin.com/in/rene-peralta-a255254/
   - name: Mike Ounsworth
@@ -80,8 +81,9 @@ agenda:
       - Paul van Brouwershaven
 
   - time: "9:15"
-    title: Status on Post-Quantum Cryptography Standardization
-    description:
+    title: Status report on Post-Quantum Cryptography Standardization
+    description: |
+        There is a significant probability that, in the coming decades, a large quantum computer can be built. When this happens, much of the cryptography that currently secures communications will have to be replaced by new, quantum resistant, cryptographic standards. For the last several years, NIST has been embarked on a process of selecting new, quantum-resistant, algorithms for  public-key cryptography. These algorithms will be the basis for the new  standards. I will describe the quantum computer threat and the measures we are taking to address it. Then I will report on the current status of our standardization effort.
     speakers: 
       - Rene Peralta
 
