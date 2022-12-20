@@ -56,12 +56,20 @@ speakers:
       linkedin: https://www.linkedin.com/in/ryancdickson/
   - name: Melanie Anderson
     title: Director, Cryptographic Security and Systems Development at the Canadian Centre for Cyber Security
-    bio:
+    bio: |
+      Melanie Anderson is the Director of Cryptographic Security and Systems Development, part of the Canadian Centre for Cyber Security at the Communications Security Establishment. Melanie and her team are responsible for evaluating the security of cryptographic products, providing cryptographic advice and guidance, and modernizing the Government of Canada's classified infrastructure. Melanie is Co-Chair of the Women in Cyber and Intelligence (WICI) group at CSE and is passionate about promoting the well-being and interests of women, mentoring and encouraging girls and young women to pursue careers in STEM.
+
+      Since joining CSE in 2003, Melanie has served in several positions across the organization. She has held roles as a software developer, a technical trainer, and a Project Manager for IT systems used by Government of Canada clients. She spent four years based in the United States as a technical Liaison for CSE at the National Security Agency and has held leadership roles in Cyber Defence. Prior to assuming her current role, Melanie was the Manager of Cryptographic Systems Development.
+
+      Melanie holds a Bachelor of Computer Science from the University of New Brunswick and completed the Senior Executive Fellows Program through the Harvard Kennedy School in 2020.
     social:
       linkedin: https://www.linkedin.com/in/melanie-anderson-24299a200/
   - name: Jonathan Hammell
     title: Senior Technical Advisor for Cryptographic Security, and Lead for Cryptographic Standards at the Canadian Centre for Cyber Security
-    bio:
+    bio: |
+      Jonathan Hammell is the Senior Technical Advisor for Cryptographic Security and the Lead for Cryptographic Standards at the Canadian Centre for Cyber Security, part of the Communications Security Establishment.  Jonathan participates in various international standards organizations, such as the Internet Engineering Task Force (IETF), Working Group 2 of Subcommittee 27 for the ISO/IEC Joint Technical Committee 1, and the Accredited Standards Committee X9.  As Senior Technical Advisor, Jonathan is a subject matter expert in cryptography and provides advice and guidance within the Government of Canada and industry partners. 
+
+      Jonathan started at CSE in 2004 in cryptographic research.  He has a BMath from the University of Waterloo, a joint degree from the Department of Combinatorics & Optimization and the David R. Cheriton School of Computer Science.  Jonathan received an MSc from the University of Calgary, where he was a member of the Centre for Information Security and Cryptography.  
     social:
       linkedin: 
   - name: Gabriele Spini
@@ -129,7 +137,8 @@ agenda:
 
   - time: "14:00"
     title: How the Canadian Government is preparing for PQC
-    description:
+    description: |
+      The Canadian Centre for Cyber Security is the lead technical authority for information technology security for the Government of Canada (GC). The Cyber Centre is working within the GC and with Canada's critical infrastructure to ensure a smooth and timely transition to PQC. This presentation will cover our guidance to GC in preparing for the PQC transition, our efforts in international standards to support adoption of PQC, and some considerations that may impact the PQC transition. 
     speakers:
       - Melanie Anderson
       - Jonathan Hammell
