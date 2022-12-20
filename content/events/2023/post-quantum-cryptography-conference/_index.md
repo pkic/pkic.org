@@ -146,7 +146,7 @@ agenda:
   - time: "14:30"
     title: Hybrid Approach for quantum-safe Public Key Infrastructure Development for Organizations (HAPKIDO)
     description: |
-      Gabriele Spini will present the HAPKIDO project, sector-based plans that help organizations transition towards Quatum Safe (QS) PKIs, including hybrid PKIs that demonstrate how QS solutions will work with existing infrastructures, and governance models that guide organizations towards a QS future. HAPKIDO is already sharing insights with front runners in the telecom, financial and public sectors.
+      Gabriele Spini will present the HAPKIDO project, sector-based plans that help organizations transition towards Quantum Safe (QS) PKIs, including hybrid PKIs that demonstrate how QS solutions will work with existing infrastructures, and governance models that guide organizations towards a QS future. HAPKIDO is already sharing insights with front runners in the telecom, financial and public sectors.
     speakers: 
       - Gabriele Spini
 
