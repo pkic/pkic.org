@@ -1,0 +1,44 @@
+id: indenova 
+name: inDenova
+slogan: 
+website: https://www.indenova.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: inDenova is a European and LATAM TSP. As a TSP we provide automation solutions (BPM Platforms, eForms,...) and Electronic Signature and onboarding solutions (eKYC, cloud signature services, biometric solutions, ....). Indenova is a Lleida.net company. Lleida.net is a TSP for certified electronic delivery services.
+
+# membership
+memberSince: 2022-12-28
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://www.indenova.com/blog/
+  feed: https://www.indenova.com/blog/feed/
+  language: es_ES
+
+# Social media
+social:
+  twitter: https://twitter.com/inDenova
+  facebook: https://www.facebook.com/indenova
+  linkedin: https://www.linkedin.com/company/indenova
+  youtube: https://www.youtube.com/user/indenovavideo
+  github: https://github.com/indenovasl
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jordi Gisbert Rodas
+    role: COO
+    social:
+      twitter: https://twitter.com/jgisbert1979
+      linkedin: https://www.linkedin.com/in/jordi-gisbert-rodas-72a38917/
+    description: |
+      Founding Partner and COO of inDenova specialized in the implementation of projects for Governments and Companies. More than 15 years of experience in the field of technologies related to Electronic Billing, Electronic Signature, Security, Process Automation and Biometrics.
+
