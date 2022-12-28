@@ -16,7 +16,7 @@
     <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{ $title }}">
         {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
         {{ with $img}}
-        <img class="member-logo" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
+        <img class="member-logo" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}" loading="lazy" />
         {{ end }}
     </a>
 {{ end }}
