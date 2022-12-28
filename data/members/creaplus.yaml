@@ -1,0 +1,57 @@
+id: creaplus
+name: CREAplus
+slogan: 
+website: https://www.creaplus.com
+
+# Short description, longer content can be placed in `content/members/`
+description: CREAplus is dedicated to achieving a high level of cybersecurity for its customers and partners. Established in 2002 it helps organisations prepare for the cyber challenges of today and tomorrow. It offers a wide range of solutions and services that enable and ensure secure electronic business processes.
+
+# membership
+memberSince: 2022-12-08
+memberType: G
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://www.creaplus.com/resources/blog
+  feed: https://www.creaplus.com/resources/blog?format=feed&type=rss
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/CREAplusLtd
+  facebook: https://www.facebook.com/CREAplusLtd
+  linkedin: https://www.linkedin.com/company/crea-plus/
+  youtube: https://www.youtube.com/@CreaplusSi
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Nastja Cepak
+    role: Lead Cryptographer
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/nastja-cepak-78b753a5/
+    description: |
+      Nastja is lead cryptographer in CREAplus and is active in these fields:
+
+      - Consulting on implementation of new cryptography and blockchain algorithms (determining technical requirements, ECC requirements, presenting how the algorithm works, assisting with testing)
+      - Leader of PQC consultation team
+      - Certified technical trainer (delivering Utimaco HSM and ESKM trainings)
+      - Working with HSMs (assisting with technical support, determining key migration requirements, cooperating with HSM specialists, assisting with firmware upgrades,...)
+      - Assisting with setting up PKI infrastructure (preparing key ceremony steps, presenting inner (mathematical) workings of PKI,...)
+      - Delivering presentations for general IT public about cryptography, blockchain, PKI, PQC.
+
+  - name: Mitja Trampuz
+    role: Managing director
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/mitjatrampuz/
+    description: |
+      Mitja is managing director of CREAplus and business development professional skilled in the information security technology (cybersecurity, hardware security modules - HSMs, cryptography, PKI, network security, 2FA/MFA, ISO/IEC 27001 ISMS, risk management, encryption etc.) with more than 30 years of working experience. He is a holder of different certifications like (ISC)²’s Certified Information Systems Security Professional – CISSP and Certified Cloud Security Professional – CCSP, ISACA’s Certified Information Systems Auditor – CISA and Certified Information Security Manager – CISM, Internal Auditor for ISO/IEC 27001 and others.
