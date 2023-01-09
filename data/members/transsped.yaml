@@ -1,0 +1,21 @@
+id: transsped
+name: Trans Sped
+slogan: The first trusted service provider in Romania
+website: https://www.transsped.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Trans Sped offers digital transformation services, fintech solutions, process digitization and automation services, as well as solutions based on digital certificates of qualified, advanced and simple electronic signatures, qualified time stamps, qualified electronic seals and long-term electronic archiving solutions. Trans Sped is the only Trust Service Provider worldwide certified under the eIDAS Regulation and at the same time cross-certified with the Federal Bridge of the US providing digital certificates for electronic signature recognized as legal binding by US and EU institutions, companies and government bodies. Trans Sped is a SAFE Identity/DirectTrust, ETSI and Cloud Signature Consortium member.
+
+# membership
+memberSince: 2023-01-09
+memberType: A
+workingGroups: 
+  - CA
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
