@@ -1,0 +1,33 @@
+id: kir
+name: KIR
+slogan: Your trustworthy partner in building a secure digital world   
+website: https://www.kir.pl
+
+# Short description, longer content can be placed in `content/members/`
+description: KIR is a key entity of the Polish payment system infrastructure. Based on state-of-the-art technologies, we build solutions for digital processes in business and administration. We specialize in remote identity authentication, secure data exchange, settlements and open banking.
+
+# membership
+memberSince: 2023-01-09
+memberType: A
+workingGroups: 
+  - CA
+
+# Social media
+social:
+  twitter: https://twitter.com/KIR__pl
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/krajowa-izba-rozliczeniowa-s.a./
+  youtube: 
+
+# Here you can list those who represent the member
+representatives:
+  - name: Waldemar Brzozowski
+    role: Main specialist at KIR, Digital Signature Business Unit
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/waldemarbrzozowski/
+    description:
+      Waldemar Brzozowski is an experienced project manager and security officer. He has worked on multiple business projects in the areas of telecommunication, banking systems, payment systems and public key infrastructure (PKI), allowing him to develop advanced professional skills in the information security technology (cybersecurity, PKI, risk management, hardware security modules – HSMs – Thales, Utimaco and Entrust), as well as software development, architecture and integration. Waldemar represents KIR at the PKI Consortium.
+
+
