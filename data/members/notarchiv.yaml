@@ -1,0 +1,21 @@
+id: notarchiv
+name: NOTARchiv
+slogan: Qualified Trust Service Provider in Hungary
+website: https://notarchiv.hu/
+
+# Short description, longer content can be placed in `content/members/`
+description: 
+
+# membership
+memberSince: 2023-01-09
+memberType: A
+workingGroups: 
+  - CA
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
