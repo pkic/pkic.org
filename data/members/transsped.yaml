@@ -1,21 +1,57 @@
-id: transsped
+id: trans-sped
 name: Trans Sped
-slogan: The first trusted service provider in Romania
-website: https://www.transsped.com
+slogan: The first trusted service provider in Romania.
+website: https://www.transsped.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: Trans Sped offers digital transformation services, fintech solutions, process digitization and automation services, as well as solutions based on digital certificates of qualified, advanced and simple electronic signatures, qualified time stamps, qualified electronic seals and long-term electronic archiving solutions. Trans Sped is the only Trust Service Provider worldwide certified under the eIDAS Regulation and at the same time cross-certified with the Federal Bridge of the US providing digital certificates for electronic signature recognized as legal binding by US and EU institutions, companies and government bodies. Trans Sped is a SAFE Identity/DirectTrust, ETSI and Cloud Signature Consortium member.
+description: Trans Sped is the most experienced trusted solutions provider based on qualified digital certificates, active on the domestic market since 2004. Qualified certificates issued by Trans Sped are internationally recognized and guarantee interoperability with various types of systems and applications.
 
 # membership
-memberSince: 2023-01-09
-memberType: A
-workingGroups: 
-  - CA
+memberSince: 2022-03-21
+memberType: H
+workingGroups:
+  - 
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://www.transsped.com/media
+  feed: 
+  language: ro
+  
+ 
+# Press Releases
+press: https://www.transsped.com/media
+  url: 
+  feed: 
+  language: ro
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  twitter: https://twitter.com/transped
+  facebook: https://www.facebook.com/TSPTransSped/
+  instagram: https://instagram.com/tsp_trans_sped?igshid=YmMyMTA2M2Y=
+  linkedin: https://ro.linkedin.com/company/transsped
+  youtube: https://www.youtube.com/channel/UC6C8jsytGNSka5LSyp5NBfQ
+  reddit: 
+  
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Camelia-Elena Ivan
+    role: Chief Executive Officer
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/camelia-elena-ivan-1437a147/
+    description: 
