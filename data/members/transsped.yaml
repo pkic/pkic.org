@@ -23,8 +23,8 @@ blog:
   language: ro
 
 # Press Releases
-press: https://www.transsped.com/media
-  url: 
+press: 
+  url: https://www.transsped.com/media
   feed: 
   language: ro
 
