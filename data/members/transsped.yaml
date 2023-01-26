@@ -1,6 +1,6 @@
 id: transsped
 name: Trans Sped
-slogan: The first trusted service provider in Romania.
+slogan: The first trusted service provider in Romania
 website: https://www.transsped.com/
 
 # Short description, longer content can be placed in `content/members/`
@@ -21,8 +21,7 @@ blog:
   url: https://www.transsped.com/media
   feed: 
   language: ro
-  
- 
+
 # Press Releases
 press: https://www.transsped.com/media
   url: 
@@ -39,7 +38,7 @@ careers:
 social:
   twitter: https://twitter.com/transped
   facebook: https://www.facebook.com/TSPTransSped/
-  instagram: https://instagram.com/tsp_trans_sped?igshid=YmMyMTA2M2Y=
+  instagram: https://www.instagram.com/tsp_trans_sped/
   linkedin: https://ro.linkedin.com/company/transsped
   youtube: https://www.youtube.com/channel/UC6C8jsytGNSka5LSyp5NBfQ
   reddit: 
