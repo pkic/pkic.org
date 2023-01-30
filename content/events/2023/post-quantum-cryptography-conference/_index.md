@@ -110,7 +110,7 @@ agenda:
     speakers: 
       - Matthew Campagna
 
-  - time: "11:00"
+  - time: "11:45"
     title: Discussion on standardization
     description:
     speakers:
