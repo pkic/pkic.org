@@ -106,7 +106,8 @@ agenda:
 
   - time: "11:00"
     title: PQC at the European Telecommunications Standards Institute (ETSI)
-    description:
+    description: |
+      Just as post quantum is providing challenges for a generation of academic cryptographers, so too is it providing challenges for cryptographic engineers. The new PQC primitives behave differently enough from their RSA and ECC predecessors that they sometimes require substantial protocol and application re-design in order to accommodate them. This talk will overview IETF progress at integrating PQC into common Internet protocols: challenges, progress, and work yet-to-be-started. I will conclude with my personal research area: PKI PQ/Traditional hybrid modes that enhance both security and migration flexibility.
     speakers: 
       - Matthew Campagna
 
