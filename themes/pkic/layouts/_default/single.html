@@ -8,7 +8,7 @@
 </div>
 
 <div class="py-3">
-    <div {{ if not .Params.fullwidth }}class="container"{{else}}class="px-4"{{end}} data-pagefind-body>
+    <div class="{{ if not .Params.fullwidth }}container{{ else }}container-fluid{{ end }}" data-pagefind-body>
         {{ .Content }}
     </div>
 </div>
