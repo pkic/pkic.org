@@ -42,18 +42,6 @@ speakers:
         Sebastian Paul works as a research engineer in Industrial IoT Security at Bosch Research and is currently pursuing his Ph.D. from the Technical University of Darmstadt in the Security in Information Technology (SIT) research group. Sebastian Paul specializes in the integration of Post-Quantum Cryptography into industrial applications and protocols. As Bosch project lead of the publicly funded project FLOQI, he strives to raise awareness of the quantum threat and to ensure Bosch is ready when powerful quantum computers arrive.
     social:
       linkedin: https://www.linkedin.com/in/sebastianpaul/
-  - name: David Benjamin
-    title: Google Chrome
-    bio:
-    website: https://davidben.net/
-    social:
-      twitter: https://twitter.com/davidben__
-      linkedin: 
-  - name: Ryan Dickson
-    title: Technical Program Manager, Chrome Security at Google
-    bio:
-    social:
-      linkedin: https://www.linkedin.com/in/ryancdickson/
   - name: Melanie Anderson
     title: Director, Cryptographic Security and Systems Development at the Canadian Centre for Cyber Security
     bio: |
@@ -77,6 +65,20 @@ speakers:
     bio:
     social:
       linkedin: https://www.linkedin.com/in/gabrielespini/
+  - name: Chris Hickman
+    title: Moderator (Chief Security Officer at Keyfactor)
+    bio: |
+      Chris Hickman is the chief security officer at Keyfactor. As a member of the senior management team, Chris is responsible for establishing & maintaining Keyfactor’s leadership position as a world-class, technical organization with deep security industry expertise. He leads client success initiatives and helps integrate the voice of the customer directly into Keyfactor’s platform and capability set.
+
+      Prior to joining Keyfactor, Chris was Director of Technical Services at Alacris, an Ottawa based smartcard and certificate management company, which was sold to Microsoft and is now part of the Microsoft Identity Manager product suite. Chris has worked on PKI projects for organizations and firms including NATO, both the U.S. and Canadian Departments of Defense, Fortune 100 banks and financial institutions, manufacturers, insurance companies, telecommunication providers and retailers. He continues to be a trusted resource for enterprises looking to leverage digital certificates within existing portfolios and new product development.
+    social:
+      linkedin: https://www.linkedin.com/in/chrishickman613/
+  - name: Greg Wetmore
+    title: Moderator (Vice President Product Development at Entrust)
+    bio: |
+      Greg Wetmore leads the global team responsible for building the products that makeup Entrust Strong Identities, Secure Payments, and Trusted Infrastructure solutions. Greg joined Entrust in 2000 and has held a number of leadership positions on the engineering team over that period. Greg is a key industry advisor and speaks regularly on topics like digital identity, IoT, and post-quantum security. Greg holds an Engineering degree from Queen’s University Kingston, Ontario, Canada.
+    social:
+      linkedin: https://www.linkedin.com/in/gregwetmore/
 
 agenda:
   - time: "8:30"
@@ -113,30 +115,27 @@ agenda:
 
   - time: "11:45"
     title: Discussion on standardization
-    description:
+    description: |
+      This panel discussion will be moderated by Chris Hickman.
+      
+      You can **submit your questions [in our discussion forum](https://github.com/orgs/pkic/discussions/categories/post-quantum-cryptography)**, during, before, or after the event. Don't forget to mention the name of the speaker if you want to address the question to a specific person!
     speakers:
       - Rene Peralta
       - Mike Ounsworth
       - Matthew Campagna
+      - Chris Hickman
 
-  - time: "12:00"
+  - time: "12:15"
     title: Lunch
 
-  - time: "13:00"
+  - time: "13:15"
     title: Mixed Certificate Chains for the Transition to Post-Quantum Authentication in PKI
     description: |
       In this talk, I will propose and investigate a migration strategy towards post-quantum PKI authentication. Our strategy is based on the concept of "mixed certificate chains" that use different signature algorithms within the same certificate chain. In order to demonstrate the feasibility of our migration strategy, we combine the well-studied and trusted hash-based signature schemes SPHINCS+ and XMSS with elliptic curve cryptography first and subsequently with lattice-based PQC signature schemes (Dilithium and Falcon)
     speakers: 
       - Sebastian Paul
 
-  - time: "13:30"
-    title: PQC in the WebPKI from a browser and root program perspective
-    description:
-    speakers:
-      - David Benjamin
-      - Ryan Dickson
-
-  - time: "14:00"
+  - time: "13:45"
     title: How the Canadian Government is preparing for PQC
     description: |
       The Canadian Centre for Cyber Security is the lead technical authority for information technology security for the Government of Canada (GC). The Cyber Centre is working within the GC and with Canada's critical infrastructure to ensure a smooth and timely transition to PQC. This presentation will cover our guidance to GC in preparing for the PQC transition, our efforts in international standards to support adoption of PQC, and some considerations that may impact the PQC transition. 
@@ -144,20 +143,27 @@ agenda:
       - Melanie Anderson
       - Jonathan Hammell
 
-  - time: "14:30"
+  - time: "14:15"
     title: Hybrid Approach for quantum-safe Public Key Infrastructure Development for Organizations (HAPKIDO)
     description: |
       Gabriele Spini will present the HAPKIDO project, sector-based plans that help organizations transition towards Quantum Safe (QS) PKIs, including hybrid PKIs that demonstrate how QS solutions will work with existing infrastructures, and governance models that guide organizations towards a QS future. HAPKIDO is already sharing insights with front runners in the telecom, financial and public sectors.
     speakers: 
       - Gabriele Spini
 
-  - time: "15:00"
+  - time: "14:45"
     title: Preparing for and migrating to a world with Post-Quantum Cryptography
-    description:
-    speakers: 
-      - To be confirmed
+    description: |
+      This panel discussion will be moderated by Greg Wetmore.
 
-  - time: "15:20"
+      You can **submit your questions [in our discussion forum](https://github.com/orgs/pkic/discussions/categories/post-quantum-cryptography)**, during, before, or after the event. Don't forget to mention the name of the speaker if you want to address the question to a specific person!
+    speakers: 
+      - Sebastian Paul
+      - Melanie Anderson
+      - Jonathan Hammell
+      - Gabriele Spini
+      - Greg Wetmore
+
+  - time: "15:15"
     title: Summary and closing
     description:
     speakers: 
