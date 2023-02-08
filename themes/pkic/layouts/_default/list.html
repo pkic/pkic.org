@@ -5,7 +5,9 @@
 <div class="album py-5">
     <div class="container">
         {{ range .Data.Pages }}
-        {{ partial "pagelisting.html" . }}
+            {{ if not .Params.robots }}
+                {{ partial "pagelisting.html" . }}
+            {{ end }}
         {{ end }}
 
         <div class="pagination justify-content-center mt-5">

@@ -13,7 +13,9 @@
 
         {{ if not .Params.noPages}}
             {{ range .Data.Pages }}
-            {{ partial "pagelisting.html" . }}
+                {{ if not .Params.robots }}
+                    {{ partial "pagelisting.html" . }}
+                {{ end }}
             {{ end }}
         {{ end }}
     </div>
