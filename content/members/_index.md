@@ -21,3 +21,5 @@ menu:
 #
 # https://github.com/pkic/pkic.github.io/tree/main/data/members
 ---
+
+{{< members >}}
