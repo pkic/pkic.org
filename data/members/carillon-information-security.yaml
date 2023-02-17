@@ -1,0 +1,29 @@
+id: carillon-information-security
+name: Carillon Information Security
+slogan: We build trust
+website: https://www.carillon.ca/
+
+# Short description, longer content can be placed in `content/members/`
+description: Carillon Information Security provides a complete spectrum of identity management solutions that are designed to prevent identity theft, promote the migration from paper to electronic authentication, and avoid loss of intellectual property.
+
+# membership
+memberSince: 2023-02-17
+memberType: A
+workingGroups:
+ - CA
+
+# Press Releases
+press: 
+  url: https://www.carillon.ca/en/news-and-events.php
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  pinterest: 
+  linkedin: https://www.linkedin.com/company/carillon-information-security
+  youtube: 
+
