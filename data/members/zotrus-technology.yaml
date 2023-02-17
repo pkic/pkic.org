@@ -1,0 +1,28 @@
+id: zotrus-technology
+name: ZoTrus Technology
+slogan: Make Zero Trust Zero Threshold
+website: https://www.zotrus.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: A Zero Trust Security Provider Based on Cryptographic Technology
+
+# membership
+memberSince: 2023-02-17
+memberType: F
+workingGroups:
+
+# Blog posts
+blog: 
+  url: https://www.zotrus.com/en/blog/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  pinterest: 
+  linkedin: 
+  youtube: 
+
