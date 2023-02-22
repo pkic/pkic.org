@@ -32,8 +32,9 @@ speakers:
     social:
       linkedin: 
   - name: Matthew Campagna
-    title: Chair CYBER QSC (Quantum Safe Cryptography and Security) at ETSI
-    bio:
+    title: Chair CYBER QSC (Quantum Safe Cryptography and Security) at ETSI, Senior Principal Engineer at Amazon Web Services (AWS)
+    bio: |
+      Matthew Campagna is a Sr. Principal Engineer & Cryptographer for Amazon Web Services Inc.’s. He oversees the design and analysis of cryptographic solutions across AWS. He is a member of the ETSI Security Algorithms Group Experts (SAGE), and Chairman of ETSI TC CYBER’s Quantum Safe Cryptography group. Previously he managed Certicom/BlackBerry’s Cryptography Research Group focused on the development of intellectual property and standardization for elliptic curve cryptography. He holds a doctorate in Mathematics from Wesleyan University.
     social:
       linkedin: https://www.linkedin.com/in/matt-campagna/
   - name: Sebastian Paul
@@ -109,7 +110,8 @@ agenda:
 
   - time: "11:00"
     title: PQC at the European Telecommunications Standards Institute (ETSI)
-    description: 
+    description: |
+      ETSI has been working on advocating and developing quantum-safe/post-quantum cryptographic standards since 2013. This presentation will cover the work that has been done at ETSI as well as the current Technical Recommendations and Specifications being developed within ETSI’s TC CYBER’s Working Group on Quantum-Safe Cryptography. The talk will also outline how the work of AWS in ETSI, IETF and submissions to NIST align with our view of PQC migration.
     speakers: 
       - Matthew Campagna
 
