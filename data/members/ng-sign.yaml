@@ -1,0 +1,23 @@
+id: ng-sign
+name: NG Sign
+slogan: 
+website: https://www.ng-sign.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: NG Sign is a software development company with its headquarters in Tunisia.
+
+# membership
+memberSince: 2023-02-17
+memberType: F
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: 
+  facebook: https://www.facebook.com/ngsign
+  instagram:
+  pinterest:
+  linkedin: https://www.linkedin.com/company/ngsign/
+  youtube: 
+
