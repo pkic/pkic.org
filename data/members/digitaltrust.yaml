@@ -1,0 +1,23 @@
+id: digitaltrust
+name: DigitalTrust
+slogan: 
+website: https://digitaltrust.ae/
+
+# Short description, longer content can be placed in `content/members/`
+description: DigitalTrust is the only publicly trusted commercial Certification Authority (CA) based in the Middle East.
+
+# membership
+memberSince: 2023-01-23
+memberType: F
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://twitter.com/DTrustUAE
+  facebook: 
+  instagram:
+  pinterest:
+  linkedin: https://www.linkedin.com/company/digital-trust-uae/
+  youtube: 
+
