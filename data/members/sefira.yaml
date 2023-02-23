@@ -1,0 +1,23 @@
+id: sefira
+name: Sefira
+slogan: for a paperless future
+website: https://www.sefira.cz/
+
+# Short description, longer content can be placed in `content/members/`
+description: We specialize in the development and delivery of our own OBELISK products for trustworthy creation, verification and storage of electronic documents according to eIDAS. We offer solutions for digitizing business processes of organizations and their transition to modern paperless operation. We provide services in the field of electronic identity, building of public key infrastructure (PKI) and implementation of HSM technologies.
+
+# membership
+memberSince: 2023-01-23
+memberType: G
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram:
+  pinterest:
+  linkedin: https://www.linkedin.com/company/sefira
+  youtube: 
+
