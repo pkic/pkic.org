@@ -1,0 +1,54 @@
+id: pqcee
+name: pQCee
+slogan: Be Quantum Ready
+website: https://www.pqcee.com
+
+# Short description, longer content can be placed in `content/members/`
+description: pQCee Pte Ltd is a deep-tech startup in the quantum cybersecurity space.  It is in the business of designing and building post-quantum products and services to strengthen and protect the next generation of computing against quantum attacks.
+
+# membership
+memberSince: 2023-01-16
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url: https://www.pqcee.com
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  twitter:
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/pqcee/
+  youtube:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Teik Guan Tan
+    role: CEO
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/teikguan
+    description: Teik Guan enjoys working in the niche area of cryptographic security design and integration, having implemented numerous successful projects and products such as CAs, smartcards (Javacard), HSMs, Authentication Servers, for banks, government agencies and enterprises. He holds a PhD in Cybersecurity from SUTD, and BSc, MSc from NUS.
