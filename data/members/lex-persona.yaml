@@ -1,0 +1,24 @@
+id: lex-persona
+name: Lex Persona
+slogan: 
+website: https://www.lex-persona.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Lex Persona is a specialized software publisher and trust services operator based in Troyes, France. Our focus is on the dematerialization field with probative value. We offer customized software and APIs that seamlessly integrate with your business processes. As an independent French company, we prioritize the protection of our users' data and host all our servers in France.
+
+# membership
+memberSince: 2023-01-16
+memberType: A
+workingGroups:
+  - CA
+  
+
+# Social media
+social:
+  twitter: https://twitter.com/lexpersona
+  facebook: 
+  instagram:
+  pinterest:
+  linkedin: https://www.linkedin.com/company/lex-persona/
+  youtube: https://www.youtube.com/channel/UCHufAAAM2k-5QmIq51Bw2gw
+
