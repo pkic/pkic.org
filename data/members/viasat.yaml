@@ -1,0 +1,23 @@
+id: viasat
+name: Viasat
+slogan: We enable a world of possibilities
+website: https://www.viasat.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Viasat brings connectivity where it's needed most to unlock opportunity for the world
+
+# membership
+memberSince: 2023-01-23
+memberType: H
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://twitter.com/ViasatInc
+  facebook: https://www.facebook.com/Viasat
+  instagram: https://www.instagram.com/viasatinc
+  pinterest: 
+  linkedin: https://www.linkedin.com/company/viasat/mycompany/
+  youtube: https://www.youtube.com/user/ViaSatInc
+
