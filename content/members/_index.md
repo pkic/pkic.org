@@ -22,4 +22,4 @@ menu:
 # https://github.com/pkic/pkic.github.io/tree/main/data/members
 ---
 
-{{< members >}}
+{{< members class="d-none d-lg-block" >}}
