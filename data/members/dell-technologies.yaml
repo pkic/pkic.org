@@ -1,0 +1,34 @@
+id: dell-technologies
+name: Dell Technologies
+slogan: With Dell Technologies, your business is always ready to move forward
+website: https://www.dell.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Technology drives human progress. This tenet is the core of our business and vision. Our customers and team members are integral to our continuing success as we provide the essential infrastructure for organizations to transform their digital futures.
+
+# membership
+memberSince: 2023-01-12
+memberType: H
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: 
+  facebook: https://www.facebook.com/DellTechnologies/
+  instagram:
+  pinterest:
+  linkedin: https://www.linkedin.com/company/delltechnologies/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Anoop Gulati
+    role: Public Key Infrastrucutre & Cryptographic Services Product Owner 
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/anoop-gulati/
+    description: Anoop Gulati is a security professional with over 14 years of experience in managing all aspects of a large-scale enterprise cryptography/Public Key infrastructures and serving as a Product Owner, Architect, Engineer for Cryptographic Services at Dell Technologies Inc.
