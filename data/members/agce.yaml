@@ -1,0 +1,22 @@
+id: agce
+name: Algerian Government Electronic Certification Authority
+slogan: Autorité Gouvernementale de Certification Electronique
+website: https://agce.dz/
+
+# Short description, longer content can be placed in `content/members/`
+description: The AGCE (Autorité Gouvernementale de Certification Electronique) is a main and necessary actor in the completion of the digital transition in Algeria. It plays a very important role as a single provider of recognized digital identity and advanced technologies for securing digital exchanges, positioning it as the trusted third party for digital transactions between government stakeholders and their interlocutors.
+
+# membership
+memberSince: 2022-11-01
+memberType: H
+workingGroups:
+
+# Social media
+social:
+  twitter: 
+  facebook: https://www.facebook.com/AGCE.DZ/
+  instagram: 
+  pinterest: 
+  linkedin: https://www.linkedin.com/company/agcedz/
+  youtube: 
+
