@@ -1,0 +1,22 @@
+id: datil
+name: Datil
+slogan: 
+website: https://datil.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Dátil is an accredited Certificate Authority in Ecuador
+
+# membership
+memberSince: 2022-01-16
+memberType: A
+workingGroups:
+  - CA
+
+# Social media
+social:
+  twitter: https://twitter.com/datilhq
+  facebook: https://www.facebook.com/datilhq
+  instagram: https://instagram.com/datilhq
+  pinterest: 
+  linkedin: https://www.linkedin.com/company/datilmedia/
+  youtube: 
