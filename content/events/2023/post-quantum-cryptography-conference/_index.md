@@ -179,7 +179,7 @@ agenda:
 
 ## Conference details
 
-On Tuesday Friday March 3, 2023 the PKI Consortium will host a Post-Quantum PKI conference in Ottawa, Canada.  
+On Friday March 3, 2023 the PKI Consortium will host a Post-Quantum PKI conference in Ottawa, Canada.  
 
 The conference is **not limited** to the members of the PKI Consortium and is open for anyone interested in preparing for Post-Quantum Cryptography.  
 
