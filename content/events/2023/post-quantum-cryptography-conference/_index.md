@@ -161,7 +161,6 @@ agenda:
     speakers: 
       - Sebastian Paul
       - Melanie Anderson
-      - Jonathan Hammell
       - Gabriele Spini
       - Greg Wetmore
 
