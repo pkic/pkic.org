@@ -5,6 +5,9 @@ title: Sponsor the PKI Consortium
 
 heroTitle: Sponsor the PKI Consortium
 heroDescription: We are immensely grateful to those who sponsor the PKI Consortium
+heroButton: 
+    label: Make a donation through PayPal
+    link: https://www.paypal.com/donate/?hosted_button_id=XWKNWW684GY3U
 
 ---
 
