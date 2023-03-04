@@ -8,10 +8,6 @@ summary: Speakers at this conference include some of the world’s top Post-Quan
 heroTitle: Post-Quantum Cryptography Conference
 heroDescription: Friday March 3, 2023 - Ottawa, Canada - Hybrid
 
-heroButton: 
-    label: Click here to register for this conference (free)
-    link: https://forms.gle/KsFYv9bmJ85ZKdpq5
-
 speakers:
   - name: Paul van Brouwershaven
     title: Chair PKI Consortium
@@ -90,6 +86,7 @@ agenda:
     description:
     speakers: 
       - Paul van Brouwershaven
+    presentation: pkic-pqcc-welcome-paul-van-brouwershaven.pdf
 
   - time: "9:15"
     title: Status report on Post-Quantum Cryptography Standardization
@@ -97,6 +94,7 @@ agenda:
         There is a significant probability that, in the coming decades, a large quantum computer can be built. When this happens, much of the cryptography that currently secures communications will have to be replaced by new, quantum resistant, cryptographic standards. For the last several years, NIST has been embarked on a process of selecting new, quantum-resistant, algorithms for  public-key cryptography. These algorithms will be the basis for the new  standards. I will describe the quantum computer threat and the measures we are taking to address it. Then I will report on the current status of our standardization effort.
     speakers: 
       - Rene Peralta
+    presentation: pkic-pqcc-pqc-standardization-status-rene-peralta-nist.pdf
 
   - time: "10:00"
     title: Break
@@ -107,6 +105,7 @@ agenda:
       Just as post quantum is providing challenges for a generation of academic cryptographers, so too is it providing challenges for cryptographic engineers. The new PQC primitives behave differently enough from their RSA and ECC predecessors that they sometimes require substantial protocol and application re-design in order to accommodate them. On top of that we need to engineer for gracefully migrating all of the Internet's systems in a fairly abrupt timeline. This talk will overview IETF progress at integrating PQC into common Internet protocols: challenges, progress, and work yet-to-be-started. I will conclude with my personal research area: PKI PQ/Traditional hybrid modes that enhance both security and migration flexibility.
     speakers: 
       - Mike Ounsworth
+    presentation: pkic-pqcc-pqc-at-ietf-mike-ounsworth-entrust.pdf
 
   - time: "11:00"
     title: PQC at the European Telecommunications Standards Institute (ETSI)
@@ -114,6 +113,7 @@ agenda:
       ETSI has been working on advocating and developing quantum-safe/post-quantum cryptographic standards since 2013. This presentation will cover the work that has been done at ETSI as well as the current Technical Recommendations and Specifications being developed within ETSI’s TC CYBER’s Working Group on Quantum-Safe Cryptography. The talk will also outline how the work of AWS in ETSI, IETF and submissions to NIST align with our view of PQC migration.
     speakers: 
       - Matthew Campagna
+    presentation: pkic-pqcc-pqc-at-etsi-matthew-campagna-etsi-aws.pdf
 
   - time: "11:45"
     title: Discussion on standardization
@@ -136,6 +136,7 @@ agenda:
       In this talk, I will propose and investigate a migration strategy towards post-quantum PKI authentication. Our strategy is based on the concept of "mixed certificate chains" that use different signature algorithms within the same certificate chain. In order to demonstrate the feasibility of our migration strategy, we combine the well-studied and trusted hash-based signature schemes SPHINCS+ and XMSS with elliptic curve cryptography first and subsequently with lattice-based PQC signature schemes (Dilithium and Falcon)
     speakers: 
       - Sebastian Paul
+    presentation: pkic-pqcc-mixed-chains-sebastian-paul-bosch.pdf
 
   - time: "13:45"
     title: How the Canadian Government is preparing for PQC
@@ -144,6 +145,7 @@ agenda:
     speakers:
       - Melanie Anderson
       - Jonathan Hammell
+    presentation: pkic-pqcc-how-gc-preparing-for-pqc-melanie-anderson-jonathan-hammell-canadian-government.pdf
 
   - time: "14:15"
     title: Hybrid Approach for quantum-safe Public Key Infrastructure Development for Organizations (HAPKIDO)
@@ -151,6 +153,7 @@ agenda:
       Gabriele Spini will present the HAPKIDO project, sector-based plans that help organizations transition towards Quantum Safe (QS) PKIs, including hybrid PKIs that demonstrate how QS solutions will work with existing infrastructures, and governance models that guide organizations towards a QS future. HAPKIDO is already sharing insights with front runners in the telecom, financial and public sectors.
     speakers: 
       - Gabriele Spini
+    presentation: pkic-pqcc-hapkido-gabriele-spini-tno.pdf
 
   - time: "14:45"
     title: Preparing for and migrating to a world with Post-Quantum Cryptography
@@ -169,6 +172,7 @@ agenda:
     description:
     speakers: 
       - Paul van Brouwershaven
+    presentation: pkic-pqcc-summary-and-closing-paul-van-brouwershaven.pdf
 
   - time: "15:30"
     title: Networking
@@ -178,23 +182,9 @@ agenda:
 
 ## Conference details
 
-On Friday March 3, 2023 the PKI Consortium will host a Post-Quantum PKI conference in Ottawa, Canada.  
+On Friday March 3, 2023 the PKI Consortium hosted it's first Post-Quantum PKI conference in Ottawa, Canada.  
 
-The conference is **not limited** to the members of the PKI Consortium and is open for anyone interested in preparing for Post-Quantum Cryptography.  
-
-> Speakers include some of the world’s top Post-Quantum Cryptography (PQC) experts and come from government, science agencies, standards bodies, and private organizations at the forefront of this new challenge to digital security. Topics will cover the status of PQC standardization at NIST, ETSI, and IETF, government preparations, migration strategies, etc.
-
-## Date and location
-
-**Date:** Friday March 3, 2023 (09:00-15:30 Eastern time)  
-**Location:** [Brookstreet Hotel](https://www.brookstreethotel.com/), Ottawa, Ontario, Canada  
-**Registration:** [Click here](https://forms.gle/KsFYv9bmJ85ZKdpq5)  
-
-* _This event can be attended in person or remotely, we strongly recommend to attend in person where possible._
-* _A limited number of rooms at the conference location are available at a conference discount. A reservation link will be provided after registration._
-* _There are no costs to register or attend the conference. Travel, accommodation and living expenses are not covered, all attendees are responsible to cover their own expenses._
-
-{{< button link="https://forms.gle/KsFYv9bmJ85ZKdpq5" label="Register for this conference" type="dark" >}}  
+The conference was open for anyone interested in preparing for Post-Quantum Cryptography and **not limited** to the members of the PKI Consortium. 
 
 ## Sponsors
 
@@ -206,7 +196,7 @@ Would you like to sponsor the Post-Quantum PKI conference? Please contact us [us
 
 ## Agenda
 
-This is a **draft agenda** and subject to change, the final agenda will be posted here when available.  
+Below you can find the agenda and slides presented, recordings will follow soon.  
 
 {{< agenda "agenda" >}}
 
