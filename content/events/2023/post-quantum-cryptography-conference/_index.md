@@ -196,6 +196,10 @@ On Friday March 3, 2023 the PKI Consortium hosted it's first Post-Quantum PKI co
 
 The conference was open for anyone interested in preparing for Post-Quantum Cryptography and **not limited** to the members of the PKI Consortium. 
 
+> We are now accepting proposals for presentations at the next Post-Quantum Cryptography Conference of the PKI Consortium, taking place in Europe after the summer of 2023.  
+>   
+> **Submit your proposed talk to our [call for presentations](https://forms.gle/Eez13Ubmrp1zFfre9)**.
+
 ## Sponsors
 
 We are immensely grateful to our sponsors: 
@@ -206,7 +210,7 @@ Would you like to sponsor the Post-Quantum PKI conference? Please contact us [us
 
 ## Agenda
 
-Below you can find the agenda and slides presented, recordings will follow soon.  
+Below you can find the agenda, slides and recordings.
 
 {{< agenda "agenda" >}}
 
