@@ -16,7 +16,7 @@ menu:
 ---
 
 {{< alert >}}
-[Check the slides of our first **Post-Quantum Cryptography Conference**, recordings will be made available soon](/events/2023/post-quantum-cryptography-conference/)
+[Check the slides and recording of our first **Post-Quantum Cryptography Conference**](/events/2023/post-quantum-cryptography-conference/)
 {{< /alert >}}
 
 {{< figure src="/img/logo-black.svg" alt="Logo of the PKI Consortium" >}}

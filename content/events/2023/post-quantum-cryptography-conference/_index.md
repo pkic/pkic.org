@@ -87,6 +87,7 @@ agenda:
     speakers: 
       - Paul van Brouwershaven
     presentation: pkic-pqcc-welcome-paul-van-brouwershaven.pdf
+    youtube: o-1sSF_xP5Q?start=1162
 
   - time: "9:15"
     title: Status report on Post-Quantum Cryptography Standardization
@@ -95,6 +96,7 @@ agenda:
     speakers: 
       - Rene Peralta
     presentation: pkic-pqcc-pqc-standardization-status-rene-peralta-nist.pdf
+    youtube: o-1sSF_xP5Q?start=2132
 
   - time: "10:00"
     title: Break
@@ -106,6 +108,7 @@ agenda:
     speakers: 
       - Mike Ounsworth
     presentation: pkic-pqcc-pqc-at-ietf-mike-ounsworth-entrust.pdf
+    youtube: o-1sSF_xP5Q?start=5713
 
   - time: "11:00"
     title: PQC at the European Telecommunications Standards Institute (ETSI)
@@ -114,6 +117,7 @@ agenda:
     speakers: 
       - Matthew Campagna
     presentation: pkic-pqcc-pqc-at-etsi-matthew-campagna-etsi-aws.pdf
+    youtube: o-1sSF_xP5Q?start=8338
 
   - time: "11:45"
     title: Discussion on standardization
@@ -126,6 +130,7 @@ agenda:
       - Mike Ounsworth
       - Matthew Campagna
       - Chris Hickman
+    youtube: o-1sSF_xP5Q?start=10682
 
   - time: "12:15"
     title: Lunch
@@ -137,6 +142,7 @@ agenda:
     speakers: 
       - Sebastian Paul
     presentation: pkic-pqcc-mixed-chains-sebastian-paul-bosch.pdf
+    youtube: o-1sSF_xP5Q?start=16437
 
   - time: "13:45"
     title: How the Canadian Government is preparing for PQC
@@ -146,6 +152,7 @@ agenda:
       - Melanie Anderson
       - Jonathan Hammell
     presentation: pkic-pqcc-how-gc-preparing-for-pqc-melanie-anderson-jonathan-hammell-canadian-government.pdf
+    youtube: o-1sSF_xP5Q?start=18196
 
   - time: "14:15"
     title: Hybrid Approach for quantum-safe Public Key Infrastructure Development for Organizations (HAPKIDO)
@@ -154,6 +161,7 @@ agenda:
     speakers: 
       - Gabriele Spini
     presentation: pkic-pqcc-hapkido-gabriele-spini-tno.pdf
+    youtube: o-1sSF_xP5Q?start=19903
 
   - time: "14:45"
     title: Preparing for and migrating to a world with Post-Quantum Cryptography
@@ -166,6 +174,7 @@ agenda:
       - Melanie Anderson
       - Gabriele Spini
       - Greg Wetmore
+    youtube: o-1sSF_xP5Q?start=21092
 
   - time: "15:15"
     title: Summary and closing
@@ -173,6 +182,7 @@ agenda:
     speakers: 
       - Paul van Brouwershaven
     presentation: pkic-pqcc-summary-and-closing-paul-van-brouwershaven.pdf
+    youtube: o-1sSF_xP5Q?start=23574
 
   - time: "15:30"
     title: Networking
