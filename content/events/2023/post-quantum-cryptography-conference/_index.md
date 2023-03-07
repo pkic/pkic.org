@@ -87,7 +87,7 @@ agenda:
     speakers: 
       - Paul van Brouwershaven
     presentation: pkic-pqcc-welcome-paul-van-brouwershaven.pdf
-    youtube: o-1sSF_xP5Q?start=1162
+    youtube: o-1sSF_xP5Q?start=1499
 
   - time: "9:15"
     title: Status report on Post-Quantum Cryptography Standardization
