@@ -1,0 +1,59 @@
+id: zeva
+name: Zeva
+slogan: Empowering Security, Protection Privacry, Enabling Transparency
+website: https://www.zevainc.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Zeva is a global IT security leader specializing in cryptography, identity and access management, and digital ecurity systems with primary focus in PKI Enablement (PKE)
+
+# membership
+memberSince: 2023-04-01
+memberType: Vendor
+workingGroups:
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog: 
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://www.zevainc.com/#news
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.zevainc.com/careers.php
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/Zeva_Inc
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/zeva-incorporated/
+  youtube: https://www.youtube.com/@zevainc
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Kirk Hall
+    role: Director, Policy & Compliance
+    social:
+      linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
+    description: 
+      Kirk Hall is Director of Policy and Compliance - SSL at Entrust.
+      
+      Hall’s responsibilities include work on Entrust SSL's digital certificate policy and compliance operations as well as regulatory and audit matters. 
+      He previously served in similar roles at GeoTrust and Trend Micro, and was a co-founder of certification authority AffirmTrust, which was acquired by Entrust in 2016. 
+      Hall holds an A.B. degree from Harvard College, a Master’s degree in economics and resource use from Yale University, and a J.D. degree from Northwestern School of Law of Lewis and Clark College.
+
