@@ -92,6 +92,12 @@ privacy:
     disable: false
     privacyEnhanced: true
 
+markup:
+  goldmark:
+    parser:
+      attribute:
+        block: true
+
 outputFormats:
   rss:
     mediatype: application/rss
