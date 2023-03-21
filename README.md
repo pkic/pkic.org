@@ -31,3 +31,10 @@ The content lives in `content/` and is written as markdown because of it's simpl
   - [GoAT](https://github.com/bep/goat) (rendered on server)
   - [Mermaid](https://mermaid-js.github.io/) (rendered using JavaScript on client)
 
+## Update content from other repositories
+
+Some content is managed in external repositories through git submodules, to update the remote branch in your local preview run the following command.
+
+```bash
+git submodule update --remote
+```
