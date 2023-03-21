@@ -1,0 +1,4 @@
+[submodule "content/pkimm"]
+	path = content/pkimm
+	url = https://github.com/pkic/pkimm
+	branch = website
