@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" data-name="Layer 1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 612 95.4">
+  <defs>
+    <style>
+      .cls-1 {
+        font-family: Arial-BoldItalicMT, Arial;
+        font-size: 26px;
+        font-weight: 700;
+      }
+
+      .cls-2 {
+        letter-spacing: -.13em;
+      }
+
+      .cls-3 {
+        letter-spacing: -.05em;
+      }
+
+      .cls-4 {
+        fill: #158ccc;
+      }
+
+      .cls-5, .cls-6 {
+        fill: #fff;
+      }
+
+      .cls-5, .cls-6, .cls-7 {
+        stroke: #231f20;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+      }
+
+      .cls-5, .cls-7 {
+        stroke-width: 4px;
+      }
+
+      .cls-8 {
+        fill: #231f20;
+        font-style: italic;
+      }
+
+      .cls-6 {
+        stroke-width: 3px;
+      }
+
+      .cls-7 {
+        fill: none;
+      }
+
+      .cls-9 {
+        font-family: Arial-ItalicMT, Arial;
+        font-size: 15px;
+      }
+    </style>
+  </defs>
+  <text class="cls-8" transform="translate(139.43 58.35) scale(1.72 1)"><tspan class="cls-1"><tspan x="0" y="0">Information Security</tspan></tspan><tspan class="cls-9"><tspan class="cls-3" x="151.25" y="18">CORPOR</tspan><tspan class="cls-2" x="212.22" y="18">A</tspan><tspan class="cls-3" x="220.3" y="18">TION</tspan></tspan></text>
+  <line class="cls-5" x1="96.7" y1="28.1" x2="120.7" y2="65.3"/>
+  <line class="cls-5" x1="93.1" y1="28.1" x2="69.1" y2="65.3"/>
+  <line class="cls-7" x1="70.3" y1="65.3" x2="119.5" y2="65.3"/>
+  <line class="cls-6" x1="142.03" y1="64.7" x2="394" y2="64.7"/>
+  <path class="cls-4" d="m84.1,28.1c0-5.6,4.8-10.2,10.8-10.2s10.8,4.6,10.8,10.2-4.8,10.2-10.8,10.2-10.8-4.6-10.8-10.2Z"/>
+  <path class="cls-4" d="m109.3,63.89c0-5.6,4.8-10.2,10.8-10.2s10.8,4.6,10.8,10.2-4.8,10.2-10.8,10.2-10.8-4.6-10.8-10.2Z"/>
+  <path class="cls-4" d="m59.09,63.89c0-5.6,4.8-10.2,10.8-10.2s10.8,4.6,10.8,10.2-4.8,10.2-10.8,10.2-10.8-4.6-10.8-10.2Z"/>
+</svg>
