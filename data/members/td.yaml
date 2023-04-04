@@ -1,0 +1,22 @@
+id: td
+name: TD
+slogan: Be the better bank
+website: https://www.td.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: As a top 10 North American bank, TD aims to stand out from its peers by having a differentiated brand - anchored in our proven business model, and rooted in a desire to give our customers, communities and colleagues the confidence to thrive in a changing world.
+
+# membership
+memberSince: 2023-04-04
+memberType: H
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://twitter.com/td_canada
+  facebook: https://www.facebook.com/TDCanada/
+  instagram: https://www.instagram.com/TD_Canada/
+  pinterest:
+  linkedin: https://www.linkedin.com/company/td
+  youtube: https://www.youtube.com/user/TDCanada/TDCanadaTrust
