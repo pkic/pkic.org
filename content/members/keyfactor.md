@@ -18,6 +18,6 @@ Products include PrimeKey EJBCA® Enterprise and SignServer Enterprise, Keyfacto
 
 ### Global presence
 
-Keyfactor have in United States, Europe, Asia and Australia.
+Keyfactor have offices in the United States, Europe, Asia and Australia.
 
 {{< youtube HGoZW7MCF60>}}
