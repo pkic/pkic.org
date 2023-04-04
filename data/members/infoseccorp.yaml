@@ -1,0 +1,51 @@
+id: infoseccorp
+name: Information Security Corporation (ISC) 
+slogan: Develops and markets cutting-edge PKI-based security solutions 
+website: https://www.infoseccorp.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: ISC has provided PKI solutions to the world's most security-conscious enterprises for over thirty years.
+
+# membership
+memberSince: 2023-04-04
+memberType: F
+workingGroups:
+  - PKIMM
+
+# sponsor
+sponsor:
+  level: 
+
+# Careers
+careers: 
+  url: https://infoseccorp.com/careers/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/infoseccorp
+  facebook: https://www.facebook.com/infsec.us/
+  linkedin: https://www.linkedin.com/company/infoseccorp/
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - id: michael-markowitz
+    name: Michael J. Markowitz, Ph.D.
+    role: Executive Vice President
+    social:
+      linkedin: https://www.linkedin.com/in/michael-markowitz-96a88a255/
+    description:
+      Dr. Markowitz has a background in cryptography, differential geometry, and mathematical physics.  
+      
+      In 1983, Markowitz and R. Schlafly developed the first commercial implementation of RSA and licensed a hybrid RSA/DES encryption utility to the UNHCR HQ, Geneva, and other governmental agencies. Markowitz has continued to work on the design and development of PKI solutions, overseeing all R&D projects at ISC since cofounding it with Thomas Venn in 1989.  
+      
+      Dr. Markowitz developed the first commercial DSA implementation in 1991. This software was widely deployed by Lockheed to sign and validate F-22 avionics submissions; Markowitz received VP Al Gore's Hammer Award for its use in the GSA FTS2001 bidding process. Later in the '90s, Markowitz served as treasurer of the IEEE P1363 standards group and contributed to the development of that set of PKC standards. In the mid '90s, he developed a complete CDSA CSP for AT&T/HP that shipped as a standard component of HP-UX for several years; he produced a software encryption utility fully interoperable with NSA's FORTEZZA card; and he was a member of NIST's Technical Advisory Committee to Develop a Federal Information Processing Standard for the Federal Key Management Infrastructure (TACDFIPSFKMI).  
+      
+      Dr. Markowitz currently participates in the OASIS PKCS#11 working group, among other organizations, and monitors emerging post-quantum standards and guidelines. His spare time is spent playing tennis and following the development of his grandchildren and quantum gravity.  
+
+      Dr. Markowitz is a graduate of Lehigh University, where he received simultaneous B.A. and M.S. degrees (SCL) and was elected to Phi Beta Kappa. He holds a Ph.D. in Mathematics from the University of California, Berkeley. In the 1980s he served on the mathematics faculties of the University of Notre Dame, the University of Chicago, the University of Illinois, Chicago, and Loyola University of Chicago.
+
