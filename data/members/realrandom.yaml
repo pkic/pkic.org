@@ -1,0 +1,22 @@
+id: realrandom
+name: Real Random
+slogan: Make a safer Internet by providing true randomness for real security
+website: https://realrandom.co/
+
+# Short description, longer content can be placed in `content/members/`
+description: Our mission is to help make a safer Internet by providing true randomness for real security. In modern cryptographic systems, security is largely based on algorithms that can be reverse engineered, making them increasingly vulnerable to threats as technology advances. To inhibit these attacks, our solution supports network security by providing a consistently reliable source of unpredictable numbers - in other words, true randomness.
+
+# membership
+memberSince: 2023-04-04
+memberType: H
+workingGroups:
+
+# Social media
+social:
+  twitter: https://twitter.com/realrandomrolls
+  facebook: https://www.facebook.com/realrandomllc
+  instagram: https://www.instagram.com/realrandomllc/
+  pinterest:
+  linkedin: https://www.linkedin.com/company/real-random-llc/?viewAsMember=true%20h
+  youtube: https://www.youtube.com/channel/UCAIc6VNEEOh6Dok1h_tThcw
+  tiktok: https://www.tiktok.com/@realrandomrolls?lang=en
