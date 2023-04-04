@@ -1,0 +1,22 @@
+id: airbus
+name: Airbus
+slogan: 
+website: https://www.airbus.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Airbus is a global pioneer in the aerospace industry, operating in the commercial aircraft, helicopters, defence and space sectors.
+
+# membership
+memberSince: 2023-04-04
+memberType: H
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://twitter.com/airbus
+  facebook: https://www.facebook.com/airbus
+  instagram: https://www.instagram.com/airbus
+  pinterest:
+  linkedin: https://www.linkedin.com/company/airbusgroup
+  youtube: https://www.youtube.com/user/airbus
