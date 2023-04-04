@@ -1,0 +1,22 @@
+id: nena
+name: NENA
+slogan: The 9-1-1 Association
+website: https://www.nena.org/
+
+# Short description, longer content can be placed in `content/members/`
+description: "NENA: The 9-1-1 Association empowers its members and the greater 9-1-1 community to provide the best possible emergency response through standards development, training, thought leadership, outreach, and advocacy. Our vision is a public made safer by 9-1-1 services delivered by highly-trained emergency-communications professionals and powered by the latest technologies"
+
+# membership
+memberSince: 2023-03-14
+memberType: H
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://www.twitter.com/911NENA911
+  facebook: https://www.facebook.com/911NENA911/
+  instagram: 
+  pinterest:
+  linkedin: 
+  youtube: https://www.youtube.com/user/911NENA911
