@@ -12,6 +12,6 @@ At Entrust, we’ve established secure connections across the planet and even in
 
 ### Founding member
 
-Back in 2013, Entrust was one of the seven CA's who founded the CA Security Council. In 2021 Entrust played a key role to restructre and expand the scope of the council and changed the name to the Public Key Infrastructure (PKI) Consortium.
+Back in 2013, Entrust was one of the seven CA's who founded the CA Security Council. In 2021 Entrust played a key role to restructure and expand the scope of the council and changed the name to the Public Key Infrastructure (PKI) Consortium.
 
 {{< youtube FeCFO5rpeIc>}}

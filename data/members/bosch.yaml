@@ -1,0 +1,23 @@
+id: bosch
+name: Bosch
+slogan: Invented for life
+website: https://www.bosch.de/en/
+
+# Short description, longer content can be placed in `content/members/`
+description: For over 130 years the name “Bosch” has been associated with forward-looking technology and trailblazing inventions that have made history. Bosch does business all over the world and is active in the most wide-ranging sectors.
+
+# membership
+memberSince: 2023-04-04
+memberType: H
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://www.twitter.com/BoschGlobal
+  facebook: https://www.facebook.com/BoschGlobal
+  instagram: https://www.instagram.com/boschglobal/
+  pinterest:
+  linkedin: https://www.linkedin.com/company/bosch/
+  youtube: https://www.youtube.com/BoschGlobal
+
