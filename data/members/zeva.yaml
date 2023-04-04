@@ -1,0 +1,22 @@
+id: zeva
+name: Zeva
+slogan: At the Forefront of innovation
+website: https://www.zevainc.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: 17 years of Public Key Enablement (PKE), Identity, Credentialing and Access Management (ICAM) excellence. Throughout the years Zeva has been solving the most complex identity and encryption challenges for the federal government and corporations around the globe. 
+
+# membership
+memberSince: 2023-04-04
+memberType: H
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  pinterest:
+  linkedin: https://www.linkedin.com/company/zeva-incorporated/
+  youtube: https://www.youtube.com/user/zevainc
