@@ -4,9 +4,12 @@ draft: false
 id: vikingcloud
 title: VikingCloud
 
+aliases:
+- securetrust
+
 ---
 
-# VikingCloud, the global leader in payment security and compliance 
+## VikingCloud, the global leader in payment security and compliance 
 
 We are the only company that can meet your organization’s end-to-end needs. Working with our team enables you to reduce costs and manage risks by better managing compliance requirements tailored to your needs and your environment.
 
