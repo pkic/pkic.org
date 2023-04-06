@@ -41,9 +41,9 @@ social:
 # Here you can list those who represent the member
 representatives:
   - name: Andrea Holland
-    role: Lead Quality Assurance Engineer
+    role: Product Manager
     social:
       twitter:
       linkedin: https://www.linkedin.com/in/andrea-h-58b72931/
     description:
-      Andrea is the Lead Quality Assurance Engineer at VikingCloud and represents the organization at the PKI Consortium.
+      Andrea is a Product Manager at VikingCloud and represents the organization at the PKI Consortium.
