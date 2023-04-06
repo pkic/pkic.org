@@ -1,0 +1,49 @@
+id: vikingcloud
+name: VikingCloud
+slogan: Providing real-time access to an organizatio’s cyber risk landscape and compliance posture.
+website: https://www.vikingcloud.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: VikingCloud provides end-to-end security and compliance solutions to businesses around the world, offering the latest in cloud-based solutions to secure networks and maintain compliance. Headquartered in Dublin, Ireland, with operations in the United States, Australia, Brazil, Canada, Germany, India, Mexico, Philippines, Poland, South Africa, and the United Kingdom, VikingCloud has clients in more than 70 countries and a global team of more than 1,000.
+
+# membership
+memberSince: 2014-11-13
+memberType: CA
+workingGroups:
+  - CA
+
+# Blog posts
+blog:
+  url: https://www.vikingcloud.com/blog/
+  feed: https://www.vikingcloud.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://www.vikingcloud.com/news/
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.vikingcloud.com/company/careers/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/vikingcloudcom
+  facebook: https://www.facebook.com/vikingcloudcom
+  instagram: https://www.instagram.com/vikingcloud/
+  linkedin: https://www.linkedin.com/company/vikingcloud/
+  youtube: 
+
+# Here you can list those who represent the member
+representatives:
+  - name: Andrea Holland
+    role: Lead Quality Assurance Engineer
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/andrea-h-58b72931/
+    description:
+      Andrea is the Lead Quality Assurance Engineer at VikingCloud and represents the organization at the PKI Consortium.
