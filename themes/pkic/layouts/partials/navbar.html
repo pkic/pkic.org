@@ -9,11 +9,20 @@
       </button>
       <div class="collapse navbar-collapse" id="navbarContent">
         <div class="navbar-nav me-auto"></div>
+
+        {{- if $.Page.FirstSection.Param "sideMenu" -}}
+        <div class="navbar-nav mb-2 d-block d-sm-none">
+          {{- partial "menu.html" . -}}
+        </div>
+        <hr class="bg-light border-1 border-top border-light">
+        {{- end -}}
+        
         <div class="navbar-nav mb-2 mb-lg-0">
           {{ $currentPage := . }}
           {{ range .Site.Menus.main }}
           <a class="nav-link{{ if $currentPage.IsMenuCurrent "main" . }} active{{ end }}" title="{{ .Title }}" href="{{ .URL }}">{{ .Name }}</a>
           {{ end }}
+
         </div>
       </div>
     </div>

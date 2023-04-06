@@ -4,8 +4,10 @@
     {{- if .Sections -}}
         {{- range .Sections -}}
             <li class="pt-2 pb-1"><strong><a href="{{ .Permalink }}" title="{{ .Title }}">{{ .Title }}</a></strong></li>
-            {{- range $i, $e := .Data.Pages -}}
-                <li class="px-2"><a href="{{ .Permalink }}" title="{{ .Title }}">{{ .Title }}</a></li>
+            {{- if or ($.Page.IsDescendant .) (eq $.Page .) -}}
+                {{- range $i, $e := .Data.Pages -}}
+                    <li class="px-2"><a href="{{ .Permalink }}" title="{{ .Title }}">{{ .Title }}</a></li>
+                {{- end -}}
             {{- end -}}
         {{- end -}}
     {{- end -}}

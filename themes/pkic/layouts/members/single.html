@@ -1,5 +1,8 @@
 {{ define "main" }}
 {{$member := index $.Site.Data.members ($.Param "id")}}
+{{ if not $member }}
+  {{ errorf "Member: %q not found" ($.Param "id") }}
+{{ end }}
 <div data-pagefind-body>
 <section class="py-4 text-center container">
     <div class="row py-lg-2">
@@ -68,7 +71,7 @@
           <div class="col-lg-3 order-lg-1">
             {{ $title := (printf "%s is %s at %s" .name .role $member.name) }}
             {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id (default (.name | urlize | safeURL) .id)) }}
-            {{ with $img}}
+            {{ with $img }}
             {{ $img = $img.Resize "x350" }}
             <img class="img-thumbnail" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
             {{ end }}
@@ -79,5 +82,4 @@
   </div>
 </div>
 </div>
-
 {{ end }}
