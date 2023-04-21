@@ -1,0 +1,22 @@
+id: identrust
+name: IdenTrust
+slogan: part of HID Global
+website: https://www.thalesgroup.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: IdenTrust, part of HID Global, is a leading provider of digital certificates that establish the basis for trusted identity solutions recognized by financial institutions, healthcare providers, government agencies and enterprises around the world.
+
+# membership
+memberSince: 2023-04-21
+memberType: A
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  pinterest:
+  linkedin: https://www.linkedin.com/company/identrus/
+  youtube: 
