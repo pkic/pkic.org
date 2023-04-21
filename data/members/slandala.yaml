@@ -1,0 +1,22 @@
+id: slandala
+name: Slandala Company
+slogan: Security Solutions
+website: https://www.slandala.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: The Slandala Company is an Information Assurance and Information Technology consultancy. Our focus is on the design, implementation and operation of information assurance systems and the technologies that enable and support the implementation of information security services.
+
+# membership
+memberSince: 2023-04-21
+memberType: D
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  pinterest:
+  linkedin: https://www.linkedin.com/company/the-slandala-company/
+  youtube: 
