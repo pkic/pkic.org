@@ -1,0 +1,22 @@
+id: nitda
+name: NITDA
+slogan: The Nigerian Public Key Infrastructure Organization
+website: https://www.nitda.gov.ng
+
+# Short description, longer content can be placed in `content/members/`
+description: The Nigerian Public Key Infrastructure Organization (NITDA) is a government agency mandated to develop, regulate and advise on information technology in the country through regulatory standards, guidelines and policies.
+
+# membership
+memberSince: 2023-04-21
+memberType: C
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://twitter.com/NITDANigeria
+  facebook: https://facebook.com/nitdanig/
+  instagram:
+  pinterest:
+  linkedin:
+  youtube:
