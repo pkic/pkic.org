@@ -1,0 +1,22 @@
+id: fidelity
+name: Fidelity International
+slogan: 
+website: https://www.fidelityinternational.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Fidelity International offers investment solutions and retirement expertise to institutions, individuals and their advisers around the world. We bring together savings and pensions expertise with world-class investment choices - both our own and those of others - to help our clients build better futures for themselves and generations to come.
+
+# membership
+memberSince: 2023-04-21
+memberType: H
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://twitter.com/fidelity_uk/
+  facebook: https://www.facebook.com/FidelityUK
+  instagram: https://instagram.com/fidelityinternational
+  pinterest:
+  linkedin: https://www.linkedin.com/company/fidelity-international/
+  youtube: https://www.youtube.com/user/FidelityUK
