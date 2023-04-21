@@ -1,0 +1,22 @@
+id: diu
+name: Defense Innovation Unit (DIU)
+slogan: The Defense Innovation Unit (DIU) fall under the US Department of Defense
+website: https://www.diu.mil/
+
+# Short description, longer content can be placed in `content/members/`
+description: DIU strengthens US national security by accelerating the adoption of leading commercial technology throughout the military and growing the national security innovation base.
+
+# membership
+memberSince: 2023-04-21
+memberType: G
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://twitter.com/DIU_x
+  facebook: https://www.facebook.com/defenseinnovationunitX/
+  instagram: 
+  pinterest:
+  linkedin: https://www.linkedin.com/company/diux/
+  youtube: https://www.youtube.com/c/DefenseInnovationUnit/
