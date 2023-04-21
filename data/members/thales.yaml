@@ -1,0 +1,22 @@
+id: thales
+name: Thales
+slogan: Building a future we can all trust
+website: https://www.thalesgroup.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Thales is a global technology leader with more than 77,000 employees on five continents. The Group is investing in digital and “deep tech” innovations - Big Data, artificial intelligence, connectivity, cybersecurity and quantum technology - to build a future we can all trust.
+
+# membership
+memberSince: 2023-04-21
+memberType: F
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://twitter.com/thalesgroup
+  facebook: https://www.facebook.com/thalesgroup
+  instagram: https://www.instagram.com/thalesgroup/
+  pinterest:
+  linkedin: https://www.linkedin.com/company/thales
+  youtube: https://www.youtube.com/user/thethalesgroup
