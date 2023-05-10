@@ -30,7 +30,7 @@ flowchart TD
 
     ApplicationForm[Complete application form]
     ApplicationForm --> Application[Application review]
-    Application --> |Questions| Questions[Application on hold untill awnsered] --> Application
+    Application --> |Questions| Questions[Application on hold until answered] --> Application
     Application --> |Everything looks good| Consultation[Members are asked for any objections]
     Consultation --> EC{Executive Council\nVote}
     EC --> |Not approved| END
@@ -45,7 +45,7 @@ flowchart TD
     Approved --> Sponsor[Consider to become a sponsor]  
     Sponsor --> SponsorApplicationForm[Complete sponsor application form]
 
-    Questions --> |No awnser| END
+    Questions --> |No answer| END
     END[Application declined]
 
     click Category "/bylaws/#eligibility"
