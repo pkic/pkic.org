@@ -1,0 +1,22 @@
+id: ge
+name: GE Research
+slogan: Building a world that works
+website: https://www.ge.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: The General Electric Company (GE) is an American multinational company. For more than 125 years, GE has invented the future of industry. Today, GE is best known for its work in the Power, Renewable Energy, Aviation and Healthcare industries.
+
+# membership
+memberSince: 2023-05-01
+memberType: H
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://www.twitter.com/generalelectric
+  facebook: https://www.facebook.com/ge
+  instagram: https://www.instagram.com/generalelectric
+  pinterest:
+  linkedin: https://www.linkedin.com/company/ge
+  youtube: https://www.youtube.com/ge
