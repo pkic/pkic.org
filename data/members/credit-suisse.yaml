@@ -1,0 +1,23 @@
+id: credit-suisse
+name: Credit Suisse
+slogan: We build lasting value by serving our clients with care and entrepreneurial spirit
+website: https://www.credit-suisse.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Credit Suisse Group is a leading financial services company, advising clients in all aspects of finance, across the globe and around the clock.
+
+# membership
+memberSince: 2023-04-04
+memberType: H
+workingGroups:
+  
+
+# Social media
+social:
+  twitter: https://www.twitter.com/creditsuisse/
+  facebook: https://www.facebook.com/creditsuisse/
+  instagram: 
+  pinterest:
+  linkedin: https://www.linkedin.com/company/credit-suisse/
+  youtube: https://www.youtube.com/creditsuissevideos/
+  flickr: https://www.flickr.com/photos/creditsuisse/
