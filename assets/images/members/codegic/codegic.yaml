@@ -1,46 +1,41 @@
 id: codegic
 name: Codegic
-slogan: Facilitating Enterprise Trust 
+slogan: Facilitating Enterprise Trust
 website: https://www.codegic.com
 
 # Short description, longer content can be placed in `content/members/`
 description: Codegic specializes in innovative PKI and Digital Signatures solutions for its customers. Codegic delivers easy to use products covering Timestamping, Document Signing & Digital Certificates issuance helping enterprises solve complex security & identity issues that emerge during digital adoption.
 
 # membership
-memberSince: 
-memberType: 
+memberSince:
+memberType:
 workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.codegic.com/blogs/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  linkedin: https://www.linkedin.com/company/codegic		
-  youtube: 
+  twitter:
+  facebook:
+  linkedin: https://www.linkedin.com/company/codegic
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Muhammad Wahaj Khan	
+  - name: Muhammad Wahaj Khan
     role: CEO
     social:
-      twitter: 
+      twitter:
       linkedin: https://www.linkedin.com/in/mwahajkhan/
-    description: 
-      Wahaj has a Bachelors in Computer Science with 20+ years of PKI  experience. He is leading a team of experts in the PKI and Trust space, providing cutting-edge solutions to clients worldwide. His focus is on delivering secure, scalable, and compliant solutions that enable businesses to establish trust, safeguard their digital assets, and protect their identities.
-	  
-	  
-      
-  
+    description: Wahaj has a Bachelors in Computer Science with 20+ years of PKI  experience. He is leading a team of experts in the PKI and Trust space, providing cutting-edge solutions to clients worldwide. His focus is on delivering secure, scalable, and compliant solutions that enable businesses to establish trust, safeguard their digital assets, and protect their identities.
