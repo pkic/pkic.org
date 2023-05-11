@@ -1,0 +1,56 @@
+id: davidgroup
+name: DAVID GROUP
+slogan: Improvise Global Cyber Stability
+website: https://davidgroup.co.id
+
+# Short description, longer content can be placed in `content/members/`
+description: Indonesian Cyber-based Technologies and Internet Security Company
+
+# membership
+memberSince: 
+memberType:
+workingGroups:
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog: 
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/davidgroup_
+  facebook: https://www.facebook.com/davidgroupofficial/
+  instagram: https://www.instagram.com/davidgroupofficial/
+  linkedin: https://www.linkedin.com/company/davidgroupofficial
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: David Samuel Haloho
+    role: CEO
+    social:
+      linkedin: https://www.linkedin.com/in/davidsamuelhaloho
+    description:
+      David Samuel Haloho has 6 years of experience in Internet Security (Cybersecurity), Electronics, Telecommunication Infrastructure (2G/3G/4G LTE), Renewable Energy (PV Solar Cell) and Technology.
+
+  - name: Pardomuan Sihaloho
+    role: Board of Commissioners
