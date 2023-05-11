@@ -11,9 +11,6 @@ heroButton:
     label: Join the conversation
     link: /discussions/
 
-menu:
-  main:
-    name: Activities
 ---
 
 ## Engagement and knowledge sharing
