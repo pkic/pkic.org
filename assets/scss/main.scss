@@ -1,31 +1,52 @@
-<style>
-@import url(https://fonts.googleapis.com/css?family=Roboto:400,300,700);
-:root {
-    --color: rgb(25, 135, 84);
-    --pagination-color: $color !important;
-}
+// required to get $orange variable
+@import "bootstrap/functions"; 
 
-html, body {
+// Default variable overrides with PKIC colors
+$green: rgb(25, 135, 84);
+$orange: rgb(237,125,49);
+$blue: rgb(90,155,213);
+
+$primary: $green;
+
+$link-color: $primary; 
+$link-hover-color: $primary; 
+
+@import "bootstrap/bootstrap";
+
+// import font(s)
+@import url(https://fonts.googleapis.com/css?family=Roboto:400,300,700);
+
+html,
+body {
     display: flex;
     flex-direction: column;
-    min-height: 100vh;  
+    min-height: 100vh;
     font-family: 'Roboto', sans-serif !important;
 }
 
-a {
-    color: var(--color);
+table {
+    @extend .table;
+    @extend .table-bordered;
+    @extend .table-striped;
+    @extend .table-hover;
+
+    text-align: left;
+    width: 100%;
+    margin-top: 1.6em;
 }
 
-a:hover {
-    color:var(--color);
-    filter: opacity(60%);
+thead {
+    @extend .table-dark;
 }
 
-.badge:hover {
-    color: white!important;
-    background-color: var(--color) !important;
-    filter: none;
-}
+// .badge {
+//     text-decoration: none;
+// }
+// .badge:hover {
+//     color: white !important;
+//     background-color: var(--color) !important;
+//     filter: none;
+// }
 
 main {
     flex: 1;
@@ -47,7 +68,7 @@ main {
     color: #fff;
     text-align: center;
     font-size: 1.6em;
-    font-weight: 200!important;
+    font-weight: 200 !important;
 }
 
 #participate a {
@@ -68,17 +89,17 @@ main {
     max-width: 175px;
     filter: grayscale(1) opacity(0.6) contrast(0.5);
 }
-.members a, a:hover, .member-logo:hover {
+
+.members a,a:hover, .member-logo:hover {
     filter: none;
     text-decoration: none;
 }
+
 .linkArea {
     color: currentColor;
     text-decoration: none;
 }
-.badge {
-    text-decoration: none;
-}
+
 .bd-placeholder-img {
     font-size: 1.125rem;
     text-anchor: middle;
@@ -91,42 +112,44 @@ figure, #content>p>img {
     margin: 2rem;
     text-align: center;
 }
+
 figure>img, #content>p>img {
     max-width: 80%;
 }
-figcaption, figcaption h4 {  
+
+figcaption, figcaption h4 {
     font-size: 70%;
-    text-align: center!important;
+    text-align: center !important;
 }
 
-blockquote{
+blockquote {
     font-size: 1.3em;
     margin-left: -1.2em;
-    font-weight: 400!important;
+    font-weight: 400 !important;
     font-style: italic;
     color: #555555;
     padding: 1.2em 30px 1.2em 75px;
-    border-left: 8px solid rgb(33, 37, 41) ;
+    border-left: 8px solid rgb(33, 37, 41);
     line-height: 1.6;
     position: relative;
     background: #efefef;
 }
 
-blockquote::before{
+blockquote::before {
     font-family: Arial;
-    content:"\201C";
-    color:rgb(33, 37, 41);
-    font-size:4em;
+    content: "\201C";
+    color: rgb(33, 37, 41);
+    font-size: 4em;
     position: absolute;
     left: 10px;
-    top:-10px;
+    top: -10px;
 }
 
-blockquote::after{
+blockquote::after {
     content: '';
 }
 
-blockquote h4{
+blockquote h4 {
     display: block;
     color: #333333;
     font-style: normal;
@@ -137,9 +160,10 @@ blockquote h4{
 .callout-warning {
     color: rgb(200, 0, 0);
     margin-left: 0em;
-    border-left: 8px solid rgb(200, 0, 0) ;
-    background: rgb(200, 0, 0, 0.2) ;
+    border-left: 8px solid rgb(200, 0, 0);
+    background: rgba(200, 0, 0, 0.2);
 }
+
 .callout-warning::before {
     margin-left: 10px;
     line-height: 1em;
@@ -149,9 +173,10 @@ blockquote h4{
 .callout-info {
     color: rgb(160, 140, 0);
     margin-left: 0em;
-    border-left: 8px solid rgb(255, 225, 0) ;
-    background: rgb(255, 225, 0, 0.2) ;
+    border-left: 8px solid rgb(255, 225, 0);
+    background: rgba(255, 225, 0, 0.2);
 }
+
 .callout-info::before {
     margin-left: 10px;
     line-height: 1em;
@@ -162,31 +187,25 @@ blockquote h4{
     padding: 1.5rem;
 }
 
-table, td, th {
-    padding: 0.5em;
-    margin: 1em;
-    border: 1px solid rgb(33, 37, 41) ;
-}
-
 main h2 {
     text-align: left;
     font-size: 1.6em;
     padding-top: 1em;
-    font-weight: 500!important;
+    font-weight: 500 !important;
 }
 
 main h3 {
     text-align: left;
     font-size: 1.2em;
     padding-top: 1em;
-    font-weight: 500!important;
+    font-weight: 500 !important;
 }
 
 main h4 {
     text-align: left;
     font-size: 1.1em;
     padding-top: 1em;
-    font-weight: 500!important;
+    font-weight: 500 !important;
 }
 
 .sponsors a {
@@ -198,21 +217,24 @@ main h4 {
 }
 
 @keyframes scroller {
-  0% {
-    opacity: 0;
-    transform: translate(0, 0);
-  }
-  5% {
-    opacity: 1;
-    transform: translate(0, 0);
-  }
-  95% {
-    opacity: 1;
-    transform: translate(-225%, 0);
-  }
-  100% {
-    opacity: 0;
-  }
+    0% {
+        opacity: 0;
+        transform: translate(0, 0);
+    }
+
+    5% {
+        opacity: 1;
+        transform: translate(0, 0);
+    }
+
+    95% {
+        opacity: 1;
+        transform: translate(-225%, 0);
+    }
+
+    100% {
+        opacity: 0;
+    }
 }
 
 @media (min-width: 768px) {
@@ -220,4 +242,3 @@ main h4 {
         font-size: 3.5rem;
     }
 }
-</style>

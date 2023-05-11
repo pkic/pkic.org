@@ -2,7 +2,11 @@
 <html lang="en">
   <head>
     {{ partial "header.html" . }}
-    {{ partial "styles.html" . }}
+
+    {{ $sass := resources.Get "scss/main.scss" }}
+    {{ $style := $sass | resources.ToCSS | resources.Fingerprint }}
+    <link rel="stylesheet" href="{{ $style.Permalink }}" integrity="{{ $style.Data.Integrity }}">
+    
   </head>
   <body>
     {{ partial "navbar.html" . }}
@@ -21,7 +25,7 @@
     {{- if .Page.Store.Get "hasMermaid" -}}
       <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
       <script>
-        mermaid.initialize({ startOnLoad: true });
+        mermaid.initialize({ startOnLoad: true, theme: 'base' });
       </script>
     {{- end -}}
 

@@ -1,7 +1,6 @@
 baseURL: https://pkic.org
 languageCode: en-us
 title: PKI Consortium
-theme: pkic
 
 copyright: PKI Consortium, Inc. All Rights Reserved
 googleAnalytics:
@@ -97,6 +96,10 @@ markup:
     parser:
       attribute:
         block: true
+
+module:
+  imports:
+  - path: github.com/gohugoio/hugo-mod-bootstrap-scss/v5
 
 outputFormats:
   rss:

@@ -11,26 +11,26 @@
     </div>
 
     <footer class="bg-dark">
-        <div class="container">
+        <div class="container fw-light text-light opacity-50">
             {{ with .File }}
                 <a href="{{$.Site.Params.siteSource}}/content/{{ .File.Path }}" class="btn btn-sm btn-outline-light align-top float-end m-3">Improve this page</a>
             {{ end }}
-            <div class="text-muted pt-3 pb-5">
+            <div class="pt-3 pb-5">
                 {{ partial "social.html" .Site.Params.social }}
             </div>
 
-            <div class="text-muted py-2">
+            <div class="py-2">
                 {{ range $id, $menu := .Site.Menus.footer }}
-                <a class="text-white text-muted" title="{{ $menu.Title }}" href="{{ $menu.URL }}">{{ $menu.Name }}</a> 
+                <a title="{{ $menu.Title }}" href="{{ $menu.URL }}" class="link-light">{{ $menu.Name }}</a> 
                 {{ if lt (add $id 1) (len $.Site.Menus.footer) }} | {{end}}
                 {{ end }}
             </div>
 
-            <div class="text-muted py-2">
-                <small>Decisions within the PKI Consortium are taken by substantial consensus of the members <a href="/bylaws/#10-voting">as specified in our bylaws</a>. Substantial consensus among members does not necessarily mean that all members share the same view or opinion. </small>
+            <div class="py-2">
+                <small>Decisions within the PKI Consortium are taken by substantial consensus of the members <a href="/bylaws/#10-voting" class="link-light">as specified in our bylaws</a>. Substantial consensus among members does not necessarily mean that all members share the same view or opinion. </small>
             </div>
 
-            <div class="text-muted py-2">
+            <div class="py-2">
                 <p class="float-end">
                     <a href="#" title="Back to top" class="m-3">
                         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#fff" class="bi bi-chevron-up" viewBox="0 0 16 16">
