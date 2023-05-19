@@ -1,0 +1,25 @@
+id: hidglobal
+name: HID Global
+slogan: Empowering Access Everywhere
+website: https://www.entrust.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: HID powers the trusted identities of the world's people, places and things, allowing people to transact safely, work productively and travel freely. HID PKIaaS, a solution of HID, enables organizations to quickly create and deploy their own enterprise PKI trust hierarchies to secure their networks, IT systems and IoT devices. HID PKIaaS increase security, eliminates operational complexity and dramatically reduces costs related to operating and deploying an organizational private PKI.
+
+# membership
+memberSince: 2023-05-17
+memberType: CA
+workingGroups:
+
+# sponsor
+sponsor:
+  level: Platinum
+
+# Social media
+social:
+  twitter: https://twitter.com/HIDGlobal
+  facebook: https://www.facebook.com/HIDGlobal
+  instagram: https://www.instagram.com/hidglobal/
+  pinterest:
+  linkedin: https://www.linkedin.com/company/hid-global
+  youtube: https://www.youtube.com/user/hidglobal
