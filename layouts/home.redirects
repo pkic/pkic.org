@@ -1,0 +1,3 @@
+{{- range where .Site.Pages "Params.redirect" "!=" nil -}}
+{{ .RelPermalink }} {{ .Param "redirect" }} 301
+{{ end }}
