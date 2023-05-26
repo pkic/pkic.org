@@ -14,6 +14,7 @@ buildDrafts: false
 disableHugoGeneratorInject: true
 enableInlineShortcodes: true
 rssLimit: 30
+enableEmoji: true
 
 # not great, but it's not a big deal if some rss feeds fail
 ignoreErrors: ["error-remote-getjson"]
@@ -110,11 +111,16 @@ outputFormats:
     path: /news/feed/
     isPlainText: false
     mediaType: application/rss
+  redirects:
+    baseName: _redirects
+    path: /
+    isPlainText: true
 
 outputs:
   home:
   - HTML
   - news
+  - redirects
   page:
   - HTML
   section:
