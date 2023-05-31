@@ -4,19 +4,37 @@ slogan: We delivered Digital Signature, Digital Certification, Dekstop Signing, 
 website: https://digisign.id/
 
 # Short description, longer content can be placed in `content/members/`
-description: Digisign is a brand of PT. Net Internusa solutions are specialized in Electronic Signatures (Digital Signature) & Electronic Certificate Providers (CA-Certificate Authority).
+description: Digisign is a brand of PT. Solusi Net Internusa are specialized in Electronic Signatures (Digital Signature) & Electronic Certificate Providers (CA-Certificate Authority).
 
 # membership
 memberSince: 2023-05-01
-memberType: F
+memberType: CA
 workingGroups:
-  
+  - CA
+  - PKIMM
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
-  pinterest:
-  linkedin: 
-  youtube: 
+  instagram: https://www.instagram.com/digisign.id/
+  youtube: https://www.youtube.com/@digisignidofficial4405
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+
+representatives:
+  - name: Willy Walanio
+    role: Chief Executive Officer
+    social:
+      linkedin: https://www.linkedin.com/in/willy-walanio-2b901423/
+      
+  - name: Aa Iksan Aripin
+    role: Chief Technologi Officer
+    social:
+      linkedin: https://www.linkedin.com/in/aaiksan/
+
+  - name: Pungki Arianto
+    role: Digital Certificate Manager
+    social:
+      linkedin: https://www.linkedin.com/in/pungkiarianto/
