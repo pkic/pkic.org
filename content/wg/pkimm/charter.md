@@ -44,10 +44,10 @@ The scope of this Working Group is to:
 - Define and maintain the PKI maturity assessment methodology including assessment report
 - Collect feedback from participants and interested parties regarding the PKI maturity model and assessment process
 - Collaborate on reviews of the PKI maturity model, such as model revisions and feedback from participants and interested parties
+- Create assessment tools and applications to support the assessment process
 
 Out of scope is:
 - Performing assessment of the PKI
-- Development of assessment applications or software related to PKI maturity model or assessment methodology
 
 ## Objectives and goals
 
@@ -71,6 +71,7 @@ Within the activities carried out by the Members of this Working Group are:
 - Contributing to the definition of the overall maturity model, including its categories, maturity levels, and assessment process
 - Collaborating on the assessment methodology for maturity model
 - Creating awareness about the PKI maturity model, assessment methodology, its adoption and how to use it
+- Preparing and publishing the deliverables of this Working Group
 
 Change in activities described in this Working Group Charter must follow the “Decision process” described in this document.
 
@@ -81,6 +82,7 @@ Based on the objectives and goals, planned activities of this Working Group, the
 - Documented assessment methodology for the PKI maturity model
 - Documented guidelines on how to use the PKI maturity model
 - Blog posts and articles to create better awareness about the PKI maturity model, its assessment methodology, adoption, and how to use it
+- Assessment tools and applications
 
 All deliverables are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) or MIT license and hosted within a public repository under the PKIC GitHub organization.
 
