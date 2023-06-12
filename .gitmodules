@@ -5,8 +5,8 @@
 [submodule "content/pqccm"]
 	path = content/pqccm
 	url = git@github.com:pkic/pqccm.git
-	branch = website
+	branch = main
 [submodule "content/remote-key-attestation"]
 	path = content/remote-key-attestation
 	url = git@github.com:pkic/remote-key-attestation.git
-	branch = website
+	branch = main
