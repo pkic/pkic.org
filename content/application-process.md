@@ -59,4 +59,9 @@ flowchart TD
     class END red;
     class ApplicationForm blue;
     class Approved green;
+
+    classDef red color: #fff, fill:#e00, stroke:#a00;
+    classDef blue color: #fff, fill:#87CEFA, stroke:#6495ED;
+    classDef green color: #fff, fill:#32CD32, stroke:#008000;
+    classDef grey color: #000, fill:#eee, stroke:#aaa;
 ```
