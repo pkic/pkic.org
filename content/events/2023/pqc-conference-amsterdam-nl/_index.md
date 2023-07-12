@@ -16,6 +16,13 @@ speakers:
       twitter: https://twitter.com/vanbroup
       linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
 
+  - name: Albert Ruiter
+    title: Logius
+    bio: 
+    social:
+      twitter: 
+      linkedin: 
+      
   - name: Bas Westerbaan
     title: Cloudflare
     bio: 
@@ -36,7 +43,7 @@ speakers:
       linkedin: https://www.linkedin.com/in/joppebos/
 
 
-agenda-tuesday:
+tuesday:
   - time: "8:30"
     title: Registration
 
@@ -45,16 +52,19 @@ agenda-tuesday:
     description:
     speakers: 
       - Paul van Brouwershaven
+      - Albert Ruiter
 
   - time: "9:15"
     title: Keynote Message
     description:
-    speakers: 
+    speakers:
+      - TBC
 
   - time: "9:30"
     title: Status update from NIST
     description:
-    speakers: 
+    speakers:
+      - TBC
 
   - time: "10:30"
     title: Break
@@ -63,25 +73,27 @@ agenda-tuesday:
   - time: "11:00"
     title: Governance
     description:
-    speakers: 
+    speakers:
+      - TBC
 
   - time: "11:30"
     title: Regulating Quantum Safe Cryptography (QSC)
-    description:
+    description: General Intelligence and Security Service of the Netherlands (AIVD)
     speakers: 
       - General Intelligence and Security Service of the Netherlands (AIVD)
 
   - time: "12:00"
     title: Quantum & Trust Services
-    description:
+    description: Dutch Authority for Digital Infrastructure (RDI)
     speakers: 
       - Dutch Authority for Digital Infrastructure (RDI)
-
 
   - time: "13:00"
     title: Lunch
     sponsor: 
-
+    speakers:
+      - TBC
+  
   - time: "14:00"
     title: PQC in practice
     description: 
@@ -92,10 +104,16 @@ agenda-tuesday:
     title: Break
     sponsor: 
 
+  - time: "11:00"
+    title: TBD
+    description:
+    speakers:
+      - TBC
+
   - time: "17:00"
     title: Networking
 
-agenda-wednesday:
+wednesday:
   - time: "8:30"
     title: Registration
 
@@ -118,15 +136,28 @@ agenda-wednesday:
   - time: "11:00"
     title: Migration (hosted by TNO)
     description:
-    speakers: 
+    speakers:
+      - TBC
 
   - time: "13:00"
     title: Lunch
     sponsor: 
 
+  - time: "14:00"
+    title: TBD
+    description:
+    speakers:
+      - TBC
+  
   - time: "15:30"
     title: Break
     sponsor: 
+
+  - time: "16:00"
+    title: TBD
+    description:
+    speakers:
+      - TBC
 
   - time: "17:00"
     title: Networking
@@ -147,16 +178,21 @@ We are immensely grateful to our sponsors:
 
 {{< sponsors level="all" height="50" max-width="150" >}}
 
+**This event would not have been possible without the organizational support from Entrust, Logius, and TNO.**
+
 Would you like to sponsor the Post-Quantum PKI conference? Please contact us [using this form](/sponsors/sponsor/).
 
 ## Agenda
 
 Below you can find the agenda, slides and recordings.
 
-{{< agenda "agenda-tuesday" >}}
+### Tuesday
 
-{{< agenda "agenda-wednesday" >}}
+{{< agenda "tuesday" >}}
 
+### Wednesday
+
+{{< agenda "wednesday" >}}
 
 Speakers are prohibited from promoting their products or services at this conference. Commercials, workshops and pitches may contain commercial information.
 
