@@ -78,9 +78,9 @@ tuesday:
 
   - time: "11:30"
     title: Regulating Quantum Safe Cryptography (QSC)
-    description: General Intelligence and Security Service of the Netherlands (AIVD)
+    description: Quantum Safe Cryptography working group of the Dutch Government
     speakers: 
-      - General Intelligence and Security Service of the Netherlands (AIVD)
+      - Quantum Safe Cryptography working group of the Dutch Government
 
   - time: "12:00"
     title: Quantum & Trust Services
@@ -91,9 +91,7 @@ tuesday:
   - time: "13:00"
     title: Lunch
     sponsor: 
-    speakers:
-      - TBC
-  
+
   - time: "14:00"
     title: PQC in practice
     description: 
@@ -166,11 +164,24 @@ wednesday:
 
 ## Conference details
 
-On November 7 and 8, 2023 the PKI Consortium will host their second Post-Quantum Cryptography (PQC) Conference in Amsterdam, the Netherlands. 
+On November 7 and 8, 2023 the PKI Consortium will host their second Post-Quantum Cryptography (PQC) Conference in Amsterdam, the Netherlands.  
+
 The conference welcomes business leaders, industry experts, and representatives from various public and private sectors interested in PQC, offering a diverse program featuring keynote speeches, breakout sessions*, panel discussions, and workshops*.
 
-The conference was open for anyone interested in preparing for Post-Quantum Cryptography and **not limited** to the members of the PKI Consortium. 
+> The conference is open for anyone interested in preparing for Post-Quantum Cryptography and **not limited** to the members of the PKI Consortium. 
+{.callout-info}
 
+## Date and location
+
+**Date:** November 7 and 8, 2023  
+**Location:** [Meervaart](https://www.meervaart.nl/meetings-events/english), Amsterdam, the Netherlands  
+**Registration:** [Click here](https://forms.gle/yz6mQ5Xu7dy6LE6C7)  
+
+* _This event can be attended in-person or remotely, we strongly recommend to attend in person where possible._
+* _Only the plenary sessions can be attended remotely, break-out rooms can not be attended online_
+* _There are no costs to register or attend the conference. Travel, accommodation and living expenses are not covered, all attendees are responsible to cover their own expenses._
+
+{{< button link="https://forms.gle/yz6mQ5Xu7dy6LE6C7" label="Register for this conference" type="dark" >}}  
 
 ## Sponsors
 
@@ -184,19 +195,20 @@ Would you like to sponsor the Post-Quantum PKI conference? Please contact us [us
 
 ## Agenda
 
-Below you can find the agenda, slides and recordings.
+This is a **draft agenda** and subject to change, the final agenda will be posted here when available. 
 
-### Tuesday
-
-{{< agenda "tuesday" >}}
-
-### Wednesday
-
-{{< agenda "wednesday" >}}
+{{< tabs >}}
+    {{< tab title="Tuesday" >}}
+      {{< agenda "tuesday" >}}
+    {{< /tab >}}
+    {{< tab title="Wednesday" >}}
+      {{< agenda "wednesday" >}}
+    {{< /tab >}}
+{{< /tabs >}}
 
 Speakers are prohibited from promoting their products or services at this conference. Commercials, workshops and pitches may contain commercial information.
 
 For more information on this conference, contact the PKI Consortium at feedback@pkic.org 
 
 
-* Breakout sessions and workshops are under consideration
+\* Breakout sessions and workshops are under consideration
