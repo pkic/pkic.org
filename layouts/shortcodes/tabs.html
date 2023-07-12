@@ -1,0 +1,13 @@
+{{ $content := $.Inner | safeHTML }}
+<nav>
+    <div class="nav nav-tabs" id="nav-tab" role="tablist">
+        {{ $tabs := .Scratch.Get "tabs" }}
+
+        {{ range $i, $title := $tabs }}
+        <button class="nav-link{{ if eq $i 0 }} active{{ end}}" id="nav-{{ $title | urlize }}-tab" data-bs-toggle="tab" data-bs-target="#nav-{{ $title | urlize }}" type="button" role="tab" aria-controls="nav-{{ $title | urlize }}" aria-selected="true">{{.}}</button>
+        {{ end }}
+    </div>
+</nav>
+<div class="tab-content" id="nav-tabContent">
+    {{ $content }}
+</div>
