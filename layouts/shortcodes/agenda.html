@@ -1,4 +1,4 @@
-{{- with $.Page.Params.agenda -}}
+{{- with $.Page.Param (index .Params 0) -}}
 
 <div class="list-group w-auto my-2">
     {{- range . -}}
