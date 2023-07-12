@@ -1,0 +1,7 @@
+{{ $title := .Get "title" }}
+{{ .Parent.Scratch.Add "tabs" (slice $title) }}
+{{ $tabs := .Parent.Scratch.Get "tabs" }}
+
+<div class="tab-pane fade{{ if lt (len $tabs) 2 }} show active{{ end}}" id="nav-{{ $title | urlize }}" role="tabpanel" aria-labelledby="nav-{{ $title | urlize }}-tab">
+    {{ .Inner | safeHTML }}
+</div>
