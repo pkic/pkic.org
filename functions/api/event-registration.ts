@@ -14,6 +14,7 @@ async function handleRequest({ request, env }) {
 
     const formData = await request.formData();
 
+    console.log(request.json())
     console.log(JSON.stringify(formData))
 
     // Validate form data
