@@ -7,9 +7,6 @@ export async function onRequestPost(ctx) {
 }
 
 async function handleRequest({ request, env }) {
-    if (request.method !== "POST") {
-        return new Response("Method not allowed", { status: 405 })
-    }
     let referer = request.headers.get('Referer')
 
     const formData = await request.formData();
