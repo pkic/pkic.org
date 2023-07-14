@@ -1,5 +1,3 @@
-const store = env.KV_EVENT_REGISTRATION
-
 export async function onRequestPost(ctx) {
     try {
         return await handleRequest(ctx);
@@ -23,14 +21,17 @@ async function handleRequest({ request, env }) {
         return Response.redirect(`${referer}?status=error`, 302)
     }
 
-    const { data, metadata } = await store.getWithMetadata(email, {
+    const { data, metadata } = await env.KV_EVENT_REGISTRATION.getWithMetadata(email, {
         type: "json"
     });
 
     if (data === null) {
         // Add registration to the store
-        await store.put(email, JSON.stringify(formData), {
-            metadata: { created: Date.now() },
+        await env.KV_EVENT_REGISTRATION.put(email, JSON.stringify(formData), {
+            metadata: { 
+                uuid: crypto.randomUUID(),
+                created: Date.now()
+            },
         })
     } else {
         // Update registration from store, if correct
