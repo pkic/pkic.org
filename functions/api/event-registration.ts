@@ -11,7 +11,7 @@ async function handleRequest({ request, env }) {
 
     const formData = await request.formData();
 
-    console.log(request.json())
+    console.log(JSON.stringify(request.json()))
     console.log(JSON.stringify(formData))
 
     // Validate form data
@@ -30,7 +30,7 @@ async function handleRequest({ request, env }) {
 
     if (data !== null) {
         // Add registration to the store
-        await env.KV_EVENT_REGISTRATION.put(email, request.json(), {
+        await env.KV_EVENT_REGISTRATION.put(email, JSON.stringify(request.json()), {
             metadata: {
                 uuid: crypto.randomUUID(),
                 created: Date.now()
