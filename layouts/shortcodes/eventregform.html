@@ -1,0 +1,94 @@
+<form id="inputForm" action="/api/event-registration" method="POST" class="row g-3 my-2 needs-validation" novalidate>
+    <div class="col-lg-6">
+        <label for="firstName" class="form-label">First Name</label>
+        <input type="text" class="form-control" id="firstName" name="First name" required>
+    </div>
+    <div class="col-lg-6">
+        <label for="lastName" class="form-label">Last Name</label>
+        <input type="text" class="form-control" id="lastName" name="Last name" required>
+    </div>
+    <div class="col-12">
+        <label for="role" class="form-label">Jon title</label>
+        <input type="text" class="form-control" id="role" name="Role" required>   
+        <div id="roleHelpBlock" class="form-text">e.g., CEO, Software engineer, Researcher, Sales Manager, etc.</div>
+    </div>
+    <div class="col-12">
+        <label for="email" class="form-label">Email</label>
+        <input type="email" class="form-control" id="email" name="Email" required>
+    </div>
+    <div class="col-12">
+        <label for="organization" class="form-label">Organization Name</label>
+        <input type="text" class="form-control" id="organization" name="Organization" required>
+    </div>
+    <div class="col-12">
+        <div><strong>How will you attend?</strong></div>
+    </div>
+
+    <div class="col-6">
+        &nbsp;&nbsp; Tuesday
+    </div>
+    <div class="col-6">
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="tuesday" id="tuesdayInPerson" value="in-person" required>
+            <label class="form-check-label" for="tuesdayInPerson">In-Person (recommended)</label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="tuesday" id="tuesdayRemote" value="remote" required>
+            <label class="form-check-label" for="tuesdayRemote">Remote</label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="tuesday" id="tuesdayNotAttend" value="not-attend" required>
+            <label class="form-check-label" for="tuesdayNotAttend">Not attending</label>
+        </div>
+    </div>
+
+
+    <div class="col-6">
+        &nbsp;&nbsp; Wednesday
+    </div>
+    <div class="col-6">
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="wednesday" id="wednesdayInPerson" value="in-person" required>
+            <label class="form-check-label" for="wednesdayInPerson">In-Person (recommended)</label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="wednesday" id="wednesdayRemote" value="remote" required>
+            <label class="form-check-label" for="wednesdayRemote">Remote</label>
+        </div>
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="radio" name="wednesday" id="wednesdayNotAttend" value="not-attend" required>
+            <label class="form-check-label" for="wednesdayNotAttend">Not attending</label>
+        </div>
+    </div>
+
+
+    <div class="col-12">
+        <label for="technical" class="form-label">How technical are you?</label>
+        <input type="range" class="form-range" min="0" max="10" step="1" id="Technical" required>
+    </div>
+    
+    <div class="col-12">
+        <label for="interest" class="form-label">Topics of interest</label>
+        <input type="text" class="form-control" id="interest" name="Interest">
+    </div>
+
+    <div class="col-12">
+        <div class="mb-3">
+            <label for="freeText" class="form-label">Comments</label>
+            <textarea class="form-control" id="freeText" name="Comments" rows="3"></textarea>
+        </div>
+    </div>
+
+    <div class="col-12">
+        <button type="submit" class="btn btn-success">Register</button>
+    </div>
+</form>
+
+<div id="formSuccess" class="alert alert-success visually-hidden" role="alert">
+    Thanks, your registration has been received and you should receive a confirmation by email soon.
+</div>
+<div id="formError" class="alert alert-danger visually-hidden" role="alert">
+    Sorry, something went wrong, please try again or contact feedback (at) pkic.org.
+</div>
+
+<script src="/scripts/form.js"></script>
