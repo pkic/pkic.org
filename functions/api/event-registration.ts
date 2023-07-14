@@ -7,6 +7,11 @@ export async function onRequestPost(ctx) {
 }
 
 async function handleRequest({ request, env }) {
+    if (request.method !== "POST") {
+        return new Response("Method not allowed", { status: 405 })
+    }
+    let referer = request.headers.get('Referer')
+    
     const formData = await request.formData();
 
     console.log(JSON.stringify(formData))
@@ -28,7 +33,7 @@ async function handleRequest({ request, env }) {
     if (data !== null) {
         // Add registration to the store
         await env.KV_EVENT_REGISTRATION.put(email, JSON.stringify(formData), {
-            metadata: { 
+            metadata: {
                 uuid: crypto.randomUUID(),
                 created: Date.now()
             },
