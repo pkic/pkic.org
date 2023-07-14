@@ -25,7 +25,7 @@ async function handleRequest({ request, env }) {
         type: "json"
     });
 
-    if (data === null) {
+    if (data !== null) {
         // Add registration to the store
         await env.KV_EVENT_REGISTRATION.put(email, JSON.stringify(formData), {
             metadata: { 
