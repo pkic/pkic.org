@@ -175,7 +175,7 @@ The conference welcomes business leaders, industry experts, and representatives 
 
 **Date:** November 7 and 8, 2023  
 **Location:** [Meervaart](https://www.meervaart.nl/meetings-events/english), Amsterdam, the Netherlands  
-**Registration:** [Click here](https://forms.gle/yz6mQ5Xu7dy6LE6C7)  
+**Registration:** [Click here](https://forms.gle/8J1Dfdu6w2XYqXd3A)  
 
 * _This event can be attended in-person or remotely, we strongly recommend to attend in person where possible._
 * _Only the plenary sessions can be attended remotely, break-out rooms can not be attended online_
