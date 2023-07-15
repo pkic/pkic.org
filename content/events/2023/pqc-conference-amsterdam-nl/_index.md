@@ -191,10 +191,6 @@ We are immensely grateful to our sponsors:
 
 Would you like to sponsor the Post-Quantum PKI conference? Please contact us [using this form](/sponsors/sponsor/).
 
-This conference would not be possible without the organizational support of the Post-Quantum Cryptography Working Group and in particular the following organizations:
-
-{{< figure height="75px" src="/img/organizational-support.jpg" >}}
-
 ## Agenda
 
 This is a **draft agenda** and subject to change, the final agenda will be posted here when available. 
@@ -210,7 +206,12 @@ This is a **draft agenda** and subject to change, the final agenda will be poste
 
 Speakers are prohibited from promoting their products or services at this conference. Commercials, workshops and pitches may contain commercial information.
 
+This conference would not be possible without the organizational support of the Post-Quantum Cryptography Working Group and in particular the following organizations:
+
+{{< figure height="75px" src="/img/organizational-support.jpg" >}}
+
 For more information on this conference, contact the PKI Consortium at feedback@pkic.org 
+
 
 
 \* Breakout sessions and workshops are under consideration
