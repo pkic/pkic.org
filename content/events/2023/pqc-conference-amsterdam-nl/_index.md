@@ -208,7 +208,7 @@ Speakers are prohibited from promoting their products or services at this confer
 
 This conference would not be possible without the organizational support of the Post-Quantum Cryptography Working Group and in particular the following organizations:
 
-{{< figure height="75px" src="/img/organizational-support.jpg" >}}
+{{< figure src="/img/organizational-support.jpg" >}}
 
 For more information on this conference, contact the PKI Consortium at feedback@pkic.org 
 
