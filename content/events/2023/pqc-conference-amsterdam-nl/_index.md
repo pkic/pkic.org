@@ -189,7 +189,8 @@ We are immensely grateful to our sponsors:
 
 {{< sponsors level="all" height="50" max-width="150" >}}
 
-**This event would not have been possible without the organizational support from Entrust, Logius, and TNO.**
+This conference would not be possible without the organizational support of the Post-Quantum Cryptography Working Group and in particular the following organizations:
+{{< figure height="75px" src="/img/organizational-support.jpg" >}}
 
 Would you like to sponsor the Post-Quantum PKI conference? Please contact us [using this form](/sponsors/sponsor/).
 
