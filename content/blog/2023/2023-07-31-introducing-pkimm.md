@@ -1,6 +1,6 @@
 ---
 title: Introducing first PKI Maturity Model (PKIMM)
-summary: The PKI Consortium publishes initial draft of the the PKI maturity model with related resources to help the industry build mature and future proof PKI including guidelines on how to evaluate the assessment and provide reporting to relying parties. The PKI maturity model is recognized as a standard for evaluation, planning, and comparison between different PKI implementations. In this blog post we are going to introduce the model.
+summary: The PKI Consortium publishes initial draft of the PKI maturity model with related resources to help the industry build mature and future proof PKI including guidelines on how to evaluate the assessment and provide reporting to relying parties. The PKI maturity model is recognized as a standard for evaluation, planning, and comparison between different PKI implementations. In this blog post we are going to introduce the model.
 authors: [Roman Cinkais]
 date: 2023-07-31T08:00:00+00:00
 categories:
@@ -48,7 +48,7 @@ mindmap
       Processes and procedures
     {{Management}}
       Key Management
-      Certificate ManagementIn
+      Certificate Management
       Infrastructure Management
       Change Management and Agility
     {{Operations}}
