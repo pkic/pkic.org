@@ -12,6 +12,7 @@ memberType: CA
 workingGroups:
   - CA
   - PKIMM
+  - PQC
 
 # sponsor
 sponsor:

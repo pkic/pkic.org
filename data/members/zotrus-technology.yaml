@@ -10,6 +10,7 @@ description: A Zero Trust Security Provider Based on Cryptographic Technology
 memberSince: 2023-02-17
 memberType: F
 workingGroups:
+  - PQC
 
 # Blog posts
 blog: 

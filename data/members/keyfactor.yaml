@@ -11,7 +11,8 @@ memberSince: 2021-04-14
 memberType: Vendor
 workingGroups:
   - PKIMM
-
+  - PQC
+  
 # sponsor
 sponsor:
   level: Silver

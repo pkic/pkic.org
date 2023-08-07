@@ -11,7 +11,8 @@ memberSince: 2013-02-14
 memberType: CA
 workingGroups:
   - CA
-
+  - PQC
+  
 # Blog posts
 blog: 
   url: https://sectigo.com/resource-library/blog-posts
