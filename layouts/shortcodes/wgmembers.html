@@ -1,5 +1,5 @@
 {{ range $.Site.Data.members }}
-    {{ if in .workingGroups "PKIMM" }}
+    {{ if in .workingGroups .Get 0 }}
     <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{.name}} - {{ .slogan }}">{{ .name }}</a>, 
     {{ end }}
 {{ end }}
