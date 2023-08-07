@@ -1,5 +1,6 @@
+{{ $wg := .Get 0 }}
 {{ range $.Site.Data.members }}
-    {{ if in .workingGroups (.Get 0) }}
+    {{ if in .workingGroups $wg }}
     <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{.name}} - {{ .slogan }}">{{ .name }}</a>, 
     {{ end }}
 {{ end }}
