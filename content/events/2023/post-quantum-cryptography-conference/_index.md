@@ -78,114 +78,115 @@ speakers:
       linkedin: https://www.linkedin.com/in/gregwetmore/
 
 agenda:
-  - time: "8:30"
-    title: Registration
+  - Friday:
+    - time: "8:30"
+      title: Registration
 
-  - time: "9:00"
-    title: Welcome
-    description:
-    speakers: 
-      - Paul van Brouwershaven
-    presentation: pkic-pqcc-welcome-paul-van-brouwershaven.pdf
-    youtube: o-1sSF_xP5Q?start=1499
+    - time: "9:00"
+      title: Welcome
+      description:
+      speakers: 
+        - Paul van Brouwershaven
+      presentation: pkic-pqcc-welcome-paul-van-brouwershaven.pdf
+      youtube: o-1sSF_xP5Q?start=1499
 
-  - time: "9:15"
-    title: Status report on Post-Quantum Cryptography Standardization
-    description: |
-        There is a significant probability that, in the coming decades, a large quantum computer can be built. When this happens, much of the cryptography that currently secures communications will have to be replaced by new, quantum resistant, cryptographic standards. For the last several years, NIST has been embarked on a process of selecting new, quantum-resistant, algorithms for  public-key cryptography. These algorithms will be the basis for the new  standards. I will describe the quantum computer threat and the measures we are taking to address it. Then I will report on the current status of our standardization effort.
-    speakers: 
-      - Rene Peralta
-    presentation: pkic-pqcc-pqc-standardization-status-rene-peralta-nist.pdf
-    youtube: o-1sSF_xP5Q?start=2132
+    - time: "9:15"
+      title: Status report on Post-Quantum Cryptography Standardization
+      description: |
+          There is a significant probability that, in the coming decades, a large quantum computer can be built. When this happens, much of the cryptography that currently secures communications will have to be replaced by new, quantum resistant, cryptographic standards. For the last several years, NIST has been embarked on a process of selecting new, quantum-resistant, algorithms for  public-key cryptography. These algorithms will be the basis for the new  standards. I will describe the quantum computer threat and the measures we are taking to address it. Then I will report on the current status of our standardization effort.
+      speakers: 
+        - Rene Peralta
+      presentation: pkic-pqcc-pqc-standardization-status-rene-peralta-nist.pdf
+      youtube: o-1sSF_xP5Q?start=2132
 
-  - time: "10:00"
-    title: Break
+    - time: "10:00"
+      title: Break
 
-  - time: "10:15"
-    title: PQC at the Internet Engineering Task Force (IETF)
-    description: |
-      Just as post quantum is providing challenges for a generation of academic cryptographers, so too is it providing challenges for cryptographic engineers. The new PQC primitives behave differently enough from their RSA and ECC predecessors that they sometimes require substantial protocol and application re-design in order to accommodate them. On top of that we need to engineer for gracefully migrating all of the Internet's systems in a fairly abrupt timeline. This talk will overview IETF progress at integrating PQC into common Internet protocols: challenges, progress, and work yet-to-be-started. I will conclude with my personal research area: PKI PQ/Traditional hybrid modes that enhance both security and migration flexibility.
-    speakers: 
-      - Mike Ounsworth
-    presentation: pkic-pqcc-pqc-at-ietf-mike-ounsworth-entrust.pdf
-    youtube: o-1sSF_xP5Q?start=5713
+    - time: "10:15"
+      title: PQC at the Internet Engineering Task Force (IETF)
+      description: |
+        Just as post quantum is providing challenges for a generation of academic cryptographers, so too is it providing challenges for cryptographic engineers. The new PQC primitives behave differently enough from their RSA and ECC predecessors that they sometimes require substantial protocol and application re-design in order to accommodate them. On top of that we need to engineer for gracefully migrating all of the Internet's systems in a fairly abrupt timeline. This talk will overview IETF progress at integrating PQC into common Internet protocols: challenges, progress, and work yet-to-be-started. I will conclude with my personal research area: PKI PQ/Traditional hybrid modes that enhance both security and migration flexibility.
+      speakers: 
+        - Mike Ounsworth
+      presentation: pkic-pqcc-pqc-at-ietf-mike-ounsworth-entrust.pdf
+      youtube: o-1sSF_xP5Q?start=5713
 
-  - time: "11:00"
-    title: PQC at the European Telecommunications Standards Institute (ETSI)
-    description: |
-      ETSI has been working on advocating and developing quantum-safe/post-quantum cryptographic standards since 2013. This presentation will cover the work that has been done at ETSI as well as the current Technical Recommendations and Specifications being developed within ETSI’s TC CYBER’s Working Group on Quantum-Safe Cryptography. The talk will also outline how the work of AWS in ETSI, IETF and submissions to NIST align with our view of PQC migration.
-    speakers: 
-      - Matthew Campagna
-    presentation: pkic-pqcc-pqc-at-etsi-matthew-campagna-etsi-aws.pdf
-    youtube: o-1sSF_xP5Q?start=8338
+    - time: "11:00"
+      title: PQC at the European Telecommunications Standards Institute (ETSI)
+      description: |
+        ETSI has been working on advocating and developing quantum-safe/post-quantum cryptographic standards since 2013. This presentation will cover the work that has been done at ETSI as well as the current Technical Recommendations and Specifications being developed within ETSI’s TC CYBER’s Working Group on Quantum-Safe Cryptography. The talk will also outline how the work of AWS in ETSI, IETF and submissions to NIST align with our view of PQC migration.
+      speakers: 
+        - Matthew Campagna
+      presentation: pkic-pqcc-pqc-at-etsi-matthew-campagna-etsi-aws.pdf
+      youtube: o-1sSF_xP5Q?start=8338
 
-  - time: "11:45"
-    title: Discussion on standardization
-    description: |
-      This panel discussion will be moderated by Chris Hickman.
-      
-      You can **submit your questions [in our discussion forum](https://github.com/orgs/pkic/discussions/categories/post-quantum-cryptography)**, during, before, or after the event. Don't forget to mention the name of the speaker if you want to address the question to a specific person!
-    speakers:
-      - Rene Peralta
-      - Mike Ounsworth
-      - Matthew Campagna
-      - Chris Hickman
-    youtube: o-1sSF_xP5Q?start=10682
+    - time: "11:45"
+      title: Discussion on standardization
+      description: |
+        This panel discussion will be moderated by Chris Hickman.
+        
+        You can **submit your questions [in our discussion forum](https://github.com/orgs/pkic/discussions/categories/post-quantum-cryptography)**, during, before, or after the event. Don't forget to mention the name of the speaker if you want to address the question to a specific person!
+      speakers:
+        - Rene Peralta
+        - Mike Ounsworth
+        - Matthew Campagna
+        - Chris Hickman
+      youtube: o-1sSF_xP5Q?start=10682
 
-  - time: "12:15"
-    title: Lunch
+    - time: "12:15"
+      title: Lunch
 
-  - time: "13:15"
-    title: Mixed Certificate Chains for the Transition to Post-Quantum Authentication in PKI
-    description: |
-      In this talk, I will propose and investigate a migration strategy towards post-quantum PKI authentication. Our strategy is based on the concept of "mixed certificate chains" that use different signature algorithms within the same certificate chain. In order to demonstrate the feasibility of our migration strategy, we combine the well-studied and trusted hash-based signature schemes SPHINCS+ and XMSS with elliptic curve cryptography first and subsequently with lattice-based PQC signature schemes (Dilithium and Falcon)
-    speakers: 
-      - Sebastian Paul
-    presentation: pkic-pqcc-mixed-chains-sebastian-paul-bosch.pdf
-    youtube: o-1sSF_xP5Q?start=16437
+    - time: "13:15"
+      title: Mixed Certificate Chains for the Transition to Post-Quantum Authentication in PKI
+      description: |
+        In this talk, I will propose and investigate a migration strategy towards post-quantum PKI authentication. Our strategy is based on the concept of "mixed certificate chains" that use different signature algorithms within the same certificate chain. In order to demonstrate the feasibility of our migration strategy, we combine the well-studied and trusted hash-based signature schemes SPHINCS+ and XMSS with elliptic curve cryptography first and subsequently with lattice-based PQC signature schemes (Dilithium and Falcon)
+      speakers: 
+        - Sebastian Paul
+      presentation: pkic-pqcc-mixed-chains-sebastian-paul-bosch.pdf
+      youtube: o-1sSF_xP5Q?start=16437
 
-  - time: "13:45"
-    title: How the Canadian Government is preparing for PQC
-    description: |
-      The Canadian Centre for Cyber Security is the lead technical authority for information technology security for the Government of Canada (GC). The Cyber Centre is working within the GC and with Canada's critical infrastructure to ensure a smooth and timely transition to PQC. This presentation will cover our guidance to GC in preparing for the PQC transition, our efforts in international standards to support adoption of PQC, and some considerations that may impact the PQC transition. 
-    speakers:
-      - Melanie Anderson
-      - Jonathan Hammell
-    presentation: pkic-pqcc-how-gc-preparing-for-pqc-melanie-anderson-jonathan-hammell-canadian-government.pdf
-    youtube: o-1sSF_xP5Q?start=18196
+    - time: "13:45"
+      title: How the Canadian Government is preparing for PQC
+      description: |
+        The Canadian Centre for Cyber Security is the lead technical authority for information technology security for the Government of Canada (GC). The Cyber Centre is working within the GC and with Canada's critical infrastructure to ensure a smooth and timely transition to PQC. This presentation will cover our guidance to GC in preparing for the PQC transition, our efforts in international standards to support adoption of PQC, and some considerations that may impact the PQC transition. 
+      speakers:
+        - Melanie Anderson
+        - Jonathan Hammell
+      presentation: pkic-pqcc-how-gc-preparing-for-pqc-melanie-anderson-jonathan-hammell-canadian-government.pdf
+      youtube: o-1sSF_xP5Q?start=18196
 
-  - time: "14:15"
-    title: Hybrid Approach for quantum-safe Public Key Infrastructure Development for Organizations (HAPKIDO)
-    description: |
-      Gabriele Spini will present the HAPKIDO project, sector-based plans that help organizations transition towards Quantum Safe (QS) PKIs, including hybrid PKIs that demonstrate how QS solutions will work with existing infrastructures, and governance models that guide organizations towards a QS future. HAPKIDO is already sharing insights with front runners in the telecom, financial and public sectors.
-    speakers: 
-      - Gabriele Spini
-    presentation: pkic-pqcc-hapkido-gabriele-spini-tno.pdf
-    youtube: o-1sSF_xP5Q?start=19903
+    - time: "14:15"
+      title: Hybrid Approach for quantum-safe Public Key Infrastructure Development for Organizations (HAPKIDO)
+      description: |
+        Gabriele Spini will present the HAPKIDO project, sector-based plans that help organizations transition towards Quantum Safe (QS) PKIs, including hybrid PKIs that demonstrate how QS solutions will work with existing infrastructures, and governance models that guide organizations towards a QS future. HAPKIDO is already sharing insights with front runners in the telecom, financial and public sectors.
+      speakers: 
+        - Gabriele Spini
+      presentation: pkic-pqcc-hapkido-gabriele-spini-tno.pdf
+      youtube: o-1sSF_xP5Q?start=19903
 
-  - time: "14:45"
-    title: Preparing for and migrating to a world with Post-Quantum Cryptography
-    description: |
-      This panel discussion will be moderated by Greg Wetmore.
+    - time: "14:45"
+      title: Preparing for and migrating to a world with Post-Quantum Cryptography
+      description: |
+        This panel discussion will be moderated by Greg Wetmore.
 
-      You can **submit your questions [in our discussion forum](https://github.com/orgs/pkic/discussions/categories/post-quantum-cryptography)**, during, before, or after the event. Don't forget to mention the name of the speaker if you want to address the question to a specific person!
-    speakers: 
-      - Sebastian Paul
-      - Melanie Anderson
-      - Gabriele Spini
-      - Greg Wetmore
-    youtube: o-1sSF_xP5Q?start=21092
+        You can **submit your questions [in our discussion forum](https://github.com/orgs/pkic/discussions/categories/post-quantum-cryptography)**, during, before, or after the event. Don't forget to mention the name of the speaker if you want to address the question to a specific person!
+      speakers: 
+        - Sebastian Paul
+        - Melanie Anderson
+        - Gabriele Spini
+        - Greg Wetmore
+      youtube: o-1sSF_xP5Q?start=21092
 
-  - time: "15:15"
-    title: Summary and closing
-    description:
-    speakers: 
-      - Paul van Brouwershaven
-    presentation: pkic-pqcc-summary-and-closing-paul-van-brouwershaven.pdf
-    youtube: o-1sSF_xP5Q?start=23574
+    - time: "15:15"
+      title: Summary and closing
+      description:
+      speakers: 
+        - Paul van Brouwershaven
+      presentation: pkic-pqcc-summary-and-closing-paul-van-brouwershaven.pdf
+      youtube: o-1sSF_xP5Q?start=23574
 
-  - time: "15:30"
-    title: Networking
+    - time: "15:30"
+      title: Networking
 
 
 ---

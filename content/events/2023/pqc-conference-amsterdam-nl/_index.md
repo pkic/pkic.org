@@ -42,123 +42,123 @@ speakers:
       twitter: 
       linkedin: https://www.linkedin.com/in/joppebos/
 
+agenda:
+  - Tuesday:
+    - time: "8:30"
+      title: Registration
 
-tuesday:
-  - time: "8:30"
-    title: Registration
+    - time: "9:00"
+      title: Opening
+      description:
+      speakers: 
+        - Paul van Brouwershaven
+        - Albert Ruiter
 
-  - time: "9:00"
-    title: Opening
-    description:
-    speakers: 
-      - Paul van Brouwershaven
-      - Albert Ruiter
+    - time: "9:15"
+      title: Keynote Message
+      description:
+      speakers:
+        - TBC
 
-  - time: "9:15"
-    title: Keynote Message
-    description:
-    speakers:
-      - TBC
+    - time: "9:30"
+      title: Status update from NIST
+      description:
+      speakers:
+        - TBC
 
-  - time: "9:30"
-    title: Status update from NIST
-    description:
-    speakers:
-      - TBC
+    - time: "10:30"
+      title: Break
+      sponsor: 
 
-  - time: "10:30"
-    title: Break
-    sponsor: 
+    - time: "11:00"
+      title: Governance
+      description:
+      speakers:
+        - TBC
 
-  - time: "11:00"
-    title: Governance
-    description:
-    speakers:
-      - TBC
+    - time: "11:30"
+      title: Regulating Quantum Safe Cryptography (QSC)
+      description: Quantum Safe Cryptography working group of the Dutch Government
+      speakers: 
+        - Quantum Safe Cryptography working group of the Dutch Government
 
-  - time: "11:30"
-    title: Regulating Quantum Safe Cryptography (QSC)
-    description: Quantum Safe Cryptography working group of the Dutch Government
-    speakers: 
-      - Quantum Safe Cryptography working group of the Dutch Government
+    - time: "12:00"
+      title: Quantum & Trust Services
+      description: Dutch Authority for Digital Infrastructure (RDI)
+      speakers: 
+        - Dutch Authority for Digital Infrastructure (RDI)
 
-  - time: "12:00"
-    title: Quantum & Trust Services
-    description: Dutch Authority for Digital Infrastructure (RDI)
-    speakers: 
-      - Dutch Authority for Digital Infrastructure (RDI)
+    - time: "13:00"
+      title: Lunch
+      sponsor: 
 
-  - time: "13:00"
-    title: Lunch
-    sponsor: 
+    - time: "14:00"
+      title: PQC in practice
+      description: 
+      speakers: 
+        - Bas Westerbaan (Cloudflare)
 
-  - time: "14:00"
-    title: PQC in practice
-    description: 
-    speakers: 
-      - Bas Westerbaan (Cloudflare)
+    - time: "15:30"
+      title: Break
+      sponsor: 
 
-  - time: "15:30"
-    title: Break
-    sponsor: 
+    - time: "11:00"
+      title: TBD
+      description:
+      speakers:
+        - TBC
 
-  - time: "11:00"
-    title: TBD
-    description:
-    speakers:
-      - TBC
+    - time: "17:00"
+      title: Networking
 
-  - time: "17:00"
-    title: Networking
+  - Wednesday:
+    - time: "8:30"
+      title: Registration
 
-wednesday:
-  - time: "8:30"
-    title: Registration
+    - time: "9:00"
+      title: Hardware
+      description:
+      speakers: 
 
-  - time: "9:00"
-    title: Hardware
-    description:
-    speakers: 
+    - time: "9:00"
+      title: "Post-Quantum Crypto: Challenges for Embedded Applications"
+      description: |
+        Post-quantum crypto standards are coming: it doesn’t matter if you believe in quantum computers or not. What is the impact on the billions of embedded devices as used in automotive or IoT? Using some typical embedded use-cases we outline the challenges and show some recent solutions in this area.
+      speakers: 
+        - Joppe Bos
 
-  - time: "9:00"
-    title: "Post-Quantum Crypto: Challenges for Embedded Applications"
-    description: |
-      Post-quantum crypto standards are coming: it doesn’t matter if you believe in quantum computers or not. What is the impact on the billions of embedded devices as used in automotive or IoT? Using some typical embedded use-cases we outline the challenges and show some recent solutions in this area.
-    speakers: 
-      - Joppe Bos
+    - time: "10:30"
+      title: Break
+      sponsor: 
 
-  - time: "10:30"
-    title: Break
-    sponsor: 
+    - time: "11:00"
+      title: Migration (hosted by TNO)
+      description:
+      speakers:
+        - TBC
 
-  - time: "11:00"
-    title: Migration (hosted by TNO)
-    description:
-    speakers:
-      - TBC
+    - time: "13:00"
+      title: Lunch
+      sponsor: 
 
-  - time: "13:00"
-    title: Lunch
-    sponsor: 
+    - time: "14:00"
+      title: TBD
+      description:
+      speakers:
+        - TBC
+    
+    - time: "15:30"
+      title: Break
+      sponsor: 
 
-  - time: "14:00"
-    title: TBD
-    description:
-    speakers:
-      - TBC
-  
-  - time: "15:30"
-    title: Break
-    sponsor: 
+    - time: "16:00"
+      title: TBD
+      description:
+      speakers:
+        - TBC
 
-  - time: "16:00"
-    title: TBD
-    description:
-    speakers:
-      - TBC
-
-  - time: "17:00"
-    title: Networking
+    - time: "17:00"
+      title: Networking
 
 ---
 
@@ -195,14 +195,7 @@ Would you like to sponsor the Post-Quantum PKI conference? Please contact us [us
 
 This is a **draft agenda** and subject to change, the final agenda will be posted here when available. 
 
-{{< tabs >}}
-    {{< tab title="Tuesday" >}}
-      {{< agenda "tuesday" >}}
-    {{< /tab >}}
-    {{< tab title="Wednesday" >}}
-      {{< agenda "wednesday" >}}
-    {{< /tab >}}
-{{< /tabs >}}
+{{< agenda "agenda" >}}
 
 Speakers are prohibited from promoting their products or services at this conference. Commercials, workshops and pitches may contain commercial information.
 
