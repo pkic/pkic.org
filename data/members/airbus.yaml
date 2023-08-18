@@ -1,6 +1,6 @@
 id: airbus
 name: Airbus
-slogan: 
+slogan: We make it fly.
 website: https://www.airbus.com/
 
 # Short description, longer content can be placed in `content/members/`
@@ -10,13 +10,58 @@ description: Airbus is a global pioneer in the aerospace industry, operating in 
 memberSince: 2023-04-04
 memberType: H
 workingGroups:
-  - PQC
+ - PQC
+
+
+# sponsor
+# sponsor:
+#  level: 
+
+# Press Releases
+press: 
+  url: https://www.airbus.com/en/newsroom
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.airbus.com/en/careers
+  feed: 
+  language: en_US
 
 # Social media
 social:
   twitter: https://twitter.com/airbus
   facebook: https://www.facebook.com/airbus
-  instagram: https://www.instagram.com/airbus
-  pinterest:
+  instagram: https://www.instagram.com/airbus/
   linkedin: https://www.linkedin.com/company/airbusgroup
-  youtube: https://www.youtube.com/user/airbus
+  youtube: https://www.youtube.com/@airbus/
+  
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:     
+  - name: Mario Schiener
+    role: Digital Trust Solutions and Cybersecurity Architect
+    social:
+      linkedin: https://de.linkedin.com/in/mario-schiener
+    description:
+     Mario Schiener studied mathematics and computer science. He specialized in algorithmic number theory and elliptic curves and holds a bachelor and a master degree from the University of Bayreuth in Germany.
+    
+     Mario has been working for Airbus since 2016 and held various cybersecurity positions, including software development, system engineering and architecture, as well as team leadership roles.
+     Cryptography has been a constant throughout all projects Mario has been involved in, ranging from smartcard programming over PKI and its applications such as S/MIME encryption solutions to post quantum cryptography.
+    
+     Mario joined the team of Airbus Digital Trust Solutions in 2021 and is currently focusing on preparing Airbus for post quantum cryptography.
+     
+     
+  - name: Ashraf Al Shalabi
+    role: Digital Trust Solutions and Cybersecurity Architect
+    social:
+      linkedin: https://www.linkedin.com/in/ashrafshalabi/
+    description: Ashraf Al Shalabi is a seasoned professional with more than 7 years of experience in cybersecurity and infrastructure design.
+    
+    His academic background includes a degree in Business Informatics. He is currently a solution architect for Airbus Corporate PKI.
+     
+    
