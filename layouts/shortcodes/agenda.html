@@ -21,29 +21,35 @@
             <div class="tab-content overflow-x-auto" id="nav-tabContent">
                 {{- range $day, $items := $days -}}
                     <div class="mt-1 tab-pane fade{{ if eq $i 0 }} show active{{ end}}" id="nav-{{ $day | urlize }}" role="tabpanel" aria-labelledby="nav-{{ $day | urlize }}-tab">
+                        <div class="d-flex flex-column align-items-start">
                             <!-- a column per location -->
                             {{- with $locations -}}
                                 {{- if gt (len .) 1 -}}
-                                    <div class="d-flex flex-row flex-nowrap border-end bg-dark text-white">
+                                    <div class="d-flex flex-row border-end bg-dark text-white">
                                         <div class="agenda-time"></div>
                                         {{- range . -}}
-                                            <div class="agenda-content border-start py-2"><span class="fs-4 mx-3">{{ .name }}</span></div>
+                                            <div class="agenda-content border-start py-2">
+                                                <span class="fs-4 mx-3">{{ .name }}</span>
+                                            </div>
                                         {{- end -}}
                                     </div>
                                 {{- end -}}
                             {{- end -}}
 
                             {{- range $items -}}
-                            <div class="d-flex flex-row flex-nowrap border-bottom{{ if not .speakers }} bg-secondary text-white{{ end }}">
+                            <div class="d-flex flex-row border-bottom{{ if not .speakers }} bg-secondary text-white{{ end }}">
                                 <!-- time -->
                                 <div class="agenda-time text-end py-2">
-                                    <span class="opacity-25 text-nowrap fs-3 mx-3">{{- .time -}}</span>
+                                    <span class="opacity-25 fs-3 mx-3">{{ .time }}</span>
                                 </div>
 
                                 {{- if not .speakers -}}
-                                    <div class="border-start py-2">
-                                        <span class="opacity-25 text-nowrap fs-3 fw-bold mx-3">{{ .title }}</span>
+                                    <div class="agenda-content border-start py-2">
+                                        <span class="opacity-25 fs-3 fw-bold mx-3">{{ .title }}</span>
                                     </div>
+                                    {{- range seq (sub (len $locations ) 1) }}
+                                        <div class="agenda-content"></div>
+                                    {{- end -}}
                                 {{- else -}}
 
                                     {{- $slot := . -}}
@@ -54,7 +60,7 @@
                                         {{- end -}}
 
                                         {{- with $item -}}
-                                            <div class="{{ if or .youtube (gt (len $locations) 1) }}agenda-content {{ end }} border-start d-inline-block position-relative">
+                                            <div class="{{ if or .youtube (gt (len $locations) 1) }}agenda-content {{ end }}border-start d-inline-block position-relative">
                                                 {{ with .track }}
                                                     <span class="position-absolute top-0 end-0 me-2 mt-2 badge rounded-pill shadow bg-warning">{{ . }}</span>
                                                 {{ end }}
@@ -107,6 +113,7 @@
                                 {{- end -}}
                             </div>
                             {{- end -}}
+                        </div>
                     </div>
                 {{- end -}}
             </div>

@@ -216,11 +216,13 @@ main h4 {
 }
 
 .agenda-time {
-    flex: 0 0 100px;
+    width: 100px;
+    min-width: 100px;
 }
 
 .agenda-content {
-    flex: 0 0 575px;
+    width: 570px;
+    min-width: 570px;
 }
 
 #agenda-tabs .nav-link {
