@@ -2,12 +2,12 @@
     <div class="mt-2 mb-4">
         {{- if gt (len .) 1 -}}
         <nav id="agenda-tabs">
-            <div class="nav nav-tabs" id="nav-tab" role="tablist">
+            <div class="nav nav-tabs" id="nav-tab" role="tablist" data-scroll-target="agenda">
                 {{- range $i, $days := . -}}
                     {{- range $day, $items := $days -}}
-                        <button class="nav-link{{ if eq $i 0 }} active{{ end}}" id="nav-{{ $day | urlize }}-tab" data-bs-toggle="tab" data-bs-target="#nav-{{ $day | urlize }}" type="button" role="tab" aria-controls="nav-{{ $day | urlize }}" aria-selected="true">{{ $day }}</button>
-                    {{ end }}
-                {{ end }}
+                       <button class="nav-link{{ if eq $i 0 }} active{{ end}}" id="nav-{{ $day | urlize }}-tab" data-bs-toggle="tab" data-bs-target="#nav-{{ $day | urlize }}" type="button" role="tab" aria-controls="nav-{{ $day | urlize }}" aria-selected="true">{{ $day }}</button>
+                    {{- end -}}
+                {{- end -}}
             </div>
         </nav>
         {{- end -}}

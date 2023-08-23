@@ -16,6 +16,13 @@ $link-hover-color: $primary;
 // import font(s)
 @import url(https://fonts.googleapis.com/css?family=Roboto:400,300,700);
 
+h1, h2, h3, h4, h5, h6 {
+    scroll-margin-top: 60px;
+}
+div {
+    scroll-margin-top: 150px;
+}
+
 html,
 body {
     display: flex;
