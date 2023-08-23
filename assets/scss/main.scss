@@ -222,15 +222,29 @@ main h4 {
     animation: scroller 60s linear 0.01s infinite;
 }
 
-.agenda-time {
-    width: 100px;
-    min-width: 100px;
-}
+@include media-breakpoint-up(xs) { 
+    .agenda-time {
+        width: 90px;
+        min-width: 90px;
+    }
+    
+    .agenda-content {
+        width: 500px;
+        min-width: 500px;
+    }
+ }
 
-.agenda-content {
-    width: 570px;
-    min-width: 570px;
-}
+ @include media-breakpoint-up(lg) { 
+    .agenda-time {
+        width: 100px;
+        min-width: 100px;
+    }
+    
+    .agenda-content {
+        width: 570px;
+        min-width: 570px;
+    }
+ }
 
 #agenda-tabs .nav-link {
     background: var(--bs-success-bg-subtle);
