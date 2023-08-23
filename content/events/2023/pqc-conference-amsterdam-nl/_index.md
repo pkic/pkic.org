@@ -381,7 +381,7 @@ The conference welcomes business leaders, industry experts, and representatives 
 **Location:** [Meervaart](https://www.meervaart.nl/meetings-events/english), Amsterdam, the Netherlands  
 **Registration:** [Click here](https://forms.gle/8J1Dfdu6w2XYqXd3A)  
 
-* _This event can be attended in-person or remotely (plenary session only), we strongly recommend to attend in person where possible._
+* _This event can be attended in-person or remotely, we strongly recommend to attend in person where possible._
 * _Only the plenary sessions can be attended remotely, break-out rooms can not be attended online_
 * _There are no costs to register or attend the conference. Travel, accommodation and living expenses are not covered, all attendees are responsible to cover their own expenses._
 
