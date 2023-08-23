@@ -52,9 +52,6 @@ main {
     flex: 1;
 }
 
-#content {
-    text-align: justify;
-}
 
 #sidebar {
     color: rgba(107, 107, 107, 0.849);
@@ -216,6 +213,22 @@ main h4 {
 
 .banner {
     animation: scroller 60s linear 0.01s infinite;
+}
+
+.agenda-time {
+    flex: 0 0 100px;
+}
+
+.agenda-content {
+    flex: 0 0 575px;
+}
+
+#agenda-tabs .nav-link {
+    background: var(--bs-success-bg-subtle);
+}
+#agenda-tabs .active {
+    background: var(--bs-light);
+    font-weight: bold;
 }
 
 @keyframes scroller {
