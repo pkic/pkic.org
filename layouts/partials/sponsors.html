@@ -3,19 +3,33 @@
     {{ $level = . }}
 {{ end }}
 
+{{ $sponsoring := $.Site.Params.name }}
+{{ with $.Scratch.Get "sponsoring" }}
+    {{ $sponsoring = . }}
+{{ end }}
+
 {{ $sponsors := slice }}
 
+<!-- member sponsors -->
 {{ range $.Site.Data.members }}
     {{ if or 
-        (and (eq $level "all") (isset .sponsor "level") (ne .sponsor.level nil))
+        (and (eq $level "all") (gt .sponsor.level ""))
         (eq .sponsor.level $level)
+        (index .sponsor.sponsoring $sponsoring)
     }}
+
         {{ $sponsors = $sponsors | append . }}
     {{ end }}
 {{ end }}
 
+<!-- non-member sponsors -->
 {{ range $.Site.Data.sponsors }}
-    {{ if or (eq $level "all") (eq .level $level) }}
+    {{ if or 
+        (and (eq $level "all") (gt .sponsor.level ""))
+        (eq .sponsor.level $level)
+        (index .sponsor.sponsoring $sponsoring)
+    }}
+
         {{ $sponsors = $sponsors | append . }}
     {{ end }}
 {{ end }}
@@ -23,10 +37,20 @@
 <div class="sponsors">
 {{ if gt (len $sponsors) 0 }}
         {{ range (shuffle $sponsors) }}
-            {{ $title := (printf "%s is a %s sponsor for the %s" .name .sponsor.level $.Site.Params.name ) }}
+            {{ $context := $.Site.Params.name }}
+            {{ $level := .sponsor.level }}
+            {{ with (index .sponsor.sponsoring $sponsoring) }}
+                {{ $level = .level }}
+                {{ $context = $sponsoring }}
+            {{ end }}
+
+            {{ $title := (printf "%s is a %s sponsor for the %s" .name $level $sponsoring ) }}
             <a href="{{ .website }}" title="{{ $title }}" target="_blank">
-                <!-- check sponsors and members resources -->
                 {{ $img := resources.GetMatch (printf "/images/**/%s/%s.*" .id .id) }}
+                {{ if .logo }}
+                    {{ $img = resources.GetMatch (printf "/images/sponsors/**/%s" .logo) }}
+                {{ end }}
+
                 {{ with $img}}
                 <img style="{{ with $.Scratch.Get `max-height` }}max-height: {{ . }}px;{{ end }}{{ with $.Scratch.Get `max-width` }}max-width: {{ . }}px;{{ end }}{{ with $.Scratch.Get `height` }}height: {{ . }}px;{{ end }}" class="sponsor-logo{{ with $.Scratch.Get `class` }} {{ . }}{{ end }}" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
                 {{ end }}
