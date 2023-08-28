@@ -244,15 +244,15 @@ agenda:
         - Joppe Bos
 
     - time: "9:30"
-      title: Hardware Cryptographic Modules
-      description: In this session experts from several hardware vendors will debate about Post-Quantum Cryptography in hardware cryptographic modules, such as HSMs, tokens, smartcards, etc.
-      track: Hardware
+      title: To be announced shortly
+      description: The speaker(s) for this session will be announced soon!
       speakers:
         - TBC
 
     - time: "10:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: Hardware Cryptographic Modules
+      description: In this session experts from several hardware vendors will debate about Post-Quantum Cryptography in hardware cryptographic modules, such as HSMs, tokens, smartcards, etc.
+      track: Hardware
       speakers:
         - TBC
 
@@ -391,7 +391,7 @@ The conference welcomes business leaders, industry experts, and representatives 
 
 We are immensely grateful to our sponsors: 
 
-{{< sponsors level="all" height="50" max-width="150" >}}
+{{< sponsors sponsoring="Post-Quantum Cryptography Conference Amsterdam 2023" level="all" height="50" max-width="150" >}}
 
 #### Become a sponsor
 
