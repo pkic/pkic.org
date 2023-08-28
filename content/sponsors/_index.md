@@ -15,9 +15,4 @@ menu:
     main:
 ---
 
-{{< sponsors level="Diamond" height="175" max-width="525" >}}
-{{< sponsors level="Titanium" height="150" max-width="450" >}}
-{{< sponsors level="Platinum" height="125" max-width="375" >}}
-{{< sponsors level="Gold" height="100" max-width="300" >}}
-{{< sponsors level="Silver" height="75" max-width="225" >}}
-{{< sponsors level="Bronze" height="50" max-width="150" >}}
+{{< sponsors level="all" height="25" max-width="75" rows=true >}}

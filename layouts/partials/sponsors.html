@@ -36,12 +36,20 @@
 
 <div class="sponsors">
 {{ if gt (len $sponsors) 0 }}
+    {{ range seq 5 1 }}
+        {{ if ($.Scratch.Get "rows") }}<div>{{ end }}
+
+        {{ $i := . }}
         {{ range (shuffle $sponsors) }}
             {{ $context := $.Site.Params.name }}
             {{ $level := .sponsor.level }}
             {{ with (index .sponsor.sponsoring $sponsoring) }}
                 {{ $level = .level }}
                 {{ $context = $sponsoring }}
+            {{ end }}
+            {{ $levelseq := (index $.Site.Data.sponsorlevels $level) }}
+            {{ if ne $levelseq $i }}
+                {{ continue }}
             {{ end }}
 
             {{ $title := (printf "%s is a %s sponsor for the %s" .name $level $sponsoring ) }}
@@ -52,9 +60,12 @@
                 {{ end }}
 
                 {{ with $img}}
-                <img style="{{ with $.Scratch.Get `max-height` }}max-height: {{ . }}px;{{ end }}{{ with $.Scratch.Get `max-width` }}max-width: {{ . }}px;{{ end }}{{ with $.Scratch.Get `height` }}height: {{ . }}px;{{ end }}" class="sponsor-logo{{ with $.Scratch.Get `class` }} {{ . }}{{ end }}" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
+                <img style="{{ with $.Scratch.Get `max-height` }}max-height: {{ math.Round (mul (int .) $levelseq) }}px;{{ end }}{{ with $.Scratch.Get `max-width` }}max-width: {{ math.Round (mul (int .) $levelseq) }}px;{{ end }}{{ with $.Scratch.Get `height` }}height: {{ math.Round (mul (int .) $levelseq) }}px;{{ end }}" class="sponsor-logo{{ with $.Scratch.Get `class` }} {{ . }}{{ end }}" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
                 {{ end }}
             </a>
         {{ end }}
+
+        {{ if ($.Scratch.Get "rows") }}</div>{{ end }}
+    {{ end }}
 {{ end }}
 </div>

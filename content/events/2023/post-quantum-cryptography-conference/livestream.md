@@ -7,4 +7,4 @@ robots: noindex
 redirect: ..
 ---
 
-{{< sponsors max-height="50" max-width="100" >}}
+{{< sponsors level="all" height="20" max-width="60" rows=true >}}
