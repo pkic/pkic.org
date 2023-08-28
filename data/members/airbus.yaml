@@ -12,7 +12,6 @@ memberType: H
 workingGroups:
  - PQC
 
-
 # sponsor
 # sponsor:
 #  level: 
@@ -33,10 +32,9 @@ careers:
 social:
   twitter: https://twitter.com/airbus
   facebook: https://www.facebook.com/airbus
-  instagram: https://www.instagram.com/airbus/
+  instagram: https://www.instagram.com/airbus
   linkedin: https://www.linkedin.com/company/airbusgroup
-  youtube: https://www.youtube.com/@airbus/
-  
+  youtube: https://www.youtube.com/@airbus
 
 # Here you can list those who represent or have represented the member.
 #
@@ -45,7 +43,7 @@ social:
 representatives:     
   - name: Mario Schiener
     role: Digital Trust Solutions and Cybersecurity Architect
-    social:
+    social: |
       linkedin: https://de.linkedin.com/in/mario-schiener
     description:
      Mario Schiener studied mathematics and computer science. He specialized in algorithmic number theory and elliptic curves and holds a bachelor and a master degree from the University of Bayreuth in Germany.
@@ -54,14 +52,12 @@ representatives:
      Cryptography has been a constant throughout all projects Mario has been involved in, ranging from smartcard programming over PKI and its applications such as S/MIME encryption solutions to post quantum cryptography.
     
      Mario joined the team of Airbus Digital Trust Solutions in 2021 and is currently focusing on preparing Airbus for post quantum cryptography.
-     
-     
+
   - name: Ashraf Al Shalabi
     role: Digital Trust Solutions and Cybersecurity Architect
     social:
       linkedin: https://www.linkedin.com/in/ashrafshalabi/
-    description: Ashraf Al Shalabi is a seasoned professional with more than 7 years of experience in cybersecurity and infrastructure design.
+    description: |
+      Ashraf Al Shalabi is a seasoned professional with more than 7 years of experience in cybersecurity and infrastructure design.
     
-    His academic background includes a degree in Business Informatics. He is currently a solution architect for Airbus Corporate PKI.
-     
-    
+      His academic background includes a degree in Business Informatics. He is currently a solution architect for Airbus Corporate PKI.
