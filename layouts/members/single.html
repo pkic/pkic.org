@@ -53,31 +53,33 @@
 
 <div class="py-5 bg-light">
   <div class="container">
-      {{ range where $member.representatives "hidden" "==" nil}}
-      {{ $date := (time "9999-01-01") }}
-      {{ with .till }}
-        {{ $date = (time .) }}
-      {{ end }}
+      {{ with $member.representatives }}
+        {{ range where . "hidden" "==" nil}}
+          {{ $date := (time "9999-01-01") }}
+          {{ with .till }}
+            {{ $date = (time .) }}
+          {{ end }}
 
-      {{ if time.Now.Before $date }}
-        <div class="row mb-5">
-          <div class="col-lg-9 order-lg-2">
-            <h2 id="{{ .name | urlize | safeURL }}" class="featurette-heading">{{.name}} {{ partial "social.html" .social }}
-              {{ partial "anchor.html" (.name | urlize) }}
-            </h2>
-            <h5>{{.role}}</h5>
-            <p class="lead">{{.description | markdownify }}</p>
-          </div>
-          <div class="col-lg-3 order-lg-1">
-            {{ $title := (printf "%s is %s at %s" .name .role $member.name) }}
-            {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id (default (.name | urlize | safeURL) .id)) }}
-            {{ with $img }}
-            {{ $img = $img.Resize "x350" }}
-            <img class="img-thumbnail" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
-            {{ end }}
-          </div>
-        </div>
-      {{ end }}
+          {{ if time.Now.Before $date }}
+            <div class="row mb-5">
+              <div class="col-lg-9 order-lg-2">
+                <h2 id="{{ .name | urlize | safeURL }}" class="featurette-heading">{{.name}} {{ partial "social.html" .social }}
+                  {{ partial "anchor.html" (.name | urlize) }}
+                </h2>
+                <h5>{{.role}}</h5>
+                <p class="lead">{{.description | markdownify }}</p>
+              </div>
+              <div class="col-lg-3 order-lg-1">
+                {{ $title := (printf "%s is %s at %s" .name .role $member.name) }}
+                {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id (default (.name | urlize | safeURL) .id)) }}
+                {{ with $img }}
+                {{ $img = $img.Resize "x350" }}
+                <img class="img-thumbnail" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
+                {{ end }}
+              </div>
+            </div>
+          {{ end }}
+        {{ end }}
       {{ end }}
   </div>
 </div>
