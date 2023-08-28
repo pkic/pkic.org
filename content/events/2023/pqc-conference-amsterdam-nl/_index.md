@@ -391,7 +391,7 @@ The conference welcomes business leaders, industry experts, and representatives 
 
 We are immensely grateful to our sponsors: 
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Amsterdam 2023" level="all" height="50" max-width="150" >}}
+{{< sponsors sponsoring="Post-Quantum Cryptography Conference Amsterdam 2023" level="all" height="20" max-width="60" rows=true >}}
 
 #### Become a sponsor
 

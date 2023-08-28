@@ -29,6 +29,4 @@ If you have any questions, please contact us at feedback@pkic.org.
 
 Thank you for your interest and we look forward to hearing from you! 
 
-{{< sponsors level="Diamond" height="175" max-width="525" >}}
-{{< sponsors level="Titanium" height="150" max-width="450" >}}
-{{< sponsors level="Platinum" height="125" max-width="375" >}}
+{{< sponsors sponsoring="Post-Quantum Cryptography Conference Amsterdam 2023" level="all" height="20" max-width="60" rows=true >}}
