@@ -1,0 +1,34 @@
+id: sts
+name: Special Telecommunications Service
+website: https://www.sts.ro/en/
+
+# Short description, longer content can be placed in `content/members/`
+description: Ensuring communications and information technology secured services for the Romanian authorities
+
+# membership
+memberSince: 2023-07-11
+memberType: CA
+workingGroups:
+  - CA
+  - PQC
+
+press: 
+  url: https://www.sts.ro/en/press-releases
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.sts.ro/en/sts_career
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  facebook: https://www.facebook.com/telecomunicatiispeciale
+  instagram: https://www.instagram.com/sts_telecomunicatii_speciale/?hl=en
+  linkedin: https://www.linkedin.com/company/serviciul-de-telecomunicatii-speciale/
+  youtube: https://www.youtube.com/@serviciuldetelecomunicatii5718
+
+
+  
