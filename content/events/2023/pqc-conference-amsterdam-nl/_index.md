@@ -2,8 +2,7 @@
 date: 2023-07-12T08:00:10Z
 draft: false
 title: Post-Quantum Cryptography Conference - November 7 and 8, 2023 - Amsterdam (NL)
-summary: Speakers at this conference include some of the world’s top Post-Quantum Cryptography (PQC) experts and come from government science agencies, standards bodies, and private organizations at the forefront of this new challenge to digital security. Topics will cover the status of PQC standardization at NIST, ETSI, and IETF, government preparations, migration strategies, etc.
-
+summary: At this two day conference we will have updates from NIST, ENISA, BSI, the Quantum Safe Cryptography working group of the Dutch Government, NXP, Cloudflare, and many more that we will be announcing soon. 
 
 heroTitle: Post-Quantum Cryptography Conference
 heroDescription: November 7 and 8, 2023 - Amsterdam, The Netherlands | Online
