@@ -129,12 +129,12 @@ agenda:
       track: Governance
       speakers:
         - TBC 
-      location:
-        Breakout:
-          title: Workshops
-          description: 
-          speakers:
-            - TBC
+      # location:
+      #   Breakout:
+      #     title: To be announced shortly
+      #     description: The speaker(s) for this session will be announced soon!
+      #     speakers:
+      #       - TBC
 
     - time: "11:30"
       title: Regulating Quantum Safe Cryptography (QSC)
