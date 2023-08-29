@@ -197,9 +197,9 @@ On Friday March 3, 2023 the PKI Consortium hosted it's first Post-Quantum PKI co
 
 The conference was open for anyone interested in preparing for Post-Quantum Cryptography and **not limited** to the members of the PKI Consortium. 
 
-> We are now accepting proposals for presentations at the next Post-Quantum Cryptography Conference of the PKI Consortium, taking place in Amsterdam, the Netherlands on November 7 and 8, 2023.  
->   
-> **Submit your proposed talk to our [call for presentations](https://forms.gle/Eez13Ubmrp1zFfre9)**.
+> Our second **Post-Quantum Cryptography Conference** will be in Amsterdam (and online), on 7 and 8 November 2023. 
+> 
+> [Click here for more information and to register for the conference.](/events/2023/pqc-conference-amsterdam-nl/)
 
 ## Sponsors
 

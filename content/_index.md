@@ -16,7 +16,7 @@ menu:
 ---
 
 {{< alert >}}
-[Check the slides and recording of our first **Post-Quantum Cryptography Conference**](/events/2023/post-quantum-cryptography-conference/)
+Our second **Post-Quantum Cryptography Conference** will be in Amsterdam (and online), on 7 and 8 November 2023. [Click here for more information and to register for the conference.](/events/2023/pqc-conference-amsterdam-nl/)
 {{< /alert >}}
 
 {{< figure src="/img/logo-black.svg" alt="Logo of the PKI Consortium" >}}
