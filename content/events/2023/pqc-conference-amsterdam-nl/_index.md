@@ -87,6 +87,14 @@ speakers:
     social:
       linkedin: https://www.linkedin.com/in/gregwetmore/
 
+  - name: Elmer Lastdrager
+    title: Research Engineer at SIDN Labs
+    bio: |
+      Elmer Lastdrager works as a Research Engineer for SIDN Labs. He is interested in technologies that improve the Internet in the future by making it more transparent, open and privacy friendly.
+    social:
+      linkedin: https://www.linkedin.com/in/elmerlastdrager/
+
+
 # Locations with sessions in parallel -----------------------------------------
 locations:
   - name: Plenary
@@ -336,7 +344,15 @@ agenda:
       title: To be announced shortly
       description: The speaker(s) for this session will be announced soon!
       speakers:
-        - TBC
+        - TB
+      location:
+        Breakout:
+          title: A testbed for evaluating post-quantum algorithms in DNS
+          description: |
+            DNS is an fundamental Internet service that translates human-readable names to IP addresses. It is secured using DNSSEC, an extension that provides authentication and integrity through the use of cryptographic signatures. The inherent limitations of the DNS protocol lead to requirements for the signing algoritms, specifically in terms of key size and signature size. This leads to challenges when deploying post-quantum algoritms. SIDN Labs is setting up a testbed in which developers, network researchers, and DNS operators can experiment with PQC algorithms and DNSSEC. Ultimately, the goal is to evaluate existing post-quantum cryptographic algorithms developers for use in DNS. In this presentation, we discuss some challenges and our progress on setting up a PQC-testbed for DNS.
+          track: Technical
+          speakers:
+            - Jan Klaussner 
 
     - time: "15:30"
       title: Break
