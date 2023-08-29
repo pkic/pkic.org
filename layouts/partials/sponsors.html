@@ -52,7 +52,7 @@
                 {{ continue }}
             {{ end }}
 
-            {{ $title := (printf "%s is a %s sponsor for the %s" .name $level $sponsoring ) }}
+            {{ $title := (printf "%s is a %s sponsor for the %s" .name $level $context ) }}
             <a href="{{ .website }}" title="{{ $title }}" target="_blank">
                 {{ $img := resources.GetMatch (printf "/images/**/%s/%s.*" .id .id) }}
                 {{ if .logo }}
