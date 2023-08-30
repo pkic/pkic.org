@@ -73,10 +73,17 @@ speakers:
     social:
       linkedin: https://www.linkedin.com/in/jan-klau%C3%9Fner-12578b159/
 
-  - name: Dr. Kaveh Bashiri
+  - name: Kaveh Bashiri
     title: The Federal Office for Information Security (BSI)
     bio: |
-      "Kaveh Bashiri received his PhD in Mathematics at the University of Bonn. Since 2021 he is a researcher at the cryptography group of the BSI. His main interests are Post-Quantum-Cryptography (especially, hash-based signature schemes) and Quantum Computing.
+      Dr. Kaveh Bashiri received his PhD in Mathematics at the University of Bonn. Since 2021 he is a researcher at the cryptography group of the BSI. His main interests are Post-Quantum-Cryptography (especially, hash-based signature schemes) and Quantum Computing.
+    social:
+      linkedin:
+
+  - name: Stavros Kousidis
+    title: The Federal Office for Information Security (BSI)
+    bio: |
+      Dr. Stavros Kousidis holds a Ph.D. in pure mathematics and joined the German Federal Office for Information Security (BSI) in 2012. Apart from classified information product approvals his work focuses on modern cryptanalysis via algebraic attacks and quantum algorithms. In particular, he led the BSI-project that produced the study "Status of Quantum Computer Development".
     social:
       linkedin:
 
@@ -93,6 +100,15 @@ speakers:
       Elmer Lastdrager works as a Research Engineer for SIDN Labs. He is interested in technologies that improve the Internet in the future by making it more transparent, open and privacy friendly.
     social:
       linkedin: https://www.linkedin.com/in/elmerlastdrager/
+
+  - name: Andrea Garcia Rodriguez
+    title: Lead Digital Policy Analyst at European Policy Centre (EPC)
+    bio: |
+      Andrea G. Rodríguez is Lead Digital Policy Analyst for the EU Digital Agenda at the European Policy Centre (EPC). Before joining the EPC, she was Lead Researcher of the Global Observatory of Urban Artificial Intelligence at CIDOB (Barcelona Centre for International Affairs), where she did research on digital topics and emerging technologies and was Project Manager. She has held advisory positions at the European Cybersecurity Forum (CYBERSEC) as Programme Committee Member, and at NATO as one of the 14 members of the Young Leaders group during the NATO 2030 process. In 2021, she was named "NextGen Leader" at the Young Professionals Summit (YPS) at the Brussels Forum and the Spanish Cybervolunteers Foundation recognised her as one of the 13 Spanish women to follow in technology, an initiative supported by Spain's Ministry of Social Affairs and the 2030 Agenda.
+
+      Andrea holds an EMJMD degree from the University of Glasgow, Dublin City University, and Charles University in Prague in Security, Intelligence and Strategic Studies (IMSISS) with a specialization in security and technology, and a B.A. (Hons) in International Relations from the Complutense University of Madrid, where she completed two stays abroad at Charles University in Prague and at the National Taiwan University (NTU) in Taipei.
+    social:
+      linkedin: https://www.epc.eu/en/analysts/Andrea-Garcia-Rodriguez~44dedc
 
 
 # Locations with sessions in parallel -----------------------------------------
@@ -169,16 +185,14 @@ agenda:
       sponsor: 
 
     - time: "14:00"
-      title: Quantum-safe PKI for the German administration
+      title: Post-Quantum Policy and Roadmap of the BSI
       description: |
-        The BSI is in control of the root certification authority of the public administration Public Key Infrastructure (PKI). This PKI is an essential element of the German government’s business processes at federal, state and municipal levels. For instance, subscribers of this PKI receive a signed certificate corresponding to a cryptographic key pair, which is used for identification, encryption, the creation of electronic signatures and other applications.
+        In the point of view of the Federal Office for Information Security in Germany (BSI), the question of "if" or "when" there will be quantum computers is no longer paramount. First post-quantum algorithms have been selected by NIST for standardisation and post-quantum cryptography will be used by default. Therefore, the migration to post-quantum cryptography should be pushed forward.
 
-        Currently, this PKI is based on RSA-4096. Hence, its security is threatened by the potential development of cryptographically relevant quantum computers. In order to address this threat, a full migration to a PKI based on quantum-safe cryptographic primitives has to be carried out.
-
-        Due to the variety of use-cases within this PKI, a number of technical requirements concerning performance, security and interoperability have to be taken into account in this migration. The goal of the talk is to discuss these requirements in detail and to present several concepts and possible solutions. In particular, we argue that a parallelized migration approach is essential in order to ensure constant availability of the system. Moreover, we discuss why standardized, stateful hash-based signature schemes such as XMSS or LMS are promising candidates for the root-CA-level in the PKI hierarchy. 
-      track: PKI
+        In this presentation, the BSI will expound upon its post-quantum cryptography policy and roadmap. We will emphasize the significance of the migration to post-quantum algorithms in safeguarding critical digital infrastructure, data, and communications. The presentation will elucidate the BSI’s approach, outlining the trajectory of post-quantum cryptography adoption as the default cryptographic standard.
+      track: Strategy
       speakers:
-        - Dr. Kaveh Bashiri
+        - Stavros Kousidis
       location:
         Breakout:
           title: Algorithm deep dive
@@ -341,10 +355,16 @@ agenda:
             - Jan Klaussner 
 
     - time: "15:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: Quantum-safe PKI for the German administration
+      description: |
+        The BSI is in control of the root certification authority of the public administration Public Key Infrastructure (PKI). This PKI is an essential element of the German government’s business processes at federal, state and municipal levels. For instance, subscribers of this PKI receive a signed certificate corresponding to a cryptographic key pair, which is used for identification, encryption, the creation of electronic signatures and other applications.
+
+        Currently, this PKI is based on RSA-4096. Hence, its security is threatened by the potential development of cryptographically relevant quantum computers. In order to address this threat, a full migration to a PKI based on quantum-safe cryptographic primitives has to be carried out.
+
+        Due to the variety of use-cases within this PKI, a number of technical requirements concerning performance, security and interoperability have to be taken into account in this migration. The goal of the talk is to discuss these requirements in detail and to present several concepts and possible solutions. In particular, we argue that a parallelized migration approach is essential in order to ensure constant availability of the system. Moreover, we discuss why standardized, stateful hash-based signature schemes such as XMSS or LMS are promising candidates for the root-CA-level in the PKI hierarchy. 
+      track: PKI
       speakers:
-        - TB
+        - Kaveh Bashiri
       location:
         Breakout:
           title: A testbed for evaluating post-quantum algorithms in DNS
@@ -359,10 +379,13 @@ agenda:
       sponsor: 
 
     - time: "16:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: A quantum cybersecurity agenda for Europe
+      description: |
+        The rapid development of quantum computing creates a new set of challenges for European cybersecurity. In recent years, the European Union has pursued an ambitious cybersecurity agenda but nevertheless, there are still questions about the current framework’s fitness to respond to these new challenges. Particularly worrisome is the advent of quantum attacks on encryption that risk rendering current cryptographic systems obsolete as they are in use. In July 2023, the European Policy Centre, with the support of Quantum Delta NL, published a discussion paper in which it analyses the criticality of preparing for quantum attacks on encryption by the creation of a new quantum cybersecurity agenda that improves technical and political coordination between EU member states and EU bodies and institutions for the transition to post-quantum cryptography and the future use of other quantum-safe technologies.
+
+        The European Policy Centre (EPC) is an independent, not-for-profit think tank dedicated to fostering European integration through analysis and debate, supporting and challenging decision-makers at all levels to make informed decisions based on evidence and analysis, and providing a platform for engaging partners, stakeholders and citizens in EU policy-making and in the debate about the future of Europe.
       speakers:
-        - TBC
+        - Andrea Garcia Rodriguez
 
     - time: "16:30"
       title: To be announced shortly
