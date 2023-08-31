@@ -25,4 +25,20 @@
           document.getElementById("inputForm").classList.add("visually-hidden");
           document.getElementById("formError").classList.remove("visually-hidden");
       }
+
+      // Make fields required, or not, depending on the category
+      const matches = document.querySelectorAll('input[name="Category"]');
+      const categoryChanged = (e) => {
+        if (e.target.id == "category-h") {
+          document.getElementById("role").required = false;
+          document.getElementById("organization").required = false;
+        } else {
+          document.getElementById("role").required = true;
+          document.getElementById("organization").required = true;
+        }
+      }
+      matches.forEach(match => {
+        match.addEventListener('change', categoryChanged);
+      })
+
   })()
