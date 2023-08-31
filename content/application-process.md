@@ -17,10 +17,13 @@ In order to admit new Members, all membership applications must agree to follow 
 
 Applications must be approved by the Executive Council after feedback from the Members. Feedback and approval on a membership application by each Member and the Executive Council shall be based solely on a determination of whether or not the applicant meets the stated membership criteria, and not on any other basis including competitive considerations.
 
+> **Individual applications are rarely accepted** and exclusively under category H (interested parties). To qualify, the individual **must not be affiliated with any organization** and must substantiate their PKI expertise.
+{.callout-info}
+
 ```mermaid
 flowchart TD 
     IsOrganization[Do you represent or are you employed by an organization?]
-    IsOrganization --> |No| Individual["Apply as individual (category H)"] -->  ApplicationForm
+    IsOrganization --> |No| Individual["You might qualify as an individual PKI expert\n(category H, interested parties), however,\nindividual applications are rarely accepted"] -->  ApplicationForm
     IsOrganization --> |Yes| IsMember[Check if the organization is an existing member]
 
     IsMember --> |Not listed as a member| Category
