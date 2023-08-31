@@ -8,16 +8,19 @@
         <input type="text" class="form-control" id="lastName" name="Last Name" required>
     </div>
     <div class="col-12">
-        <label for="role" class="form-label">Job Title (if applicable)</label>
-        <input type="text" class="form-control" id="role" name="Role">
+        <label for="role" class="form-label">Job Title</label>
+        <input type="text" class="form-control" id="role" name="Role" aria-describedby="roleHelp">
+        <div id="roleHelp" class="form-text">This should reflect your official role or position within the organization.</div>
     </div>
     <div class="col-12">
         <label for="email" class="form-label">Email</label>
-        <input type="email" class="form-control" id="email" name="Email" required>
+        <input type="email" class="form-control" id="email" name="Email" aria-describedby="emailHelp" required>
+        <div id="emailHelp" class="form-text">Provide your professional email address, which should normally have the same domain as your organization's website. Applications submitted with a personal email addresses like @gmail.com, @hotmail.com, @live.com, etc., are most likely declined.</div>
     </div>
     <div class="col-12">
-        <label for="organization" class="form-label">Organization Name (if applicable)</label>
-        <input type="text" class="form-control" id="organization" name="Organization">
+        <label for="organization" class="form-label">Organization Name</label>
+        <input type="text" class="form-control" id="organization" name="Organization" aria-describedby="organizationHelp">
+        <div id="organizationHelp" class="form-text">The majority of applications mandate the completion of this field. The PKI Consortium exclusively accepts individuals, under category H, on a personal basis. To qualify, the individual must not be affiliated with any organization and must provide proof of their PKI expertise.</div>
     </div>
     <div class="col-12">
         <label for="website" class="form-label">Website</label>
