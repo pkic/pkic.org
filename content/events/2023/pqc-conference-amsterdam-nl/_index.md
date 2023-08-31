@@ -207,11 +207,15 @@ agenda:
       speakers:
         - TBC
 
+    # Moved from Wednesday 16h as speaker is only available on Tuesday
     - time: "15:30"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: A quantum cybersecurity agenda for Europe
+      description: |
+        The rapid development of quantum computing creates a new set of challenges for European cybersecurity. In recent years, the European Union has pursued an ambitious cybersecurity agenda but nevertheless, there are still questions about the current framework’s fitness to respond to these new challenges. Particularly worrisome is the advent of quantum attacks on encryption that risk rendering current cryptographic systems obsolete as they are in use. In July 2023, the European Policy Centre, with the support of Quantum Delta NL, published a discussion paper in which it analyses the criticality of preparing for quantum attacks on encryption by the creation of a new quantum cybersecurity agenda that improves technical and political coordination between EU member states and EU bodies and institutions for the transition to post-quantum cryptography and the future use of other quantum-safe technologies.
+
+        The European Policy Centre (EPC) is an independent, not-for-profit think tank dedicated to fostering European integration through analysis and debate, supporting and challenging decision-makers at all levels to make informed decisions based on evidence and analysis, and providing a platform for engaging partners, stakeholders and citizens in EU policy-making and in the debate about the future of Europe.
       speakers:
-        - TBC
+        - Andrea Garcia Rodriguez
 
     - time: "15:30"
       title: Break
@@ -379,13 +383,10 @@ agenda:
       sponsor: 
 
     - time: "16:00"
-      title: A quantum cybersecurity agenda for Europe
-      description: |
-        The rapid development of quantum computing creates a new set of challenges for European cybersecurity. In recent years, the European Union has pursued an ambitious cybersecurity agenda but nevertheless, there are still questions about the current framework’s fitness to respond to these new challenges. Particularly worrisome is the advent of quantum attacks on encryption that risk rendering current cryptographic systems obsolete as they are in use. In July 2023, the European Policy Centre, with the support of Quantum Delta NL, published a discussion paper in which it analyses the criticality of preparing for quantum attacks on encryption by the creation of a new quantum cybersecurity agenda that improves technical and political coordination between EU member states and EU bodies and institutions for the transition to post-quantum cryptography and the future use of other quantum-safe technologies.
-
-        The European Policy Centre (EPC) is an independent, not-for-profit think tank dedicated to fostering European integration through analysis and debate, supporting and challenging decision-makers at all levels to make informed decisions based on evidence and analysis, and providing a platform for engaging partners, stakeholders and citizens in EU policy-making and in the debate about the future of Europe.
+      title: To be announced shortly
+      description: The speaker(s) for this session will be announced soon!
       speakers:
-        - Andrea Garcia Rodriguez
+        - TBC
 
     - time: "16:30"
       title: To be announced shortly
