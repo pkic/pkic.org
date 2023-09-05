@@ -1,0 +1,53 @@
+id: evertrust
+name: EVERTRUST
+slogan: 
+website: https://www.evertrust.fr/
+
+# Short description, longer content can be placed in `content/members/`
+description: EVERTRUST
+
+# membership
+memberSince: 2023-09-05
+memberType: CA
+workingGroups:
+  - CA
+  - PQC
+
+# Blog posts
+blog: 
+  url: https://evertrust.fr/learn/
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://evertrust.fr/press-releases/
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.entrust.com/careers
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/evertrust-sas
+  youtube: https://www.youtube.com/channel/UCKp8-JCNtss0aKskPx2FvKw
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Alexandre Aufrere
+    role: Partner, CTO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/alexandreaufrere/
+    description:
+      Supélec, CTO
