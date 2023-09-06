@@ -1,0 +1,64 @@
+id: sealwebassets/images/members
+name: Sealweb
+slogan: Securing transactions
+website: https://www.sealweb.eu/
+
+# Short description, longer content can be placed in `content/members/`
+description: SEALWeb is a consulting company dedicated to trust services projects. 
+
+# membership
+memberSince: 2023-05-01
+memberType: Consulting Services
+workingGroups:
+  - PKIMM
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: 
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: 
+
+# Careers
+careers: 
+  url: https://www.sealweb.eu/la-societe/recrutement/?lang=en
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/sealwebeu
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jérôme BORDIER 
+    role: “Security architectures” Partner
+    social:
+      linkedin: https://fr.linkedin.com/in/jeromebordier
+    description:
+      For over 15 years, Jerome has defined and implemented security projects architectures.
+      
+      Jérôme is:
+
+        * ISS and electronic trust expert
+        * LSTI Certification Committee Member
+        * Expert member at ETSI and ENISA
+        * Auditor for a number of certified French TSP (Trust Service Provider)
+        * Computer Engineer with a Master’s Degree from Paris Dauphine
