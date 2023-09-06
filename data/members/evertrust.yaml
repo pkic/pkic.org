@@ -4,13 +4,12 @@ slogan:
 website: https://www.evertrust.fr/
 
 # Short description, longer content can be placed in `content/members/`
-description: EVERTRUST
+description: EVERTRUST is a French software vendor specialized in a key sector of cybersecurity: trust management software.
 
 # membership
 memberSince: 2023-09-05
-memberType: CA
+memberType: Vendor
 workingGroups:
-  - CA
   - PQC
 
 # Blog posts
@@ -27,9 +26,9 @@ press:
 
 # Careers
 careers: 
-  url: https://www.entrust.com/careers
+  url: https://www.welcometothejungle.com/fr/companies/evertrust/jobs
   feed: 
-  language: en_US
+  language: fr_FR
 
 # Social media
 social:
@@ -50,4 +49,4 @@ representatives:
       twitter: 
       linkedin: https://www.linkedin.com/in/alexandreaufrere/
     description:
-      Supélec, CTO
+      Alexandre is the CTO of EVERTRUST and one of the co-founders of the company. He has more than 15 years of experience in the digital trust field, and represents EVERTRUST at the PKI Consortium.
