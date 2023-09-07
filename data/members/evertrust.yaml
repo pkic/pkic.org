@@ -4,7 +4,7 @@ slogan:
 website: https://www.evertrust.fr/
 
 # Short description, longer content can be placed in `content/members/`
-description: EVERTRUST is a French software vendor specialized in a key sector of cybersecurity: trust management software.
+description: "EVERTRUST is a French software vendor specialized in a key sector of cybersecurity: trust management software."
 
 # membership
 memberSince: 2023-09-05
