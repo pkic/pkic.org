@@ -50,13 +50,13 @@ social:
 representatives:
   - id: jerome-bordier
     name: Jérôme Bordier
-    role: 'Security architectures' Partner
+    role: "'Security architectures' Partner"
     social:
       linkedin: https://fr.linkedin.com/in/jeromebordier
     description: |
       For over 15 years, Jerome has defined and implemented security projects architectures.
 
-      Jérôme is
+      Jérôme is:
 
         * ISS and electronic trust expert
         * LSTI Certification Committee Member
