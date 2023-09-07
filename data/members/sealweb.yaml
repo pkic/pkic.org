@@ -1,5 +1,5 @@
-id: sealwebassets/images/members
-name: Sealweb
+id: sealweb
+name: SEALWeb
 slogan: Securing transactions
 website: https://www.sealweb.eu/
 
@@ -48,11 +48,12 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Jérôme BORDIER 
-    role: “Security architectures” Partner
+  - id: jerome-bordier
+    name: Jérôme Bordier
+    role: "Security architectures" Partner
     social:
       linkedin: https://fr.linkedin.com/in/jeromebordier
-    description:
+    description: |
       For over 15 years, Jerome has defined and implemented security projects architectures.
       
       Jérôme is:
@@ -61,4 +62,4 @@ representatives:
         * LSTI Certification Committee Member
         * Expert member at ETSI and ENISA
         * Auditor for a number of certified French TSP (Trust Service Provider)
-        * Computer Engineer with a Master’s Degree from Paris Dauphine
+        * Computer Engineer with a Master's Degree from Paris Dauphine
