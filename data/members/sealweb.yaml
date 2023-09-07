@@ -50,7 +50,7 @@ social:
 representatives:
   - id: jerome-bordier
     name: Jérôme Bordier
-    role: "Security architectures" Partner
+    role: 'Security architectures' Partner
     social:
       linkedin: https://fr.linkedin.com/in/jeromebordier
     description: |
