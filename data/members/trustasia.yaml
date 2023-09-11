@@ -13,6 +13,7 @@ memberType: Vendor
 workingGroups:
   - CA
   - PKIMM
+  - PQC
 
 # sponsor
 sponsor:
