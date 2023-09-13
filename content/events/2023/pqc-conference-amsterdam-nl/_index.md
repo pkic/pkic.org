@@ -98,8 +98,7 @@ speakers:
     title: Research Engineer at SIDN Labs
     bio: |
       Elmer Lastdrager works as a Research Engineer for SIDN Labs. He is interested in technologies that improve the Internet in the future by making it more transparent, open and privacy friendly.
-    social:
-      linkedin: https://www.linkedin.com/in/elmerlastdrager/
+    website: https://www.linkedin.com/in/elmerlastdrager/
 
   - name: Andrea Garcia Rodriguez
     title: Lead Digital Policy Analyst at European Policy Centre (EPC)
@@ -107,9 +106,21 @@ speakers:
       Andrea G. Rodríguez is Lead Digital Policy Analyst for the EU Digital Agenda at the European Policy Centre (EPC). Before joining the EPC, she was Lead Researcher of the Global Observatory of Urban Artificial Intelligence at CIDOB (Barcelona Centre for International Affairs), where she did research on digital topics and emerging technologies and was Project Manager. She has held advisory positions at the European Cybersecurity Forum (CYBERSEC) as Programme Committee Member, and at NATO as one of the 14 members of the Young Leaders group during the NATO 2030 process. In 2021, she was named "NextGen Leader" at the Young Professionals Summit (YPS) at the Brussels Forum and the Spanish Cybervolunteers Foundation recognised her as one of the 13 Spanish women to follow in technology, an initiative supported by Spain's Ministry of Social Affairs and the 2030 Agenda.
 
       Andrea holds an EMJMD degree from the University of Glasgow, Dublin City University, and Charles University in Prague in Security, Intelligence and Strategic Studies (IMSISS) with a specialization in security and technology, and a B.A. (Hons) in International Relations from the Complutense University of Madrid, where she completed two stays abroad at Charles University in Prague and at the National Taiwan University (NTU) in Taipei.
-    social:
-      linkedin: https://www.epc.eu/en/analysts/Andrea-Garcia-Rodriguez~44dedc
+    website: https://www.epc.eu/en/analysts/Andrea-Garcia-Rodriguez~44dedc
 
+  - name: Bill Newhouse
+    title: Cybersecurity Engineer & Project Lead, National Cybersecurity Center of Excellence (NCCoE) at NIST
+    bio: |
+      Bill Newhouse is a cybersecurity engineer at the National Cybersecurity Center of Excellence (NCCoE) in the Applied Cybersecurity Division in the Information Technology Laboratory at the National Institute of Standards and Technology (NIST).
+
+      His work at the NCCoE, NIST's applied cybersecurity lab, pushes for the adoption of functional cybersecurity reference designs built from commercially available technologies provided by project collaborators. These projects include establishing communities of interest with members from industry, academia, and government to gain insight to define project's that address cybersecurity risk faced by the members of the community of interest. NCCoE projects are documented in NIST SP 1800 series publications known as practices guides. He has completed guides addressing cybersecurity risk in the hospitality and retail sectors as well as an early demonstration of derived credentials. He recently completed a cybersecurity collaboration with the U.S. Department of Energy that resulted in a Cybersecurity Framework Profile developed for the Liquefied Natural Gas (LNG) industry and the subsidiary functions that support the overarching liquefaction process, transport, and distribution of LNG. His responsibilities as the financial services sector lead also include identifying ways to include financial services sector use case scenarios in relevant NCCoE projects/practice guides. He is presently leading projects on Data Classification and Migration to Post-Quantum Cryptography.
+    website: https://www.nist.gov/people/bill-newhouse
+
+  - name: Dustin Moody
+    title: Mathematician & Project Lead, Post-Quantum Cryptography at NIST
+    bio: |
+      Dustin Moody is a mathematician in the NIST Computer Security Division. Dustin leads the post-quantum cryptography project at NIST. He received his Ph.D. from the University of Washington in 2009. His area of research deals with elliptic curves and their applications in cryptography.
+    website: https://www.nist.gov/people/dustin-moody
 
 # Locations with sessions in parallel -----------------------------------------
 locations:
@@ -135,13 +146,18 @@ agenda:
       description:
       speakers:
         - TBC
-
+  
     - time: "9:30"
       title: Status update from NIST
       description: |
-        Discover the latest advancements in the world of Post-Quantum Cryptography (PQC) algorithm selection and standardization in a dynamic presentation by NIST. Gain exclusive insights into the ongoing NIST process, including an in-depth overview of the shortlisted PQC candidates, evaluation criteria, and progress updates. Uncover the challenges, breakthroughs, and future directions that are shaping the PQC landscape, as NIST continues its mission to establish robust cryptographic standards for the quantum era. Don't miss this opportunity to engage with the forefront of cryptographic research and be part of the pivotal discussions driving the future of secure communications.
+        The U.S. National Institute of Standards and Technology (NIST) has been actively engaged in the solicitation, evaluation, and standardization of quantum-resistant public-key cryptographic algorithms. This year, in August, marked a significant milestone as NIST released a request for comments on the first three draft Federal Information Processing Standards (FIPS) for Post-Quantum Cryptography, following their successful completion of the initial four evaluation rounds.
+
+        In this presentation, Mr. Bill Newhouse and Dr. Dustin Moody from NIST will provide a comprehensive update, offering insights into the status of standardization, and the development of practices to ease migration from quantum-vulnerable public-key cryptography to quantum-resistant public-key cryptography.
+
+        Additionally, during his presentation on Wednesday, Dr. Dustin Moody will dive deeper into NIST's standardization efforts and progress, including a focus on the first round of additional signature scheme candidates announced in July.
       speakers:
-        - TBC
+        - Bill Newhouse
+        - Dustin Moody
 
     - time: "10:30"
       title: Break
