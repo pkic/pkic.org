@@ -122,6 +122,49 @@ speakers:
       Dustin Moody is a mathematician in the NIST Computer Security Division. Dustin leads the post-quantum cryptography project at NIST. He received his Ph.D. from the University of Washington in 2009. His area of research deals with elliptic curves and their applications in cryptography.
     website: https://www.nist.gov/people/dustin-moody
 
+  - name: Volker Krummel
+    title: Chapter Lead PQC at Utimaco
+    bio: |
+      Dr. Volker Krummel is a distinguished expert in the field of cryptography, currently serving as the Chapter Lead for Post-Quantum Cryptography (PQC) at Utimaco. With a robust educational background, Volker holds a PhD in Cryptography, demonstrating his profound expertise in this specialized field.
+
+      With over two decades of dedicated experience in Cryptography and IT-Security, Volker has consistently contributed to the advancement of secure digital systems. His extensive knowledge and practical insights have been instrumental in shaping the landscape of cybersecurity.
+
+      In his current role as Chapter Lead for PQC within the CTO office at Utimaco, Volker Krummel continues to be at the forefront of pioneering efforts to address the evolving challenges posed by quantum computing to cryptographic systems. His leadership and dedication make him a vital asset in the quest for secure and resilient digital infrastructures in the age of quantum computing.
+    social:
+      linkedin: https://www.linkedin.com/in/volker-k-4ba519174
+    
+  - name: Itan Barmes
+    title: Team lead at Deloitte
+    bio: |
+      Itan Barmes is the capability lead for Cryptography and Quantum Security at Deloitte Risk Advisory in the Netherlands. Itan and his team focus on cryptography challenges such as key management, public-key infrastructure, implementation of cryptography in infrastructure and software, and mitigating the quantum threat. 
+
+      Itan served as a subject matter expert for the Quantum Security program of the World Economic Forum. Next to client-focused work, Itan frequently writes thought leadership articles on quantum risk and speaks regularly at external events.
+    social:
+      linkedin: https://www.linkedin.com/in/itanbarmes
+
+  - name: Lory Thorpe
+    title: Quantum Safe Industry Lead at IBM
+    bio: |
+      Driven executive leader with over 20 years senior level global experience in digital transformation and telecommunications with a strong technology, strategy and innovation background (development, architecture, product and solution mgt) in Internet of Things, mobile networks, cloud, security, data analytics/ AI, edge.  Expertise in building, integrating and delivering innovative digital products and solutions to market, across Private and Public sector within Enterprise.
+      
+      Leading portfolio and industry efforts on application of Quantum Computing and Quantum Safe in Telecommunications in IBM.
+    social:
+      linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
+
+  - name: Stefan van den Berg
+    title: Cryptography at TNO
+    bio: |
+      Stefan van den Berg studied at the university of Eindhoven. He graduated in both masters Information Security Technology and Embedded Systems. Currently he works as a scientist in the department Applied Cryptography and Quantum Algorithms at TNO, the Dutch national organization for applied scientific research. His work focuses on development of various Privacy-Enhancing Technologies, Post-Quantum Cryptography solutions and Quantum Applications.
+    social:
+      linkedin: https://www.linkedin.com/in/stefan-van-den-berg-3aa2b0129/en/
+
+  - name: Beverly Roberts 
+    title: Director, Strategic Parterships at 01 Communique Laboratory Inc.
+    bio: |
+      Beverly Roberts is a strategy-oriented professional with 15+ years of experience in strategic partnership, account management, and business development with a strong background in project management.
+    social:
+      linkedin: https://www.linkedin.com/in/beverly-r-886190117
+
 # Locations with sessions in parallel -----------------------------------------
 locations:
   - name: Plenary
@@ -165,67 +208,122 @@ agenda:
       sponsor: 
 
     - time: "11:00"
-      title: A status update from the EU
-      description:
+      title: Preparing the United States for Post-Quantum Cryptography
+      description: |
+        Considering the rapidly evolving landscape in the realm of quantum computing and its potential implications for cybersecurity, this talk delves into the governance and regulatory framework surrounding Post-Quantum Cryptography in the United States.
+
+        The backdrop for this discussion is the enactment of HR 7535, known as the "Quantum Computing Cybersecurity Preparedness Act," on December 21, 2022, by President Joe Biden. Among its many facets, this legislation underscores the critical role of cryptography in ensuring the national security of the United States and the continued functionality of its economy.
+
+        Mr. Bill Newhouse, will provide valuable insights into how the United States is proactively preparing both its federal government and a spectrum of organizations, with a particular focus on those supporting critical infrastructure, for the era of Post-Quantum Cryptography. This presentation highlights the collaborative efforts of key entities, including the Cybersecurity and Infrastructure Security Agency (CISA), the National Security Agency (NSA), and the National Institute of Standards and Technology (NIST), in shaping the governance and regulatory landscape that will govern Post-Quantum Cryptography within the nation.
       track: Governance
       speakers:
-        - TBC 
-      # location:
-      #   Breakout:
-      #     title: To be announced shortly
-      #     description: The speaker(s) for this session will be announced soon!
-      #     speakers:
-      #       - TBC
+        - Bill Newhouse 
+      location:
+        Breakout:
+          title: Lattice-based cryptography
+          description: |
+            The speaker(s) for this session will be announced soon!
 
-    - time: "11:30"
-      title: Regulating Quantum Safe Cryptography (QSC)
-      description: Quantum Safe Cryptography working group of the Dutch Government
+            \* _This is a 40 minute session_
+          track: Algorithms
+          speakers:
+            - TBC
+
+    - time: "11:20"
+      title: The EU Approach to Post-Quantum Cryptography Governance
+      description: |
+        As quantum computing revolutionizes the cybersecurity landscape, this session delves into the European perspective on governance and regulation in the era of Post-Quantum Cryptography.
+
+        In this presentation, the European Union Agency for Cybersecurity (ENISA) will discuss the EU approach to safeguarding critical digital infrastructure, data, and communications through the adoption of post-quantum cryptography as the default cryptographic standard. The session will offer insights into collaborative efforts across European nations and outline the roadmap for navigating the quantum future.
       track: Governance
       speakers: 
-        - Quantum Safe Cryptography working group of the Dutch Government
+        - ENISA
+      location:
+        Breakout:
+          title: " "
+          description: \* _Continuation of the session about Lattice-based cryptography_
+          speakers:
+            - None
 
-    - time: "12:00"
-      title: Post-Quantum Cryptography & Trust Services
-      description: Dutch Authority for Digital Infrastructure (RDI)
-      track: Governance
-      speakers: 
-        - Dutch Authority for Digital Infrastructure (RDI)
-
-    - time: "12:30"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
-      speakers:
-        - TBC
-
-    - time: "13:00"
-      title: Lunch
-      sponsor: 
-
-    - time: "14:00"
+    - time: "11:40"
       title: Post-Quantum Policy and Roadmap of the BSI
       description: |
         In the point of view of the Federal Office for Information Security in Germany (BSI), the question of "if" or "when" there will be quantum computers is no longer paramount. First post-quantum algorithms have been selected by NIST for standardisation and post-quantum cryptography will be used by default. Therefore, the migration to post-quantum cryptography should be pushed forward.
 
         In this presentation, the BSI will expound upon its post-quantum cryptography policy and roadmap. We will emphasize the significance of the migration to post-quantum algorithms in safeguarding critical digital infrastructure, data, and communications. The presentation will elucidate the BSI’s approach, outlining the trajectory of post-quantum cryptography adoption as the default cryptographic standard.
-      track: Strategy
-      speakers:
+      track: Governance
+      speakers: 
         - Stavros Kousidis
       location:
         Breakout:
-          title: Algorithm deep dive
-          description: The speaker(s) for this session will be announced soon!
-          track: Technical
+          title: Stateful Hash-Based Signature Schemes
+          description: |
+            Stateful hash based signatures provide thorough security and a high level of maturity.
+            However, their requirement of proper handling the state of the key raises concerns for certain use cases. In this talk we want to shade some light on the state handling challenge and how an ideal solution should look like to allow a smooth transition into the PQC era.
+
+            \* _This is a 40 minute session_
+          track: Algorithms
           speakers:
-            - TBC 
-  
-    - time: "14:30"
+            - Volker Krummel
+
+    - time: "12:00"
       title: To be announced shortly
       description: The speaker(s) for this session will be announced soon!
+      track: Governance
       speakers:
         - TBC
+      location:
+        Breakout:
+          title: " "
+          description: \* _Continuation of the session about Stateful Hash-Based Signature Schemes_
+          speakers:
+            - None
+
+    - time: "12:20"
+      title: Unlocking the Netherlands' Quantum-Resilient Cryptography Strategy
+      description: |
+        In this presentation, we will delve into the Netherlands' pioneering approach to Post-Quantum Cryptography (PQC) governance and regulation. Positioned at the forefront of quantum-resilient cryptography, the Netherlands has crafted a resource that extends beyond theoretical discussions, offering organizations concrete steps and invaluable advice.
+
+        The Netherlands' commitment to fortifying global cybersecurity is exemplified by the [PQC Migration Handbook](https://english.aivd.nl/publications/publications/2023/04/04/the-pqc-migration-handbook). This indispensable resource equips organizations with pragmatic guidance on how to proactively mitigate the imminent threat posed by quantum computers to today's cryptographic systems.
+
+        Join us to discover how the Netherlands is diligently preparing both government entities and organizations to seamlessly transition to quantum-resilient cryptographic solutions.
+      track: Governance
+      speakers:
+        - QSC-WG
+      location:
+          Breakout:
+            title: To be announced shortly
+            description: |
+              The speaker(s) for this session will be announced soon!
+
+              \* _This is a 40 minute session_
+            track: Algorithms
+            speakers:
+              - TBC 
+
+    - time: "12:40"
+      title: "Ask the Experts: Global Perspectives on Post-Quantum Cryptography Governance"
+      description: |
+        An engaging Q&A session on the global Governance and Regulation of Post-Quantum Cryptography. In this panel discussion, esteemed speakers from previous sessions will come together to answer your burning questions and provide a comprehensive overview of how various nations are addressing the impending quantum threat.
+
+        Discover how nations are navigating the intricate balance between innovation and security, and gain valuable insights into the diverse regulatory approaches that have emerged. Whether you're interested in the regulatory intricacies of a specific region or seeking a broader understanding of global efforts, this Q&A session promises to offer a wealth of knowledge and expert perspectives on the Governance and Regulation of Post-Quantum Cryptography worldwide. Don't miss this opportunity to engage with our panelists and explore the evolving landscape of quantum cybersecurity governance.
+      track: Governance
+      speakers:
+        - Bill Newhouse
+        - Stavros Kousidis
+      location:
+        Breakout:
+          title: " "
+          description: \* _Continuation of the previous session_
+          speakers:
+            - None
+
+    - time: "13:00"
+      title: Lunch
+      sponsor: 
 
     # Moved from Wednesday 16h as speaker is only available on Tuesday
-    - time: "15:30"
+    - time: "14:00"
       title: A quantum cybersecurity agenda for Europe
       description: |
         The rapid development of quantum computing creates a new set of challenges for European cybersecurity. In recent years, the European Union has pursued an ambitious cybersecurity agenda but nevertheless, there are still questions about the current framework’s fitness to respond to these new challenges. Particularly worrisome is the advent of quantum attacks on encryption that risk rendering current cryptographic systems obsolete as they are in use. In July 2023, the European Policy Centre, with the support of Quantum Delta NL, published a discussion paper in which it analyses the criticality of preparing for quantum attacks on encryption by the creation of a new quantum cybersecurity agenda that improves technical and political coordination between EU member states and EU bodies and institutions for the transition to post-quantum cryptography and the future use of other quantum-safe technologies.
@@ -233,6 +331,43 @@ agenda:
         The European Policy Centre (EPC) is an independent, not-for-profit think tank dedicated to fostering European integration through analysis and debate, supporting and challenging decision-makers at all levels to make informed decisions based on evidence and analysis, and providing a platform for engaging partners, stakeholders and citizens in EU policy-making and in the debate about the future of Europe.
       speakers:
         - Andrea Garcia Rodriguez
+      location:
+        Breakout:
+          title: To be announced shortly
+          description: The speaker(s) for this session will be announced soon!
+          track: Technical
+          speakers:
+            - TBC 
+  
+    - time: "14:30"
+      title: What is it going to take to break cryptography with a quantum computer?
+      description: |
+        The whole industry is working on standardizing and implementing post-quantum cryptography, in order to mitigate the risk from future quantum computers. One question that is (and will probably remain) unanswered is “when are quantum computers going to be powerful enough to break cryptography?”. At the same time, there are regular press releases about new methods of breaking cryptography in the short term. These publications often cause panic and confusion which is counter-productive to the process of mitigating the quantum risk.
+        
+        In this presentation we give a high-level description on how quantum algorithms work, and what still needs to happen before such algorithms can be implemented on real hardware. A simple model can be used to make sense of past and future announcements on the nearing moment of the cryptopocalypse (the point at which quantum computing becomes powerful enough to use Shor's algorithm to crack public-key cryptography). We discuss some of the examples from the past year.
+      speakers:
+        - Itan Barmes
+      location:
+        Breakout:
+          title: "Crunching the Numbers: Post Quantum Algorithm Performance"
+          description: |  
+            Explore the differences between classic and post-quantum algorithms, comparing security levels, sizes and signature speeds. Hardware Security Modules are benchmarked to show real numbers.
+          track: Technical
+          speakers:
+            - Tomas Gustavsson
+
+    - time: "15:00"
+      title: To be announced shortly
+      description: The speaker(s) for this session will be announced soon!
+      speakers:
+        - TBC
+      location:
+        Breakout:
+          title: To be announced shortly
+          description: The speaker(s) for this session will be announced soon!
+          track: Technical
+          speakers:
+            - TBC 
 
     - time: "15:30"
       title: Break
@@ -245,6 +380,20 @@ agenda:
       track: Industry
       speakers:
         - Bas Westerbaan
+      location:
+        Breakout:
+          title: Update from the GSMA Post Quantum Telco Network Task Force
+          description: |  
+            The GSMA Post Quantum Telco Network Task Force has been dedicated to exploring the implications of Post-Quantum Cryptography (PQC) within the telecommunications space. Our mission extends beyond theoretical discussions, focusing on the tangible impacts on Network Operators and the broader telco supply chain.
+
+            The task force is a collaborative effort involving more than 50 companies representing operators, government and the wider Telco supply chain, including over 20 major network operators globally.
+
+            Earlier this year, we published a comprehensive [Post Quantum Telco Network Impact Assessment Whitepaper](https://www.gsma.com/newsroom/wp-content/uploads//PQ.1-Post-Quantum-Telco-Network-Impact-Assessment-Whitepaper-Version1.0.pdf). Building on this groundwork, we are now actively developing Quantum Risk Management guidelines tailored specifically to the telecommunications industry. Additionally, we are crafting best practice guidelines that delve into Telco use cases, with a particular emphasis on Public Key Infrastructure (PKI) implications.
+
+            In this presentation, we will provide insights into our findings and ongoing initiatives, shedding light on the practical steps being taken to ensure the resilience and security of Telco networks in the age of quantum computing. Our comprehensive approach ensures that the telecommunications industry is well-prepared to face the security challenges and opportunities presented by the quantum era.
+          track: Industry
+          speakers:
+            - Lory Thorpe
 
     - time: "16:30"
       title: Post-quantum crypto integration for enterprise applications
@@ -256,12 +405,11 @@ agenda:
         - Anselme Tueno
       location:
         Breakout:
-          title: "Crunching the Numbers: Post Quantum Algorithm Performance"
-          description: |  
-            Explore the differences between classic and post-quantum algorithms, comparing security levels, sizes and signature speeds. Hardware Security Modules are benchmarked to show real numbers.
+          title: To be announced shortly
+          description: The speaker(s) for this session will be announced soon!
           track: Technical
           speakers:
-            - Tomas Gustavsson
+            - TBC 
  
     - time: "17:00"
       title: Closing remarks for day 1
@@ -284,12 +432,28 @@ agenda:
       track: Hardware
       speakers: 
         - Joppe Bos
+      location:
+        Breakout:
+          title: A testbed for evaluating post-quantum algorithms in DNS
+          description: |
+            DNS is an fundamental Internet service that translates human-readable names to IP addresses. It is secured using DNSSEC, an extension that provides authentication and integrity through the use of cryptographic signatures. The inherent limitations of the DNS protocol lead to requirements for the signing algoritms, specifically in terms of key size and signature size. This leads to challenges when deploying post-quantum algoritms. SIDN Labs is setting up a testbed in which developers, network researchers, and DNS operators can experiment with PQC algorithms and DNSSEC. Ultimately, the goal is to evaluate existing post-quantum cryptographic algorithms developers for use in DNS. In this presentation, we discuss some challenges and our progress on setting up a PQC-testbed for DNS.
+          track: Technical
+          speakers:
+            - Elmer Lastdrager
 
     - time: "9:30"
       title: To be announced shortly
       description: The speaker(s) for this session will be announced soon!
       speakers:
         - TBC
+      location:
+        Breakout:
+          title: Coping with post-quantum signatures in the WebPKI
+          description: |
+            Post-quantum signature algorithms are far from drop-in replacements for the WebPKI. In this technical talk we will first size up the current offering, and the schemes on the horizon. Then we will cover the current work-arounds being discussed to keep the WebPKI running: from smaller changes such as shipping intermediates with browsers, to more ambitious proposals such Merkle Tree Certificates.
+          track: Technical
+          speakers:
+            - Bas Westerbaan
 
     - time: "10:00"
       title: Hardware Cryptographic Modules
@@ -297,6 +461,12 @@ agenda:
       track: Hardware
       speakers:
         - TBC
+      location:
+        Breakout:
+          title: To be announced shortly
+          description: The speaker(s) for this session will be announced soon!
+          speakers:
+            - TBC
 
     - time: "10:30"
       title: Break
@@ -308,37 +478,67 @@ agenda:
         After TCP/IP, X.509 is probably the most widely deployed technology in modern networking. Use cases of X.509 from the incredibly mainstream to the incredibly niche are as diverse as the Internet itself. This talk will classify different types of PKI deployments according to the types of challenges that they will face during PQ transition including discoverability of the crypto in use (cryptographic bill of materials CBOM), hardware lock-in, which, depending where it is in your network, leads to different types of migration challenges, and the security properties needing during the migration. We will then survey a suite of crypto discovery and transition tools discussing which migration types and security properties they address.
 
         _This migration track is moderated by TNO._ 
-      track: Migration
+      track: PKI
       speakers:
         - Greg Wetmore
+      location:
+        Breakout:
+          title: To be announced shortly
+          description: The speaker(s) for this session will be announced soon!
+          speakers:
+            - TBC
 
     - time: "11:30"
-      title: To be announced shortly
+      title: Quantum-safe PKI for the German administration
       description: |
-        The speaker(s) for this session will be announced soon!
+        The BSI is in control of the root certification authority of the public administration Public Key Infrastructure (PKI). This PKI is an essential element of the German government’s business processes at federal, state and municipal levels. For instance, subscribers of this PKI receive a signed certificate corresponding to a cryptographic key pair, which is used for identification, encryption, the creation of electronic signatures and other applications.
 
-        _This migration track is moderated by TNO._ 
-      track: Migration
+        Currently, this PKI is based on RSA-4096. Hence, its security is threatened by the potential development of cryptographically relevant quantum computers. In order to address this threat, a full migration to a PKI based on quantum-safe cryptographic primitives has to be carried out.
+
+        Due to the variety of use-cases within this PKI, a number of technical requirements concerning performance, security and interoperability have to be taken into account in this migration. The goal of the talk is to discuss these requirements in detail and to present several concepts and possible solutions. In particular, we argue that a parallelized migration approach is essential in order to ensure constant availability of the system. Moreover, we discuss why standardized, stateful hash-based signature schemes such as XMSS or LMS are promising candidates for the root-CA-level in the PKI hierarchy. 
+      track: PKI
       speakers:
-        - TBC
+        - Kaveh Bashiri
+      location:
+        Breakout:
+          title: To be announced shortly
+          description: The speaker(s) for this session will be announced soon!
+          speakers:
+            - TBC
 
     - time: "12:00"
       title: PKI and PQC Strategy for Payment Card Industry
       description: |  
         In this session you will get an overview of the impact of PQC to PCI Standards (such as ANSI X9, and ISO TC68 standards applicable to PKI in the financial services/payment card industry) and the steps taken to prepare them for a world with Post-Quantum Cryptography.
+      track: PKI
       speakers:
         - Jeremy King
-      track: Migration
+      track: PKI
+      location:
+        Breakout:
+          title: To be announced shortly
+          description: The speaker(s) for this session will be announced soon!
+          speakers:
+            - TBC
 
     - time: "12:30"
-      title: To be announced shortly
+      title: Post-Quantum Cryptography & Trust Services
       description: |
-        The speaker(s) for this session will be announced soon!
+        In the evolving landscape of cybersecurity, the emergence of quantum computing poses a substantial threat to the established foundations of trust services, particularly in the context of Qualified Trust Services governed by the eIDAS regulation. Join us for an insightful presentation by the Dutch Authority for Digital Infrastructure, the supervisory authority for Trust Service Providers in the Netherlands.
 
-        _This migration track is moderated by TNO._ 
-      track: Migration
-      speakers:
-        - TBC
+        In this session, we will explore the intricate interplay between Post-Quantum Cryptography and Trust Services, shedding light on the unique challenges posed by the quantum threat. Discover how the eIDAS regulation, which governs Qualified Trust Services, faces significant implications in the quantum era. Gain valuable insights into the proactive strategies and regulatory considerations essential for maintaining trust and security in a quantum-affected landscape.
+
+        Join us to navigate the crucial intersection of Post-Quantum Cryptography and Trust Services, as we delve into the Dutch perspective and the broader implications for the global trust ecosystem.
+      track: PKI
+      speakers: 
+        - Dutch Authority for Digital Infrastructure (RDI)
+      location:
+        Breakout:
+          title: Vulnerabilities of Blockchain Security in the World of Quantum Computing
+          description: |
+            Blockchain technology was created to make the storage of data or transactions more secure.  It has revolutionized the way we process transactions with improved security, efficiency, and transparency.  PKI is the security backbone of blockchain technology to ensure the integrity and trustworthiness of a blockchain network.  In the world of cryptocurrencies, private keys are used by the payer to sign and initiate a transaction.  It is also used by a validator to sign and assure the world that a transaction has been validated.  RSA and ECC are the most commonly used algorithms in the current PKI ecosystem.  It has been proven for over 40 years that the private key cannot be reverse engineered back from its public key even using the most powerful super computer today.  However, the rapid development of quantum computing is posing security threats to PKI because its excessive power can derive the private key back from its public key.  This breaks the backbone of blockchain security because transactions cannot be trusted anymore.  In this session we will cover quantum threats to blockchain.  We will also demonstrate some practical implementations of PQC that have been performed to convert an existing blockchain network to become quantum-safe.
+          speakers:
+            - Beverly Roberts
 
     - time: "13:00"
       title: Lunch
@@ -352,18 +552,35 @@ agenda:
         With the first round of additional signature scheme candidates announced in July, Dr. Moody will shed light on various approaches, including Code-based, Isogeny, Lattice-based, Multivariate, and others. He will also share insights into the feedback received since their initial announcement.
 
         This session promises to provide valuable insights, expert analysis, and a comprehensive understanding of NIST's ongoing mission to strengthen our digital future against the quantum threat.
+      track: Algorithms
       speakers:
         - Dustin Moody
       location:
         Breakout:
-          title: Coping with post-quantum signatures in the WebPKI
+          title: "Post-quantum technologies explained: building a PQ decision tree for developers"
           description: |
-            Post-quantum signature algorithms are far from drop-in replacements for the WebPKI. In this technical talk we will first size up the current offering, and the schemes on the horizon. Then we will cover the current work-arounds being discussed to keep the WebPKI running: from smaller changes such as shipping intermediates with browsers, to more ambitious proposals such Merkle Tree Certificates.
+            Now that the quantum era is upon us, the question arises: How do you ensure your project is "quantum ready"? Which algorithms are the right fit, and which protocols provide the necessary support? Join this informative session to explore the development of a comprehensive decision tree by experts from various organizations, including dcypher, TNO, CWI, NXP, Compumatica, Technolotion, and Fox-IT.
+
+            During this session, we'll delve into the underlying motivations, careful considerations, and thought processes behind the creation of this decision tree. Gain insights into how to navigate the complexities of post-quantum cryptography and discover a practical tool designed to simplify the decision-making process for quantum-ready projects.
           track: Technical
           speakers:
-            - Bas Westerbaan
-    
+            - TBC
+
     - time: "14:30"
+      title: To be announced shortly
+      description: The speaker(s) for this session will be announced soon!
+      speakers:
+        - TBC
+      location:
+        Breakout:
+          title: Using quantum-safe hybrid certificates for signing documents
+          description: |
+            Within the HAPKIDO project we aim to develop a roadmap for hybrid Quantum-Safe Public-Key Infrastructures. Next to TLS many other digital services rely on PKIs for their security; one important example is the electronic signatures on documents, which are standardized in PAdES and have legal value in many countries. One of the services which provides PAdES support is the european Digital Signing Service (DSS). To support the transition to quantum-safe PKIs we have created an extension for DSS, which allows users to use a hybrid certificate to sign and validate a PDF-document. In this presentation we will show our work and explain some of the decisions that we made in the process.
+          track: Technical
+          speakers:
+            - Stefan van den Berg
+
+    - time: "15:00"
       title: To be announced shortly
       description: The speaker(s) for this session will be announced soon!
       speakers:
@@ -377,44 +594,32 @@ agenda:
           speakers:
             - Jan Klaussner 
 
-    - time: "15:00"
-      title: Quantum-safe PKI for the German administration
-      description: |
-        The BSI is in control of the root certification authority of the public administration Public Key Infrastructure (PKI). This PKI is an essential element of the German government’s business processes at federal, state and municipal levels. For instance, subscribers of this PKI receive a signed certificate corresponding to a cryptographic key pair, which is used for identification, encryption, the creation of electronic signatures and other applications.
-
-        Currently, this PKI is based on RSA-4096. Hence, its security is threatened by the potential development of cryptographically relevant quantum computers. In order to address this threat, a full migration to a PKI based on quantum-safe cryptographic primitives has to be carried out.
-
-        Due to the variety of use-cases within this PKI, a number of technical requirements concerning performance, security and interoperability have to be taken into account in this migration. The goal of the talk is to discuss these requirements in detail and to present several concepts and possible solutions. In particular, we argue that a parallelized migration approach is essential in order to ensure constant availability of the system. Moreover, we discuss why standardized, stateful hash-based signature schemes such as XMSS or LMS are promising candidates for the root-CA-level in the PKI hierarchy. 
-      track: PKI
-      speakers:
-        - Kaveh Bashiri
-      location:
-        Breakout:
-          title: A testbed for evaluating post-quantum algorithms in DNS
-          description: |
-            DNS is an fundamental Internet service that translates human-readable names to IP addresses. It is secured using DNSSEC, an extension that provides authentication and integrity through the use of cryptographic signatures. The inherent limitations of the DNS protocol lead to requirements for the signing algoritms, specifically in terms of key size and signature size. This leads to challenges when deploying post-quantum algoritms. SIDN Labs is setting up a testbed in which developers, network researchers, and DNS operators can experiment with PQC algorithms and DNSSEC. Ultimately, the goal is to evaluate existing post-quantum cryptographic algorithms developers for use in DNS. In this presentation, we discuss some challenges and our progress on setting up a PQC-testbed for DNS.
-          track: Technical
-          speakers:
-            - Elmer Lastdrager
-
     - time: "15:30"
       title: Break
       sponsor: 
 
     - time: "16:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: "Final Q&A"
+      description: | 
+        As we wrap up this two-day conference, our experts will come together to address your queries, offer further insights, and engage in a meaningful exchange of ideas. Whether you seek to delve deeper into specific topics discussed during the conference or have broader inquiries about the quantum landscape, this session is your opportunity to connect with the experts who have shared their wisdom and expertise over the past two days.
+
+        Join us for a collaborative and enlightening Q&A session that tries to provide clarity, foster discussion, and leave you with a comprehensive understanding of the quantum computing and cryptography landscape. Don't miss this final chance to engage with our speakers and conference chairs in a vibrant exchange of knowledge.
       speakers:
         - TBC
 
     - time: "16:30"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: "Recap: Unveiling Insights - A Two-Day Conference Retrospective"
+      description: |
+        As our two-day conference journey draws to a close, join us for a captivating recap session where our chairs will guide you through a comprehensive review of the insights, revelations, and pivotal moments that have unfolded throughout this event.
+
+        In this engaging retrospective, we will revisit the highlights, key takeaways, and thought-provoking discussions that have enriched our understanding of the quantum landscape. Our conference chairs will synthesize the wealth of knowledge shared by our esteemed presenters, encapsulating the essence of their presentations and the responses to your insightful questions.
+
+        This recap promises to be a valuable opportunity to distill the essence of this conference, offering a holistic perspective on the critical issues, emerging trends, and future directions in the field of quantum computing and cryptography.
       speakers:
         - TBC
 
     - time: "17:00"
-      title: Closing remarks for day 2
+      title: Closing remarks
       description: 
       speakers:
         - Paul van Brouwershaven
