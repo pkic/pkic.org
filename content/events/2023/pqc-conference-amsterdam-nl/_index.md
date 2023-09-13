@@ -154,7 +154,8 @@ agenda:
 
         In this presentation, Mr. Bill Newhouse and Dr. Dustin Moody from NIST will provide a comprehensive update, offering insights into the status of standardization, and the development of practices to ease migration from quantum-vulnerable public-key cryptography to quantum-resistant public-key cryptography.
 
-        Additionally, during his presentation on Wednesday, Dr. Dustin Moody will dive deeper into NIST's standardization efforts and progress, including a focus on the first round of additional signature scheme candidates announced in July.
+        Furthermore, in his Wednesday presentation, Dr. Dustin Moody will offer a more comprehensive examination of the standardization process for additional signature schemes. The first round of candidates was unveiled in July, and during his presentation, Dr. Moody will illuminate the various approaches taken and the feedback received since their initial announcement.
+
       speakers:
         - Bill Newhouse
         - Dustin Moody
@@ -322,14 +323,12 @@ agenda:
         - TBC
 
     - time: "12:00"
-      title: To be announced shortly
-      description: |
-        The speaker(s) for this session will be announced soon!
-
-        _This migration track is moderated by TNO._ 
-      track: Migration
+      title: PKI and PQC Strategy for Payment Card Industry
+      description: |  
+        In this session you will get an overview of the impact of PQC to PCI Standards (such as ANSI X9, and ISO TC68 standards applicable to PKI in the financial services/payment card industry) and the steps taken to prepare them for a world with Post-Quantum Cryptography.
       speakers:
-        - TBC
+        - Jeremy King
+      track: Migration
 
     - time: "12:30"
       title: To be announced shortly
@@ -346,11 +345,15 @@ agenda:
       sponsor: 
 
     - time: "14:00"
-      title: PKI and PQC Strategy for Payment Card Industry
+      title: NIST standardization of additional signature schemes
       description: |  
-        In this session you will get an overview of the impact of PQC to PCI Standards (such as ANSI X9, and ISO TC68 standards applicable to PKI in the financial services/payment card industry) and the steps taken to prepare them for a world with Post-Quantum Cryptography.
+        In this presentation, Dr. Dustin Moody, a distinguished expert from the U.S. National Institute of Standards and Technology (NIST), will take you on a deep dive into NIST's standardization efforts for additional signature schemes.
+
+        With the first round of additional signature scheme candidates announced in July, Dr. Moody will shed light on various approaches, including Code-based, Isogeny, Lattice-based, Multivariate, and others. He will also share insights into the feedback received since their initial announcement.
+
+        This session promises to provide valuable insights, expert analysis, and a comprehensive understanding of NIST's ongoing mission to strengthen our digital future against the quantum threat.
       speakers:
-        - Jeremy King
+        - Dustin Moody
       location:
         Breakout:
           title: Coping with post-quantum signatures in the WebPKI
