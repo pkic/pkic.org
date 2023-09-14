@@ -282,7 +282,7 @@ agenda:
     - time: "12:20"
       title: Unlocking the Netherlands' Quantum-Resilient Cryptography Strategy
       description: |
-        In this presentation, we will delve into the Netherlands' pioneering approach to Post-Quantum Cryptography (PQC) governance and regulation. Positioned at the forefront of quantum-resilient cryptography, the Netherlands has crafted a resource that extends beyond theoretical discussions, offering organizations concrete steps and invaluable advice.
+        In this presentation, we will delve into the Netherlands' approach to Post-Quantum Cryptography (PQC) governance and regulation. Positioned at the forefront of quantum-resilient cryptography, the Netherlands has crafted a resource that extends beyond theoretical discussions, offering organizations concrete steps and invaluable advice.
 
         The Netherlands' commitment to fortifying global cybersecurity is exemplified by the [PQC Migration Handbook](https://english.aivd.nl/publications/publications/2023/04/04/the-pqc-migration-handbook). This indispensable resource equips organizations with pragmatic guidance on how to proactively mitigate the imminent threat posed by quantum computers to today's cryptographic systems.
 
