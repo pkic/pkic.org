@@ -234,7 +234,7 @@ agenda:
       description: |
         As quantum computing revolutionizes the cybersecurity landscape, this session delves into the European perspective on governance and regulation in the era of Post-Quantum Cryptography.
 
-        In this presentation, the European Union Agency for Cybersecurity (ENISA) will discuss the EU approach to safeguarding critical digital infrastructure, data, and communications through the adoption of post-quantum cryptography as the default cryptographic standard. The session will offer insights into collaborative efforts across European nations and outline the roadmap for navigating the quantum future.
+        In this presentation, we will discuss the EU approach to safeguarding critical digital infrastructure, data, and communications through the adoption of post-quantum cryptography as the default cryptographic standard. The session will offer insights into collaborative efforts across European nations and outline the roadmap for navigating the quantum future.
       track: Governance
       speakers: 
         - ENISA
