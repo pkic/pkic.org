@@ -165,6 +165,16 @@ speakers:
     social:
       linkedin: https://www.linkedin.com/in/beverly-r-886190117
 
+  - name: Basil Hess
+    title: Senior Research Engineer at IBM Research.
+    bio: |
+      Basil is a Senior Research Engineer at IBM Research Europe - Zurich since 2020. His focus is on the implementation side of cryptography, quantum-safe cryptography and quantum-safe migration.
+
+      The projects he is currently involved include Open Quantum Safe - software for prototyping quantum-resistant cryptography, CBOM (Cryptography Bill of Materials), and two submissions to the NIST PQC Standardization for additional digital signature schemes: MAYO and SQIsign.
+
+      Basil holds a PhD in Information Systems and a MSc in Computer Science, both from ETH Zurich.
+    website: https://research.ibm.com/people/basil-hess
+
 # Locations with sessions in parallel -----------------------------------------
 locations:
   - name: Plenary
@@ -363,11 +373,14 @@ agenda:
         - TBC
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
+          title: Protocol-independent interfaces for hybrid/multi-key signatures
+          description: |
+            The NIST PQC standardization has emerged in three FIPS drafts for quantum-safe KEM and Signatures. While the guidance on which PQC standards to adopt is getting clearer, many institutions like ANSSI and BSI recommend hybrid, or multi-key mechanisms for the transition to quantum-safe cryptography, typically combing a classical with a quantum-safe scheme to benefit from the security of both. The question how to perform multi-key exchange and multi-signature schemes (MKE/MSS) lead to several proposals for the integration in protocols like TLS, IPsec and X.509 certificates.
+
+            An implementer of a cryptographic protocol can usually rely on a cryptographic library to implement the primitives and algorithms such as for key exchange and authentication. In the case of MKE/MSS this is usually not the case, and it becomes the implementers task to combine multiple schemes. We argue that it is preferable to have a common abstraction for multi-key schemes in the core cryptographic library that can be used by different protocol stacks. To address this challenge, we propose a common software interface, which is usable for various protocol stacks. We focus on MSS and go through scenarios show how to integrate the interface.
           track: Technical
           speakers:
-            - TBC 
+            - Basil Hess 
 
     - time: "15:30"
       title: Break
