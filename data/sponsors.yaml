@@ -1,7 +1,7 @@
-# - name: 
-#   website: https://
-#   logo: filename.svg
-#   sponsor:
-#     sponsoring:
-#       "Post-Quantum Cryptography Conference Amsterdam 2023":
-#         level: Ambassador
+- name: Amsterdam Convention Bureau
+  website: https://www.iamsterdam.com
+  logo: amsterdam-convention-bureau.svg
+  sponsor:
+    sponsoring:
+      "Post-Quantum Cryptography Conference Amsterdam 2023":
+        level: Ambassador
