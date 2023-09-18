@@ -2,7 +2,8 @@
 date: 2023-07-12T08:00:10Z
 draft: false
 title: Post-Quantum Cryptography Conference - November 7 and 8, 2023 - Amsterdam (NL)
-summary: At this two day conference we will have updates from NIST, ENISA, BSI, the Quantum Safe Cryptography working group of the Dutch Government, NXP, Cloudflare, and many more that we will be announcing soon. 
+summary: |
+  At this two day conference we will have speakers from U.S. National Institute of Standards and Technology (NIST), the German Federal Office for Information Security (BSI), the Quantum Safe Cryptography working group of the Dutch Government, IBM, NXP, Cloudflare, and many more
 
 heroTitle: Post-Quantum Cryptography Conference
 heroDescription: November 7 and 8, 2023 - Amsterdam, The Netherlands | Online
