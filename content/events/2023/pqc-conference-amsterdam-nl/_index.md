@@ -180,7 +180,14 @@ speakers:
     title: Head of Quantum at Banco Santander
     bio: |
       Jaime Gómez García is a recognized expert in telecommunications, blockchain, and quantum technologies, with an extensive professional background within the financial sector. His contributions as a disseminator of quantum technologies and their consequential influence on enterprises, notably within the financial domain, have garnered him recognition as a LinkedIn Quantum Top Voices in 2022 and 2023. Currently, Jaime is Head of Quantum Technologies at Banco Santander, addressing how quantum computing can be leveraged in benefit of the business and how to tackle the quantum threat to cryptography.
-    website: https://www.linkedin.com/in/jaime-gomez-garcia/
+    social:
+      linkedin: https://www.linkedin.com/in/jaime-gomez-garcia/
+
+  - name: Andreas Hülsing
+    title: Associate Professor at Eindhoven University of Technology
+    bio: 
+    social:
+      linkedin: https://www.linkedin.com/in/andreas-h%C3%BClsing-b7868874/
 
 # Locations with sessions in parallel -----------------------------------------
 locations:
@@ -377,7 +384,6 @@ agenda:
       title: Comparing Strategies for Quantum-Safe Cryptography Adoption in Organizations
       description: |
         Take a practical and insightful look at the recommendations available to organizations for transitioning to quantum-safe cryptography. We'll explore the primary sources of information that organization leaders should consider, effective messaging strategies to secure executive engagement, and the need to address preconceived notions. Furthermore, we will compare various recommendations to develop a comprehensive transition plan.
-        
         This talk aims to provide a balanced and informative perspective on the critical topic of quantum-safe cryptography adoption, offering valuable insights for organizations preparing for the post-quantum cybersecurity era.
       speakers:
         - Jaime Gómez García
@@ -506,10 +512,10 @@ agenda:
         - Greg Wetmore
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
+          title: Formal verification
+          description: The abstract for this session will follow soon!
           speakers:
-            - TBC
+            - Andreas Hülsing
 
     - time: "11:30"
       title: Quantum-safe PKI for the German administration
