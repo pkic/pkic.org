@@ -153,7 +153,7 @@ speakers:
       linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
 
   - name: Stefan van den Berg
-    title: Cryptography at TNO
+    title: Cryptographer at TNO
     bio: |
       Stefan van den Berg studied at the university of Eindhoven. He graduated in both masters Information Security Technology and Embedded Systems. Currently he works as a scientist in the department Applied Cryptography and Quantum Algorithms at TNO, the Dutch national organization for applied scientific research. His work focuses on development of various Privacy-Enhancing Technologies, Post-Quantum Cryptography solutions and Quantum Applications.
     social:
