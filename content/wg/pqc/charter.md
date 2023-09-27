@@ -29,37 +29,19 @@ This Working Group Charter has been created according to the [“Working Groups�
 
 ## Introduction
 
-There is currently no standardized and globally recognized maturity model for PKI. Some available models are very specific and built on top of frameworks like Capability Maturity Model Integration (CMMI), working for specific purposes of the consulting companies.
-
-Our goal is to build a Post-Quantum Cryptography that will be recognized around the globe as a standard for evaluation, planning, and comparison between different PKI implementations. It can also serve as a basis for additional services connected with the model, like PKI maturity assessment, or implementation and action plans definition for PKI environments. These activities can be extended to any interested parties outside of the PKIC.
-
-The Post-Quantum Cryptography and assessment methodology will be used as an entry point for anyone evaluating PKI environment by itself or using an independent third party.
-
-The adoption of the Post-Quantum Cryptography must be very easy and therefore the model must be very clear and understandable by different PKI environments, use-cases, industries, and open, available for anyone to use it. Assessment methodology will be developed to support on-site and automated assessment.
+This working group brings together individuals and organizations who are passionate about Post-Quantum Cryptography. The working group will collaborate and coordinate activities, share information, and promote knowledge of this rapidly developing field with the working group and the wider community.
 
 ## Scope
 
-The scope of this Working Group is to:
-- Define and maintain the Post-Quantum Cryptography with applicable categories and maturity levels
-- Define and maintain the PKI maturity assessment methodology including assessment report
-- Collect feedback from participants and interested parties regarding the Post-Quantum Cryptography and assessment process
-- Collaborate on reviews of the Post-Quantum Cryptography, such as model revisions and feedback from participants and interested parties
+The scope of this working group is to provide an open platform for members to discuss and share information on Post-Quantum Cryptography, including implications, migration strategies, and other related topics.
 
-Out of scope is:
-- Performing assessment of the PKI
-- Development of assessment applications or software related to Post-Quantum Cryptography or assessment methodology
+This working group will not develop or evaluate cryptographic algorithms or their implementations.
 
 ## Objectives and goals
 
-The objective is to provide a definition of the Post-Quantum Cryptography and what is the maturity assessment process and procedures to rate the current maturity level according to the model and possibility to track progress for any organization and users of the PKI, independently of the size and use-case.
+By working collectively, we aim to coordinate various activities, exchange valuable insights, and promote the sharing of essential information related to Post-Quantum Cryptography, benefiting not only our members but also the wider community.
 
-It should also serve as a basis for the development of the PKI maturity assessment open-source software, applications and tools, which will automate and streamline maturity assessment according to the Post-Quantum Cryptography and assessment methodology.
-
-The maturity model is based on the Capability Maturity Model Integration ([CMMI](https://en.wikipedia.org/wiki/Capability_Maturity_Model_Integration)) developed by Carnegie Mellon University. It should provide the following:
-- Quickly understand the current level of capabilities and performance of the PKI
-- Support comparison of PKI maturity with similar organizations based on size or industry (anonymized)
-- Action plans on how to improve the capabilities of the current PKI
-- Improve overall PKI performance
+The working group will facilitate information exchange among its members, encouraging discussions and sharing insights on various aspects of Post-Quantum Cryptography. This will include discussions on the implications and development of quantum computing, best practices for implementing PQC, and strategies for transitioning from classical to post-quantum cryptographic algorithms.
 
 ## Summary of the planned activities
 
@@ -76,15 +58,9 @@ Change in activities described in this Working Group Charter must follow the “
 
 ## Summary of the deliverables
 
-Based on the objectives and goals, planned activities of this Working Group, the initial deliverables are:
-- Documented Post-Quantum Cryptography
-- Documented assessment methodology for the Post-Quantum Cryptography
-- Documented guidelines on how to use the Post-Quantum Cryptography
-- Blog posts and articles to create better awareness about the Post-Quantum Cryptography, its assessment methodology, adoption, and how to use it
+[PQC Capabilities Matrix (PQCCM)](https://pkic.org/pqccm/): The working group will manage a PQCCM, which will serve as a comprehensive repository of software applications, libraries, and hardware that offer support for Post-Quantum Cryptography. This matrix will help members and the wider community to identify available PQC solutions without endorsing or evaluating their implementation or quality.
 
-All deliverables are licensed under the Creative Commons Attribution 4.0 International (CC BY 4.0) or MIT license and hosted within a public repository under the PKIC GitHub organization.
-
-The change in deliverables described in this Working Group Charter must follow the “Decision process” described in this document.
+[PQC Conference](https://pkic.org/events/2023/pqc-conference-amsterdam-nl/): From time to time the working group might organize a PKI Consortium Post-Quantum Cryptography Conference where the wider community can come together to present their research, share insights, and discuss the latest advancements in the field of Post-Quantum Cryptography.
 
 ## Means of communication
 
