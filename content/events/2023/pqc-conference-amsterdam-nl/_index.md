@@ -159,12 +159,12 @@ speakers:
     social:
       linkedin: https://www.linkedin.com/in/stefan-van-den-berg-3aa2b0129/en/
 
-  - name: Beverly Roberts 
-    title: Director, Strategic Parterships at 01 Communique Laboratory Inc.
+  - name: Andrew Cheung
+    title: President & CEO at 01 Communique Laboratory Inc.
     bio: |
-      Beverly Roberts is a strategy-oriented professional with 15+ years of experience in strategic partnership, account management, and business development with a strong background in project management.
+      Andrew is  the President & CEO of 01 Communique and IronCAP. He holds a B.Sc. (Hon) degree in Computer Science and over 25 years' experience in communications, mobile, and cyber security solutions development, and an early adopter of quantum and the threat to current encryption. Andrew's interest in post-quantum cybersecurity drove him to full time research some 7 years ago long before the Quantum threat was discussed - this led to  the birth of IronCAP the world's first proven commercially available quantum-safe data encryption.
     social:
-      linkedin: https://www.linkedin.com/in/beverly-r-886190117
+      linkedin: https://www.linkedin.com/in/andrew-cheung-a7b8ba5/
 
   - name: Basil Hess
     title: Senior Research Engineer at IBM Research.
@@ -565,7 +565,7 @@ agenda:
           description: |
             Blockchain technology was created to make the storage of data or transactions more secure.  It has revolutionized the way we process transactions with improved security, efficiency, and transparency.  PKI is the security backbone of blockchain technology to ensure the integrity and trustworthiness of a blockchain network.  In the world of cryptocurrencies, private keys are used by the payer to sign and initiate a transaction.  It is also used by a validator to sign and assure the world that a transaction has been validated.  RSA and ECC are the most commonly used algorithms in the current PKI ecosystem.  It has been proven for over 40 years that the private key cannot be reverse engineered back from its public key even using the most powerful super computer today.  However, the rapid development of quantum computing is posing security threats to PKI because its excessive power can derive the private key back from its public key.  This breaks the backbone of blockchain security because transactions cannot be trusted anymore.  In this session we will cover quantum threats to blockchain.  We will also demonstrate some practical implementations of PQC that have been performed to convert an existing blockchain network to become quantum-safe.
           speakers:
-            - Beverly Roberts
+            - Andrew Cheung
 
     - time: "13:00"
       title: Lunch
