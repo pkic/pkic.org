@@ -185,7 +185,10 @@ speakers:
 
   - name: Andreas Hülsing
     title: Associate Professor at Eindhoven University of Technology
-    bio: 
+    bio: |
+      Andreas Hülsing is an associate professor leading the Applied and Provable Security (APS) group at Eindhoven University of Technology (TU/e). His research group is currently supported by NWO under the Vidi grant “A solid theory for post-quantum cryptography”. Besides, he is collaborating in the Formosa project to produce machine-checked proofs for high-assurance cryptographic software.  His research focuses on post-quantum cryptography – cryptography that resists quantum computer-aided attacks. Andreas’ works range from theoretical works, like how to model quantum attacks or formal security arguments in post-quantum security models, to applied works, like the analysis of side-channel attacks or the development of efficient hash-based signature schemes.  In many of my works, Andreas tries to combine the theoretical and the applied perspective. This is especially reflected in my work on standardizing post-quantum cryptography.
+
+      Previously, Andreas held positions as assistant professor and postdoctoral researcher in the Coding Theory and Cryptology group, working with Tanja Lange in the PQCRYPTO project. Before that he was a postdoctoral researcher in the cryptographic implementations group at TU/e, working with Daniel J. Bernstein. He did his PhD in the cryptography and computer algebra group at TU Darmstadt under the supervision of Johannes Buchmann. Before starting his PhD, he worked as a research fellow at Fraunhofer SIT in Darmstadt. He holds a Diploma in computer science from TU Darmstadt.
     social:
       linkedin: https://www.linkedin.com/in/andreas-h%C3%BClsing-b7868874/
 
@@ -510,8 +513,9 @@ agenda:
         - Greg Wetmore
       location:
         Breakout:
-          title: Formal verification
-          description: The abstract for this session will follow soon!
+          title: Machine-checking post-quantum cryptography
+          description: |
+            Post-quantum cryptography brought a lot of new aspects into cryptography. This includes but is not limited to the facts that schemes are build on new mathematical structures (or rather not widely used in cryptography thus far), security proofs rely on new techniques as well as a deep understanding of said new structures, and implementations have to include and protect new algorithms. In addition, mathematical proofs of security get generally more complex and implementations have to protect against more and more attack vectors. This makes the whole development prone to error. An approach to deal with the added complexity and add reliable security guarantees is the use of computers to machine-check security proofs and implementations. In this talk I will discuss the challenges, and present ongoing projects aiming at machine-checking security proofs and implementations of PQC in EasyCrypt, and Jasmine within the Formosa Crypto consortium.
           speakers:
             - Andreas Hülsing
 
