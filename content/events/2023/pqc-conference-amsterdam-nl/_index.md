@@ -192,6 +192,19 @@ speakers:
     social:
       linkedin: https://www.linkedin.com/in/andreas-h%C3%BClsing-b7868874/
 
+  - name: Blair Canavan
+    title: Director, Alliances at Thales
+    bio: 
+    social:
+      linkedin: https://www.linkedin.com/in/blair-canavan-5b708a2/
+
+  - name: Giuseppe Damiano
+    title: Director of Product Management at Entrust
+    bio: 
+    social:
+      linkedin: https://www.linkedin.com/in/gdamiano/
+
+
 # Locations with sessions in parallel -----------------------------------------
 locations:
   - name: Plenary
@@ -493,7 +506,9 @@ agenda:
       description: In this session experts from several hardware vendors will debate about Post-Quantum Cryptography in hardware cryptographic modules, such as HSMs, tokens, smartcards, etc.
       track: Hardware
       speakers:
-        - TBC
+        - Blair Canavan
+        - Giuseppe Damiano
+        - Volker Krummel
       location:
         Breakout:
           title: To be announced shortly
