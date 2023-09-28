@@ -448,6 +448,7 @@ agenda:
       description: 
       speakers:
         - Paul van Brouwershaven
+        - Albert de Ruiter
     
     - time: "17:05"
       title: Networking
@@ -654,6 +655,7 @@ agenda:
       description: 
       speakers:
         - Paul van Brouwershaven
+        - Albert de Ruiter
 
     - time: "17:05"
       title: Networking
