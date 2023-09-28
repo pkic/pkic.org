@@ -204,6 +204,23 @@ speakers:
     social:
       linkedin: https://www.linkedin.com/in/gdamiano/
 
+  - name: Anita Wehmann
+    title: Senior Advisor Information Security at the Ministry of the Interior and Kingdom Relations (BZK) of the Netherlands
+    bio: 
+    social:
+      linkedin: https://www.linkedin.com/in/anita-wehmann-cciso-isap-09230042/
+
+  - name: Germain van der Velden
+    title: IT Advisor at the Ministry of Infrastructure and Water Management of the Netherlands
+    bio: 
+    social:
+      linkedin: https://www.linkedin.com/in/germain3/
+
+  - name: Larissa Kalle
+    title: Advisor Cybersecurity at the National Cyber Security Centre (NCSC) of the Netherlands
+    bio: 
+    social:
+      linkedin: https://www.linkedin.com/in/larissakalle/
 
 # Locations with sessions in parallel -----------------------------------------
 locations:
@@ -329,7 +346,8 @@ agenda:
         Join us to discover how the Netherlands is diligently preparing both government entities and organizations to seamlessly transition to quantum-resilient cryptographic solutions.
       track: Governance
       speakers:
-        - QSC-WG
+        - Anita Wehmann
+        - Germain van der Velden
       location:
           Breakout:
             title: To be announced shortly
