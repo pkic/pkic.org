@@ -277,7 +277,7 @@ agenda:
         In this presentation, we will discuss the EU approach to safeguarding critical digital infrastructure, data, and communications through the adoption of post-quantum cryptography as the default cryptographic standard. The session will offer insights into collaborative efforts across European nations and outline the roadmap for navigating the quantum future.
       track: Governance
       speakers: 
-        - ENISA
+        - TBC
       location:
         Breakout:
           title: " "
