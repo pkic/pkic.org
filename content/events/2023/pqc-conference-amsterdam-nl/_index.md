@@ -722,9 +722,9 @@ We are immensely grateful to our sponsors:
 
 {{< sponsors sponsoring="Post-Quantum Cryptography Conference Amsterdam 2023" level="all" height="20" max-width="60" rows=true >}}
 
-#### Become a sponsor
+#### [Become a sponsor](pqc-conference-ams-sponsors.pdf)
 
-Are you interested in becoming a sponsor for the Post-Quantum PKI Conference? For further details regarding sponsorship opportunities within the PKI Consortium and specifically for the PQC Conference, please reach out to us. You can request a brochure with comprehensive information by [contacting us](/sponsors/sponsor/).
+Are you interested in becoming a sponsor for the Post-Quantum Cryptography Conference? For further details regarding sponsorship opportunities within the PKI Consortium and specifically for the PQC Conference, please [reach out to us](/sponsors/sponsor/). You can also [download the sponsorship brochure](pqc-conference-ams-sponsors.pdf) for comprehensive information and pricing of our sponsor packages.
 
 ## Agenda
 
