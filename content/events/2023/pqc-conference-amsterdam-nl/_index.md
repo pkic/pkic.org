@@ -207,19 +207,22 @@ speakers:
 
   - name: Anita Wehmann
     title: Senior Advisor Information Security at the Ministry of the Interior and Kingdom Relations (BZK) of the Netherlands
-    bio: 
+    bio: |
+      Anita Wehmann is a sen. policy advisor at the Ministry of the Interior and Kingdom Relations.and initiated the  QvC-Rijk program.  She is working in the field of Cybersecurity and integrated security since 2009  for several organizations within the Dutch government. It is her passion is to make the Dutch Government more cyber resilient through collaboration.
     social:
       linkedin: https://www.linkedin.com/in/anita-wehmann-cciso-isap-09230042/
 
   - name: Germain van der Velden
     title: IT Advisor at the Ministry of Infrastructure and Water Management of the Netherlands
-    bio: 
+    bio: |
+      Germain van der Velden is an IT advisor at the Ministry of Infrastructure and Watermanagement. He is specialized in cybersecurity, digitalization and digital technologies such as Quantum, AI and Cloud. Germain focuses on topics as quantum technology, post-quantum cryptography, IT strategy and national and economic security. He is also a member of the QvC Rijk team.
     social:
       linkedin: https://www.linkedin.com/in/germain3/
 
   - name: Larissa Kalle
     title: Advisor Cybersecurity at the National Cyber Security Centre (NCSC) of the Netherlands
-    bio: 
+    bio: | 
+      Larissa Kalle is a cybersecurity advisor at NCSC-NL. She has been working in the field of cybersecurity for the past 7 years with the drive to increase the digital resilience of governmental and vital organizations. Larissa focuses on topics such as risk management and post-quantum cryptography and is a member of the QvC Rijk team.
     social:
       linkedin: https://www.linkedin.com/in/larissakalle/
 
@@ -349,6 +352,7 @@ agenda:
       speakers:
         - Anita Wehmann
         - Germain van der Velden
+        - Larissa Kalle
       location:
           Breakout:
             title: To be announced shortly
