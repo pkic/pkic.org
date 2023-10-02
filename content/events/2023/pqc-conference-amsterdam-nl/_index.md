@@ -194,7 +194,8 @@ speakers:
 
   - name: Blair Canavan
     title: Director, Alliances at Thales
-    bio: 
+    bio: |
+      Blair has 30+ years of IT cybersecurity sales, channel, marketing and business development experience starting as Symantec’s 1st Canadian employee. Blair continuously expanded his cybersecurity and cryptographic expertise with several start-ups including Chrysalis-ITS (Thales), InfoSec Global, Titus, Crypto4A and since September 2019, re-joined his data protection colleagues within Thales’ Global Technology Alliances team, including management of the Post-Quantum cryptography portfolio. He is an avid presenter, start-up consultant and IT industry contributor. Blair holds an Hons.BA from the University of Waterloo, and Wilfrid Laurier University, Ontario, Canada.
     social:
       linkedin: https://www.linkedin.com/in/blair-canavan-5b708a2/
 
@@ -711,7 +712,6 @@ The conference welcomes business leaders, industry experts, and representatives 
 **Registration:** [Click here](https://forms.gle/rzBQuBTR82xukCPw8)  
 
 * _This event can be attended in-person or remotely, we strongly recommend to attend in person where possible._
-* _Only the plenary sessions can be attended remotely, break-out rooms can not be attended online_
 * _There are no costs to register or attend the conference. Travel, accommodation and living expenses are not covered, all attendees are responsible to cover their own expenses._
 
 {{< button link="https://forms.gle/rzBQuBTR82xukCPw8" label="Register for this conference" type="dark" >}}  
@@ -729,8 +729,6 @@ Are you interested in becoming a sponsor for the Post-Quantum Cryptography Confe
 ## Agenda
 
 This is a **preliminary agenda** and is subject to revisions. The definitive details, including topics, abstracts, speakers, and allocated time slots, will be provided here once they are finalized.
-
-You can tune in to the plenary topics via a live YouTube stream, but for the breakout sessions attendance in person is currently required, we will consider recording the breakout sessions if sufficient budget is available. Please consider to become a [sponsor](#become-a-sponsor) if you would like these breakout sessions to be recorded.
 
 {{< agenda "agenda" >}}
 
