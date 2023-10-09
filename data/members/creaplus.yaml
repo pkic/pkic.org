@@ -1,10 +1,10 @@
 id: creaplus
-name: CREAplus
+name: CREAPLUS
 slogan: 
 website: https://www.creaplus.com
 
 # Short description, longer content can be placed in `content/members/`
-description: CREAplus is dedicated to achieving a high level of cybersecurity for its customers and partners. Established in 2002 it helps organisations prepare for the cyber challenges of today and tomorrow. It offers a wide range of solutions and services that enable and ensure secure electronic business processes.
+description: CREAPLUS is dedicated to achieving a high level of cybersecurity for its customers and partners. Established in 2002 it helps organisations prepare for the cyber challenges of today and tomorrow. It offers a wide range of solutions and services that enable and ensure secure electronic business processes.
 
 # membership
 memberSince: 2022-12-08
@@ -40,7 +40,7 @@ representatives:
       twitter: 
       linkedin: https://www.linkedin.com/in/nastja-cepak-78b753a5/
     description: |
-      Nastja is lead cryptographer in CREAplus and is active in these fields:
+      Nastja is lead cryptographer in CREAPLUS and is active in these fields:
 
       - Consulting on implementation of new cryptography and blockchain algorithms (determining technical requirements, ECC requirements, presenting how the algorithm works, assisting with testing)
       - Leader of PQC consultation team
@@ -55,4 +55,4 @@ representatives:
       twitter: 
       linkedin: https://www.linkedin.com/in/mitjatrampuz/
     description: |
-      Mitja is managing director of CREAplus and business development professional skilled in the information security technology (cybersecurity, hardware security modules - HSMs, cryptography, PKI, network security, 2FA/MFA, ISO/IEC 27001 ISMS, risk management, encryption etc.) with more than 30 years of working experience. He is a holder of different certifications like (ISC)²’s Certified Information Systems Security Professional – CISSP and Certified Cloud Security Professional – CCSP, ISACA’s Certified Information Systems Auditor – CISA and Certified Information Security Manager – CISM, Internal Auditor for ISO/IEC 27001 and others.
+      Mitja is managing director of CREAPLUS and business development professional skilled in the information security technology (cybersecurity, hardware security modules - HSMs, cryptography, PKI, network security, 2FA/MFA, ISO/IEC 27001 ISMS, risk management, encryption etc.) with more than 30 years of working experience. He is a holder of different certifications like (ISC)²’s Certified Information Systems Security Professional – CISSP and Certified Cloud Security Professional – CCSP, ISACA’s Certified Information Systems Auditor – CISA and Certified Information Security Manager – CISM, Internal Auditor for ISO/IEC 27001 and others.
