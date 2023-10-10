@@ -520,10 +520,11 @@ agenda:
             - Elmer Lastdrager
 
     - time: "9:30"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: Challenges for the Post-Quantum Transition of Mobile Ecosystems
+      description: |
+        In the fast-approaching post-quantum era, mobile ecosystems, including smartphones, grapple with the formidable task of integrating advanced cryptographic methods. The main challenge lies in the resource-intensive nature of post-quantum cryptography, requiring increased computational power and hardware acceleration. This urgency is driven by the rising threat of quantum computing, making a swift transition to post-quantum cryptography imperative for robust data protection. During the presentation, we will delve into a case study of implementing SPHINCS within the mobile ecosystem, demonstrating that leveraging existing hardware resources is a viable approach but we still need improvements in hardware.
       speakers:
-        - TBC
+        - Gustavo Banegas
       location:
         Breakout:
           title: Coping with post-quantum signatures in the WebPKI
