@@ -226,6 +226,14 @@ speakers:
     social:
       linkedin: https://www.linkedin.com/in/larissakalle/
 
+  - name: Gustavo Banegas
+    title: Cryptographer at Qualcomm
+    bio: 
+    social: 
+      linkedin: https://www.linkedin.com/in/gustavo-banegas-phd-50b12a69/
+
+
+
 # Locations with sessions in parallel -----------------------------------------
 locations:
   - name: Plenary
@@ -396,12 +404,13 @@ agenda:
         - Andrea Garcia Rodriguez
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
-          track: Technical
+          title: Machine-checking post-quantum cryptography
+          description: |
+            Post-quantum cryptography brought a lot of new aspects into cryptography. This includes but is not limited to the facts that schemes are build on new mathematical structures (or rather not widely used in cryptography thus far), security proofs rely on new techniques as well as a deep understanding of said new structures, and implementations have to include and protect new algorithms. In addition, mathematical proofs of security get generally more complex and implementations have to protect against more and more attack vectors. This makes the whole development prone to error. An approach to deal with the added complexity and add reliable security guarantees is the use of computers to machine-check security proofs and implementations. In this talk I will discuss the challenges, and present ongoing projects aiming at machine-checking security proofs and implementations of PQC in EasyCrypt, and Jasmine within the Formosa Crypto consortium.
           speakers:
-            - TBC 
-  
+            - Andreas Hülsing
+
+      
     - time: "14:30"
       title: What is it going to take to break cryptography with a quantum computer?
       description: |
@@ -552,11 +561,10 @@ agenda:
         - Greg Wetmore
       location:
         Breakout:
-          title: Machine-checking post-quantum cryptography
-          description: |
-            Post-quantum cryptography brought a lot of new aspects into cryptography. This includes but is not limited to the facts that schemes are build on new mathematical structures (or rather not widely used in cryptography thus far), security proofs rely on new techniques as well as a deep understanding of said new structures, and implementations have to include and protect new algorithms. In addition, mathematical proofs of security get generally more complex and implementations have to protect against more and more attack vectors. This makes the whole development prone to error. An approach to deal with the added complexity and add reliable security guarantees is the use of computers to machine-check security proofs and implementations. In this talk I will discuss the challenges, and present ongoing projects aiming at machine-checking security proofs and implementations of PQC in EasyCrypt, and Jasmine within the Formosa Crypto consortium.
+          title: To be announced shortly
+          description: The speaker(s) for this session will be announced soon!
           speakers:
-            - Andreas Hülsing
+            - TBC
 
     - time: "11:30"
       title: Quantum-safe PKI for the German administration
