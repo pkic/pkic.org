@@ -228,7 +228,12 @@ speakers:
 
   - name: Gustavo Banegas
     title: Cryptographer at Qualcomm
-    bio: 
+    bio: | 
+      Gustavo possesses a distinguished academic background, having earned a Ph.D. in Computer Science and Mathematics with a specialization in post-quantum cryptography from  Eindhoven University of Technology. Over the past decade, he has diligently dedicated himself to the field of cryptography, focusing particularly on its practical implementation. 
+
+      In recent years, Gustavo's expertise has extended to isogenies and the development of hardware implementations for algorithms such as Kyber, Dilithium, and Falcon.
+
+      Today, Gustavo holds a senior position as a cryptography engineer at Qualcomm, where he continues to leverage his deep knowledge and practical experience to drive innovation and secure the digital landscape
     social: 
       linkedin: https://www.linkedin.com/in/gustavo-banegas-phd-50b12a69/
 
