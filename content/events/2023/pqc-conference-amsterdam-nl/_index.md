@@ -237,6 +237,12 @@ speakers:
     social: 
       linkedin: https://www.linkedin.com/in/gustavo-banegas-phd-50b12a69/
 
+  - name: Lizzy Polman
+    title: Inspector, Dutch Authority for Digital Infrastructure
+    bio: | 
+      Lizzy Polman is with the Dutch Authority for Digital Infrastructure (Rijksinspectie Digitale Infrastructuur - RDI) for over 3,5 years, in the function of Inspector for the eIDAS realm. She is also involved with research on Quantum Technology and the possible positive and negative impact on society, the working fields of the RDI, and coherence with existing technology. Her interest lies particularly in the domain of post-quantum cryptography. I have a background in Archaeology, Arabic culture, Crisis management, and IT security.
+    social: 
+      linkedin: https://www.linkedin.com/in/lizzy-polman-ma-msc-6b883644/
 
 
 # Locations with sessions in parallel -----------------------------------------
@@ -615,7 +621,7 @@ agenda:
         Join us to navigate the crucial intersection of Post-Quantum Cryptography and Trust Services, as we delve into the Dutch perspective and the broader implications for the global trust ecosystem.
       track: PKI
       speakers: 
-        - Dutch Authority for Digital Infrastructure (RDI)
+        - Lizzy Polman
       location:
         Breakout:
           title: Vulnerabilities of Blockchain Security in the World of Quantum Computing
