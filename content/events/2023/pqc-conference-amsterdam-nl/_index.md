@@ -250,6 +250,13 @@ speakers:
     social: 
       linkedin: 
 
+  - name: Sandra Guasch Castello
+    title: Staff Privacy Engineer at SandboxAQ
+    bio: |
+      Sandra Guasch is a privacy engineer at SandboxAQ, where she works on post-quantum privacy-preserving technologies. She got her PhD from the Polytechnic University of Catalonia (UPC) on voter verifiability applied to electronic voting in 2016. She has worked in different areas of applied cryptography and cybersecurity, including designing electronic voting protocols, security lifecycle management, secure systems design and red teaming.
+    social: 
+      linkedin: https://www.linkedin.com/in/sandraguasch/
+
 
 # Locations with sessions in parallel -----------------------------------------
 locations:
@@ -580,10 +587,11 @@ agenda:
         - Greg Wetmore
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
+          title: "A Sign of the Times: The Transition to Quantum Secure Authentication"
+          description: | 
+            Authentication is one of the most important security goals on the Internet and in the quantum era requires transitioning. Due to the complexity and scale of large systems, post-quantum migration time is often long. We’ll exemplify the challenges and timelines of authentication migrations using FIDO2, enabling the audience to assess the transition time of their own authentication systems.
           speakers:
-            - TBC
+            - Sandra Guasch Castello
 
     - time: "11:30"
       title: Quantum-safe PKI for the German administration
