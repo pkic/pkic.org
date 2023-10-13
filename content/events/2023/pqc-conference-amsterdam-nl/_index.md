@@ -257,6 +257,17 @@ speakers:
     social: 
       linkedin: https://www.linkedin.com/in/sandraguasch/
 
+  - name: Tom Patterson
+    title: Global Lead, Quantum Security at Accenture
+    bio: |
+      Tom Patterson is the Managing Director for Emerging Technology Security at Accenture, where he drives advancements in artificial intelligence, quantum security, and space-based security around the globe.  An acclaimed security expert with three decades of experience across all facets of security, Tom is a published author and keynote speaker providing compelling insight into cybersecurity issues of the day, with a view into a more secure tomorrow.  Previously, Tom led efforts with the White House to develop a national ‘moonshot’ toward the cyber defense of the country by the end of this decade. Additionally, he focused on extending trust and security to hundreds of global stakeholders including governments and critical infrastructure companies to protect national borders, transact trillions dollars, deliver energy to millions, secure global air transit, and provide healthcare to entire populations.
+
+      Tom has served on several public company boards, and advised the FBI, Secret Service, and White House on security issues. Tom also has been appointed to the U.S. President’s National Security Telecommunications Advisory Committee’s (NSTAC) Cyber Moonshot Subcommittee co-lead.
+
+      Earlier, Tom has run security services for Deloitte in EMEA, and was IBM's Chief eCommerce Strategist. Tom has worked on security for the launch of a nuclear aircraft carrier and space shuttle as well as with the U.S. Government and businesses around the world. The author of Mapping Security, Tom is a frequent guest security expert on TV including CNBC, Fox and CNN, blogs regularly on Twitter @TomTalks, and speaks frequently at TEDx, DoJ, DoD, SIFMA, WEF, Davos, Financial Times, and many other high-level government and industry events around the world.
+    social: 
+      linkedin: https://www.linkedin.com/in/tomtalks
+
 
 # Locations with sessions in parallel -----------------------------------------
 locations:
@@ -672,10 +683,19 @@ agenda:
             - TBC
 
     - time: "14:30"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: Moving toward a Quantum Security Maturity Index
+      description: | 
+        Recent advances in quantum computing, factoring algorithms, and hybrid compute approaches toward development of cryptographically relevant quantum computers have made the need to proactively defend our enterprises from this threat an immediate requirement.  
+
+        Today there are a variety of approaches toward mitigating this risk that are being considered, developed, and deployed around the world.  There are leading sectors and trailing sectors in terms of adoption, and there are different algorithms and architectures being relied on in various parts of the world.  The constant message from government and industry is to 'Start Now' and while that is good, we need to consider what's next.
+
+        With the variety of approaches and levels of maturity, there is a global move to agree upon a common maturity index that would support a common vocabulary, improve quantum defenses, consistently measure progress, share knowledge, and prioritize actions and budgets.
+
+        These maturity index levels would cover initial risk and strategy, discovery and inventory, crypto ecosystem, architectures, testing, trials, roll outs, and a steady state managed operation. Included in each of these levels would be reference to approaches such as CBOMs, crypto agility, quantum key distribution, algorithm selection, and more.
+
+        This talk will provide an introduction to the maturity index concept for quantum, an update on what else is happening around the world, and provide an invitation to participate in both the definitions, adoptions, and benefits of a globally accepted post quantum maturity index.  
       speakers:
-        - TBC
+        - Tom Patterson
       location:
         Breakout:
           title: Using quantum-safe hybrid certificates for signing documents
