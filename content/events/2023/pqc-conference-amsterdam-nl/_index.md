@@ -399,6 +399,8 @@ agenda:
       speakers:
         - Bill Newhouse
         - Stavros Kousidis
+        - Jérôme Plût
+        - Anita Wehmann
       location:
         Breakout:
           title: " "
