@@ -195,7 +195,7 @@ speakers:
   - name: Blair Canavan
     title: Director, Alliances at Thales
     bio: |
-      Blair has 30+ years of IT cybersecurity sales, channel, marketing and business development experience starting as Symantec’s 1st Canadian employee. Blair continuously expanded his cybersecurity and cryptographic expertise with several start-ups including Chrysalis-ITS (Thales), InfoSec Global, Titus, Crypto4A and since September 2019, re-joined his data protection colleagues within Thales’ Global Technology Alliances team, including management of the Post-Quantum cryptography portfolio. He is an avid presenter, start-up consultant and IT industry contributor. Blair holds an Hons.BA from the University of Waterloo, and Wilfrid Laurier University, Ontario, Canada.
+      Blair has 30+ years of IT cybersecurity sales, channel, marketing, and business development experience. Blair continuously expanded his cybersecurity and cryptographic expertise starting with Symantec and several cyber start-ups including Chrysalis-ITS (Thales), InfoSec Global, Crypto4A and since September 2019, back with Thales’ Global Technology Alliances team, including the Quantum cryptography portfolio. Blair recently represented the Canadian Forum for Digital Infrastructure Resilience (CFDIR) to articulate the standards and Government guidance at Mobile World Congress (MWC) in 2023. He is an avid presenter, start-up consultant, and IT industry contributor. Blair holds an Hons.BA from the University of Waterloo, and Wilfrid Laurier University, Ontario, Canada.  
     social:
       linkedin: https://www.linkedin.com/in/blair-canavan-5b708a2/
 
@@ -243,6 +243,12 @@ speakers:
       Lizzy Polman is with the Dutch Authority for Digital Infrastructure (Rijksinspectie Digitale Infrastructuur - RDI) for over 3,5 years, in the function of Inspector for the eIDAS realm. She is also involved with research on Quantum Technology and the possible positive and negative impact on society, the working fields of the RDI, and coherence with existing technology. Her interest lies particularly in the domain of post-quantum cryptography. I have a background in Archaeology, Arabic culture, Crisis management, and IT security.
     social: 
       linkedin: https://www.linkedin.com/in/lizzy-polman-ma-msc-6b883644/
+
+  - name: Jérôme Plût
+    title: ANSSI
+    bio: 
+    social: 
+      linkedin: 
 
 
 # Locations with sessions in parallel -----------------------------------------
@@ -347,11 +353,11 @@ agenda:
             - Volker Krummel
 
     - time: "12:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: ANSSI plan for post-quantum transition
+      description: The abstract for this session will be published soon!
       track: Governance
       speakers:
-        - TBC
+        - Jérôme Plût
       location:
         Breakout:
           title: " "
