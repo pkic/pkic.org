@@ -275,6 +275,13 @@ speakers:
     social: 
       linkedin: https://www.linkedin.com/in/bordekock/
 
+  - name: Léo Ducas
+    title: Researcher at Centrum Wiskunde & Informatica (CWI) and Professor at Leiden University
+    bio: |
+      Leo Ducas is a researcher at Centrum Wiskunde & Informatica and a professor at Leiden University. He is a leading expert in the field of lattice-based cryptography, which is a promising area of research for post-quantum cryptography. His research has focused on developing cryptographic schemes that are secure against quantum computers, and he has made significant contributions to the field. In particular, he has proposed several lattice-based schemes that are resistant to quantum attacks, including the first sub-exponential algorithm for solving the learning with errors (LWE) problem. His work has been recognized with several awards, including the Best Paper Award at Eurocrypt 2012 and the Google Faculty Research Award in 2015.
+    website: https://homepages.cwi.nl/~ducas/
+    social: 
+      linkedin: https://www.linkedin.com/in/leo-ducas-28b6a04a/
 # Locations with sessions in parallel -----------------------------------------
 locations:
   - name: Plenary
@@ -337,7 +344,7 @@ agenda:
             \* _This is a 40 minute session_
           track: Algorithms
           speakers:
-            - TBC
+            - Léo Ducas
 
     - time: "11:20"
       title: The EU Approach to Post-Quantum Cryptography Governance
