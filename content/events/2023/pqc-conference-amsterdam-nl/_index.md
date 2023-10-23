@@ -268,6 +268,19 @@ speakers:
     social: 
       linkedin: https://www.linkedin.com/in/tomtalks
 
+  - name: Pasqualle Verwoerdt
+    title: Board of Directors at Compumatica
+    bio: |
+      Pasqualle Verwoerdt is a member of the Board of Directors of Compumatica and is closely involved with The Quantum Gateway Foundation (an initiative from ABN AMRO, Capgemini, UvA and Compumatica partly funded by Quantum Delta NL) as Steering Group member. Pasqualle has been involved in and interested in encryption and key management since 2014.
+    social: 
+      linkedin: https://www.linkedin.com/in/pasqualleverwoerdt/
+
+  - name: Bor de Kock
+    title: Assistant Professor of Cryptology at NTNU Trondheim
+    bio: |
+      Bor de Kock is an Assistant Professor of Cryptology at NTNU, The Norwegian University of Science and Technology. He has an MSc degree in Computer Science and Engineering from the Eindhoven University of Technology, where he focused on information security, and a PhD on post-quantum key exchange protocols from NTNU. In his research Bor mostly works on key exchange and password-based protocols, while he teaches courses about cryptology and network security for masters’ students. 
+    social: 
+      linkedin: https://www.linkedin.com/in/bordekock/
 
 # Locations with sessions in parallel -----------------------------------------
 locations:
@@ -617,10 +630,11 @@ agenda:
         - Kaveh Bashiri
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
+          title: Quantum Resistance through Symmetric Key Cryptography
+          description: |
+            Symmetric encryption algorithms, such as AES256, are already considered to be post-quantum secure, meaning that they are resistant to attack by quantum computers. This fact is often overlooked in discussions about post-quantum cryptography, but it is important to remember that symmetric encryption can be used to protect data even if quantum computers become powerful enough to break asymmetric encryption algorithms. In this presentation we will explore how symmetric encryption algorithms can be used to protect existing asymmetric implementations.
           speakers:
-            - TBC
+            - Pasqualle Verwoerdt
 
     - time: "12:00"
       title: PKI and PQC Strategy for Payment Card Industry
@@ -632,10 +646,13 @@ agenda:
       track: PKI
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
+          title: "Symmetric Key Exchange: Lightweight Alternatives for a Post-Quantum IoT"
+          description: |  
+            Symmetric cryptographic primitives such as AES are simple, efficient and secure – even in a post-quantum world – which makes them interesting for a variation of purposes where we need secure encryption, but with strong constraints to computing power and storage. Traditionally a downside of these algorithms has been their static, long-term keys, making it hard to achieve security properties such as forward secrecy without negotiating a new key every time.
+
+            In this talk we will look at a number of protocols that achieve symmetric authenticated key exchange: we propose new methods of key evolution that guarantee full forward secrecy, while also taking care of key synchronization between the involved parties. This makes them very suitable for IoT devices, or other settings where efficient post-quantum cryptography is required.
           speakers:
-            - TBC
+            - Bor de Kock
 
     - time: "12:30"
       title: Post-Quantum Cryptography & Trust Services
