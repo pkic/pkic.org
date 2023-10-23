@@ -219,13 +219,6 @@ speakers:
     social:
       linkedin: https://www.linkedin.com/in/germain3/
 
-  - name: Larissa Kalle
-    title: Advisor Cybersecurity at the National Cyber Security Centre (NCSC) of the Netherlands
-    bio: | 
-      Larissa Kalle is a cybersecurity advisor at NCSC-NL. She has been working in the field of cybersecurity for the past 7 years with the drive to increase the digital resilience of governmental and vital organizations. Larissa focuses on topics such as risk management and post-quantum cryptography and is a member of the QvC Rijk team.
-    social:
-      linkedin: https://www.linkedin.com/in/larissakalle/
-
   - name: Gustavo Banegas
     title: Cryptographer at Qualcomm
     bio: | 
@@ -408,7 +401,6 @@ agenda:
       speakers:
         - Anita Wehmann
         - Germain van der Velden
-        - Larissa Kalle
       location:
           Breakout:
             title: To be announced shortly
@@ -531,11 +523,12 @@ agenda:
         - Anselme Tueno
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
+          title: "Building Your PQC Lab: Trust But Verify Your PQC Ecosystem"
+          description: |
+            This session will outline the tactical steps for establishing and building or accessing a Post-Quantum Crypto (PQC) test environment. With the increasing volume of ecosystem options available and emerging, now is the time to identify and test against your priority enterprise applications and use cases. This session will identify and highlight some of the key challenges addressing PKI, Code Signing, IoT, and TLS use cases. To summarize, best practices and strategies being implemented in the real-world will be shared to provide attendees with concrete examples for leveraging a PQC test environment.
           track: Technical
           speakers:
-            - TBC 
+            - Blair Canavan
  
     - time: "17:00"
       title: Closing remarks for day 1
