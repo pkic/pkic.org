@@ -282,6 +282,15 @@ speakers:
     website: https://homepages.cwi.nl/~ducas/
     social: 
       linkedin: https://www.linkedin.com/in/leo-ducas-28b6a04a/
+
+  - name: Simona Samardjiska
+    title: Assistant Professor at Digital Security Group, ICIS, Radboud University
+    bio: 
+    website: https://www.ru.nl/en/people/samardjiska-s
+    social: 
+      linkedin: https://www.linkedin.com/in/simona-samardjiska-516b8435/
+
+
 # Locations with sessions in parallel -----------------------------------------
 locations:
   - name: Plenary
@@ -410,14 +419,14 @@ agenda:
         - Germain van der Velden
       location:
           Breakout:
-            title: To be announced shortly
+            title: Code-based Cryptography
             description: |
-              The speaker(s) for this session will be announced soon!
+              The abstract for this session will be added soon!
 
               \* _This is a 40 minute session_
             track: Algorithms
             speakers:
-              - TBC 
+              - Simona Samardjiska 
 
     - time: "12:40"
       title: "Ask the Experts: Global Perspectives on Post-Quantum Cryptography Governance"
