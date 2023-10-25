@@ -290,6 +290,20 @@ speakers:
     social: 
       linkedin: https://www.linkedin.com/in/simona-samardjiska-516b8435/
 
+  - name: Jelle Don
+    title: Researcher at Centrum Wiskunde & Informatica (CWI)
+    bio: |
+      Jelle Don is a researcher nearing the completion of his PhD-candidacy in the Cryptology Group at Centrum Wiskunde & Informatica (CWI). His expertise is on provable security in the Quantum Random-Oracle Model, but recently he has been diving into the intricacies of post-quantum standardization.
+    website: https://www.cwi.nl/en/people/jelle-don/
+    social: 
+      linkedin: https://www.linkedin.com/in/jelle-don-20b72a253/
+
+  - name: Alessandro Amadori
+    title: Cryptographer at TNO
+    bio: |
+      Alessandro Amadori is a cryptographer currently working at TNO, where his main area of expertise lies in the transition to quantum-safe cryptography. Prior to joining TNO, he earned his PhD from Eindhoven University of Technology, with a research focus on applied cryptography, especially secure implementations.
+    social: 
+      linkedin: https://www.linkedin.com/in/alessandro-amadori-4b2149b8
 
 # Locations with sessions in parallel -----------------------------------------
 locations:
@@ -699,14 +713,15 @@ agenda:
         - Dustin Moody
       location:
         Breakout:
-          title: "Post-quantum technologies explained: building a PQ decision tree for developers"
+          title: "Investigating Post-Quantum Cryptography: building a PQC decision tree for developers"
           description: |
-            Now that the quantum era is upon us, the question arises: How do you ensure your project is "quantum ready"? Which algorithms are the right fit, and which protocols provide the necessary support? Join this informative session to explore the development of a comprehensive decision tree by experts from various organizations, including dcypher, TNO, CWI, NXP, Compumatica, Technolotion, and Fox-IT.
+            Now that the quantum era is upon us, the question arises: How do you ensure your organisation is “quantum-ready”? With some many candidates and standards to choose from, which algorithms are the right fit for your applications? Join this informative session to explore the development of a comprehensive decision tree by experts from various organizations, including dcypher, TNO, CWI, NXP, Compumatica, Technolution, and Fox-IT.
 
-            During this session, we'll delve into the underlying motivations, careful considerations, and thought processes behind the creation of this decision tree. Gain insights into how to navigate the complexities of post-quantum cryptography and discover a practical tool designed to simplify the decision-making process for quantum-ready projects.
+            During this session, we’ll delve into the underlying motivations, thought processes and important takeaways regarding the creation of this decision tree. Gain insights into how to navigate the complexities of post-quantum cryptography and discover a practical tool designed to simplify the decision-making process for quantum-ready organisations.
           track: Technical
           speakers:
-            - TBC
+            - Jelle Don
+            - Alessandro Amadori
 
     - time: "14:30"
       title: Moving toward a Quantum Security Maturity Index
