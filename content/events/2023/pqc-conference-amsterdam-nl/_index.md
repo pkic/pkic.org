@@ -408,7 +408,8 @@ agenda:
 
     - time: "12:00"
       title: ANSSI plan for post-quantum transition
-      description: The abstract for this session will be published soon!
+      description: |
+        We will present the plans of ANSSI for transition to quantum-safe cryptography. The existence of the threat of quantum computing requires initiating this transition as soon as possible while ensuring that no security regression is possible. In this spirit, we will explain our three-step roadmap towards quantum-safe algorithms, while listing a few of the technical orientations which can already be determined.
       track: Governance
       speakers:
         - Jérôme Plût
