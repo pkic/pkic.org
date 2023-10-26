@@ -12,6 +12,12 @@ memberType: F
 workingGroups:
   - PQC
 
+# sponsor
+sponsor:
+  sponsoring:
+    "Post-Quantum Cryptography Conference Amsterdam 2023":
+      level: Innovator
+
 # Social media
 social:
   twitter: https://twitter.com/thalesgroup

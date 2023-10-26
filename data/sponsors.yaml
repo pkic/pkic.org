@@ -5,3 +5,19 @@
     sponsoring:
       "Post-Quantum Cryptography Conference Amsterdam 2023":
         level: Ambassador
+
+- name: PQShield
+  website: https://pqshield.com/
+  logo: pqshield.svg
+  sponsor:
+    sponsoring:
+      "Post-Quantum Cryptography Conference Amsterdam 2023":
+        level: Inspirator
+
+- name: Fortanix 
+  website: https://fortanix.com/
+  logo: fortanix.svg
+  sponsor:
+    sponsoring:
+      "Post-Quantum Cryptography Conference Amsterdam 2023":
+        level: Innovator
