@@ -278,7 +278,15 @@ speakers:
   - name: Léo Ducas
     title: Researcher at Centrum Wiskunde & Informatica (CWI) and Professor at Leiden University
     bio: |
-      Leo Ducas is a researcher at Centrum Wiskunde & Informatica and a professor at Leiden University. He is a leading expert in the field of lattice-based cryptography, which is a promising area of research for post-quantum cryptography. His research has focused on developing cryptographic schemes that are secure against quantum computers, and he has made significant contributions to the field. In particular, he has proposed several lattice-based schemes that are resistant to quantum attacks, including the first sub-exponential algorithm for solving the learning with errors (LWE) problem. His work has been recognized with several awards, including the Best Paper Award at Eurocrypt 2012 and the Google Faculty Research Award in 2015.
+      I have obtained my PhD at ENS Paris, on the topic of Lattice-based Cryptography. After a post-doc at UCSD, I have joined CWI in 2015. I obtained a VENI grant in 2016, and started a tenure-track at CWI in 2017. I am also a Professor of Cryptology at the Mathematical Institute of Leiden University since 2021.
+
+      I do research on cryptology, and I am more specifically interested in theoretical and practical aspects of lattice-based cryptography.
+
+      I am involved in the design of fast algorithms for use in lattice-based cryptographic protocols, and in the design of optimized cryptographic protocols for practice. This work includes candidates Quantum-safe protocols  for the NIST standardization competition (NewHope, Frodo, Kyber, Dilithium).
+
+      I am also interested the precise security estimations of lattice problems, the fine tuning of cryptanalytic algorithm and their implementation. In particular I am very active in the development of the FPLLL lattice reduction library, so as to test in practice the latest algorithmic advances, but also to provide useful tools for prototyping new algorithms.
+
+      I have also contributed to quantum cryptanalysis of lattice-based schemes, showing that not all lattices problems are equally resistant to quantum computing.
     website: https://homepages.cwi.nl/~ducas/
     social: 
       linkedin: https://www.linkedin.com/in/leo-ducas-28b6a04a/
@@ -357,7 +365,9 @@ agenda:
         Breakout:
           title: Lattice-based cryptography
           description: |
-            The abstract for this session will be availible soon!
+            Lattices are underlying three out of the four new PQC standards of the NIST: Kyber, Dilithium and Falcon. But what is a lattice ? What kind of computation does it involves ? What are the challenges related to implementing such schemes ?
+
+            This talk aims at giving an overview at the principles of lattice-based cryptography, covering both public key encryption and digital signature.
 
             \* _This is a 40 minute session_
           track: Algorithms
