@@ -357,7 +357,7 @@ agenda:
         Breakout:
           title: Lattice-based cryptography
           description: |
-            The speaker(s) for this session will be announced soon!
+            The abstract for this session will be availible soon!
 
             \* _This is a 40 minute session_
           track: Algorithms
