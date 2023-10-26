@@ -365,7 +365,7 @@ agenda:
         Breakout:
           title: Lattice-based cryptography
           description: |
-            Lattices are underlying three out of the four new PQC standards of the NIST: Kyber, Dilithium and Falcon. But what is a lattice ? What kind of computation does it involves ? What are the challenges related to implementing such schemes ?
+            Lattices are underlying three out of the four new PQC standards of the NIST: Kyber, Dilithium and Falcon. But what is a lattice? What kind of computation does it involves? What are the challenges related to implementing such schemes?
 
             This talk aims at giving an overview at the principles of lattice-based cryptography, covering both public key encryption and digital signature.
 
