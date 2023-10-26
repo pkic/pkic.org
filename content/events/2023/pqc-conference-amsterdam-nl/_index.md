@@ -323,13 +323,7 @@ agenda:
       speakers: 
         - Paul van Brouwershaven
         - Albert de Ruiter
-
-    - time: "9:15"
-      title: Keynote Message
-      description:
-      speakers:
-        - TBC
-  
+ 
     - time: "9:30"
       title: Status update from NIST
       description: |
