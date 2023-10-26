@@ -213,7 +213,7 @@ speakers:
       linkedin: https://www.linkedin.com/in/anita-wehmann-cciso-isap-09230042/
 
   - name: Germain van der Velden
-    title: IT Advisor at the Ministry of Infrastructure and Water Management of the Netherlands
+    title: Senior Information Advisor at the Ministry of Infrastructure and Water Management of the Netherlands
     bio: |
       Germain van der Velden is an IT advisor at the Ministry of Infrastructure and Watermanagement. He is specialized in cybersecurity, digitalization and digital technologies such as Quantum, AI and Cloud. Germain focuses on topics as quantum technology, post-quantum cryptography, IT strategy and national and economic security. He is also a member of the QvC Rijk team.
     social:
@@ -421,13 +421,13 @@ agenda:
             - None
 
     - time: "12:20"
-      title: Unlocking the Netherlands' Quantum-Resilient Cryptography Strategy
+      title: Unlocking the Quantum-Resilient Cryptography Strategy for the Dutch central government
       description: |
-        In this presentation, we will delve into the Netherlands' approach to Post-Quantum Cryptography (PQC) governance and regulation. Positioned at the forefront of quantum-resilient cryptography, the Netherlands has crafted a resource that extends beyond theoretical discussions, offering organizations concrete steps and invaluable advice.
+        In this presentation, we will delve into the Dutch central governments’ approach to mitigate the risks of quantum technology. Quantum resilient Cryptography  governance and regulation can help in mitigating these risks. Positioned at the forefront of quantum-resilient cryptography, a resource was crafted that extends beyond theoretical discussions, offering organizations concrete steps and invaluable advice. Because of our approach this will not only reach the government, but also IT-providers, and (vital) sectors in the Netherlands.
 
-        The Netherlands' commitment to fortifying global cybersecurity is exemplified by the [PQC Migration Handbook](https://english.aivd.nl/publications/publications/2023/04/04/the-pqc-migration-handbook). This indispensable resource equips organizations with pragmatic guidance on how to proactively mitigate the imminent threat posed by quantum computers to today's cryptographic systems.
+        The commitment to fortifying global cybersecurity is exemplified by the Dutch [PQC Migration Handbook](https://english.aivd.nl/publications/publications/2023/04/04/the-pqc-migration-handbook). This indispensable resource equips organizations with pragmatic guidance on how to proactively mitigate the imminent threat posed by quantum computers to today’s cryptographic systems.
 
-        Join us to discover how the Netherlands is diligently preparing both government entities and organizations to seamlessly transition to quantum-resilient cryptographic solutions.
+        Join us to discover how the Dutch central government is diligently preparing for transition to quantum-resilient cryptographic solutions.
       track: Governance
       speakers:
         - Anita Wehmann
