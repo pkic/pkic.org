@@ -617,10 +617,12 @@ agenda:
         - Volker Krummel
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
+          title: "[DISCUSSION] Your cryptography will be broken, prepare yourself now!"
+          description: |
+            This interactive session builds upon the presentation "Unlocking the Quantum-Resilient Cryptography Strategy for the Dutch central government" from Tuesday, November 7th. During this session, you can participate in an interactive discussion about the major challenges we face in preparing for the migration to quantum-resilient cryptography.
           speakers:
-            - TBC
+            - Anita Wehmann
+            - Germain van der Velden
 
     - time: "10:30"
       title: Break
