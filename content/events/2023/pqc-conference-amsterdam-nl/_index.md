@@ -285,7 +285,8 @@ speakers:
 
   - name: Simona Samardjiska
     title: Assistant Professor at Digital Security Group, ICIS, Radboud University
-    bio: 
+    bio: |
+      Simona Samardjiska is an assistant professor in post-quantum cryptography at the Digital Security group, Radboud University. Her expertise and research interests are in the mathematics of post-quantum cryptography (multivariate and code-based cryptography). She has been actively involved in the current NIST Post-Quantum standardization process as a principal submitter of the second-round candidate MQDSS and one of the submitters of MEDS in the new 4th NIST signature round. She has also contributed to the understanding of the security of several finalists and second-round candidates, by analyzing their classical security and resistance to side-channel attacks. She has published on several IACR conferences, journals and IEEE symposiums, has been a program committee member of various cryptography-related conferences and workshops and is currently an associate editor of the EURASIP Journal on Information Security. She is an activist for gender balance and diversity in computer science.
     website: https://www.ru.nl/en/people/samardjiska-s
     social: 
       linkedin: https://www.linkedin.com/in/simona-samardjiska-516b8435/
@@ -429,7 +430,7 @@ agenda:
           Breakout:
             title: Code-based Cryptography
             description: |
-              The abstract for this session will be added soon!
+              Last summer, several lattice-based schemes were chosen for standardization in NIST's effort to standardize post-quantum cryptography. The process of selecting candidates is however not over, with the focus now being primarily on code-based and multivariate schemes. In this talk I will discuss code-based cryptosystems, their basic design principles, security and challenges. I will focus on the candidates remaining in the NIST competition - the well-established KEM designs, but also the new emerging signature designs.
 
               \* _This is a 40 minute session_
             track: Algorithms
