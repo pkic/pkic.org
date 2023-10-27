@@ -497,6 +497,7 @@ agenda:
             At its core, generating an LMS private key and obtaining its corresponding public key involves computing an exponential number of hashes and representing large Merkle trees in memory. Moreover, signing with this key later requires recovering subsets of the hashes computed at generation time. Sequential, high memory approaches to these operations make LMS key generation prohibitively slow and resource-intensive. While there is a number of hardware-oriented efforts to optimize LMS, well-known open-source implementations do not use software optimizations and support only small parameter sets.
 
             In this talk, we describe how to make LMS key generation procedure faster with SIMD hashing (by adapting the low-memory iterative algorithm of RFC8554) and recall algorithms that trade off signature speed against succinct representations of private keys in memory.
+          track: Algorithms
           speakers:
             - Francisco José Vial-Prado
       
