@@ -314,6 +314,14 @@ speakers:
     social: 
       linkedin: https://www.linkedin.com/in/alessandro-amadori-4b2149b8
 
+  - name: Francisco José Vial-Prado
+    title: Senior Cryptography Engineer at Fortanix
+    bio: |
+      Francisco José Vial-Prado studied at École Polytechnique in Paris, and holds a Ph.D. in Cryptography from the Université Paris-Saclay obtained under supervision of Prof. Louis Goubin. He currently works at Fortanix, where his work and research focuses in applied cryptography, post-quantum cryptography, and secure implementations.
+    website: https://www.vialprado.com
+    social: 
+      linkedin: https://www.linkedin.com/in/francisco-vial-prado-a744871a6/
+
 # Locations with sessions in parallel -----------------------------------------
 locations:
   - name: Plenary
@@ -473,20 +481,6 @@ agenda:
 
     # Moved from Wednesday 16h as speaker is only available on Tuesday
     - time: "14:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
-      speakers:
-        - TBC
-      location:
-        Breakout:
-          title: Machine-checking post-quantum cryptography
-          description: |
-            Post-quantum cryptography brought a lot of new aspects into cryptography. This includes but is not limited to the facts that schemes are build on new mathematical structures (or rather not widely used in cryptography thus far), security proofs rely on new techniques as well as a deep understanding of said new structures, and implementations have to include and protect new algorithms. In addition, mathematical proofs of security get generally more complex and implementations have to protect against more and more attack vectors. This makes the whole development prone to error. An approach to deal with the added complexity and add reliable security guarantees is the use of computers to machine-check security proofs and implementations. In this talk I will discuss the challenges, and present ongoing projects aiming at machine-checking security proofs and implementations of PQC in EasyCrypt, and Jasmine within the Formosa Crypto consortium.
-          speakers:
-            - Andreas Hülsing
-
-      
-    - time: "14:30"
       title: What is it going to take to break cryptography with a quantum computer?
       description: |
         The whole industry is working on standardizing and implementing post-quantum cryptography, in order to mitigate the risk from future quantum computers. One question that is (and will probably remain) unanswered is “when are quantum computers going to be powerful enough to break cryptography?”. At the same time, there are regular press releases about new methods of breaking cryptography in the short term. These publications often cause panic and confusion which is counter-productive to the process of mitigating the quantum risk.
@@ -496,12 +490,30 @@ agenda:
         - Itan Barmes
       location:
         Breakout:
-          title: "Crunching the Numbers: Post Quantum Algorithm Performance"
-          description: |  
-            Explore the differences between classic and post-quantum algorithms, comparing security levels, sizes and signature speeds. Hardware Security Modules are benchmarked to show real numbers.
-          track: Technical
+          title: "LMS: Lighter, faster key generation"
+          description: |
+            The Leighton-Micali Signature (LMS) system is a stateful hash-based signature scheme whose security relies on properties of hash functions, standing at a comfortable security level against attackers in possession of quantum computers. As such, LMS has been standardized by NIST in SP-800-208 and is regarded as a suitable post-quantum signature algorithm in industry.
+
+            At its core, generating an LMS private key and obtaining its corresponding public key involves computing an exponential number of hashes and representing large Merkle trees in memory. Moreover, signing with this key later requires recovering subsets of the hashes computed at generation time. Sequential, high memory approaches to these operations make LMS key generation prohibitively slow and resource-intensive. While there is a number of hardware-oriented efforts to optimize LMS, well-known open-source implementations do not use software optimizations and support only small parameter sets.
+
+            In this talk, we describe how to make LMS key generation procedure faster with SIMD hashing (by adapting the low-memory iterative algorithm of RFC8554) and recall algorithms that trade off signature speed against succinct representations of private keys in memory.
           speakers:
-            - Tomas Gustavsson
+            - Francisco José Vial-Prado
+      
+    - time: "14:30"
+      title: "Crunching the Numbers: Post Quantum Algorithm Performance"
+      description: |  
+        Explore the differences between classic and post-quantum algorithms, comparing security levels, sizes and signature speeds. Hardware Security Modules are benchmarked to show real numbers.
+      track: Technical
+      speakers:
+        - Tomas Gustavsson
+      location:
+        Breakout:
+          title: Machine-checking post-quantum cryptography
+          description: |
+            Post-quantum cryptography brought a lot of new aspects into cryptography. This includes but is not limited to the facts that schemes are build on new mathematical structures (or rather not widely used in cryptography thus far), security proofs rely on new techniques as well as a deep understanding of said new structures, and implementations have to include and protect new algorithms. In addition, mathematical proofs of security get generally more complex and implementations have to protect against more and more attack vectors. This makes the whole development prone to error. An approach to deal with the added complexity and add reliable security guarantees is the use of computers to machine-check security proofs and implementations. In this talk I will discuss the challenges, and present ongoing projects aiming at machine-checking security proofs and implementations of PQC in EasyCrypt, and Jasmine within the Formosa Crypto consortium.
+          speakers:
+            - Andreas Hülsing
 
     - time: "15:00"
       title: Comparing Strategies for Quantum-Safe Cryptography Adoption in Organizations
