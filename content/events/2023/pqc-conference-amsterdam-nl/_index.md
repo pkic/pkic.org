@@ -239,7 +239,8 @@ speakers:
 
   - name: Jérôme Plût
     title: ANSSI
-    bio: 
+    bio: |
+      Jérôme Plût is a cryptographer at the French cybersecurity agency ANSSI. He is involved in the writing of national cryptographic security requirements and in asymmetric and quantum-safe cryptography.
     social: 
       linkedin: 
 
