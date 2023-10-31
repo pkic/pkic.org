@@ -81,12 +81,12 @@ speakers:
     social:
       linkedin:
 
-  - name: Stavros Kousidis
+  - name: Stephan Ehlen
     title: The Federal Office for Information Security (BSI)
     bio: |
-      Dr. Stavros Kousidis holds a Ph.D. in pure mathematics and joined the German Federal Office for Information Security (BSI) in 2012. Apart from classified information product approvals his work focuses on modern cryptanalysis via algebraic attacks and quantum algorithms. In particular, he led the BSI-project that produced the study "Status of Quantum Computer Development".
+      Dr. Stephan Ehlen holds a Ph.D. in pure mathematics (Number Theory), is a lecturer (Privatdozent) in Mathematics at University of Cologne in Germany and part of the crypto group at the German Federal Office for Information Security (BSI) since 2021. He works on post-quantum cryptography with a focus on lattice-based schemes and leads the BSI project on implementing post-quantum schemes in the open source crypto library Botan.
     social:
-      linkedin:
+      linkedin: https://www.linkedin.com/in/stephan-ehlen/
 
   - name: Greg Wetmore
     title: Vice President Product Development at Entrust
@@ -414,7 +414,7 @@ agenda:
         In this presentation, the BSI will expound upon its post-quantum cryptography policy and roadmap. We will emphasize the significance of the migration to post-quantum algorithms in safeguarding critical digital infrastructure, data, and communications. The presentation will elucidate the BSI’s approach, outlining the trajectory of post-quantum cryptography adoption as the default cryptographic standard.
       track: Governance
       speakers: 
-        - Stavros Kousidis
+        - Stephan Ehlen
       location:
         Breakout:
           title: Stateful Hash-Based Signature Schemes
@@ -474,7 +474,7 @@ agenda:
       speakers:
         - Bill Newhouse
         - Andrea Garcia Rodriguez
-        - Stavros Kousidis
+        - Stephan Ehlen
         - Jérôme Plût
         - Anita Wehmann
       location:
