@@ -322,6 +322,15 @@ speakers:
     social: 
       linkedin: https://www.linkedin.com/in/francisco-vial-prado-a744871a6/
 
+  - name: Robert Hann
+    title: Global Vice President of Sales, Cryptographic Center of Excellence at Entrust
+    bio: |
+      Robert Hann is the Global Vice President of Sales, Cryptographic Center of Excellence at Entrust. He has specialized in PKI, Identity Management and Trust Services for over two decades, bringing a practical, innovative and commercially sound perspective to these areas. With a broad business-centered focus, he has helped organizations in all sectors to realize their objectives and cost-effectively secure the services that many of us rely upon in our business and personal lives.
+
+      Before his current role, Robert served as VP - PKI & Trust Services EMEA & APAC and Director of PKI & Trust Services - EMEA Sales at Entrust.
+    social: 
+      linkedin: https://www.linkedin.com/in/robert-hann-a79509/
+
 # Locations with sessions in parallel -----------------------------------------
 locations:
   - name: Plenary
@@ -644,12 +653,16 @@ agenda:
       sponsor: 
 
     - time: "11:00"
-      title: PKI deployments are as unique as any snowflake; how to build equally flexible PQ migration strategies
+      title: How to Sell Post-Quantum Readiness by Combining it with a Zero Trust Journey
       description: |
-        After TCP/IP, X.509 is probably the most widely deployed technology in modern networking. Use cases of X.509 from the incredibly mainstream to the incredibly niche are as diverse as the Internet itself. This talk will classify different types of PKI deployments according to the types of challenges that they will face during PQ transition including discoverability of the crypto in use (cryptographic bill of materials CBOM), hardware lock-in, which, depending where it is in your network, leads to different types of migration challenges, and the security properties needing during the migration. We will then survey a suite of crypto discovery and transition tools discussing which migration types and security properties they address.
+        Convincing the board of the urgency and importance of PQC can be challenging, especially when there are competing priorities and limited resources.
+
+        One possible way to sell PQC to the board is by combining it with a zero trust journey, which is a holistic approach to cybersecurity that assumes no trust in any entity, whether internal or external, and verifies every request and transaction. A zero trust journey can help organizations achieve better security outcomes, such as reducing the attack surface, enhancing visibility and control, and improving compliance and resilience. By aligning PQC with a zero trust journey, organizations can demonstrate how PQC can support and enable their strategic goals, such as digital transformation, innovation, and customer satisfaction.
+
+        In this presentation, we will discuss how to leverage the benefits of a zero trust journey to make a compelling case for PQC. We will also share some best practices and tips on how to plan and execute a successful PQC transition that is aligned with a zero trust journey.
       track: PKI
       speakers:
-        - Greg Wetmore
+        - Robert Hann
       location:
         Breakout:
           title: "A Sign of the Times: The Transition to Quantum Secure Authentication"
@@ -765,10 +778,11 @@ agenda:
             - Stefan van den Berg
 
     - time: "15:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: PKI deployments are as unique as any snowflake; how to build equally flexible PQ migration strategies
+      description: |
+        After TCP/IP, X.509 is probably the most widely deployed technology in modern networking. Use cases of X.509 from the incredibly mainstream to the incredibly niche are as diverse as the Internet itself. This talk will classify different types of PKI deployments according to the types of challenges that they will face during PQ transition including discoverability of the crypto in use (cryptographic bill of materials CBOM), hardware lock-in, which, depending where it is in your network, leads to different types of migration challenges, and the security properties needing during the migration. We will then survey a suite of crypto discovery and transition tools discussing which migration types and security properties they address.
       speakers:
-        - TBC
+        - Greg Wetmore
       location:
         Breakout:
           title: CRQC and Signatures – no Problem?
