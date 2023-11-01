@@ -326,9 +326,9 @@ speakers:
   - name: Robert Hann
     title: Global Vice President of Sales, Cryptographic Center of Excellence at Entrust
     bio: |
-      Robert Hann is the Global Vice President of Sales, Cryptographic Center of Excellence at Entrust. He has specialized in PKI, Identity Management and Trust Services for over two decades, bringing a practical, innovative and commercially sound perspective to these areas. With a broad business-centered focus, he has helped organizations in all sectors to realize their objectives and cost-effectively secure the services that many of us rely upon in our business and personal lives.
-
-      Before his current role, Robert served as VP - PKI & Trust Services EMEA & APAC and Director of PKI & Trust Services - EMEA Sales at Entrust.
+      Robert Hann is the Global Vice President of Sales, Center of Excellence at Entrust. He has specialized in PKI, Identity Management and Trust Services for well over two decades, bringing a practical, innovative and commercially sound perspective to these areas. With a broad business-centered focus, he has helped organizations in all sectors to realize their objectives and cost-effectively secure the services that many of us rely upon in our business and personal lives.
+      
+      Prior to other roles at Entrust, he was co-owner of Trustis, a UK based Managed Cryptography Services provider that Entrust acquired in 2017.
     social: 
       linkedin: https://www.linkedin.com/in/robert-hann-a79509/
 
