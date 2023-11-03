@@ -1,4 +1,4 @@
-{{ $id := getenv "HUGO_LIVESTREAM" }}
+{{ $id := getenv (.Get "id") }}
 <div class="row">
 
   <div class="col-lg-8 order-lg-1 sticky-top">
