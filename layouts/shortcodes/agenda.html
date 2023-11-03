@@ -8,6 +8,7 @@
                        <button class="nav-link{{ if eq $i 0 }} active{{ end}}" id="nav-{{ $day | urlize }}-tab" data-bs-toggle="tab" data-bs-target="#nav-{{ $day | urlize }}" type="button" role="tab" aria-controls="nav-{{ $day | urlize }}" aria-selected="true">{{ $day }}</button>
                     {{- end -}}
                 {{- end -}}
+                <button class="nav-link" id="nav-speakers-tab" data-bs-toggle="tab" data-bs-target="#nav-speakers" type="button" role="tab" aria-controls="nav-speakers" aria-selected="true">Speakers</button>
             </div>
         </nav>
         {{- end -}}
@@ -19,6 +20,25 @@
 
         {{- range $i, $days := . -}}
             <div class="tab-content overflow-x-auto" id="nav-tabContent">
+                <div class="mt-1 tab-pane fade" id="nav-speakers" role="tabpanel" aria-labelledby="nav-speakers-tab">
+                    <div class="container border pt-4">
+                    {{- range sort $.Page.Params.Speakers "name" -}}
+                        <div class="p-3 border-bottom">
+                            <strong>
+                                {{- if .website -}}
+                                    <a href="{{ .website }}" title="{{ .bio }}" target="_blank">{{- .name -}}</a>
+                                {{- else if .social.linkedin -}}
+                                    <a href="{{ .social.linkedin }}" title="{{ .bio }}" target="_blank">{{- .name -}}</a>
+                                {{- else -}}
+                                    <a href="#">{{- .name -}}</a>
+                                {{end}}
+                            </strong><br />
+                            <strong>{{- .title -}}</strong>
+                            <div class="p-4 fst-italic">{{- .bio -}}</div>
+                        </div>
+                    {{- end -}}  
+                    </div>
+                </div>
                 {{- range $day, $items := $days -}}
                     <div class="mt-1 tab-pane fade{{ if eq $i 0 }} show active{{ end}}" id="nav-{{ $day | urlize }}" role="tabpanel" aria-labelledby="nav-{{ $day | urlize }}-tab">
                         <div class="d-flex flex-column align-items-start">
