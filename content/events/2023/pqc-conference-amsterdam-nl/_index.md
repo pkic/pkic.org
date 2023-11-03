@@ -202,7 +202,18 @@ speakers:
 
   - name: Giuseppe Damiano
     title: Director of Product Management at Entrust
-    bio: 
+    bio: |
+      Giuseppe is currently the Director of Product Management for the nShield product portfolio offering at Entrust.
+
+      Giuseppe is a senior expert in developing and managing PKI solutions and infrastructures, data security, and electronic payment systems with more than 30 years of experience. He has a very strong knowledge of IT architecture security, PKI solutions, HSMs, e-procurement, e-invoicing, digital certificates for electronic signatures, electronic seals, and time stamping.
+
+      During his professional career, as CTO of a Qualified Trust Service Provider, Giuseppe has successfully deployed large-scale projects for major Italian banks, insurance companies, and certification authorities, managing more than 20 million qualified digital certificates using solutions developed in-house.
+
+      Notable achievements include setting up one of the biggest Qualified Remote Signature infrastructures in Europe, remote signature server solutions capable of hosting large numbers of certificates independently of the HSM capacity, designing HSM solutions to manage data security for electronic payment instruments. Together with one of the most important smart-card manufacturers, he defined and implemented the first prototype of a digital signature system based on a GSM SIM. The project was nominated in 2005 by the European IST-Prize as one of Europe’s most innovative projects of the year.
+
+      Giuseppe has actively contributed to writing one of the first technical API standards for Cloud Signature. The standard is defined by the Cloud Signature Consortium and adopted by ETSI.
+
+      He has also actively contributed to writing one of the first proposals for Distributed Ledger Timestamp based on standard PKI formats and blockchain evidence.
     social:
       linkedin: https://www.linkedin.com/in/gdamiano/
 
