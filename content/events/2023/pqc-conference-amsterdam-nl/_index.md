@@ -19,7 +19,7 @@ speakers:
       github: https://github.com/vanbroup
 
   - name: Albert de Ruiter
-    title: Policy Authority PKI Dutch Government (
+    title: Policy Authority PKI Dutch Government (Logius)
     bio: |
       Albert de Ruiter operates the Policy Authority at Logius, the digital government service organization of the Netherlands. He is also a member of the QvC (Quantum Secure Cryptography) working group of the Dutch government, a board member of HAPKIDO, and a member of the PKI Consortium. Albert is known for introducing the idea of a Post-Quantum Cryptography Conference to the PKI Consortium in 2022.
     social:
