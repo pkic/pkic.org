@@ -873,8 +873,6 @@ Are you interested in becoming a sponsor for the Post-Quantum Cryptography Confe
 
 ## Agenda
 
-This is a **preliminary agenda** and is subject to revisions. The definitive details, including topics, abstracts, speakers, and allocated time slots, will be provided here once they are finalized.
-
 {{< agenda "agenda" >}}
 
 Speakers are prohibited from promoting their products or services at this conference. Commercials, workshops and pitches may contain commercial information.
