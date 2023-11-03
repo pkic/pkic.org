@@ -26,9 +26,9 @@
                         <div class="p-3 border-bottom">
                             <strong>
                                 {{- if .website -}}
-                                    <a href="{{ .website }}" title="{{ .bio }}" target="_blank">{{- .name -}}</a>
+                                    <a href="{{ .website }}" target="_blank">{{- .name -}}</a>
                                 {{- else if .social.linkedin -}}
-                                    <a href="{{ .social.linkedin }}" title="{{ .bio }}" target="_blank">{{- .name -}}</a>
+                                    <a href="{{ .social.linkedin }}" target="_blank">{{- .name -}}</a>
                                 {{- else -}}
                                     <a href="#">{{- .name -}}</a>
                                 {{end}}
@@ -96,16 +96,22 @@
                                                     {{- range .speakers -}}
                                                     {{- $speaker := . -}}
                                                         {{- range $.Page.Params.speakers -}}
-                                                            {{- if eq $speaker .name -}}
+                                                            {{- if eq (trim $speaker " *") .name -}}
                                                             <strong>
                                                                 {{- if .website -}}
                                                                     <a href="{{ .website }}" title="{{ .bio }}" target="_blank">{{- .name -}}</a>
                                                                 {{- else if .social.linkedin -}}
                                                                     <a href="{{ .social.linkedin }}" title="{{ .bio }}" target="_blank">{{- .name -}}</a>
                                                                 {{- else -}}
-                                                                    <span title="{{ .bio }}">{{- .name -}}</span>
+                                                                    <a href="#" title="{{ .bio }}">{{- .name -}}</a>
                                                                 {{end}}
-                                                            </strong> - <span>{{- .title -}}</span><br />
+                                                            </strong>  
+                                                            {{- if (hasSuffix $speaker " *") -}}
+                                                                <span class="badge rounded-pill bg-primary">Moderator</span>
+                                                            {{- end -}}
+                                                            <span> - </span>
+                                                            <span>{{- .title -}}</span> 
+                                                            <br />
                                                             {{- end -}}    
                                                         {{- end -}}
                                                     {{- end -}}

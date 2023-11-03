@@ -344,6 +344,47 @@ speakers:
     social: 
       linkedin: https://www.linkedin.com/in/robert-hann-a79509/
 
+  - name: Ronald Cramer
+    title: Head of the Cryptology Group at CWI
+    bio: |
+      Ronald Cramer (PhD 1997 Amsterdam, MSc 1992 Leiden) is head (and founder) of the Cryptology research group at CWI, Amsterdam, The Netherlands and full professor (chair in cryptology) at the Mathematical Institute, Leiden University, The Netherlands, both since 1 June 2004. Cramer has held prior research positions at ETH Zurich (1997-2000) and at Aarhus University (2000-2004).
+
+      Since 2008 Cramer is a Visiting Professor at Division of Mathematical Sciences, NTU, Singapore. His prior visiting appointments include ENS (Rue d'Ulm, Paris), CRM (Barcelona), Complutense (Madrid), UPC (Barcelona), as well as an appointment as Visiting Distinguished Cryptographer at NTT Research Labs (Tokio).
+
+      Cramer's research focuses mostly on foundational and mathematical aspects of cryptology. He is perhaps best known for work on chosen-ciphertext security (Cramer-Shoup encryption, which is also an ISO standard, and invention of hash-proof systems), for work on the introduction and development of Sigma-protocol theory and of such notions as multiplicative secret sharing, arithmetic codices, pseudo-random secret sharing, algebraic manipulation detection codes, and for work on cryptographic protocol theory. Currently, he also focuses on algebraic aspects of lattice-based cryptography. He is an author of the textbook Secure Multi-Party and Secret Sharing (Cambridge, 2015), the first on the topic.
+
+      Cramer's research focuses mostly on foundational and mathematical aspects of cryptology. He is perhaps best known for work on chosen-ciphertext security (Cramer-Shoup encryption, which is also an ISO standard, and invention of hash-proof systems), for work on the introduction and development of Sigma-protocol theory and of such notions as multiplicative secret sharing, arithmetic codices, pseudo-random secret sharing, algebraic manipulation detection codes, and for work on cryptographic protocol theory. Currently, he also focuses on algebraic aspects of lattice-based cryptography. He is an author of the textbook Secure Multi-Party and Secret Sharing (Cambridge, 2015), the first on the topic.
+
+      His editorial board memberships include Journal of Cryptology (Springer, 2001-2016), IEEE Transactions on Information Theory (2011-2014), Journal of Mathematical Cryptology (de Gruyter), Designs, Codes and Cryptography (Springer), and Journal of Algebra and Its Applications. He has served as Program Chair for 9th Annual TCC (2012), 11th Annual PKC (2008) and 24th Annual EUROCRYPT (2005).
+
+      During 2005--2007, he served on the board of directors of the International Association for Cryptologic Research (IACR). During 2009--2015, he served on the advisory board of the Center for Advanced Security Research (CASED), Darmstadt, Germany. He also serves on the advisory board of the Springer Verlag Book Series on Cryptology and Information Security. He also serves or has served on several international Award Committees.
+    website: https://www.cwi.nl/en/people/ronald-cramer/
+
+  - name: Marc Stevens
+    title: Tenured Researcher Cryptology at CWI
+    bio: |
+      Marc Stevens is a tenured researcher at the Cryptology Group at Centrum Wiskunde & Informatica in Amsterdam. He obtained his PhD in 2012 from the Mathematical Institute, Leiden University, for which he was awarded the KHMW (The Royal Holland Society of Sciences) Martinus van Marum prize. He is an expert in cryptanalysis, with emphasis on practical attacks on MD5 and SHA-1. Research highlights are the construction of the MD5 'rogue' Certification Authority (CRYPTO'09 Best Paper Award), the invention of counter-cryptanalysis and the reconstruction of the cryptanalytic attack in the supermalware Flame (CRYPTO'13 Best Young Researcher Paper Award), and the achievement of the first collision for full SHA-1 (CRYPTO'17 Best Paper Award & 2017 Pwnie Award for best cryptologic attack).
+    website: https://www.cwi.nl/en/people/marc-stevens/
+    social:
+      linkedin: https://www.linkedin.com/in/marcstevenscwi/
+
+  - name: Chris Hickman
+    title: Moderator (Chief Security Officer at Keyfactor)
+    bio: |
+      Chris Hickman is the chief security officer at Keyfactor. As a member of the senior management team, Chris is responsible for establishing & maintaining Keyfactor’s leadership position as a world-class, technical organization with deep security industry expertise. He leads client success initiatives and helps integrate the voice of the customer directly into Keyfactor’s platform and capability set.
+
+      Prior to joining Keyfactor, Chris was Director of Technical Services at Alacris, an Ottawa based smartcard and certificate management company, which was sold to Microsoft and is now part of the Microsoft Identity Manager product suite. Chris has worked on PKI projects for organizations and firms including NATO, both the U.S. and Canadian Departments of Defense, Fortune 100 banks and financial institutions, manufacturers, insurance companies, telecommunication providers and retailers. He continues to be a trusted resource for enterprises looking to leverage digital certificates within existing portfolios and new product development.
+    social:
+      linkedin: https://www.linkedin.com/in/chrishickman613/
+
+  - name: Thomas Attema
+    title: Senior Scientist bij TNO en CWI
+    bio: |
+      In a data-driven society, it is essential to protect private and confidential information. At the same time the cryptography developed to protect information might, in the near future, be broken by quantum computers. Thomas studies novel cryptographic techniques, secure against quantum computers and capable of harnessing data in a privacy-friendly manner.
+    social:
+      linkedin: https://www.linkedin.com/in/thomas-attema/
+
+
 # Locations with sessions in parallel -----------------------------------------
 locations:
   - name: Plenary
@@ -490,6 +531,7 @@ agenda:
         - Stephan Ehlen
         - Jérôme Plût
         - Anita Wehmann
+        - Ronald Cramer *
       location:
         Breakout:
           title: " "
@@ -652,6 +694,7 @@ agenda:
         - Blair Canavan
         - Giuseppe Damiano
         - Volker Krummel
+        - Marc Stevens *
       location:
         Breakout:
           title: "[DISCUSSION] Your cryptography will be broken, prepare yourself now!"
@@ -816,7 +859,8 @@ agenda:
 
         Join us for a collaborative and enlightening Q&A session that tries to provide clarity, foster discussion, and leave you with a comprehensive understanding of the quantum computing and cryptography landscape. Don't miss this final chance to engage with our speakers and conference chairs in a vibrant exchange of knowledge.
       speakers:
-        - TBC
+        - Paul van Brouwershaven *
+        - Albert de Ruiter *
 
     - time: "16:30"
       title: "Recap: Unveiling Insights - A Two-Day Conference Retrospective"
@@ -827,7 +871,15 @@ agenda:
 
         This recap promises to be a valuable opportunity to distill the essence of this conference, offering a holistic perspective on the critical issues, emerging trends, and future directions in the field of quantum computing and cryptography.
       speakers:
-        - TBC
+        - Chris Hickman
+        - Greg Wetmore
+        - Jelle Don
+        - Marc Stevens
+        - Ronald Cramer
+        - Thomas Attema
+        - Tomas Gustavsson
+        - Paul van Brouwershaven *
+        - Albert de Ruiter *
 
     - time: "17:00"
       title: Closing remarks
