@@ -369,7 +369,7 @@ speakers:
       linkedin: https://www.linkedin.com/in/marcstevenscwi/
 
   - name: Chris Hickman
-    title: Moderator (Chief Security Officer at Keyfactor)
+    title: Chief Security Officer at Keyfactor
     bio: |
       Chris Hickman is the chief security officer at Keyfactor. As a member of the senior management team, Chris is responsible for establishing & maintaining Keyfactor’s leadership position as a world-class, technical organization with deep security industry expertise. He leads client success initiatives and helps integrate the voice of the customer directly into Keyfactor’s platform and capability set.
 
