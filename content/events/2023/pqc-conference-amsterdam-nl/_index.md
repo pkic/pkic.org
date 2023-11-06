@@ -380,6 +380,12 @@ speakers:
     social:
       linkedin: https://www.linkedin.com/in/thomas-attema/
 
+  - name: Lærke Vinther Christiansen
+    title: PhD Researcher at Delft University of Technology
+    bio: |
+      Lærke V. Christiansen is PhD Candidate at Delft University of Technology, where she specializes in Technology Governance and Serious Gaming. For her PhD, she is developing a serious game to facilitate the transition from current PKI systems to Quantum-Safe PKI systems. Furthermore, she specializes in collective action within socio-technical systems, which functions as the touchstone for her serious game designs.  
+    social:
+      linkedin: https://www.linkedin.com/in/l%C3%A6rke-vinther-christiansen-884b71178/
 
 # Locations with sessions in parallel -----------------------------------------
 locations:
@@ -918,6 +924,8 @@ We are immensely grateful to our sponsors:
 Are you interested in becoming a sponsor for the Post-Quantum Cryptography Conference? For further details regarding sponsorship opportunities within the PKI Consortium and specifically for the PQC Conference, please [reach out to us](/sponsors/sponsor/). You can also [download the sponsorship brochure](pqc-conference-ams-sponsors.pdf) for comprehensive information and pricing of our sponsor packages.
 
 ## Agenda
+
+In addition to the schedule provided, individuals attending in person have the option to participate in a workshop entitled "The Leap to Quantum-Safety: A game for the transition to QS PKI," led by Lærke Vinther Christiansen, a PhD Candidate at Delft University of Technology. The workshop is held multiple times throughout the day and is situated in the foyer behind the blue hall. Due to the limited capacity for participants in the game, it is advisable to pre-register.
 
 {{< agenda "agenda" >}}
 
