@@ -167,15 +167,11 @@ speakers:
     social:
       linkedin: https://www.linkedin.com/in/andrew-cheung-a7b8ba5/
 
-  - name: Basil Hess
-    title: Senior Research Engineer at IBM Research.
+  - name: Ini Kong
+    title: PhD researcher	Delft University of Technology
     bio: |
-      Basil is a Senior Research Engineer at IBM Research Europe - Zurich since 2020. His focus is on the implementation side of cryptography, quantum-safe cryptography and quantum-safe migration.
-
-      The projects he is currently involved include Open Quantum Safe - software for prototyping quantum-resistant cryptography, CBOM (Cryptography Bill of Materials), and two submissions to the NIST PQC Standardization for additional digital signature schemes: MAYO and SQIsign.
-
-      Basil holds a PhD in Information Systems and a MSc in Computer Science, both from ETH Zurich.
-    website: https://research.ibm.com/people/basil-hess
+      Ini Kong is a PhD candidate in the Department of Engineering Systems and Services at the Faculty of Technology, Policy and Management of Delft University of Technology. She holds a master’s degree in Environment and Society at Radboud University and an undergraduate degree with honours in Political Science and Sociology from University of Toronto. Her research interests include digital security in critical infrastructures, transition governance and quantum-safe transition.
+    website: https://www.linkedin.com/in/ini-kong-7bbb75147
 
   - name: Jaime Gómez García
     title: Head of Quantum at Banco Santander
@@ -589,14 +585,12 @@ agenda:
         - Jaime Gómez García
       location:
         Breakout:
-          title: Protocol-independent interfaces for hybrid/multi-key signatures
+          title: "Leading the Quantum-safe Transition: A Growth Stages Approach"
           description: |
-            The NIST PQC standardization has emerged in three FIPS drafts for quantum-safe KEM and Signatures. While the guidance on which PQC standards to adopt is getting clearer, many institutions like ANSSI and BSI recommend hybrid, or multi-key mechanisms for the transition to quantum-safe cryptography, typically combing a classical with a quantum-safe scheme to benefit from the security of both. The question how to perform multi-key exchange and multi-signature schemes (MKE/MSS) lead to several proposals for the integration in protocols like TLS, IPsec and X.509 certificates.
-
-            An implementer of a cryptographic protocol can usually rely on a cryptographic library to implement the primitives and algorithms such as for key exchange and authentication. In the case of MKE/MSS this is usually not the case, and it becomes the implementers task to combine multiple schemes. We argue that it is preferable to have a common abstraction for multi-key schemes in the core cryptographic library that can be used by different protocol stacks. To address this challenge, we propose a common software interface, which is usable for various protocol stacks. We focus on MSS and go through scenarios show how to integrate the interface.
+            We recognize that there are many uncertainties on how organizations can overcome quantum-safe transition challenges. By dissecting quantum-safe transition into a series of stages, we use the concept of growth models which allows us to understand how organizations can be arranged and evolve over time toward quantum-safe. During the presentation, we share our research findings on different stages of quantum-safe transition and discuss how organizations across diverse sectors may be involved in these stages of transition.
           track: Technical
           speakers:
-            - Basil Hess 
+            - Ini Kong
 
     - time: "15:30"
       title: Break
