@@ -625,11 +625,10 @@ agenda:
           title: "Leading the Quantum-safe Transition: A Growth Stages Approach"
           description: |
             We recognize that there are many uncertainties on how organizations can overcome quantum-safe transition challenges. By dissecting quantum-safe transition into a series of stages, we use the concept of growth models which allows us to understand how organizations can be arranged and evolve over time toward quantum-safe. During the presentation, we share our research findings on different stages of quantum-safe transition and discuss how organizations across diverse sectors may be involved in these stages of transition.
-          track: Technical
           speakers:
             - Ini Kong
           youtube: 
-          presentation:
+          presentation: pkic-pqcc_ini_kong_leading-the-quantum-safe-transition-a-growth-stages-approach.pdf
 
     - time: "15:30"
       title: Break
@@ -687,6 +686,7 @@ agenda:
       speakers:
         - Paul van Brouwershaven
         - Albert de Ruiter
+      youtube: 
     
     - time: "17:05"
       title: Networking
@@ -942,6 +942,7 @@ agenda:
       speakers:
         - Paul van Brouwershaven *
         - Albert de Ruiter *
+      youtube: 
 
     - time: "16:30"
       title: "Recap: Unveiling Insights - A Two-Day Conference Retrospective"
@@ -961,6 +962,7 @@ agenda:
         - Tomas Gustavsson
         - Paul van Brouwershaven *
         - Albert de Ruiter *
+      youtube: 
 
     - time: "17:00"
       title: Closing remarks
@@ -968,6 +970,7 @@ agenda:
       speakers:
         - Paul van Brouwershaven
         - Albert de Ruiter
+      youtube: 
 
     - time: "17:05"
       title: Networking
