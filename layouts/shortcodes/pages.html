@@ -1,0 +1,4 @@
+{{ $pages := index .Site.Taxonomies.tags.resource.Pages }}
+{{ range $pages }}
+{{ partial "pagelisting.html" . }}
+{{ end }}

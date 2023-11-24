@@ -10,7 +10,7 @@ heroTitle: Working Groups of the PKI Consortium
 heroDescription:
 
 menu:
-    main:
+    footer:
 
 ---
 
