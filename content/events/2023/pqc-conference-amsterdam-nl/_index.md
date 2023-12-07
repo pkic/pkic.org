@@ -405,7 +405,7 @@ agenda:
       speakers: 
         - Paul van Brouwershaven
         - Albert de Ruiter
-      youtube: 
+      youtube: RgkFEX93A-I
       presentation: pkic-pqcc_paul-van-brouwershaven-and-albert-de-ruiter_pki-consortium_welcome.pdf
 
     - time: "9:30"
@@ -420,7 +420,7 @@ agenda:
       speakers:
         - Bill Newhouse
         - Dustin Moody
-      youtube: 
+      youtube: sC23sYOB6JQ
       presentation: pkic-pqcc_bill-newhouse-and-dustin-moody_nist_status-update-from-nist.pdf
 
     - time: "10:30"
@@ -439,7 +439,7 @@ agenda:
       speakers:
         - Bill Newhouse 
       presentation: pkic-pqcc_bill-newhouse_nist_preparing-the-united-states-for-pqc.pdf
-      youtube: 
+      youtube: cG09NrgtUxE
       location:
         Breakout:
           title: Lattice-based cryptography
@@ -452,7 +452,7 @@ agenda:
           track: Algorithms
           speakers:
             - Léo Ducas
-          youtube: 
+          youtube: 6ptBm7Sdsfg
           presentation: pkic-pqcc_leo-ducas_cwi-leiden-university_lattice-based-cryptography.pdf
 
     - time: "11:20"
@@ -464,7 +464,7 @@ agenda:
       speakers:
         - Andrea Garcia Rodriguez
       presentation: pkic-pqcc_andrea-garcia-rodriquez_epc_a-quantum-cybersecurity-agenda-for-europe.pdf
-      youtube: 
+      youtube: a_39lTpgbeg
       location:
         Breakout:
           title: " "
@@ -482,7 +482,7 @@ agenda:
       speakers: 
         - Stephan Ehlen
       presentation: pkic-pqcc_stephan-ehlen_bsi_post-quantum-policy-and-roadmap-of-the-bsi.pdf
-      youtube: 
+      youtube: npNTxhb6INU
       location:
         Breakout:
           title: Stateful Hash-Based Signature Schemes
@@ -494,7 +494,7 @@ agenda:
           track: Algorithms
           speakers:
             - Volker Krummel
-          youtube: 
+          youtube: 8EKgKkc3tTc
           presentation: pkic-pqcc_volkert-krummel_utimaco_stateful-hash-based-signature-schemes.pdf
 
     - time: "12:00"
@@ -505,7 +505,7 @@ agenda:
       speakers:
         - Jérôme Plût
       presentation: pkic-pqcc_jerome-plut_anssi_anssi-plan-for-post-quantum-transition.pdf
-      youtube: 
+      youtube: P15ClXQVvug
       location:
         Breakout:
           title: " "
@@ -526,7 +526,7 @@ agenda:
         - Anita Wehmann
         - Germain van der Velden
       presentation: pkic-pqcc_anita-wehmann-and-germain-van-der-velden_dutch-government_unlocking-the-quantum-resilient-cryptography-strategy-for-the-dutch-central-government.pdf
-      youtube: 
+      youtube: eUvGjiBGLXA
       location:
           Breakout:
             title: Code-based Cryptography
@@ -537,7 +537,7 @@ agenda:
             track: Algorithms
             speakers:
               - Simona Samardjiska 
-            youtube: 
+            youtube: S_P7j6aWwXc
             presentation: pkic-pqcc_simona-samardjiska_radboud-university_code-based-cryptography.pdf
 
     - time: "12:40"
@@ -555,7 +555,7 @@ agenda:
         - Anita Wehmann
         - Ronald Cramer *
       presentation: 
-      youtube: 
+      youtube: OfLBDM-n1l4
       location:
         Breakout:
           title: " "
@@ -576,7 +576,7 @@ agenda:
       speakers:
         - Itan Barmes
       presentation: pkic-pqcc_itan-barnes_deloitte_what-is-it-going-to-take-to-break-cryptography-with-a-quantum-computer.pdf
-      youtube: 
+      youtube: o4QkK9apizM
       location:
         Breakout:
           title: "LMS: Lighter, faster key generation"
@@ -589,7 +589,7 @@ agenda:
           track: Algorithms
           speakers:
             - Francisco José Vial-Prado
-          youtube: 
+          youtube: Irh_HrgnM-g
           presentation: pkic-pqcc_francisco-vial-prado_fortanix_lms-lighter-faster-key-generation.pdf
 
     - time: "14:30"
@@ -600,7 +600,7 @@ agenda:
       speakers:
         - Tomas Gustavsson
       presentation: pkic-pqcc_tomas-gustavsson_keyfactor_crunching-the-numbers-post-quantum-algorithm-performance.pdf
-      youtube: 
+      youtube: hOcBAz_jocg
       location:
         Breakout:
           title: Machine-checking post-quantum cryptography
@@ -608,7 +608,7 @@ agenda:
             Post-quantum cryptography brought a lot of new aspects into cryptography. This includes but is not limited to the facts that schemes are build on new mathematical structures (or rather not widely used in cryptography thus far), security proofs rely on new techniques as well as a deep understanding of said new structures, and implementations have to include and protect new algorithms. In addition, mathematical proofs of security get generally more complex and implementations have to protect against more and more attack vectors. This makes the whole development prone to error. An approach to deal with the added complexity and add reliable security guarantees is the use of computers to machine-check security proofs and implementations. In this talk I will discuss the challenges, and present ongoing projects aiming at machine-checking security proofs and implementations of PQC in EasyCrypt, and Jasmine within the Formosa Crypto consortium.
           speakers:
             - Andreas Hülsing
-          youtube: 
+          youtube: 2KnsZSI8okg
           presentation: pkic-pqcc_andreas-hulsing_eindhoven-university-of-technology_machine-checking-post-quantum-cryptography.pdf
 
     - time: "15:00"
@@ -619,7 +619,7 @@ agenda:
       speakers:
         - Jaime Gómez García
       presentation: pkic-pqcc_jaime-gomez_banco-santander_comparing-strategies-for-quantum-safe-cryptography-adoption-in-organizations.pdf
-      youtube: 
+      youtube: RbwwxZSBjyo
       location:
         Breakout:
           title: "Leading the Quantum-safe Transition: A Growth Stages Approach"
@@ -627,7 +627,7 @@ agenda:
             We recognize that there are many uncertainties on how organizations can overcome quantum-safe transition challenges. By dissecting quantum-safe transition into a series of stages, we use the concept of growth models which allows us to understand how organizations can be arranged and evolve over time toward quantum-safe. During the presentation, we share our research findings on different stages of quantum-safe transition and discuss how organizations across diverse sectors may be involved in these stages of transition.
           speakers:
             - Ini Kong
-          youtube: 
+          youtube: sRS1qJfdjV0
           presentation: pkic-pqcc_ini_kong_leading-the-quantum-safe-transition-a-growth-stages-approach.pdf
 
     - time: "15:30"
@@ -642,7 +642,7 @@ agenda:
       speakers:
         - Bas Westerbaan
       presentation: pkic-pqcc_bas-westerbaan_cloudflare_birth-of-the-post-quantum-internet.pdf
-      youtube: 
+      youtube: oHCjaVe64Cs
       location:
         Breakout:
           title: Update from the GSMA Post Quantum Telco Network Task Force
@@ -657,7 +657,7 @@ agenda:
           track: Industry
           speakers:
             - Lory Thorpe
-          youtube: 
+          youtube: yzh5YxzsuX8
           presentation: pkic-pqcc_lory-thorpe_ibm_update-from-the-gsma-post-quantum-telco-network-task-force.pdf
 
     - time: "16:30"
@@ -668,7 +668,7 @@ agenda:
       speakers:
         - Anselme Tueno
       presentation: pkic-pqcc_anselme-tueno_sap_post-quantum-crypto-integration-for-enterprise-applications.pdf
-      youtube: 
+      youtube: elAR4mDxmWU
       location:
         Breakout:
           title: "Building Your PQC Lab: Trust But Verify Your PQC Ecosystem"
@@ -677,7 +677,7 @@ agenda:
           track: Technical
           speakers:
             - Blair Canavan
-          youtube: 
+          youtube: t-9HXYZfyp4
           presentation: pkic-pqcc_blair-canavan_thales_building-your-pqc-lab-trust-but-verify-your-pqc-ecosystem.pdf
 
     - time: "17:00"
@@ -686,7 +686,7 @@ agenda:
       speakers:
         - Paul van Brouwershaven
         - Albert de Ruiter
-      youtube: 
+      youtube: zFaEMnfaKV4
     
     - time: "17:05"
       title: Networking
@@ -704,7 +704,7 @@ agenda:
       speakers: 
         - Joppe Bos
       presentation: pkic-pqcc_joppe-bos_nxp_post-quantum-crypto-challenges-for-embedded-applications.pdf
-      youtube: 
+      youtube: ffBickBkvAk
       location:
         Breakout:
           title: A testbed for evaluating post-quantum algorithms for the DNS
@@ -713,7 +713,7 @@ agenda:
           track: Technical
           speakers:
             - Elmer Lastdrager
-          youtube: 
+          youtube: KOiDCX2KvTk
           presentation: pkic-pqcc_elmer-lastdrager_sidn-labs_a-testbed-for-evaluating-post-quantum-algorithms-for-the dns.pdf
 
     - time: "9:30"
@@ -723,7 +723,7 @@ agenda:
       speakers:
         - Gustavo Banegas
       presentation: pkic-pqcc_gustavo-banegas_qualcomm_challenges-for-the-post-quantum-transition-of-mobile-ecosystems.pdf
-      youtube: 
+      youtube: INGVdgD2nzQ
       location:
         Breakout:
           title: Coping with post-quantum signatures in the WebPKI
@@ -732,7 +732,7 @@ agenda:
           track: Technical
           speakers:
             - Bas Westerbaan
-          youtube: 
+          youtube: A7BNuYMz0YI
           presentation: pkic-pqcc_bas-westerbaan_cloudflare_coping-with-post-quantum-signatures-in-the-webpki.pdf
 
     - time: "10:00"
@@ -745,7 +745,7 @@ agenda:
         - Volker Krummel
         - Marc Stevens *
       presentation: 
-      youtube: 
+      youtube: ZEWm2lbcd2o
       location:
         Breakout:
           title: "[DISCUSSION] Your cryptography will be broken, prepare yourself now!"
@@ -754,7 +754,7 @@ agenda:
           speakers:
             - Anita Wehmann
             - Germain van der Velden
-          youtube: 
+          youtube: 7oiY62neyOg
           presentation: pkic-pqcc_anita-wehmann-and-germain-van-der-velden_dutch-government_your-cryptography-will-be-broken-prepare-yourself-now.pdf
 
     - time: "10:30"
@@ -773,7 +773,7 @@ agenda:
       speakers:
         - Robert Hann
       presentation: pkic-pqcc_robert-hann_entrust_how-to-sell-post-quantum-readiness-by-combining-it-with-a-zero-trust-journey.pdf
-      youtube: 
+      youtube: tHKmdhfYePU
       location:
         Breakout:
           title: "A Sign of the Times: The Transition to Quantum Secure Authentication"
@@ -781,7 +781,7 @@ agenda:
             Authentication is one of the most important security goals on the Internet and in the quantum era requires transitioning. Due to the complexity and scale of large systems, post-quantum migration time is often long. We’ll exemplify the challenges and timelines of authentication migrations using FIDO2, enabling the audience to assess the transition time of their own authentication systems.
           speakers:
             - Sandra Guasch Castello
-          youtube: 
+          youtube: R9PMCroZ9r4
           presentation: pkic-pqcc_sandra-guasch-castello_sandboxaq_a-sign-of-the-times-the-transition-to-quantum-secure authentication.pdf
 
     - time: "11:30"
@@ -796,7 +796,7 @@ agenda:
       speakers:
         - Kaveh Bashiri
       presentation: pkic-pqcc_kaveh-bashiri_bsi_quantum-safe-pki-for-the-german-administration.pdf
-      youtube: 
+      youtube: v5svxXbvSo0
       location:
         Breakout:
           title: Quantum Resistance through Symmetric Key Cryptography
@@ -804,7 +804,7 @@ agenda:
             Symmetric encryption algorithms, such as AES256, are already considered to be post-quantum secure, meaning that they are resistant to attack by quantum computers. This fact is often overlooked in discussions about post-quantum cryptography, but it is important to remember that symmetric encryption can be used to protect data even if quantum computers become powerful enough to break asymmetric encryption algorithms. In this presentation we will explore how symmetric encryption algorithms can be used to protect existing asymmetric implementations.
           speakers:
             - Pasqualle Verwoerdt
-          youtube: 
+          youtube: Xoy6RSdfqvc
           presentation: pkic-pqcc_pasqualle-verwoerdt_compumatica_quantum-resistance-through-symmetric-key-cryptography.pdf
 
     - time: "12:00"
@@ -816,7 +816,7 @@ agenda:
         - Jeremy King
       track: PKI
       presentation: pkic-pqcc_jeremy-king_pci-security-standards-council_pki-and-pqc-strategy-for-payment-card-industry.pdf
-      youtube: 
+      youtube: 4RrAmcilkpQ
       location:
         Breakout:
           title: "Symmetric Key Exchange: Lightweight Alternatives for a Post-Quantum IoT"
@@ -826,11 +826,11 @@ agenda:
             In this talk we will look at a number of protocols that achieve symmetric authenticated key exchange: we propose new methods of key evolution that guarantee full forward secrecy, while also taking care of key synchronization between the involved parties. This makes them very suitable for IoT devices, or other settings where efficient post-quantum cryptography is required.
           speakers:
             - Bor de Kock
-          youtube: 
+          youtube: Q-yvSC9AYRs
           presentation: pkic-pqcc_bor-de-kock_ntnu-trondheim_symmetric-key-exchange-lightweight-alternatives-for-a-post-quantum-iot.pdf
 
     - time: "12:30"
-      title: Post-Quantum Cryptography & Trust 
+      title: Post-Quantum Cryptography & Trust Services
       description: |
         In the evolving landscape of cybersecurity, the emergence of quantum computing poses a substantial threat to the established foundations of trust services, particularly in the context of Qualified Trust Services governed by the eIDAS regulation. Join us for an insightful presentation by the Dutch Authority for Digital Infrastructure, the supervisory authority for Trust Service Providers in the Netherlands.
 
@@ -841,7 +841,7 @@ agenda:
       speakers: 
         - Lizzy Polman
       presentation: pkic-pqcc_lizzy-pollman_rdi_post-quantum-cryptography-and-trust-services.pdf
-      youtube: 
+      youtube: GGD7WafUfIA
       location:
         Breakout:
           title: Vulnerabilities of Blockchain Security in the World of Quantum Computing
@@ -849,7 +849,7 @@ agenda:
             Blockchain technology was created to make the storage of data or transactions more secure.  It has revolutionized the way we process transactions with improved security, efficiency, and transparency.  PKI is the security backbone of blockchain technology to ensure the integrity and trustworthiness of a blockchain network.  In the world of cryptocurrencies, private keys are used by the payer to sign and initiate a transaction.  It is also used by a validator to sign and assure the world that a transaction has been validated.  RSA and ECC are the most commonly used algorithms in the current PKI ecosystem.  It has been proven for over 40 years that the private key cannot be reverse engineered back from its public key even using the most powerful super computer today.  However, the rapid development of quantum computing is posing security threats to PKI because its excessive power can derive the private key back from its public key.  This breaks the backbone of blockchain security because transactions cannot be trusted anymore.  In this session we will cover quantum threats to blockchain.  We will also demonstrate some practical implementations of PQC that have been performed to convert an existing blockchain network to become quantum-safe.
           speakers:
             - Andrew Cheung
-          youtube: 
+          youtube: eV5zc8hwUFU 
           presentation: pkic-pqcc_andrew-cheung_01-communique-laboratory_vulnerabilities-of-blockchain-security-in-the-world-of-quantum-computing.pdf
 
     - time: "13:00"
@@ -868,7 +868,7 @@ agenda:
       speakers:
         - Dustin Moody
       presentation: pkic-pqcc_dustin-moody_nist_nist-standardization-of-additional-signature-schemes.pdf
-      youtube: 
+      youtube: dfCW6TxD_aw
       location:
         Breakout:
           title: "Investigating Post-Quantum Cryptography: building a PQC decision tree for developers"
@@ -880,7 +880,7 @@ agenda:
           speakers:
             - Jelle Don
             - Alessandro Amadori
-          youtube: 
+          youtube: xWFUFzobTvs
           presentation: pkic-pqcc_jelle-don-and-alessandro-amadori_tno_investigating-post-quantum-cryptography-building-a-pqc-decision-tree-for-developers.pdf
 
     - time: "14:30"
@@ -898,7 +898,7 @@ agenda:
       speakers:
         - Tom Patterson
       presentation: pkic-pqcc_tom-patterson_accenture_moving-toward-a-quantum-security-maturity-index.pdf
-      youtube: 
+      youtube: 1u8EeL0hd7Q
       location:
         Breakout:
           title: Using quantum-safe hybrid certificates for signing documents
@@ -907,7 +907,7 @@ agenda:
           track: Technical
           speakers:
             - Stefan van den Berg
-          youtube: 
+          youtube: NkwWV27Ldm8
           presentation: pkic-pqcc_stefan-van-den-berg_tno_using-quantum-safe-hybrid-certificates-for-signing-documents.pdf
 
     - time: "15:00"
@@ -917,7 +917,7 @@ agenda:
       speakers:
         - Greg Wetmore
       presentation: pkic-pqcc_greg-wetmore_entrust_pki-deployments-are-as-unique-as-any-snowflake-how-to-build-equally-flexible-pq-migration-strategies.pdf
-      youtube: 
+      youtube: POGH7ugSOJ4
       location:
         Breakout:
           title: CRQC and Signatures – no Problem?
@@ -926,7 +926,7 @@ agenda:
           track: Technical
           speakers:
             - Jan Klaussner 
-          youtube: 
+          youtube: Gpk7v6JMUlg
           presentation: pkic-pqcc_jan-klaussner_d-trust_crqc-and-signatures-no-problem.pdf
 
     - time: "15:30"
@@ -942,7 +942,7 @@ agenda:
       speakers:
         - Paul van Brouwershaven *
         - Albert de Ruiter *
-      youtube: 
+      youtube: KScnARFK-Fw
 
     - time: "16:30"
       title: "Recap: Unveiling Insights - A Two-Day Conference Retrospective"
@@ -962,7 +962,7 @@ agenda:
         - Tomas Gustavsson
         - Paul van Brouwershaven *
         - Albert de Ruiter *
-      youtube: 
+      youtube: 2Da_zU4mC44
 
     - time: "17:00"
       title: Closing remarks
@@ -970,7 +970,7 @@ agenda:
       speakers:
         - Paul van Brouwershaven
         - Albert de Ruiter
-      youtube: 
+      youtube: OlHQEtjzXMk
 
     - time: "17:05"
       title: Networking
