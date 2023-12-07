@@ -124,7 +124,7 @@
 
                                             {{- if .youtube -}}
                                                 <div class="{{ if eq (len $locations) 1 }}agenda-content {{ end }}ratio ratio-16x9">
-                                                    <iframe width="100%" height="100%" src="https://www.youtube.com/embed/{{- .youtube -}}&theme=light&modestbranding=1" title="{{ .title -}}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+                                                    <iframe width="100%" height="100%" src="https://www.youtube-nocookie.com/embed/{{ .youtube }}{{ not (strings.Contains .youtube "?") }}?{{ else }}&{{ end }}theme=light&modestbranding=1" title="{{ .title -}}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
                                                 </div>
                                             {{- end -}}
 
