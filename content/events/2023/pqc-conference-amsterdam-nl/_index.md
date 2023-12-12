@@ -714,7 +714,7 @@ agenda:
           speakers:
             - Elmer Lastdrager
           youtube: KOiDCX2KvTk
-          presentation: pkic-pqcc_elmer-lastdrager_sidn-labs_a-testbed-for-evaluating-post-quantum-algorithms-for-the dns.pdf
+          presentation: pkic-pqcc_elmer-lastdrager_sidn-labs_a-testbed-for-evaluating-post-quantum-algorithms-for-the-dns.pdf
 
     - time: "9:30"
       title: Challenges for the Post-Quantum Transition of Mobile Ecosystems
