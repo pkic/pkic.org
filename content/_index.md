@@ -16,7 +16,7 @@ menu:
 ---
 
 {{< alert >}}
-The slides of the presentations at our second **Post-Quantum Cryptography Conference** are now accessible for your reference. [Click on the title of the session in the agenda to download the slides](/events/2023/pqc-conference-amsterdam-nl/). The recordings will be added soon.
+The slides and recordings of the presentations at our second **Post-Quantum Cryptography Conference** are now accessible for your reference. [Click on the title of the session in the agenda to download the slides](/events/2023/pqc-conference-amsterdam-nl/).
 {{< /alert >}}
 
 {{< figure src="/img/logo-black.svg" alt="Logo of the PKI Consortium" >}}
