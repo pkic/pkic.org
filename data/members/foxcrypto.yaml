@@ -1,0 +1,53 @@
+id: foxcrypto
+name: Fox Crypto B.V.
+slogan: For a more secure society
+website: https://www.foxcrypto.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Fox Crypto invents, creates and manages cryptographic products for data encryption, domain separation and key management.
+
+# membership
+memberSince: 2024-01-09
+memberType: F
+workingGroups:
+  - PQC
+
+# sponsor
+#sponsor:
+#  level: 
+
+# Blog posts
+blog: 
+  url: https://blog.fox-it.com/
+  feed: https://blog.fox-it.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://www.fox-it.com/nl-en/newsroom/
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://nccgroup.wd3.myworkdayjobs.com/NCC_Group
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/foxit
+  linkedin: https://www.linkedin.com/company/fox-it_2/
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Sander Dorigo
+    role: Security Architect
+    social:
+      linkedin: https://www.linkedin.com/in/sanderdorigo/
+      mastodon: https://mastodon.coffee/@sander
+    description:
+      For the last decade, Sander Dorigo has been working on the (cryptographic) security of applications, systems and (financial) data streams. Sander started as a security engineer working for a variety of defense contractors and joined the financial sector as a cryptographic consultant. From there, he moved to Fox-IT where he works on certified security products for high-security customers.
