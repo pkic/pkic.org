@@ -14,8 +14,9 @@ workingGroups:
   - PQC
   
 # sponsor
+# Upgraded to Silver to Platinum on 2024-01-01
 sponsor:
-  level: Silver
+  level: Platinum
 
 # Blog posts
 blog: 
