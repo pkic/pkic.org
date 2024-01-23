@@ -1,16 +1,17 @@
 id: reliefvalidation
 name: Relief Validation LTD
-slogan:
+slogan: Empowering businesses with seamless e-signature solutions
 website: https://reliefvalidation.com.bd
 
 # Short description, longer content can be placed in `content/members/`
-description: 0
+description: We provide a secure and efficient e-signature platform to streamline document signing processes. Save time, reduce costs, and increase productivity with our user-friendly interface. Join us today and embrace the power of digital signatures for your business.
 
 # membership
 memberSince: 2024-01-23
 memberType: A
 workingGroups:
-
+  - CA
+  
 # sponsor
 sponsor:
   level: 
