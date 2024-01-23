@@ -1,0 +1,54 @@
+id: reliefvalidation
+name: Relief Validation LTD
+slogan:
+website: https://reliefvalidation.com.bd
+
+# Short description, longer content can be placed in `content/members/`
+description: 0
+
+# membership
+memberSince: 2024-01-23
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter:
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+#   - name: 
+#     role: 
+#     social:
+#       twitter: 
+#       linkedin: 
+#     description:
