@@ -1,0 +1,54 @@
+id: unsungltd
+name: Unsung Limited
+slogan:
+website: https://www.unsungltd.com
+
+# Short description, longer content can be placed in `content/members/`
+description: I'm a PKI SME that's been working in the field for the past 20+ years. Having a successful career as an individual, I've expanded my business into a small niche PKI only focus'ed, UK based consultancy. In terms of size we are approx. of 20+ employees. We have a variety of customers of various sizes, mainly in UK the Defence & Public Sector. We are seen by our customers as a trusted partner on PKI
+
+# membership
+memberSince: 2024-01-24
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://www.twitter.com/unsungtodd
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/unsung-limited/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Todd Beldham
+    role: Founder & CTO
+    social:
+      twitter: 
+      linkedin: 
+    description: Todd is the Founder & CTO at Unsung Limited and represents the organization at the PKI Consortium.
