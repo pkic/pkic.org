@@ -1,0 +1,54 @@
+id: unsungltd
+name: Unsung Limited
+slogan:
+website: https://www.unsungltd.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Established in 2009, Unsung is a trusted cyber security advisor who has provided best in class PKI solutions to both public sector and private clients.
+
+# membership
+memberSince: 2024-01-09
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://www.twitter.com/unsungtodd
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/unsung-limited/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Todd Beldham
+    role: Founder & CTO
+    social:
+      twitter: 
+      linkedin: 
+    description: Todd is the Founder & CTO at Unsung Limited and represents the organization at the PKI Consortium.
