@@ -1,0 +1,54 @@
+id: lawtrust
+name: Lawtrust
+slogan:
+website: https://www.lawtrust.co.za/
+
+# Short description, longer content can be placed in `content/members/`
+description: We have always believed that we should play a pioneering role in our industry, and have achieved some significant firsts over the years:  We are the first African Certificate Authority to achieve ISO 21188 and WebTrust Certification We are the first African Certificate Authority to be included in the Adobe Approved Trust List (AATL) We are the first Certificate Authority to be accredited for the provision of Advanced Electronic Signatures under the ECT Act We are the only African Trust Centre to be contracted by the EU to extend identity and signature validation through the Future Trust project
+
+# membership
+memberSince: 2024-01-24
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.lawtrust.co.za/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: https://www.facebook.com/lawtrustinfosec
+  instagram: 
+  linkedin: https://www.linkedin.com/company/lawtrust/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Cornel Kleynhans
+    role: Senior Manager: Technology Operations
+    social:
+      twitter: 
+      linkedin: 
+    description: Cornel is the Senior Manager: Technology Operations at Lawtrust and represents the organization at the PKI Consortium.
