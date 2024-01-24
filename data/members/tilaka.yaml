@@ -1,0 +1,54 @@
+id: tilaka
+name: Tilaka Nusa Teknologi
+slogan:
+website: https://www.tilaka.id
+
+# Short description, longer content can be placed in `content/members/`
+description: Tanda Tangan Digital
+
+# membership
+memberSince: 2024-01-24
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: https://www.instagram.com/tilaka_id/
+  linkedin: https://www.linkedin.com/company/tilaka/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Abraham Ferdinand Inoerawan
+    role: co-CTO
+    social:
+      twitter: 
+      linkedin: 
+    description: Abraham Ferdinand is the co-CTO at Tilaka Nusa Teknologi and represents the organization at the PKI Consortium.
