@@ -1,0 +1,54 @@
+id: gradenegger
+name: 
+slogan:
+website: https://www.gradenegger.eu
+
+# Short description, longer content can be placed in `content/members/`
+description: I work in the PKI team of Deutsche Bahn, the largest railroad organization in europe. I also own a part-time consulting business on PKI and run a blog on this topic. I worked six years for Microsoft on PKI and AD CS. I also develop Add-Ons for MS AD CS.
+
+# membership
+memberSince: 2024-01-24
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.gradenegger.eu/de/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Uwe Gradenegger
+    role: 
+    social:
+      twitter: 
+      linkedin: 
+    description: Uwe is the  at  and represents the organization at the PKI Consortium.
