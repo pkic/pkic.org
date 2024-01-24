@@ -1,13 +1,13 @@
 id: tilaka
 name: Tilaka Nusa Teknologi
-slogan:
+slogan: Your Digital ID and Certificate Trusted Partner
 website: https://www.tilaka.id
 
 # Short description, longer content can be placed in `content/members/`
-description: Tanda Tangan Digital
+description: PT Tilaka Nusa Teknologi was established in 2019 to be the answer to business needs in various industries related to legality and data security in the digital world.
 
 # membership
-memberSince: 2024-01-24
+memberSince: 2024-01-09
 memberType: A
 workingGroups:
 
