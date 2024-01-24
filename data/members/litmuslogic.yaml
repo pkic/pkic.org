@@ -1,13 +1,13 @@
 id: litmuslogic
 name: Litmus Logic
 slogan:
-website: HTTPS://www.Litmuslogic.com
+website: https://www.Litmuslogic.com
 
 # Short description, longer content can be placed in `content/members/`
 description: We build PKI that are cross certified with FBCA.  We build custom software to make Microsoft CA work for cross certification purposes.
 
 # membership
-memberSince: 2024-01-24
+memberSince: 2023-09-05
 memberType: F
 workingGroups:
 
