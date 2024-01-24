@@ -1,13 +1,13 @@
 id: posdigicert
-name: Pos Digicert Sdn Bhd
-slogan:
+name: Pos Digicert
+slogan: Embracing our stakeholders with electronic identity and security services through the creation of seamless customer experience in digital trust ecosystem
 website: https://www.posdigicert.com.my/
 
 # Short description, longer content can be placed in `content/members/`
-description: Site description
+description: POS DIGICERT, was incorporated in February 1998 to pursue its objective as the premier licensed Certification Authority (CA) in Malaysia. As the Certification Authority, POS DIGICERT is responsible for the creation of digital identities through the use of digital certificates.
 
 # membership
-memberSince: 2024-01-24
+memberSince: 2024-01-09
 memberType: A
 workingGroups:
 
