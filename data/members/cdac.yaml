@@ -1,0 +1,54 @@
+id: cdac
+name: CDAC
+slogan:
+website: https://www.cdac.in
+
+# Short description, longer content can be placed in `content/members/`
+description: Lavanya working as Principal Technical Officer,CDAC. CDAC (Centre for Development of Advanced Computing). CDAC is an organization in India that specializes in research and development in the field of advanced computing technology. It is a government agency that has played a significant role in the development and deployment of various information technology solutions and services in India.
+
+# membership
+memberSince: 2024-01-24
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/cdacindia
+  facebook: https://www.facebook.com/CDACINDIA
+  instagram: 
+  linkedin: 
+  youtube: https://www.youtube.com/c/CDACOfficial
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Lavanya Palani
+    role: PTO
+    social:
+      twitter: 
+      linkedin: 
+    description: Lavanya is the PTO at CDAC and represents the organization at the PKI Consortium.
