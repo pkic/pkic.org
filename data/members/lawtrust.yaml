@@ -48,7 +48,7 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Cornel Kleynhans
-    role: Senior Manager: Technology Operations
+    role: "Senior Manager: Technology Operations"
     social:
       twitter: 
       linkedin: 
