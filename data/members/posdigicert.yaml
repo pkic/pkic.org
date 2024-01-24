@@ -1,0 +1,54 @@
+id: posdigicert
+name: Pos Digicert Sdn Bhd
+slogan:
+website: https://www.posdigicert.com.my/
+
+# Short description, longer content can be placed in `content/members/`
+description: Site description
+
+# membership
+memberSince: 2024-01-24
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Amir Suhaimi Hassan
+    role: Chief Operating Officer
+    social:
+      twitter: 
+      linkedin: 
+    description: Amir Suhaimi is the Chief Operating Officer at Pos Digicert Sdn Bhd and represents the organization at the PKI Consortium.
