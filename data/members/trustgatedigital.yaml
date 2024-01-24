@@ -1,0 +1,54 @@
+id: trustgatedigital
+name: Trustgate Digital Ltd
+slogan:
+website: https://www.trustgatedigital.com
+
+# Short description, longer content can be placed in `content/members/`
+description: I am the founder of a digital certificate advocacy company that is looking to promote the use of PKI in the Nigerian and African countries. The company is a startup and i am looking to leverage this consortium collective knowledge and expertize to help shape Nigerian Government policy development in the area of implementing a national PKI services
+
+# membership
+memberSince: 2024-01-24
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: http://www.facebook.com/trustgatedigital
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Ope Odusan
+    role: Managing Director
+    social:
+      twitter: 
+      linkedin: 
+    description: Ope is the Managing Director at Trustgate Digital Ltd and represents the organization at the PKI Consortium.
