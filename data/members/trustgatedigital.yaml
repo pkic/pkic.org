@@ -1,13 +1,13 @@
 id: trustgatedigital
-name: Trustgate Digital Ltd
-slogan:
+name: Trustgate Digital
+slogan: Trust, Be Trusted in the Digital World
 website: https://www.trustgatedigital.com
 
 # Short description, longer content can be placed in `content/members/`
-description: I am the founder of a digital certificate advocacy company that is looking to promote the use of PKI in the Nigerian and African countries. The company is a startup and i am looking to leverage this consortium collective knowledge and expertize to help shape Nigerian Government policy development in the area of implementing a national PKI services
+description: Our solution is to provide a holistic public key infrastructure and digital trust certificate services for people and organizations through the creation, deployment, and management of trusted digital certificates for people, businesses, and IT assets.
 
 # membership
-memberSince: 2024-01-24
+memberSince: 2024-01-09
 memberType: H
 workingGroups:
 
