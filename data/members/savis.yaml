@@ -1,0 +1,54 @@
+id: savis
+name: SAVIS TECHNOLOGY GROUP
+slogan:
+website: https://savis.vn/
+
+# Short description, longer content can be placed in `content/members/`
+description: SAVIS là đơn vị được Bộ TT&TT cấp phép cung cấp Ký số từ xa Remote Signing đầu tiên tại Việt Nam với hơn 17 năm kinh nghiệm trong cung cấp giải pháp chuyển đổi số cho Chính phủ, Ngân hàng, Y tế, Giáo dục...
+
+# membership
+memberSince: 2024-01-24
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://savis.vn/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: https://www.facebook.com/savisgroup1
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Hanh Nguyen
+    role: Purchasing Senior
+    social:
+      twitter: 
+      linkedin: 
+    description: Hanh is the Purchasing Senior at SAVIS TECHNOLOGY GROUP and represents the organization at the PKI Consortium.
