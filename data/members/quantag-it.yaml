@@ -1,0 +1,54 @@
+id: quantag-it
+name: Quantag IT Solutions GmbH
+slogan:
+website: https://quantag-it.com
+
+# Short description, longer content can be placed in `content/members/`
+description: We develop PQC software
+
+# membership
+memberSince: 2024-01-24
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: undefined
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/QuantagITSolut
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/quantag-it-solutions
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Sergii Salata
+    role: CEO
+    social:
+      twitter: 
+      linkedin: 
+    description: Sergii is the CEO at Quantag IT Solutions GmbH and represents the organization at the PKI Consortium.
