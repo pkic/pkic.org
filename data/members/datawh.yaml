@@ -1,0 +1,54 @@
+id: datawh
+name: Data-Warehouse GmbH
+slogan:
+website: Https://datawh.info
+
+# Short description, longer content can be placed in `content/members/`
+description: Providing a german native cryptographic inventorisation and management plattform with outstanding discovery capabilities PCert(TM) since more than 10 years. I was the leading researcher and brain behind the realisation. More infos at https://datawh.info/en/pcert
+
+# membership
+memberSince: 2024-01-24
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://datawh.info/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Alexander Dr. Loew
+    role: CEO
+    social:
+      twitter: 
+      linkedin: 
+    description: Alexander is the CEO at Data-Warehouse GmbH and represents the organization at the PKI Consortium.
