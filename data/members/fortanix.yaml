@@ -1,13 +1,13 @@
 id: fortanix
 name: Fortanix
-slogan:
+slogan: Look. Know. Further.
 website: https://fortanix.com/
 
 # Short description, longer content can be placed in `content/members/`
 description: Modernize data security for multi-cloud. Secure data at rest, in motion, or during use. On-premises, In the cloud. Or anywhere in-between.
 
 # membership
-memberSince: 2024-01-24
+memberSince: 2024-01-09
 memberType: F
 workingGroups:
 
@@ -18,7 +18,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: null
+  feed: 
   language: en_US
 
 # Press Releases
