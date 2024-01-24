@@ -1,0 +1,54 @@
+id: secondfactor
+name: Second Factor, Inc.
+slogan:
+website: https://www.secondfactor.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Second Factor is an IT services consulting company focused on securing complex systems where our customer base includes the U.S. Government and private entities.
+
+# membership
+memberSince: 2024-01-24
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/second-factor-inc-/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Raymond Shanley
+    role: President & CEO
+    social:
+      twitter: 
+      linkedin: 
+    description: Raymond is the President & CEO at Second Factor, Inc. and represents the organization at the PKI Consortium.
