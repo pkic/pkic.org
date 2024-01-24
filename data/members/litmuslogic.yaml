@@ -1,0 +1,54 @@
+id: litmuslogic
+name: Litmus Logic
+slogan:
+website: HTTPS://www.Litmuslogic.com
+
+# Short description, longer content can be placed in `content/members/`
+description: We build PKI that are cross certified with FBCA.  We build custom software to make Microsoft CA work for cross certification purposes.
+
+# membership
+memberSince: 2024-01-24
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: James Ryan
+    role: CISO
+    social:
+      twitter: 
+      linkedin: 
+    description: James is the CISO at Litmus Logic and represents the organization at the PKI Consortium.
