@@ -1,0 +1,54 @@
+id: sunnic-sec
+name: Sunnic Pte Ltd
+slogan:
+website: https://www.sunnic-sec.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Sunnic is a technology company that delivers comprehensive digital data protection solutions for Regional Banks and Government Agencies.
+
+# membership
+memberSince: 2024-01-24
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/SunnicPteLtd05
+  facebook: https://www.facebook.com/Sunnicsg
+  instagram: 
+  linkedin: https://www.linkedin.com/company/sunnic-pte-ltd/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Zhenxin Sun
+    role: Product Director
+    social:
+      twitter: 
+      linkedin: 
+    description: Zhenxin is the Product Director at Sunnic Pte Ltd and represents the organization at the PKI Consortium.
