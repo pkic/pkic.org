@@ -1,5 +1,5 @@
 id: quantumgateway
-name: Quantum Gateway Solutions BV
+name: Quantum Gateway Solutions
 slogan:
 website: https://quantumgateway.foundation
 
@@ -18,7 +18,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: null
+  feed: 
   language: en_US
 
 # Press Releases
