@@ -1,0 +1,54 @@
+id: globalsign
+name: GlobalSign
+slogan:
+website: https://www.globalsign.com/en
+
+# Short description, longer content can be placed in `content/members/`
+description: We're experts in automated, Scalable, Integrated Digital Certificates Solutions, SSLs/TLSs, managed PKI, IoT, authentication & email security. Learn more about our identity management services.
+
+# membership
+memberSince: 2024-01-24
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/globalsign
+  facebook: https://www.facebook.com/GlobalSignSSL
+  instagram: https://www.instagram.com/globalsign/
+  linkedin: https://www.linkedin.com/company/globalsign/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Mohit Kumar
+    role: VP, Product Management
+    social:
+      twitter: 
+      linkedin: 
+    description: Mohit is the VP, Product Management at GlobalSign and represents the organization at the PKI Consortium.
