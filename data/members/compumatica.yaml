@@ -1,10 +1,10 @@
 id: compumatica
-name: Compumatica secure networks bv
+name: Compumatica secure networks
 slogan:
 website: https://compumatica.com
 
 # Short description, longer content can be placed in `content/members/`
-description: undefined
+description: Compumatica is an independent Dutch cybersecurity manufacturer in the field on encryption (network- & e-mail encryption) and network security/segmentation (firewall & diode technology). The solutions have different certifications from The Netherlands, European Union, and NATO. Compumatica is located in  Uden, The Hague and Würselen (Germany). 
 
 # membership
 memberSince: 2024-01-24
@@ -18,7 +18,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: null
+  feed: 
   language: en_US
 
 # Press Releases
