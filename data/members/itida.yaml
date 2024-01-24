@@ -1,0 +1,54 @@
+id: itida
+name: ITIDA
+slogan:
+website: https://itida.gov.eg/English/Pages/default.aspx
+
+# Short description, longer content can be placed in `content/members/`
+description: As the Egyptian RootCA (Root Certificate Authority) manager working at ITIDA (Information Technology Industry Development Agency), an organization that serves as the digital signature regulator in Egypt, you play a crucial role in ensuring the security and integrity of digital communications within the country.
+
+# membership
+memberSince: 2024-01-24
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/ITIDA?ref_src=twsrc%5Etfw
+  facebook: 
+  instagram: https://www.instagram.com/itidaegypt/
+  linkedin: https://www.linkedin.com/company/itida
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Mahmoud Elsaeed
+    role: Egypt RootCA Manager
+    social:
+      twitter: 
+      linkedin: 
+    description: Mahmoud is the Egypt RootCA Manager at ITIDA and represents the organization at the PKI Consortium.
