@@ -1,35 +1,25 @@
 id: cryptas
-name: CRYPTAS International
-slogan:
-website: https://www.cryptas.com
+name: Cryptas
+slogan: We protect identities
+website: https://www.cryptas.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: We provide the keys for your secure and successful digital transformation - everything to do with PKI, electronic identities, digital certificates, encryption, and electronic signatures.
+description: We provide the keys for your secure and successful digital transformation - everything to do with PKI, electronic identities, digital certificates, encryption, and electronic signatures.  
 
 # membership
 memberSince: 2024-01-09
 memberType: F
 workingGroups:
 
-# sponsor
-sponsor:
-  level: 
-
-# Blog posts
-blog: 
-  url: 
-  feed: null
-  language: en_US
-
 # Press Releases
 press: 
-  url: 
+  url: https://www.cryptas.com/en/company/news
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://www.cryptas.com/en/company/career
   feed: 
   language: en_US
 
@@ -38,7 +28,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/cryptas
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -46,9 +36,18 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Karl Heinz Mayer
-    role: SVP Sales and Marketing
+  - id: stefan-bumerl
+    name: Stefan Bumerl
+    role: Founder & CEO
     social:
       twitter: 
-      linkedin: 
-    description: Karl Heinz is the SVP Sales and Marketing at CRYPTAS International GmbH and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/stefanbumerl
+    description: 25+ years in crypto and PKI business, founder, CEO and CTO of Cryptas IT Security GmbH
+
+  - id: karl-heinz-meyer
+    name: Karl Heinz Meyer
+    role: SVP Sales
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/karl-heinz-mayer-7323812/
+    description: 30+ years in IT with senior management positions in security, consulting & sales. CISSP, Certified Customer Success Manager.  
