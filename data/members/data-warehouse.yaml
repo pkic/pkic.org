@@ -1,10 +1,10 @@
-id: datawh
-name: Data-Warehouse GmbH
+id: data-warehouse
+name: Data-Warehouse
 slogan:
 website: https://datawh.info
 
 # Short description, longer content can be placed in `content/members/`
-description: Providing a german native cryptographic inventorisation and management plattform with outstanding discovery capabilities PCert(TM) since more than 10 years. I was the leading researcher and brain behind the realisation. More infos at https://datawh.info/en/pcert
+description: Data-Warehouse provides a german native cryptographic inventorisation and management plattform with outstanding discovery capabilities PCert(TM) since more than 10 years.
 
 # membership
 memberSince: 2024-01-09
