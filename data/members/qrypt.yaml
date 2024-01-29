@@ -17,19 +17,19 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://www.qrypt.com/resources/?postCategory=Blog+Post
   feed: 
   language: en_US
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.qrypt.com/resources/?postCategory=News
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://www.qrypt.com/careers/
   feed: 
   language: en_US
 
