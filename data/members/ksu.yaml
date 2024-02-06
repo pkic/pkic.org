@@ -1,0 +1,54 @@
+id: ksu
+name: COEIA
+slogan:
+website: https://coeia.ksu.edu.sa/
+
+# Short description, longer content can be placed in `content/members/`
+description: المصدر الأول في ابحاث أمن المعلومات، والاختراعات والمنتجات الامنية، يضم المركز العديد من الباحثين المتميزين في أمن المعلومات، ولديه العديد من برائات الاختراع، والمشاريع، ويقدم العديد من الخدمات الادارية والتقنية والتأهيلية في امن المعلومات
+
+# membership
+memberSince: 2024-02-06
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/COEIA_KSU/
+  facebook: https://www.facebook.com/coeia.page/
+  instagram: https://www.instagram.com/coeia_ksu
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Nayef Alharbi
+    role: Cryptography Expert
+    social:
+      twitter: 
+      linkedin: 
+    description: Nayef is the Cryptography Expert at COEIA and represents the organization at the PKI Consortium.
