@@ -1,0 +1,27 @@
+id: eval
+name: Eval
+slogan: Eval, security is value.
+website: https://eval.digital/en/
+
+# Short description, longer content can be placed in `content/members/`
+description: Eval has led the way in Brazilian information security, offering comprehensive data protection solutions across various industry
+
+# membership
+memberSince: 2023-09-05
+memberType: Vendor
+workingGroups:
+  - PKIMM
+  - PQC
+
+
+# Blog posts
+blog: 
+  url: https://eval.digital/en/blog/
+  language: en_US
+
+# Social media
+social:
+  facebook: https://www.facebook.com/eval.digital
+  instagram: https://www.instagram.com/eval.digital/
+  linkedin: https://www.linkedin.com/company/evaldigital/
+  youtube: https://youtube.com/@evaldigital
