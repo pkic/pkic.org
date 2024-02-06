@@ -1,10 +1,10 @@
 id: itida
 name: ITIDA
-slogan:
-website: https://itida.gov.eg/English/Pages/default.aspx
+slogan: Egypt Information Technology Industry Development Agency
+website: https://itida.gov.eg/English/
 
 # Short description, longer content can be placed in `content/members/`
-description: As the Egyptian RootCA (Root Certificate Authority) manager working at ITIDA (Information Technology Industry Development Agency), an organization that serves as the digital signature regulator in Egypt, you play a crucial role in ensuring the security and integrity of digital communications within the country.
+description: The Information Technology Industry Development Agency (ITIDA) is a leading agency that champions a world-class IT industry in Egypt. With its long-term commitment and substantial ongoing investment, ITIDA aims to play an increasingly important role in Egypt’s economic growth. The agency delivers sustainable improvements to the entire IT ecosystem in Egypt and has won several awards for its excellence. ITIDA is also responsible for managing the Egyptian RootCA, the Root Certificate Authority that provides digital certificates and public key infrastructure services in Egypt.
 
 # membership
 memberSince: 2024-01-24
@@ -17,19 +17,19 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://itida.gov.eg/English/Blogs/
   feed: 
   language: en_US
 
 # Press Releases
 press: 
-  url: 
+  url: https://itida.gov.eg/English/PressReleases/Pages/
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://itida.gov.eg/English/Careers/
   feed: 
   language: en_US
 
