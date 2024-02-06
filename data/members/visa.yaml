@@ -17,7 +17,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://usa.visa.com/visa-everywhere/blog.html
   feed: 
   language: en_US
 
@@ -29,16 +29,16 @@ press:
 
 # Careers
 careers: 
-  url: 
+  url: https://corporate.visa.com/en/careers.html
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
-  linkedin: 
+  twitter: https://twitter.com/Visa
+  facebook: https://www.facebook.com/VisaUnitedStates
+  instagram: https://instagram.com/visa_us/
+  linkedin: https://www.linkedin.com/company/visa
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -47,8 +47,8 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Adam Clark
-    role: 
+    role: Vice President Applied Cryptography
     social:
       twitter: 
       linkedin: 
-    description: Adam is the  at Visa and represents the organization at the PKI Consortium.
+    description: Adam is the Vice President Applied Cryptography at Visa and represents the organization at the PKI Consortium.
