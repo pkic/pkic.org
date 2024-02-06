@@ -1,11 +1,10 @@
 id: lawtrust
 name: Lawtrust
-slogan:
+slogan: Information Security Solutions
 website: https://www.lawtrust.co.za/
 
 # Short description, longer content can be placed in `content/members/`
-description: |
-  We have always believed that we should play a pioneering role in our industry, and have achieved some significant firsts over the years:  We are the first African Certificate Authority to achieve ISO 21188 and WebTrust Certification We are the first African Certificate Authority to be included in the Adobe Approved Trust List (AATL) We are the first Certificate Authority to be accredited for the provision of Advanced Electronic Signatures under the ECT Act We are the only African Trust Centre to be contracted by the EU to extend identity and signature validation through the Future Trust project
+description: "We have always believed that we should play a pioneering role in our industry, and have achieved some significant firsts over the years:  We are the first African Certificate Authority to achieve ISO 21188 and WebTrust Certification We are the first African Certificate Authority to be included in the Adobe Approved Trust List (AATL) We are the first Certificate Authority to be accredited for the provision of Advanced Electronic Signatures under the ECT Act We are the only African Trust Centre to be contracted by the EU to extend identity and signature validation through the Future Trust project"
 
 # membership
 memberSince: 2023-09-26
