@@ -1,0 +1,54 @@
+id: savis
+name: SAVIS TECHNOLOGY GROUP
+slogan: Shaping Digital Future Together
+website: https://savis.vn/
+
+# Short description, longer content can be placed in `content/members/`
+description: SAVIS GROUP is in the TOP 10 leading Information Technology enterprises in Vietnam providing Platforms - Services - Solutions for Digital Transformation and Security - Information Security, with in-depth capabilities in the field of Digital Government, Digital businesses, Digital television, Digital banking, IoT and smart cities.
+
+# membership
+memberSince: 2024-01-24
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://savis.vn/feed/
+  language: vi_VN
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: vi_VN
+
+# Careers
+careers: 
+  url: https://career.savis.vn/
+  feed: 
+  language: vi_VN
+
+# Social media
+social:
+  twitter: 
+  facebook: https://www.facebook.com/savisgroup1
+  instagram: 
+  linkedin: https://www.linkedin.com/company/savis-technology-group/
+  youtube: https://www.youtube.com/channel/UCOqVgwafCQ5k_h4PQn-IRBw
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Hanh Nguyen
+    role: Purchasing Senior
+    social:
+      twitter: 
+      linkedin: 
+    description: Hanh is the Purchasing Senior at SAVIS TECHNOLOGY GROUP and represents the organization at the PKI Consortium.
