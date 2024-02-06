@@ -1,54 +1,27 @@
 id: eval
 name: Eval
-slogan:
-website: https://eval.digital
+slogan: Eval, security is value.
+website: https://eval.digital/en/
 
 # Short description, longer content can be placed in `content/members/`
-description: Mais de 18 anos de experiência no desenvolvimento de soluções de Autenticação, Assinatura Eletrônica e Digital, e Proteção de Dados.
+description: Eval has led the way in Brazilian information security, offering comprehensive data protection solutions across various industry
 
 # membership
-memberSince: 2024-01-24
-memberType: F
+memberSince: 2023-09-05
+memberType: Vendor
 workingGroups:
+  - PKIMM
+  - PQC
 
-# sponsor
-sponsor:
-  level: 
 
 # Blog posts
 blog: 
-  url: 
-  feed: https://eval.digital/feed/
-  language: en_US
-
-# Press Releases
-press: 
-  url: 
-  feed: 
-  language: en_US
-
-# Careers
-careers: 
-  url: 
-  feed: 
+  url: https://eval.digital/en/blog/
   language: en_US
 
 # Social media
 social:
-  twitter: 
   facebook: https://www.facebook.com/eval.digital
   instagram: https://www.instagram.com/eval.digital/
   linkedin: https://www.linkedin.com/company/evaldigital/
-  youtube: 
-
-# Here you can list those who represent or have represented the member.
-#
-# Those wo no longer represent an organization might have written blog posts,
-# to keep the attribution a from/till data range can be included.
-representatives:
-  - name: Marcelo Tiziano
-    role: Director
-    social:
-      twitter: 
-      linkedin: 
-    description: Marcelo is the Director at Eval and represents the organization at the PKI Consortium.
+  youtube: https://youtube.com/@evaldigital
