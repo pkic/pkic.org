@@ -1,10 +1,10 @@
 id: litmuslogic
 name: Litmus Logic
-slogan:
-website: https://www.Litmuslogic.com
+slogan: Create forward looking security stategies that work
+website: https://www.litmuslogic.com
 
 # Short description, longer content can be placed in `content/members/`
-description: We build PKI that are cross certified with FBCA.  We build custom software to make Microsoft CA work for cross certification purposes.
+description: Founded in 2001, Litmus Logic is a boutique firm offering world-class expertise required to make transformational changes in the areas of security, privacy, and Internet technologies.
 
 # membership
 memberSince: 2023-09-05
