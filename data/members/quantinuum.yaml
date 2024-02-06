@@ -10,6 +10,7 @@ description: Quantum Origin is a cryptographic key generation platform that gene
 memberSince: 2024-02-06
 memberType: G
 workingGroups:
+ - PQC
 
 # sponsor
 sponsor:
