@@ -1,10 +1,10 @@
 id: quantinuum
 name: Quantinuum
-slogan:
-website: https://www.quantinuum.com/cybersecurity/quantumorigin
+slogan: Accelerate quantum computing and use its power to positively transform the world
+website: https://www.quantinuum.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: Quantum Origin is a cryptographic key generation platform that generates verifiably random quantum- enhanced cryptographic keys.
+description: Quantinuum unites best-in-class software with high-fidelity hardware to accelerate quantum computing. With integrated full-stack technology, our world-class scientists are rapidly scaling quantum computing.
 
 # membership
 memberSince: 2024-02-06
