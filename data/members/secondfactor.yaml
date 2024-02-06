@@ -1,13 +1,13 @@
 id: secondfactor
-name: Second Factor, Inc.
-slogan:
+name: Second Factor
+slogan: A Higher Level of Trust
 website: https://www.secondfactor.com
 
 # Short description, longer content can be placed in `content/members/`
 description: Second Factor is an IT services consulting company focused on securing complex systems where our customer base includes the U.S. Government and private entities.
 
 # membership
-memberSince: 2024-01-24
+memberSince: 2023-08-02
 memberType: H
 workingGroups:
 
