@@ -1,0 +1,54 @@
+id: quantinuum
+name: Quantinuum
+slogan:
+website: https://www.quantinuum.com/cybersecurity/quantumorigin
+
+# Short description, longer content can be placed in `content/members/`
+description: Quantum Origin is a cryptographic key generation platform that generates verifiably random quantum- enhanced cryptographic keys.
+
+# membership
+memberSince: 2024-02-06
+memberType: G
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/QuantinuumQC
+  facebook: https://www.facebook.com/QuantinuumQC
+  instagram: https://www.instagram.com/quantinuumqc/
+  linkedin: https://www.linkedin.com/company/quantinuumqc/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Marion Le Masson
+    role: Senior Product Manager
+    social:
+      twitter: 
+      linkedin: 
+    description: Marion is the Senior Product Manager at Quantinuum and represents the organization at the PKI Consortium.
