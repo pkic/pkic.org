@@ -1,13 +1,13 @@
 id: pkisolutions
 name: PKI Solutions
 slogan:
-website: https://www.PKIsolutions.com
+website: https://www.pkisolutions.com
 
 # Short description, longer content can be placed in `content/members/`
 description: PKI Solutions offers the industry-leading PKI Spotlight, consulting, and training for confidence in your identity and encryption systems.
 
 # membership
-memberSince: 2024-01-24
+memberSince: 2023-09-05
 memberType: G
 workingGroups:
 
