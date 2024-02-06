@@ -1,10 +1,10 @@
 id: tno
 name: The Netherlands Organisation for applied scientific research
-slogan:
+slogan: Innovation for life
 website: https://www.tno.nl
 
 # Short description, longer content can be placed in `content/members/`
-description: TNO verbindt mensen en kennis om innovaties te creëren die de concurrentiekracht van bedrijven en het welzijn van de samenleving duurzaam versterken.
+description: TNO connects people and knowledge to create innovations that boost the competitive strength of industry and the well-being of society in a sustainable way.
 
 # membership
 memberSince: 2023-09-26
