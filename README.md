@@ -53,8 +53,10 @@ All [Bootstrap](https://getbootstrap.com/docs/) styles are available, to change 
 
 ## Update content from other repositories
 
-Some content is managed in external repositories through git submodules, to update the remote branch in your local preview run the following command.
+Some content is managed in external repositories through git submodules, include the remote remote branch in your local preview run the following command.
 
 ```bash
+git submodule init
 git submodule update --remote
 ```
+The update command can be run to update your local copy when the remote branch changes. Submodules are managed in the file .gitmodules.
