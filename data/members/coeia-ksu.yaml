@@ -1,10 +1,10 @@
-id: ksu
+id: coeia-ksu
 name: COEIA
-slogan:
-website: https://coeia.ksu.edu.sa/
+slogan: Center of Excellence in Information Assurance at King Saud University
+website: https://coeia.ksu.edu.sa/en
 
 # Short description, longer content can be placed in `content/members/`
-description: المصدر الأول في ابحاث أمن المعلومات، والاختراعات والمنتجات الامنية، يضم المركز العديد من الباحثين المتميزين في أمن المعلومات، ولديه العديد من برائات الاختراع، والمشاريع، ويقدم العديد من الخدمات الادارية والتقنية والتأهيلية في امن المعلومات
+description: The Center of Excellence for Information Security at King Saud University is a non-profit center that aims to develop and provide innovative security solutions to raise the level of information security in the public and private sectors, both within the Kingdom of Saudi Arabia in particular and the Arab region in general. It also provides advisory services to secure computer networks and information systems, applies international standards, and develops training and educational curricula specialized in the field of information security and suited to the needs of institutions and organizations in various areas of work.
 
 # membership
 memberSince: 2024-02-06
