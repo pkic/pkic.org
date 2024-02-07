@@ -1,10 +1,10 @@
-<svg  xmlns="http://www.w3.org/2000/svg" fill="none">
-
- <g>
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:svg="http://www.w3.org/2000/svg">
+ <g class="layer">
   <title>Layer 1</title>
-  <path id="svg_1" fill="#B6B6B6" d="m53.3647,32.8491c0.416,-1.8834 0.6353,-3.8406 0.6353,-5.8491c0,-14.9117 -12.0883,-27 -27,-27c-14.9117,0 -27,12.0883 -27,27c0,14.9117 12.0883,27 27,27c2.0085,0 3.9657,-0.2193 5.8491,-0.6353l-8.7056,-8.7056c-5.6652,-5.6652 -5.6652,-14.8504 0,-20.5156c5.6652,-5.6652 14.8504,-5.6652 20.5156,0l8.7056,8.7056z"/>
-  <path id="svg_2" fill="#2558DD" d="m27.0077,27.0075c4.1597,-4.1597 10.9038,-4.1597 15.0635,0l8.8018,8.8018c4.1597,4.1597 4.1597,10.9039 0,15.0635c-4.1596,4.1597 -10.9038,4.1597 -15.0635,0l-8.8018,-8.8018c-4.1597,-4.1597 -4.1597,-10.9038 0,-15.0635z"/>
-  <text font-weight="bold" xml:space="preserve" text-anchor="start" font-family="'Lexend'" font-size="18" id="svg_4" y="19" x="58.99994" stroke-width="0" fill="#2558DD">QUANTAG</text>
-  <text xml:space="preserve" text-anchor="start" font-family="'Lexend'" font-size="12" id="svg_5" y="31.83333" x="60.26878" stroke-width="0" fill="#320ea5">IT SOLUTIONS</text>
+  <path d="m53.36,32.85c0.42,-1.88 0.64,-3.84 0.64,-5.85c0,-14.91 -12.09,-27 -27,-27c-14.91,0 -27,12.09 -27,27c0,14.91 12.09,27 27,27c2.01,0 3.97,-0.22 5.85,-0.64l-8.71,-8.7c-5.66,-5.67 -5.66,-14.85 0,-20.52c5.67,-5.66 14.85,-5.66 20.52,0l8.7,8.71z" fill="#B6B6B6" id="svg_1"/>
+  <path d="m27.01,27.01c4.16,-4.16 10.9,-4.16 15.06,0l8.8,8.8c4.16,4.16 4.16,10.9 0,15.06c-4.16,4.16 -10.9,4.16 -15.06,0l-8.8,-8.8c-4.16,-4.16 -4.16,-10.9 0,-15.06z" fill="#2558DD" id="svg_2"/>
+  <text fill="#2558dd" font-family="Sans-serif" font-size="19" font-weight="bold" id="svg_4" stroke-width="0" text-anchor="middle" x="102.5" xml:space="preserve" y="20.8">QUANTAG</text>
+  <text fill="#320ea5" font-family="Sans-serif" font-size="13" id="svg_5" letter-spacing="0" stroke-width="0" text-anchor="middle" word-spacing="-1" x="105" xml:space="preserve" y="35.05">IT SOLUTIONS</text>
  </g>
 </svg>
