@@ -1,0 +1,54 @@
+id: coeia-ksu
+name: COEIA
+slogan: Center of Excellence in Information Assurance at King Saud University
+website: https://coeia.ksu.edu.sa/en
+
+# Short description, longer content can be placed in `content/members/`
+description: The Center of Excellence for Information Security at King Saud University is a non-profit center that aims to develop and provide innovative security solutions to raise the level of information security in the public and private sectors, both within the Kingdom of Saudi Arabia in particular and the Arab region in general. It also provides advisory services to secure computer networks and information systems, applies international standards, and develops training and educational curricula specialized in the field of information security and suited to the needs of institutions and organizations in various areas of work.
+
+# membership
+memberSince: 2024-02-06
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://coeia.ksu.edu.sa/en/news
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/COEIA_KSU/
+  facebook: https://www.facebook.com/coeia.page/
+  instagram: https://www.instagram.com/coeia_ksu
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Nayef Alharbi
+    role: Cryptography Expert
+    social:
+      twitter: 
+      linkedin: 
+    description: Nayef is the Cryptography Expert at COEIA and represents the organization at the PKI Consortium.
