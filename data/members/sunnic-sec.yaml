@@ -1,15 +1,17 @@
 id: sunnic-sec
 name: Sunnic
-slogan:
+slogan: A secure cyberspace built on the foundation of trust
 website: https://www.sunnic-sec.com
 
 # Short description, longer content can be placed in `content/members/`
-description: Sunnic is a technology company that delivers comprehensive digital data protection solutions for Regional Banks and Government Agencies.
+description: Sunnic is the leading provider of comprehensive digital data security technology, specializing in data protection, cryptography key management, PKI, and access control solutions, designed to safeguard our customers' most critical assets.
 
 # membership
 memberSince: 2024-01-09
 memberType: F
 workingGroups:
+  - PKIMM
+  - PQC
 
 # sponsor
 sponsor:
@@ -17,19 +19,19 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
-  feed: 
+  url: https://www.sunnic-sec.com/news
+  feed: https://www.sunnic-sec.com/news
   language: en_US
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.sunnic-sec.com/news
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://www.sunnic-sec.com/careers
   feed: 
   language: en_US
 
@@ -37,18 +39,23 @@ careers:
 social:
   twitter: https://twitter.com/SunnicPteLtd05
   facebook: https://www.facebook.com/Sunnicsg
-  instagram: 
-  linkedin: https://www.linkedin.com/company/sunnic-pte-ltd/
-  youtube: 
+  linkedin: https://www.linkedin.com/company/sunnic 
+ 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Zhenxin Sun
-    role: Product Director
+  - name: Sun Zhenxin
+    role: Technical Director
     social:
-      twitter: 
-      linkedin: 
-    description: Zhenxin is the Product Director at Sunnic Pte Ltd and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/sun-zhenxin-ab8130a7/
+    description: Sun Zhenxin served in the industry over 15 years, and specializes in Information Security, Risk Management, Compliance, Data Protection, and Business Continuity. Currently, he serves as the Technical Director at Sunnic HQ and SunnicAsia, renowned for providing advanced security solutions to international banks. Mr. Sun leads the design and execution of Sunnic products, overseeing IT Security and Data Protection strategies for 70+ finance and government sectors globally. His dedication has secured prestigious clients, including major financial institutions, international corporations, and government agencies.
+ 
+  - name: Luke Chung
+    role: Sales Director
+    social:
+      twitter: https://twitter.com/
+      linkedin: https://www.linkedin.com/in/luke-chung-86964717/
+    description: Luke Chung, Sunnic's Sales Director, brings a wealth of professional experience spanning over two decades, with a diverse background encompassing roles in Project Management, Sales, and Business Development within the IT and Cybersecurity sectors. Luke has a proven track record of not only driving substantial revenue growth, and successfully leading multimillion-dollar projects, but also a passion for building high-performing teams. Luke excels in fostering and nurturing vital B2B and B2C relationships, crafting pioneering business strategies, and delivering exceptional win-win outcomes that align seamlessly with customers' diverse and evolving business requirements.business 
