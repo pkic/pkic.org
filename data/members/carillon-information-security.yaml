@@ -11,6 +11,7 @@ memberSince: 2023-02-17
 memberType: A
 workingGroups:
  - CA
+ - PQC
 
 # Press Releases
 press: 
