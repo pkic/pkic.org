@@ -1,6 +1,5 @@
 ---
 date: 2024-02-06
-draft: false
 id: quantag-it
 title: Quantag IT Solutions
 
