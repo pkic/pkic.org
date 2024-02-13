@@ -4,7 +4,7 @@ slogan:
 website: https://www.grcpath.com
 
 # Short description, longer content can be placed in `content/members/`
-description: "GRC PATH is the first Iraqi company that provides consultation services on : IT Audit, SWIFT CSP Assessment, Payment Security, Info security Training"
+description: "GRC PATH is the first Iraqi company that provides consultation services on : IT Audit, SWIFT CSP Assessment, PCI Compliance"
 
 # membership
 memberSince: 2024-02-06
@@ -50,5 +50,5 @@ representatives:
     role: Principal
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/amh80/
     description: Ali is the Principal at GRC PATH and represents the organization at the PKI Consortium.
