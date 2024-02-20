@@ -1,6 +1,6 @@
 id: accutivesecurity
 name: Accutive
-slogan:
+slogan: The Auth + Crypto Products and Services Company
 website: https://accutivesecurity.com/
 
 # Short description, longer content can be placed in `content/members/`
@@ -50,5 +50,5 @@ representatives:
     role: CTO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/paul-horn-70631111/
     description: Paul is the CTO at Accutive and represents the organization at the PKI Consortium.
