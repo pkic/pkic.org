@@ -1,0 +1,54 @@
+id: accutivesecurity
+name: Accutive
+slogan:
+website: https://accutivesecurity.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Accutive Security offers effective customizable and secure data protection products and services that safeguard vital information and accelerate innovation
+
+# membership
+memberSince: 2024-02-20
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://accutivesecurity.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/accutivesec
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Paul Horn
+    role: CTO
+    social:
+      twitter: 
+      linkedin: 
+    description: Paul is the CTO at Accutive and represents the organization at the PKI Consortium.
