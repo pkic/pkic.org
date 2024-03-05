@@ -1,0 +1,54 @@
+id: smartcryptosolutions
+name: SmartCrypto
+slogan:
+website: https://smartcryptosolutions.com
+
+# Short description, longer content can be placed in `content/members/`
+description: SmartCrypto– smart-trusted and affordable data, identity and payment security solutions focused on Africa and the 1Billion.
+
+# membership
+memberSince: 2024-02-20
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://smartcryptosolutions.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Dayle Wheeler
+    role: Managing Director
+    social:
+      twitter: 
+      linkedin: 
+    description: Dayle is the Managing Director at SmartCrypto and represents the organization at the PKI Consortium.
