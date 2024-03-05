@@ -1,0 +1,54 @@
+id: tcs
+name: TATA CONSULTANCY SERVICES LIMITED
+slogan:
+website: https://www.tcs.com
+
+# Short description, longer content can be placed in `content/members/`
+description: TCS, a global leader in IT services, consulting, and business solutions, leverages technology for business transformation and helps catalyze change. Learn more.
+
+# membership
+memberSince: 2024-02-20
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/TCS
+  facebook: https://www.facebook.com/TataConsultancyServices
+  instagram: https://www.instagram.com/tcsglobal/
+  linkedin: https://www.linkedin.com/company/tata-consultancy-services/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Yash Jain
+    role: Solution Architect
+    social:
+      twitter: 
+      linkedin: 
+    description: Yash is the Solution Architect at TATA CONSULTANCY SERVICES LIMITED and represents the organization at the PKI Consortium.
