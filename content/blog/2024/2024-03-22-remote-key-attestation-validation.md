@@ -22,7 +22,7 @@ Several examples of remote key attestation include:
 * Mobile phones, which are used for a wide range of activities from accessing critical data to online banking. Protecting these devices from malware is essential to prevent theft of keys and unauthorized access to users' accounts.
 * Code signing, which requires a digital signature from original software vendors to prevent the easy installation of malware on users' computers. Protecting code signing keys from theft is crucial in maintaining the integrity of legitimate software.
 
-For the PKI Consortium, the emphasis on hardware cryptographic devices for code signing keys, as enforced by the CA/B Forum1 and Microsoft, has triggered significant activity. The shift towards hardware tokens for code signing, such as USB tokens or smart cards, presents challenges in scalability for organizations due to increased automation, distributed teams, and a surge in the number of signatures performed.
+For the PKI Consortium, the emphasis on hardware cryptographic devices for code signing keys, as enforced by the CA/B Forum[^1] and Microsoft, has triggered significant activity. The shift towards hardware tokens for code signing, such as USB tokens or smart cards, presents challenges in scalability for organizations due to increased automation, distributed teams, and a surge in the number of signatures performed.
 
 ## Addressing Challenges
 
@@ -49,3 +49,4 @@ We encourage everyone (including non-members) to participate in our Remote Key A
 
 We also welcome you to join the PKI Consortium and to start or participate in a topic in our [community discussions](https://github.com/pkic/community/discussions).
 
+[^1]: [Baseline Requirements for the Issuance and Management of Publicly‐Trusted Code Signing Certificates](https://cabforum.org/uploads/Baseline-Requirements-for-the-Issuance-and-Management-of-Code-Signing.v3.7.pdf).
