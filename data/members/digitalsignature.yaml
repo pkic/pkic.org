@@ -1,0 +1,54 @@
+id: digitalsignature
+name: Bangla Phone Limited
+slogan:
+website: https://www.digitalsignature.com.bd/Default.aspx
+
+# Short description, longer content can be placed in `content/members/`
+description: A forward-looking technology enthusiast with 17+ years’ background in creating and executing innovative software solutions to enhance business productivity. Consistently recognized as a hands-on and competent leader, skilled at coordinating cross-functional teams in a fast-paced, deadline-driven environment to steer timely project completion within budgetary constraints. Problem solver and strong communicator eager to prove value and talent at an emerging company. Motivated to advance and expand skills set through targeted mentorship and challenging projects
+
+# membership
+memberSince: 2024-04-02
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Tapan Kumar Kundu
+    role: Manager, Technical Sales
+    social:
+      twitter: 
+      linkedin: 
+    description: Tapan Kumar is the Manager, Technical Sales at Bangla Phone Limited and represents the organization at the PKI Consortium.
