@@ -1,0 +1,54 @@
+id: turkcell
+name: Turkcell Iletisim Hizmetleri A.S.
+slogan:
+website: https://www.turkcell.com.tr/
+
+# Short description, longer content can be placed in `content/members/`
+description: Türkiye’nin lider iletişim ve teknoloji şirketi Turkcell’in sunduğu tüm avantaj, kampanya, cihaz, servis ve hizmetleri turkcell.com.tr'de inceleyebilirsiniz
+
+# membership
+memberSince: 2024-04-02
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://www.twitter.com/Turkcell
+  facebook: https://www.facebook.com/Turkcell
+  instagram: https://www.instagram.com/turkcell/
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Buse Bilgin
+    role: 5G/6G Research Engineer
+    social:
+      twitter: 
+      linkedin: 
+    description: Buse is the 5G/6G Research Engineer at Turkcell Iletisim Hizmetleri A.S. and represents the organization at the PKI Consortium.
