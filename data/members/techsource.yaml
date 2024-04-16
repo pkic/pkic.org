@@ -1,0 +1,54 @@
+id: techsource
+name: Technology source
+slogan:
+website: https://Techsource.iq
+
+# Short description, longer content can be placed in `content/members/`
+description: Start your development with Technology Source Company.
+
+# membership
+memberSince: 2024-04-16
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: https://www.facebook.com/profile.php?id=100083795857490
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Noor Alazzawi
+    role: Pki operation manager
+    social:
+      twitter: 
+      linkedin: 
+    description: Noor is the Pki operation manager at Technology source and represents the organization at the PKI Consortium.
