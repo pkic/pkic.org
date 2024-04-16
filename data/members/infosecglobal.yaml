@@ -1,0 +1,54 @@
+id: infosecglobal
+name: InfoSec Global
+slogan:
+website: https://www.infosecglobal.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Discover, protect & control all your cryptographic assets with InfoSec Global’s crypto-agility management solutions for digital keys, certificates, identities & more.
+
+# membership
+memberSince: 2024-04-16
+memberType: G
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/infosecglobal
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/infosec-global/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Ian Curry
+    role: Chief Business Officer
+    social:
+      twitter: 
+      linkedin: 
+    description: Ian is the Chief Business Officer at InfoSec Global and represents the organization at the PKI Consortium.
