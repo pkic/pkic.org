@@ -1,0 +1,54 @@
+id: icp
+name: Federal Authority for Identity, Citizenship, Customs & Port Security (ICP)
+slogan:
+website: https://icp.gov.ae/en/
+
+# Short description, longer content can be placed in `content/members/`
+description: Federal Authority for Identity, Citizenship, Customs & Port Security (ICP) was established on Sha’ban 15, 1425H corresponding to September 29, 2004 under the name “Emirates Identity Authority” under Federal Law No. (2) for the year 2004 to establish the “Population Register and Emirates Identity Card Program”, which included recording personal and vital data for all population in the state and keeping them in electronic databases in coordination with the competent authorities, and issuing the Emirates ID Card for each individual to be registered and to contain the Emirates ID number, readable data and data stored on an electronic chip, which can be used in all entities.  PKI professional with 30+ years of experience, joined ICP in 2013-18 and again in 2013 as PKI & Trust Services Advisor.
+
+# membership
+memberSince: 2024-04-16
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/UAEICP
+  facebook: 
+  instagram: https://www.instagram.com/uaeicp/
+  linkedin: 
+  youtube: https://www.youtube.com/c/IdentityandCitizenshipUAE_ICAUAE
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Joao Martins
+    role: PKI & Trust Services Advisor
+    social:
+      twitter: 
+      linkedin: 
+    description: Joao is the PKI & Trust Services Advisor at Federal Authority for Identity, Citizenship, Customs & Port Security (ICP) and represents the organization at the PKI Consortium.
