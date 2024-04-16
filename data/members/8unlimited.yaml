@@ -1,0 +1,54 @@
+id: 8unlimited
+name: 8 Unlimited GmbH
+slogan:
+website: https://8unlimited.at
+
+# Short description, longer content can be placed in `content/members/`
+description: we are providing resources and project management for PKI implementations
+
+# membership
+memberSince: 2024-04-16
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Harald Kaiblinger
+    role: Project Manager
+    social:
+      twitter: 
+      linkedin: 
+    description: Harald is the Project Manager at 8 Unlimited GmbH and represents the organization at the PKI Consortium.
