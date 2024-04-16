@@ -1,0 +1,54 @@
+id: emudhra
+name: eMudhra
+slogan:
+website: https://www.emudhra.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: eMudhra, a Digital Trust Service Provider (TSP), specializes in delivering comprehensive digital security solutions and services. This role is pivotal in ensuring secure online transactions and communication through digital certificates, authentication services, and cryptographic solutions.
+
+# membership
+memberSince: 2024-04-16
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/eMudhra
+  facebook: https://www.facebook.com/eMudhra/
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Suchindran C S
+    role: Senior Consultant - GRC
+    social:
+      twitter: 
+      linkedin: 
+    description: Suchindran is the Senior Consultant - GRC at eMudhra and represents the organization at the PKI Consortium.
