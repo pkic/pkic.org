@@ -10,7 +10,8 @@ description: Discover, protect & control all your cryptographic assets with Info
 memberSince: 2024-04-16
 memberType: G
 workingGroups:
-
+  - PQC
+  
 # sponsor
 sponsor:
   level: 
