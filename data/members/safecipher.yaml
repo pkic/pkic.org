@@ -1,11 +1,10 @@
 id: safecipher
 name: Safecipher
-slogan:
+slogan: Preparing for Post Quantum Cryptography
 website: https://pkiconsultants.safecipher.com/index.html
 
 # Short description, longer content can be placed in `content/members/`
-description: Vendor neutral crypto specialists with a very specialized knowledge of Public Key Infrastructure (PKI)  Hardware Security Modules (HSM), Quantum Resistant Cryptography and Crypto-Agility
-
+description: SafeCipher focuses on Public Key Infrastructure (PKI), Hardware Security Modules (HSM), and Quantum-Resistant Cryptography. SafeCipher  actively supports organizations in transitioning their PKI and cryptographic estates to quantum-resistant algorithms. SafeCipher builds PKI certificate chains based on ML-DSA signature schemes. SafeCipher plans, develops, and guides organizations through the Quantum transition by providing cryptographic audits across their On-Prem, Cloud and CI/CD DevOps estates.
 # membership
 memberSince: 2024-04-16
 memberType: H
@@ -47,8 +46,8 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Stephen Monti
-    role: 
+    role: Founder & CTO
     social:
       twitter: 
       linkedin: 
-    description: Stephen is the  at Safecipher and represents the organization at the PKI Consortium.
+    description: Stephen is the Founder at Safecipher and represents the organization at the PKI Consortium.
