@@ -1,0 +1,54 @@
+id: safecipher
+name: Safecipher
+slogan: Preparing for Post Quantum Cryptography
+website: https://pkiconsultants.safecipher.com/index.html
+
+# Short description, longer content can be placed in `content/members/`
+description: SafeCipher focuses on Public Key Infrastructure (PKI), Hardware Security Modules (HSM), and Quantum-Resistant Cryptography.
+
+# membership
+memberSince: 2024-04-16
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://pkiconsultants.safecipher.com/feed.html
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Stephen Monti
+    role: Founder & CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/company/safecipher-ltd
+    description: Stephen is the Founder & CEO at Safecipher and represents the organization at the PKI Consortium.
