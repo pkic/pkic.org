@@ -4,7 +4,7 @@ slogan:
 website: https://smartcryptosolutions.com
 
 # Short description, longer content can be placed in `content/members/`
-description: SmartCrypto– smart-trusted and affordable data, identity and payment security solutions focused on Africa and the 1Billion.
+description: SmartCrypto smart-trusted and affordable data, identity and payment security solutions focused on Africa and the 1Billion.
 
 # membership
 memberSince: 2024-02-20
@@ -38,7 +38,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/smartcrypto-solutions/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -50,5 +50,5 @@ representatives:
     role: Managing Director
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/daylewheeler/
     description: Dayle is the Managing Director at SmartCrypto and represents the organization at the PKI Consortium.
