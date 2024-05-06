@@ -4,7 +4,7 @@ slogan:
 website: https://www.tcs.com
 
 # Short description, longer content can be placed in `content/members/`
-description: TCS, a global leader in IT services, consulting, and business solutions, leverages technology for business transformation and helps catalyze change. Learn more.
+description: TCS, a global leader in IT services, consulting, and business solutions, leverages technology for business transformation and helps catalyze change.
 
 # membership
 memberSince: 2024-02-20
@@ -50,5 +50,5 @@ representatives:
     role: Solution Architect
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/yash-jain-849a8417/
     description: Yash is the Solution Architect at TATA CONSULTANCY SERVICES LIMITED and represents the organization at the PKI Consortium.
