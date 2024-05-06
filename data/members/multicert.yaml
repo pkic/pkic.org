@@ -4,7 +4,7 @@ slogan:
 website: https://www.multicert.com
 
 # Short description, longer content can be placed in `content/members/`
-description: O propósito da Multicert é garantir a Identidade, Segurança e Confiança Digital das Organizações, Sistemas e Pessoas. A qualquer hora e em qualquer lugar.
+description: Multicert's purpose is to guarantee the Identity, Security and Digital Trust of Organizations, Systems and People. Anytime and anywhere.
 
 # membership
 memberSince: 2024-04-02
@@ -50,5 +50,5 @@ representatives:
     role: Head of Advanced Solutions
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/nponte/
     description: Nuno is the Head of Advanced Solutions at Multicert and represents the organization at the PKI Consortium.
