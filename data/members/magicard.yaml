@@ -4,7 +4,7 @@ slogan:
 website: https://Magicard.com
 
 # Short description, longer content can be placed in `content/members/`
-description: Magicard was founded in 1992 and is a pioneer of ID card printing technologies with a full range of desktop devices to meet any ID requirement
+description: Magicard was founded in 1992 and is a pioneer of ID card printing technologies with a full range of desktop devices to meet any ID requirement.
 
 # membership
 memberSince: 2024-04-16
@@ -50,5 +50,5 @@ representatives:
     role: Business Development Manager EMEA
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/martin-mcgrory-b4701135/
     description: Martin is the Business Development Manager EMEA at Magicard and represents the organization at the PKI Consortium.
