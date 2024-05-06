@@ -1,0 +1,54 @@
+id: landisgyr
+name: Landis+Gyr, Inc.
+slogan:
+website: https://www.landisgyr.eu/?locale=en_US
+
+# Short description, longer content can be placed in `content/members/`
+description: At Landis+Gyr, we create a greener tomorrow through leading smart metering, grid edge intelligence and smart infrastructure technology.
+
+# membership
+memberSince: 2024-04-02
+memberType: G
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/landisgyr
+  facebook: https://www.facebook.com/LandisGyr
+  instagram: 
+  linkedin: https://www.linkedin.com/company/6291?trk=tyah
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Mike Del Campo
+    role: Global Principal Security Architect
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/mikedelcampo/
+    description: Mike is the Global Principal Security Architect at Landis+Gyr, Inc. and represents the organization at the PKI Consortium.
