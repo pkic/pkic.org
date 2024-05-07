@@ -4,7 +4,7 @@ slogan:
 website: https://Techsource.iq
 
 # Short description, longer content can be placed in `content/members/`
-description: Start your development with Technology Source Company.
+description: At Technology Source, we are the first Trust Service Provider (TSP) in Iraq. Our mission is to empower government institutions, businesses and individuals to securely sign and manage their documents with ease and efficiency. 
 
 # membership
 memberSince: 2024-04-16
@@ -17,7 +17,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://techsource.iq/#blog
   feed: 
   language: en_US
 
@@ -38,7 +38,7 @@ social:
   twitter: 
   facebook: https://www.facebook.com/profile.php?id=100083795857490
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/technology-source101/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -50,5 +50,5 @@ representatives:
     role: Pki operation manager
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/noor-al-azzawi-561a921b7/
     description: Noor is the Pki operation manager at Technology source and represents the organization at the PKI Consortium.
