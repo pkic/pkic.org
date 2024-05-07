@@ -4,7 +4,7 @@ slogan:
 website: https://8unlimited.at
 
 # Short description, longer content can be placed in `content/members/`
-description: we are providing resources and project management for PKI implementations
+description: We provide resources and project management for PKI implementations.
 
 # membership
 memberSince: 2024-04-16
@@ -50,5 +50,5 @@ representatives:
     role: Project Manager
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/kaiblinger/
     description: Harald is the Project Manager at 8 Unlimited GmbH and represents the organization at the PKI Consortium.
