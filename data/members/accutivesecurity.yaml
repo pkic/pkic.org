@@ -16,9 +16,9 @@ sponsor:
   level: 
 
 # Blog posts
-blog: 
-  url: 
-  feed: https://accutivesecurity.com/feed/
+blog:
+  url: https://accutivesecurity.com/insights/
+  feed: https://accutivesecurity.com/category/articles/
   language: en_US
 
 # Press Releases
@@ -28,18 +28,15 @@ press:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url: https://www.accutive.com/careers
+  feed:
   language: en_US
 
 # Social media
 social:
-  twitter: https://twitter.com/accutivesec
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/showcase/89817988
+  linkedin (corporate): https://www.linkedin.com/company/1113269
 
 # Here you can list those who represent or have represented the member.
 #
@@ -47,8 +44,12 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Paul Horn
-    role: CTO
+    role: Chief Technical Officer (CTO)
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/paul-horn-70631111/
-    description: Paul is the CTO at Accutive and represents the organization at the PKI Consortium.
+    description: |
+      Paul Horn is Accutive’s leading quantum cryptography expert and is a regular in the North American cybersecurity circuit, including keynote presentations to hundreds of cybersecurity experts about emerging cybersecurity threats, including the need for post-quantum cryptography in the face of quantum threats.  Paul has been active in the cybersecurity space for decades. He began his cybersecurity career by developing deep expertise in hardware security modules (HSMs), including installation, configuration, and monitoring. From his HSM foundation, Paul expanded his expertise to the full suite of Thales identity protection products.
+
+      Paul’s belief in the importance of cybersecurity education led him to achieve a CISSP certification and begin instructing cybersecurity professionals on best practices for cryptography and key management, including HSMs. In the years since, Paul has led the development and architecture for Accutive’s proprietary data protection platform – Accutive Data Discovery + Masking (ADM) and overseen many successful customer projects. In addition to his continued involvement in ADM, Paul leads Accutive Security’s PKI practice, guiding our engineers in the design and implementation of highly secure and available PKI infrastructure.
+
