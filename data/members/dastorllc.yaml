@@ -23,7 +23,7 @@ blog:
 
 # Press Releases
 press: 
-  url: 
+  url: https://dastorllc.com/news/
   feed: 
   language: en_US
 
@@ -38,7 +38,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/dastorllc/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -50,5 +50,5 @@ representatives:
     role: International Business Solutions
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/erik-ej-bols-b93953236/
     description: Erik is the International Business Solutions at DāSTOR and represents the organization at the PKI Consortium.
