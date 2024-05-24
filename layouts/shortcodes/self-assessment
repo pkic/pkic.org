@@ -1,0 +1,2 @@
+<self-assessment dataUrl="{{ with .Get "data-url" }}{{ . }}{{ else }}assessment-data.yaml{{ end }}"></self-assessment>
+<script src="https://3keycompany.github.io/Web-Component-Self-Assessment/bundle.js"></script>
