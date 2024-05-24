@@ -7,5 +7,5 @@ fullwidth: true
 
 ---
 
-{{< self-assessment data-url="https://3keycompany.github.io/Web-Component-Self-Assessment/assessment-data.yaml" />}}
+{{< self-assessment data-url="https://3keycompany.github.io/Web-Component-Self-Assessment/assessment-data.yaml" >}}
 
