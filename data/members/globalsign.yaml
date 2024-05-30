@@ -10,7 +10,8 @@ description: As technology evolves, the need for trusted, verified, and easily d
 memberSince: 2024-01-09
 memberType: A
 workingGroups:
-
+  - PQC
+  
 # sponsor
 sponsor:
   level: 
