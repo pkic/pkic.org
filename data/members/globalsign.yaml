@@ -11,6 +11,7 @@ memberSince: 2024-01-09
 memberType: A
 workingGroups:
   - PQC
+  - PKIMM
   
 # sponsor
 sponsor:
