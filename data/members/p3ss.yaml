@@ -1,0 +1,54 @@
+id: p3ss
+name: Backdoor Global, Inc.
+slogan:
+website: https://p3ss.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Protocol 3 Suite Solutions is the technology division of Backdoor Global, providing comprehensive IT solutions to businesses of all sizes. We offer a wide range of services, including software development, SaaS, IT consulting, SAP solutions, licensing, IT security, hosting, and artificial intelligence.
+
+# membership
+memberSince: 2024-06-18
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.p3ss.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/backdoorHQ
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Venancio Cespedes
+    role: Co-Founder
+    social:
+      twitter: 
+      linkedin: 
+    description: Venancio is the Co-Founder at Backdoor Global, Inc. and represents the organization at the PKI Consortium.
