@@ -1,0 +1,54 @@
+id: microsoft
+name: Microsoft Corp.
+slogan:
+website: https://www.microsoft.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Explore Microsoft products and services for your home or business. Shop Surface, Microsoft 365, Xbox, Windows, Azure, and more. Find downloads and get support.
+
+# membership
+memberSince: 2024-06-18
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/microsoft
+  facebook: https://www.facebook.com/Microsoft
+  instagram: 
+  linkedin: https://www.linkedin.com/company/microsoft
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Daniel Cervera
+    role: Senior Program Manager
+    social:
+      twitter: 
+      linkedin: 
+    description: Daniel is the Senior Program Manager at Microsoft Corp. and represents the organization at the PKI Consortium.
