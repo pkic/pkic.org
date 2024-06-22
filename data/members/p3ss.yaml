@@ -1,54 +1,66 @@
 id: p3ss
 name: Backdoor Global, Inc.
-slogan:
-website: https://p3ss.com
+slogan: Your Trusted Technology Partner
+website: https://www.p3ss.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: Protocol 3 Suite Solutions is the technology division of Backdoor Global, providing comprehensive IT solutions to businesses of all sizes. We offer a wide range of services, including software development, SaaS, IT consulting, SAP solutions, licensing, IT security, hosting, and artificial intelligence.
+description: Protocol 3 Suite Solutions is the technology division of Backdoor Global, Inc., providing comprehensive IT solutions to businesses of all sizes.
 
 # membership
 memberSince: 2024-06-18
 memberType: H
 workingGroups:
 
+
 # sponsor
-sponsor:
-  level: 
+# sponsor:
+# level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: https://www.p3ss.com/feed/
+# blog: 
+  url: https://www.p3ss.com/blog
+  feed: 
   language: en_US
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.p3ss.com/blog
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://secure.p3ss.com/open.php
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: https://twitter.com/backdoorHQ
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  twitter: https://x.com/backdoorHQ
+#facebook: 
+#instagram: 
+linkedin: https://www.linkedin.com/company/backdoorglobal
+#youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
+  - name: Euder Villamizar
+    role: CEO
+    social:
+      twitter: https://x.com/neugocho
+      linkedin: https://www.linkedin.com/in/euder-villamizar-94374231/
+    description:         
+         Euder Isaac Villamizar Peñaloza is a businessman and systems engineer. He is the co-founder of Backdoor Global, Inc.
+         
+         He graduated in Systems Engineering from UNEFA in 2011. Currently, he is an outsourcing consultant for SAP ABAP/Workflow and the chief of software development and CEO at Backdoor Global, Inc., a company whose mission is to eliminate barriers to entry and introduce computer solutions into daily life in Latin America.
+  
   - name: Venancio Cespedes
     role: Co-Founder
     social:
-      twitter: 
-      linkedin: 
-    description: Venancio is the Co-Founder at Backdoor Global, Inc. and represents the organization at the PKI Consortium.
+      twitter: https://x.com/venywest
+      linkedin: https://www.linkedin.com/in/venywest/
+    description: 
+         Venancio is the Co-Founder at Backdoor Global, Inc. and represents the organization at the PKI Consortium.
