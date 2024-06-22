@@ -8,9 +8,31 @@ description: Firma.Digital is a trust service provider authorized by Minister of
 
 # membership
 memberSince: 2022-08-25
-memberType: CA
+memberType: A
 workingGroups:
-  
+  - CA
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
 
 # Social media
 social:
@@ -19,4 +41,3 @@ social:
   instagram: 
   linkedin: 
   youtube: 
-

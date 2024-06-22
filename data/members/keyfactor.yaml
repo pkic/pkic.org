@@ -8,7 +8,7 @@ description: Keyfactor develops products for PKI, digital signatures and cryptog
 
 # membership
 memberSince: 2021-04-14
-memberType: Vendor
+memberType: F
 workingGroups:
   - PKIMM
   - PQC
@@ -54,6 +54,11 @@ representatives:
     social:
       twitter: https://twitter.com/primetomas
       linkedin: https://www.linkedin.com/in/tgustavsson/
-    description:
-      Tomas Gustavsson has a MSc from KTH in Stockholm and has been researching and implementing PKI systems since 1994. He is the founder of and still a developer of the open source enterprise PKI project EJBCA and a contributor to numerous open source projects. As a co-founder of PrimeKey, Tomas is passionate about helping users worldwide find the best possible PKI and digital signature solutions. He has worked with customers deploying PKI solutions across the world during the last 20 years.
-
+    description: Tomas Gustavsson has a MSc from KTH in Stockholm and has been researching and implementing PKI systems since 1994. He is the founder of and still a developer of the open source enterprise PKI project EJBCA and a contributor to numerous open source projects. As a co-founder of PrimeKey, Tomas is passionate about helping users worldwide find the best possible PKI and digital signature solutions. He has worked with customers deploying PKI solutions across the world during the last 20 years.
+    
+  - name: Sven Rajala
+    role: International PKI Man of Mystery
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/international-pki-man-of-mystery/
+    description: Sven Rajala is an award winning seasoned cyber-security consultant with extensive subject matter expertise on PKI, automation of PKI/Signing Solutions, and containers. He has over 17 years of experience working in both the private sector and with federal government departments and agencies. Sven is frequently called upon to participate in client discussions, presentations, and seminars on topics including PKI, EJBCA, and PKI Devsecops.

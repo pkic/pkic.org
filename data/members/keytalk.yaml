@@ -8,13 +8,12 @@ description: It is the Keytalk mission to make PKI Management not only as best a
 
 # membership
 memberSince: 2021-03-29
-memberType: Vendor
+memberType: F
 workingGroups:
 
 # sponsor
-#sponsor:
-#  level: 
-
+sponsor:
+  level: 
 
 # Blog posts
 blog: 
@@ -52,13 +51,11 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/ms2441b32/
-    description:
-      Michael is the CEO KeyTalk and represents the organization at the PKI Consortium.
+    description: Michael is the CEO KeyTalk and represents the organization at the PKI Consortium.
 
   - name: Bas von Barnau Sythoff
     role: Sales Director
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/bas-von-barnau-sythoff-302180/
-    description:
-      Bas is the Sales Director at KeyTalk and represents the organization at the PKI Consortium.
+    description: Bas is the Sales Director at KeyTalk and represents the organization at the PKI Consortium.

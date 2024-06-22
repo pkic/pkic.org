@@ -10,12 +10,28 @@ description: TrustWrx is the first low-cost, hands-free enterprise-class securit
 memberSince: 2022-09-08
 memberType: F
 workingGroups:
-  
+
+# sponsor
+sponsor:
+  level: 
+
 # Blog posts
 blog:
   url: https://www.trustwrx.com/index.php/blog/
   feed: https://www.trustwrx.com/index.php/blog/feed/
   language: en_US
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
 
 # Social media
 social:
@@ -25,12 +41,14 @@ social:
   linkedin: https://www.linkedin.com/company/trustwrx/
   youtube: 
 
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
 representatives:
   - name: George Sidman
     role: Chairman & CEO
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/george-sidman-381b9b/
-    description:
-      George Sidman is a serial entrepreneur with a 30-year track record in launching and growing successful software and Internet companies. His technology experience spans large-scale library and information automation, commercial ISP services, and Internet security and privacy technologies. Between 2004 and early 2011 he was the Founder, Chairman and Chief Technology Architect of WebLOQ, Inc. and he is the inventor of the patented TrustWrx secure Internet communications technology.
-
+    description: George Sidman is a serial entrepreneur with a 30-year track record in launching and growing successful software and Internet companies. His technology experience spans large-scale library and information automation, commercial ISP services, and Internet security and privacy technologies. Between 2004 and early 2011 he was the Founder, Chairman and Chief Technology Architect of WebLOQ, Inc. and he is the inventor of the patented TrustWrx secure Internet communications technology.

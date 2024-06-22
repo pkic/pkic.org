@@ -8,10 +8,14 @@ description: SSL.com is a publicly-trusted commercial certificate authority expa
 
 # membership
 memberSince: 2020-04-22
-memberType: CA
+memberType: A
 workingGroups:
   - CA
   - PKIMM
+
+# sponsor
+sponsor:
+  level: 
 
 # Blog posts
 blog: 
@@ -46,5 +50,4 @@ representatives:
     social:
       twitter:
       linkedin:
-    description:
-      Chris Kemmerer joined SSL.com in 2014 and is currently Manager of Compliance. In addition to representing SSL.com at the CA/Browser Forum and participating in various ballot initiatives, he is pleased to work as part of the CA Security Council to address issues facing Certificate Authorities and the community of relying parties.
+    description: Chris Kemmerer joined SSL.com in 2014 and is currently Manager of Compliance. In addition to representing SSL.com at the CA/Browser Forum and participating in various ballot initiatives, he is pleased to work as part of the CA Security Council to address issues facing Certificate Authorities and the community of relying parties.

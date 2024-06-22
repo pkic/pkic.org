@@ -21,6 +21,18 @@ blog:
   feed: https://www.indenova.com/blog/feed/
   language: es_ES
 
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
+
 # Social media
 social:
   twitter: https://twitter.com/inDenova
@@ -39,6 +51,4 @@ representatives:
     social:
       twitter: https://twitter.com/jgisbert1979
       linkedin: https://www.linkedin.com/in/jordi-gisbert-rodas-72a38917/
-    description: |
-      Founding Partner and COO of inDenova specialized in the implementation of projects for Governments and Companies. More than 15 years of experience in the field of technologies related to Electronic Billing, Electronic Signature, Security, Process Automation and Biometrics.
-
+    description: Founding Partner and COO of inDenova specialized in the implementation of projects for Governments and Companies. More than 15 years of experience in the field of technologies related to Electronic Billing, Electronic Signature, Security, Process Automation and Biometrics.

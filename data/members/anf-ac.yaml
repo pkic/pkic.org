@@ -8,13 +8,13 @@ description: Focused on actively contributing to the progress of society and imp
 
 # membership
 memberSince: 2021-11-12
-memberType: CA
+memberType: A
 workingGroups:
-  - 
+  - CA
 
 # sponsor
-#sponsor:
-#  level: 
+sponsor:
+  level: 
 
 # Blog posts
 blog: 
@@ -53,6 +53,4 @@ representatives:
     social:
       twitter: 
       linkedin: 
-    description:
-      Pablo Díaz is the IT Manager and Product Manager PKI at ANF AC and represents the organization at the PKI Consortium.
-
+    description: Pablo Díaz is the IT Manager and Product Manager PKI at ANF AC and represents the organization at the PKI Consortium.

@@ -11,7 +11,28 @@ memberSince: 2023-01-16
 memberType: A
 workingGroups:
   - CA
-  
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
 
 # Social media
 social:
@@ -21,4 +42,3 @@ social:
   pinterest:
   linkedin: https://www.linkedin.com/company/lex-persona/
   youtube: https://www.youtube.com/channel/UCHufAAAM2k-5QmIq51Bw2gw
-

@@ -16,6 +16,18 @@ workingGroups:
 sponsor:
   level: 
 
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
 # Careers
 careers: 
   url: https://infoseccorp.com/careers/
@@ -33,12 +45,11 @@ social:
 # Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - id: michael-markowitz
-    name: Michael J. Markowitz, Ph.D.
+  - name: Michael J. Markowitz, Ph.D.
     role: Executive Vice President
     social:
       linkedin: https://www.linkedin.com/in/michael-markowitz-96a88a255/
-    description:
+    description: |
       Dr. Markowitz has a background in cryptography, differential geometry, and mathematical physics.  
       
       In 1983, Markowitz and R. Schlafly developed the first commercial implementation of RSA and licensed a hybrid RSA/DES encryption utility to the UNHCR HQ, Geneva, and other governmental agencies. Markowitz has continued to work on the design and development of PKI solutions, overseeing all R&D projects at ISC since cofounding it with Thomas Venn in 1989.  
@@ -48,4 +59,3 @@ representatives:
       Dr. Markowitz currently participates in the OASIS PKCS#11 working group, among other organizations, and monitors emerging post-quantum standards and guidelines. His spare time is spent playing tennis and following the development of his grandchildren and quantum gravity.  
 
       Dr. Markowitz is a graduate of Lehigh University, where he received simultaneous B.A. and M.S. degrees (SCL) and was elected to Phi Beta Kappa. He holds a Ph.D. in Mathematics from the University of California, Berkeley. In the 1980s he served on the mathematics faculties of the University of Notre Dame, the University of Chicago, the University of Illinois, Chicago, and Loyola University of Chicago.
-

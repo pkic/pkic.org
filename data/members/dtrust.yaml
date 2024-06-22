@@ -8,7 +8,7 @@ description: Berlin-based D-TRUST is a member of the Bundesdruckerei Group. D-TR
 
 # membership
 memberSince: 2020-04-22
-memberType: CA
+memberType: A
 workingGroups:
   - CA
   - PQC
@@ -54,5 +54,4 @@ representatives:
       twitter:
       linkedin: https://www.linkedin.com/in/enrico-entschew-252b9811/
       xing: https://www.xing.com/profile/Enrico_Entschew
-    description:
-      Enrico Entschew is Principal Industrial Standardization and Compliance at D-Trust and represents the organization at the PKI Consortium.
+    description: Enrico Entschew is Principal Industrial Standardization and Compliance at D-Trust and represents the organization at the PKI Consortium.

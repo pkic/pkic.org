@@ -11,6 +11,16 @@ memberSince: 2024-01-09
 memberType: F
 workingGroups:
 
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
 # Press Releases
 press: 
   url: https://www.cryptas.com/en/company/news
@@ -36,16 +46,14 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - id: stefan-bumerl
-    name: Stefan Bumerl
+  - name: Stefan Bumerl
     role: Founder & CEO
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/stefanbumerl
     description: 25+ years in crypto and PKI business, founder, CEO and CTO of Cryptas IT Security GmbH
 
-  - id: karl-heinz-mayer
-    name: Karl Heinz Meyer
+  - name: Karl Heinz Meyer
     role: SVP Sales
     social:
       twitter: 

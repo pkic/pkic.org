@@ -8,12 +8,12 @@ description: Sixscape is dedicated to making Cryptographic Authentication and Se
 
 # membership
 memberSince: 2021-07-20
-memberType: Vendor
+memberType: F
 workingGroups:
 
 # sponsor
-#sponsor:
-#  level:
+sponsor:
+  level:
 
 # Blog posts
 blog: 
@@ -36,6 +36,8 @@ careers:
 # Social media
 social:
   twitter: https://twitter.com/sixscape_comm
+  facebook: 
+  instagram:  
   linkedin: https://www.linkedin.com/company/sixscape-communications-global/
   youtube: https://www.youtube.com/channel/UCWpFFKtkP5HUybYxqmp4ATQ
 
@@ -49,7 +51,7 @@ representatives:
     role: Chief Executive Officer
     social:
       linkedin: https://www.linkedin.com/in/deanbell
-    description:
+    description: |
       Dean is the CEO of Sixscape Communications and is responsible for driving growth and all strategic initiatives of the company. Prior to Sixscape, Dean spent the last 24 years setting up and growing the international presence for a number of US and European Cybersecurity companies, focusing on enterprise, government, and service provider markets. 
       
       His background includes stints in the UK, Middle East, Australia and Singapore in general management and senior executive roles for both direct sales and channel-based go-to-market security vendors with successful exits with BorderWare Technologies, Scanit, BlueCat Networks. He represents Sixscape at the PKI Consortium.
@@ -58,5 +60,4 @@ representatives:
     role: Chief Technology Officer
     social:
       linkedin: https://www.linkedin.com/in/rramkishore
-    description:
-      Ram Kishore is the CTO of Sixscape. Ram has served in the PKI industry for more than a decade and had worked as PKI Specialist and software developer for major public CA’s and security software product companies. He represents Sixscape at the PKI Consortium.
+    description: Ram Kishore is the CTO of Sixscape. Ram has served in the PKI industry for more than a decade and had worked as PKI Specialist and software developer for major public CA’s and security software product companies. He represents Sixscape at the PKI Consortium.

@@ -8,11 +8,15 @@ description: Sectigo partners with organizations of all sizes to deliver automat
 
 # membership
 memberSince: 2013-02-14
-memberType: CA
+memberType: A
 workingGroups:
   - CA
   - PQC
-  
+
+# sponsor
+sponsor:
+  level: 
+
 # Blog posts
 blog: 
   url: https://sectigo.com/resource-library/blog-posts

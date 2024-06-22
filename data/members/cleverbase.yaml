@@ -8,9 +8,13 @@ description: Cleverbase offers a mobile app which, after a one-time registration
 
 # membership
 memberSince: 2021-02-18
-memberType: CA
+memberType: A
 workingGroups:
   - CA
+
+# sponsor
+sponsor:
+  level: 
 
 # Blog posts
 blog:
@@ -45,5 +49,4 @@ representatives:
     social:
       twitter:
       linkedin: https://www.linkedin.com/in/niels-schoumans-50047234/
-    description:
-      Niels Schoumans is the Security Officer at Cleverbase and represents the organization at the PKI Consortium.
+    description: Niels Schoumans is the Security Officer at Cleverbase and represents the organization at the PKI Consortium.

@@ -13,8 +13,8 @@ workingGroups:
   - PQC
 
 # sponsor
-#sponsor:
-#  level: 
+sponsor:
+  level: 
 
 # Blog posts
 blog: 
@@ -37,7 +37,10 @@ careers:
 # Social media
 social:
   twitter: https://twitter.com/foxit
+  facebook: 
+  instagram:  
   linkedin: https://www.linkedin.com/company/fox-it_2/
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,5 +52,4 @@ representatives:
     social:
       linkedin: https://www.linkedin.com/in/sanderdorigo/
       mastodon: https://mastodon.coffee/@sander
-    description:
-      For the last decade, Sander Dorigo has been working on the (cryptographic) security of applications, systems and (financial) data streams. Sander started as a security engineer working for a variety of defense contractors and joined the financial sector as a cryptographic consultant. From there, he moved to Fox-IT where he works on certified security products for high-security customers.
+    description: For the last decade, Sander Dorigo has been working on the (cryptographic) security of applications, systems and (financial) data streams. Sander started as a security engineer working for a variety of defense contractors and joined the financial sector as a cryptographic consultant. From there, he moved to Fox-IT where he works on certified security products for high-security customers.

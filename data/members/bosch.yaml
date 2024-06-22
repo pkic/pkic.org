@@ -12,6 +12,28 @@ memberType: H
 workingGroups:
   - PQC
 
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
+
 # Social media
 social:
   twitter: https://www.twitter.com/BoschGlobal
@@ -20,4 +42,3 @@ social:
   pinterest:
   linkedin: https://www.linkedin.com/company/bosch/
   youtube: https://www.youtube.com/BoschGlobal
-

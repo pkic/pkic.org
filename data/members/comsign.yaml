@@ -8,8 +8,9 @@ description: ComSign has vast experience in providing digital signature and PKI 
 
 # membership
 memberSince: 2021-08-27
-memberType: CA
+memberType: A
 workingGroups:
+  - CA
   - PKIMM
 
 # sponsor
@@ -52,5 +53,4 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/yaireisenstein/
-    description:
-      Yair Eisenstein is the Business Development & Project Department Manager at ComSign and represents the organization at the PKI Consortium
+    description: Yair Eisenstein is the Business Development & Project Department Manager at ComSign and represents the organization at the PKI Consortium

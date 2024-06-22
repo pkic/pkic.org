@@ -8,9 +8,13 @@ description: VikingCloud provides end-to-end security and compliance solutions t
 
 # membership
 memberSince: 2014-11-13
-memberType: CA
+memberType: A
 workingGroups:
   - CA
+
+# sponsor
+sponsor:
+  level:
 
 # Blog posts
 blog:
@@ -45,5 +49,4 @@ representatives:
     social:
       twitter:
       linkedin: https://www.linkedin.com/in/andrea-h-58b72931/
-    description:
-      Andrea is a Product Manager at VikingCloud and represents the organization at the PKI Consortium.
+    description: Andrea is a Product Manager at VikingCloud and represents the organization at the PKI Consortium.

@@ -8,16 +8,31 @@ description: Eval has led the way in Brazilian information security, offering co
 
 # membership
 memberSince: 2023-09-05
-memberType: Vendor
+memberType: F
 workingGroups:
   - PKIMM
   - PQC
 
+# sponsor
+sponsor:
+  level: 
 
 # Blog posts
 blog: 
   url: https://eval.digital/en/blog/
   language: en_US
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
 
 # Social media
 social:

@@ -7,11 +7,22 @@ description: Ensuring communications and information technology secured services
 
 # membership
 memberSince: 2023-07-11
-memberType: CA
+memberType: A
 workingGroups:
   - CA
   - PQC
 
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
 press: 
   url: https://www.sts.ro/en/press-releases
   feed: 
@@ -25,6 +36,7 @@ careers:
 
 # Social media
 social:
+  twitter:
   facebook: https://www.facebook.com/telecomunicatiispeciale
   instagram: https://www.instagram.com/sts_telecomunicatii_speciale/?hl=en
   linkedin: https://www.linkedin.com/company/serviciul-de-telecomunicatii-speciale/

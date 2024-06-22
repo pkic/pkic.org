@@ -8,7 +8,7 @@ description: Discover, inventory, & control cryptography with InfoSec Global cry
 
 # membership
 memberSince: 2024-04-16
-memberType: Vendor
+memberType: F
 workingGroups: PQC
 
 # sponsor
@@ -52,4 +52,3 @@ representatives:
       twitter: 
       linkedin: https://www.linkedin.com/in/ian-curry-67084a162/
     description: Ian is the Chief Business Officer at InfoSec Global and represents the organization at the PKI Consortium.
-

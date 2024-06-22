@@ -8,9 +8,13 @@ description: With a long history of supplying digital ID and payment solutions, 
 
 # membership
 memberSince: 2021-02-03
-memberType: CA
+memberType: A
 workingGroups:
   - CA
+
+# sponsor
+sponsor:
+  level:
 
 # Blog posts
 blog:
@@ -47,5 +51,4 @@ representatives:
     social:
       twitter:
       linkedin: https://www.linkedin.com/in/chemalogo/
-    description:
-     Chema López is the Director Área Innovación and Cumplimiento y Tecnología at Firmaprofesional and represents the organization at the PKI Consortium.
+    description: Chema López is the Director Área Innovación and Cumplimiento y Tecnología at Firmaprofesional and represents the organization at the PKI Consortium.

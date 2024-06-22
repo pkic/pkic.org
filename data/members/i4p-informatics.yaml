@@ -8,7 +8,7 @@ description: i4p is a Hungarian company, who is first to offer secure multi-part
 
 # membership
 memberSince: 2021-08-27
-memberType: Vendor
+memberType: F
 workingGroups:
   - PKIMM
   - PQC
@@ -54,8 +54,7 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/rozsahegyizsolt/
-    description:
-      Zsolt Rózsahegyi is the CEO at i4p informatics and represents the organization at the PKI Consortium
+    description: Zsolt Rózsahegyi is the CEO at i4p informatics and represents the organization at the PKI Consortium
 
   - id: ferenc-peto
     name: Ferenc Pető
@@ -63,5 +62,4 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/ferenc-pet%C5%91-94667438/
-    description:
-      Ferenc Pető is the CTO at i4p informatics and represents the organization at the PKI Consortium
+    description: Ferenc Pető is the CTO at i4p informatics and represents the organization at the PKI Consortium

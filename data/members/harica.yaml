@@ -8,9 +8,13 @@ description: HARICA is the Hellenic Academic & Research Institutions Certificati
 
 # membership
 memberSince: 2019-09-30
-memberType: CA
+memberType: A
 workingGroups:
   - CA
+
+# sponsor
+sponsor:
+  level: 
 
 # Blog posts
 blog: 
@@ -45,5 +49,4 @@ representatives:
     social:
       twitter:
       linkedin: https://www.linkedin.com/in/dzacharo/
-    description:
-      Dimitris Zacharopoulos was the CA/Browser Forum Chair from 2019 till end 2020.
+    description: Dimitris Zacharopoulos was the CA/Browser Forum Chair from 2019 till end 2020 and became the chair again in 2022.

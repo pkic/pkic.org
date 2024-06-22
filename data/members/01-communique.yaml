@@ -8,7 +8,7 @@ description: Established in 1992, 01 Communique is always at the forefront of te
 
 # membership
 memberSince: 2023-09-26
-memberType: Vendor
+memberType: F
 workingGroups:
   - PQC
 
@@ -23,6 +23,18 @@ blog:
   url: https://blog.01com.com/wp/
   feed: https://blog.01com.com/wp/?feed=rss2
   language: en_US
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
 
 # Social media
 social:
