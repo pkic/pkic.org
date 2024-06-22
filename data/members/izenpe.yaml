@@ -8,9 +8,13 @@ description: "Izenpe is a project promoted by the Basque Government and the Basq
 
 # membership
 memberSince: 2021-02-12
-memberType: CA
+memberType: A
 workingGroups:
   - CA
+
+# sponsor
+sponsor:
+  level: 
 
 # Blog posts
 blog:
@@ -40,8 +44,7 @@ social:
 
 # Here you can list those who represent the member
 representatives:
-  - id: toni-saez
-    name: Toni Sáez
+  - name: Toni Sáez
     role: Technical Department Manager (CTO)
     social:
       twitter:
@@ -49,8 +52,7 @@ representatives:
     description:
       Toni Saez is the Izenpe Technical Manager and represents Izenpe at the PKI Consortium.
       
-  - id: oscar-garcia
-    name: Oscar García
+  - name: Oscar García
     role: Chief Security Officer (CISO)
     social:
       twitter:

@@ -8,10 +8,33 @@ description: Logius manages PKIoverheid, which is the name for the PKI designed 
 
 # membership
 memberSince: 2021-06-22
-memberType: Government
+memberType: H
+  #Government
 workingGroups:
   - PKIMM 
   - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
 
 # Social media
 social:
@@ -19,4 +42,4 @@ social:
   facebook: 
   instagram: 
   linkedin: https://nl.linkedin.com/company/logius
-  youtube: 
+  youtube:

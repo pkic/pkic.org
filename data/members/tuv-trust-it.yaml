@@ -10,12 +10,10 @@ description: For many years the TÜV TRUST IT has been a successful IT-TÜV ente
 memberSince: 2021-06-29
 memberType: D
 workingGroups:
-  
 
 # sponsor
-#sponsor:
-#  level: 
-
+sponsor:
+  level: 
 
 # Blog posts
 blog: 
@@ -53,5 +51,4 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/clemens-wanko-0947a5210/
-    description:
-      Clemens is the head of the conformity assessment body (CAB) at TUV AUSTRIA CERT and vice chair of the European accredited eIDAS/ETSI auditors in the ACAB council and is highly interested in harmonized secure interpretatiion and implementation of legal requirements and normative standards.
+    description: Clemens is the head of the conformity assessment body (CAB) at TUV AUSTRIA CERT and vice chair of the European accredited eIDAS/ETSI auditors in the ACAB council and is highly interested in harmonized secure interpretatiion and implementation of legal requirements and normative standards.

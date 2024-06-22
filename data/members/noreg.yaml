@@ -8,9 +8,8 @@ description: Noreg is a Hungarian private company dedicated to provide IT securi
 
 # membership
 memberSince: 2021-09-02
-memberType: Vendor
+memberType: F
 workingGroups:
-  - 
 
 # sponsor
 sponsor:
@@ -52,6 +51,4 @@ representatives:
     role: CEO
     social:
       linkedin: https://www.linkedin.com/in/k%C5%91r%C3%B6s-zsolt-88615685/
-    description:
-      Zsolt Kőrös is the CEO at Noreg and represents the company in the PKI Consortium.
-
+    description: Zsolt Kőrös is the CEO at Noreg and represents the company in the PKI Consortium.

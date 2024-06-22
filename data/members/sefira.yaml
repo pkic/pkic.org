@@ -10,7 +10,28 @@ description: We specialize in the development and delivery of our own OBELISK pr
 memberSince: 2023-01-23
 memberType: G
 workingGroups:
-  
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
 
 # Social media
 social:
@@ -20,4 +41,3 @@ social:
   pinterest:
   linkedin: https://www.linkedin.com/company/sefira
   youtube: 
-

@@ -11,3 +11,33 @@ memberSince: 2021-09-07
 memberType: Government
 workingGroups:
   - PKIMM 
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram:
+  linkedin: 
+  youtube: 

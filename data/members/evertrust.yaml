@@ -8,9 +8,13 @@ description: "EVERTRUST is a French software vendor specialized in a key sector 
 
 # membership
 memberSince: 2023-09-05
-memberType: Vendor
+memberType: F
 workingGroups:
   - PQC
+
+# sponsor
+sponsor:
+  level: 
 
 # Blog posts
 blog: 
@@ -48,5 +52,4 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/alexandreaufrere/
-    description:
-      Alexandre is the CTO of EVERTRUST and one of the co-founders of the company. He has more than 15 years of experience in the digital trust field, and represents EVERTRUST at the PKI Consortium.
+    description: Alexandre is the CTO of EVERTRUST and one of the co-founders of the company. He has more than 15 years of experience in the digital trust field, and represents EVERTRUST at the PKI Consortium.

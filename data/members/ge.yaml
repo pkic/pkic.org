@@ -10,7 +10,40 @@ description: The General Electric Company (GE) is an American multinational comp
 memberSince: 2023-05-01
 memberType: H
 workingGroups:
-  
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
 
 # Social media
 social:

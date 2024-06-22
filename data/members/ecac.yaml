@@ -8,13 +8,13 @@ description: ECAC, Government of Pakistan is a regulatory body for Certificate S
 
 # membership
 memberSince: 2021-07-20
-memberType: Regulator
+memberType: C
+  #Regulator
 workingGroups:
-  - 
 
 # sponsor
-#sponsor:
-#  level: 
+sponsor:
+  level: 
 
 # Blog posts
 blog: 
@@ -52,6 +52,4 @@ representatives:
     social:
       twitter: https://twitter.com/rameezrehman408
       linkedin: https://www.linkedin.com/in/rameezrehman408/
-    description:
-      Syed Rameez Rehman is currently working as IT Security Auditor in Islamabad at Electronic Certification Accreditation Council, Government of Pakistan. He has worked on multiple Research and Development projects in the domain of Hardware Security, Smart Devices (Android) Security, Malware Detection/Analysis and Augmented Reality.
-
+    description: Syed Rameez Rehman is currently working as IT Security Auditor in Islamabad at Electronic Certification Accreditation Council, Government of Pakistan. He has worked on multiple Research and Development projects in the domain of Hardware Security, Smart Devices (Android) Security, Malware Detection/Analysis and Augmented Reality.

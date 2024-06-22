@@ -56,7 +56,7 @@ representatives:
     social:
       twitter: https://twitter.com/jplomas
       linkedin: https://www.linkedin.com/in/jplomas/
-    description:
+    description: |
       JP has been writing code for open source and commercial projects for over 25 years and is a strong advocate for open-source and emerging technologies. He was a core developer and systems engineer for the QRL project from 2016 - 2022 and still makes open source contributions to the protocol.
 
       As a doctor, he still practices medicine as a Consultant in Anaesthesia and Intensive Care Medicine.
@@ -66,7 +66,7 @@ representatives:
     social:
       twitter: https://twitter.com/thecyyber
       linkedin: https://www.linkedin.com/in/cyyber
-    description:
+    description: |
       Kaushal Kumar Singh is an experienced software developer working with cutting-edge technologies including Blockchain, Big Data & Machine learning. He also has experience in algorithmic trading development including for High Frequency Trading using the FIX Protocol. He has contributed to open source projects including QRL, Google Protobuf & the Data Transfer Project.
 
       This experience and expertise is backed by a Dual Degree (B. Tech & MBA) with a focus in Business Technology in CSE from KIIT University.

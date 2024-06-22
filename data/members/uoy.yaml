@@ -8,7 +8,8 @@ description: The University of York is a collegiate research university in York,
 
 # membership
 memberSince: 2024-01-09
-memberType: University
+memberType: H
+  #University
 workingGroups:
 
 # sponsor
@@ -50,6 +51,4 @@ representatives:
     role: Assistant professor
     social:
       linkedin: https://www.linkedin.com/in/rpam
-    description:
-      Roberto Metere is a seasoned Cyber Security and Privacy professional currently lecturing at the University of York, proud member of the Cyber Security and Privacy Research Group. With a PhD in Computer and Information Systems Security, his expertise lies in formal verification, ensuring the watertight security of cryptographic structures.
-
+    description: Roberto Metere is a seasoned Cyber Security and Privacy professional currently lecturing at the University of York, proud member of the Cyber Security and Privacy Research Group. With a PhD in Computer and Information Systems Security, his expertise lies in formal verification, ensuring the watertight security of cryptographic structures.

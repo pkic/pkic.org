@@ -29,7 +29,7 @@ press:
 
 # Careers
 careers: 
-  url: 
+  url: https://secondfactor.com/careers
   feed: 
   language: en_US
 
@@ -51,4 +51,4 @@ representatives:
     social:
       twitter: 
       linkedin: 
-    description: Raymond is the President & CEO at Second Factor, Inc. and represents the organization at the PKI Consortium.
+    description: Raymond Shanley is the President & CEO at Second Factor, Inc. and represents the organization at the PKI Consortium.

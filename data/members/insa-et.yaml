@@ -11,7 +11,28 @@ description: The Information Network Security Administration was established for
 memberSince: 2023-01-16
 memberType: H
 workingGroups:
-  
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
 
 # Social media
 social:
@@ -21,4 +42,3 @@ social:
   pinterest:
   linkedin: 
   youtube: https://www.youtube.com/channel/UCTc5kO3p6xAQSObDdx_Eg3w
-

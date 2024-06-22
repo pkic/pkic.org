@@ -13,11 +13,27 @@ workingGroups:
  - CA
  - PQC
 
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
 # Press Releases
 press: 
   url: https://www.carillon.ca/en/news-and-events.php
   feed: 
   language: en_US
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
 
 # Social media
 social:
@@ -27,4 +43,3 @@ social:
   pinterest: 
   linkedin: https://www.linkedin.com/company/carillon-information-security
   youtube: 
-

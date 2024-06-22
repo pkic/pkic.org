@@ -8,7 +8,7 @@ description: Codegic specializes in innovative PKI and Digital Signatures soluti
 
 # membership
 memberSince: 2023-05-01
-memberType:
+memberType: F
 workingGroups:
 
 # sponsor
@@ -20,6 +20,18 @@ blog:
   url: https://www.codegic.com/blogs/
   feed:
   language: en_US
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
 
 # Social media
 social:

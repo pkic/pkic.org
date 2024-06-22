@@ -8,7 +8,7 @@ description: Since 2001, Ascertia has been a global leader in delivering high-tr
 
 # membership
 memberSince: 2021-04-26
-memberType: Vendor
+memberType: F
 workingGroups:
   - PKIMM
   - PQC
@@ -53,6 +53,4 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/mike-hathaway-7844905/
-    description:
-      Mike Hathaway is a seasoned PKI specialist with over 20 years’ experience. Mike spent more than a decade at Entrust and has held positions at EDS working as part of the Atlas consortium and at PriceWaterHouseCoopers beTRUSTed. He brings his extensive expertise and knowledge to the Ascertia team and applies his experience to drive further PKI innovation.
-
+    description: Mike Hathaway is a seasoned PKI specialist with over 20 years’ experience. Mike spent more than a decade at Entrust and has held positions at EDS working as part of the Atlas consortium and at PriceWaterHouseCoopers beTRUSTed. He brings his extensive expertise and knowledge to the Ascertia team and applies his experience to drive further PKI innovation.

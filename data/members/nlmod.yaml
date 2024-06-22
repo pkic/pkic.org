@@ -8,10 +8,14 @@ description: The Dutch Ministry of Defence (NL-MoD) has created an internal publ
 
 # membership
 memberSince: 2021-07-06
-memberType: CA
+memberType: A
 workingGroups:
   - CA
-  
+
+# sponsor
+sponsor:
+  level: 
+
 # Blog posts
 blog: 
   url: 
@@ -48,6 +52,4 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/ing-fekke-bakker-msc-cgeit-cissp-cisa-28024912/
-    description: 
-      Fekke Bakker is the Operational TSP Manager at the Dutch Ministry of Defence and represents the organization at the PKI Consortium.
-      
+    description: Fekke Bakker is the Operational TSP Manager at the Dutch Ministry of Defence and represents the organization at the PKI Consortium.

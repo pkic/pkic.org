@@ -8,8 +8,9 @@ description: Camerfirma is the digital certification and electronic signature au
 
 # membership
 memberSince: 2022-05-06
-memberType: CA
+memberType: A
 workingGroups:
+ - CA
 
 # sponsor
 sponsor:
@@ -52,4 +53,3 @@ representatives:
        twitter: 
        linkedin: https://www.linkedin.com/in/acarrata/
      description:
-      

@@ -9,7 +9,7 @@ description:
 
 # membership
 memberSince: 2022-04-11
-memberType: Vendor
+memberType: F
 workingGroups:
   - CA
   - PKIMM
@@ -55,7 +55,7 @@ representatives:
     social:
       twitter: 
       linkedin:  https://www.linkedin.com/in/edwin-zhai-119992a9/
-    description: 
+    description: |
       Edwin Zhai is the CEO of TrustAsia and represents the organization at the PKI Consortium. Prior to TrustAsia, he was the Technical Director at GlobalSign China and was responsible for team building in China. 
       Edwin has more than fifteen years of experience in the information security industry with expertise knowledge of PKI and SSL/TLS.
    
@@ -64,7 +64,7 @@ representatives:
     social:
       twitter:
       linkedin:
-    description:
+    description: |
       With over twenty years of experience in PKI/CA, Bruce Wei has strong familiarity with PKI/CA operation management and audit, e-signature application, and SSL/TLS certificates both in China and abroad. 
       As a qualified expert in China Ministry of Industry and Information Technology, Bruce has participated in the development of several electronic authentication related standards. 
       He is also knowledgeable about TSP (PKI/CA) security and compliance management, and regulations of e-signature and digital identity in Europe and the USA.
@@ -74,7 +74,7 @@ representatives:
     social:
       twitter: 
       linkedin: 
-    description: 
+    description: |
       Rollin Yu has extensive expertise in information security and PKI/CA with more than 10 years of experience in the industry. 
       Since 2015, he has provided consultancy, training, evaluation and implementation services in the PKI and CA spaces for organizations from a wide variety of areas including finance, education, telecommunication, public cloud, etc. 
       Rollin is well acquainted with industrial standards and development trends, and has successfully led the cooperation with over ten CAs globally.

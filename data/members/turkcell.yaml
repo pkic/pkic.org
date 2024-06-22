@@ -13,8 +13,8 @@ workingGroups:
  - PQC
 
 # sponsor
-# sponsor:
-#  level: 
+sponsor:
+  level: 
 
 # Press Releases
 press: 
@@ -45,7 +45,7 @@ representatives:
     role: 5G/6G Research Engineer
     social:
       linkedin: https://www.linkedin.com/in/buseebrem/
-    description:
+    description: |
       Buse Bilgin is an accomplished Next Generation R&D Engineer based in Istanbul, Turkey, specializing in Electrical & Electronics Engineering with a focus on 5G and 6G technologies. With a Master's degree from Koç University and a Bachelor's 
       degree from Istanbul Bilgi University, Buse has excelled academically and professionally. At Turkcell Technology, she plays a pivotal role in managing EU projects related to next-generation wireless technologies. As a co-founder and ML-Engineer 
       at Vrables Lab, she contributed to the development of advanced photonic-based diagnostic platforms and received a prestigious TUBITAK BiGG grant. Recognized for her work with awards like the KUImpact Patent Competition 2022, Buse is also a passionate 

@@ -8,15 +8,19 @@ description: Microsec Ltd. is a mid-sized qualified trust service provider (QTSP
 
 # membership
 memberSince: 2021-03-02
-memberType: CA
+memberType: A
 workingGroups:
   - CA
+
+# sponsor
+sponsor:
+  level: 
 
 # Blog posts
 blog:
   url: https://www.microsec.hu/en/pki-blog
   feed: 
-  language: 
+  language: en_US
 
 # Press Releases
 press: 
@@ -28,7 +32,7 @@ press:
 careers: 
   url: https://www.microsec.hu/en/career
   feed: 
-  language:
+  language: en_US
 
 # Social media
 social:
@@ -46,5 +50,4 @@ representatives:
     social:
       twitter:
       linkedin: https://www.linkedin.com/in/s%C3%A1ndor-sz%C5%91ke-05b28749/
-    description:
-      Dr. Sándor Szőke is the Deputy Director of eIDAS Trust Services at Microsec and represents the organization at the PKI Consortium.
+    description: Dr. Sándor Szőke is the Deputy Director of eIDAS Trust Services at Microsec and represents the organization at the PKI Consortium.

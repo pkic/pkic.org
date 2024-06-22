@@ -12,6 +12,28 @@ memberType: A
 workingGroups: 
   - CA
 
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
+
 # Social media
 social:
   twitter: https://twitter.com/KIR__pl
@@ -27,7 +49,4 @@ representatives:
     social:
       twitter:
       linkedin: https://www.linkedin.com/in/waldemarbrzozowski/
-    description:
-      Waldemar Brzozowski is an experienced project manager and security officer. He has worked on multiple business projects in the areas of telecommunication, banking systems, payment systems and public key infrastructure (PKI), allowing him to develop advanced professional skills in the information security technology (cybersecurity, PKI, risk management, hardware security modules – HSMs – Thales, Utimaco and Entrust), as well as software development, architecture and integration. Waldemar represents KIR at the PKI Consortium.
-
-
+    description: Waldemar Brzozowski is an experienced project manager and security officer. He has worked on multiple business projects in the areas of telecommunication, banking systems, payment systems and public key infrastructure (PKI), allowing him to develop advanced professional skills in the information security technology (cybersecurity, PKI, risk management, hardware security modules – HSMs – Thales, Utimaco and Entrust), as well as software development, architecture and integration. Waldemar represents KIR at the PKI Consortium.

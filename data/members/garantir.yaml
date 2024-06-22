@@ -8,9 +8,8 @@ description: Garantir is dedicated to providing the most advanced and most versa
 
 # membership
 memberSince: 2021-10-11
-memberType: Vendor
+memberType: F
 workingGroups:
-  - 
 
 # sponsor
 sponsor:
@@ -53,13 +52,11 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/kieran-miller-0776136/
-    description:
-      Kieran Miller is Chief Architect at Garantir. Kieren is specialized in enterprise digital signature and asymmetric cryptography applications
+    description: Kieran Miller is Chief Architect at Garantir. Kieren is specialized in enterprise digital signature and asymmetric cryptography applications
 
   - name: Chris Van Genderen
     role: Senior Security Architect
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/chris-van-genderen-4677678/
-    description:
-     Chris Van Genderen is Senior Security Architect at Garantir and represents the organization at the PKI Consortium
+    description: Chris Van Genderen is Senior Security Architect at Garantir and represents the organization at the PKI Consortium

@@ -8,9 +8,27 @@ description: E-Tugra produces more than 3 million Digital Certificates, over 500
 
 # membership
 memberSince: 2022-05-23
-memberType: CA
+memberType: A
 workingGroups:
-  
+  - CA
+
+# Blog posts
+blog: 
+  url:
+  feed: 
+  language:
+
+# Press Releases
+press: 
+  url:
+  feed: 
+  language:
+
+# Careers
+careers: 
+  url:
+  feed: 
+  language:
 
 # Social media
 social:
@@ -19,4 +37,3 @@ social:
   instagram: 
   linkedin: https://www.linkedin.com/company/etugra
   youtube: https://www.youtube.com/channel/UCT2p5mmROw7oD8IyPAsq3cQ
-
