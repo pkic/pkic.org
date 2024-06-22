@@ -1,17 +1,16 @@
-id: resquant
-name: Resquant
-slogan: Stay secure in the era of quantum computers
-website: https://www.resquant.com
+id: smartcryptosolutions
+name: SmartCrypto
+slogan:
+website: https://smartcryptosolutions.com
 
 # Short description, longer content can be placed in `content/members/`
-description: ResQuant is a deep-tech, cybersecurity company operating on the border of science and business. We exist to protect sensitive data worldwide from current and future threats.
+description: SmartCrypto smart-trusted and affordable data, identity and payment security solutions focused on Africa and the 1Billion.
 
 # membership
-memberSince: 2024-01-09
-memberType: F
+memberSince: 2024-02-20
+memberType: H
 workingGroups:
-  - PQC
-  
+
 # sponsor
 sponsor:
   level: 
@@ -19,7 +18,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: 
+  feed: https://smartcryptosolutions.com/feed/
   language: en_US
 
 # Press Releases
@@ -39,7 +38,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: https://www.linkedin.com/company/id-secure/
+  linkedin: https://www.linkedin.com/company/smartcrypto-solutions/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -47,9 +46,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Sven Zagala
+  - name: Dayle Wheeler
     role: Managing Director
     social:
       twitter: 
-      linkedin: 
-    description: Sven is the Managing Director at Resquant Sp. z o.o. and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/daylewheeler/
+    description: Dayle is the Managing Director at SmartCrypto and represents the organization at the PKI Consortium.

@@ -1,0 +1,54 @@
+id: dastorllc
+name: DāSTOR
+slogan:
+website: https://dastorllc.com
+
+# Short description, longer content can be placed in `content/members/`
+description: DāSTOR provides enterprise data center solutions that leverage foundational infrastructure and interconnectivity to drive scalable and reliable digital services. With DāSTOR, customers seamlessly connect to partners and clients to drive better digital outcomes.
+
+# membership
+memberSince: 2024-04-16
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://dastorllc.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://dastorllc.com/news/
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/dastorllc/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Erik Bols
+    role: International Business Solutions
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/erik-ej-bols-b93953236/
+    description: Erik is the International Business Solutions at DāSTOR and represents the organization at the PKI Consortium.

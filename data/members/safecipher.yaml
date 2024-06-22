@@ -1,17 +1,16 @@
-id: resquant
-name: Resquant
-slogan: Stay secure in the era of quantum computers
-website: https://www.resquant.com
+id: safecipher
+name: Safecipher
+slogan: Preparing for Post Quantum Cryptography
+website: https://pkiconsultants.safecipher.com/index.html
 
 # Short description, longer content can be placed in `content/members/`
-description: ResQuant is a deep-tech, cybersecurity company operating on the border of science and business. We exist to protect sensitive data worldwide from current and future threats.
+description: SafeCipher focuses on Public Key Infrastructure (PKI), Hardware Security Modules (HSM), and Quantum-Resistant Cryptography.
 
 # membership
-memberSince: 2024-01-09
-memberType: F
+memberSince: 2024-04-16
+memberType: H
 workingGroups:
-  - PQC
-  
+
 # sponsor
 sponsor:
   level: 
@@ -19,7 +18,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: 
+  feed: https://pkiconsultants.safecipher.com/feed.html
   language: en_US
 
 # Press Releases
@@ -39,7 +38,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: https://www.linkedin.com/company/id-secure/
+  linkedin: 
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -47,9 +46,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Sven Zagala
-    role: Managing Director
+  - name: Stephen Monti
+    role: Founder & CEO
     social:
       twitter: 
-      linkedin: 
-    description: Sven is the Managing Director at Resquant Sp. z o.o. and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/company/safecipher-ltd
+    description: Stephen is the Founder & CEO at Safecipher and represents the organization at the PKI Consortium.
