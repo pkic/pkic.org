@@ -1,0 +1,54 @@
+id: zenithtec
+name: ZenithTec Solutions **Website**:
+slogan:
+website: undefined
+
+# Short description, longer content can be placed in `content/members/`
+description: I am an individual cybersecurity consultant, primarily focus on product security architecture. PKI is part of my day job activities
+
+# membership
+memberSince: 2024-06-26
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Bharat Parvathaneni
+    role: Security Architect
+    social:
+      twitter: 
+      linkedin: 
+    description: Bharat is the Security Architect at ZenithTec Solutions **Website**: and represents the organization at the PKI Consortium.
