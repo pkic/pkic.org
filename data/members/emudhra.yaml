@@ -47,15 +47,15 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Suchindran C S
-    role: Senior Consultant - GRC
+  - name: Kaushik Srinivasan
+    role: Co-Founder - CFA
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/suchindran-c-s-a991881/
-    description: Suchindran is the Senior Consultant - GRC at eMudhra and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/kaushik85/
+    description: Kaushik Srinivasan is the Co-Founder - CFA at eMudhra and represents the organization at the PKI Consortium.
   - name: Scott Rea
     role: Executive Vice President - Global Strategic Advisor
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/scott-rea-cissp-19399/
-    description: Scott is the Executive Vice President - Global Strategic Advisor at eMudhra and represents the organization at the PKI Consortium.
+    description: Scott Rea is the Executive Vice President - Global Strategic Advisor at eMudhra and represents the organization at the PKI Consortium.
