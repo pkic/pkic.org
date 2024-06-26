@@ -4,7 +4,8 @@ slogan:
 website: https://camgovca.cm/
 
 # Short description, longer content can be placed in `content/members/`
-description: ANTIC  is the  Root Certification Authorithy and Governement  Certification Authorithy of Cameroon. ANTIC issues electronic certificates that ensure four security services notably: the authentication of users, integrity of data, confidentiality of exchanges and the non-repudiation of messages exchanged during online transactions.
+description: |
+  ANTIC is the Root Certification Authorithy and Governement Certification Authorithy of Cameroon. ANTIC issues electronic certificates that ensure four security services notably: the authentication of users, integrity of data, confidentiality of exchanges and the non-repudiation of messages exchanged during online transactions.
 
 # membership
 memberSince: 2024-06-22
