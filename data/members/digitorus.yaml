@@ -1,10 +1,10 @@
 id: digitorus
 name: Digitorus
-slogan:
+slogan: Specialist in Public Key Infrastructure (PKI), Digital Signatures, and Trustworthy Systems (TWS)
 website: https://www.digitorus.com
 
 # Short description, longer content can be placed in `content/members/`
-description: Digitorus is a software development and consultancy company specialized in cybersecurity and identity management
+description: Digitorus is a software development and consultancy company specialized in Public Key Infrastructure (PKI), Digital Signatures, and Trustworthy Systems (TWS) that require a high level of confidentiality, integrity, and availability.
 
 # membership
 memberSince: 2024-06-26
@@ -50,5 +50,5 @@ representatives:
     role: Founder and CEO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
     description: Paul is the Founder and CEO at Digitorus and represents the organization at the PKI Consortium.
