@@ -19,26 +19,26 @@ sponsor:
 blog: 
   url: 
   feed: https://www.soluti.com.br/feed/
-  language: en_US
+  language: pt_BR
 
 # Press Releases
 press: 
   url: 
   feed: 
-  language: en_US
+  language: pt_BR
 
 # Careers
 careers: 
   url: 
   feed: 
-  language: en_US
+  language: pt_BR
 
 # Social media
 social:
   twitter: 
   facebook: 
   instagram: https://www.instagram.com/solutidigital/
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/solutidigital/
   youtube: https://www.youtube.com/c/SolutiDigital
 
 # Here you can list those who represent or have represented the member.
@@ -50,5 +50,6 @@ representatives:
     role: CIO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/alexandrehtorres/
     description: Alexandre is the CIO at Soluti Negócios Inteligentes Ltda and represents the organization at the PKI Consortium.
+    hidden: true
