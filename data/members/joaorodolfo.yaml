@@ -1,0 +1,55 @@
+id: joaorodolfo
+name: Cyber Security Specialist in Brazil
+slogan:
+website: https://joaorodolfo.wordpress.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Tecnologia, Segurança da informação e diversão
+
+# membership
+memberSince: 2024-06-22
+memberType: H
+# Consultant
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://joaorodolfo.wordpress.com/feed/
+  language: pt_BR
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: pt_BR
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: pt_BR
+
+# Social media
+social:
+  twitter: https://twitter.com/joaorodolfo
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Joao Rodolfo Vieira da Silva
+    role: Cyber Security Specialist - PKI Subject
+    social:
+      twitter: https://twitter.com/joaorodolfo
+      linkedin: https://www.linkedin.com/in/joaorodolfo/
+    description: Joao Rodolfo is the Cyber Security Specialist in Brazil and represents the organization at the PKI Consortium.
