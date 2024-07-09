@@ -1,44 +1,46 @@
-id: appviewx
+id: AVX
 name: AppViewX
-slogan:
+slogan: Automate certificate lifecycle management with AppViewX for efficiency, security, and compliance!
 website: https://www.appviewx.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: AppViewX certificate lifecycle management automation solution for Certificates and keys PKI-as-a-Service
+description: Using AppViewX, the Most Advanced Certificate Lifecycle Management and PKI Platform - Prevent outages, eliminate security weaknesses and reduce risk while accelerating innovation and growth across hybrid multi-cloud environments. 
 
 # membership
 memberSince: 2024-06-18
 memberType: F
 workingGroups:
+  - PKIMM
+  - PQC
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog: 
-  url: 
-  feed: https://www.appviewx.com/feed/
+  url: https://www.appviewx.com/resources/resource-center/
+  feed: https://www.appviewx.com/resources/resource-center/feed
   language: en_US
 
 # Press Releases
 press: 
-  url: 
-  feed: 
+  url: https://www.appviewx.com/company/in-the-news/
+  feed: https://www.appviewx.com/company/in-the-news/feed
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://www.appviewx.com/company/careers/
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: https://twitter.com/appviewx
+  twitter: https://x.com/appviewx
   facebook: https://www.facebook.com/AppViewX.Official/
-  instagram: 
-  linkedin: https://www.linkedin.com/company/appviewx/
+  instagram: https://www.instagram.com/appviewx.official/
+  linkedin: https://www.linkedin.com/company/appviewx/mycompany/verification/
   youtube: https://www.youtube.com/channel/UC7bxiyRmuHNtTh_PMMSNVxw
 
 # Here you can list those who represent or have represented the member.
@@ -46,9 +48,29 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Harshana Moorthy
-    role: Lead Principle Solutions Architect at AppViewX
+  - name: Muralidharan Palanisamy
+    role: Chief Solutions Officer 
     social:
       twitter: 
-      linkedin: 
-    description: Harshana is the Lead Principle Solutions Architect at AppViewX at AppViewX and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/muralidharanpalanisamy/
+    description: Murali is a veteran enterprise technology influencer, overseeing Innovation, Strategy and Product Direction to enable Customers in achieving value using AppViewX platform.
+  - name: Harshana Moorthy 
+    role: Lead Principle Solutions architect
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/harshana-moorthy-savvy101/
+    description: A seasoned cybersecurity pre-sales leader with deep expertise in PKI implementation, and secure identity solutions.  Drives strategic growth through understanding customer's compliance requirements and delivering Machine Identity Solutions 
+  - name: Ganesh Gopalan
+    role: General Manager & Vice President - Identity Security for PKI & CLM 
+    social:
+      linkedin: https://www.linkedin.com/in/ganesh-gopalan-749746256/
+    description: Possess strong understanding of Cryptography and PKI; Implemented PKI related RFCs like 5280 (Digital Certificate and CRL), 5652 (PKCS#7), 4210 (CMP), 4211 (CRMF), 6960 (OCSP), 3161 (TSA), 5055 (SCVP), 5175 (XML Signatures), ACME (RFC 8555), KMIP, OAUTH 2.0, JSON Web Signatures and Encryption
+  - name: Christina Simko
+    role: Vice President of Product Marketing
+    social:
+      linkedin: https://www.linkedin.com/in/csimko/
+    description: creating and executing high growth marketing strategies and programs for cybersecurity Enterprise. 
+  - name: Cally Fritsch
+    role: Director of Product Marketing
+    hidden: true
+
