@@ -39,7 +39,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/antic/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -51,5 +51,5 @@ representatives:
     role: Security Engineer Information Systemes
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/gbithicki-ndanga-brice-ars%C3%A8ne-1292a5191/
     description: Ndanga is the Security Engineer Information Systemes at ANTIC and represents the organization at the PKI Consortium.
