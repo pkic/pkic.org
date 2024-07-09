@@ -1,5 +1,5 @@
-id: wordpress
-name: Cyber Security Specialist into Bank in Brazil
+id: joaorodolfo
+name: Cyber Security Specialist in Brazil
 slogan:
 website: https://joaorodolfo.wordpress.com
 
@@ -9,6 +9,7 @@ description: Tecnologia, Segurança da informação e diversão
 # membership
 memberSince: 2024-06-22
 memberType: H
+# Consultant
 workingGroups:
 
 # sponsor
@@ -19,19 +20,19 @@ sponsor:
 blog: 
   url: 
   feed: https://joaorodolfo.wordpress.com/feed/
-  language: en_US
+  language: pt_BR
 
 # Press Releases
 press: 
   url: 
   feed: 
-  language: en_US
+  language: pt_BR
 
 # Careers
 careers: 
   url: 
   feed: 
-  language: en_US
+  language: pt_BR
 
 # Social media
 social:
@@ -49,6 +50,6 @@ representatives:
   - name: Joao Rodolfo Vieira da Silva
     role: Cyber Security Specialist - PKI Subject
     social:
-      twitter: 
-      linkedin: 
-    description: Joao Rodolfo is the Cyber Security Specialist - PKI Subject at Cyber Security Specialist into Bank in Brazil and represents the organization at the PKI Consortium.
+      twitter: https://twitter.com/joaorodolfo
+      linkedin: https://www.linkedin.com/in/joaorodolfo/
+    description: Joao Rodolfo is the Cyber Security Specialist in Brazil and represents the organization at the PKI Consortium.
