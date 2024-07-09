@@ -1,0 +1,54 @@
+id: zenithtec
+name: ZenithTec Solutions
+slogan:
+website:
+
+# Short description, longer content can be placed in `content/members/`
+description: ZenithTec Solutions is a cybersecurity consultancy founded by Bharat Parvathaneni, an experienced cybersecurity consultant and architect.
+
+# membership
+memberSince: 2024-06-26
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Bharat Parvathaneni
+    role: Security Architect
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/bharat-parvathaneni-ccsp-csslp-63b0a312/
+    description: Bharat is the Security Architect at ZenithTec Solutions and represents the organization at the PKI Consortium.
