@@ -10,6 +10,7 @@ description: Explore Microsoft products and services for your home or business. 
 memberSince: 2024-06-18
 memberType: A
 workingGroups:
+  - PKIMM
 
 # sponsor
 sponsor:
@@ -17,29 +18,29 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
-  feed: 
+  url: https://www.microsoft.com/en-us/security/blog/
+  feed: https://www.microsoft.com/en-us/security/blog/feed/
   language: en_US
 
 # Press Releases
 press: 
-  url: 
-  feed: 
+  url: https://news.microsoft.com/category/press-releases/
+  feed: https://news.microsoft.com/source/feed/
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://careers.microsoft.com/
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: https://twitter.com/microsoft
+  twitter: https://twitter.com/Microsoft
   facebook: https://www.facebook.com/Microsoft
-  instagram: 
+  instagram: https://www.instagram.com/microsoft
   linkedin: https://www.linkedin.com/company/microsoft
-  youtube: 
+  youtube: https://www.youtube.com/Microsoft
 
 # Here you can list those who represent or have represented the member.
 #
@@ -47,8 +48,8 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Daniel Cervera
-    role: Senior Program Manager
+    role: Senior Security Program Manager
     social:
-      twitter: 
-      linkedin: 
-    description: Daniel is the Senior Program Manager at Microsoft Corp. and represents the organization at the PKI Consortium.
+      twitter: https://twitter.com/cervera
+      linkedin: https://www.linkedin.com/in/cryptopki/
+    description: Daniel Cervera is the co-chair of Microsoft's PKI Policy Working Group, responsible for maintaining the company's internal PKI security standards. He collaborates with product teams across a range of offerings, from Azure to Xbox, to drive adherence to these standards.
