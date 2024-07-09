@@ -9,6 +9,7 @@ description: I help companies build out technical infrastructure to support ecom
 # membership
 memberSince: 2024-06-26
 memberType: H
+# Consultant
 workingGroups:
 
 # sponsor
@@ -38,7 +39,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/common-crypto-authority/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -50,5 +51,5 @@ representatives:
     role: Technical Architect
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/troyjanderson/
     description: Troy is the Technical Architect at Common Crypto Authority and represents the organization at the PKI Consortium.
