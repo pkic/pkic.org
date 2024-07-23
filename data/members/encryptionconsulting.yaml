@@ -46,10 +46,10 @@ social:
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
-representatives:
-  - name: Puneet Singh
-    role: President of Encryption Consulting
-    social:
-      twitter: 
-      linkedin: https://www.linkedin.com/in/puneet-singh-52108a9/
-    description: Puneet has spent the last 16+ years helping enterprises around the world better address the Data Protection and Privacy challenge through innovative technology solution design and delivery. Puneet is passionate about helping organizations innovative their Data Protection and Privacy program, helping organizations deal with the cyber talent shortage through automation, and advising senior leadership on communicating and reporting cybersecurity risk and effectiveness.
+#representatives:
+#  - name: Puneet Singh
+#    role: President of Encryption Consulting
+#    social:
+#      twitter: 
+#      linkedin: https://www.linkedin.com/in/puneet-singh-52108a9/
+#    description: Puneet has spent the last 16+ years helping enterprises around the world better address the Data Protection and Privacy challenge through innovative technology solution design and delivery. Puneet is passionate about helping organizations innovative their Data Protection and Privacy program, helping organizations deal with the cyber talent shortage through automation, and advising senior leadership on communicating and reporting cybersecurity risk and effectiveness.
