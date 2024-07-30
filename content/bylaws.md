@@ -5,7 +5,7 @@ draft: false
 title: Bylaws
 
 heroTitle: Bylaws of the Public Key Infrastructure Consortium
-heroDescription: "Effective as of: May 1, 2022"
+heroDescription: "Effective as of: August 1, 2024"
 
 menu: 
     footer:
@@ -48,7 +48,13 @@ Organizations are eligible to join the PKI Consortium as members if they can dem
 - **(e)** Standards defining organizations;
 - **(f)** Organizations that build PKI software, cryptographic devices;
 - **(g)** Organizations that build software used by relying parties;
-- **(h)** Interested parties that are organizations or individuals that contribute to PKI based services or perform PKI related research (e.g., consultancy, universities, research institutions, security researchers). Members in this category are not eligible to vote or to be elected for the Executive Council or Board of Directors.
+- **(h)** Interested parties (Members in this category are not eligible to vote or to be elected for the Executive Council or Board of Directors).
+  - **1.** Government entities with a general interest in PKI or cryptography, but who do not fall under category (c).
+  - **2.** Organizations providing PKI or cryptography consultancy services.
+  - **3.** Organizations conducting PKI or cryptography-related research.
+  - **4.** Universities offering academic programs in PKI or cryptography.
+  - **5.** PhD students actively researching PKI or cryptography.
+  - **6.** Independent consultants or researchers with demonstrated PKI or cryptography expertise, as evidenced by relevant certifications, publications, or project experience and who are not employed by an organization.
 
 All members will be listed on the PKIC website with name and logo (if any). Individuals will be listed by name and can be linked to a personal website or profile such as on LinkedIn. Profile pages (for organizations) and brief descriptions are optional but recommended and can help to describe the organization and the objective of the membership.
 
