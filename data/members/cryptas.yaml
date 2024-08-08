@@ -23,13 +23,13 @@ blog:
 
 # Press Releases
 press: 
-  url: https://www.cryptas.com/en/company/news
+  url: https://www.cryptas.com/en/news
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: https://www.cryptas.com/en/company/career
+  url: https://www.cryptas.com/en/career
   feed: 
   language: en_US
 
@@ -53,7 +53,7 @@ representatives:
       linkedin: https://www.linkedin.com/in/stefanbumerl
     description: 25+ years in crypto and PKI business, founder, CEO and CTO of Cryptas IT Security GmbH
 
-  - name: Karl Heinz Meyer
+  - name: Karl Heinz Mayer
     role: SVP Sales
     social:
       twitter: 
