@@ -1,7 +1,7 @@
 id: techsource
 name: Technology source
 slogan:
-website: https://Techsource.iq
+website: https://techsource.iq
 
 # Short description, longer content can be placed in `content/members/`
 description: At Technology Source, we are the first Trust Service Provider (TSP) in Iraq. Our mission is to empower government institutions, businesses and individuals to securely sign and manage their documents with ease and efficiency. 
@@ -10,6 +10,7 @@ description: At Technology Source, we are the first Trust Service Provider (TSP)
 memberSince: 2024-04-16
 memberType: A
 workingGroups:
+ - TCWG 
 
 # sponsor
 sponsor:

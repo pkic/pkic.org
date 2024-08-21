@@ -10,6 +10,7 @@ description: Die QRL Stiftung is a grant-awarding non-profit organisation that s
 memberSince: 2023-04-04
 memberType: H
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
