@@ -3,7 +3,6 @@ languageCode: en-us
 title: PKI Consortium
 
 copyright: PKI Consortium, Inc. All Rights Reserved
-googleAnalytics:
 
 permalinks:
   blog: /:year/:month/:day/:title/
