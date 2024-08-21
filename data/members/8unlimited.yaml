@@ -10,7 +10,8 @@ description: We provide resources and project management for PKI implementations
 memberSince: 2024-04-16
 memberType: H
 workingGroups:
- - PQC
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:

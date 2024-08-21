@@ -10,7 +10,8 @@ description: Airbus is a global pioneer in the aerospace industry, operating in 
 memberSince: 2023-04-04
 memberType: H
 workingGroups:
- - PQC
+  - PQC
+  - TCWG
 
 # sponsor
 # sponsor:

@@ -11,6 +11,7 @@ memberSince: 2021-07-20
 memberType: C
   #Regulator
 workingGroups:
+  - TCWG
 
 # sponsor
 sponsor:
