@@ -12,6 +12,7 @@ memberType: A
 workingGroups:
   - CA
   - PKIMM
+  - TCWG
 
 # sponsor
 sponsor:
