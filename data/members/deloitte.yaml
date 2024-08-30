@@ -1,0 +1,54 @@
+id: deloitte
+name: Deloitte-India
+slogan:
+website: https://www2.deloitte.com/in
+
+# Short description, longer content can be placed in `content/members/`
+description: Deloitte drives progress, helping clients become leaders. Deloitte invests in outstanding people of diverse talents and backgrounds, empowering them to achieve more. Our work combines advice with action and integrity. We believe that when our clients and society are stronger, so are we.
+
+# membership
+memberSince: 2024-08-30
+memberType: H
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Shravani Shahapure
+    role: Head Quantum Safe cyber security, Cryptography and Quantum Computing
+    social:
+      twitter: 
+      linkedin: 
+    description: Shravani is the Head Quantum Safe cyber security, Cryptography and Quantum Computing at Deloitte-India and represents the organization at the PKI Consortium.
