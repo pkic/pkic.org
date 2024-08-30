@@ -1,0 +1,54 @@
+id: commlinkinfotech
+name: Commlink Info Tech Ltd.
+slogan:
+website: https://www.commlinkinfotech.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Commlink Info Tech Ltd, the Best software company in Bangladesh, provides innovative and customized software solutions for businesses of all sizes.
+
+# membership
+memberSince: 2024-08-30
+memberType: G
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.commlinkinfotech.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Tapan Kundu
+    role: Manager, Technical Sales
+    social:
+      twitter: 
+      linkedin: 
+    description: Tapan is the Manager, Technical Sales at Commlink Info Tech Ltd. and represents the organization at the PKI Consortium.
