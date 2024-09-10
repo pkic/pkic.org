@@ -145,7 +145,7 @@ server:
           block-all-mixed-content;
           style-src 'unsafe-inline' 'self' https://fonts.googleapis.com/css;
           font-src https://fonts.gstatic.com/s/roboto/;
-          script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js;
+          script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/;
           img-src 'self' https://i.ytimg.com data:;
           frame-src https://www.youtube-nocookie.com/ https://player.vimeo.com/ https://www.youtube.com/;
           media-src  https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4;
