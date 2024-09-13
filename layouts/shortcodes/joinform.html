@@ -138,6 +138,8 @@
         </div>
     </div>
 
+    <hr />
+
     <div class="col-12">
         <strong>Members are not required to be present at every meeting or participate in all activities but we appreciate active members</strong>
         <div class="form-check">
@@ -171,6 +173,32 @@
             <label class="form-check-label" for="sponsoring">
                 We would like to sponsor or make a donation to the consortium 
             </label>
+        </div>
+    </div>
+
+    <hr />
+
+    <div class="col-12">
+        <strong>Which working groups are you or your colleagues interested in joining?</strong>
+        <div class="form-text mb-3">Please list the email addresses of colleagues interested in joining working groups (same organization domain as the submitter, separated by commas).</div>
+
+        <div class="ms-4">
+            <div class="mb-3">
+                <label for="wg-pkic" class="form-label">Would you like to add any colleagues to the PKI Consortium's general mailing list?</label>
+                <input class="form-control" id="wg-pkic" type="email" name="PKI Consortium" multiple>
+            </div>
+
+            {{ $wg := .Site.GetPage "/wg"}}
+            {{ range $wg.Sections }}
+                {{ $wgID := printf "wg-%s" (.Title | anchorize) }}
+                <label for="{{ $wgID }}" class="form-label">Do you or any of you colleagues want to join the <a href="{{ .Permalink }}" target="_blank">{{ .Title }}</a>?</label>
+                <div class="input-group mb-3">
+                    <div class="input-group-text">
+                        <input class="form-check-input mt-0" id="{{ $wgID }}-check" type="checkbox" value="I would like to join the {{ .Title }}">
+                    </div>
+                    <input class="form-control" id="{{ $wgID  }}" type="email" name="{{ .Title }} members" multiple>
+                </div>
+            {{ end }}
         </div>
     </div>
 
