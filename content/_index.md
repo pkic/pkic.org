@@ -16,10 +16,10 @@ menu:
 ---
 
 {{< alert >}}
-The slides and recordings of the presentations at our second **Post-Quantum Cryptography Conference** are now accessible for your reference. [Click on the title of the session in the agenda to download the slides](/events/2023/pqc-conference-amsterdam-nl/).
+The PKI Consortium is excited to host its third hybrid **Post-Quantum Cryptography (PQC) Conference** on Wednesday, January 15, and Thursday, January 16, 2025. [Click here for more details and to register](/events/2025/pqc-conference-austin-us/).
 {{< /alert >}}
 
-{{< figure src="/img/logo-black.svg" alt="Logo of the PKI Consortium" >}}
+{{< youtube id=WUu_KizQV30 loading=lazy allowFullScreen=true autoplay=true loop=true >}}
 
 ## PKI Consortium
 
