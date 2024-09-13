@@ -198,7 +198,7 @@
                 <label for="{{ $wgID }}" class="form-label">Do you or any of you colleagues want to join the <a href="{{ .Permalink }}" target="_blank">{{ .Title }}</a>?</label>
                 <div class="input-group mb-3">
                     <div class="input-group-text">
-                        <input class="form-check-input mt-0" id="{{ $wgID }}-check" type="checkbox" value="I would like to join the {{ .Title }}" title="I would like to join the {{ .Title }}">
+                        <input class="form-check-input mt-0" id="{{ $wgID }}-check" type="checkbox" name="I would like to join the {{ .Title }}" title="I would like to join the {{ .Title }}">
                     </div>
                     <input class="form-control" id="{{ $wgID  }}" type="email" name="{{ .Title }} members" title="Enter the email address of colleagues that would like to join the {{ .Title }} (same organization domain as the submitter, separated by commas)" multiple>
                 </div>
