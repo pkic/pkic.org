@@ -29,7 +29,10 @@
       // Make fields required, or not, depending on the category
       const matches = document.querySelectorAll('input[name="Category"]');
       const categoryChanged = (e) => {
-        if (e.target.id == "category-h") {
+        if (e.target.id == "category-h5" || 
+            e.target.id == "category-h6" || 
+            e.target.id == "category-h7") {
+              
           document.getElementById("role").required = false;
           document.getElementById("organization").required = false;
         } else {
