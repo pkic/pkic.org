@@ -185,7 +185,7 @@
         <div class="ms-4">
             <div class="mb-3">
                 <label for="wg-pkic" class="form-label">Would you like to add any colleagues to the PKI Consortium's general mailing list?</label>
-                <input class="form-control" id="wg-pkic" type="email" name="PKI Consortium" multiple>
+                <input class="form-control" id="wg-pkic" type="email" name="PKI Consortium" title="Enter the email address of colleagues that would like to join the PKI Consortium's general mailing list (same organization domain as the submitter, separated by commas)" multiple>
             </div>
 
             {{ $wg := .Site.GetPage "/wg"}}
@@ -194,9 +194,9 @@
                 <label for="{{ $wgID }}" class="form-label">Do you or any of you colleagues want to join the <a href="{{ .Permalink }}" target="_blank">{{ .Title }}</a>?</label>
                 <div class="input-group mb-3">
                     <div class="input-group-text">
-                        <input class="form-check-input mt-0" id="{{ $wgID }}-check" type="checkbox" value="I would like to join the {{ .Title }}">
+                        <input class="form-check-input mt-0" id="{{ $wgID }}-check" type="checkbox" value="I would like to join the {{ .Title }}" title="I would like to join the {{ .Title }}">
                     </div>
-                    <input class="form-control" id="{{ $wgID  }}" type="email" name="{{ .Title }} members" multiple>
+                    <input class="form-control" id="{{ $wgID  }}" type="email" name="{{ .Title }} members" title="Enter the email address of colleagues that would like to join the {{ .Title }} (same organization domain as the submitter, separated by commas)" multiple>
                 </div>
             {{ end }}
         </div>
