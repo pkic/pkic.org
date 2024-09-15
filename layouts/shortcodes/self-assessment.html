@@ -1,3 +1,8 @@
+<style>
+    :root {
+        --pkimm-sticky-top-offset: 56px;
+    }
+</style>
 <self-assessment
     dataUrl="{{ with .Get "data-url" }}{{ . }}{{ else }}assessment-data.yaml{{ end }}"
     configUrl="{{ with .Get "config-url" }}{{ . }}{{ else }}config.yaml{{ end }}"
