@@ -1,5 +1,4 @@
 <self-assessment
-    class="self-assessment"
     dataUrl="{{ with .Get "data-url" }}{{ . }}{{ else }}assessment-data.yaml{{ end }}"
     configUrl="{{ with .Get "config-url" }}{{ . }}{{ else }}config.yaml{{ end }}"
 ></self-assessment>
