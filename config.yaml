@@ -149,5 +149,4 @@ server:
           img-src 'self' https://i.ytimg.com data:;
           frame-src https://www.youtube-nocookie.com/ https://player.vimeo.com/ https://www.youtube.com/;
           media-src  https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4;
-          connect-src ws://localhost:1313/livereload 'self';
-          object-src 'self' data:;
+          connect-src ws://localhost:1313/livereload 'self' data: https://fonts.gstatic.com/s/roboto/;;
