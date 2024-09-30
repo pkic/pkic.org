@@ -65,6 +65,8 @@ It is in the public consensus that the state-of-the-art quantum-secure key excha
 
 Contrary to the KEM world, no consensus has yet been reached when it comes to tackling the challenge of making our asymmetric signatures quantum-secure. NIST's finalists for signatures simply cannot be used as drop-in replacements for current classical algorithms due to performance issues.
 
+Acknowledging the problems with the current quantum-secure signature schemes, NIST announced the creation of the signatures "on-ramp" [competition](https://csrc.nist.gov/projects/pqc-dig-sig/standardization) in an effort to find better alternatives, in terms of security but mainly in terms of time and bandwidth efficiency.
+
 Seeing that KEM can be shipped and deployed as a drop-in replacement almost instantly with minimal costs to performance, and that KEM faces a very real threat in the present due to the harvest-now-decrypt-later paradigm, and that signature schemes are both a lot more expensive to deploy and less risky in the current era of the pre-quantum-relevant computer, it seems urgent to start a process of distributing a quantum-secure key exchange mechanism, if only to flex the deployment muscle and the idea of containing a quantum threat. For signatures whose threat is much more distant, it is best to give more time to study before standardizing a decent solution and deploying it.
 
 ## Conclusion
