@@ -29,6 +29,7 @@ However, one may ask what part of a TLS connection is at risk and at what point 
 
 There is no similar attack that can be deployed on authentication or asymmetric signature schemes. An attacker with access to signatures cannot use quantum computers in the future to affect the traffic. This is due to the nature of their usage, which is aimed at preventing man-in-the-middle and impersonation attacks. These attacks assume the attacker acts online, namely while the TLS connection takes place.
 
+
 ## Efficiency Concerns
 Quantum-secure cryptographic primitives offer a higher grade of security by accommodating the threat of an attacker with access to a quantum computer. However, these enhanced security claims come at a painful performance cost which currently seems eminent.
 
