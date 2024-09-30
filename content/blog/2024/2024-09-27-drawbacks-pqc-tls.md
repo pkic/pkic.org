@@ -67,7 +67,7 @@ It is not clear what prevents other schemes, approved by NIST or not, from facin
 ## The (Near) Future
 It is in the public consensus that the state-of-the-art quantum-secure key exchange mechanism as approved by NIST, namely ML-KEM, is a solid alternative and generally ready for widespread deployment, at least in a hybrid scheme, as it has also been tested in several tests conducted by [Google  and Cloudflare](https://medium.com/hwupathum/x25519kyber768-post-quantum-hybrid-algorithm-supported-by-google-chrome).
 
-Contrary to the KEM world, no consensus has yet been reached when it comes to tackling the challenge of making our asymmetric signatures quantum-secure. NIST's finalists for signatures simply cannot be used as drop-in replacements for current classical algorithms due to performance issues.
+Contrary to the KEM world, no consensus has yet been reached when it comes to tackling the challenge of making our asymmetric signatures quantum-secure. NIST's finalists for signatures simply cannot be used as drop-in replacements for current classical algorithms in TLS due to performance issues.
 
 Acknowledging the problems with the current quantum-secure signature schemes, NIST announced the creation of the signatures "on-ramp" [competition](https://csrc.nist.gov/projects/pqc-dig-sig/standardization) in an effort to find better alternatives, in terms of security but mainly in terms of time and bandwidth efficiency.
 
