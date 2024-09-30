@@ -73,6 +73,7 @@ Acknowledging the problems with the current quantum-secure signature schemes, NI
 
 Seeing that KEM can be shipped and deployed as a drop-in replacement almost instantly with minimal costs to performance, and that KEM faces a very real threat in the present due to the harvest-now-decrypt-later paradigm, and that signature schemes are both a lot more expensive to deploy and less risky in the current era of the pre-quantum-relevant computer, it seems urgent to start a process of distributing a quantum-secure key exchange mechanism, if only to flex the deployment muscle and the idea of containing a quantum threat. For signatures whose threat is much more distant, it is best to give more time to study before standardizing a decent solution and deploying it.
 
+
 ## Conclusion
 Ongoing efforts to deploy PQ/hybrid KEMs as drop-in replacements for current mechanisms are well-tested and crucial for protecting information and identity in the near future. On the other hand, PQ signatures remain an unsolved problem, at least in terms of being drop-in replacements for ECC/RSA. Given that WebPKI is integrated into the core of modern-day communication and the threat is much more distant, it is best to be careful and measured with deployment of new algorithms, as tempting and shiny as they might seem.
 
