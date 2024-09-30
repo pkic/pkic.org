@@ -59,10 +59,7 @@ Google recently [claimed](https://www.chromium.org/Home/chromium-security/post-q
 ## Cryptographic Strength
 Quantum-secure cryptography is a relatively new branch of cryptography. Shor's algorithm was developed in 1994, and most primitives are based on mathematical problems whose study started around that time. As such, not much is known about their strength and possible pitfalls. In cryptography, uncertainty usually means danger, and this may be the case.
 
-Well known examples of this claim are two contestants from the NIST post-quantum competition. These are a multivariate-based scheme named [Rainbow](https://eprint.iacr/2022/214), and an isogeny-based scheme named [SIKE](https://eprint.iacr/2022/975). Despite advancing several rounds in the NIST competition and being close to advancing to the final round, they were both broken completely, and even classically so-a classic attacker with a commercial laptop can break the schemes in a relatively short time.
-
-It is not clear what prevents other schemes, approved by NIST or not, from facing the same fate. It is noted that except for the hash-based signature scheme SLH-DSA, which is a poor fit for TLS, the other schemes approved by NIST are based on lattices. Given that the initial list of contestants contained primitives based on various fields, this may also raise some questions about their security or our understanding thereof.
-
+Well known examples of this claim are two contestants from the NIST post-quantum competition. These are a multivariate-based scheme named [Rainbow](https://eprint.iacr/2022/214), and an isogeny-based scheme named [SIKE](https://eprint.iacr/2022/975). Despite advancing several rounds in the NIST competition and being close to advancing to the final round, they were both broken completely, and even classically so-a classic attacker with a commercial laptop can break the schemes in a relatively short time. These examples are a good reminder that “modern” and “standardized” are not always synonyms for “secure”.
 
 ## The (Near) Future
 It is in the public consensus that the state-of-the-art quantum-secure key exchange mechanism as approved by NIST, namely ML-KEM, is a solid alternative and generally ready for widespread deployment, at least in a hybrid scheme, as it has also been tested in several tests conducted by [Google  and Cloudflare](https://medium.com/hwupathum/x25519kyber768-post-quantum-hybrid-algorithm-supported-by-google-chrome).
@@ -79,5 +76,8 @@ Ongoing efforts to deploy PQ/hybrid KEMs as drop-in replacements for current mec
 
 
 ## Feedback
-Did you like the article? Please send your feedback at “dzacharo at yahoo.com”.
+Did you like the article? Please send your feedback to “dzacharo at yahoo.com”.
 
+
+## Acknowledgements
+I would like to thank Kornél Réti and Tomas Gustavsson for reviewing this article and providing valuable comments.
