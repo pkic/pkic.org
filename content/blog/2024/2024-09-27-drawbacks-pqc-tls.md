@@ -77,6 +77,7 @@ Seeing that KEM can be shipped and deployed as a drop-in replacement almost inst
 ## Conclusion
 Ongoing efforts to deploy PQ/hybrid KEMs as drop-in replacements for current mechanisms are well-tested and crucial for protecting information and identity in the near future. On the other hand, PQ signatures remain an unsolved problem, at least in terms of being drop-in replacements for ECC/RSA. Given that WebPKI is integrated into the core of modern-day communication and the threat is much more distant, it is best to be careful and measured with deployment of new algorithms, as tempting and shiny as they might seem.
 
+
 ## Feedback
 Did you like the article? Please send your feedback at “dzacharo at yahoo.com”.
 
