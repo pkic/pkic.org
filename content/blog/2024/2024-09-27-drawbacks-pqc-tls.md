@@ -39,6 +39,7 @@ While some algorithms offer similar or even better time complexity compared to c
 
 Similarly to the previous section, we find that efficiency is handled differently when we consider KEMs and signature schemes. While quantum-secure key exchange mechanisms make a small difference compared to classical algorithms, transitioning to quantum-secure asymmetric signature schemes is costlier. The negative impact is double headed: not only do the quantum-secure primitives require many more bytes than their classic alternatives, but a standard TLS handshake generally contains six signatures and two public keys. This means that each additional overhead gets a big multiplier when sizing the whole handshake.
 
+
 ## How Expensive it Can Get
 The numbers in this section follow a survey published recently by [Cloudflare](https://blog.cloudflare.com/it-it/pq-2024), and account for the finalists of the NIST process.
 
