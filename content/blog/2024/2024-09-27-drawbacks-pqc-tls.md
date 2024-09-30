@@ -63,6 +63,7 @@ Well known examples of this claim are two contestants from the NIST post-quantum
 
 It is not clear what prevents other schemes, approved by NIST or not, from facing the same fate. It is noted that except for the hash-based signature scheme SLH-DSA, which is a poor fit for TLS, the other schemes approved by NIST are based on lattices. Given that the initial list of contestants contained primitives based on various fields, this may also raise some questions about their security or our understanding thereof.
 
+
 ## The (Near) Future
 It is in the public consensus that the state-of-the-art quantum-secure key exchange mechanism as approved by NIST, namely ML-KEM, is a solid alternative and generally ready for widespread deployment, at least in a hybrid scheme, as it has also been tested in several tests conducted by [Google  and Cloudflare](https://medium.com/hwupathum/x25519kyber768-post-quantum-hybrid-algorithm-supported-by-google-chrome).
 
