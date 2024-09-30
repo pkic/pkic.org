@@ -55,6 +55,7 @@ Moreover, the firmware of some network devices such as old routers or terminals,
 
 Google recently [claimed](https://www.chromium.org/Home/chromium-security/post-quantum-pki-design) that it (somewhat softly) bounds the bandwidth overhead it can accommodate for containing a quantum attacker by 7 kB. No NIST approved signature scheme can currently get anywhere near those numbers for reasonable time complexity and security margins.
 
+
 ## Cryptographic Strength
 Quantum-secure cryptography is a relatively new branch of cryptography. Shor's algorithm was developed in 1994, and most primitives are based on mathematical problems whose study started around that time. As such, not much is known about their strength and possible pitfalls. In cryptography, uncertainty usually means danger, and this may be the case.
 
