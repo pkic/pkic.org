@@ -106,7 +106,7 @@ agenda:
         This panel will bring together industry leaders from the **Financial**, **Mobile**, **Healthcare**, and **Aviation** sectors to discuss the critical transition to post-quantum cryptography (PQC). Panelists from leading banks, the GSMA Association, DirectTrust, and other key stakeholders will explore the growing threat posed by quantum computing to traditional cryptographic systems. They will discuss the unique challenges each industry faces in adopting quantum-resistant solutions, including technical, regulatory, and operational hurdles. Key topics will include the current state of readiness, strategies for smooth transitions, the role of standards bodies, and collaborative efforts across industries. The discussion will also address timelines, cost considerations, and the importance of future-proofing critical infrastructure to ensure security in a post-quantum world.
       track: Panel dicussion
       speakers:
-
+        - TBC
       location:
         Breakout:
           title: To be announced shortly
