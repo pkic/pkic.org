@@ -48,6 +48,19 @@ speakers:
       He is broadly interested in computer security, network and protocol measurement, applied cryptography, privacy, elliptic curves, and distributed systems.
     website: https://www.linkedin.com/in/lukevalenta/
   
+  - name: Joey Lupo
+    title: Product Security Architect at QuSecure, Inc
+    bio: |
+      Joey’s strength and passion are in all things security, cryptography, and code. For the last 2 and a half years, he has worked at QuSecure as a Product Security Architect and Software Engineer. He completed an MSc in Cyber Security, Privacy, and Trust from the University of Edinburgh as a 2021 scholarship award winner of the St. Andrew’s Society of the State of New York. Before that, he graduated summa cum laude from Amherst College, where he studied mathematics and computer science and was captain of the Division III men’s ice hockey team.
+    website: https://www.linkedin.com/in/joey-lupo
+
+  - name: Giuseppe Bruno
+    title: Head of Division at Bank of Italy
+    bio: |
+      Giuseppe Bruno is the Head of Division in the Economics and Statistics Department at the Bank of Italy. In his career, he has worked with experts from the Division of Research and Statistics at the Board of Governors of the Federal Reserve System. In 1993, he spent an academic year at the University of Pennsylvania (Philadelphia) for developing algorithms for optimal control of econometric models. In 2000, after a short period at the Statistical Division of the Organisation for Economic Co-operation and Development (OECD), he was appointed Head of the Economic Research Department’s IT unit. In 2022 he has been visiting the Institute of Quantum Computing at the University of Waterloo. Over his career, he has published over 30 papers in different economic and computational economics journals.
+    website: 
+
+
 # Locations with sessions in parallel -----------------------------------------
 locations:
   - name: Plenary
@@ -90,10 +103,10 @@ agenda:
     - time: "11:00"
       title: "Strategies for Transitioning to Future-Proof Cryptography"
       description: |
-        This panel will bring together industry leaders from the **Financial**, **Mobile**, **Healthcare**, and **Aviation** sectors to discuss the critical transition to post-quantum cryptography (PQC). Panelists from leading banks, the GSMA Association, and other key stakeholders will explore the growing threat posed by quantum computing to traditional cryptographic systems. They will discuss the unique challenges each industry faces in adopting quantum-resistant solutions, including technical, regulatory, and operational hurdles. Key topics will include the current state of readiness, strategies for smooth transitions, the role of standards bodies, and collaborative efforts across industries. The discussion will also address timelines, cost considerations, and the importance of future-proofing critical infrastructure to ensure security in a post-quantum world.
+        This panel will bring together industry leaders from the **Financial**, **Mobile**, **Healthcare**, and **Aviation** sectors to discuss the critical transition to post-quantum cryptography (PQC). Panelists from leading banks, the GSMA Association, DirectTrust, and other key stakeholders will explore the growing threat posed by quantum computing to traditional cryptographic systems. They will discuss the unique challenges each industry faces in adopting quantum-resistant solutions, including technical, regulatory, and operational hurdles. Key topics will include the current state of readiness, strategies for smooth transitions, the role of standards bodies, and collaborative efforts across industries. The discussion will also address timelines, cost considerations, and the importance of future-proofing critical infrastructure to ensure security in a post-quantum world.
       track: Panel dicussion
       speakers:
-        - TBC
+
       location:
         Breakout:
           title: To be announced shortly
@@ -260,11 +273,12 @@ agenda:
             - TBC
 
     - time: "9:30"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: Is CBOM Enough?
+      description: |
+        A number of organizations are framing the migration to post-quantum cryptography (PQC) as an opportunity to affect broader IT security modernization across their organizations, especially as it relates to managing the full life cycle of cryptographic algorithms, libraries, and protocols. This presentation introduces the idea of a Cryptographic Bill of Materials (CBOM), often considered a key element of this IT modernization effort. We compare and contrast CBOM with the more familiar Software Bill of Materials (SBOM), paying particular attention to how the cryptographic ecosystem poses unique challenges compared to software-at-large. For example, many cryptographic protocols include a negotiation phase over the wire, complicating the effort to know exactly which algorithm was used in any given protocol handshake. We explore the types of cryptographic assurance that a CBOM can and cannot provide for an organization. Finally, we describe how supplementary efforts such as key management, real-time cryptographic monitoring, and the ability to execute historical queries are needed to fill in the operational gaps of a CBOM.
       track: 
       speakers:
-        - TBC
+        - Joey Lupo
       location:
         Breakout:
           title: To be announced shortly
@@ -274,9 +288,10 @@ agenda:
             - TBC
 
     - time: "10:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
-      track: 
+      title: Hardware Cryptographic Modules
+      description: |
+        This panel will explore the integration of Post-Quantum Cryptography (PQC) into Hardware Cryptographic Modules, with a focus on the recently released NIST standards. Panelists will examine the challenges and opportunities related to certifying PQC algorithms in compliance with established security requirements. Key topics will include performance considerations, such as the computational cost of PQC in constrained environments, and availability, especially the readiness of hardware vendors to meet market demand. The discussion will also address the evolving landscape of certification processes and the implications for secure communications in a Post-Quantum world.
+      track: Panel discussion
       speakers:
         - TBC
       location:
@@ -352,11 +367,12 @@ agenda:
       sponsor: 
 
     - time: "14:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
-      track: 
+      title: "Communication among Financial Institutions: What are the available answers to the quantum threat?"
+      description: |
+        As central banks, financial institutions, and payment platforms rely heavily on secure communication for transactions, client information, and regulatory compliance, the advent of quantum computing poses a significant threat to some of the classical encryption methods underpinning these systems. Quantum computers, with their potential to solve integer factorization (used in RSA) and discrete logarithm problems (used in ECC) exponentially faster than classical computers, could break widely used cryptographic systems like RSA, Diffie-Hellman, and Elliptic Curve Cryptography (ECC), which secure most financial communications today. This quantum threat calls for proactive strategies to ensure the long-term security of financial networks. In this work, we have explored the available solutions, working closely with different encryption technologies and key management systems. The network is based on cloud VPN, providing a high level of cryptoagility, or the ability to switch between cryptographic algorithms efficiently, and shows significant interoperability among providers featuring standard protocols."
+      track: Industry
       speakers:
-        - TBC
+        - Giuseppe Bruno
       location:
         Breakout:
           title: To be announced shortly
@@ -394,38 +410,6 @@ agenda:
             - TBC
 
     - time: "15:30"
-      title: Break
-      sponsor: 
-
-    - time: "16:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
-      track: 
-      speakers:
-        - TBC
-      location:
-        Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
-          track: 
-          speakers:
-            - TBC
-
-    - time: "16:30"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
-      track: 
-      speakers:
-        - TBC
-      location:
-        Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
-          track: 
-          speakers:
-            - TBC
-
-    - time: "16:55"
       title: To be announced shortly
       description: The speaker(s) for this session will be announced soon!
       track: 
@@ -439,7 +423,7 @@ agenda:
           speakers:
             - TBC
   
-    - time: "17:00"
+    - time: "16:00"
       title: Networking
 
 ---
