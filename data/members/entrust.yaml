@@ -102,10 +102,12 @@ representatives:
 
   - name: Diana Gruhn
     role: Director of Product Marketing
+    till: 2022-01-05
     hidden: true
 
   - name: Jay Schiavo
     role: Vice President, ECS Products and Markets
+    till: 2024-07-20
     hidden: true
 
   - name: Clayton Smith
