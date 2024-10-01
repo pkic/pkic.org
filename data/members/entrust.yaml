@@ -64,16 +64,6 @@ representatives:
 
       Mr. Morton is a graduate of University of Waterloo, where he received an undergraduate degree in electrical engineering. He also holds a master’s degree in business administration from Concordia University.
 
-  - name: Chris Bailey
-    role: VP of Strategy and Business Development – Certificate Services
-    social:
-      twitter:
-      linkedin:
-    description:
-      Chris Bailey is Vice President of Strategy and Business Development at Entrust, a global leader in the identity-based digital information security market for nearly two decades.
-
-      Previously Bailey was the General Manager of Trend Micro SSL and Business Incubation for Trend Micro SSL, which was purchased Entrust. Before that, Bailey served as the CEO and co-founder of the certification authority AffirmTrust, which was acquired by Trend Micro in 2011, and as co-founder and CTO of GeoTrust, a major world Certification Authority acquired by VeriSign in 2006.
-
   - name: Paul van Brouwershaven
     role: Director, Technology Compliance
     social:
@@ -85,8 +75,22 @@ representatives:
       Paul served in the industry for over twenty years and is an active member of industry standards and regulatory groups such as ETSI. 
       Paul has been actively promoting public awareness for internet security and industry best practices prior to the widespread move to adopt security by default.
 
+  - name: Chris Bailey
+    role: VP of Strategy and Business Development – Certificate Services
+    hidden: true
+    till: 2024-06-29
+    social:
+      twitter:
+      linkedin:
+    description:
+      Chris Bailey is Vice President of Strategy and Business Development at Entrust, a global leader in the identity-based digital information security market for nearly two decades.
+
+      Previously Bailey was the General Manager of Trend Micro SSL and Business Incubation for Trend Micro SSL, which was purchased Entrust. Before that, Bailey served as the CEO and co-founder of the certification authority AffirmTrust, which was acquired by Trend Micro in 2011, and as co-founder and CTO of GeoTrust, a major world Certification Authority acquired by VeriSign in 2006.
+
   - name: Kirk Hall
     role: Director, Policy & Compliance
+    hidden: true
+    till: 2024-10-15
     social:
       linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
     description: 
