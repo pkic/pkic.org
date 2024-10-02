@@ -465,12 +465,15 @@ We are immensely grateful to our sponsors:
 
 The conference features a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees can look forward to keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers are not permitted to promote products or services during presentations.
 
-> Please note that this is a **preliminary agenda** and is subject to change. Final details, including topics, abstracts, speakers, panels, and time slots, will be updated here in the coming weeks and months, with **more speakers and panels to be announced**.
+> Please note that this is a **preliminary agenda** and is subject to change. Final details, including topics, abstracts, speakers, panels, and time slots, will be updated here in the coming weeks and months, with **more speakers and panels to be announced**, we still have limited availibility for speakers.  
+> {{< button link="/call" target="_blank" label="Propose a Talk or Panel" type="outline-danger" >}}  
 {.callout-warning}
 
 To get a sense of what to expect, you can also check out the agenda, slides, and recordings from our [Amsterdam PQC Conference](/events/2023/pqc-conference-amsterdam-nl/).
 
 {{< agenda "agenda" >}}
+
+{{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="Leader" height="20" max-width="60" >}}
 
 Please be aware that speakers are not permitted to promote products or services during their presentations. While commercials, workshops, and pitches may include commercial information, the primary focus of the conference is on educational content.
 
