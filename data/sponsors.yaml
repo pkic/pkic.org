@@ -13,6 +13,8 @@
     sponsoring:
       "Post-Quantum Cryptography Conference Amsterdam 2023":
         level: Inspirator
+      "Post-Quantum Cryptography Conference Austin 2025":
+        level: Leader
 
 - name: Fortanix 
   website: https://fortanix.com/
