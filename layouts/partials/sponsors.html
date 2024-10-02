@@ -13,9 +13,13 @@
 <!-- member sponsors -->
 {{ range $.Site.Data.members }}
     {{ if or 
-        (and (eq $level "all") (gt .sponsor.level ""))
+        (and (eq $level "all") (or 
+            (gt .sponsor.level "")
+            (index .sponsor.sponsoring $sponsoring)
+        ))
+
         (eq .sponsor.level $level)
-        (index .sponsor.sponsoring $sponsoring)
+        (and (index .sponsor.sponsoring $sponsoring) (eq (index .sponsor.sponsoring $sponsoring).level $level))
     }}
 
         {{ $sponsors = $sponsors | append . }}
@@ -25,11 +29,15 @@
 <!-- non-member sponsors -->
 {{ range $.Site.Data.sponsors }}
     {{ if or 
-        (and (eq $level "all") (gt .sponsor.level ""))
-        (eq .sponsor.level $level)
-        (index .sponsor.sponsoring $sponsoring)
-    }}
+        (and (eq $level "all") (or 
+            (gt .sponsor.level "")
+            (index .sponsor.sponsoring $sponsoring)
+        ))
 
+        (eq .sponsor.level $level)
+        (and (index .sponsor.sponsoring $sponsoring) (eq (index .sponsor.sponsoring $sponsoring).level $level))
+    }}
+    
         {{ $sponsors = $sponsors | append . }}
     {{ end }}
 {{ end }}
