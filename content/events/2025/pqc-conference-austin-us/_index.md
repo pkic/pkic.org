@@ -128,7 +128,7 @@ speakers:
   - name: Mike Ounsworth
     title: Software Security Architect at Entrust
     bio: | 
-        Mike Ounsworth is a Software Security Architect at Entrust. His day-job is primarily application security architecture and penetration testing, with research projects in cryptography and post-quantum cryptography. He is leading discussion at IETF around post-quantum transition strategies for Public Key Infrastructure (PKI), including primary and secondary authorship on several Internet Drafts. He holds an M.Sc in Computer Science in robotics and artificial intelligence from McGill University, and an undergraduate degree in Computer Science with concentrations in mathematics and physics from Queen's University. Fun fact: he has a decade of experience coaching the high school level FIRST Robotics Competition.
+      Mike Ounsworth is a Software Security Architect at Entrust. His day-job is primarily application security architecture and penetration testing, with research projects in cryptography and post-quantum cryptography. He is leading discussion at IETF around post-quantum transition strategies for Public Key Infrastructure (PKI), including primary and secondary authorship on several Internet Drafts. He holds an M.Sc in Computer Science in robotics and artificial intelligence from McGill University, and an undergraduate degree in Computer Science with concentrations in mathematics and physics from Queen's University. Fun fact: he has a decade of experience coaching the high school level FIRST Robotics Competition.
     social:
       linkedin: 
 
