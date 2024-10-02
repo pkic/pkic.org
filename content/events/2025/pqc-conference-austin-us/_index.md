@@ -60,6 +60,71 @@ speakers:
       Giuseppe Bruno is the Head of Division in the Economics and Statistics Department at the Bank of Italy. In his career, he has worked with experts from the Division of Research and Statistics at the Board of Governors of the Federal Reserve System. In 1993, he spent an academic year at the University of Pennsylvania (Philadelphia) for developing algorithms for optimal control of econometric models. In 2000, after a short period at the Statistical Division of the Organisation for Economic Co-operation and Development (OECD), he was appointed Head of the Economic Research Department’s IT unit. In 2022 he has been visiting the Institute of Quantum Computing at the University of Waterloo. Over his career, he has published over 30 papers in different economic and computational economics journals.
     website: 
 
+  - name: Blair Canavan
+    title: Director, Alliances at Thales
+    bio: |
+      Blair has 30+ years of IT cybersecurity sales, channel, marketing, and business development experience. Blair continuously expanded his cybersecurity and cryptographic expertise starting with Symantec and several cyber start-ups including Chrysalis-ITS (Thales), InfoSec Global, Crypto4A and since September 2019, back with Thales’ Global Technology Alliances team, including the Quantum cryptography portfolio. Blair recently represented the Canadian Forum for Digital Infrastructure Resilience (CFDIR) to articulate the standards and Government guidance at Mobile World Congress (MWC) in 2023. He is an avid presenter, start-up consultant, and IT industry contributor. Blair holds an Hons.BA from the University of Waterloo, and Wilfrid Laurier University, Ontario, Canada.  
+    social:
+      linkedin: https://www.linkedin.com/in/blair-canavan-5b708a2/
+
+  - name: Giuseppe Damiano
+    title: Vice President of Product Management at Entrust
+    bio: |
+      Giuseppe is currently the Vice President of Product Management for the nShield product portfolio offering at Entrust.
+
+      Giuseppe is a senior expert in developing and managing PKI solutions and infrastructures, data security, and electronic payment systems with more than 30 years of experience. He has a very strong knowledge of IT architecture security, PKI solutions, HSMs, e-procurement, e-invoicing, digital certificates for electronic signatures, electronic seals, and time stamping.
+
+      During his professional career, as CTO of a Qualified Trust Service Provider, Giuseppe has successfully deployed large-scale projects for major Italian banks, insurance companies, and certification authorities, managing more than 20 million qualified digital certificates using solutions developed in-house.
+
+      Notable achievements include setting up one of the biggest Qualified Remote Signature infrastructures in Europe, remote signature server solutions capable of hosting large numbers of certificates independently of the HSM capacity, designing HSM solutions to manage data security for electronic payment instruments. Together with one of the most important smart-card manufacturers, he defined and implemented the first prototype of a digital signature system based on a GSM SIM. The project was nominated in 2005 by the European IST-Prize as one of Europe’s most innovative projects of the year.
+
+      Giuseppe has actively contributed to writing one of the first technical API standards for Cloud Signature. The standard is defined by the Cloud Signature Consortium and adopted by ETSI.
+
+      He has also actively contributed to writing one of the first proposals for Distributed Ledger Timestamp based on standard PKI formats and blockchain evidence.
+    social:
+      linkedin: https://www.linkedin.com/in/gdamiano/
+
+  - name: Bruno Couillard
+    title: Co-Founder & CEO at Crypto4A
+    bio: |
+      Bruno Couillard is the CEO and co-founder of Crypto4A Technologies Inc., where he leads the development of cutting-edge crypto-agile and post-quantum cybersecurity solutions, including the QxHSM and QxEDGE. With over 35 years of experience in cryptography, key management, and quantum-safe technology, Bruno has worked extensively in both commercial and military applications.
+
+      Previously, he co-founded Chrysalis-ITS and spearheaded the development of the Luna HSM, now a part of Thales. He also contributed to the creation of the PKCS#11 Standard. In addition to his entrepreneurial work, Bruno has served as a cryptographic evaluator for the Canadian Government and played a key role in the Canadian Cryptographic Modernization Program (CCMP).
+
+      Bruno is an active board member of Quantum Industry Canada (QIC), co-chair of the Quantum Industry Developers and Users Working Group, and a member of the Canadian National Quantum Strategy committee. Through these roles, he continues to promote and shape a quantum-safe cybersecurity ecosystem.
+    social:
+      linkedin: https://www.linkedin.com/in/brunocouillard/
+
+  - name: Tomas Gustavsson
+    title: Chief PKI Officer at Keyfactor
+    bio: |
+      Tomas is the founder of the open-source PKI project EJBCA and Chief PKI Officer of Keyfactor. He has been implementing PKI systems since 1994 and have contributed to numerous other open source-projects in PKI and applied cryptography. Tomas has been working on applying quantum safe algorithms to PKI for the last couple of years.
+    social:
+      linkedin: https://www.linkedin.com/in/tgustavsson/
+
+  - name: Lory Thorpe
+    title: Quantum Safe Industry Lead at IBM and Chair of the GSMA Post Quantum Telco Network Task Force
+    bio: |
+      Driven executive leader with over 20 years senior level global experience in digital transformation and telecommunications with a strong technology, strategy and innovation background (development, architecture, product and solution mgt) in Internet of Things, mobile networks, cloud, security, data analytics/ AI, edge.  Expertise in building, integrating and delivering innovative digital products and solutions to market, across Private and Public sector within Enterprise.
+      
+      Leading portfolio and industry efforts on application of Quantum Computing and Quantum Safe in Telecommunications in IBM.
+    social:
+      linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
+
+  - name: Jaime Gómez García
+    title: Head of Quantum at Banco Santander
+    bio: |
+      Jaime Gómez García is a recognized expert in telecommunications, blockchain, and quantum technologies, with an extensive professional background within the financial sector. His contributions as a disseminator of quantum technologies and their consequential influence on enterprises, notably within the financial domain, have garnered him recognition as a LinkedIn Quantum Top Voices in 2022 and 2023. Currently, Jaime is Head of Quantum Technologies at Banco Santander, addressing how quantum computing can be leveraged in benefit of the business and how to tackle the quantum threat to cryptography.
+    social:
+      linkedin: https://www.linkedin.com/in/jaime-gomez-garcia/
+  
+  - name: Scott Stuewe
+    title: President and CEO at DirectTrust
+    bio: |
+      Scott Stuewe is a 25+ year veteran of the healthcare information technology industry. As President and CEO of DirectTrust, Scott drives strategy, visibility, and growth of DirectTrust’s focus areas of community, accreditation, standards development, and trust services to contribute to the advancement of trusted healthcare data exchange. Under his tenure, the organization achieved the landmark milestones of one, two, three, and four billion Direct Secure Messages sent and received through the DirectTrust Network, as well as acquired SAFE Identity, and merged with EHNAC. Previously, Stuewe was Director of Strategy and Interoperability at a health information management company, and served more than 24 years at Cerner, including as Cerner Network’s Director of National Interoperability Strategy, where he drove participation in the CommonWell Health Alliance and the bridge with Carequality.
+    social:
+      linkedin: https://www.linkedin.com/in/scottstuewe/
+
 
 # Locations with sessions in parallel -----------------------------------------
 locations:
@@ -106,7 +171,9 @@ agenda:
         This panel will bring together industry leaders from the **Financial**, **Mobile**, **Healthcare**, and **Aviation** sectors to discuss the critical transition to post-quantum cryptography (PQC). Panelists from leading banks, the GSMA Association, DirectTrust, and other key stakeholders will explore the growing threat posed by quantum computing to traditional cryptographic systems. They will discuss the unique challenges each industry faces in adopting quantum-resistant solutions, including technical, regulatory, and operational hurdles. Key topics will include the current state of readiness, strategies for smooth transitions, the role of standards bodies, and collaborative efforts across industries. The discussion will also address timelines, cost considerations, and the importance of future-proofing critical infrastructure to ensure security in a post-quantum world.
       track: Panel dicussion
       speakers:
-        - TBC
+        - Lory Thorpe
+        - Jaime Gómez García
+        - Scott Stuewe 
       location:
         Breakout:
           title: To be announced shortly
@@ -137,11 +204,13 @@ agenda:
         - TBC
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
-          track: 
+          title: Update on end-to-end PKI and HSM integrations with ML-DSA
+          description: |
+            At last years PQC Conference we benchmarked Hardware Securtiy Modules with Dilithium. Now that FIPS-204 is released, it is time to forget about Dilithium and do production level integrations using ML-DSA.
+            This session shows PKI application integration for issuing certificates, with a number of HSMs that are ready for ML-DSA. We will highlight how easy, or hard, it is to integrate using PKCS#11 or REST APIs. Of course there will be benchmarks of certificate issuance comparing ML-DSA against classic algorithms. Let's see what else we are able to squeeze in until January.
+          track: Developers
           speakers:
-            - TBC
+            - Tomas Gustavsson
 
     - time: "12:30"
       title: To be announced shortly
@@ -293,7 +362,9 @@ agenda:
         This panel will explore the integration of Post-Quantum Cryptography (PQC) into Hardware Cryptographic Modules, with a focus on the recently released NIST standards. Panelists will examine the challenges and opportunities related to certifying PQC algorithms in compliance with established security requirements. Key topics will include performance considerations, such as the computational cost of PQC in constrained environments, and availability, especially the readiness of hardware vendors to meet market demand. The discussion will also address the evolving landscape of certification processes and the implications for secure communications in a Post-Quantum world.
       track: Panel discussion
       speakers:
-        - TBC
+        - Blair Canavan
+        - Bruno Couillard
+        - Giuseppe Damiano 
       location:
         Breakout:
           title: To be announced shortly
