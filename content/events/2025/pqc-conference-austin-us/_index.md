@@ -125,6 +125,12 @@ speakers:
     social:
       linkedin: https://www.linkedin.com/in/scottstuewe/
 
+  - name: Mike Ounsworth
+    title: Software Security Architect at Entrust
+    bio: | 
+        Mike Ounsworth is a Software Security Architect at Entrust. His day-job is primarily application security architecture and penetration testing, with research projects in cryptography and post-quantum cryptography. He is leading discussion at IETF around post-quantum transition strategies for Public Key Infrastructure (PKI), including primary and secondary authorship on several Internet Drafts. He holds an M.Sc in Computer Science in robotics and artificial intelligence from McGill University, and an undergraduate degree in Computer Science with concentrations in mathematics and physics from Queen's University. Fun fact: he has a decade of experience coaching the high school level FIRST Robotics Competition.
+    social:
+      linkedin: 
 
 # Locations with sessions in parallel -----------------------------------------
 locations:
@@ -385,11 +391,14 @@ agenda:
         - TBC
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
+          title: PQC standardization at the Internet Engineering Task Force (IETF)
+          description: |
+            Just as post-quantum cryptography (PQC) has presented significant challenges for academic cryptographers, so too has it posed unique challenges for cryptographic engineers. The new PQC primitives, with their distinct characteristics compared to traditional RSA and ECC algorithms, often require substantial protocol and application redesign to accommodate them effectively. Moreover, the need for a relatively abrupt transition to PQC across the Internet's vast infrastructure has introduced additional complexities.
+
+            This presentation will provide a comprehensive overview of the latest developments in PQC standardization within the IETF. We will delve into the challenges and progress made in integrating PQC into common Internet protocols, highlighting key areas where work is still underway. Additionally, we will explore the implications of the newly standardized algorithms (ML-DSA, SLH-DSA, ML-KEM, LMS, XMSS) and discuss the strategies for their successful deployment. Finally, we will share insights from our research on PKI PQ/traditional hybrid modes, which offer a promising approach for enhancing both security and migration flexibility during the transition to a post-quantum world.
           track: 
           speakers:
-            - TBC
+            - Mike Ounsworth
 
     - time: "11:30"
       title: To be announced shortly
