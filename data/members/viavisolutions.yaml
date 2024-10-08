@@ -1,0 +1,54 @@
+id: viavisolutions
+name: VIAVI Solutions
+slogan:
+website: https://www.viavisolutions.com
+
+# Short description, longer content can be placed in `content/members/`
+description: VIAVI Solutions offers security performance test solutions prior to deployment. SASE, PQC.
+
+# membership
+memberSince: 2024-10-08
+memberType: H.3
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://blog.viavisolutions.com/
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://www.viavisolutions.com/en-uk/corporate/news-and-events/news-releases
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.viavisolutions.com/en-uk/corporate/careers/search-and-apply
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://x.com/viavisolutions
+  facebook: https://www.facebook.com/viavisolutions
+  instagram: https://www.instagram.com/viavifiber/
+  linkedin: https://www.linkedin.com/company/viavi-solutions
+  youtube: https://www.youtube.com/c/viavisolutions?cbrd=1
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Sam Darwish
+    role: 5G & Wireless Sales Director
+    social:
+      twitter: 
+      linkedin: 
+    description: Sam is the 5G & Wireless Sales Director at VIAVI Solutions and represents the organization at the PKI Consortium.
