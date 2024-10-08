@@ -1,14 +1,14 @@
 id: viavisolutions
 name: VIAVI Solutions
 slogan:
-website: 
+website: https://www.viavisolutions.com
 
 # Short description, longer content can be placed in `content/members/`
-description: We are a global leader in communications test and measurement. VIAVI enables customer innovation in industries ranging from communication networks, hyperscale and enterprise data centers to consumer electronics and mission-critical avionics, transportation, aerospace. For PQC we have a solution that enables security assurance, performance evaluation, interoperability testing and standards compliance.
+description: VIAVI Solutions offers security performance test solutions prior to deployment. SASE, PQC.
 
 # membership
 memberSince: 2024-10-08
-memberType: H
+memberType: H.3
 workingGroups:
 
 # sponsor
@@ -17,29 +17,29 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
-  feed: null
+  url: https://blog.viavisolutions.com/
+  feed: 
   language: en_US
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.viavisolutions.com/en-uk/corporate/news-and-events/news-releases
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://www.viavisolutions.com/en-uk/corporate/careers/search-and-apply
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: https://x.com/viavisolutions
+  facebook: https://www.facebook.com/viavisolutions
+  instagram: https://www.instagram.com/viavifiber/
+  linkedin: https://www.linkedin.com/company/viavi-solutions
+  youtube: https://www.youtube.com/c/viavisolutions?cbrd=1
 
 # Here you can list those who represent or have represented the member.
 #
