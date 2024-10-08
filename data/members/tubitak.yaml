@@ -1,14 +1,14 @@
 id: tubitak
-name: TÜBİTAK
-slogan:
-website: https://tubitak.gov.tr/en
+name: TÜBİTAK BİLGEM
+slogan: We are at the heart of technology
+website: https://bilgem.tubitak.gov.tr/en
 
 # Short description, longer content can be placed in `content/members/`
-description: T.C. Sanayi ve Teknoloji Bakanlığı'nın ilgili kuruluşudur.
+description: TÜBİTAK BİLGEM continues to be an R&D center that shapes the future and directs the science and technology of the future by making our country a reference point.
 
 # membership
 memberSince: 2024-10-08
-memberType: H
+memberType: H.3
 workingGroups:
 
 # sponsor
@@ -23,23 +23,23 @@ blog:
 
 # Press Releases
 press: 
-  url: 
+  url: https://bilgem.tubitak.gov.tr/en/all-news
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://bilgem.tubitak.gov.tr/en/career
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: https://twitter.com/tubitakbilgem
+  facebook: https://www.facebook.com/bilgem.tubitak
+  instagram: https://www.instagram.com/tubitakbilgem
+  linkedin: https://www.linkedin.com/company/tubitakbilgem
+  youtube: https://www.youtube.com/@tubitak.bilgem
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +50,6 @@ representatives:
     role: Chief Researcher
     social:
       twitter: 
-      linkedin: 
-    description: Asil is the Chief Researcher at TÜBİTAK and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/asilyardimci
+    description: Asil YARDIMCI is chief research engineer and software developer at National Research Institute of Electronics and Cryptology (UEKAE) which is affiliated to TÜBİTAK BİLGEM.
+    With over 10 years of experience in the Public Key Infrastructure (PKI) domain, Asil has primarily focused on developing PKI services for Electronic Certificate Service Providers. He holds both Bachelor's and Master's degrees in Computer Science.
