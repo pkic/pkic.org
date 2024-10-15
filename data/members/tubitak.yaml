@@ -51,5 +51,6 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/asilyardimci
-    description: Asil YARDIMCI is chief research engineer and software developer at National Research Institute of Electronics and Cryptology (UEKAE) which is affiliated to TÜBİTAK BİLGEM.
-    With over 10 years of experience in the Public Key Infrastructure (PKI) domain, Asil has primarily focused on developing PKI services for Electronic Certificate Service Providers. He holds both Bachelor's and Master's degrees in Computer Science.
+    description: |
+      Asil YARDIMCI is chief research engineer and software developer at National Research Institute of Electronics and Cryptology (UEKAE) which is affiliated to TÜBİTAK BİLGEM.
+      With over 10 years of experience in the Public Key Infrastructure (PKI) domain, Asil has primarily focused on developing PKI services for Electronic Certificate Service Providers. He holds both Bachelor's and Master's degrees in Computer Science.
