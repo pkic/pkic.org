@@ -1,6 +1,21 @@
-{{ $latest := getJSON "https://api.github.com/repos/pkic/ltl/releases/latest" }}
-{{ $ltl := getJSON (printf "https://github.com/pkic/ltl/releases/download/%s/ltl.json" $latest.tag_name) }}
-
+{{ $latest := dict }}
+{{ $latestUrl := "https://api.github.com/repos/pkic/ltl/releases/latest" }}
+{{ with resources.GetRemote $latestUrl }}
+    {{ with .Err }}
+        {{ errorf "%s" . }}
+    {{ else }}
+        {{ $latest = . | transform.Unmarshal }}
+    {{end }}
+{{ end }}
+{{ $ltl := dict }}
+{{ $ltlUrl := (printf "https://github.com/pkic/ltl/releases/download/%s/ltl.json" $latest.tag_name) }}
+{{ with resources.GetRemote $ltlUrl }}
+    {{ with .Err }}
+        {{ errorf "%s" . }}
+    {{ else }}
+        {{ $ltl = .Content | transform.Unmarshal }}
+    {{end }}
+{{ end }}
 {{ range $ltl }}
     <h2 id="{{ .name | safeURL }}">{{ .name }}
         {{ partial "anchor.html" .name }}

@@ -17,9 +17,12 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: https://clm.fi/blogs/news/
-  feed: https://clm.fi/blogs/news.atom
+  url: 
+  feed: 
   language: en_US
+  # these are disabled due to invalid certificate slowing pkic.org build times
+  # url: https://clm.fi/blogs/news/
+  # feed: https://clm.fi/blogs/news.atom
 
 # Press Releases
 press: 
