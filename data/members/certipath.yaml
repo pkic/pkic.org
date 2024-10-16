@@ -4,12 +4,14 @@ slogan:
 website: https://certipath.com
 
 # Short description, longer content can be placed in `content/members/`
-description: I am the Chair of the CertiPath Bridge Certification Authority Policy Management Authority.  The CertiPath Bridge membership includes major Aerospace/Defense Companies, the U.S. Federal PKI, and the Dutch Ministry of Defence.  In my capacity as Chair, I ensure the Enterprise PKIs that cross-certify with the CertiPath Bridge maintain a consistent level of security and interoperability, thereby brokering interorganizational trust between our members.  As a company, CertiPath focuses on the use of digital identity in the modern connected world.  A major focus of our work today is in identity management using PKI-based digital credentials for Physical Access Control Systems.
+description: As a company, CertiPath focuses on the use of digital identity in the modern connected world.  A major focus of our work today is in identity management using PKI-based digital credentials for Physical Access Control Systems.
 
 # membership
 memberSince: 2024-08-30
-memberType: H
+memberType: H.2
 workingGroups:
+  - PKIMM
+  - PQC
 
 # sponsor
 sponsor:
