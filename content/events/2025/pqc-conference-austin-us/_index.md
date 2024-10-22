@@ -447,11 +447,12 @@ agenda:
             - TBC
 
     - time: "12:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: NIST National Cybersecurity Center of Excellence’s Migration to Post-Quantum Cryptography Project
+      description: |
+        As organizations prepare for the transition to post-quantum cryptography (PQC), the NIST National Cybersecurity Center of Excellence (NCCoE) and its industry collaborators are researching practical approaches for migration to standardized post-quantum cryptography. This presentation by Bill Newhouse, Cybersecurity Engineer and Project Lead at NCCoE, will focus on what the collaboration has learned as it has explored cryptographic discovery and inventory tools and the interoperability of the PQC algorithms being standardized by NIST in the communication protocols and systems that rely on public-key encryption. The session will explore the real-world challenges of transitioning to PQC enabling organizations to safeguard their critical systems against quantum threats. The presentation will highlight NIST Special Publication 1800-38 which is being used to document the insights and findings of this collaborative project.
       track: 
       speakers:
-        - TBC
+        - Bill Newhouse
       location:
         Breakout:
           title: To be announced shortly
