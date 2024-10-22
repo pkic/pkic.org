@@ -21,9 +21,9 @@ We'll continue to add more options to our list in the coming days, so be sure to
 
 ## Near the conference location
 
-| Name                                                                                                              | Description                                  | Price              | Booking |
-| ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------- | ------------------ | ------- |
-| [Courtyard Austin-University Area](https://www.marriott.com/en-us/hotels/auscy-courtyard-austin-university-area/) | ~1.5 miles (approximately 15 minutes by car) | From 116 USD/Night |         |
+| Name                                                                                                              | Description                                             | Price              | Booking |
+| ----------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- | ------------------ | ------- |
+| [Courtyard Austin-University Area](https://www.marriott.com/en-us/hotels/auscy-courtyard-austin-university-area/) | [~2.6 miles](https://maps.app.goo.gl/BYTwMVe5WAXfEL356) | From 116 USD/Night |         |
 
 ## Downtown
 
