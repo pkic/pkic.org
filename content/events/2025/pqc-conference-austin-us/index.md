@@ -17,6 +17,7 @@ speakers:
       twitter: https://twitter.com/vanbroup
       linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
       github: https://github.com/vanbroup
+      ietf: https://datatracker.ietf.org/person/paul.vanbrouwershaven@digitorus.com
 
   - name: Albert de Ruiter
     title: Policy Authority PKI Dutch Government (Logius)
@@ -130,7 +131,31 @@ speakers:
     bio: | 
       Mike Ounsworth is a Software Security Architect at Entrust. His day-job is primarily application security architecture and penetration testing, with research projects in cryptography and post-quantum cryptography. He is leading discussion at IETF around post-quantum transition strategies for Public Key Infrastructure (PKI), including primary and secondary authorship on several Internet Drafts. He holds an M.Sc in Computer Science in robotics and artificial intelligence from McGill University, and an undergraduate degree in Computer Science with concentrations in mathematics and physics from Queen's University. Fun fact: he has a decade of experience coaching the high school level FIRST Robotics Competition.
     social:
-      linkedin: 
+      github: https://github.com/ounsworth
+      ietf: https://datatracker.ietf.org/person/mike.ounsworth@entrust.com
+
+  - name: Tim Callan
+    title: Chief Compliance Officer at Sectigo
+    bio: | 
+      Tim Callan has over 20 years of experience in the SSL and PKI technology spaces. Tim leads Sectigo's conformance with industry and regulatory requirements including browser root programs, WebTrust, CA/Browser Forum, and more. Tim is instrumental in driving initiatives to improve certificate agility and successful issuance. A founding member of the CA/Browser Forum and current vice-chair for one of its working groups, Tim is creator and co-host of "Root Causes: A PKI and Security Podcast", the world’s most popular podcast dedicated to digital certificates. With 400+ episodes published, Tim is on the forefront of explaining trends that will be essential to the IT professionals, including shortening certificate lifespans and the coming change to post-quantum cryptography.   
+    social:
+      linkedin: https://www.linkedin.com/in/tim-callan/
+
+  - name: Erik Hieta-aho
+    title: Senior Scientist at VTT, Research Center of Finland
+    bio: | 
+      Erik Hieta-aho is a senior scientist in the applied cryptography research group at VTT, Finland's research center. He received his PhD in mathematics at Ohio University in 2018 with a focus on error corrected coding theory. He has taken part in projects implementing a self-sovereign identity manager and studying the modern post-quantum cryptographic algorithms. He has interests in various contexts of PQC and the applications of cryptography.    
+    website: https://cris.vtt.fi/en/persons/erik-hieta-aho
+    social:
+      linkedin: https://www.linkedin.com/in/erikhietaaho/
+
+  - name: Axel York Poschmann
+    title: VP of Product at PQShield
+    bio: | 
+      Dr. Axel York Poschmann is a cryptography expert with over 15 years of experience, blending a strong academic foundation with industry leadership. Formerly an Assistant Professor at Nanyang Technological University, Axel’s research has led to high-impact publications and patents in cryptographic engineering. As VP of Product at PQShield, he drives the development of quantum-safe solutions, collaborating with regulators and industry leaders to advance secure communication systems.
+    social:
+      linkedin: https://www.linkedin.com/in/dr-axel-york-poschmann/
+
 
 # Locations with sessions in parallel -----------------------------------------
 locations:
@@ -196,18 +221,20 @@ agenda:
         - TBC
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
+          title: Hybrid PQC Digital Signatures and SSI
+          description: |
+            Self-sovereign identity (SSI) and digital credentials are becoming more and more practical, especially in Europe, and as such it is essential for them to be secured against the quantum threat. As we know PQC is a relatively modern area of cryptography and so we have decided to implement both a classical and a PQC digital signature scheme in a hybrid implementation within an SSI stack. Therefore, providing the classical security we know and trust while also preparing for the eventual quantum computing attack in the future. We are developing a hybrid PQC digital signature scheme in which we are implementing ML-DSA and ECDSA in parallel. The goals of our project also include the benchmarking and comparison of the hybrid vs PQC vs classical implementations.
           track: 
           speakers:
-            - TBC
+            - Erik Hieta-aho
 
     - time: "12:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
-      track: 
+      title: "ELI5: Implementing digital certificates for a post-quantum world"
+      description: |
+        This presentation will focus on the pragmatic steps IT teams can take now to prepare for deployment of post-quantum cryptographic algorithms once it becomes practical. This conversation will directly connect the steps back to IT teams’ day-to-day tasks, as it relates to certificate management, and help practitioners identify exactly what they need to do today to begin the process of being post-quantum ready. The presentation will go over: (1) the necessary steps for industry standards bodies to clarify requirements for the new NIST standards; (2) what software, hardware, and services vendors need to do to incorporate support and possible timelines for this support; (3) how enterprises can apply these updates, (4) what you, as an IT manager, can do today to begin the transformation to PQC, and (5) what a likely post-quantum certificate migration plan might look like, including the use of hybrid certificates. 
+      track: Beginners
       speakers:
-        - TBC
+        - Tim Callan
       location:
         Breakout:
           title: Update on end-to-end PKI and HSM integrations with ML-DSA
@@ -275,11 +302,14 @@ agenda:
         - TBC
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
+          title: "Quantum-Safe Secure Boot: How hard can it be?"
+          description: |
+            Secure boot is hard. Quantum-safe secure boot is even harder. It starts with the choice of a suitable algorithm. On the signature verification side, conflicting regulatory requirements on Post-Quantum/Traditional (PQ/T) hybrid mean there is no silver-bullet, while on the signature generation side, key management challenges and the lack of available end-to-end quantum-safe solutions further complicate the decision process.
+
+            In this talk we highlight open issues at various stages of the secure boot lifecycle.
           track: 
           speakers:
-            - TBC
+            - Axel York Poschmann
 
     - time: "15:30"
       title: Break
@@ -483,11 +513,12 @@ agenda:
         - TBC
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
-          track: 
+          title: Is your HSM quantum-ready? Here’s what you need to know!
+          description: |
+            Every currently deployed HSM must be replaced with a quantum-safe HSM. But what is a quantum-safe HSM. First, it must itself utilize quantum-safe root keys and algorithms for its processing. Second, it must support quantum-safe firmware updates to remain agile and current as algorithms and protocols evolve. Third, it must provide access to PQC algorithms for application integration. These capabilities must be bult-in not bolted-on to an existing HSM. An HSM that exposes PQC algorithms but itself uses classic algorithms is NOT quantum-safe. This talk will explore these issues in detail.
+          track: Hardware
           speakers:
-            - TBC
+            - Bruno Couillard
 
     - time: "15:30"
       title: To be announced shortly
@@ -528,6 +559,10 @@ This conference is a premier gathering for decision-makers, technical leaders, a
 * _Travel, accommodation and living expenses are not covered, all attendees are responsible to cover their own expenses._
 
 {{< button link="/register" target="_blank" label="Register for this conference" type="dark" >}}  
+
+### Accommodation
+
+To make your stay in Austin as comfortable as possible, we've compiled a list of accommodation options near the Thompson Conference Center. Whether you're looking for a budget-friendly option or a luxurious stay, you'll find plenty of choices to suit your preferences. Visit the [accommodation page](accommodation/) for our detailed suggestions and helpful tips on booking your accommodation.
 
 ## Sponsors
 
