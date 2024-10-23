@@ -63,7 +63,7 @@ Moving forward, system designers should ensure their systems and applications su
 
 More information on how POODLE works can be found in the [Security Advisory prepared by Google][1]. More detail and supporting information can be found at the Common Vulnerabilities and Exposures [CVE-2014-3566][6].
 
- [1]: https://www.openssl.org/~bodo/ssl-poodle.pdf
+ [1]: https://web.archive.org/web/20240120033644/https://www.openssl.org/~bodo/ssl-poodle.pdf
  [2]: https://en.wikipedia.org/wiki/Transport_Layer_Security
  [3]: https://tools.ietf.org/html/draft-ietf-tls-downgrade-scsv-00
  [4]: https://www.openssl.org/news/secadv_20141015.txt
