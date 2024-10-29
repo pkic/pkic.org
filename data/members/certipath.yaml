@@ -1,0 +1,65 @@
+id: certipath
+name: CertiPath
+slogan: Helping organizations achieve ubiquitous trust online
+website: https://certipath.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: CertiPath focuses on the use of digital identity in the modern connected world
+
+# membership
+memberSince: 2024-08-30
+memberType: H.2
+workingGroups:
+  - PKIMM
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://certipath.com/press-releases/
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=57c7c621-d53c-4343-b966-05c3847fda18&ccId=19000101_000001&lang=en_US
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  linkedin: https://www.linkedin.com/company/certipath/
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jeff Nigriny
+    role: Founder and CEO
+    social:
+      linkedin: https://www.linkedin.com/in/jeff-nigriny-4b2124/
+    description:
+      As the Founder and CEO of CertiPath, Jeff is committed to helping government and commercial customers reduce the cost and increase the reliability and scalability of identity assurance associated with even the most massive projects. His efforts focus on overcoming the core challenges of identity and access management. He has invented commonly used identity technology, helped to write federal identity policy, and authored Virginia’s digital identity law. His success has earned him recognition as one the industry’s leading visionaries for solutions and services in the areas of digital identity, electronic physical access, enterprise security, risk mitigation, and security system design.
+
+  - name: Judith Spencer
+    role: Chair, CertiPath Policy Management Authority
+    social:
+      linkedin: https://www.linkedin.com/in/judith-spencer-93824227/
+    description: 
+      
+Judith provides leadership for the Certipath Public Key Infrastructure Policy Management Authority (PMA), an advisory group composed of Certipath Bridge Certification Authority member organizations. As PMA Chair, Judith manages and maintains CertiPath’s Certificate Policy, prepares operational guidance for CertiPath’s trust community, and partners with the U.S. Federal PKI Policy Authority to ensure alignment on identity management matters. At CertiPath, Judith also helps track trends and policies in the identity provisioning and management market and helps guide both the company and the industry in the adoption of more robust and usable standards.
+
+  - name: Matt Cooper
+    role: Vice President, Identity/Access Management
+    description: 
+      Matt has more than 25 years of experience working with PKI technology and has authored an array of sophisticated software, including certificate path building and validation libraries, a timestamp server, S/MIME clients, and custom CA components. He also has extensive experience identifying security risks and non-conformant behavior in software, protocols, and systems and has experience with large-scale private sector enterprise PKI deployment, ranging from architecture planning and policy to implementation and maintenance.
