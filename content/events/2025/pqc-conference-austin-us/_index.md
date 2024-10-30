@@ -63,12 +63,14 @@ speakers:
       Giuseppe Bruno is the Head of Division in the Economics and Statistics Department at the Bank of Italy. In his career, he has worked with experts from the Division of Research and Statistics at the Board of Governors of the Federal Reserve System. In 1993, he spent an academic year at the University of Pennsylvania (Philadelphia) for developing algorithms for optimal control of econometric models. In 2000, after a short period at the Statistical Division of the Organisation for Economic Co-operation and Development (OECD), he was appointed Head of the Economic Research Department’s IT unit. In 2022 he has been visiting the Institute of Quantum Computing at the University of Waterloo. Over his career, he has published over 30 papers in different economic and computational economics journals.
     website: 
 
-  - name: Blair Canavan
-    title: Director, Alliances at Thales
+  - name: Eric Amador
+    title: Product Manager at Thales
     bio: |
-      Blair has 30+ years of IT cybersecurity sales, channel, marketing, and business development experience. Blair continuously expanded his cybersecurity and cryptographic expertise starting with Symantec and several cyber start-ups including Chrysalis-ITS (Thales), InfoSec Global, Crypto4A and since September 2019, back with Thales’ Global Technology Alliances team, including the Quantum cryptography portfolio. Blair recently represented the Canadian Forum for Digital Infrastructure Resilience (CFDIR) to articulate the standards and Government guidance at Mobile World Congress (MWC) in 2023. He is an avid presenter, start-up consultant, and IT industry contributor. Blair holds an Hons.BA from the University of Waterloo, and Wilfrid Laurier University, Ontario, Canada.  
+      Eric Amador is Product Market Manager at Thales, spearheading the development of the Luna Hardware Security Module (HSM) product line. He leads diverse teams across engineering, sales, marketing, and support to deliver cutting-edge hardware security solutions.
+      
+      Collaborating closely with R&D, Eric integrates emerging cryptographic technologies, including post-quantum cryptography (PQC), 5G, and crypto assets, to fortify product security. His role involves conducting in-depth market analysis to identify regional trends and customer needs across the Americas, Europe, APAC, and the Middle East. He fosters strategic partnerships with key industry players and ensures products adhere to stringent global and regional security standards, such as FIPS 140-3 Level 3 and Common Criteria EAL4+. 
     social:
-      linkedin: https://www.linkedin.com/in/blair-canavan-5b708a2/
+      linkedin: https://www.linkedin.com/in/eric-amador-971850a/
 
   - name: Giuseppe Damiano
     title: Vice President of Product Management at Entrust
@@ -158,6 +160,55 @@ speakers:
     social:
       linkedin: https://www.linkedin.com/in/dr-axel-york-poschmann/
 
+  - name: Matthew Campagna
+    title: Senior Principal Engineer at Amazon Web Services (AWS)
+    bio: |
+      Matthew Campagna is a Sr. Principal Engineer & Cryptographer for Amazon Web Services Inc.’s. He oversees the design and analysis of cryptographic solutions across AWS. He is a member of the ETSI Security Algorithms Group Experts (SAGE), and Chairman of ETSI TC CYBER’s Quantum Safe Cryptography group. Previously he managed Certicom/BlackBerry’s Cryptography Research Group focused on the development of intellectual property and standardization for elliptic curve cryptography. He holds a doctorate in Mathematics from Wesleyan University.
+    social:
+      linkedin: https://www.linkedin.com/in/matt-campagna/
+
+  - name: Panos Kampanakis
+    title: Principal Security Engineer, Applied Scientist at Amazon Web Services (AWS)
+    bio: |
+      Panos has extensive experience with cyber security, applied cryptography, security automation, and vulnerability management. In his professional career, he has trained and presented on various security topics at technical events for numerous years. He has co-authored cybersecurity publications and participated in various security standards bodies to provide common interoperable protocols and languages for security information sharing, cryptography, and PKI. Currently, he works with engineers and industry standards partners to provide cryptographically secure tools, protocols, and standards.
+    website: https://www.amazon.science/author/panos-kampanakis
+    social:
+      linkedin: https://www.linkedin.com/in/panoskampanakis/
+
+  - name: Mila Anastasova
+    title: Computer and Electrical Engineering at Florida Atlantic University
+    bio:
+    social:
+      linkedin: https://www.linkedin.com/in/mila-anastasova/
+
+  - name: Maaike van Leuken
+    title: Researcher and Portfolio Manager Quantum Safe Technologies at Netherlands Organisation for Applied Scientific Research (TNO)
+    bio: |
+      Maaike van Leuken is a researcher and the portfolio manager for Quantum Safe Technologies at TNO. Her focus is on the migration towards quantum safe cryptography. She graduated in computing science, cyber security and cryptography from Radboud University in 2021.
+    website: https://www.tno.nl/en/about-tno/our-people/maaike-leuken/
+    social:
+      linkedin: https://www.linkedin.com/in/maaike-van-leuken-0b1b7011a/
+
+  - name: Alexander Löw
+    title: CEO at Data-Warehouse
+    bio: |
+      Dr. Alexander Löw is the CEO of Data-Warehouse GmbH and serves as a Senator in the German Senate of Economy. He holds the position of Vice President of the German Cybersecurity Council Association and is the innovative mind behind IQIMS and PCert. Alexander has a deep understanding of cybersecurity and a strong focus on Public Key Infrastructure (PKI).
+    social:
+      linkedin: https://www.linkedin.com/in/dr-alexander-loew/
+
+  - name: José Hernández Pérez
+    title: Research Specialist at HPI Consulting & Florida State University
+    bio: |
+      José Hernández Pérez is an educational consultant specializing in emerging technologies for business, including artificial intelligence, quantum computing, and high-performance computing. He also works as an Applications Specialist at Florida State University’s Research Computing Center, focusing on curriculum development and providing research software support in the humanities, arts, and social sciences. His mission is to equip students at every career stage with the skills and resources they need to pursue their passions wherever they may lead them. José Hernández graduated from the University of Chicago with a MA in Digital Studies and a BA in History.
+    social:
+      linkedin: https://www.linkedin.com/in/jose-hernandez-a49170145
+
+  - name: Syed Suleman Ahmad
+    title: Research Engineer at Cloudflare
+    bio: |
+      Suleman is a Research Engineer working at the intersection of product engineering and security research at Cloudflare. His work and academic experience has span the following areas of interest: Security and Privacy, Internet Measurement, and Applied Machine Learning — particularly applications in Cybersecurity, and Distributed Systems.
+    social:
+      linkedin: https://www.linkedin.com/in/sulemanahmadd/
 
 # Locations with sessions in parallel -----------------------------------------
 locations:
@@ -209,11 +260,12 @@ agenda:
         - Scott Stuewe 
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
+          title: Migrating and benchmarking a banking application
+          description: |
+            There is a hesitance to start the migration to quantum-safe solutions, which leads to slower adoption of PQC. This stems from multiple PQC algorithms to choose from, each having specific strong and weaker points, especially with respect to performance, storage and bandwidth. How to deploy these? Hybrid or not? What is the impact on my application? By helping (financial) organisation in migrating their application and testing them in an operational setting, we capture system effects and benchmarking results. In this presentation, I will discuss the results and experiences gained during the migration and share common pitfalls.
           track: 
           speakers:
-            - TBC
+            - Maaike van Leuken
 
     - time: "11:30"
       title: To be announced shortly
@@ -373,11 +425,14 @@ agenda:
         - TBC
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
+          title: PQC standardization at the Internet Engineering Task Force (IETF)
+          description: |
+            Just as post-quantum cryptography (PQC) has presented significant challenges for academic cryptographers, so too has it posed unique challenges for cryptographic engineers. The new PQC primitives, with their distinct characteristics compared to traditional RSA and ECC algorithms, often require substantial protocol and application redesign to accommodate them effectively. Moreover, the need for a relatively abrupt transition to PQC across the Internet's vast infrastructure has introduced additional complexities.
+
+            This presentation will provide a comprehensive overview of the latest developments in PQC standardization within the IETF. We will delve into the challenges and progress made in integrating PQC into common Internet protocols, highlighting key areas where work is still underway. Additionally, we will explore the implications of the newly standardized algorithms (ML-DSA, SLH-DSA, ML-KEM, LMS, XMSS) and discuss the strategies for their successful deployment. Finally, we will share insights from our research on PKI PQ/traditional hybrid modes, which offer a promising approach for enhancing both security and migration flexibility during the transition to a post-quantum world.
           track: 
           speakers:
-            - TBC
+            - Mike Ounsworth
 
     - time: "9:30"
       title: Is CBOM Enough?
@@ -397,10 +452,10 @@ agenda:
     - time: "10:00"
       title: Hardware Cryptographic Modules
       description: |
-        This panel will explore the integration of Post-Quantum Cryptography (PQC) into Hardware Cryptographic Modules, with a focus on the recently released NIST standards. Panelists will examine the challenges and opportunities related to certifying PQC algorithms in compliance with established security requirements. Key topics will include performance considerations, such as the computational cost of PQC in constrained environments, and availability, especially the readiness of hardware vendors to meet market demand. The discussion will also address the evolving landscape of certification processes and the implications for secure communications in a Post-Quantum world.
+        This panel will explore the integration of Post-Quantum Cryptography (PQC) into Hardware Cryptographic Modules, with a focus on the recently released NIST standards. Panelists will examine the challenges and opportunities related to certifying PQC algorithms in compliance with established security requirements. Key topics will include performance considerations, such as the computational cost of PQC in constrained environments, the importance of ensuring interoperability and crypto agility in the process, and availability, especially the readiness of hardware vendors to meet market demand. The discussion will also address the evolving landscape of certification processes and the implications for secure communications in a Post-Quantum world.
       track: Panel discussion
       speakers:
-        - Blair Canavan
+        - Eric Amador
         - Bruno Couillard
         - Giuseppe Damiano 
       location:
@@ -416,21 +471,22 @@ agenda:
       sponsor: 
 
     - time: "11:00"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: Crypto asset discovery tooling – an overview of capabilities, characteristics and gaps
+      description: |
+        In the migration towards PQC, one of the first steps should be getting an overview of cryptographic assets in your organisation, i.e. where and why are you using which types of cryptographic algorithms, protocols, keys, etc. The result is captured in a Cryptographic Bill-Of-Materials (CBOM). Various commercial solutions exist, but how well are these addressing the problem? In 2024, as an independent research organisation, we have conducted research into crypto asset discovery tooling and their vendors, through literature research and interviews with the vendors. In this presentation, I will give an overview of the currently existing tools, the ideal setting, the gap between them and how to bridge that gap.
       track: 
       speakers:
-        - TBC
+        - Maaike van Leuken
       location:
         Breakout:
-          title: PQC standardization at the Internet Engineering Task Force (IETF)
+          title: Lessons learned from testing millions of servers for Post-Quantum compatibility
           description: |
-            Just as post-quantum cryptography (PQC) has presented significant challenges for academic cryptographers, so too has it posed unique challenges for cryptographic engineers. The new PQC primitives, with their distinct characteristics compared to traditional RSA and ECC algorithms, often require substantial protocol and application redesign to accommodate them effectively. Moreover, the need for a relatively abrupt transition to PQC across the Internet's vast infrastructure has introduced additional complexities.
+            Protocol ossification delayed the rollout of TLS 1.3 for years, and has once again become a roadblock in the rollout of post-quantum cryptography. In a recent large-scale study of TLS servers, we assessed the deployment compatibility of post-quantum key agreements, uncovering surprising results and insights. Notably, we observed protocol ossification in areas beyond the well-known issue of fragmented ClientHello messages due to large key sizes. We believe more surprises will emerge with post-quantum certificates, making deployment far more complex than a “flip-of-a-switch” transition.
 
-            This presentation will provide a comprehensive overview of the latest developments in PQC standardization within the IETF. We will delve into the challenges and progress made in integrating PQC into common Internet protocols, highlighting key areas where work is still underway. Additionally, we will explore the implications of the newly standardized algorithms (ML-DSA, SLH-DSA, ML-KEM, LMS, XMSS) and discuss the strategies for their successful deployment. Finally, we will share insights from our research on PKI PQ/traditional hybrid modes, which offer a promising approach for enhancing both security and migration flexibility during the transition to a post-quantum world.
-          track: 
+            In this talk, we share our findings from the study, and emphasize the importance of testing early to identify potential post-quantum migration challenges rather than making assumptions about where issues may arise. We walk through the subtle deployment complexities and operational issues that can arise when managing the complexities of post-quantum PKI implementations, particularly for end-user connection stability. By offering practical insights, we hope to contribute to a smoother shift to the post-quantum era, enhancing crypto-agility and strengthening the reliability of the Web PKI as a by-product.
+          track: WebPKI
           speakers:
-            - Mike Ounsworth
+            - Syed Suleman Ahmad
 
     - time: "11:30"
       title: To be announced shortly
@@ -440,11 +496,13 @@ agenda:
         - TBC
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
-          track: 
+          title: How much will ML-DSA signatures affect Web Metrics after all? 
+          description: |
+            It is sometimes argued that ML-DSA signatures will increase the size of TLS handshakes by 15KB which will affect web performance significantly. As most web connections transfer much larger amounts of data, 15KB may not impact the bottom line of the most common web performance metrics. In this session, we will present a qualitative analysis of web metrics and their relation to the TLS handshake. We will demonstrate that web connections transport large amounts of web content which takes much longer than the handshake itself. We will also analyze the web page performance metrics of top websites to showcase that an additional 15KB in the handshake will have minimal impact on the user experience. The takeaway of this session will be that ML-DSA will introduce overhead, but after using simple techniques to trim the authentication data in the handshake, the practical effect on web users will not be noticeable. 
+          track: WebPKI
           speakers:
-            - TBC
+            - Panos Kampanakis
+            - Mila Anastasova
 
     - time: "12:00"
       title: NIST National Cybersecurity Center of Excellence’s Migration to Post-Quantum Cryptography Project
@@ -455,18 +513,25 @@ agenda:
         - Bill Newhouse
       location:
         Breakout:
-          title: To be announced shortly
-          description: The speaker(s) for this session will be announced soon!
-          track: 
+          title: The impact of ML-KEM and ML-DSA on mTLS connection Time-to-Last-Byte
+          description: |
+            Multiple studies have evaluated the impact of PQC algorithms in TLS 1.3. These studies have been focusing on server authentication with PQC signatures. To our knowledge, there has been no study focusing on mTLS authentication where the client sends a PQ certificate chain as well. Such connections could be used in Zero Trust Architectures where the client opens multiple connections to various destinations each of which uses mTLS authentication. These sessions will be double impacted by the size of the “authentication data” travelling both directions. This presentation will share experimental results of the Time-to-Last-Byte (TTLB) of mTLS connections using ML-KEM and ML-DSA and transferring small and larger amounts of data. We will evaluate different round-trips, network bandwidth and TCP initial congestion windows. We will discuss the effect of PQC on mTLS sessions and compare it to previous experiments on typical TLS connections. We will cover potential mTLS use-cases that will suffer more than others and ways to improve them.
+          track: WebPKI
           speakers:
-            - TBC
+            - Panos Kampanakis
+            - Matthew Campagna
 
     - time: "12:30"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: Practical Insights from Following NIST SP 1800-38B
+      description: |
+        In this session, Dr. Alexander Löw from Data-Warehouse will share real-world experiences from the National Cybersecurity Center of Excellence (NCCoE) regarding the implementation of NIST SP 1800-38B. Alexander will delve into the practical application of public key application discovery tools within the context of transitioning to PQC.
+
+        Participants will gain insights into the step-by-step process outlined in SP 1800-38B, including identifying public key cryptographic algorithms in use, assessing their vulnerability to quantum attacks, developing a migration strategy, and implementing new PQC algorithms.
+
+        By walking through the challenges encountered, attendees gain insights into what to expect during their transition, and learn about the role and benefits of Cryptographic Agility, Cryptographic Inventory, Cryptographic Bill of Material (CBOM), Software Bill of Material (SBOM), and Cryptographic Governance, providing comprehensive insights based on real-world experiences from following the National Cybersecurity Center of Excellence (NCCoE).
       track: 
       speakers:
-        - TBC
+        - Alexander Löw
       location:
         Breakout:
           title: To be announced shortly
@@ -495,11 +560,16 @@ agenda:
             - TBC
 
     - time: "14:30"
-      title: To be announced shortly
-      description: The speaker(s) for this session will be announced soon!
+      title: Curriculum Development for Post-Quantum Workforce Development Programs
+      description: |
+        As we transition to Post-Quantum Cryptography (PQC), professionals across various sectors, initially in IT, finance, and business, must be retrained to implement the new NIST protocols and prepare for ongoing crypto-agile updates. This shift presents a unique challenge, as much of this retraining will need to occur on the job through workforce development programs rather than in traditional classroom settings.
+
+        This talk will focus on identifying effective strategies for developing retraining programs, drawing from past curriculum models in technologies such as High-Performance Computing  and Artificial Intelligence. We will present examples of PQC retraining programs from the cybersecurity and finance sectors, demonstrating how to integrate open-source tutorials, training platforms, textbooks, and existing industry programs into a cohesive, customized curriculum that aligns with each professional’s responsibilities and already established long-term development goals.
+
+        This session will offer practical guidance to managers, team leaders and developers for designing their own PQC workforce development curricula, highlighting useful pedagogical frameworks, current tools, and available platforms.
       track: 
       speakers:
-        - TBC
+        - José Hernández Pérez
       location:
         Breakout:
           title: To be announced shortly
