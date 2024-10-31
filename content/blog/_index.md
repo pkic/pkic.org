@@ -8,4 +8,8 @@ heroDescription: Public Key Infrastructure (PKI) Consortium Blog
 
 menu:
     main:
+
+outputs:
+    - html
+    - rss
 ---

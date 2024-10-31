@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{ .Title }} - Event Overlays</title>
+  <style>
+    body {
+      margin: 0;
+      padding: 0;
+      background-color: black;
+      /* background-color: rgba(0, 0, 0, 0); */
+    }
+  </style>
+
+  {{ $js := resources.Get "js/event-overlays.js" }}
+  {{ $params := dict }}
+  {{ $sourceMap := cond hugo.IsProduction "" "inline" }}
+  {{ $opts := dict "sourceMap" $sourceMap "minify" hugo.IsProduction "target" "es2018" "params" $params }}
+  {{ $js = $js | js.Build $opts }}
+  {{ if hugo.IsProduction }}
+  {{ $js = $js | fingerprint }}
+  {{ end }} 
+  <script src="{{ $js.RelPermalink }}" {{ if hugo.IsProduction }}integrity="{{ $js.Data.Integrity }}"{{ end }} defer></script>
+</head>
+<body>
+  <div id="svg-container"></div>
+</body>
+</html>

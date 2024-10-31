@@ -114,6 +114,14 @@ outputFormats:
     baseName: _redirects
     path: /
     isPlainText: true
+    notAlternative: true
+  event-overlays:
+    mediatype: text/html
+    baseName: event-overlays
+  event-data:
+    mediatype: application/json
+    isPlainText: true
+    baseName: event-data
 
 outputs:
   home:
@@ -123,8 +131,7 @@ outputs:
   page:
   - HTML
   section:
-  - HTML
-  - RSS  
+  - HTML 
 
 caches:
   getjson:

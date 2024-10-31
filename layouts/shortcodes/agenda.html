@@ -1,12 +1,12 @@
-{{- with $.Page.Param (index .Params 0) -}}
+{{- with $.Page.Param "data.agenda" -}}
     <div class="mt-2 mb-4">
         {{- if gt (len .) 1 -}}
         <nav id="agenda-tabs">
             <div class="nav nav-tabs" id="nav-tab" role="tablist" data-scroll-target="agenda">
-                {{- range $i, $days := . -}}
-                    {{- range $day, $items := $days -}}
-                       <button class="nav-link{{ if eq $i 0 }} active{{ end}}" id="nav-{{ $day | urlize }}-tab" data-bs-toggle="tab" data-bs-target="#nav-{{ $day | urlize }}" type="button" role="tab" aria-controls="nav-{{ $day | urlize }}" aria-selected="true">{{ $day }}</button>
-                    {{- end -}}
+                {{- $counter := 0 -}}
+                {{- range $day, $items := . -}}
+                    <button class="nav-link{{ if eq $counter 0 }} active{{ end }}" id='nav-{{ ( $day | time.Format "Monday" ) | urlize }}-tab' data-bs-toggle="tab" data-bs-target='#nav-{{ ( $day | time.Format "Monday" ) | urlize }}' type="button" role="tab" aria-controls="nav-{{ $day | urlize }}" aria-selected="true" title='{{ $day | time.Format ":date_full" }}'>{{ $day | time.Format "Monday" }}</button>
+                    {{- $counter = add $counter 1 -}}
                 {{- end -}}
                 <button class="nav-link" id="nav-speakers-tab" data-bs-toggle="tab" data-bs-target="#nav-speakers" type="button" role="tab" aria-controls="nav-speakers" aria-selected="true">Speakers</button>
             </div>
@@ -14,15 +14,16 @@
         {{- end -}}
 
         {{- $locations := (slice (dict "name" "Plenary")) -}}
-        {{- with $.Page.Params.locations -}}
-        {{- $locations = $.Page.Params.locations -}}
+        {{- with $.Page.Param "data.locations" -}}
+            {{- $locations = . -}}
         {{- end -}}
 
-        {{- range $i, $days := . -}}
+        {{- $counter := 0 -}}
+        {{- range $day, $items := . -}}
             <div class="tab-content overflow-x-auto" id="nav-tabContent">
                 <div class="mt-1 tab-pane fade" id="nav-speakers" role="tabpanel" aria-labelledby="nav-speakers-tab">
                     <div class="container border pt-4">
-                    {{- range sort $.Page.Params.Speakers "name" -}}
+                    {{- range sort $.Page.Params.data.speakers "name" -}}
                         <div class="p-3 border-bottom">
                             <strong>
                                 {{- if .website -}}
@@ -39,110 +40,105 @@
                     {{- end -}}  
                     </div>
                 </div>
-                {{- range $day, $items := $days -}}
-                    <div class="mt-1 tab-pane fade{{ if eq $i 0 }} show active{{ end}}" id="nav-{{ $day | urlize }}" role="tabpanel" aria-labelledby="nav-{{ $day | urlize }}-tab">
-                        <div class="d-flex flex-column align-items-start">
-                            <!-- a column per location -->
-                            {{- with $locations -}}
-                                {{- if gt (len .) 1 -}}
-                                    <div class="d-flex flex-row border-end bg-dark text-white">
-                                        <div class="agenda-time"></div>
-                                        {{- range . -}}
-                                            <div class="agenda-content border-start py-2">
-                                                <span class="fs-4 mx-3">{{ .name }}</span>
+                <div class="mt-1 tab-pane fade{{ if eq $counter 0 }} active show{{ end }}" id='nav-{{ ( $day | time.Format "Monday" ) | urlize }}' role="tabpanel" aria-labelledby="nav-{{ $day | urlize }}-tab">
+                    <div class="d-flex flex-column align-items-start">
+                        <!-- a column per location -->
+                        {{- with $locations -}}
+                            {{- if gt (len .) 1 -}}
+                                <div class="d-flex flex-row border-end bg-dark text-white">
+                                    <div class="agenda-time"></div>
+                                    {{- range . -}}
+                                        <div class="agenda-content border-start py-2">
+                                            <span class="fs-4 mx-3">{{ .name }}</span>
+                                        </div>
+                                    {{- end -}}
+                                </div>
+                            {{- end -}}
+                        {{- end -}}
+
+                        {{- range $items -}}
+                        <div class="d-flex flex-row border-bottom{{ if not .sessions }} bg-secondary text-white{{ end }}">
+                            <!-- time -->
+                            <div class="agenda-time text-end py-2">
+                                <span class="opacity-25 fs-3 mx-3">{{ .time }}</span>
+                            </div>
+
+                            {{- if not .sessions -}}
+                                <div class="agenda-content border-start py-2">
+                                    <span class="opacity-25 fs-3 fw-bold mx-3">{{ .title }}</span>
+                                </div>
+                                {{- range seq (sub (len $locations ) 1) }}
+                                    <div class="agenda-content"></div>
+                                {{- end -}}
+                                
+                            {{- else -}}
+
+                                {{- $slot := . -}}
+                                {{- range $locations -}}
+                                    {{- range where $slot.sessions "locations" "intersect" (slice .name) -}}
+                                        <div class="{{ if or .youtube (gt (len $locations) 1) }}agenda-content {{ end }}border-start d-inline-block position-relative">
+                                            {{ with .track }}
+                                                <span class="position-absolute top-0 end-0 me-2 mt-2 badge rounded-pill shadow bg-warning">{{ . }}</span>
+                                            {{ end }}
+                                            <p class="fw-bold m-3">
+                                                {{- $title := .title -}}
+                                                {{- with $.Page.Resources.Get .presentation -}}
+                                                    <a href="{{ .RelPermalink }}" title="{{ $title }}" target="_blank">{{- $title -}}</a>
+                                                {{- else -}}
+                                                    {{- .title -}}
+                                                {{- end -}}
+                                            </p>
+                                            <div class="text-secondary m-3 fw-light fs-6 opacity-75">
+                                                {{- range .speakers -}}
+                                                {{- $speaker := . -}}
+                                                    {{- range $.Page.Params.speakers -}}
+                                                        {{- if eq (trim $speaker " *") .name -}}
+                                                        <strong>
+                                                            {{- if .website -}}
+                                                                <a href="{{ .website }}" title="{{ .bio }}" target="_blank">{{- .name -}}</a>
+                                                            {{- else if .social.linkedin -}}
+                                                                <a href="{{ .social.linkedin }}" title="{{ .bio }}" target="_blank">{{- .name -}}</a>
+                                                            {{- else -}}
+                                                                <a href="#" title="{{ .bio }}">{{- .name -}}</a>
+                                                            {{end}}
+                                                        </strong>  
+                                                        {{- if (hasSuffix $speaker " *") -}}
+                                                            <span class="badge rounded-pill bg-primary">Moderator</span>
+                                                        {{- end -}}
+                                                        <span> - </span>
+                                                        <span>{{- .title -}}</span> 
+                                                        <br />
+                                                        {{- end -}}    
+                                                    {{- end -}}
+                                                {{- end -}}
+                                            </div>
+                                            <div class="opacity-75 m-3">{{- .description | markdownify -}}</div>
+
+                                        {{- if eq (len $locations) 1 -}}
                                             </div>
                                         {{- end -}}
-                                    </div>
-                                {{- end -}}
-                            {{- end -}}
 
-                            {{- range $items -}}
-                            <div class="d-flex flex-row border-bottom{{ if not .speakers }} bg-secondary text-white{{ end }}">
-                                <!-- time -->
-                                <div class="agenda-time text-end py-2">
-                                    <span class="opacity-25 fs-3 mx-3">{{ .time }}</span>
-                                </div>
-
-                                {{- if not .speakers -}}
-                                    <div class="agenda-content border-start py-2">
-                                        <span class="opacity-25 fs-3 fw-bold mx-3">{{ .title }}</span>
-                                    </div>
-                                    {{- range seq (sub (len $locations ) 1) }}
-                                        <div class="agenda-content"></div>
-                                    {{- end -}}
-                                {{- else -}}
-
-                                    {{- $slot := . -}}
-                                    {{- range $locations -}}
-                                        {{- $item := $slot -}}
-                                        {{- if ne .name "Plenary" -}}
-                                            {{- $item = (index $slot.location .name) -}}
+                                        {{- if .youtube -}}
+                                            <div class="{{ if eq (len $locations) 1 }}agenda-content {{ end }}ratio ratio-16x9">
+                                                <iframe width="100%" height="100%" src="https://www.youtube-nocookie.com/embed/{{ .youtube }}{{ if not (strings.Contains .youtube "?") }}?{{ else }}&{{ end }}theme=light&modestbranding=1" title="{{ .title -}}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+                                            </div>
                                         {{- end -}}
 
-                                        {{- with $item -}}
-                                            <div class="{{ if or .youtube (gt (len $locations) 1) }}agenda-content {{ end }}border-start d-inline-block position-relative">
-                                                {{ with .track }}
-                                                    <span class="position-absolute top-0 end-0 me-2 mt-2 badge rounded-pill shadow bg-warning">{{ . }}</span>
-                                                {{ end }}
-                                                <p class="fw-bold m-3">
-                                                    {{- $title := .title -}}
-                                                    {{- with $.Page.Resources.Get .presentation -}}
-                                                        <a href="{{ .RelPermalink }}" title="{{ $title }}" target="_blank">{{- $title -}}</a>
-                                                    {{- else -}}
-                                                        {{- .title -}}
-                                                    {{- end -}}
-                                                </p>
-                                                <div class="text-secondary m-3 fw-light fs-6 opacity-75">
-                                                    {{- range .speakers -}}
-                                                    {{- $speaker := . -}}
-                                                        {{- range $.Page.Params.speakers -}}
-                                                            {{- if eq (trim $speaker " *") .name -}}
-                                                            <strong>
-                                                                {{- if .website -}}
-                                                                    <a href="{{ .website }}" title="{{ .bio }}" target="_blank">{{- .name -}}</a>
-                                                                {{- else if .social.linkedin -}}
-                                                                    <a href="{{ .social.linkedin }}" title="{{ .bio }}" target="_blank">{{- .name -}}</a>
-                                                                {{- else -}}
-                                                                    <a href="#" title="{{ .bio }}">{{- .name -}}</a>
-                                                                {{end}}
-                                                            </strong>  
-                                                            {{- if (hasSuffix $speaker " *") -}}
-                                                                <span class="badge rounded-pill bg-primary">Moderator</span>
-                                                            {{- end -}}
-                                                            <span> - </span>
-                                                            <span>{{- .title -}}</span> 
-                                                            <br />
-                                                            {{- end -}}    
-                                                        {{- end -}}
-                                                    {{- end -}}
-                                                </div>
-                                                <div class="opacity-75 m-3">{{- .description | markdownify -}}</div>
-
-                                            {{- if eq (len $locations) 1 -}}
-                                                </div>
-                                            {{- end -}}
-
-                                            {{- if .youtube -}}
-                                                <div class="{{ if eq (len $locations) 1 }}agenda-content {{ end }}ratio ratio-16x9">
-                                                    <iframe width="100%" height="100%" src="https://www.youtube-nocookie.com/embed/{{ .youtube }}{{ if not (strings.Contains .youtube "?") }}?{{ else }}&{{ end }}theme=light&modestbranding=1" title="{{ .title -}}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-                                                </div>
-                                            {{- end -}}
-
-                                            {{- if gt (len $locations) 1 -}}
-                                                </div>
-                                            {{- end -}}
+                                        {{- if gt (len $locations) 1 -}}
+                                            </div>
+                                        {{- end -}}
                                             
-                                        {{- else -}}
-                                            <div class="agenda-content border-start d-inline-block pt-2 position-relative"></div>
-                                        {{- end -}}
+                                    {{- else -}}
+                                        <div class="agenda-content border-start d-inline-block pt-2 position-relative"></div>
                                     {{- end -}}
                                 {{- end -}}
-                            </div>
                             {{- end -}}
                         </div>
+                        {{- end -}}
                     </div>
-                {{- end -}}
+                </div>
             </div>
+            {{- $counter = add $counter 1 -}}
         {{- end -}}
     </div>
 {{- end -}}
