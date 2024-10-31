@@ -39,16 +39,6 @@ let agendaData = [];
 let speakersData = [];
 let locationsData = [];
 
-fetch('event-data.json')
-    .then(response => response.json())
-    .then(data => {
-        agendaData = data.agenda || [];
-        speakersData = data.speakers || [];
-        locationsData = data.locations || [];
-        updateNameAndTitle();
-    })
-    .catch(error => console.error('Error loading event data:', error));
-
 function getHashParams() {
     const params = new URLSearchParams(window.location.hash.substring(1));
     return {
@@ -71,7 +61,7 @@ function getSpeakers(day, currentTime, location = null, speakerName = null) {
     const currentMinutes = currentTime ? parseTime(currentTime) : null;
     let currentSpeakers = [];
 
-    const filteredAgenda = day ? { [day]: agendaData[day] } : agendaData;
+    const filteredAgenda = day && agendaData[day] ? { [day]: agendaData[day] } : agendaData;
     Object.values(filteredAgenda).forEach(dayAgenda => {
         dayAgenda.forEach((agendaSlot, index) => {
             const startMinutes = parseTime(agendaSlot.time);
@@ -245,7 +235,19 @@ function refreshIfAutoUpdateEnabled() {
     }
 }
 
-updateNameAndTitle();
-setInterval(refreshIfAutoUpdateEnabled, 60000);
-window.addEventListener('hashchange', updateNameAndTitle);
-window.addEventListener('keydown', navigateSpeakers);
+fetch('event-data.json')
+    .then(response => response.json())
+    .then(data => {
+
+        agendaData = data.agenda || {};
+        speakersData = data.speakers || [];
+        locationsData = data.locations || [];
+
+        updateNameAndTitle();
+        setInterval(refreshIfAutoUpdateEnabled, 60000);
+
+        window.addEventListener('hashchange', updateNameAndTitle);
+        window.addEventListener('keydown', navigateSpeakers);
+
+    })
+    .catch(error => console.error('Error loading event data:', error));
