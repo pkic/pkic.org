@@ -1,0 +1,26 @@
+{{- $data := .Page.Params.data -}}
+BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//PKI Consortium//NONSGML v1.0//EN
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+{{- range $date, $slots := $data.agenda -}}
+    {{- range $slot := $slots -}}
+        {{- range $session := $slot.sessions }}
+BEGIN:VEVENT
+UID:{{ printf "%s-%s-%s" $session.locations $date $slot.time | urlize }}@ics.pkic.org
+DTSTAMP:{{ now.Format "20060102T150405Z" }}
+DTSTART:{{ ( time.AsTime (printf "%sT%s:00" $date $slot.time) $data.timezone ) | time.Format "20060102T150405Z" }}
+SUMMARY:{{ replaceRE "(.{70})" "${1}\n\t" $session.title | default "" }}
+DESCRIPTION:{{ (replaceRE "(.{70})" "${1}\n\t" (replaceRE "\n" " " ($session.description | markdownify))) | default "" }}
+{{ range $session.speakers -}}
+ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;
+    CN={{ . }}
+    :MAILTO:noreply@pkic.org
+{{ end -}}
+LOCATION:{{ range $index, $location := $session.locations }}{{ if $index }}, {{ end }}{{ $location }}{{ end }}
+END:VEVENT
+        {{- end }}
+    {{- end -}}
+{{- end }}
+END:VCALENDAR

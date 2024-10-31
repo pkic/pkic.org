@@ -9,6 +9,8 @@ heroTitle: Post-Quantum Cryptography Conference
 heroDescription: November 7 and 8, 2023 - Amsterdam, The Netherlands | Online
 
 data:
+  timezone: Europe/Amsterdam
+
   # Speakers --------------------------------------------------------------------
   speakers:
     - name: Paul van Brouwershaven

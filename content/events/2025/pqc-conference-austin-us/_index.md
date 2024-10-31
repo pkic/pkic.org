@@ -10,11 +10,14 @@ outputs:
  - html
  - event-data
  - event-overlays
+ - event-agenda
 
 heroTitle: Post-Quantum Cryptography Conference
 heroDescription: January 15 and 16, 2025 - Austin, Texas, US | Online
 
 data:
+  timezone: America/Chicago
+
   # Speakers --------------------------------------------------------------------
   speakers:
     - name: Paul van Brouwershaven

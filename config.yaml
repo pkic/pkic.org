@@ -122,6 +122,10 @@ outputFormats:
     mediatype: application/json
     isPlainText: true
     baseName: event-data
+  event-agenda:
+    mediatype: text/calendar
+    baseName: agenda
+    isPlainText: true
 
 outputs:
   home:

@@ -9,6 +9,8 @@ heroTitle: Post-Quantum Cryptography Conference
 heroDescription: Friday March 3, 2023 - Ottawa, Canada - Hybrid
 
 data:
+  timezone: America/Toronto
+
   speakers:
     - name: Paul van Brouwershaven
       title: Chair PKI Consortium
