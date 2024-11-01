@@ -5,14 +5,16 @@ PRODID:-//PKI Consortium//NONSGML v1.0//EN
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 REFRESH-INTERVAL;VALUE=DURATION:P1H
+URL:{{ .Page.Permalink }}/agenda.ics
 {{- range $date, $slots := $data.agenda -}}
-    {{- range $slot := $slots -}}
+    {{- range $index, $slot := $slots -}}
         {{- range $session := $slot.sessions -}}
             {{- $description := ((replaceRE "\n" "\\n" ($session.description | markdownify)) | default "No description available") }}
 BEGIN:VEVENT
 UID:{{ printf "%s-%s-%s" $session.locations $date $slot.time | urlize }}@ics.pkic.org
 DTSTAMP:{{ now.Format "20060102T150405Z" }}
 DTSTART:{{ ( time.AsTime (printf "%sT%s:00" $date $slot.time) $data.timezone ).UTC | time.Format "20060102T150405Z" }}
+DTEND:{{ ( time.AsTime (printf "%sT%s:00" $date (index $slots (add $index 1)).time) $data.timezone ).UTC | time.Format "20060102T150405Z" }}
 SUMMARY:{{ strings.TrimSpace (replaceRE "(.{70})" "${1}\n    " $session.title | default "No title available") }}
 DESCRIPTION: 
     {{- if $data.draft -}}** Please note that this is a preliminary agenda
@@ -31,10 +33,14 @@ X-ALT-DESC;FMTTYPE=text/html:
 {{- range $index, $location := $session.locations -}}
     {{ if not $index }}
 LOCATION:{{ strings.FirstUpper $location }}
+CATEGORIES:{{ strings.FirstUpper $location }}{{ if  $session.track }}, {{ $session.track }}{{ end }}
 COLOR:{{ (index $data.locations $location).color }}
+X-APPLE-CALENDAR-COLOR:{{ (index $data.locations $location).color }}
     {{- end }}
 CONFERENCE;VALUE=URI;FEATURE=AUDIO,VIDEO,SCREEN;
     LABEL=Livestream:{{ (index $data.locations $location).livestream }}
+    X-MICROSOFT-ONLINEMEETINGCONFLINK:{{ (index $data.locations $location).livestream }}
+    X-GOOGLE-CONFERENCE:{{ (index $data.locations $location).livestream }}
 {{- end }}
 {{ range $session.speakers -}}
 ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;
