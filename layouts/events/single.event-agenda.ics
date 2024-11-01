@@ -8,16 +8,26 @@ REFRESH-INTERVAL;VALUE=DURATION:P1H
 {{- range $date, $slots := $data.agenda -}}
     {{- range $slot := $slots -}}
         {{- range $session := $slot.sessions -}}
-            {{- $description := ((replaceRE "\n+" " " ($session.description | markdownify)) | default "No description available") }}
+            {{- $description := ((replaceRE "\n" "\\n" ($session.description | markdownify)) | default "No description available") }}
 BEGIN:VEVENT
 UID:{{ printf "%s-%s-%s" $session.locations $date $slot.time | urlize }}@ics.pkic.org
 DTSTAMP:{{ now.Format "20060102T150405Z" }}
 DTSTART:{{ ( time.AsTime (printf "%sT%s:00" $date $slot.time) $data.timezone ).UTC | time.Format "20060102T150405Z" }}
 SUMMARY:{{ strings.TrimSpace (replaceRE "(.{70})" "${1}\n    " $session.title | default "No title available") }}
 DESCRIPTION: 
-    {{ strings.TrimSpace (replaceRE "(.{70})" "${1}\n    " (replaceRE "\n+" " " ($description | plainify))) }}
+    {{- if $data.draft -}}** Please note that this is a preliminary agenda
+    and is subject to change. Subscribe to this feed for updates, but do
+    not copy or import from it. **\n\n{{- end }}
+    {{ strings.TrimSpace (replaceRE "(.{70})" "${1}\n    " (replaceRE "\n" "\\n" ($description | plainify))) }}
 X-ALT-DESC;FMTTYPE=text/html:
+    {{- if $data.draft -}}<em><p style="color:red;">Please note that this
+    is a preliminary agenda and is subject to change. Subscribe to this 
+    feed for updates, but do not copy or import from it.</em></p>\n\n{{- end }}
     {{ strings.TrimSpace (replaceRE "(.{70})" "${1}\n    " $description) }}
+    <p><img src='https://pkic.org/img/pkic-og-logo.jpg' alt='PKI 
+    Consortium' width='200'></p><p><img src='
+    https://pkic.org/events/2025/pqc-conference-austin-us/sponsors.jpg'
+    alt='Sponsors' width='500'></p>
 {{- range $index, $location := $session.locations -}}
     {{ if not $index }}
 LOCATION:{{ strings.FirstUpper $location }}
