@@ -5,7 +5,7 @@ PRODID:-//PKI Consortium//NONSGML v1.0//EN
 CALSCALE:GREGORIAN
 METHOD:PUBLISH
 REFRESH-INTERVAL;VALUE=DURATION:P1H
-URL:{{ .Page.Permalink }}/agenda.ics
+URL:{{ .Page.Permalink }}agenda.ics
 {{- range $date, $slots := $data.agenda -}}
     {{- range $index, $slot := $slots -}}
         {{- range $session := $slot.sessions -}}
