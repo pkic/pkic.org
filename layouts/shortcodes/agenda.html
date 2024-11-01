@@ -13,8 +13,8 @@
         </nav>
         {{- end -}}
 
-        {{- $locations := (slice (dict "name" "Plenary")) -}}
-        {{- with $.Page.Param "data.locations" -}}
+        {{- $locations := slice -}}
+        {{- with $.Page.Param "data.locations.order" -}}
             {{- $locations = . -}}
         {{- end -}}
 
@@ -49,7 +49,7 @@
                                     <div class="agenda-time"></div>
                                     {{- range . -}}
                                         <div class="agenda-content border-start py-2">
-                                            <span class="fs-4 mx-3">{{ .name }}</span>
+                                            <span class="fs-4 mx-3">{{ strings.FirstUpper . }}</span>
                                         </div>
                                     {{- end -}}
                                 </div>
@@ -75,7 +75,7 @@
 
                                 {{- $slot := . -}}
                                 {{- range $locations -}}
-                                    {{- range where $slot.sessions "locations" "intersect" (slice .name) -}}
+                                    {{- range where $slot.sessions "locations" "intersect" (slice .) -}}
                                         <div class="{{ if or .youtube (gt (len $locations) 1) }}agenda-content {{ end }}border-start d-inline-block position-relative">
                                             {{ with .track }}
                                                 <span class="position-absolute top-0 end-0 me-2 mt-2 badge rounded-pill shadow bg-warning">{{ . }}</span>

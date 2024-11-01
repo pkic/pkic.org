@@ -11,6 +11,12 @@ heroDescription: November 7 and 8, 2023 - Amsterdam, The Netherlands | Online
 data:
   timezone: Europe/Amsterdam
 
+  # Locations with sessions in parallel -----------------------------------------
+  locations:
+    order: [plenary, breakout]
+    plenary:
+    breakout:
+
   # Speakers --------------------------------------------------------------------
   speakers:
     - name: Paul van Brouwershaven
@@ -390,11 +396,6 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/l%C3%A6rke-vinther-christiansen-884b71178/
 
-  # Locations with sessions in parallel -----------------------------------------
-  locations:
-    - name: Plenary
-    - name: Breakout
-
   # Agenda ----------------------------------------------------------------------
   agenda:
     # Tuesday -------------------------------------------------------------------
@@ -412,7 +413,7 @@ data:
             youtube: RgkFEX93A-I
             presentation: pkic-pqcc_paul-van-brouwershaven-and-albert-de-ruiter_pki-consortium_welcome.pdf
             locations:
-              - Plenary
+              - plenary
 
       - time: "9:30"
         sessions:
@@ -429,7 +430,7 @@ data:
             youtube: sC23sYOB6JQ
             presentation: pkic-pqcc_bill-newhouse-and-dustin-moody_nist_status-update-from-nist.pdf
             locations:
-              - Plenary
+              - plenary
 
       - time: "10:30"
         title: Break
@@ -450,7 +451,7 @@ data:
             presentation: pkic-pqcc_bill-newhouse_nist_preparing-the-united-states-for-pqc.pdf
             youtube: cG09NrgtUxE
             locations:
-              - Plenary
+              - plenary
 
           - title: Lattice-based cryptography
             description: |
@@ -465,7 +466,7 @@ data:
             youtube: 6ptBm7Sdsfg
             presentation: pkic-pqcc_leo-ducas_cwi-leiden-university_lattice-based-cryptography.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "11:20"
         sessions:
@@ -479,14 +480,14 @@ data:
             presentation: pkic-pqcc_andrea-garcia-rodriquez_epc_a-quantum-cybersecurity-agenda-for-europe.pdf
             youtube: a_39lTpgbeg
             locations:
-              - Plenary
+              - plenary
 
           - title: " "
             description: \* _Continuation of the session about Lattice-based cryptography_
             speakers:
               - None
             locations:
-              - Breakout
+              - breakout
 
       - time: "11:40"
         sessions:
@@ -501,7 +502,7 @@ data:
             presentation: pkic-pqcc_stephan-ehlen_bsi_post-quantum-policy-and-roadmap-of-the-bsi.pdf
             youtube: npNTxhb6INU
             locations:
-              - Plenary
+              - plenary
 
           - title: Stateful Hash-Based Signature Schemes
             description: |
@@ -515,7 +516,7 @@ data:
             youtube: 8EKgKkc3tTc
             presentation: pkic-pqcc_volkert-krummel_utimaco_stateful-hash-based-signature-schemes.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "12:00"
         sessions:
@@ -528,14 +529,14 @@ data:
             presentation: pkic-pqcc_jerome-plut_anssi_anssi-plan-for-post-quantum-transition.pdf
             youtube: P15ClXQVvug
             locations:
-              - Plenary
+              - plenary
 
           - title: " "
             description: \* _Continuation of the session about Stateful Hash-Based Signature Schemes_
             speakers:
               - None
             locations:
-              - Breakout
+              - breakout
 
       - time: "12:20"
         sessions:
@@ -553,7 +554,7 @@ data:
             presentation: pkic-pqcc_anita-wehmann-and-germain-van-der-velden_dutch-government_unlocking-the-quantum-resilient-cryptography-strategy-for-the-dutch-central-government.pdf
             youtube: eUvGjiBGLXA
             locations:
-              - Plenary
+              - plenary
 
           - title: Code-based Cryptography
             description: |
@@ -566,7 +567,7 @@ data:
             youtube: S_P7j6aWwXc
             presentation: pkic-pqcc_simona-samardjiska_radboud-university_code-based-cryptography.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "12:40"
         sessions:
@@ -586,14 +587,14 @@ data:
             presentation: 
             youtube: OfLBDM-n1l4
             locations:
-              - Plenary
+              - plenary
 
           - title: " "
             description: \* _Continuation of the previous session_
             speakers:
               - None
             locations:
-              - Breakout
+              - breakout
 
       - time: "13:00"
         title: Lunch
@@ -611,7 +612,7 @@ data:
             presentation: pkic-pqcc_itan-barnes_deloitte_what-is-it-going-to-take-to-break-cryptography-with-a-quantum-computer.pdf
             youtube: o4QkK9apizM
             locations:
-              - Plenary
+              - plenary
 
           - title: "LMS: Lighter, faster key generation"
             description: |
@@ -626,7 +627,7 @@ data:
             youtube: Irh_HrgnM-g
             presentation: pkic-pqcc_francisco-vial-prado_fortanix_lms-lighter-faster-key-generation.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "14:30"
         sessions:
@@ -639,7 +640,7 @@ data:
             presentation: pkic-pqcc_tomas-gustavsson_keyfactor_crunching-the-numbers-post-quantum-algorithm-performance.pdf
             youtube: hOcBAz_jocg
             locations:
-              - Plenary
+              - plenary
 
           - title: Machine-checking post-quantum cryptography
             description: |
@@ -649,7 +650,7 @@ data:
             youtube: 2KnsZSI8okg
             presentation: pkic-pqcc_andreas-hulsing_eindhoven-university-of-technology_machine-checking-post-quantum-cryptography.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "15:00"
         sessions:
@@ -662,7 +663,7 @@ data:
             presentation: pkic-pqcc_jaime-gomez_banco-santander_comparing-strategies-for-quantum-safe-cryptography-adoption-in-organizations.pdf
             youtube: RbwwxZSBjyo
             locations:
-              - Plenary
+              - plenary
 
           - title: "Leading the Quantum-safe Transition: A Growth Stages Approach"
             description: |
@@ -672,7 +673,7 @@ data:
             youtube: sRS1qJfdjV0
             presentation: pkic-pqcc_ini_kong_leading-the-quantum-safe-transition-a-growth-stages-approach.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "15:30"
         title: Break
@@ -689,7 +690,7 @@ data:
             presentation: pkic-pqcc_bas-westerbaan_cloudflare_birth-of-the-post-quantum-internet.pdf
             youtube: oHCjaVe64Cs
             locations:
-              - Plenary
+              - plenary
 
           - title: Update from the GSMA Post Quantum Telco Network Task Force
             description: |  
@@ -706,7 +707,7 @@ data:
             youtube: yzh5YxzsuX8
             presentation: pkic-pqcc_lory-thorpe_ibm_update-from-the-gsma-post-quantum-telco-network-task-force.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "16:30"
         sessions:
@@ -719,7 +720,7 @@ data:
             presentation: pkic-pqcc_anselme-tueno_sap_post-quantum-crypto-integration-for-enterprise-applications.pdf
             youtube: elAR4mDxmWU
             locations:
-              - Plenary
+              - plenary
 
           - title: "Building Your PQC Lab: Trust But Verify Your PQC Ecosystem"
             description: |
@@ -730,7 +731,7 @@ data:
             youtube: t-9HXYZfyp4
             presentation: pkic-pqcc_blair-canavan_thales_building-your-pqc-lab-trust-but-verify-your-pqc-ecosystem.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "17:00"
         sessions:
@@ -741,7 +742,7 @@ data:
               - Albert de Ruiter
             youtube: zFaEMnfaKV4
             locations:
-              - Plenary
+              - plenary
 
       - time: "17:05"
         title: Networking
@@ -762,7 +763,7 @@ data:
             presentation: pkic-pqcc_joppe-bos_nxp_post-quantum-crypto-challenges-for-embedded-applications.pdf
             youtube: ffBickBkvAk
             locations:
-              - Plenary
+              - plenary
 
           - title: A testbed for evaluating post-quantum algorithms for the DNS
             description: |
@@ -773,7 +774,7 @@ data:
             youtube: KOiDCX2KvTk
             presentation: pkic-pqcc_elmer-lastdrager_sidn-labs_a-testbed-for-evaluating-post-quantum-algorithms-for-the-dns.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "9:30"
         sessions:
@@ -785,7 +786,7 @@ data:
             presentation: pkic-pqcc_gustavo-banegas_qualcomm_challenges-for-the-post-quantum-transition-of-mobile-ecosystems.pdf
             youtube: INGVdgD2nzQ
             locations:
-              - Plenary
+              - plenary
 
           - title: Coping with post-quantum signatures in the WebPKI
             description: |
@@ -796,7 +797,7 @@ data:
             youtube: A7BNuYMz0YI
             presentation: pkic-pqcc_bas-westerbaan_cloudflare_coping-with-post-quantum-signatures-in-the-webpki.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "10:00"
         sessions:
@@ -811,7 +812,7 @@ data:
             presentation: 
             youtube: ZEWm2lbcd2o
             locations:
-              - Plenary
+              - plenary
 
           - title: "[DISCUSSION] Your cryptography will be broken, prepare yourself now!"
             description: |
@@ -822,7 +823,7 @@ data:
             youtube: 7oiY62neyOg
             presentation: pkic-pqcc_anita-wehmann-and-germain-van-der-velden_dutch-government_your-cryptography-will-be-broken-prepare-yourself-now.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "10:30"
         title: Break
@@ -843,7 +844,7 @@ data:
             presentation: pkic-pqcc_robert-hann_entrust_how-to-sell-post-quantum-readiness-by-combining-it-with-a-zero-trust-journey.pdf
             youtube: tHKmdhfYePU
             locations:
-              - Plenary
+              - plenary
 
           - title: "A Sign of the Times: The Transition to Quantum Secure Authentication"
             description: | 
@@ -853,7 +854,7 @@ data:
             youtube: R9PMCroZ9r4
             presentation: pkic-pqcc_sandra-guasch-castello_sandboxaq_a-sign-of-the-times-the-transition-to-quantum-secure authentication.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "11:30"
         sessions:
@@ -870,7 +871,7 @@ data:
             presentation: pkic-pqcc_kaveh-bashiri_bsi_quantum-safe-pki-for-the-german-administration.pdf
             youtube: v5svxXbvSo0
             locations:
-              - Plenary
+              - plenary
 
           - title: Quantum Resistance through Symmetric Key Cryptography
             description: |
@@ -880,7 +881,7 @@ data:
             youtube: Xoy6RSdfqvc
             presentation: pkic-pqcc_pasqualle-verwoerdt_compumatica_quantum-resistance-through-symmetric-key-cryptography.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "12:00"
         sessions:
@@ -894,7 +895,7 @@ data:
             presentation: pkic-pqcc_jeremy-king_pci-security-standards-council_pki-and-pqc-strategy-for-payment-card-industry.pdf
             youtube: 4RrAmcilkpQ
             locations:
-              - Plenary
+              - plenary
 
           - title: "Symmetric Key Exchange: Lightweight Alternatives for a Post-Quantum IoT"
             description: |  
@@ -906,7 +907,7 @@ data:
             youtube: Q-yvSC9AYRs
             presentation: pkic-pqcc_bor-de-kock_ntnu-trondheim_symmetric-key-exchange-lightweight-alternatives-for-a-post-quantum-iot.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "12:30"
         sessions:
@@ -923,7 +924,7 @@ data:
             presentation: pkic-pqcc_lizzy-pollman_rdi_post-quantum-cryptography-and-trust-services.pdf
             youtube: GGD7WafUfIA
             locations:
-              - Plenary
+              - plenary
 
           - title: Vulnerabilities of Blockchain Security in the World of Quantum Computing
             description: |
@@ -933,7 +934,7 @@ data:
             youtube: eV5zc8hwUFU 
             presentation: pkic-pqcc_andrew-cheung_01-communique-laboratory_vulnerabilities-of-blockchain-security-in-the-world-of-quantum-computing.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "13:00"
         title: Lunch
@@ -954,7 +955,7 @@ data:
             presentation: pkic-pqcc_dustin-moody_nist_nist-standardization-of-additional-signature-schemes.pdf
             youtube: dfCW6TxD_aw
             locations:
-              - Plenary
+              - plenary
 
           - title: "Investigating Post-Quantum Cryptography: building a PQC decision tree for developers"
             description: |
@@ -968,7 +969,7 @@ data:
             youtube: xWFUFzobTvs
             presentation: pkic-pqcc_jelle-don-and-alessandro-amadori_tno_investigating-post-quantum-cryptography-building-a-pqc-decision-tree-for-developers.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "14:30"
         sessions:
@@ -988,7 +989,7 @@ data:
             presentation: pkic-pqcc_tom-patterson_accenture_moving-toward-a-quantum-security-maturity-index.pdf
             youtube: 1u8EeL0hd7Q
             locations:
-              - Plenary
+              - plenary
 
           - title: Using quantum-safe hybrid certificates for signing documents
             description: |
@@ -999,7 +1000,7 @@ data:
             youtube: NkwWV27Ldm8
             presentation: pkic-pqcc_stefan-van-den-berg_tno_using-quantum-safe-hybrid-certificates-for-signing-documents.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "15:00"
         sessions:
@@ -1011,7 +1012,7 @@ data:
             presentation: pkic-pqcc_greg-wetmore_entrust_pki-deployments-are-as-unique-as-any-snowflake-how-to-build-equally-flexible-pq-migration-strategies.pdf
             youtube: POGH7ugSOJ4
             locations:
-              - Plenary
+              - plenary
 
           - title: CRQC and Signatures – no Problem?
             description: |
@@ -1022,7 +1023,7 @@ data:
             youtube: Gpk7v6JMUlg
             presentation: pkic-pqcc_jan-klaussner_d-trust_crqc-and-signatures-no-problem.pdf
             locations:
-              - Breakout
+              - breakout
 
       - time: "15:30"
         title: Break
@@ -1040,7 +1041,7 @@ data:
               - Albert de Ruiter *
             youtube: KScnARFK-Fw
             locations:
-              - Plenary
+              - plenary
 
       - time: "16:30"
         sessions:
@@ -1063,7 +1064,7 @@ data:
               - Albert de Ruiter *
             youtube: 2Da_zU4mC44
             locations:
-              - Plenary
+              - plenary
 
       - time: "17:00"
         sessions:
@@ -1074,7 +1075,7 @@ data:
               - Albert de Ruiter
             youtube: OlHQEtjzXMk
             locations:
-              - Plenary
+              - plenary
 
       - time: "17:05"
         title: Networking

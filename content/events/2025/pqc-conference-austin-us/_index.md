@@ -18,6 +18,16 @@ heroDescription: January 15 and 16, 2025 - Austin, Texas, US | Online
 data:
   timezone: America/Chicago
 
+  # Locations with sessions in parallel -----------------------------------------
+  locations:
+    order: [plenary, breakout]
+    plenary:
+      color: black
+      livestream: https://pkic.org/events/2025/pqc-conference-austin-us/livestream/#Plenary
+    breakout:
+      color: navy 
+      livestream: https://pkic.org/events/2025/pqc-conference-austin-us/livestream/#Breakout
+
   # Speakers --------------------------------------------------------------------
   speakers:
     - name: Paul van Brouwershaven
@@ -218,11 +228,6 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/sulemanahmadd/
 
-  # Locations with sessions in parallel -----------------------------------------
-  locations:
-    - name: Plenary
-    - name: Breakout
-
   # Agenda ----------------------------------------------------------------------
   agenda:
     # Wednesday -------------------------------------------------------------------
@@ -240,7 +245,7 @@ data:
             youtube: 
             presentation: 
             locations:
-              - Plenary
+              - plenary
 
       - time: "9:30"
         sessions:
@@ -257,7 +262,7 @@ data:
             youtube: 
             presentation: 
             locations:
-              - Plenary
+              - plenary
 
       - time: "10:30"
         title: Break
@@ -274,7 +279,7 @@ data:
               - Jaime Gómez García
               - Scott Stuewe 
             locations:
-              - Plenary
+              - plenary
 
           - title: Migrating and benchmarking a banking application
             description: |
@@ -283,7 +288,7 @@ data:
             speakers:
               - Maaike van Leuken-
             locations:
-              - Breakout
+              - breakout
 
       - time: "11:30"
         sessions:
@@ -293,7 +298,7 @@ data:
             speakers:
               - TBC
             locations:
-            - Plenary
+            - plenary
 
           - title: Hybrid PQC Digital Signatures and SSI
             description: |
@@ -302,7 +307,7 @@ data:
             speakers:
               - Erik Hieta-aho
             locations:
-              - Breakout
+              - breakout
 
       - time: "12:00"
         sessions:
@@ -313,7 +318,7 @@ data:
             speakers:
               - Tim Callan
             locations:
-              - Plenary
+              - plenary
 
           - title: Update on end-to-end PKI and HSM integrations with ML-DSA
             description: |
@@ -323,7 +328,7 @@ data:
             speakers:
               - Tomas Gustavsson
             locations:
-              - Breakout
+              - breakout
 
       - time: "12:30"
         sessions:
@@ -333,7 +338,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Plenary
+              - plenary
 
           - title: To be announced shortly
             description: The speaker(s) for this session will be announced soon!
@@ -341,7 +346,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Breakout
+              - breakout
 
       - time: "13:00"
         title: Lunch
@@ -358,7 +363,7 @@ data:
             speakers:
               - Luke Valenta
             locations:
-              - Plenary
+              - plenary
 
           - title: To be announced shortly
             description: The speaker(s) for this session will be announced soon!
@@ -366,7 +371,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Breakout
+              - breakout
 
       - time: "14:30"
         sessions:
@@ -376,7 +381,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Plenary
+              - plenary
 
           - title: To be announced shortly
             description: The speaker(s) for this session will be announced soon!
@@ -384,7 +389,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Breakout
+              - breakout
 
       - time: "15:00"
         sessions:
@@ -394,7 +399,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Plenary
+              - plenary
 
           - title: "Quantum-Safe Secure Boot: How hard can it be?"
             description: |
@@ -405,7 +410,7 @@ data:
             speakers:
               - Axel York Poschmann
             locations:
-              - Breakout
+              - breakout
 
       - time: "15:30"
         title: Break
@@ -419,7 +424,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Plenary
+              - plenary
 
           - title: Making PQ signatures work in the WebPKI
             description: |
@@ -432,7 +437,7 @@ data:
               - Luke Valenta
             track: WebPKI
             locations:
-              - Breakout
+              - breakout
 
       - time: "16:30"
         sessions:
@@ -442,7 +447,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Plenary
+              - plenary
 
             title: 
             description: _Continuation of prior session_
@@ -450,7 +455,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Breakout
+              - breakout
 
       - time: "16:55"
         sessions:
@@ -460,7 +465,7 @@ data:
               - Paul van Brouwershaven
               - Albert de Ruiter
             locations:
-              - Plenary
+              - plenary
 
       - time: "17:00"
         sessions:
@@ -479,7 +484,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Plenary
+              - plenary
 
           - title: PQC standardization at the Internet Engineering Task Force (IETF)
             description: |
@@ -490,7 +495,7 @@ data:
             speakers:
               - Mike Ounsworth
             locations:
-              - Breakout
+              - breakout
 
       - time: "9:30"
         sessions:
@@ -501,18 +506,18 @@ data:
             speakers:
               - Joey Lupo
             locations:
-              - Plenary
+              - plenary
 
           - title: PQC Interoperability Project
             locations:
-              - Breakout
+              - breakout
             description: |
               The Post Quantum Crypto Interoperability project started as a hackathon project at the IETF in 2022.  People interested in adding PQ algorithm support into existing X.509 keys, signatures and certificates brough their tools and started to collaborate using the proposed PQC algorithms. The project has continued to grow and includes an artifact repository anyone can use for interoperability testing, a list of prototype OIDS to facilitate interoperability, and a compatibility matrix to demonstrate interoperability between users. With the experience obtained by participating in the project, its collaborators also provide valuable feedback to the emerging standards that are in development for the support of PQC. This talk will give an overview of the project, how to use it for interoperability testing and will encourage you to become a participant in the project.
             track: 
             speakers:
               - TBC
             locations:
-              - Breakout
+              - breakout
 
       - time: "10:00"
         sessions:
@@ -525,7 +530,7 @@ data:
               - Bruno Couillard
               - Giuseppe Damiano 
             locations:
-              - Plenary
+              - plenary
 
           - title: To be announced shortly
             description: The speaker(s) for this session will be announced soon!
@@ -533,7 +538,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Breakout
+              - breakout
 
       - time: "10:30"
         title: Break
@@ -548,7 +553,7 @@ data:
             speakers:
               - Maaike van Leuken
             locations:
-              - Plenary
+              - plenary
 
           - title: Lessons learned from testing millions of servers for Post-Quantum compatibility
             description: |
@@ -559,7 +564,7 @@ data:
             speakers:
               - Syed Suleman Ahmad
             locations:
-              - Breakout
+              - breakout
 
       - time: "11:30"
         sessions:
@@ -569,7 +574,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Plenary
+              - plenary
 
           - title: How much will ML-DSA signatures affect Web Metrics after all? 
             description: |
@@ -579,7 +584,7 @@ data:
               - Panos Kampanakis
               - Mila Anastasova
             locations:
-              - Breakout
+              - breakout
 
 
       - time: "12:00"
@@ -591,7 +596,7 @@ data:
             speakers:
               - Bill Newhouse
             locations:
-              - Plenary
+              - plenary
 
           - title: The impact of ML-KEM and ML-DSA on mTLS connection Time-to-Last-Byte
             description: |
@@ -601,7 +606,7 @@ data:
               - Panos Kampanakis
               - Matthew Campagna
             locations:
-              - Breakout
+              - breakout
 
       - time: "12:30"
         sessions:
@@ -616,7 +621,7 @@ data:
             speakers:
               - Alexander Löw
             locations:
-              - Plenary
+              - plenary
 
           - title: To be announced shortly
             description: The speaker(s) for this session will be announced soon!
@@ -624,7 +629,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Breakout
+              - breakout
 
       - time: "13:00"
         title: Lunch
@@ -639,7 +644,7 @@ data:
             speakers:
               - Giuseppe Bruno
             locations:
-              - Plenary
+              - plenary
 
           - title: To be announced shortly
             description: The speaker(s) for this session will be announced soon!
@@ -647,7 +652,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Breakout
+              - breakout
 
       - time: "14:30"
         sessions:
@@ -662,7 +667,7 @@ data:
             speakers:
               - José Hernández Pérez
             locations:
-              - Plenary
+              - plenary
 
           - title: To be announced shortly
             description: The speaker(s) for this session will be announced soon!
@@ -670,7 +675,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Breakout
+              - breakout
 
       - time: "15:00"
         sessions:
@@ -680,7 +685,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Plenary
+              - plenary
 
           - title: Is your HSM quantum-ready? Here’s what you need to know!
             description: |
@@ -689,7 +694,7 @@ data:
             speakers:
               - Bruno Couillard
             locations:
-              - Breakout
+              - breakout
 
       - time: "15:30"
         sessions:
@@ -699,7 +704,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Plenary
+              - plenary
 
           - title: To be announced shortly
             description: The speaker(s) for this session will be announced soon!
@@ -707,7 +712,7 @@ data:
             speakers:
               - TBC
             locations:
-              - Breakout
+              - breakout
     
       - time: "16:00"
         title: Networking

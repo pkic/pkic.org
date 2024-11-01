@@ -11,6 +11,10 @@ heroDescription: Friday March 3, 2023 - Ottawa, Canada - Hybrid
 data:
   timezone: America/Toronto
 
+  locations:
+    order: [plenary]
+    plenary:
+
   speakers:
     - name: Paul van Brouwershaven
       title: Chair PKI Consortium
@@ -94,7 +98,7 @@ data:
             presentation: pkic-pqcc-welcome-paul-van-brouwershaven.pdf
             youtube: o-1sSF_xP5Q?start=1499
             locations:
-              - Plenary
+              - plenary
 
       - time: "9:15"
         sessions:
@@ -106,7 +110,7 @@ data:
             presentation: pkic-pqcc-pqc-standardization-status-rene-peralta-nist.pdf
             youtube: o-1sSF_xP5Q?start=2132
             locations:
-              - Plenary
+              - plenary
 
       - time: "10:00"
         sessions:
@@ -122,7 +126,7 @@ data:
             presentation: pkic-pqcc-pqc-at-ietf-mike-ounsworth-entrust.pdf
             youtube: o-1sSF_xP5Q?start=5713
             locations:
-              - Plenary
+              - plenary
 
       - time: "11:00"
         sessions:
@@ -134,7 +138,7 @@ data:
             presentation: pkic-pqcc-pqc-at-etsi-matthew-campagna-etsi-aws.pdf
             youtube: o-1sSF_xP5Q?start=8338
             locations:
-              - Plenary
+              - plenary
 
       - time: "11:45"
         sessions:
@@ -150,7 +154,7 @@ data:
               - Chris Hickman
             youtube: o-1sSF_xP5Q?start=10682
             locations:
-              - Plenary
+              - plenary
 
       - time: "12:15"
         sessions:
@@ -166,7 +170,7 @@ data:
             presentation: pkic-pqcc-mixed-chains-sebastian-paul-bosch.pdf
             youtube: o-1sSF_xP5Q?start=16437
             locations:
-              - Plenary
+              - plenary
 
       - time: "13:45"
         sessions:
@@ -179,7 +183,7 @@ data:
             presentation: pkic-pqcc-how-gc-preparing-for-pqc-melanie-anderson-jonathan-hammell-canadian-government.pdf
             youtube: o-1sSF_xP5Q?start=18196
             locations:
-              - Plenary
+              - plenary
 
       - time: "14:15"
         sessions:
@@ -191,7 +195,7 @@ data:
             presentation: pkic-pqcc-hapkido-gabriele-spini-tno.pdf
             youtube: o-1sSF_xP5Q?start=19903
             locations:
-              - Plenary
+              - plenary
 
       - time: "14:45"
         sessions:
@@ -207,7 +211,7 @@ data:
               - Greg Wetmore
             youtube: o-1sSF_xP5Q?start=21092
             locations:
-              - Plenary
+              - plenary
 
       - time: "15:15"
         sessions:
@@ -218,7 +222,7 @@ data:
             presentation: pkic-pqcc-summary-and-closing-paul-van-brouwershaven.pdf
             youtube: o-1sSF_xP5Q?start=23574
             locations:
-              - Plenary
+              - plenary
 
       - time: "15:30"
         title: Networking
