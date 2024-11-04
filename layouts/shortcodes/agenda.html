@@ -91,7 +91,7 @@
                                             <div class="text-secondary m-3 fw-light fs-6 opacity-75">
                                                 {{- range .speakers -}}
                                                 {{- $speaker := . -}}
-                                                    {{- range $.Page.Params.speakers -}}
+                                                    {{- range $.Page.Params.data.speakers -}}
                                                         {{- if eq (trim $speaker " *") .name -}}
                                                         <strong>
                                                             {{- if .website -}}
