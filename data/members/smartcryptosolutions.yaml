@@ -1,16 +1,17 @@
 id: smartcryptosolutions
 name: SmartCrypto
-slogan:
+slogan: Affordable crypto solutions to Africa and the one Billion
 website: https://smartcryptosolutions.com
 
 # Short description, longer content can be placed in `content/members/`
-description: SmartCrypto smart-trusted and affordable data, identity and payment security solutions focused on Africa and the 1Billion.
+description: SmartCrypto is a niche provider of cryptographic solutions to financial and government organisations in Africa
 
 # membership
 memberSince: 2024-02-20
-memberType: H
+memberType: H.2
 workingGroups:
-
+  - PKIMM
+  - PQC
 # sponsor
 sponsor:
   level: 
@@ -47,8 +48,28 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Dayle Wheeler
-    role: Managing Director
+    role: Founder & CEO
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/daylewheeler/
-    description: Dayle is the Managing Director at SmartCrypto and represents the organization at the PKI Consortium.
+    description: 
+      Dayle is a highly skilled technology professional, currently serving as the Managing Director of SmartCrypto.  He has over 30 years’ experience in technology, with one of his career highlights leading the IT Security for multiple Olympic games.  He has held several roles focusing on innovative technologies that assist companies with their digital transformation.
+ 
+      He has a proven track record with Enterprise customers in developing strategies to achieve the goal of a zero-trust architecture, using his self-developed Crypto Framework as a business enabler.
+ 
+      Dayle has a wealth of experience, not only in technology, but in running companies and setting up start-up companies in the tech space.
+ 
+      Dayle’s attention to detail ensures that no stone is left unturned, making him the ideal person to oversee compliance to regulations with ISO standards that are relevant to Cybersecurity, Financial Services, Payment industry or Public Key Infrastructure.
+  - name: Niel van Greunen
+    role: Founder & Technical Director
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/niel-van-greunen-512b9310/
+    description: 
+      Niel is known for his meticulous attention to detail, analytical mindset, and unwavering commitment to ensuring the security and integrity of cryptographic systems.  His colleagues often describe him as methodical, calm under pressure, and passionate about advancing the field of cryptography.
+
+      Niel’s ability to balance theoretical knowledge with practical implementation has been instrumental in SmartCrypto’s success.
+      
+      He is a dedicated problem solver, always seeking innovative solutions to complex cryptographic challenges.  He is a quiet leader and teacher, getting the maximum out of his staff through empowerment, collaboration and transparency, with a strong focus on continuous learning.
+
+      Niel is a forward-thinking and dedicated professional in the ever-evolving world of cryptography. 
