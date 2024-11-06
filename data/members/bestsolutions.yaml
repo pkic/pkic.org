@@ -1,0 +1,54 @@
+id: bestsolutions
+name: B.EST Solutions Estonia
+slogan:
+website: https://bestsolutions.ee/
+
+# Short description, longer content can be placed in `content/members/`
+description: B.EST Solutions, an award-winning Estonian IT company devoted to leveraging the most anticipated e-GOV solutions and competency have been recognised by the United Nations, Google and Financial Times, EU, OECD, U.S State Department, and the National Institute of Standards and Technology. B.EST Solutions Estonia has over 15 years expertise in developing and managing a national mobile digital identity and legally e-signing infrastructure with: more than 300 million transactions made, connected to more than 2000 e-services, 20 banks serve their clients using our mobile-ID, m-Residency has been implemented for running location independent global businesses. Our customers include multinationals, major banks, mobile network operators, and insurance companies, along with international organisations and a wide variety of other clients.  Our new generation eSIM, SIM based and Cloud Mobile Identity solutions with improved cryptographic capabilities enable users to give legally binding e-signatures and securely use any e-service. To date, the World Bank estimates that there are 1 billion people without official proof of identity worldwide. For the economically excluded, SIM and eSIM based Mobile Identity could help close the digital divide by providing a secure enough digital ID to open a bank account or open the company. Since 2021 B.EST Solutions is GSMA member and active participant at the eSIM SAM (Secure Applications on Mobile) working group.  Coming from Estonia – a leading digital country, we’re sharing the experience with the global community.
+
+# membership
+memberSince: 2024-11-06
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://bestsolutions.ee/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jana Krimpe
+    role: CEO, Founder
+    social:
+      twitter: 
+      linkedin: 
+    description: Jana is the CEO, Founder at B.EST Solutions Estonia and represents the organization at the PKI Consortium.
