@@ -63,3 +63,10 @@ representatives:
       twitter: 
       linkedin: https://www.linkedin.com/in/international-pki-man-of-mystery/
     description: Sven Rajala is an award winning seasoned cyber-security consultant with extensive subject matter expertise on PKI, automation of PKI/Signing Solutions, and containers. He has over 17 years of experience working in both the private sector and with federal government departments and agencies. Sven is frequently called upon to participate in client discussions, presentations, and seminars on topics including PKI, EJBCA, and PKI Devsecops.
+
+  - name: Neal Fuerst
+    role: Senior Director, U.S. Federal
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/neal-fuerst-a40411/
+    description: Neal Fuerst is a well-seasoned cyber-security consultant and business strategist with over 30 years of experience working in both the public and private sectors. He is frequently called on to lead discussions and seminars on topics including FedRAMP, CMMC, PKI Audit procedures, basic cryptography, and PKI technology. Neal has been a key contributor to many federal policies and procedures and has many years of experience teaching students about the technology and policy compliance. Neal serves as the Chairman of the PKIC Training and Certification Working Group.
