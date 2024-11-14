@@ -1,0 +1,65 @@
+id: bloombase
+name: Bloombase
+slogan: Intelligent Storage Firewall
+website: https://www.bloombase.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Blombase is an intelligent storage firewall company
+
+# membership
+memberSince: 2024-11-06
+memberType: F
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://blog.bloombase.com
+  feed:
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://www.bloombase.com/go/press-releases
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://careers.bloombase.com
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://x.com/Bloombase
+  facebook: https://www.facebook.com/Bloombase
+  instagram: https://www.instagram.com/bloombase
+  linkedin: https://www.linkedin.com/company/Bloombase
+  youtube: https://www.youtube.com/@Bloombase
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jemmee Yung
+    role: Vice President, Business Development
+    social:
+      twitter: https://twitter.com/jemmee
+      linkedin: https://www.linkedin.com/in/jemmeeyung
+    description: Jemmee Yung is the Vice President for Business Development at Bloombase, an intelligent storage firewall company specializing in AI-powered threat detection and response (TDR) and post-quantum cryptography (PQC) security for data cloud. Responsible for business development and alliances, Jemmee has previously held product management and product marketing related positions representing all market segments at Bloombase. Jemmee is the company representative of Bloombase to a number of industry consortia such as IEEE 1619 Security in Storage Working Group (SISWG), IEEE 2883 Standard for Sanitizing Storage, Peripheral Component Interconnect Special Interest Group (PCI-SIG), Storage Networking Industry Association (SNIA), NVM Express (NVMe), and Compute Express Link (CXL). Jemmee is a Certified Information Systems Security Professional (CISSP), Certified Information Systems Auditor (CISA), and a member of the International Association for Cryptologic Research (IACR). He holds a Master's in Electrical and Electronic Engineering.
+
+  - name: Sean Xiang
+    role: Chief Executive Officer
+    hidden: true
+    description: Sean Xiang is a co-founder and CEO of Bloombase, an intelligent storage firewall company specializing in defense-in-depth security, real-time threat detection and remediation for data cloud. Sean brings over two decades of experience with high-performance computing, cryptography, and low-latency storage technologies to Bloombase. Prior to his entrepreneurial ventures, Sean was a scientist with the Beckman Laser Institute at University of California, Irvine. He holds a PhD in Electrical and Electronic Engineering.
+
+  - name: Justy Wong
+    role: Chief Technology Officer
+    hidden: true
+ 
