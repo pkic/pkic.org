@@ -299,7 +299,7 @@ data:
               There is a hesitance to start the migration to quantum-safe solutions, which leads to slower adoption of PQC. This stems from multiple PQC algorithms to choose from, each having specific strong and weaker points, especially with respect to performance, storage and bandwidth. How to deploy these? Hybrid or not? What is the impact on my application? By helping (financial) organisation in migrating their application and testing them in an operational setting, we capture system effects and benchmarking results. In this presentation, I will discuss the results and experiences gained during the migration and share common pitfalls.
             track: 
             speakers:
-              - Maaike van Leuken-
+              - Maaike van Leuken
             locations:
               - breakout
 
@@ -311,7 +311,7 @@ data:
             speakers:
               - TBC
             locations:
-            - plenary
+              - plenary
 
           - title: Hybrid PQC Digital Signatures and SSI
             description: |
@@ -457,16 +457,23 @@ data:
 
       - time: "16:30"
         sessions:
-          - title: The PQC Migration Handbook – the Revised and Extended Second edition
-            description: |
-              In 2023, we published the PQC Migration Handbook, outlining concrete advice, methodologies and tools to mitigate the quantum threat to cryptography. In December 2024, we published a second edition. It details the full spectrum of PQC migration- from international developments on legislation and a high-level migration path, to technical details on crypto primitives and practical experiences with the migration. It then provides concrete steps to perform a cryptographic inventory, a quantum risk methodology, and how to become crypto-agile. In this presentation, I will discuss the key takeaways from this PQC Migration Handbook.
+          - title: To be announced shortly
+            description: The speaker(s) for this session will be announced soon!
             track: 
             speakers:
-              - Maaike van Leuken
+              - TBC
             locations:
               - plenary
+          # - title: The PQC Migration Handbook – the Revised and Extended Second edition
+          #   description: |
+          #     In 2023, we published the PQC Migration Handbook, outlining concrete advice, methodologies and tools to mitigate the quantum threat to cryptography. In December 2024, we published a second edition. It details the full spectrum of PQC migration- from international developments on legislation and a high-level migration path, to technical details on crypto primitives and practical experiences with the migration. It then provides concrete steps to perform a cryptographic inventory, a quantum risk methodology, and how to become crypto-agile. In this presentation, I will discuss the key takeaways from this PQC Migration Handbook.
+          #   track: 
+          #   speakers:
+          #     - Maaike van Leuken
+          #   locations:
+          #     - plenary
 
-            title: 
+          - title: 
             description: _Continuation of prior session_
             track: 
             speakers:
