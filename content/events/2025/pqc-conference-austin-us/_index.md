@@ -230,6 +230,17 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/sulemanahmadd/
 
+    - name: Reshmi TR
+      title: Scientist at Society for Electronic Transactions and Security (SETS)
+      bio: |
+        Dr. TR Reshmi is currently working as a Scientist under Cryptology and Computing Research group in Society for Electronic Transactions and Security (SETS) Chennai Under Office of Principal Scientific Adviser to the Government of India. Her active projects are in the areas of Blockchain, 5G Security, Ransomware Analysis and AI/ML for Cybersecurity. 
+
+        Dr. Reshmi, an alumnus of Anna University, received her Ph.D. in Information & Communication Engineering from Anna University in 2015. Currently, she has around 15 years of industrial, academic and research experience in the field of computer science and engineering.  She has delivered several keynote addresses and presented papers in a number of reputed national and international conferences and also has authored 30 papers in SCI and Scopus Indexed technical journals. Further, to her credit, Dr Reshmi has one patents granted and 2 under progress for grant approval.
+
+        Dr. Reshmi is an IPv6 Forum Certified Engineer (Silver). She is an active member of several professional societies and forums such as IETF, ISOC, IPv6 forum, IAENG to name a few and also a member in few working groups & committees in her professional areas.
+      social:
+        linkedin: https://www.linkedin.com/in/reshmi-tr-2323a862/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     # Wednesday -------------------------------------------------------------------
@@ -367,11 +378,14 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
+          - title: "Quantum-Safe Solutions for Permissioned Blockchain Networks: A Hyperledger Fabric Case Study"
+            description: |
+              This presentation explores the integration of Post-Quantum Cryptographic (PQC) solutions within the permissioned blockchain framework of Hyperledger Fabric. Focusing on applications such as supply chain management, land registration, and certificate validation, the talk will highlight how Hyperledger Fabric has been tailored to meet security needs in both academia and industry. Public Key Infrastructure (PKI) is central to these implementations, ensuring identity management and secure communication via TLS validations, with chain codes customized for specific uses.
+
+              The rise of quantum computing presents significant vulnerabilities for classical cryptographic algorithms used within these blockchain networks. In response, a quantum-safe PKI using Crystal Dilithium-based digital signatures has been developed and tested within Hyperledger Fabric, achieving successful implementation. Attempts to integrate SPINCS+, however, revealed compatibility challenges, emphasizing the need for adapting permissioned blockchain systems as quantum threats emerge. This talk will share early results of deploying a PQC-enabled certifying authority in Hyperledger Fabric, offering insights into essential modifications for a quantum-resistant blockchain environment.
             track: 
             speakers:
-              - TBC
+              - Reshmi TR
             locations:
               - breakout
 
@@ -443,11 +457,12 @@ data:
 
       - time: "16:30"
         sessions:
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
+          - title: The PQC Migration Handbook – the Revised and Extended Second edition
+            description: |
+              In 2023, we published the PQC Migration Handbook, outlining concrete advice, methodologies and tools to mitigate the quantum threat to cryptography. In December 2024, we published a second edition. It details the full spectrum of PQC migration- from international developments on legislation and a high-level migration path, to technical details on crypto primitives and practical experiences with the migration. It then provides concrete steps to perform a cryptographic inventory, a quantum risk methodology, and how to become crypto-agile. In this presentation, I will discuss the key takeaways from this PQC Migration Handbook.
             track: 
             speakers:
-              - TBC
+              - Maaike van Leuken
             locations:
               - plenary
 
