@@ -1,0 +1,111 @@
+id: ltf.ngo
+name: Libyan Technology Foundation
+slogan: Technical Awareness for All
+website: https://www.ltf.ngo/
+
+# Short description, longer content can be placed in `content/members/`
+description: LTF is a non-profit foundation 2020, to promote technical awareness, support Libya's ICT sector, and drive digital transformation.
+
+# membership
+memberSince: 2024-11-18
+memberType: A
+workingGroups:
+  - CA
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: none
+
+# Blog posts
+blog: 
+  url: https://www.ltf.ngo/blog/
+  feed: https://www.ltf.ngo/blog/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://technology.ly/en/news/
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://technology.ly/en/contact/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/Libyan_Tech_NGO
+  facebook: https://www.facebook.com/Libyan.Technology.NGO/
+  instagram: https://www.instagram.com/libyan_technology_ngo/
+  linkedin: https://www.linkedin.com/company/libyantechnology/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Amin Salih
+    role: Founder & Chairman
+    social:
+      twitter: https://twitter.com/Amin_Y_Salih
+      linkedin: https://www.linkedin.com/in/amin-salih/
+    description:
+      Mr. Amin Younis Salih is a prominent figure in Libya's technology sector, serving as the Chairman of the Libyan Technology Foundation (LTF). Established on August 25, 2020, LTF is a non-profit organization dedicated to promoting technological development and digital transformation within the country.
+
+      In his role at LTF, Salih oversees the organization's strategic direction, focusing on initiatives that enhance technological awareness and support the growth of the information and communications technology (ICT) sector in Libya. Under his leadership, LTF has launched programs aimed at fostering innovation and entrepreneurship among Libyan youth.
+
+      Beyond his work with LTF, Salih is an active participant in Libya's broader technology community. He has delivered talks on digital transformation, including a presentation at TEDxZintan, where he discussed the evolution of technology and its necessity for the country's progress. 
+
+      Salih's contributions extend to organizing significant events such as the Libyan Information Technology Day, held in Tripoli on June 1, 2022. This event featured various activities, workshops, and conferences across multiple cities, highlighting his commitment to advancing Libya's technological landscape. 
+    from: 2020-08-25
+
+  - name: Amin Salih
+    role: Founder & Chairman
+    social:
+      twitter: https://twitter.com/Amin_Y_Salih
+      linkedin: https://www.linkedin.com/in/amin-salih/
+    description:
+      Mr. Amin Younis Salih is a prominent figure in Libya's technology sector, serving as the Chairman of the Libyan Technology Foundation (LTF). Established on August 25, 2020, LTF is a non-profit organization dedicated to promoting technological development and digital transformation within the country.
+
+      In his role at LTF, Salih oversees the organization's strategic direction, focusing on initiatives that enhance technological awareness and support the growth of the information and communications technology (ICT) sector in Libya. Under his leadership, LTF has launched programs aimed at fostering innovation and entrepreneurship among Libyan youth.
+
+      Beyond his work with LTF, Salih is an active participant in Libya's broader technology community. He has delivered talks on digital transformation, including a presentation at TEDxZintan, where he discussed the evolution of technology and its necessity for the country's progress. 
+
+      Salih's contributions extend to organizing significant events such as the Libyan Information Technology Day, held in Tripoli on June 1, 2022. This event featured various activities, workshops, and conferences across multiple cities, highlighting his commitment to advancing Libya's technological landscape. 
+    from: 2020-08-25
+
+  - name: Amin Salih
+    role: Founder & Chairman
+    social:
+      twitter: https://twitter.com/Amin_Y_Salih
+      linkedin: https://www.linkedin.com/in/amin-salih/
+    description:
+      Mr. Amin Younis Salih is a prominent figure in Libya's technology sector, serving as the Chairman of the Libyan Technology Foundation (LTF). Established on August 25, 2020, LTF is a non-profit organization dedicated to promoting technological development and digital transformation within the country.
+
+      In his role at LTF, Salih oversees the organization's strategic direction, focusing on initiatives that enhance technological awareness and support the growth of the information and communications technology (ICT) sector in Libya. Under his leadership, LTF has launched programs aimed at fostering innovation and entrepreneurship among Libyan youth.
+
+      Beyond his work with LTF, Salih is an active participant in Libya's broader technology community. He has delivered talks on digital transformation, including a presentation at TEDxZintan, where he discussed the evolution of technology and its necessity for the country's progress. 
+
+      Salih's contributions extend to organizing significant events such as the Libyan Information Technology Day, held in Tripoli on June 1, 2022. This event featured various activities, workshops, and conferences across multiple cities, highlighting his commitment to advancing Libya's technological landscape. 
+    from: 2020-08-25
+
+  - name: Amin Salih
+    role: Founder & Chairman
+    social:
+      twitter: https://twitter.com/Amin_Y_Salih
+      linkedin: https://www.linkedin.com/in/amin-salih/
+    description:
+      Mr. Amin Younis Salih is a prominent figure in Libya's technology sector, serving as the Chairman of the Libyan Technology Foundation (LTF). Established on August 25, 2020, LTF is a non-profit organization dedicated to promoting technological development and digital transformation within the country.
+
+      In his role at LTF, Salih oversees the organization's strategic direction, focusing on initiatives that enhance technological awareness and support the growth of the information and communications technology (ICT) sector in Libya. Under his leadership, LTF has launched programs aimed at fostering innovation and entrepreneurship among Libyan youth.
+
+      Beyond his work with LTF, Salih is an active participant in Libya's broader technology community. He has delivered talks on digital transformation, including a presentation at TEDxZintan, where he discussed the evolution of technology and its necessity for the country's progress. 
+
+      Salih's contributions extend to organizing significant events such as the Libyan Information Technology Day, held in Tripoli on June 1, 2022. This event featured various activities, workshops, and conferences across multiple cities, highlighting his commitment to advancing Libya's technological landscape. 
+    from: 2020-08-25
