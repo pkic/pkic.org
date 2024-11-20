@@ -255,6 +255,13 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/jan-klaußner-12578b159
 
+    - name: Jeff Stapleton
+      title: Executive Director Cybersecurity Researcher at Wells Fargo
+      bio: |
+        Jeff Stapleton is a security professional with over 40 years’ experience primarily in the financial services industry, focusing on cryptography, PKI and key management. He has participated in the development of numerous ISO and X9 standards for 35 years, chaired the X9F4 Cybersecurity and Cryptography workgroup for 25 years, and a US expert to ISO TC68 Financial Services. Jeff has published papers, written articles, and authored his five-book series Security Without Obscurity with Routledge CRC Press. 
+      social:
+        linkedin: https://www.linkedin.com/in/jjstapleton 
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     # Wednesday -------------------------------------------------------------------
@@ -405,11 +412,12 @@ data:
 
       - time: "14:30"
         sessions:
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
+          - title: "X9 Financial PKI: PQC Readiness and Crypto-Agility for Financial Services"
+            description: |
+              Transitioning from legacy asymmetric algorithms to PQC algorithms also means upgrading your PKI and certificates, however the financial services industry has its own needs which no longer aligns with the CA/Browser Forum, the IETF, NIST, or other programs. Consequently, the Accredited Standards Committee (ASC) X9 Financial Services has launched the X9 Financial PKI as an alternative for PQC readiness and crypto-agility to banks, merchants, and third-party financial service providers. This session discusses the issues, the requirements, the technologies, the X9 Financial PKI program, and its first implementation using PQC enabled certificates. 
             track: 
             speakers:
-              - TBC
+              - Jeff Stapleton
             locations:
               - plenary
 
