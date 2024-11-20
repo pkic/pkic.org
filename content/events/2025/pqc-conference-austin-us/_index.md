@@ -248,6 +248,13 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/inigo-barreira-107690/
 
+    - name: Jan Klaußner
+      title: Senior Product Architect at Bundesdruckerei GmbH
+      bio: |
+        Jan Klaußner studied computer science with focus on cryptography and security at TU Dresden and worked in the IT-Security industry ever since. Several years developing high grade security products provided him a deep understanding of the possibilities and challenges around smart cards and Public Key Infrastructures. Finally, he joined his team at the Bundesdruckerei in 2021 to improve and promote innovative ideas around PKIs and post quantum cryptography.
+      social:
+        linkedin: https://www.linkedin.com/in/jan-klaußner-12578b159
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     # Wednesday -------------------------------------------------------------------
@@ -406,11 +413,14 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
-            track: 
+          - title: "Hybrid PQC E-Mail Communication: Easing Migration Pain"
+            description: |
+              Secure e-mail communication is a natural fit for hybrid cryptography, offering long-term confidentiality and non-repudiation for users. This talk introduces a prototype system comprising a Certificate Authority, Certificate Management System, and an extended Open Source client application, including an integration module for Microsoft Outlook.
+
+              The presentation explores the selection criteria for hybrid schemes and the rationale behind choosing Composite and ICA approaches to facilitate PKI and S/MIME migration. It also shares insights from implementing and using pure PQC, Composite, and ICA hybrid constructions. Topics include certificate creation, client enrollment, and securely signing and encrypting e-mail messages using S/MIME across various cryptographic configurations, emphasizing the hybrid integration of classical and post-quantum secure cryptography.
+            track: Migration
             speakers:
-              - TBC
+              - Jan Klaußner
             locations:
               - breakout
 
