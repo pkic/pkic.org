@@ -241,6 +241,13 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/reshmi-tr-2323a862/
 
+    - name: Iñigo Barreira
+      title: CA Manager at Sectigo
+      bio: |
+        Iñigo Barreira has been working in PKI and cybersecurity for more than 25 years and has held technical responsibility positions on CAs/TSPs, Browsers and also Certification Bodies as an auditor. He started working with ETSI ESI in the earlies 2000 and has participated in several STFs developing many of the standards used in the past for the issuance of certificates and also on preservation services which were the germen for the current ENs in where he also participated as editor. He has also participated in some other projects with ENISA (European Agency for Cybersecurity) writing several reports, all related to PKI services. Iñigo is an engineer and holds several technical certifications.
+      social:
+        linkedin: https://www.linkedin.com/in/inigo-barreira-107690/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     # Wednesday -------------------------------------------------------------------
@@ -557,11 +564,14 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
+          - title: ETSI ESI and Quantum-Safe Cryptography
+            description: |
+              ETSI ESI (Electronic Signatures and Trust Infrastructures) develops policies, security, and technical requirements for Trust Service Providers (TSPs), including certification authorities, time-stamping authorities, and providers of remote signature creation, validation, registered e-delivery, and long-term data preservation services. ETSI ESI also maintains Trusted Lists, which enhance confidence in digital certificates and services by indicating TSP compliance with recognized approval schemes.
+
+              This presentation will explore how developments in Quantum-Safe Cryptography (QSC) and Post-Quantum Cryptography (PQC) affect ETSI ESI standards. It will highlight areas where changes from other standards development organizations (SDOs) may influence ETSI ESI work, discuss potential impacts on existing frameworks, and provide an estimated timeline for adoption by consumers and organizations.
             track: 
             speakers:
-              - TBC
+              - Iñigo Barreira
             locations:
               - breakout
 
