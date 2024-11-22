@@ -1,1 +1,2 @@
-{{- .Page.Params.data | jsonify -}}
+{{- $data := partialCached "add-headshots.html" . -}}
+{{- $data | jsonify -}}

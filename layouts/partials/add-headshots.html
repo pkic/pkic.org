@@ -1,0 +1,21 @@
+{{- $speakers := slice -}}
+{{- range $.Page.Params.data.speakers -}}
+    {{- $speaker := . -}}
+    {{- $headshot := (printf "speakers/%s.*" (default (.name | urlize | safeURL) .headshot)) -}}
+    {{- with $.Page.Resources.GetMatch $headshot -}}
+        {{ $x150 := .Resize "x150" }}        
+        {{ $x250 := .Resize "x250" }}
+        {{ $x600 := .Resize "x600" }}
+
+        {{- $speakers = $speakers | append (merge $speaker (dict "headshot" (dict 
+            "x150" $x150.Permalink
+            "x250" $x250.Permalink
+            "x600" $x600.Permalink
+        ))) -}}
+
+    {{- else -}}
+        {{- $speakers = $speakers | append $speaker -}}
+    {{- end -}}
+{{- end -}}
+{{- $data := merge $.Page.Params.data (dict "speakers" $speakers) -}}
+{{- return $data -}}
