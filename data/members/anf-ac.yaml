@@ -19,7 +19,7 @@ sponsor:
 # Blog posts
 blog: 
   url: https://anf.es/en/blog-eng/
-  feed: https://anf.es/en/feed/
+  #feed: https://anf.es/en/feed/
   language: en_US
 
 # Press Releases

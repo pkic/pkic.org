@@ -22,7 +22,7 @@ sponsor:
 # Blog posts
 blog: 
   url: https://www.entrust.com/blog/
-  feed: https://www.entrust.com/blog/feed/
+  #feed: https://www.entrust.com/blog/feed/
   language: en_US
 
 # Press Releases

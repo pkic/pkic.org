@@ -19,7 +19,7 @@ sponsor:
 # Blog posts
 blog:
   url: https://trustsec.net/blog/
-  feed: https://trustsec.net/feed
+ # feed: https://trustsec.net/feed
   language: en_US
 
 # Press Releases
