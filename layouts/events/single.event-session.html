@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ .Title }} - Event Session</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+        :root {
+            --blue: rgba(90, 155, 213, 0.98);
+            --orange: #ed7d31;
+            --green: #188754;
+            --yellow: #ffc000;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: black;
+            /* background-color: rgba(0, 0, 0, 0); */
+
+            font-family: 'Roboto', sans-serif;
+        }
+
+        #header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            padding: 50px;
+            font-size: 4vh;
+            font-weight: bolder;
+        }
+
+        .white-orange {
+            display: inline-block;
+            background-color: white;
+            color: var(--orange);
+            padding: 1vh 3vh;
+        }
+
+        .orange-white {
+            background-color: var(--orange);
+            color: white;
+            padding: 1vh 3vh;
+        }
+
+        .white-blue {
+            background-color: white;
+            color: var(--blue);
+            padding: 1vh 3vh;
+        }
+
+        .blue-white {
+            background-color: var(--blue);
+            color: white;
+            padding: 1vh 3vh;
+        }
+
+        .yellow-black {
+            background-color: var(--yellow);
+            color: black;
+            padding: 1vh 3vh;
+            font-size: 4vh;
+            font-weight: bolder;
+        }
+
+        #logo {
+            display: block;
+            position: fixed;
+            bottom: 50px;
+            right: 50px;
+            width: 20vh;
+        }
+
+        #logo-element {
+            position: fixed;
+            top: 10vh;
+            right: 50px;
+            width: 75vh;
+        }
+
+        #session {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80vw;
+            font-size: 4vh;
+        }
+
+        #session>div {
+            align-content: center;
+            min-height: 8vh;
+            font-size: 4vh;
+        }
+
+        #session #title {
+            font-weight: bolder;
+        }
+
+        #session #description {
+            padding: 1vh 0;
+            font-size: 1.5vh;
+
+        }
+
+        #session .speaker {
+            display: block;
+            clear: both;
+            align-content: center;
+            padding: 10px;
+        }
+
+        #session .speaker .name {
+            font-weight: bolder;
+        }
+
+        #session .speaker .title {
+            font-weight: lighter;
+            font-size: 70%;
+        }
+
+        #session .speaker .headshot {
+            width: 10vh;
+            height: 10vh;
+            border-radius: 50%;
+            margin-right: 2vh;
+            float: left;
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        #sponsors {
+            background-color: white;
+            position: fixed;
+            bottom: calc(10vh + 50px);
+            left: 50px;
+            padding: 1vh;
+        }
+
+        #footer {
+            position: fixed;
+            bottom: 50px;
+            left: 50px;
+        }
+
+        .sponsor-logo {
+            display: inline;
+            padding: 1vh;
+            height: 3vh;
+            max-width: 10vh;
+        }
+
+        .sponsors {
+            display: inline;
+        }
+
+        .sponsors a {
+            text-decoration: none;
+        }
+
+        .dimmed {
+            color: rgba(255, 255, 255, 0.3);
+            margin: 0.5vh;
+        }
+    </style>
+
+    {{ $js := resources.Get "js/event-session.js" }}
+    {{ $params := dict }}
+    {{ $sourceMap := cond hugo.IsProduction "" "inline" }}
+    {{ $opts := dict "sourceMap" $sourceMap "minify" hugo.IsProduction "target" "es2018" "params" $params }}
+    {{ $js = $js | js.Build $opts }}
+    {{ if hugo.IsProduction }}
+    {{ $js = $js | fingerprint }}
+    {{ end }}
+    <script src="{{ $js.RelPermalink }}" {{ if hugo.IsProduction }}integrity="{{ $js.Data.Integrity }}" {{ end }}
+        defer></script>
+</head>
+
+<body>
+    <img src="/img/logo.svg" id="logo" alt="PKI Consortium">
+    <img src="/img/logo-color.svg" id="logo-element" alt="PKI Consortium">
+
+    <div id="header">
+        <div class="white-orange">
+            Post-Quantum
+        </div>
+        <div class="orange-white">
+            Cryptography Conference
+        </div>
+    </div>
+
+    <div id="session">
+        <div class="white-blue">
+            <div id="title"></div>
+            <div id="description"></div>
+        </div>
+        <div id="speakers" class="blue-white"></div>
+    </div>
+
+    <div id="sponsors">
+        {{ .Scratch.Set "level" "Leader" }}
+        {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Austin 2025" }}
+
+        {{ partial "sponsors.html" . }}
+
+        {{ .Scratch.Set "level" "Platinum" }}
+        {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Austin 2025" }}
+
+        {{ partial "sponsors.html" . }}
+    </div>
+    <div id="footer">
+        <div class="yellow-black">
+            January 15 and 16, 2025 - Austin, TX (US) | Online
+        </div>
+        <div class="dimmed">
+            PKI Consortium Inc. is registered as a 501(c)(6) non-profit entity (“business league”) under Utah law
+            (10462204-0140) | pkic.org
+        </div>
+    </div>
+</body>
+
+</html>
