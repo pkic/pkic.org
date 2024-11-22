@@ -36,7 +36,6 @@ data:
     - name: Paul van Brouwershaven
       title: Chair PKI Consortium and Director of Technology Compliance at Entrust
       bio: Paul van Brouwershaven is Director of Technology Compliance for Entrust’s certification authority, Chair of the PKI Consortium and former Vice Chair of the CA/Browser Forum.
-      headshot: paul-van-brouwershaven
       social:
         twitter: https://twitter.com/vanbroup
         linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
@@ -57,7 +56,6 @@ data:
         Bill Newhouse is a cybersecurity engineer at the National Cybersecurity Center of Excellence (NCCoE) in the Applied Cybersecurity Division in the Information Technology Laboratory at the National Institute of Standards and Technology (NIST).
 
         His work at the NCCoE, NIST's applied cybersecurity lab, pushes for the adoption of functional cybersecurity reference designs built from commercially available technologies provided by project collaborators. These projects include establishing communities of interest with members from industry, academia, and government to gain insight to define project's that address cybersecurity risk faced by the members of the community of interest. NCCoE projects are documented in NIST SP 1800 series publications known as practices guides. He has completed guides addressing cybersecurity risk in the hospitality and retail sectors as well as an early demonstration of derived credentials. He recently completed a cybersecurity collaboration with the U.S. Department of Energy that resulted in a Cybersecurity Framework Profile developed for the Liquefied Natural Gas (LNG) industry and the subsidiary functions that support the overarching liquefaction process, transport, and distribution of LNG. His responsibilities as the financial services sector lead also include identifying ways to include financial services sector use case scenarios in relevant NCCoE projects/practice guides. He is presently leading projects on Data Classification and Migration to Post-Quantum Cryptography.
-      headshot: bill-newhouse
       website: https://www.nist.gov/people/bill-newhouse
 
     - name: Dustin Moody
