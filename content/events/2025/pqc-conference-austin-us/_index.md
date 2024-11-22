@@ -10,6 +10,7 @@ outputs:
  - html
  - event-data
  - event-overlays
+ - event-session
  - event-agenda
 
 heroTitle: Post-Quantum Cryptography Conference
@@ -34,7 +35,8 @@ data:
   speakers:
     - name: Paul van Brouwershaven
       title: Chair PKI Consortium and Director of Technology Compliance at Entrust
-      bio: Paul van Brouwershaven is Director of Technology Compliance for Entrust’s certification authority, Chair of the PKI Consortium and Vice Chair of the CA/Browser Forum.
+      bio: Paul van Brouwershaven is Director of Technology Compliance for Entrust’s certification authority, Chair of the PKI Consortium and former Vice Chair of the CA/Browser Forum.
+      headshot: paul-van-brouwershaven
       social:
         twitter: https://twitter.com/vanbroup
         linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
@@ -42,7 +44,7 @@ data:
         ietf: https://datatracker.ietf.org/person/paul.vanbrouwershaven@digitorus.com
 
     - name: Albert de Ruiter
-      title: Policy Authority PKI Dutch Government (Logius)
+      title: Vice Chair PKI Consortium and Policy Authority PKI Dutch Government (Logius)
       bio: |
         Albert de Ruiter operates the Policy Authority at Logius, the digital government service organization of the Netherlands. He is also a member of the QvC (Quantum Secure Cryptography) working group of the Dutch government, a board member of HAPKIDO, and a member of the PKI Consortium. Albert is known for introducing the idea of a Post-Quantum Cryptography Conference to the PKI Consortium in 2022.
       social:
@@ -55,6 +57,7 @@ data:
         Bill Newhouse is a cybersecurity engineer at the National Cybersecurity Center of Excellence (NCCoE) in the Applied Cybersecurity Division in the Information Technology Laboratory at the National Institute of Standards and Technology (NIST).
 
         His work at the NCCoE, NIST's applied cybersecurity lab, pushes for the adoption of functional cybersecurity reference designs built from commercially available technologies provided by project collaborators. These projects include establishing communities of interest with members from industry, academia, and government to gain insight to define project's that address cybersecurity risk faced by the members of the community of interest. NCCoE projects are documented in NIST SP 1800 series publications known as practices guides. He has completed guides addressing cybersecurity risk in the hospitality and retail sectors as well as an early demonstration of derived credentials. He recently completed a cybersecurity collaboration with the U.S. Department of Energy that resulted in a Cybersecurity Framework Profile developed for the Liquefied Natural Gas (LNG) industry and the subsidiary functions that support the overarching liquefaction process, transport, and distribution of LNG. His responsibilities as the financial services sector lead also include identifying ways to include financial services sector use case scenarios in relevant NCCoE projects/practice guides. He is presently leading projects on Data Classification and Migration to Post-Quantum Cryptography.
+      headshot: bill-newhouse
       website: https://www.nist.gov/people/bill-newhouse
 
     - name: Dustin Moody
@@ -262,6 +265,13 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/jjstapleton 
 
+    - name: Corey Bonnell
+      title: Industry Technology Strategist at DigiCert
+      bio: |
+        Corey Bonnell has over a decade of engineering experience in several domains with a deep focus on Public Key Infrastructure. Corey represents DigiCert in several standards organizations, such as the CA/Browser Forum, X9, and IETF.
+      social:
+        linkedin: https://www.linkedin.com/in/coreybonnell/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     # Wednesday -------------------------------------------------------------------
@@ -345,7 +355,7 @@ data:
 
       - time: "12:00"
         sessions:
-          - title: "ELI5: Implementing digital certificates for a post-quantum world"
+          - title: "ELI5: Implementing Digital Certificates for a Post-Quantum World"
             description: |
               This presentation will focus on the pragmatic steps IT teams can take now to prepare for deployment of post-quantum cryptographic algorithms once it becomes practical. This conversation will directly connect the steps back to IT teams’ day-to-day tasks, as it relates to certificate management, and help practitioners identify exactly what they need to do today to begin the process of being post-quantum ready. The presentation will go over: (1) the necessary steps for industry standards bodies to clarify requirements for the new NIST standards; (2) what software, hardware, and services vendors need to do to incorporate support and possible timelines for this support; (3) how enterprises can apply these updates, (4) what you, as an IT manager, can do today to begin the transformation to PQC, and (5) what a likely post-quantum certificate migration plan might look like, including the use of hybrid certificates. 
             track: Beginners
@@ -388,7 +398,7 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: Why the Internet isn’t ready for post-quantum certificates
+          - title: Why the Internet isn’t ready for Post-Quantum Certificates
             description: |
               NIST has finalized the first set of post-quantum algorithms, and post-quantum key agreement has been enabled by default in browsers for over a year. Why are signatures lagging behind? This talk provides the latest updates in a fast-moving ecosystem, a recap of the challenges in migrating to post-quantum certificates, and an overview of ongoing efforts to make post-quantum signatures practical in the WebPKI.
 
@@ -467,7 +477,7 @@ data:
             locations:
               - plenary
 
-          - title: Making PQ signatures work in the WebPKI
+          - title: Making PQ Signatures work in the WebPKI
             description: |
               Post-quantum signatures are not easily deployable in the WebPKI. Using the signature algorithms recently standardized by NIST as drop-in replacements for existing classical algorithms on the Web would incur significant performance degradations, making this approach infeasible unless a cryptographically-relevant quantum computer (CRQCs) is imminent. There’s a real risk that post-quantum signatures do not see widespread adoption before CRQCs become a reality, unless we make changes to how signatures are used in the WebPKI.
 
@@ -532,11 +542,11 @@ data:
               The Post Quantum Crypto Interoperability project started as a hackathon project at the IETF in 2022. People interested in adding PQ algorithm support into existing X.509 keys, signatures and certificates brough their tools and started to collaborate using the proposed PQC algorithms. The project has continued to grow and includes an artifact repository anyone can use for interoperability testing, a list of prototype OIDS to facilitate interoperability, and a compatibility matrix to demonstrate interoperability between users.  With the experience obtained by participating in the project, its collaborators also provide valuable feedback to the emerging standards that are in development for the support of PQC.  This talk will give an overview of the project, how to use it for interoperability testing and will encourage you to become a participant in the project.  
             track: 
             speakers:
-              - TBC
+              - Corey Bonnell
             locations:
               - plenary
 
-          - title: PQC standardization at the Internet Engineering Task Force (IETF)
+          - title: PQC Standardization at the Internet Engineering Task Force (IETF)
             description: |
               Just as post-quantum cryptography (PQC) has presented significant challenges for academic cryptographers, so too has it posed unique challenges for cryptographic engineers. The new PQC primitives, with their distinct characteristics compared to traditional RSA and ECC algorithms, often require substantial protocol and application redesign to accommodate them effectively. Moreover, the need for a relatively abrupt transition to PQC across the Internet's vast infrastructure has introduced additional complexities.
 
@@ -558,11 +568,10 @@ data:
             locations:
               - plenary
 
-          - title: PQC Interoperability Project
+          - title: To be announced shortly
             locations:
               - breakout
-            description: |
-              The Post Quantum Crypto Interoperability project started as a hackathon project at the IETF in 2022.  People interested in adding PQ algorithm support into existing X.509 keys, signatures and certificates brough their tools and started to collaborate using the proposed PQC algorithms. The project has continued to grow and includes an artifact repository anyone can use for interoperability testing, a list of prototype OIDS to facilitate interoperability, and a compatibility matrix to demonstrate interoperability between users. With the experience obtained by participating in the project, its collaborators also provide valuable feedback to the emerging standards that are in development for the support of PQC. This talk will give an overview of the project, how to use it for interoperability testing and will encourage you to become a participant in the project.
+            description: The speaker(s) for this session will be announced soon!
             track: 
             speakers:
               - TBC
@@ -599,7 +608,7 @@ data:
 
       - time: "11:00"
         sessions:
-          - title: Crypto asset discovery tooling – an overview of capabilities, characteristics and gaps
+          - title: Crypto Asset Discovery Tooling – an Overview of Capabilities, Characteristics and Gaps
             description: |
               In the migration towards PQC, one of the first steps should be getting an overview of cryptographic assets in your organisation, i.e. where and why are you using which types of cryptographic algorithms, protocols, keys, etc. The result is captured in a Cryptographic Bill-Of-Materials (CBOM). Various commercial solutions exist, but how well are these addressing the problem? In 2024, as an independent research organisation, we have conducted research into crypto asset discovery tooling and their vendors, through literature research and interviews with the vendors. In this presentation, I will give an overview of the currently existing tools, the ideal setting, the gap between them and how to bridge that gap.
             track: 
@@ -608,7 +617,7 @@ data:
             locations:
               - plenary
 
-          - title: Lessons learned from testing millions of servers for Post-Quantum compatibility
+          - title: Lessons Learned from Testing Millions of Servers for Post-Quantum Compatibility
             description: |
               Protocol ossification delayed the rollout of TLS 1.3 for years, and has once again become a roadblock in the rollout of post-quantum cryptography. In a recent large-scale study of TLS servers, we assessed the deployment compatibility of post-quantum key agreements, uncovering surprising results and insights. Notably, we observed protocol ossification in areas beyond the well-known issue of fragmented ClientHello messages due to large key sizes. We believe more surprises will emerge with post-quantum certificates, making deployment far more complex than a “flip-of-a-switch” transition.
 
@@ -629,7 +638,7 @@ data:
             locations:
               - plenary
 
-          - title: How much will ML-DSA signatures affect Web Metrics after all? 
+          - title: How much will ML-DSA Signatures affect Web Metrics after all? 
             description: |
               It is sometimes argued that ML-DSA signatures will increase the size of TLS handshakes by 15KB which will affect web performance significantly. As most web connections transfer much larger amounts of data, 15KB may not impact the bottom line of the most common web performance metrics. In this session, we will present a qualitative analysis of web metrics and their relation to the TLS handshake. We will demonstrate that web connections transport large amounts of web content which takes much longer than the handshake itself. We will also analyze the web page performance metrics of top websites to showcase that an additional 15KB in the handshake will have minimal impact on the user experience. The takeaway of this session will be that ML-DSA will introduce overhead, but after using simple techniques to trim the authentication data in the handshake, the practical effect on web users will not be noticeable. 
             track: WebPKI
