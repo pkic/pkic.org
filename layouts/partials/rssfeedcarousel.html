@@ -2,6 +2,7 @@
 {{- range $.Site.Data.members -}}
   {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
     {{- with .blog.feed -}}
+      {{- $t := debug.Timer . -}}
       {{- with resources.GetRemote . -}}
         {{- with .Err -}}
           {{- warnf "%s" . -}}
@@ -22,7 +23,10 @@
             {{- end -}}
           {{- end -}}
         {{- end -}}
+      {{- else -}}
+        {{- warnf "Unable to get RSS feed from %q" . -}}
       {{- end -}}
+      {{- $t.Stop -}}
     {{- end -}}
   {{- end -}}
 {{- end -}}
