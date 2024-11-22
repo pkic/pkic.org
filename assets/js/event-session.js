@@ -81,7 +81,7 @@ function updateSessionAndSpeakers() {
 
                 let headshot = "<span class='headshot'></span>";
                 if (speaker.headshot) {
-                    headshot = `<img src="./speakers/${speaker.headshot}.jpg"  class="headshot" />`
+                    headshot = `<img src="${speaker.headshot.x250}"  class="headshot" />`
                 }
 
                 speakerElement.innerHTML = `
