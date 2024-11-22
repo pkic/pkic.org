@@ -17,7 +17,7 @@ sponsor:
 # Blog posts
 blog: 
   url: https://trustzone.com/news/
-  feed: https://trustzone.com/feed/ 
+  #feed: https://trustzone.com/feed/ 
   language: en_US
 
 # Press Releases

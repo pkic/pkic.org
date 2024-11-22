@@ -19,7 +19,7 @@ sponsor:
 # Blog posts
 blog:
   url: https://www.vikingcloud.com/blog/
-  feed: https://www.vikingcloud.com/feed/
+  #feed: https://www.vikingcloud.com/feed/
   language: en_US
 
 # Press Releases
