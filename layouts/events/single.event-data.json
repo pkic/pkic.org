@@ -1,2 +1,2 @@
-{{- $data := partialCached "add-headshots.html" . -}}
+{{- $data := partial "add-headshots.html" . -}}
 {{- $data | jsonify -}}

@@ -1,4 +1,4 @@
-{{- $data := partialCached "add-headshots.html" . -}}
+{{- $data := partial "add-headshots.html" . -}}
 {{- with $data.agenda -}}
     <div class="mt-2 mb-4">
         {{- if gt (len .) 1 -}}
