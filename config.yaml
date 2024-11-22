@@ -118,6 +118,9 @@ outputFormats:
   event-overlays:
     mediatype: text/html
     baseName: event-overlays
+  event-session:
+    mediatype: text/html
+    baseName: event-session
   event-data:
     mediatype: application/json
     isPlainText: true
@@ -154,7 +157,7 @@ server:
       Referrer-Policy: strict-origin-when-cross-origin
       Content-Security-Policy: default-src 'none'; form-action 'self'; base-uri 'self'; 
           block-all-mixed-content;
-          style-src 'unsafe-inline' 'self' https://fonts.googleapis.com/css;
+          style-src 'unsafe-inline' 'self' https://fonts.googleapis.com/;
           font-src https://fonts.gstatic.com/s/roboto/;
           script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/;
           img-src 'self' https://i.ytimg.com data:;
