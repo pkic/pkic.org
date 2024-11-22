@@ -537,12 +537,13 @@ data:
 
       - time: "9:00"
         sessions:
-          - title: PQC Interoperability Project
-            description: |
-              The Post Quantum Crypto Interoperability project started as a hackathon project at the IETF in 2022. People interested in adding PQ algorithm support into existing X.509 keys, signatures and certificates brough their tools and started to collaborate using the proposed PQC algorithms. The project has continued to grow and includes an artifact repository anyone can use for interoperability testing, a list of prototype OIDS to facilitate interoperability, and a compatibility matrix to demonstrate interoperability between users.  With the experience obtained by participating in the project, its collaborators also provide valuable feedback to the emerging standards that are in development for the support of PQC.  This talk will give an overview of the project, how to use it for interoperability testing and will encourage you to become a participant in the project.  
+          - title: To be announced shortly
+            locations:
+              - breakout
+            description: The speaker(s) for this session will be announced soon!
             track: 
             speakers:
-              - Corey Bonnell
+              - TBC
             locations:
               - plenary
 
@@ -568,13 +569,12 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
-            locations:
-              - breakout
-            description: The speaker(s) for this session will be announced soon!
+          - title: PQC Interoperability Project
+            description: |
+              The Post Quantum Crypto Interoperability project started as a hackathon project at the IETF in 2022. People interested in adding PQ algorithm support into existing X.509 keys, signatures and certificates brough their tools and started to collaborate using the proposed PQC algorithms. The project has continued to grow and includes an artifact repository anyone can use for interoperability testing, a list of prototype OIDS to facilitate interoperability, and a compatibility matrix to demonstrate interoperability between users.  With the experience obtained by participating in the project, its collaborators also provide valuable feedback to the emerging standards that are in development for the support of PQC.  This talk will give an overview of the project, how to use it for interoperability testing and will encourage you to become a participant in the project.  
             track: 
             speakers:
-              - TBC
+              - Corey Bonnell
             locations:
               - breakout
 
