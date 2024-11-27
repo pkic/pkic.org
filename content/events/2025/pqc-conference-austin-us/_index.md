@@ -382,11 +382,14 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
+          - title: Architecting PKI Hierarchies for Graceful PQ Migration
+            description: |
+              Public Key Infrastructures (PKIs) are intricate systems to design, deploy, and  maintain. As post-quantum cryptography (PQC) becomes a reality, one of the most challenging decisions will be algorithm selection. Historically, this has been straightforward—for example, using RSA-2048-SHA256 consistently throughout the PKI hierarchy. In a PQC world, this approach becomes less viable due to tradeoffs that may require different algorithms or parameters at each layer. For instance, long-term secure algorithms might be optimal for root CAs, high-performance algorithms for issuing CAs, and bandwidth-efficient algorithms for end entities.
+
+              Hybrid approaches further complicate these decisions, offering additional security or migration flexibility depending on the use case. This talk explores a "toolbox" of migration mechanisms for X.509 and presents example PKI hierarchies tailored to specific scenarios, illustrating how to navigate the complexity of algorithm choices for a graceful transition to post-quantum cryptography.
             track: 
             speakers:
-              - TBC
+              - Mike Ounsworth
             locations:
               - breakout
 
