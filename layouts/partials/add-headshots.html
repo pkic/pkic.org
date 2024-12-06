@@ -1,7 +1,7 @@
 {{- $speakers := slice -}}
 {{- range $.Page.Params.data.speakers -}}
     {{- $speaker := . -}}
-    {{- $headshot := (printf "speakers/%s.*" (default (.name | urlize | safeURL) .headshot)) -}}
+    {{- $headshot := (printf "speakers/%s.*" (default (.name | urlize | safeURL) .id)) -}}
     {{- with $.Page.Resources.GetMatch $headshot -}}
         {{ $x150 := .Resize "x150" }}        
         {{ $x250 := .Resize "x250" }}
