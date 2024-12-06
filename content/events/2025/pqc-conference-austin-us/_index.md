@@ -58,11 +58,13 @@ data:
         His work at the NCCoE, NIST's applied cybersecurity lab, pushes for the adoption of functional cybersecurity reference designs built from commercially available technologies provided by project collaborators. These projects include establishing communities of interest with members from industry, academia, and government to gain insight to define project's that address cybersecurity risk faced by the members of the community of interest. NCCoE projects are documented in NIST SP 1800 series publications known as practices guides. He has completed guides addressing cybersecurity risk in the hospitality and retail sectors as well as an early demonstration of derived credentials. He recently completed a cybersecurity collaboration with the U.S. Department of Energy that resulted in a Cybersecurity Framework Profile developed for the Liquefied Natural Gas (LNG) industry and the subsidiary functions that support the overarching liquefaction process, transport, and distribution of LNG. His responsibilities as the financial services sector lead also include identifying ways to include financial services sector use case scenarios in relevant NCCoE projects/practice guides. He is presently leading projects on Data Classification and Migration to Post-Quantum Cryptography.
       website: https://www.nist.gov/people/bill-newhouse
 
-    - name: Dustin Moody
-      title: Mathematician & Project Lead, Post-Quantum Cryptography at NIST
+    - name: Andrew Regenscheid
+      title: Manager Cryptographic Technology Group at NIST
       bio: |
-        Dustin Moody is a mathematician in the NIST Computer Security Division. Dustin leads the post-quantum cryptography project at NIST. He received his Ph.D. from the University of Washington in 2009. His area of research deals with elliptic curves and their applications in cryptography.
-      website: https://www.nist.gov/people/dustin-moody
+        Andrew Regenscheid is the manager of the Cryptographic Technology Group within the Computer Security Division at NIST. In his 15 years at NIST, Andrew has worked to apply cryptographic algorithms and tools to improve the security of computer platforms, communication protocols, and authentication mechanisms. He currently leads NIST’s development of cryptographic standards and guidelines, which includes efforts on post-quantum cryptography, lightweight block ciphers and hash functions, and privacy-enhancing cryptography.
+      website: https://www.nist.gov/people/andrew-regenscheid
+      social:
+        linkedin: https://www.linkedin.com/in/andrew-regenscheid-677240a/
 
     - name: Luke Valenta
       title: Research Engineer at Cloudflare
@@ -135,9 +137,10 @@ data:
         
         Leading portfolio and industry efforts on application of Quantum Computing and Quantum Safe in Telecommunications in IBM.
       social:
-        linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
+        linkedin: https://www.linkedin.com/in/lorythorpe/
 
     - name: Jaime Gómez García
+      id: jaime-gomez-garcia
       title: Head of Quantum at Banco Santander
       bio: |
         Jaime Gómez García is a recognized expert in telecommunications, blockchain, and quantum technologies, with an extensive professional background within the financial sector. His contributions as a disseminator of quantum technologies and their consequential influence on enterprises, notably within the financial domain, have garnered him recognition as a LinkedIn Quantum Top Voices in 2022 and 2023. Currently, Jaime is Head of Quantum Technologies at Banco Santander, addressing how quantum computing can be leveraged in benefit of the business and how to tackle the quantum threat to cryptography.
@@ -211,6 +214,7 @@ data:
         linkedin: https://www.linkedin.com/in/maaike-van-leuken-0b1b7011a/
 
     - name: Alexander Löw
+      id: alexander-loew
       title: CEO at Data-Warehouse
       bio: |
         Dr. Alexander Löw is the CEO of Data-Warehouse GmbH and serves as a Senator in the German Senate of Economy. He holds the position of Vice President of the German Cybersecurity Council Association and is the innovative mind behind IQIMS and PCert. With a deep understanding of cybersecurity since the 1980s and 25 years of experience as a Data Protection Officer (DPO), Alexander has a strong focus on Public Key Infrastructure (PKI). He has been involved in the conceptualization, building, and maintenance of industrial and governmental CAs (e.g., Macao, German Airforce, BMW) since 2001. In 2012, following a significant APT attack, he began automating PKI processes to enhance cybersecurity. Since 2014, he has been actively involved in publishing and presenting on PKI and cybersecurity topics, and has been conducting PKI trainings for the German BSI Alliance for Cybersecurity since 2015. In 2024, he joined the NIST Post-Quantum Migration Working Group to contribute to the development of standard 1800-38B.
@@ -218,6 +222,7 @@ data:
         linkedin: https://www.linkedin.com/in/dr-alexander-loew/
 
     - name: José Hernández Pérez
+      id: jose-hernandez-perez
       title: Research Specialist at HPI Consulting & Florida State University
       bio: |
         José Hernández Pérez is an educational consultant specializing in emerging technologies for business, including artificial intelligence, quantum computing, and high-performance computing. He also works as an Applications Specialist at Florida State University’s Research Computing Center, focusing on curriculum development and providing research software support in the humanities, arts, and social sciences. His mission is to equip students at every career stage with the skills and resources they need to pursue their passions wherever they may lead them. José Hernández graduated from the University of Chicago with a MA in Digital Studies and a BA in History.
@@ -243,6 +248,7 @@ data:
         linkedin: https://www.linkedin.com/in/reshmi-tr-2323a862/
 
     - name: Iñigo Barreira
+      id: inigo-barreira
       title: CA Manager at Sectigo
       bio: |
         Iñigo Barreira has been working in PKI and cybersecurity for more than 25 years and has held technical responsibility positions on CAs/TSPs, Browsers and also Certification Bodies as an auditor. He started working with ETSI ESI in the earlies 2000 and has participated in several STFs developing many of the standards used in the past for the issuance of certificates and also on preservation services which were the germen for the current ENs in where he also participated as editor. He has also participated in some other projects with ENISA (European Agency for Cybersecurity) writing several reports, all related to PKI services. Iñigo is an engineer and holds several technical certifications.
@@ -250,6 +256,7 @@ data:
         linkedin: https://www.linkedin.com/in/inigo-barreira-107690/
 
     - name: Jan Klaußner
+      id: jan-klaussner
       title: Senior Product Architect at Bundesdruckerei GmbH
       bio: |
         Jan Klaußner studied computer science with focus on cryptography and security at TU Dresden and worked in the IT-Security industry ever since. Several years developing high grade security products provided him a deep understanding of the possibilities and challenges around smart cards and Public Key Infrastructures. Finally, he joined his team at the Bundesdruckerei in 2021 to improve and promote innovative ideas around PKIs and post quantum cryptography.
@@ -264,11 +271,69 @@ data:
         linkedin: https://www.linkedin.com/in/jjstapleton 
 
     - name: Corey Bonnell
-      title: Industry Technology Strategist at DigiCert
+      title: Technology Strategist at DigiCert
       bio: |
-        Corey Bonnell has over a decade of engineering experience in several domains with a deep focus on Public Key Infrastructure. Corey represents DigiCert in several standards organizations, such as the CA/Browser Forum, X9, and IETF.
+        Corey Bonnell is a Technology Strategist at DigiCert. He has over 15 years of engineering experience in several domains with a deep focus on Public Key Infrastructure. Corey represents DigiCert in several standards organizations, such as the CA/Browser Forum, ETSI, and IETF. He has been involved in the standardization process of emerging standards relating to post-quantum cryptography and is a frequent participant in IETF post-quantum cryptography hackathons.
       social:
         linkedin: https://www.linkedin.com/in/coreybonnell/
+
+    - name: Morgan Stern
+      title: Senior Quantum Resistant Cryptography Subject Matter Expert at National Security Agency (NSA)
+      bio: |
+        Dr. Morgan Stern is the senior Quantum Resistant Cryptography Subject Matter Expert in the National Security Agency (NSA)'s Cybersecurity Directorate. In that capacity he combines his deep knowledge of public key cryptography and quantum information science to help craft cybersecurity strategy, and advise agencies across the US Government with regards to the threats and opportunities presented by quantum technologies. Prior to this he held a series of technical leadership roles in NSA's Cybersecurity and Capabilities Directorates where he was responsible for analyzing the security of cryptographic systems, as well as serving joint duty at the Office of the Director for National Intelligence, providing analysis to policy makers.
+        
+        Dr. Stern earned his PhD in Mathematics from the University of Maryland, College Park, and his BS in Mathematics from the University of Chicago.
+    
+    - name: Scott Aaronson 
+      title: Schlumberger Chair of Computer Science and Founding Director, Quantum Information Center at UT Austin
+      bio: |
+        Scott Aaronson is a renowned theoretical computer scientist and the Schlumberger Centennial Chair of Computer Science at the University of Texas at Austin. His pioneering contributions to quantum computing and computational complexity theory include influential work on the Quantum Turing Machine with postselection, algebrization, and boson sampling.
+
+        Aaronson received his B.Sc. in Computer Science from Cornell University and his Ph.D. from the University of California, Berkeley, under the mentorship of Umesh Vazirani. His career includes notable roles at the Institute for Advanced Study, the University of Waterloo, and MIT. He is also the founding director of UT Austin’s Quantum Information Center, a leading hub for advancing quantum research and technology.
+
+        His achievements have been recognized with prestigious awards, including the Alan T. Waterman Award, the Presidential Early Career Award for Scientists and Engineers (PECASE), the Tomassoni–Chisesi Prize, and the ACM Prize in Computing. Aaronson is also well known for his blog, *Shtetl-Optimized*, and his book, *Quantum Computing Since Democritus*, which make complex scientific concepts accessible to a wide audience.
+
+    - name: David Hook
+      title: VP Software Enginering at Keyfactor
+      bio: |
+        David has been working on Cryptography APIs and secure protocols since the mid-1990s and in IT and open-source since the mid-1980s. He is a founder and still active committer of the Legion of the Bouncy Castle Cryptography project which began in the year 2000 and provides APIs in Java, C#, and Kotlin. David founded Crypto Workshop, now part of Keyfactor, in 2012 in order to better support the Bouncy Castle APIs and its user community. Shortly after, he led the work on the FIPS certification of the Bouncy Castle APIs, resulting in their first certifications in 2016. His deep interest is in providing tools to simplify the development of solutions that make use of cryptography and secure protocols, with an emphasis on standards-based approaches.
+      social:
+        linkedin: https://www.linkedin.com/in/david-hook-29b720/
+
+    - name: Santhosh Kumar
+      title: Scientist at Society for Electronic Transactions and Security (SETS)
+      bio: |
+        Mr Santhosh Kumar T is working as a Scientist at SETS under the Cryptology and Computing Research Group in Society for Electronic Transactions and Security (SETS) Chennai, A Cybersecurity R & D Organization Under Office of Principal Scientific Adviser to the Government of India. He completed his M.Tech in Computer Science and Engineering from Bharathidasan University, Trichy. He is currently pursuing his Ph.D. in Information & Communication Engineering from Anna University. He has been associated with SETS since 2016 and provided his contribution towards various R&D projects under the domain of Cryptology and Network Security. His major contribution towards the development of Certifying Authority PKI solution and it has been deployed at various government sectors. His research interests lie in the realms of Applied Cryptography including Post-Quantum Cryptography, PKI and Embedded/IoT systems technology.
+      social:
+        linkedin: https://www.linkedin.com/in/tsanthoshkumar/
+
+    - name: Jonathan Smith
+      title: Senior FIPS Tester at DEKRA
+      bio: |
+        Jonathan Smith has over 25 years experience testing FIPS modules and their algorithms across multiple NVLAP accredited CST laboratories; and frequently contributes to the cryptographic module user forum (CMUF)'s workgroups which develop proposed FIPS 140-3 guidance.
+      social:
+        linkedin: https://www.linkedin.com/in/jonathan-smith-a2488999/
+
+    - name: Kunal Abhishek
+      title: Scientist and Head of Department (Cyber Security - Quantum Technology) at C-DAC, Ministry of Electronics & IT (India)
+      bio: |
+        Dr. Kunal Abhishek is a Scientist ‘E’ at the Centre for Development of Advanced Computing (C-DAC), where he leads the Cyber Security, Forensics, and Quantum Technology Groups, driving advanced cyber security solutions for government organizations. Before joining C-DAC, he served as Group Head at SETS Chennai and spent seven years at WESEE, Indian Navy, developing indigenous cryptographic and information security solutions.  
+
+        He has spearheaded key Government of India PKI initiatives, including Lakshman (Strategic PKI), e-Abhedya (ECC-based PKI), and a proprietary elliptic curve PKI, while designing cryptographic tools like GANGA (secure RNG), GHOST (trusted elliptic curves), and ADRISHYA (mobile VPN). Dr. Kunal played a pivotal role in national policy development, contributing to India’s Cryptography Roadmap and IT Act amendments introducing ECC-based Digital Signature Rules. 
+
+        As a trusted consultant to strategic agencies, he has authored the forthcoming *Deciphering Tactics, Techniques and Procedures of Ransomware(s) – 1989 to 2023* and serves as an Advisory Board Member for AccuKnox Inc., addressing Zero Trust container security. He is also co-leading a government project on HPC-based quantum accelerators for supercomputers.
+
+        With 19 years of experience in R&D and deployment, Dr. Kunal’s expertise spans Cryptography, Quantum Technology, and Secure Kernel Development. He holds an M.S. in Software Systems from BITS Pilani and a Ph.D. in Computer Science from Bharathidasan University, specializing in Applied Cryptography, with research published in leading journals and conferences.
+      social:
+        linkedin: 
+
+    - name: Nils Gerhardt
+      title: Chief Technology Officer at Utimaco
+      bio: |
+        Nils Gerhardt has 20 years’ experience in the cyber security industry. In his current role, Nils is the Chief Technology Officer for Utimaco, a leading provider of cyber security solutions, and supervisory board member of ISITS AG. Before joining Utimaco, Nils worked at Giesecke + Devrient in various executive management roles with regional and global responsibilities in Germany, Canada, and the USA. As Chairman of the Board of GlobalPlatform, a global industry organization, Nils brought major companies together to define the standards for secure digital services and devices.
+      social:
+        linkedin: https://www.linkedin.com/in/nils-gerhardt-38b6691/
+
 
   # Agenda ----------------------------------------------------------------------
   agenda:
@@ -291,35 +356,43 @@ data:
 
       - time: "9:30"
         sessions:
+          - title: "Quantum Computing: Between Hope and Hype"
+            description: |
+              Professor Aaronson will provide a personal perspective on the current state and future prospects of quantum computing, addressing its implications for cryptography and the pressing question of how long current public-key cryptographic systems might remain secure. Following his talk, Professor Aaronson will engage in an open Q&A session, inviting discussion on any aspects of quantum computing.
+            speakers:
+              - Scott Aaronson
+            locations:
+              - plenary
+
+      - time: "10:00"
+        sessions:
           - title: NIST Post-Quantum Cryptography Update
             description: |
               In August 2024, the National Institute of Standards and Technology (NIST) reached a pivotal moment by releasing the first three finalized Post-Quantum Cryptography (PQC) standards: FIPS 203, FIPS 204, and FIPS 205. These standards mark the beginning of a new era in cryptography, designed to protect against the future threat of quantum computing.
 
-              In this presentation, Dr. Dustin Moody, a leading mathematician at NIST, will provide an in-depth update on the newly established FIPS PQC standards. He will also discuss the ongoing efforts to standardize additional cryptographic algorithms, ensuring preparedness for potential vulnerabilities in the current standards.
+              In this presentation, Mr. Andrew Regenscheid, Manager Cryptographic Technology Group at NIST, will provide an in-depth update on the newly established FIPS PQC standards. He will also discuss the ongoing efforts to standardize additional cryptographic algorithms, ensuring preparedness for potential vulnerabilities in the current standards.
 
               Mr. Bill Newhouse, a cybersecurity engineer and Project Lead at the NIST National Cybersecurity Center of Excellence (NCCoE), will explain the urgency of transitioning to these new quantum-resistant cryptographic standards. He will also share practical strategies and best practices to facilitate the migration from existing public-key cryptographic systems to these next-generation standards.
             speakers:
               - Bill Newhouse
-              - Dustin Moody
+              - Andrew Regenscheid
             youtube: 
             presentation: 
             locations:
               - plenary
 
-      - time: "10:30"
+      - time: "11:00"
         title: Break
         sponsor: 
 
-      - time: "11:00"
+      - time: "11:30"
         sessions:
-          - title: "Strategies for Transitioning to Future-Proof Cryptography"
+          - title: Transitioning National Security Systems to a Post Quantum Future
             description: |
-              This panel will bring together industry leaders from the **Financial**, **Mobile**, **Healthcare**, and **Aviation** sectors to discuss the critical transition to post-quantum cryptography (PQC). Panelists from leading banks, the GSMA Association, DirectTrust, and other key stakeholders will explore the growing threat posed by quantum computing to traditional cryptographic systems. They will discuss the unique challenges each industry faces in adopting quantum-resistant solutions, including technical, regulatory, and operational hurdles. Key topics will include the current state of readiness, strategies for smooth transitions, the role of standards bodies, and collaborative efforts across industries. The discussion will also address timelines, cost considerations, and the importance of future-proofing critical infrastructure to ensure security in a post-quantum world.
-            track: Panel dicussion
+              In this presentation, Dr. Morgan Stern, Senior Subject Matter Expert on Quantum-Resistant Cryptography within the National Security Agency (NSA)'s Cybersecurity Directorate, will discuss the NSA's approach to transitioning National Security Systems to a post-quantum future. Dr. Stern will highlight key strategies, challenges, and milestones in preparing for the quantum threat, ensuring secure and resilient systems for national defense.
+            track: 
             speakers:
-              - Lory Thorpe
-              - Jaime Gómez García
-              - Scott Stuewe 
+              - Morgan Stern
             locations:
               - plenary
 
@@ -329,25 +402,6 @@ data:
             track: 
             speakers:
               - Maaike van Leuken
-            locations:
-              - breakout
-
-      - time: "11:30"
-        sessions:
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
-            track: 
-            speakers:
-              - TBC
-            locations:
-              - plenary
-
-          - title: Hybrid PQC Digital Signatures and SSI
-            description: |
-              Self-sovereign identity (SSI) and digital credentials are becoming more and more practical, especially in Europe, and as such it is essential for them to be secured against the quantum threat. As we know PQC is a relatively modern area of cryptography and so we have decided to implement both a classical and a PQC digital signature scheme in a hybrid implementation within an SSI stack. Therefore, providing the classical security we know and trust while also preparing for the eventual quantum computing attack in the future. We are developing a hybrid PQC digital signature scheme in which we are implementing ML-DSA and ECDSA in parallel. The goals of our project also include the benchmarking and comparison of the hybrid vs PQC vs classical implementations.
-            track: 
-            speakers:
-              - Erik Hieta-aho
             locations:
               - breakout
 
@@ -362,26 +416,6 @@ data:
             locations:
               - plenary
 
-          - title: Update on end-to-end PKI and HSM integrations with ML-DSA
-            description: |
-              At last years PQC Conference we benchmarked Hardware Securtiy Modules with Dilithium. Now that FIPS-204 is released, it is time to forget about Dilithium and do production level integrations using ML-DSA.
-              This session shows PKI application integration for issuing certificates, with a number of HSMs that are ready for ML-DSA. We will highlight how easy, or hard, it is to integrate using PKCS#11 or REST APIs. Of course there will be benchmarks of certificate issuance comparing ML-DSA against classic algorithms. Let's see what else we are able to squeeze in until January.
-            track: Developers
-            speakers:
-              - Tomas Gustavsson
-            locations:
-              - breakout
-
-      - time: "12:30"
-        sessions:
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
-            track: 
-            speakers:
-              - TBC
-            locations:
-              - plenary
-
           - title: Architecting PKI Hierarchies for Graceful PQ Migration
             description: |
               Public Key Infrastructures (PKIs) are intricate systems to design, deploy, and  maintain. As post-quantum cryptography (PQC) becomes a reality, one of the most challenging decisions will be algorithm selection. Historically, this has been straightforward—for example, using RSA-2048-SHA256 consistently throughout the PKI hierarchy. In a PQC world, this approach becomes less viable due to tradeoffs that may require different algorithms or parameters at each layer. For instance, long-term secure algorithms might be optimal for root CAs, high-performance algorithms for issuing CAs, and bandwidth-efficient algorithms for end entities.
@@ -390,6 +424,29 @@ data:
             track: 
             speakers:
               - Mike Ounsworth
+            locations:
+              - breakout
+
+      - time: "12:30"
+        sessions:
+          - title: "Strategies for Transitioning to Future-Proof Cryptography"
+            description: |
+              This panel will bring together industry leaders from the **Financial**, **Mobile**, **Healthcare**, and **Aviation** sectors to discuss the critical transition to post-quantum cryptography (PQC). Panelists from leading banks, the GSMA Association, DirectTrust, and other key stakeholders will explore the growing threat posed by quantum computing to traditional cryptographic systems. They will discuss the unique challenges each industry faces in adopting quantum-resistant solutions, including technical, regulatory, and operational hurdles. Key topics will include the current state of readiness, strategies for smooth transitions, the role of standards bodies, and collaborative efforts across industries. The discussion will also address timelines, cost considerations, and the importance of future-proofing critical infrastructure to ensure security in a post-quantum world.
+            track: Panel dicussion
+            speakers:
+              - Lory Thorpe
+              - Jaime Gómez García
+              - Scott Stuewe 
+            locations:
+              - plenary
+
+          - title: Update on end-to-end PKI and HSM integrations with ML-DSA
+            description: |
+              At last years PQC Conference we benchmarked Hardware Securtiy Modules with Dilithium. Now that FIPS-204 is released, it is time to forget about Dilithium and do production level integrations using ML-DSA.
+              This session shows PKI application integration for issuing certificates, with a number of HSMs that are ready for ML-DSA. We will highlight how easy, or hard, it is to integrate using PKCS#11 or REST APIs. Of course there will be benchmarks of certificate issuance comparing ML-DSA against classic algorithms. Let's see what else we are able to squeeze in until January.
+            track: Developers
+            speakers:
+              - Tomas Gustavsson
             locations:
               - breakout
 
@@ -470,11 +527,13 @@ data:
 
       - time: "16:00"
         sessions:
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
-            track: 
+          - title: "Extending or Evolving: Choosing the Path to Quantum Readiness"
+            description: |
+              This panel will delve deeper into the decisions organizations face in securing their systems for the post-quantum era. Should resources be directed toward extending the life of legacy algorithms—such as by increasing RSA key sizes or adopting higher-order elliptic curves—to address immediate security concerns? Or is it more prudent to focus exclusively on transitioning to quantum-resistant algorithms? This session will explore the technical and strategic trade-offs of both approaches, offering insights into the urgency and complexity of achieving quantum readiness.
+            track: Panel discussion
             speakers:
-              - TBC
+              - Kunal Abhishek
+              - 
             locations:
               - plenary
 
@@ -493,21 +552,17 @@ data:
 
       - time: "16:30"
         sessions:
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
-            track: 
+          - title: "To Hybrid or Not to Hybrid: Navigating the PQC Transition"
+            description: |
+              As organizations prepare for the post-quantum era, hybrid cryptography has emerged as a contentious strategy. Advocates see it as a pragmatic bridge, combining classical algorithms with quantum-resistant counterparts—or even multiple quantum-resistant algorithms—to ensure security during the transition. Critics, however, argue that hybrid solutions introduce complexity, increase attack surfaces, and may delay full adoption of streamlined quantum-safe algorithms.
+
+              This panel brings together experts with diverse perspectives to debate the merits and drawbacks of hybrid cryptography. Should hybrid solutions be embraced as a stepping stone, or do they risk complicating the path to quantum readiness? Attendees will explore the technical, operational, and strategic implications of hybrid approaches, including the potential benefits and challenges of combining multiple quantum-resistant algorithms.
+            track: Panel discussion
             speakers:
-              - TBC
+              - Lory Thorpe
+              - Andrew Regenscheid
             locations:
               - plenary
-          # - title: The PQC Migration Handbook – the Revised and Extended Second edition
-          #   description: |
-          #     In 2023, we published the PQC Migration Handbook, outlining concrete advice, methodologies and tools to mitigate the quantum threat to cryptography. In December 2024, we published a second edition. It details the full spectrum of PQC migration- from international developments on legislation and a high-level migration path, to technical details on crypto primitives and practical experiences with the migration. It then provides concrete steps to perform a cryptographic inventory, a quantum risk methodology, and how to become crypto-agile. In this presentation, I will discuss the key takeaways from this PQC Migration Handbook.
-          #   track: 
-          #   speakers:
-          #     - Maaike van Leuken
-          #   locations:
-          #     - plenary
 
           - title: 
             description: _Continuation of prior session_
@@ -531,6 +586,9 @@ data:
         sessions:
         title: Networking
 
+      - time: "19:00"
+        title: End of Day One
+
     # Thursday -----------------------------------------------------------------
     2025-01-16:
       - time: "8:30"
@@ -538,13 +596,16 @@ data:
 
       - time: "9:00"
         sessions:
-          - title: To be announced shortly
-            locations:
-              - breakout
-            description: The speaker(s) for this session will be announced soon!
+          - title: Update on the NIST standardization of additional signature schemes
+            description: |
+              In this presentation, Mr. Andrew Regenscheid, a distinguished expert from the U.S. National Institute of Standards and Technology (NIST), will take you on a deep dive into NIST’s standardization efforts for additional signature schemes.
+
+              In October 2024, NIST announced 14 Second-Round candidates chosen from 40 First-Round submissions, including CROSS, LESS, and even MAYO, which might bring a bit of flavor to the new algorithms.
+
+              These algorithms were selected based on rigorous evaluations of security, performance, and unique algorithm characteristics, reflecting NIST’s ongoing commitment to diversifying post-quantum cryptographic standards. Dr. Moody will discuss each selected scheme's potential, addressing key innovations and the next steps in the standardization process.
             track: 
             speakers:
-              - TBC
+              - Andrew Regenscheid
             locations:
               - plenary
 
@@ -581,14 +642,12 @@ data:
 
       - time: "10:00"
         sessions:
-          - title: Hardware Cryptographic Modules
+          - title: PQC in FIPS 140-3, status and roadmap
             description: |
-              This panel will explore the integration of Post-Quantum Cryptography (PQC) into Hardware Cryptographic Modules, with a focus on the recently released NIST standards. Panelists will examine the challenges and opportunities related to certifying PQC algorithms in compliance with established security requirements. Key topics will include performance considerations, such as the computational cost of PQC in constrained environments, the importance of ensuring interoperability and crypto agility in the process, and availability, especially the readiness of hardware vendors to meet market demand. The discussion will also address the evolving landscape of certification processes and the implications for secure communications in a Post-Quantum world.
-            track: Panel discussion
+              Summarize the current state of CMVP algorithm and module validation for PQC algorithms, briefly touch on CMVP plans to speed up module validation through automation, cover 140-3 requirements for PQC algorithms within module, and briefly highlight NSA's CNSA 2.0 as an example of government requirements for PQC beyond the minimum requirements of CMVP.
+            track: 
             speakers:
-              - Eric Amador
-              - Bruno Couillard
-              - Giuseppe Damiano 
+              - Jonathan Smith
             locations:
               - plenary
 
@@ -609,12 +668,15 @@ data:
 
       - time: "11:00"
         sessions:
-          - title: Crypto Asset Discovery Tooling – an Overview of Capabilities, Characteristics and Gaps
+          - title: Hardware Cryptographic Modules
             description: |
-              In the migration towards PQC, one of the first steps should be getting an overview of cryptographic assets in your organisation, i.e. where and why are you using which types of cryptographic algorithms, protocols, keys, etc. The result is captured in a Cryptographic Bill-Of-Materials (CBOM). Various commercial solutions exist, but how well are these addressing the problem? In 2024, as an independent research organisation, we have conducted research into crypto asset discovery tooling and their vendors, through literature research and interviews with the vendors. In this presentation, I will give an overview of the currently existing tools, the ideal setting, the gap between them and how to bridge that gap.
-            track: 
+              This panel will explore the integration of Post-Quantum Cryptography (PQC) into Hardware Cryptographic Modules, with a focus on the recently released NIST standards. Panelists will examine the challenges and opportunities related to certifying PQC algorithms in compliance with established security requirements. Key topics will include performance considerations, such as the computational cost of PQC in constrained environments, the importance of ensuring interoperability and crypto agility in the process, and availability, especially the readiness of hardware vendors to meet market demand. The discussion will also address the evolving landscape of certification processes and the implications for secure communications in a Post-Quantum world.
+            track: Panel discussion
             speakers:
-              - Maaike van Leuken
+              - Bruno Couillard
+              - Eric Amador
+              - Giuseppe Damiano 
+              - Nils Gerhardt
             locations:
               - plenary
 
@@ -631,11 +693,12 @@ data:
 
       - time: "11:30"
         sessions:
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
+          - title: Crypto Asset Discovery Tooling – an Overview of Capabilities, Characteristics and Gaps
+            description: |
+              In the migration towards PQC, one of the first steps should be getting an overview of cryptographic assets in your organisation, i.e. where and why are you using which types of cryptographic algorithms, protocols, keys, etc. The result is captured in a Cryptographic Bill-Of-Materials (CBOM). Various commercial solutions exist, but how well are these addressing the problem? In 2024, as an independent research organisation, we have conducted research into crypto asset discovery tooling and their vendors, through literature research and interviews with the vendors. In this presentation, I will give an overview of the currently existing tools, the ideal setting, the gap between them and how to bridge that gap.
             track: 
             speakers:
-              - TBC
+              - Maaike van Leuken
             locations:
               - plenary
 
@@ -686,11 +749,14 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
-            track: 
+          - title: X9.146 Quantum TLS
+            description: |
+              The draft standard X9.146 Quantum TLS is nicknamed for enhancing the Transport Layer Security (TLS) protocol to support the NIST PQC algorithms. Security protocols such as TLS, developed and managed by the Internet Engineering Task Force (IETF) various workgroups, are heavily relied upon the financial services industry. However, the financial services industry wants to transition to PQC algorithms sooner rather than later, including banks, merchants, and third party financial service providers. This session introduces the draft X9.146 standard under development by the X9F5 Financial PKI workgroup, and the software engineering for enhancing and successfully testing this standard amongst collaborating industry vendors.
+            track: Panel discussion
             speakers:
-              - TBC
+              - Jeff Stapleton
+              - David Hook
+              - Mike Ounsworth
             locations:
               - breakout
 
@@ -709,11 +775,12 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
+          - title: Hybrid PQC Digital Signatures and SSI
+            description: |
+              Self-sovereign identity (SSI) and digital credentials are becoming more and more practical, especially in Europe, and as such it is essential for them to be secured against the quantum threat. As we know PQC is a relatively modern area of cryptography and so we have decided to implement both a classical and a PQC digital signature scheme in a hybrid implementation within an SSI stack. Therefore, providing the classical security we know and trust while also preparing for the eventual quantum computing attack in the future. We are developing a hybrid PQC digital signature scheme in which we are implementing ML-DSA and ECDSA in parallel. The goals of our project also include the benchmarking and comparison of the hybrid vs PQC vs classical implementations.
             track: 
             speakers:
-              - TBC
+              - Erik Hieta-aho
             locations:
               - breakout
 
@@ -732,11 +799,12 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
+          - title: "Evaluating the Impact of ML-DSA, ML-KEM, and ASCON on IoT Platform : A Case Study on IoT Device Authentication"
+            description: |
+              The rapid proliferation of IoT devices necessitates robust security mechanisms to ensure device authentication and secure communication. This case study explores the integration of Module Lattice-based Digital Signature Algorithm (ML-DSA) for digital certificate-based authentication and Module Lattice-based Key Encapsulation Mechanism (ML-KEM), paired with ASCON, for PKI-less authentication. By leveraging the quantum-resistant properties of module lattice cryptography, ML-DSA enables secure digital certificates for establishing device identities. Simultaneously, ML-KEM with ASCON provides a lightweight and efficient alternative for environments where traditional Public Key Infrastructure (PKI) is impractical. The study evaluates these approaches in IoT settings, emphasizing their scalability, performance, and resistance to both quantum and classical attacks, paving the way for next-generation IoT security frameworks.
             track: 
             speakers:
-              - TBC
+              - Santhosh Kumar
             locations:
               - breakout
 
@@ -779,6 +847,9 @@ data:
     
       - time: "16:00"
         title: Networking
+
+      - time: "18:00"
+        title: End of Day Two
 
 ---
 
@@ -823,11 +894,8 @@ We are immensely grateful to our sponsors:
 
 The conference features a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees can look forward to keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers are not permitted to promote products or services during presentations.
 
-> Please note that this is a **preliminary agenda** and is subject to change. Final details, including topics, abstracts, speakers, panels, and time slots, will be updated here in the coming weeks and months, with **more speakers and panels to be announced**, we still have limited availability for speakers.  
-> {{< button link="/call" target="_blank" label="Propose a Talk or Panel" type="outline-danger" >}}  
+> Please note that this is a **preliminary agenda** and is subject to change. Final details, including topics, abstracts, speakers, panels, and time slots, will be updated here in the coming weeks.
 {.callout-warning}
-
-To get a sense of what to expect, you can also check out the agenda, slides, and recordings from our [Amsterdam PQC Conference](/events/2023/pqc-conference-amsterdam-nl/).
 
 {{< agenda "agenda" >}}
 
