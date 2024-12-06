@@ -532,8 +532,8 @@ data:
               This panel will delve deeper into the decisions organizations face in securing their systems for the post-quantum era. Should resources be directed toward extending the life of legacy algorithms—such as by increasing RSA key sizes or adopting higher-order elliptic curves—to address immediate security concerns? Or is it more prudent to focus exclusively on transitioning to quantum-resistant algorithms? This session will explore the technical and strategic trade-offs of both approaches, offering insights into the urgency and complexity of achieving quantum readiness.
             track: Panel discussion
             speakers:
+              - Bill Newhouse
               - Kunal Abhishek
-              - 
             locations:
               - plenary
 
@@ -559,8 +559,8 @@ data:
               This panel brings together experts with diverse perspectives to debate the merits and drawbacks of hybrid cryptography. Should hybrid solutions be embraced as a stepping stone, or do they risk complicating the path to quantum readiness? Attendees will explore the technical, operational, and strategic implications of hybrid approaches, including the potential benefits and challenges of combining multiple quantum-resistant algorithms.
             track: Panel discussion
             speakers:
-              - Lory Thorpe
               - Andrew Regenscheid
+              - Lory Thorpe
             locations:
               - plenary
 
