@@ -300,13 +300,6 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/david-hook-29b720/
 
-    - name: Santhosh Kumar
-      title: Scientist at Society for Electronic Transactions and Security (SETS)
-      bio: |
-        Mr Santhosh Kumar T is working as a Scientist at SETS under the Cryptology and Computing Research Group in Society for Electronic Transactions and Security (SETS) Chennai, A Cybersecurity R & D Organization Under Office of Principal Scientific Adviser to the Government of India. He completed his M.Tech in Computer Science and Engineering from Bharathidasan University, Trichy. He is currently pursuing his Ph.D. in Information & Communication Engineering from Anna University. He has been associated with SETS since 2016 and provided his contribution towards various R&D projects under the domain of Cryptology and Network Security. His major contribution towards the development of Certifying Authority PKI solution and it has been deployed at various government sectors. His research interests lie in the realms of Applied Cryptography including Post-Quantum Cryptography, PKI and Embedded/IoT systems technology.
-      social:
-        linkedin: https://www.linkedin.com/in/tsanthoshkumar/
-
     - name: Jonathan Smith
       title: Senior FIPS Tester at DEKRA
       bio: |
@@ -456,14 +449,12 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: Why the Internet isn’t ready for Post-Quantum Certificates
+          - title: 2025 is Here - How to get your PQC Readiness Plan Underway
             description: |
-              NIST has finalized the first set of post-quantum algorithms, and post-quantum key agreement has been enabled by default in browsers for over a year. Why are signatures lagging behind? This talk provides the latest updates in a fast-moving ecosystem, a recap of the challenges in migrating to post-quantum certificates, and an overview of ongoing efforts to make post-quantum signatures practical in the WebPKI.
-
-              In a followup breakout session, we go into detail into some of the more promising proposals for coping with post-quantum certificates.
-            track: WebPKI
+              2024 saw NIST’s milestone release of the first certified PQC algorithms. As 2025 begins, it is more urgent than ever to “get your house in order” with Quantum Readiness. We will discuss these current & future risks and outline how to effectively counter against evolving threats with strategic and tactical steps within a PQC readiness plan. This session will also identify some of the industry challenges affecting today’s PKI, IoT, TLS & Code Signing. To conclude, strategies will be presented citing real-world examples including PQC code signing that specifically describe ecosystem collaboration and testing within critical enterprise applications and infrastructure.
+            track: 
             speakers:
-              - Luke Valenta
+              - Blair Canavan
             locations:
               - plenary
 
@@ -502,11 +493,14 @@ data:
 
       - time: "15:00"
         sessions:
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
-            track: 
+          - title: Why the Internet isn’t ready for Post-Quantum Certificates
+            description: |
+              NIST has finalized the first set of post-quantum algorithms, and post-quantum key agreement has been enabled by default in browsers for over a year. Why are signatures lagging behind? This talk provides the latest updates in a fast-moving ecosystem, a recap of the challenges in migrating to post-quantum certificates, and an overview of ongoing efforts to make post-quantum signatures practical in the WebPKI.
+
+              In a followup breakout session, we go into detail into some of the more promising proposals for coping with post-quantum certificates.
+            track: WebPKI
             speakers:
-              - TBC
+              - Luke Valenta
             locations:
               - plenary
 
@@ -799,12 +793,11 @@ data:
             locations:
               - plenary
 
-          - title: "Evaluating the Impact of ML-DSA, ML-KEM, and ASCON on IoT Platform : A Case Study on IoT Device Authentication"
-            description: |
-              The rapid proliferation of IoT devices necessitates robust security mechanisms to ensure device authentication and secure communication. This case study explores the integration of Module Lattice-based Digital Signature Algorithm (ML-DSA) for digital certificate-based authentication and Module Lattice-based Key Encapsulation Mechanism (ML-KEM), paired with ASCON, for PKI-less authentication. By leveraging the quantum-resistant properties of module lattice cryptography, ML-DSA enables secure digital certificates for establishing device identities. Simultaneously, ML-KEM with ASCON provides a lightweight and efficient alternative for environments where traditional Public Key Infrastructure (PKI) is impractical. The study evaluates these approaches in IoT settings, emphasizing their scalability, performance, and resistance to both quantum and classical attacks, paving the way for next-generation IoT security frameworks.
+          - title: To be announced shortly
+            description: The speaker(s) for this session will be announced soon!
             track: 
             speakers:
-              - Santhosh Kumar
+              - TBC
             locations:
               - breakout
 
@@ -837,11 +830,20 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
+          - title: "Securing Data in the Quantum Era: From the Root of Trust to Protecting Ecosystems"
+            description: |
+              With advancements in Quantum Computing, the security of our data relies heavily on robust cryptographic solutions.
+
+              Hardware Security Modules (HSMs) with integrated Post-Quantum Cryptographic (PQC) algorithms become center stage for securing data in the Quantum Computing Era. Besides providing PQC algorithms, HSMs also secure and automate key distribution for “complex to manage” stateful hash-based signature algorithms and provide hardware acceleration to meet modern applications’ cryptographic needs.
+
+              Taking those advancements as starting point, the talk will shift gear and explore how security systems, comprising of software and hardware, use Post Quantum primitives to secure their operation. Important systems include Key Management, PKI, and File & Folder Encryption. The role of each system in the security framework will be discussed, focusing on specific PQC requirements.
+
+              The talk continues to move to the solution level, and will provide insights and lessons learned for the needs and challenges of securing an inter-banking system, a project currently at the research stage.
+
+              By the end of the session, attendees will have a good overview on the capabilities of cryptographic components, how those capabilities can be used by security solutions and what is needed next, to secure whole “Ecosystems” against Quantum Computer attacks on today’s cryptography.
             track: 
             speakers:
-              - TBC
+              - Nils Gerhardt
             locations:
               - breakout
     
