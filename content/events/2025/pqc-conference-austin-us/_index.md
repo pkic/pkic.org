@@ -327,6 +327,12 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/nils-gerhardt-38b6691/
 
+    - name: Blair Canavan
+      title: Director, Alliances - PQC Portfolio at Thales
+      bio: |
+        Blair has 30+ years of cybersecurity sales, marketing and business development experience. Blair expanded his cybersecurity and cryptographic expertise with Symantec, several cyber start-ups including Chrysalis-ITS (Thales), Titus, Synopsys, InfoSec Global, Crypto4A and since September 2019, was recruited back to Thales’ Global Technology Alliances team, inclusive of the PKI & Post Quantum Cryptography (PQC) portfolio.  He is an avid public speaker, start-up consultant and IT industry contributor. Blair holds an Hons.BA from the University of Waterloo and Wilfrid Laurier University, Ontario, Canada.
+      social:
+        linkedin: https://www.linkedin.com/in/blair-canavan-5b708a2/
 
   # Agenda ----------------------------------------------------------------------
   agenda:
