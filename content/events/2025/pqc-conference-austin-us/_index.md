@@ -809,11 +809,12 @@ data:
 
       - time: "15:00"
         sessions:
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
+          - title: Perspectives on the transition to PQC in the financial sector
+            description: |
+              The race towards post-quantum cryptography has started. While several organizations in the finance sector are taking steps to prepare for the transition, the focus seems to still be building up. This session will provide an update on the status of the transition to PQC in the financial sector, including relevant regulations such as DORA, PCI-DSS, CNSA2, and NIST IR 8547, and how these regulations collectively drive the need for improved cryptography management; the ongoing collaboration in initiatives like the Europol Quantum Safe Financial Forum or the FS-ISAC PQC Workgroup; and the Santander Quantum Threat Program.
             track: 
             speakers:
-              - TBC
+              - Jaime Gómez García
             locations:
               - plenary
 
