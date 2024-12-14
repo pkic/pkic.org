@@ -7,162 +7,298 @@
     <title>{{ .Title }} - Event Session</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-
+    
         :root {
             --blue: rgba(90, 155, 213, 0.98);
             --orange: #ed7d31;
             --green: #188754;
             --yellow: #ffc000;
+            --margin: 25px;
+            --padding: 15px 25px;
+            --min-height: 30px;
         }
-
+    
         body {
             margin: 0;
-            padding: 0;
+            padding: var(--margin);
             background-color: black;
             /* background-color: rgba(0, 0, 0, 0); */
-
+    
             font-family: 'Roboto', sans-serif;
+            font-size: 1em;
         }
-
+    
         #header {
-            position: fixed;
-            top: 0;
-            left: 0;
-            padding: 50px;
-            font-size: 4vh;
+            position: relative;
             font-weight: bolder;
+            font-size: 1.7em;
+            margin-bottom: var(--margin);
         }
-
+    
         .white-orange {
             display: inline-block;
             background-color: white;
             color: var(--orange);
-            padding: 1vh 3vh;
+            padding: var(--padding);
         }
-
+    
         .orange-white {
             background-color: var(--orange);
             color: white;
-            padding: 1vh 3vh;
+            padding: var(--padding);
         }
-
+    
         .white-blue {
             background-color: white;
             color: var(--blue);
-            padding: 1vh 3vh;
+            padding: var(--padding);
         }
-
+    
         .blue-white {
             background-color: var(--blue);
             color: white;
-            padding: 1vh 3vh;
+            padding: var(--padding);
         }
-
+    
         .yellow-black {
             background-color: var(--yellow);
             color: black;
-            padding: 1vh 3vh;
-            font-size: 4vh;
+            font-size: 1em;
             font-weight: bolder;
+            padding: var(--padding);
         }
-
+    
         #logo {
-            display: block;
-            position: fixed;
-            bottom: 50px;
-            right: 50px;
+            position: relative;
+            float: right;
             width: 20vh;
         }
-
+    
         #logo-element {
             position: fixed;
             top: 10vh;
             right: 50px;
             width: 75vh;
         }
-
+    
         #session {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 80vw;
-            font-size: 4vh;
+            position: relative;
         }
-
+    
+        .centered {
+            width: auto;
+            height: auto;
+            font-size: 1em;
+            margin-bottom: var(--margin);
+        }
+    
+        .fullscreen {
+            font-size: 1em;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+    
+        .fullscreen>#subject {
+        }
+    
+        .fullscreen>#speakers {
+            flex: 1 1 auto;
+        }
+    
         #session>div {
-            align-content: center;
-            min-height: 8vh;
-            font-size: 4vh;
+            min-height: var(--min-height);
         }
-
+    
         #session #title {
+            font-size: 2em;
             font-weight: bolder;
         }
-
+    
         #session #description {
-            padding: 1vh 0;
-            font-size: 1.5vh;
-
+            margin: 10px 0;
+            font-size: 0.9em;
         }
 
+        #speakersList {
+            display: flex;
+            flex-wrap: wrap;
+        }
+
+        #speakersList:has(> :last-child:nth-child(4)) {
+            flex-wrap: wrap;
+        }
+
+        #speakersList:not(:has(> :nth-child(4))) .speaker {
+            flex: 1 1 100%;
+        }
+    
         #session .speaker {
-            display: block;
-            clear: both;
-            align-content: center;
-            padding: 10px;
+            font-size: 1.4em;
+            margin-bottom: 5px;
+            flex: 1 1 45%;
+            box-sizing: border-box;
         }
-
+    
         #session .speaker .name {
             font-weight: bolder;
+            font-size: 1.2em;
         }
-
+    
         #session .speaker .title {
             font-weight: lighter;
-            font-size: 70%;
+            font-size: 0.8em;
         }
-
+    
         #session .speaker .headshot {
-            width: 10vh;
-            height: 10vh;
-            border-radius: 50%;
-            margin-right: 2vh;
-            float: left;
             background-color: rgba(255, 255, 255, 0.3);
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            margin-right: var(--margin);
+            float: left;
+        }
+    
+        #footer {
+            position: relative;
+            width: 100%;
+            margin-bottom: var(--margin);
         }
 
+        /* Sponsors div */
         #sponsors {
             background-color: white;
-            position: fixed;
-            bottom: calc(10vh + 50px);
-            left: 50px;
-            padding: 1vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: row;
+            flex-wrap: wrap;
         }
-
-        #footer {
-            position: fixed;
-            bottom: 50px;
-            left: 50px;
-        }
-
-        .sponsor-logo {
-            display: inline;
-            padding: 1vh;
-            height: 3vh;
-            max-width: 10vh;
-        }
-
+    
+        /* Sponsors partial */
         .sponsors {
-            display: inline;
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
-
+    
         .sponsors a {
+            margin: 15px 15px;
             text-decoration: none;
         }
 
+        .sponsor-logo {
+            height: 50px;
+            max-width: 100px;
+        }
+    
         .dimmed {
             color: rgba(255, 255, 255, 0.3);
-            margin: 0.5vh;
+            font-size: 0.8em;
+            padding: 10px;
+        }
+    
+        /* Full HD resolution */
+        @media (min-width: 1920px) {
+            :root {
+                --margin: 50px;
+            }
+
+            body {
+                font-size: 1.2em;
+            }
+
+            #session {
+                width: 85%;
+                position: fixed;
+                z-index: 100;
+            }
+    
+            #header {
+                position: fixed;
+            }
+    
+            #footer {
+                position: fixed;
+                bottom: var(--margin);
+                left: var(--margin);
+                width: auto;
+            }
+
+            #sponsors {
+                background-color: white;
+                display: block;
+                align-items: center;
+                justify-content: left;
+            }
+    
+            /* Sponsors partial */
+            .sponsors {
+                display: inline-block;
+                align-items: center;
+                justify-content: left;
+                padding: 10px;
+            }
+
+            #textbar {
+                width: 75%;
+            }
+
+            #logo {
+                position: fixed;
+                right: var(--margin);
+                bottom: var(--margin);
+            }
+
+            .centered {
+                top: 35%;
+                left: 50%;
+                transform: translate(-50%, -35%);
+            }
+        }
+    
+        @media (max-width: 1200px) {
+            body {
+                font-size: 1.1em;
+            }
+        }
+    
+        @media (max-width: 768px) {
+            body {
+                font-size: 0.9em;
+            }
+        }
+    
+        @media (max-width: 480px) {
+            body {
+                font-size: 0.7em;
+            }
+        }
+
+        @media print {
+            @page {
+                size: auto;
+                margin: 0;
+                padding: 50px;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            body {
+                margin: 0;
+                padding: 0;
+            }
+
+            #footer {
+                position: fixed;
+                bottom: 0;
+                margin-bottom: 0;
+            }
+
+            #speakersList:has(> :last-child:nth-child(4)) {
+                font-size: 0.8em;
+            }
         }
     </style>
 
@@ -179,7 +315,6 @@
 </head>
 
 <body>
-    <img src="/img/logo.svg" id="logo" alt="PKI Consortium">
     <img src="/img/logo-color.svg" id="logo-element" alt="PKI Consortium">
 
     <div id="header">
@@ -191,34 +326,40 @@
         </div>
     </div>
 
-    <div id="session">
-        <div class="white-blue">
+    <div id="session" class="centered">
+        <div id="subject" class="white-blue">
             <div id="title"></div>
             <div id="description"></div>
         </div>
-        <div id="speakers" class="blue-white"></div>
+        <div id="speakers" class="blue-white">
+            <div id="speakersList"></div>
+        </div>
     </div>
 
-    <div id="sponsors">
-        {{ .Scratch.Set "level" "Leader" }}
-        {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Austin 2025" }}
-
-        {{ partial "sponsors.html" . }}
-
-        {{ .Scratch.Set "level" "Platinum" }}
-        {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Austin 2025" }}
-
-        {{ partial "sponsors.html" . }}
-    </div>
     <div id="footer">
-        <div class="yellow-black">
+        <div id="sponsors">
+            {{ .Scratch.Set "level" "Leader" }}
+            {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Austin 2025" }}
+    
+            {{ partial "sponsors.html" . }}
+    
+            {{ .Scratch.Set "level" "Platinum" }}
+            {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Austin 2025" }}
+    
+            {{ partial "sponsors.html" . }}
+        </div>
+
+        <div id="textbar" class="yellow-black">
             January 15 and 16, 2025 - Austin, TX (US) | Online
         </div>
         <div class="dimmed">
             PKI Consortium Inc. is registered as a 501(c)(6) non-profit entity (“business league”) under Utah law
             (10462204-0140) | pkic.org
         </div>
+
+        <img src="/img/logo.svg" id="logo" alt="PKI Consortium">
     </div>
+
 </body>
 
 </html>
