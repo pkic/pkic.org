@@ -71,8 +71,9 @@ function updateSessionAndSpeakers() {
         document.getElementById('title').textContent = selectedSession.title;
         document.getElementById('description').textContent = selectedSession.description;
         document.getElementById('description').style.display = selectedSession.description ? 'block' : 'none';
-        const speakersDiv = document.getElementById('speakers');
-        speakersDiv.innerHTML = '';
+        const speakersList = document.getElementById('speakersList');
+        speakersList.innerHTML = '';
+
         selectedSession.speakers.forEach(speakerName => {
             const speaker = speakersData.find(s => s.name === speakerName);
             if (speaker) {
@@ -89,7 +90,7 @@ function updateSessionAndSpeakers() {
                     <div class="name">${speaker.name}</div>
                     <div class="title">${speaker.title}</div>
                 `;
-                speakersDiv.appendChild(speakerElement);
+                speakersList.appendChild(speakerElement);
             }
         });
     } else {
@@ -125,6 +126,10 @@ function updateNameAndTitle() {
 }
 
 function navigateSessions(event) {
+    if (event.ctrlKey || event.altKey) {
+        return;
+    }
+
     if (event.key === 'ArrowLeft') {
         currentSessionIndex = (currentSessionIndex > 0) ? currentSessionIndex - 1 : sessions.length - 1;
         autoUpdateEnabled = false;
@@ -154,6 +159,28 @@ function navigateSessions(event) {
             currentSessionIndex = index;
         }
         autoUpdateEnabled = false;
+    } else if (event.key === '+') {
+        document.body.style.padding = '0';
+        const sessionDiv = document.getElementById('session');
+        if (sessionDiv) {
+            document.querySelectorAll('body > div').forEach(div => {
+                if (div !== sessionDiv) {
+                    div.style.display = 'none';
+                }
+            });
+            sessionDiv.className = 'fullscreen';
+        }
+    } else if (event.key === '-') {
+        document.body.style.padding = getComputedStyle(document.documentElement).getPropertyValue('--padding');
+        const sessionDiv = document.getElementById('session');
+        if (sessionDiv) {
+            document.querySelectorAll('body > div').forEach(div => {
+                if (div !== sessionDiv) {
+                    div.style.display = '';
+                }
+            });
+            sessionDiv.className = 'centered';
+        }
     }
 
     updateSessionAndSpeakers();
