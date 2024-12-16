@@ -328,6 +328,13 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/blair-canavan-5b708a2/
 
+    - name: Yarkin Doroz
+      title: Product Manager at NVIDIA
+      bio: |
+        Yarkin Doroz is a product manager for Encryption Libraries on the NVIDIA Enterprise product team. He ensures the development of cutting-edge encryption solutions to keep Nvidia's products at the forefront of security technology. Prior to joining NVIDIA, Yarkin co-founded two startups and served as a teaching professor at Worcester Polytechnic Institute (WPI). His expertise includes Post-Quantum Cryptography, Fully Homomorphic Encryption, and Side-Channel Attacks.
+      social:
+        linkedin: https://www.linkedin.com/in/yarkindoroz/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     # Wednesday -------------------------------------------------------------------
@@ -823,11 +830,12 @@ data:
 
       - time: "15:30"
         sessions:
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
+          - title: Accelerated Quantum Supercomputing and Post-Quantum Cryptography 
+            description: |
+              Accelerated computing is revolutionizing numerous fields, including quantum computing (QC) and artificial intelligence (AI), and is also set to accelerate the development of robust post-quantum cryptographic solutions. This talk explores how cutting-edge AI techniques are addressing challenges within QC across the hardware and software stack to create more optimized circuits, bringing practical quantum computers one step closer. Additionally, this talk will cover how GPU-based acceleration serves as a safeguard against emerging quantum cryptographic threats. We will reveal how GPU-based algorithms are accelerating cryptographic research by examining technical challenges in parallelizing cryptographic workloads across GPUs, managing memory bandwidth, optimizing performance, and overcoming hardware limitations. We will also highlight how these technologies are accelerating QC research. Real-world applications in sectors such as finance, healthcare, and data privacy will be showcased, demonstrating the practical benefits of AI, QC, and PQC.
             track: 
             speakers:
-              - TBC
+              - Yarkin Doroz
             locations:
               - plenary
 
