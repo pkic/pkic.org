@@ -184,13 +184,6 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/dr-axel-york-poschmann/
 
-    - name: Matthew Campagna
-      title: Senior Principal Engineer at Amazon Web Services (AWS)
-      bio: |
-        Matthew Campagna is a Sr. Principal Engineer & Cryptographer for Amazon Web Services Inc.’s. He oversees the design and analysis of cryptographic solutions across AWS. He is a member of the ETSI Security Algorithms Group Experts (SAGE), and Chairman of ETSI TC CYBER’s Quantum Safe Cryptography group. Previously he managed Certicom/BlackBerry’s Cryptography Research Group focused on the development of intellectual property and standardization for elliptic curve cryptography. He holds a doctorate in Mathematics from Wesleyan University.
-      social:
-        linkedin: https://www.linkedin.com/in/matt-campagna/
-
     - name: Panos Kampanakis
       title: Principal Security Engineer, Applied Scientist at Amazon Web Services (AWS)
       bio: |
@@ -200,8 +193,9 @@ data:
         linkedin: https://www.linkedin.com/in/panoskampanakis/
 
     - name: Mila Anastasova
-      title: Computer and Electrical Engineering at Florida Atlantic University
-      bio:
+      title: Applied Scientist at Amazon Web Services (AWS)
+      bio: |
+        Mila Anastasova is an applied scientist at Amazon. She has received her PhD degree in Computer Engineering at Florida Atlantic University, in 2024. Her research is focused on the implementation and optimization of classical and post-quantum cryptography algorithms for different low- and high-end target platforms, as well as their integration into security network protocols.
       social:
         linkedin: https://www.linkedin.com/in/mila-anastasova/
 
@@ -729,8 +723,8 @@ data:
               Multiple studies have evaluated the impact of PQC algorithms in TLS 1.3. These studies have been focusing on server authentication with PQC signatures. To our knowledge, there has been no study focusing on mTLS authentication where the client sends a PQ certificate chain as well. Such connections could be used in Zero Trust Architectures where the client opens multiple connections to various destinations each of which uses mTLS authentication. These sessions will be double impacted by the size of the “authentication data” travelling both directions. This presentation will share experimental results of the Time-to-Last-Byte (TTLB) of mTLS connections using ML-KEM and ML-DSA and transferring small and larger amounts of data. We will evaluate different round-trips, network bandwidth and TCP initial congestion windows. We will discuss the effect of PQC on mTLS sessions and compare it to previous experiments on typical TLS connections. We will cover potential mTLS use-cases that will suffer more than others and ways to improve them.
             track: WebPKI
             speakers:
+              - Mila Anastasova
               - Panos Kampanakis
-              - Matthew Campagna
             locations:
               - breakout
 
