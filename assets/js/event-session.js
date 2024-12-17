@@ -15,7 +15,8 @@ function getHashParams() {
         time: params.get('time'),
         location: params.get('location'),
         textbar: params.get('textbar'),
-        fullscreen: params.get('fullscreen')
+        fullscreen: params.get('fullscreen'),
+        noDescription: params.get('noDescription')
     };
 }
 
@@ -98,13 +99,18 @@ function updateSessionAndSpeakers() {
         });
 
         // Update textbar countdown if needed
-        const { textbar: paramTextbar } = getHashParams();
+        const { textbar: paramTextbar, noDescription } = getHashParams();
         if (paramTextbar === 'start') {
             updateTextbarCountdown(selectedSession.title);
             if (countdownInterval) {
                 clearInterval(countdownInterval);
             }
             countdownInterval = setInterval(() => updateTextbarCountdown(selectedSession.title), 60000);
+        }
+
+        // Hide description if noDescription param is set
+        if (noDescription === 'true') {
+            document.getElementById('description').style.display = 'none';
         }
     } else {
         document.getElementById('title').textContent = 'No session scheduled';
@@ -166,7 +172,7 @@ function updateTextbarCountdown(sessionTitle) {
 }
 
 function updateNameAndTitle() {
-    const { day: paramDay, time: paramTime, location: paramLocation, textbar: paramTextbar, fullscreen: paramFullscreen } = getHashParams();
+    const { day: paramDay, time: paramTime, location: paramLocation, textbar: paramTextbar, fullscreen: paramFullscreen, noDescription } = getHashParams();
 
     // Clear existing interval if any
     if (countdownInterval) {
@@ -182,6 +188,11 @@ function updateNameAndTitle() {
     // Trigger fullscreen mode if specified
     if (paramFullscreen === 'true') {
         setFullscreenMode(true);
+    }
+
+    // Hide description if noDescription param is set
+    if (noDescription === 'true') {
+        document.getElementById('description').style.display = 'none';
     }
 
     const now = new Date();
@@ -223,12 +234,12 @@ function navigateSessions(event) {
     } else if (/^[a-zA-Z]$/.test(event.key)) {
         const letter = event.key.toLowerCase();
         const nextSessionIndex = sessions.findIndex((session, index) =>
-            index > currentSessionIndex && session.title.toLowerCase().startsWith(letter)
+            index > currentSessionIndex && session.title && session.title.toLowerCase().startsWith(letter)
         );
         if (nextSessionIndex !== -1) {
             currentSessionIndex = nextSessionIndex;
         } else {
-            const firstSessionIndex = sessions.findIndex(session => session.title.toLowerCase().startsWith(letter));
+            const firstSessionIndex = sessions.findIndex(session => session.title && session.title.toLowerCase().startsWith(letter));
             if (firstSessionIndex !== -1) {
                 currentSessionIndex = firstSessionIndex;
             }
