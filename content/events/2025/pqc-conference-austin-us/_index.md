@@ -800,11 +800,12 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
-            description: The speaker(s) for this session will be announced soon!
+          - title: Quantum Key Distribution – What is done and what is to come
+            description: |
+              Quantum Key Distribution (QKD) systems promise to be a provably secure key transfer between two peers based on quantum effects that can meet the requirements for a quantum-secure communication in the post-quantum-threat era. For countries as well as for companies worldwide it is essential to keep track with the fast-changing developments on secure communication. The development and application of new cryptographic methods and key exchanges is immanent. We at Bundesdruckerei GmbH, owned by the German Federal Ministry of Finance, had the chance to examine and test several QKD systems and their peripherals within the Qu-Gov project. This talk will show the delimitation of QKD to PQC but also the potential use of a hybrid system and shares our experience with such QKD-systems regarding their performance, use in existing infrastructure, caveats and limits as well as open issues that we see as crucial.
             track: 
             speakers:
-              - TBC
+              - Jan Klaußner
             locations:
               - breakout
 
@@ -904,9 +905,6 @@ We are immensely grateful to our sponsors:
 ## Agenda
 
 The conference features a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees can look forward to keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers are not permitted to promote products or services during presentations.
-
-> Please note that this is a **preliminary agenda** and is subject to change. Final details, including topics, abstracts, speakers, panels, and time slots, will be updated here in the coming weeks.
-{.callout-warning}
 
 {{< agenda "agenda" >}}
 
