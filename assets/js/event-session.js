@@ -6,12 +6,16 @@ let agendaData = [];
 let speakersData = [];
 let locationsData = [];
 
+let countdownInterval = null;
+
 function getHashParams() {
     const params = new URLSearchParams(window.location.hash.substring(1));
     return {
         day: params.get('day'),
         time: params.get('time'),
-        location: params.get('location')
+        location: params.get('location'),
+        textbar: params.get('textbar'),
+        fullscreen: params.get('fullscreen')
     };
 }
 
@@ -47,7 +51,6 @@ function getSessions(day, currentTime, location = null) {
             }
         });
     });
-
 
     console.log("Filtered sessions:", currentSessions);
     return currentSessions;
@@ -93,6 +96,16 @@ function updateSessionAndSpeakers() {
                 speakersList.appendChild(speakerElement);
             }
         });
+
+        // Update textbar countdown if needed
+        const { textbar: paramTextbar } = getHashParams();
+        if (paramTextbar === 'start') {
+            updateTextbarCountdown(selectedSession.title);
+            if (countdownInterval) {
+                clearInterval(countdownInterval);
+            }
+            countdownInterval = setInterval(() => updateTextbarCountdown(selectedSession.title), 60000);
+        }
     } else {
         document.getElementById('title').textContent = 'No session scheduled';
         document.getElementById('description').innerHTML = '';
@@ -100,8 +113,76 @@ function updateSessionAndSpeakers() {
     }
 }
 
+function setFullscreenMode(enable) {
+    document.body.style.padding = enable ? '0' : getComputedStyle(document.documentElement).getPropertyValue('--padding');
+    const sessionDiv = document.getElementById('session');
+    if (sessionDiv) {
+        document.querySelectorAll('body > div').forEach(div => {
+            if (div !== sessionDiv) {
+                div.style.display = enable ? 'none' : '';
+            }
+        });
+        sessionDiv.className = enable ? 'fullscreen' : 'centered';
+    }
+}
+
+function getSessionStartTime(sessionTitle) {
+    for (const dayAgenda of Object.values(agendaData)) {
+        for (const agendaSlot of dayAgenda) {
+            if (agendaSlot.sessions && agendaSlot.sessions.some(session => session.title === sessionTitle)) {
+                return agendaSlot.time;
+            }
+        }
+    }
+    return null;
+}
+
+function updateTextbarCountdown(sessionTitle) {
+    const startTime = getSessionStartTime(sessionTitle);
+    if (!startTime) {
+        document.getElementById('textbar').textContent = 'Session not found';
+        return;
+    }
+
+    const now = new Date();
+    const startMinutes = parseTime(startTime);
+    const currentMinutes = now.getHours() * 60 + now.getMinutes();
+    const minutesLeft = startMinutes - currentMinutes;
+
+    const textbar = document.getElementById('textbar');
+    if (minutesLeft > 0) {
+        const hours = Math.floor(minutesLeft / 60);
+        const minutes = minutesLeft % 60;
+        if (hours > 0) {
+            textbar.textContent = `Starting in ${hours} hour${hours > 1 ? 's' : ''} and ${minutes} minute${minutes !== 1 ? 's' : ''}...`;
+        } else {
+            textbar.textContent = `Starting in ${minutes} minute${minutes !== 1 ? 's' : ''}...`;
+        }
+    } else if (minutesLeft > -2) {
+        textbar.textContent = 'Starting soon...';
+    } else {
+        textbar.textContent = 'pkic.org/ask';
+    }
+}
+
 function updateNameAndTitle() {
-    const { day: paramDay, time: paramTime, location: paramLocation } = getHashParams();
+    const { day: paramDay, time: paramTime, location: paramLocation, textbar: paramTextbar, fullscreen: paramFullscreen } = getHashParams();
+
+    // Clear existing interval if any
+    if (countdownInterval) {
+        clearInterval(countdownInterval);
+        countdownInterval = null;
+    }
+
+    // Set textbar text if provided
+    if (paramTextbar && paramTextbar !== 'start') {
+        document.getElementById('textbar').textContent = paramTextbar;
+    }
+
+    // Trigger fullscreen mode if specified
+    if (paramFullscreen === 'true') {
+        setFullscreenMode(true);
+    }
 
     const now = new Date();
     let currentTime;
@@ -160,27 +241,9 @@ function navigateSessions(event) {
         }
         autoUpdateEnabled = false;
     } else if (event.key === '+') {
-        document.body.style.padding = '0';
-        const sessionDiv = document.getElementById('session');
-        if (sessionDiv) {
-            document.querySelectorAll('body > div').forEach(div => {
-                if (div !== sessionDiv) {
-                    div.style.display = 'none';
-                }
-            });
-            sessionDiv.className = 'fullscreen';
-        }
+        setFullscreenMode(true);
     } else if (event.key === '-') {
-        document.body.style.padding = getComputedStyle(document.documentElement).getPropertyValue('--padding');
-        const sessionDiv = document.getElementById('session');
-        if (sessionDiv) {
-            document.querySelectorAll('body > div').forEach(div => {
-                if (div !== sessionDiv) {
-                    div.style.display = '';
-                }
-            });
-            sessionDiv.className = 'centered';
-        }
+        setFullscreenMode(false);
     }
 
     updateSessionAndSpeakers();
@@ -195,7 +258,6 @@ function refreshIfAutoUpdateEnabled() {
 fetch('event-data.json')
     .then(response => response.json())
     .then(data => {
-
         agendaData = data.agenda || {};
         speakersData = data.speakers || [];
         locationsData = data.locations || [];
@@ -205,6 +267,5 @@ fetch('event-data.json')
 
         window.addEventListener('hashchange', updateNameAndTitle);
         window.addEventListener('keydown', navigateSessions);
-
     })
     .catch(error => console.error('Error loading event data:', error));
