@@ -202,7 +202,7 @@
         /* Full HD resolution */
         @media (min-width: 1920px) {
             :root {
-                --margin: 50px;
+                --margin: 100px;
             }
 
             body {
@@ -223,6 +223,7 @@
                 position: fixed;
                 bottom: var(--margin);
                 left: var(--margin);
+                margin-bottom: 0;
                 width: auto;
             }
 
@@ -255,6 +256,10 @@
                 top: 35%;
                 left: 50%;
                 transform: translate(-50%, -35%);
+            }
+
+            .dimmed {
+                margin-bottom: calc(-1 * (0.8em + 20px));
             }
         }
     
