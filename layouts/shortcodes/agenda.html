@@ -65,12 +65,14 @@
                         <div class="d-flex flex-row border-bottom{{ if not .sessions }} bg-secondary text-white{{ end }}">
                             <!-- time -->
                             <div class="agenda-time text-end py-2">
-                                <span class="opacity-25 fs-3 mx-3">{{ .time }}</span>
+                                {{ $dateTime := (time.AsTime (printf "%sT%s:00" $day .time) $data.timezone).UTC }}
+                                <time datetime="{{ $dateTime.Format "2006-01-02T15:04:05Z07:00" }}" class="opacity-25 fs-3 me-3">{{ .time }}</time>
+                                <time datetime="{{ $dateTime.Format "2006-01-02T15:04:05Z07:00" }}" class="opacity-25 fs-6 me-3 fw-lighter d-block localTime">🕑</time>
                             </div>
 
                             {{- if not .sessions -}}
-                                <div class="agenda-content border-start py-2">
-                                    <span class="opacity-25 fs-3 fw-bold mx-3">{{ .title }}</span>
+                                <div class="agenda-content border-start py-2 align-middle">
+                                    <span class="opacity-25 fs-1 fw-bold mx-3">{{ .title }}</span>
                                 </div>
                                 {{- range seq (sub (len $locations ) 1) }}
                                     <div class="agenda-content"></div>
