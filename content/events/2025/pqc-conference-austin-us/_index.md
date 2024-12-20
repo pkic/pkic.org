@@ -199,13 +199,12 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/mila-anastasova/
 
-    - name: Maaike van Leuken
-      title: Researcher and Portfolio Manager Quantum Safe Technologies at Netherlands Organisation for Applied Scientific Research (TNO)
+    - name: Alessandro Amadori
+      title: Cryptographic Researcher at Netherlands Organisation for Applied Scientific Research (TNO)
       bio: |
-        Maaike van Leuken is a researcher and the portfolio manager for Quantum Safe Technologies at TNO. Her focus is on the migration towards quantum safe cryptography. She graduated in computing science, cyber security and cryptography from Radboud University in 2021.
-      website: https://www.tno.nl/en/about-tno/our-people/maaike-leuken/
+        Alessandro Amadori is a cryptographer at TNO focusing on the migration to Post-quantum Cryptography. He holds a PhD from Eindhoven University of Technology in cryptographic implementations. He has contributed in several PQC migration projects like HAPKIDO and is one a co-author of the second edition of the PQC migration handbook.
       social:
-        linkedin: https://www.linkedin.com/in/maaike-van-leuken-0b1b7011a/
+        linkedin: https://www.linkedin.com/in/alessandro-amadori-4b2149b8/
 
     - name: Alexander Löw
       id: alexander-loew
@@ -401,7 +400,7 @@ data:
               There is a hesitance to start the migration to quantum-safe solutions, which leads to slower adoption of PQC. This stems from multiple PQC algorithms to choose from, each having specific strong and weaker points, especially with respect to performance, storage and bandwidth. How to deploy these? Hybrid or not? What is the impact on my application? By helping (financial) organisation in migrating their application and testing them in an operational setting, we capture system effects and benchmarking results. In this presentation, I will discuss the results and experiences gained during the migration and share common pitfalls.
             track: 
             speakers:
-              - Maaike van Leuken
+              - Alessandro Amadori
             locations:
               - breakout
 
@@ -699,7 +698,7 @@ data:
               In the migration towards PQC, one of the first steps should be getting an overview of cryptographic assets in your organisation, i.e. where and why are you using which types of cryptographic algorithms, protocols, keys, etc. The result is captured in a Cryptographic Bill-Of-Materials (CBOM). Various commercial solutions exist, but how well are these addressing the problem? In 2024, as an independent research organisation, we have conducted research into crypto asset discovery tooling and their vendors, through literature research and interviews with the vendors. In this presentation, I will give an overview of the currently existing tools, the ideal setting, the gap between them and how to bridge that gap.
             track: 
             speakers:
-              - Maaike van Leuken
+              - Alessandro Amadori
             locations:
               - plenary
 
