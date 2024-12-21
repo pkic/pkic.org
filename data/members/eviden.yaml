@@ -1,15 +1,16 @@
 id: eviden
-name: Bull sas
-slogan:
-website: https://eviden.com
+name: Eviden
+slogan: Expanding the possibilities of data and technology
+website: https://www.cryptovision.com/en/welcome/
 
 # Short description, longer content can be placed in `content/members/`
-description: Eviden offers a wide range of industry-leading solutions including advanced computing, digital security, net zero transformation and many more.
+description: Eviden provides highly certified software and hardware cybersecurity products to support customers in protecting their data, managing access and securing identities, bringing the needed layer of trust in today’s heterogenous digital environments.
 
 # membership
 memberSince: 2024-08-30
 memberType: F
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -17,38 +18,57 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://eviden.com/insights/blogs/
   feed: 
   language: en_US
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.cryptovision.com/en/news-2/
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://www.cryptovision.com/en/hr-career/
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: undefined
+  twitter: https://x.com/Eviden_Security
   facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  instagram: https://www.instagram.com/evidenlive/
+  linkedin: https://www.linkedin.com/showcase/eviden-cybersecurity/
+  youtube: https://www.youtube.com/@EvidenLive
 
 # Here you can list those who represent or have represented the member.
 #
-# Those wo no longer represent an organization might have written blog posts,
+# Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Eric BIGNAND
-    role: Head of Big Data & Security South Europe & MEA
+  - name: Simon Ulmer
+    role: Group VP - Head of Digital ID Cybersecurity products
     social:
-      twitter: 
-      linkedin: 
-    description: Eric is the Head of Big Data & Security South Europe & MEA at Bull sas and represents the organization at the PKI Consortium.
+      twitter: https://x.com/UlmerSimon
+      linkedin: https://www.linkedin.com/in/simonulmer/
+    description: 
+Simon has a passion for technology and storytelling. He explains how software solves problems, empowers users, and transforms industries. Passion is contagious, and he prides himself in igniting enthusiasm, engagement and growth in his team and when connecting with clients.
+
+He is currently leading a multinational software development business unit in the domain of secure digital identities as Group VP (Vice-President) Head of Digital Identity and CEO (Chief Executive Officer) of several legal entities. He was able to build technical expertise in the area of software development, IT infrastructures and cryptography. He oversees the development lifecycle of the Group software solutions with a focus on revenue and customers, taking in to account the market, the product, security best practices, and regulatory requirements. He pushes his team to meet project deadlines, innovate and ensure the quality of deliverables. Managing a multinational team requires effective leadership skills to ensure cohesion, collaboration, and productivity across different cultures, and languages. His language skills in English, French and German and his experience immersed in foreign cultures in the US, Germany, France, UK and China, are key asset in this regard.
+
+Previously he held the position of Industry CTO (Chief Technology Officer) creating technology innovation, delivering value-added solutions, and serving as an advisor to clients. He functioned as a thought leader and spokesperson, sharing insights, trends, and best practices related to technology innovation and digital transformation. His main goal was co-creating solutions that address his client’s business challenges and opportunities.
+
+While in charge of the global strategic alliance between Atos and Siemens, he worked to expand the digital value proposition of the two companies. By developing a joint go to market strategy and managing an investment fund, he created value for both organizations and their customers.
+
+Working for the French administration in entrepreneurship, startups, and innovation. He has also lead several turnarounds which required a combination of leadership, strategic thinking, financial acumen (understanding financial statements, cash flow management, and budgeting), operational expertise (identifying inefficiencies, streamlining workflows, and optimizing performance across functional areas), and interpersonal skills to effectively navigate challenges, communicate changes, manage resistance, and put the company back on the path of sustainable growth. He successfully leads negotiations to secure support for the turnaround plans.
+
+ - name: Vasco Gomes
+    role: Global CTO Cybersecurity Products
+    social:
+      twitter: https://x.com/Vasco_M_Gomes
+      linkedin: https://www.linkedin.com/in/vasco-gomes-eviden/
+    description: 
+Coming from an Information Technology engineering background, with 25 years' of experience in information security, Vasco helped many customers balance operational constraints versus acceptable business risks. In the recent years he expanded this experience to help customers look into what the information security landscape might be in the next 5 years+ and best way to manage it. During innovation workshops, he shares with them some keys to anticipate the future shape of cybersecurity and maximize sovereignty over their most critical data.
+
+Using those customer interactions and by continuously monitoring major technological trends, he influences Eviden cybersecurity services and products roadmaps, as well as partnerships, mergers and acquisitions.
