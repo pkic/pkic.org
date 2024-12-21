@@ -1,0 +1,186 @@
+<html>
+<head>
+  <title>PKI Consortium - Countdown</title>
+  <style>
+    body {
+      background-color: #000;
+    }
+  </style>
+</head>
+
+<body>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="-50 -50 434 434" width="100%" height="100%">
+    <title>PKI Consortium - Enhanced Rotating Logo</title>
+    <style>
+      @keyframes rotate {
+        0% {
+          transform: rotate(0deg) scale(1);
+        }
+
+        50% {
+          transform: rotate(180deg) scale(0.8);
+        }
+
+        100% {
+          transform: rotate(360deg) scale(1);
+        }
+      }
+
+      @keyframes gradientShift {
+        0% {
+          stop-color: rgb(66, 66, 66);
+        }
+
+        /* black */
+        20% {
+          stop-color: rgb(237, 125, 49);
+        }
+
+        /* orange */
+        40% {
+          stop-color: rgb(90, 155, 213);
+        }
+
+        /* blue */
+        60% {
+          stop-color: rgb(255, 192, 0);
+        }
+
+        /* yellow */
+        80% {
+          stop-color: rgb(25, 135, 84);
+        }
+
+        /* green */
+        100% {
+          stop-color: rgb(66, 66, 66);
+        }
+
+        /* black */
+      }
+
+      @keyframes fadeTrail {
+
+        0%,
+        100% {
+          opacity: 1;
+        }
+
+        50% {
+          opacity: 0.3;
+        }
+      }
+
+      @keyframes blink {
+
+        0%,
+        100% {
+          opacity: 1;
+        }
+
+        50% {
+          opacity: 0;
+        }
+      }
+
+      .fade {
+        transform-origin: 168px 151px;
+        animation: fadeTrail 5s ease-in-out infinite;
+        filter: url(#shadow);
+        /* Apply shadow filter */
+      }
+
+      .rotate {
+        animation: rotate 5s linear infinite;
+        filter: url(#shadow);
+        /* Apply shadow filter */
+      }
+
+      .gradient {
+        animation: gradientShift 5s linear infinite;
+      }
+
+      .timer {
+        font-family: Arial, sans-serif;
+        font-size: 90px;
+        font-weight: bold;
+        fill: url(#dynamicGradient);
+        /* Match the gradient */
+        text-anchor: middle;
+        dominant-baseline: middle;
+        text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+      }
+
+      .blink {
+        animation: blink 0.8s step-start infinite;
+        fill: rgb(255, 0, 0);
+      }
+    </style>
+
+    <defs>
+      <linearGradient id="dynamicGradient" x1="0%" y1="0%" x2="100%">
+        <stop offset="0%" class="gradient" />
+        <stop offset="100%" class="gradient" />
+      </linearGradient>
+      <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+        <feDropShadow dx="2" dy="2" stdDeviation="4" flood-color="rgba(0, 0, 0, 0.5)" />
+      </filter>
+    </defs>
+
+    <g id="logoElement">
+      <g class="rotate fade" fill="url(#dynamicGradient)">
+        <path
+          d="M196.82 294.34c-8.4 14.54-10.04 34.62-28.8 34.62-18.77 0-20.42-20.08-28.81-34.62-28.1-5.62-53.29-19.3-73.05-38.53l14.41-13.62c22.69 21.78 53.5 35.17 87.45 35.17 33.94 0 64.75-13.39 87.43-35.17l14.41 13.62c-19.76 19.23-44.94 32.91-73.04 38.53zm10.95-283.82c24.35 6.87 46.13 19.9 63.53 37.3a148.53 148.53 0 0 1 6.31 6.73c16.8 0 35.05-8.62 44.44 7.63 9.37 16.25-7.19 27.71-15.59 42.25 4.94 14.66 7.62 30.36 7.62 46.68 0 12.37-1.54 24.39-4.43 35.86l-19.01-5.67c2.37-9.67 3.64-19.78 3.64-30.19 0-34.87-14.14-66.44-36.98-89.28-14.86-14.85-33.39-26.02-54.12-32.02l4.59-19.29zm-178.4 94.39c-8.39-14.54-24.96-26-15.58-42.25 9.39-16.25 27.63-7.63 44.43-7.63a148.75 148.75 0 0 1 6.32-6.73c17.4-17.4 39.17-30.43 63.53-37.3l4.59 19.29c-20.73 6-39.27 17.17-54.12 32.02-22.84 22.84-36.98 54.41-36.98 89.28 0 10.41 1.27 20.52 3.64 30.19l-19.01 5.67c-2.89-11.47-4.43-23.49-4.43-35.86 0-16.32 2.67-32.02 7.61-46.68z" />
+        <path fill-rule="evenodd"
+          d="M238.24 80.88c17.98 17.97 29.09 42.8 29.09 70.23 0 14.57-3.14 28.42-8.78 40.88l40.9 23.62-9.83 17.1-40.95-23.65a99.39 99.39 0 0 1-10.43 12.28c-17.98 17.97-42.81 29.09-70.22 29.09-27.43 0-52.26-11.12-70.24-29.09a100.18 100.18 0 0 1-10.42-12.28l-40.95 23.65-9.83-17.1 40.9-23.62c-5.64-12.46-8.79-26.31-8.79-40.88 0-27.43 11.12-52.26 29.09-70.23 15.79-15.78 36.86-26.28 60.33-28.6V5.04h19.81v47.24c23.47 2.32 44.54 12.82 60.32 28.6zm-14.01 14.01C209.85 80.5 189.97 71.6 168.02 71.6c-21.96 0-41.84 8.9-56.23 23.29-14.39 14.38-23.29 34.26-23.29 56.22 0 21.95 8.9 41.83 23.29 56.22s34.27 23.28 56.23 23.28c21.95 0 41.83-8.89 56.21-23.28 14.4-14.38 23.3-34.27 23.3-56.22 0-21.96-8.9-41.84-23.3-56.22z" />
+      </g>
+      <text id="countdown" class="timer" x="167" y="160">60</text>
+    </g>
+  </svg>
+  <script>
+    let countdownElement = document.getElementById('countdown');
+    let countdownValue = 60;
+    let intervalId;
+    let isPaused = false;
+
+    function startCountdown() {
+      clearInterval(intervalId);
+      intervalId = setInterval(() => {
+        if (!isPaused && countdownValue > 0) {
+          countdownValue--;
+          countdownElement.textContent = countdownValue;
+        } else if (countdownValue === 0) {
+          let elements = logoElement.querySelectorAll('*');
+          elements.forEach(element => {
+            element.classList.add('blink');
+          });
+        }
+      }, 1000);
+    }
+
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'r') {
+        let elements = logoElement.querySelectorAll('*');
+        elements.forEach(element => {
+          element.classList.remove('blink');
+        });
+        countdownValue = 60;
+        countdownElement.textContent = countdownValue;
+        isPaused = true;
+        startCountdown();
+      } else if (event.key === '+') {
+        countdownValue += 10;
+        countdownElement.textContent = countdownValue;
+      } else if (event.key === '-') {
+        countdownValue = Math.max(0, countdownValue - 10);
+        countdownElement.textContent = countdownValue;
+      } else if (event.key === ' ') {
+        isPaused = !isPaused;
+      }
+    });
+
+    startCountdown();
+  </script>
+</body>
+
+</html>
