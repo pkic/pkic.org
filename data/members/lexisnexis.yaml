@@ -1,0 +1,54 @@
+id: lexisnexis
+name: Lexis Nexis Risk Solutions
+slogan:
+website: https://risk.lexisnexis.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: LexisNexis Risk Solutions uses Big Data, proprietary linking and targeted solutions to provide insights that help make organizations more secure and efficient.
+
+# membership
+memberSince: 2024-12-24
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Neil Costigan
+    role: Chief Architect
+    social:
+      twitter: 
+      linkedin: 
+    description: Neil is the Chief Architect at Lexis Nexis Risk Solutions and represents the organization at the PKI Consortium.
