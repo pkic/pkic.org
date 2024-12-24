@@ -1,0 +1,54 @@
+id: versasec
+name: Versasec AB
+slogan:
+website: https://versasec.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Versasec is an Identity and Access Management (IAM) provider specialized in passwordless solutions such as PKI and FIDO for the enterprise.
+
+# membership
+memberSince: 2024-12-24
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://versasec.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Joakim Thorén
+    role: CEO & Founder
+    social:
+      twitter: 
+      linkedin: 
+    description: Joakim is the CEO & Founder at Versasec AB and represents the organization at the PKI Consortium.
