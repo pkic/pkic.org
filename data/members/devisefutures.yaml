@@ -1,0 +1,54 @@
+id: devisefutures
+name: Devise Futures - IT Solutions, Lda
+slogan:
+website: https://www.devisefutures.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Devise Futures is an innovative organization dedicated to advancing secure digital solutions through expertise in cryptography, identity management, and public key infrastructure (PKI). As a consultant for the Portuguese Government, Devise Futures has played a key role in shaping eIDAS QTSP (namely, the the services for issuing qualified certificates, and for remote qualified signatures) and advanced eID solutions (Mobile Digital Key). Additionally, the organization is actively contributing to the European Commission’s efforts in developing the new EUDI Wallet and ARF, aligning with the highest standards for secure and interoperable digital identity systems.
+
+# membership
+memberSince: 2024-12-24
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.devisefutures.com/index.xml
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: José Miranda
+    role: CEO
+    social:
+      twitter: 
+      linkedin: 
+    description: José is the CEO at Devise Futures - IT Solutions, Lda and represents the organization at the PKI Consortium.
