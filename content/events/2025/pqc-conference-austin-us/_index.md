@@ -524,6 +524,7 @@ data:
             speakers:
               - Bill Newhouse
               - Kunal Abhishek
+              - Jeff Stapleton
             locations:
               - plenary
 
@@ -847,6 +848,16 @@ data:
               - breakout
     
       - time: "16:00"
+        sessions:
+          - title: Closing remarks
+            description: 
+            speakers:
+              - Paul van Brouwershaven
+              - Albert de Ruiter
+            locations:
+              - plenary
+
+      - time: "16:10"
         title: Networking
 
       - time: "18:00"
