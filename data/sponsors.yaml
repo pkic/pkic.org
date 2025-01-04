@@ -23,3 +23,11 @@
     sponsoring:
       "Post-Quantum Cryptography Conference Amsterdam 2023":
         level: Innovator
+
+- name: DigiCert 
+  website: https://www.digicert.com/
+  logo: digicert.svg
+  sponsor:
+    sponsoring:
+      "Post-Quantum Cryptography Conference Austin 2025":
+        level: Innovator
