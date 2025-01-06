@@ -339,7 +339,13 @@ data:
     - name: Garfield Jones
       title: Associate Chief of Strategic Technology at U.S. Department of Homeland Security
       bio: |
+        Garfield S. Jones is the Associate Chief of Strategic Technology for the Cybersecurity and Infrastructure Security Agency. 
 
+        Dr. Jones is responsible for developing the strategy and providing guidance on the use of innovative and leading-edge technology across CISA, including articulating and documenting the future technology vision to achieve the organization’s mission objectives and goals.         
+
+        ​​​​​​​Dr. Jones was Deputy Program Manager for the Continuous Diagnostics and Mitigation (CDM) Program responsible for Systems Engineering, Architecture, and Testing. Prior to joining DHS, Dr. Jones worked as a Systems Engineer developing complex weapons, geographic, and information systems for agencies such as Office of Naval Intelligence (ONI), National Geospatial Intelligence Agency (NGA), and the Naval Criminal Investigative Service (NCIS). In 2018, he retired from the Army Reserves after serving 25 years (16 years active duty and nine years reservist) as an Information Systems Warrant Officer.         
+
+        Dr. Jones holds a Doctor of Engineering in Industrial and Systems Engineering with a concentration in Machine Learning and Artificial Intelligence. He serves as a professor at two universities teaching Computer Science and Systems Engineering. Dr. Jones filed for a patent regarding the use of the Probabilistic Neural Network (PNN) for Vulnerabilities Risk Calculation of a Text Document and he was granted the patent in 2023.  He is currently working on a second patent.
       social:
         linkedin: https://www.linkedin.com/in/garfield-jones-d-eng-0aba558b/
 
