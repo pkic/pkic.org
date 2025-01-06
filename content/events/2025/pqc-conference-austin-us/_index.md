@@ -443,7 +443,7 @@ data:
               This panel will bring together industry leaders from the **Financial**, **Mobile**, and **Healthcare** sectors to discuss the critical transition to post-quantum cryptography (PQC). Panelists from leading banks, the GSMA Association, DirectTrust, and other key stakeholders will explore the growing threat posed by quantum computing to traditional cryptographic systems. They will discuss the unique challenges each industry faces in adopting quantum-resistant solutions, including technical, regulatory, and operational hurdles. Key topics will include the current state of readiness, strategies for smooth transitions, the role of standards bodies, and collaborative efforts across industries. The discussion will also address timelines, cost considerations, and the importance of future-proofing critical infrastructure to ensure security in a post-quantum world.
             track: Panel dicussion
             speakers:
-              - Samantha Mabey*
+              - Samantha Mabey *
               - Lory Thorpe
               - Jaime Gómez García
               - Scott Stuewe 
@@ -541,7 +541,7 @@ data:
               This panel will delve deeper into the decisions organizations face in securing their systems for the post-quantum era. Should resources be directed toward extending the life of legacy algorithms—such as by increasing RSA key sizes or adopting higher-order elliptic curves—to address immediate security concerns? Or is it more prudent to focus exclusively on transitioning to quantum-resistant algorithms? This session will explore the technical and strategic trade-offs of both approaches, offering insights into the urgency and complexity of achieving quantum readiness.
             track: Panel discussion
             speakers:
-              - Ralph Spencer Poore*
+              - Ralph Spencer Poore *
               - Bill Newhouse
               - Jeff Stapleton
               - Tomas Gustavsson
@@ -570,7 +570,7 @@ data:
               This panel brings together experts with diverse perspectives to debate the merits and drawbacks of hybrid cryptography. Should hybrid solutions be embraced as a stepping stone, or do they risk complicating the path to quantum readiness? Attendees will explore the technical, operational, and strategic implications of hybrid approaches, including the potential benefits and challenges of combining multiple quantum-resistant algorithms.
             track: Panel discussion
             speakers:
-              - Ralph Spencer Poore*
+              - Ralph Spencer Poore *
               - Andrew Regenscheid
               - Garfield Jones
               - Lory Thorpe
@@ -686,6 +686,7 @@ data:
               This panel will explore the integration of Post-Quantum Cryptography (PQC) into Hardware Cryptographic Modules, with a focus on the recently released NIST standards. Panelists will examine the challenges and opportunities related to certifying PQC algorithms in compliance with established security requirements. Key topics will include performance considerations, such as the computational cost of PQC in constrained environments, the importance of ensuring interoperability and crypto agility in the process, and availability, especially the readiness of hardware vendors to meet market demand. The discussion will also address the evolving landscape of certification processes and the implications for secure communications in a Post-Quantum world.
             track: Panel discussion
             speakers:
+              - John Buselli *
               - Bruno Couillard
               - Ed Reynolds
               - Eric Amador
