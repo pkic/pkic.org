@@ -286,19 +286,6 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/jonathan-smith-a2488999/
 
-    - name: Kunal Abhishek
-      title: Scientist and Head of Department (Cyber Security - Quantum Technology) at C-DAC, Ministry of Electronics & IT (India)
-      bio: |
-        Dr. Kunal Abhishek is a Scientist ‘E’ at the Centre for Development of Advanced Computing (C-DAC), where he leads the Cyber Security, Forensics, and Quantum Technology Groups, driving advanced cyber security solutions for government organizations. Before joining C-DAC, he served as Group Head at SETS Chennai and spent seven years at WESEE, Indian Navy, developing indigenous cryptographic and information security solutions.  
-
-        He has spearheaded key Government of India PKI initiatives, including Lakshman (Strategic PKI), e-Abhedya (ECC-based PKI), and a proprietary elliptic curve PKI, while designing cryptographic tools like GANGA (secure RNG), GHOST (trusted elliptic curves), and ADRISHYA (mobile VPN). Dr. Kunal played a pivotal role in national policy development, contributing to India’s Cryptography Roadmap and IT Act amendments introducing ECC-based Digital Signature Rules. 
-
-        As a trusted consultant to strategic agencies, he has authored the forthcoming *Deciphering Tactics, Techniques and Procedures of Ransomware(s) – 1989 to 2023. He is also co-leading a government project on HPC-based quantum accelerators for supercomputers.
-
-        With 19 years of experience in R&D and deployment, Dr. Kunal’s expertise spans Cryptography, Quantum Technology, and Secure Kernel Development. He holds an M.S. in Software Systems from BITS Pilani and a Ph.D. in Computer Science from Bharathidasan University, specializing in Applied Cryptography, with research published in leading journals and conferences.
-      social:
-        linkedin: 
-
     - name: Nils Gerhardt
       title: Chief Technology Officer at Utimaco
       bio: |
@@ -517,8 +504,8 @@ data:
             track: Panel discussion
             speakers:
               - Bill Newhouse
-              - Kunal Abhishek
               - Jeff Stapleton
+              - Tomas Gustavsson
             locations:
               - plenary
 
