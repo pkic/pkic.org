@@ -307,6 +307,43 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/yarkindoroz/
 
+    - name: Ralph Spencer Poore
+      title: Moderator, Vice Chair of the PQC Working Group of the PKI Consortium
+      bio: |
+        Ralph Spencer Poore is a seasoned technologist with over 50 years of experience in information assurance. He boasts a diverse background as an inventor, author, and instructor, specializing in computer security, information systems audit, applied cryptography, intellectual property, and computer forensics. Ralph serves as Vice Chair of the PQC Working Group of the PKI Consortium, actively contributing to the advancement of post-quantum cryptography.
+      social:
+        linkedin: https://www.linkedin.com/in/ralphspencerpoore/
+
+    - name: Samantha Mabey
+      title: Moderator, Director of Digital Security Solutions Marketing at Entrust
+      bio: |
+        Samantha Mabey is the Director of Digital Security Solutions Marketing at Entrust, where she oversees marketing strategy and communications for the Digital Security Solutions portfolio. She is also the host of several acclaimed podcasts, including the Cybersecurity Institute Podcast, where she engages with industry experts on critical topics in cybersecurity and digital trust.
+
+        Previously, Samantha served as a Senior Strategist at McMillan (February 2018-March 2019), refining her expertise in brand strategy and marketing while delivering impactful campaigns for a diverse range of clients.
+
+        Combining her marketing acumen with a passion for digital security, Samantha is a recognized leader and influential voice in the industry.
+      social:
+        linkedin: https://www.linkedin.com/in/samanthamabey/
+
+    - name: John Buselli
+      title: Moderator, Offering Manager at IBM Quantum
+      bio: |
+        John Buselli is an Offering Manager for the IBM Quantum Group and is currently focused on the development and delivery of IBM’s Quantum Safe Program.  
+        In this role, he oversees product strategy, market development and customer-facing programs.  
+        Since joining IBM Research in 2015, John has focused on cyber security, confidential computing, privacy-enhancing technologies, data governance and securing AI Analytic initiatives.
+        He previously led a global team at IBM tasked with building an Information Governance/Compliance Practice within the IBM software organization.   
+        His career has been focused on establishing and expanding initial markets, products and operations for early-stage software firms including Verity (purchased by HP), and KVS (acquired by Symantec) Princeton Softech (purchased by IBM) as well as senior leadership roles at Seer Technologies and Texas Instruments.
+      social:
+        linkedin: https://www.linkedin.com/in/johnbuselli/
+
+    - name: Garfield Jones
+      title: Associate Chief of Strategic Technology at U.S. Department of Homeland Security
+      bio: |
+
+      social:
+        linkedin: https://www.linkedin.com/in/garfield-jones-d-eng-0aba558b/
+
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     # Wednesday -------------------------------------------------------------------
@@ -406,6 +443,7 @@ data:
               This panel will bring together industry leaders from the **Financial**, **Mobile**, and **Healthcare** sectors to discuss the critical transition to post-quantum cryptography (PQC). Panelists from leading banks, the GSMA Association, DirectTrust, and other key stakeholders will explore the growing threat posed by quantum computing to traditional cryptographic systems. They will discuss the unique challenges each industry faces in adopting quantum-resistant solutions, including technical, regulatory, and operational hurdles. Key topics will include the current state of readiness, strategies for smooth transitions, the role of standards bodies, and collaborative efforts across industries. The discussion will also address timelines, cost considerations, and the importance of future-proofing critical infrastructure to ensure security in a post-quantum world.
             track: Panel dicussion
             speakers:
+              - Samantha Mabey*
               - Lory Thorpe
               - Jaime Gómez García
               - Scott Stuewe 
@@ -503,6 +541,7 @@ data:
               This panel will delve deeper into the decisions organizations face in securing their systems for the post-quantum era. Should resources be directed toward extending the life of legacy algorithms—such as by increasing RSA key sizes or adopting higher-order elliptic curves—to address immediate security concerns? Or is it more prudent to focus exclusively on transitioning to quantum-resistant algorithms? This session will explore the technical and strategic trade-offs of both approaches, offering insights into the urgency and complexity of achieving quantum readiness.
             track: Panel discussion
             speakers:
+              - Ralph Spencer Poore*
               - Bill Newhouse
               - Jeff Stapleton
               - Tomas Gustavsson
@@ -531,7 +570,9 @@ data:
               This panel brings together experts with diverse perspectives to debate the merits and drawbacks of hybrid cryptography. Should hybrid solutions be embraced as a stepping stone, or do they risk complicating the path to quantum readiness? Attendees will explore the technical, operational, and strategic implications of hybrid approaches, including the potential benefits and challenges of combining multiple quantum-resistant algorithms.
             track: Panel discussion
             speakers:
+              - Ralph Spencer Poore*
               - Andrew Regenscheid
+              - Garfield Jones
               - Lory Thorpe
             locations:
               - plenary
