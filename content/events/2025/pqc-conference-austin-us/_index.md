@@ -219,16 +219,12 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/sulemanahmadd/
 
-    - name: Reshmi TR
-      title: Scientist at Society for Electronic Transactions and Security (SETS)
+    - name: Ini Kong
+      title: PhD Researcher at Delft University of Technology
       bio: |
-        Dr. TR Reshmi is currently working as a Scientist under Cryptology and Computing Research group in Society for Electronic Transactions and Security (SETS) Chennai Under Office of Principal Scientific Adviser to the Government of India. Her active projects are in the areas of Blockchain, 5G Security, Ransomware Analysis and AI/ML for Cybersecurity. 
-
-        Dr. Reshmi, an alumnus of Anna University, received her Ph.D. in Information & Communication Engineering from Anna University in 2015. Currently, she has around 15 years of industrial, academic and research experience in the field of computer science and engineering.  She has delivered several keynote addresses and presented papers in a number of reputed national and international conferences and also has authored 30 papers in SCI and Scopus Indexed technical journals. Further, to her credit, Dr Reshmi has one patents granted and 2 under progress for grant approval.
-
-        Dr. Reshmi is an IPv6 Forum Certified Engineer (Silver). She is an active member of several professional societies and forums such as IETF, ISOC, IPv6 forum, IAENG to name a few and also a member in few working groups & committees in her professional areas.
+        Ini Kong is a PhD Researcher in the Department of Engineering Systems and Services at Delft University of Technology. Under the supervision of Prof.dr.ir. Marijn Janssen and Prof.dr.ir Nitesh Bharosa, her PhD research focuses on Public Key Infrastructure (PKI) systems that facilitate digital communication and information exchange. The aim of the research is to guide organizations transitioning toward Quantum-safe (QS) PKI systems and extend knowledge on the development of a stages-of-growth model for QS transition. Her PhD research is part of a larger project called HAPKIDO (Hybrid Approach for quantum-safe Public Key Infrastructure Development for Organizations) funded by NWO (Netherlands Organization for Scientific Research). The project delivers sector-based plans towards QS PKIs, including hybrid PKIs that demonstrate how QS solutions will work with existing infrastructures, and governance models that guide organizations toward a QS future.
       social:
-        linkedin: https://www.linkedin.com/in/reshmi-tr-2323a862/
+        linkedin: https://www.linkedin.com/in/ini-kong-7bbb75147/
 
     - name: Iñigo Barreira
       id: inigo-barreira
@@ -454,14 +450,12 @@ data:
             locations:
               - plenary
 
-          - title: "Quantum-Safe Solutions for Permissioned Blockchain Networks: A Hyperledger Fabric Case Study"
+          - title: Online Quantum-safe Readiness Tool
             description: |
-              This presentation explores the integration of Post-Quantum Cryptographic (PQC) solutions within the permissioned blockchain framework of Hyperledger Fabric. Focusing on applications such as supply chain management, land registration, and certificate validation, the talk will highlight how Hyperledger Fabric has been tailored to meet security needs in both academia and industry. Public Key Infrastructure (PKI) is central to these implementations, ensuring identity management and secure communication via TLS validations, with chain codes customized for specific uses.
-
-              The rise of quantum computing presents significant vulnerabilities for classical cryptographic algorithms used within these blockchain networks. In response, a quantum-safe PKI using Crystal Dilithium-based digital signatures has been developed and tested within Hyperledger Fabric, achieving successful implementation. Attempts to integrate SPINCS+, however, revealed compatibility challenges, emphasizing the need for adapting permissioned blockchain systems as quantum threats emerge. This talk will share early results of deploying a PQC-enabled certifying authority in Hyperledger Fabric, offering insights into essential modifications for a quantum-resistant blockchain environment.
+              The list of standardization based on Post-Quantum Cryptography (PQC) and the NIST IR 8547 initial public draft signal that organizations should begin preparing for their transitions to PQC standards. While transitions to PQC standards cannot be addressed in isolation due to interdependencies that organizations depend on, there are many uncertainties that prevent organizations from taking actionable steps. In order to navigate the complexities of transitions, an online quantum readiness assessment tool is developed to guide organizations. With a multi-dimensional approach, the tool recognizes various dimensions that organizations should consider when transitioning their existing infrastructures. What sets this tool apart from other available tool is its foundation in the scientific methods, utilizing empirical data and addressing context specific transition challenges relevant to PKIs. Since it remains crucial for organizations to gain an overview of transition progress, the tool allows organizations to focus on areas that have low readiness levels and adjust their strategies with a set of possible recommendations. 
             track: 
             speakers:
-              - Reshmi TR
+              - Ini Kong
             locations:
               - breakout
 
