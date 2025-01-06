@@ -308,14 +308,14 @@ data:
         linkedin: https://www.linkedin.com/in/yarkindoroz/
 
     - name: Ralph Spencer Poore
-      title: Moderator, Vice Chair of the PQC Working Group of the PKI Consortium
+      title: Vice Chair of the PQC Working Group of the PKI Consortium
       bio: |
         Ralph Spencer Poore is a seasoned technologist with over 50 years of experience in information assurance. He boasts a diverse background as an inventor, author, and instructor, specializing in computer security, information systems audit, applied cryptography, intellectual property, and computer forensics. Ralph serves as Vice Chair of the PQC Working Group of the PKI Consortium, actively contributing to the advancement of post-quantum cryptography.
       social:
         linkedin: https://www.linkedin.com/in/ralphspencerpoore/
 
     - name: Samantha Mabey
-      title: Moderator, Director of Digital Security Solutions Marketing at Entrust
+      title: Director of Digital Security Solutions Marketing at Entrust
       bio: |
         Samantha Mabey is the Director of Digital Security Solutions Marketing at Entrust, where she oversees marketing strategy and communications for the Digital Security Solutions portfolio. She is also the host of several acclaimed podcasts, including the Cybersecurity Institute Podcast, where she engages with industry experts on critical topics in cybersecurity and digital trust.
 
@@ -326,7 +326,7 @@ data:
         linkedin: https://www.linkedin.com/in/samanthamabey/
 
     - name: John Buselli
-      title: Moderator, Offering Manager at IBM Quantum
+      title: Offering Manager at IBM Quantum
       bio: |
         John Buselli is an Offering Manager for the IBM Quantum Group and is currently focused on the development and delivery of IBM’s Quantum Safe Program.  
         In this role, he oversees product strategy, market development and customer-facing programs.  
