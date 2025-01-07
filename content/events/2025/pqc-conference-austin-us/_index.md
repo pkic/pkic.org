@@ -74,11 +74,11 @@ data:
         He is broadly interested in computer security, network and protocol measurement, applied cryptography, privacy, elliptic curves, and distributed systems.
       website: https://www.linkedin.com/in/lukevalenta/
     
-    - name: Joey Lupo
-      title: Product Security Architect at QuSecure, Inc
+    - name: Roman Cinkais
+      title: Co-founder at 3Key Company
       bio: |
-        Joey’s strength and passion are in all things security, cryptography, and code. For the last 2 and a half years, he has worked at QuSecure as a Product Security Architect and Software Engineer. He completed an MSc in Cyber Security, Privacy, and Trust from the University of Edinburgh as a 2021 scholarship award winner of the St. Andrew’s Society of the State of New York. Before that, he graduated summa cum laude from Amherst College, where he studied mathematics and computer science and was captain of the Division III men’s ice hockey team.
-      website: https://www.linkedin.com/in/joey-lupo
+        Roman is the co-founder of 3Key Company, which provides services and products related to security in information technology. He has long been involved in public key infrastructure and the development of trust services such as certificate management, digital signature, and cryptographic key management. In 2021, he founded an open-source project called CZERTAINLY for trust service lifecycle management, which aims to help companies increase cryptographic agility and protect against external and internal cyber threats.
+      website: https://www.linkedin.com/in/roman-cinkais/
 
     - name: Giuseppe Bruno
       title: Head of Division at Bank of Italy
@@ -646,7 +646,7 @@ data:
               A number of organizations are framing the migration to post-quantum cryptography (PQC) as an opportunity to affect broader IT security modernization across their organizations, especially as it relates to managing the full life cycle of cryptographic algorithms, libraries, and protocols. This presentation introduces the idea of a Cryptographic Bill of Materials (CBOM), often considered a key element of this IT modernization effort. We compare and contrast CBOM with the more familiar Software Bill of Materials (SBOM), paying particular attention to how the cryptographic ecosystem poses unique challenges compared to software-at-large. For example, many cryptographic protocols include a negotiation phase over the wire, complicating the effort to know exactly which algorithm was used in any given protocol handshake. We explore the types of cryptographic assurance that a CBOM can and cannot provide for an organization. Finally, we describe how supplementary efforts such as key management, real-time cryptographic monitoring, and the ability to execute historical queries are needed to fill in the operational gaps of a CBOM.
             track: 
             speakers:
-              - Joey Lupo
+              - Roman Cinkais
             locations:
               - plenary
 
