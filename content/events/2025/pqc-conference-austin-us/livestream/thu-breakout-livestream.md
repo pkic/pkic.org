@@ -9,7 +9,7 @@ robots: noindex
 
 {{< livestream id="HUGO_LS_THU_BREAKOUT" >}}
 
-{{< button link="../thu-plenary-livestream/" label="Go to Plenary" type="warning" >}} 
+{{< button link="../thu-plenary-livestream/" label="Go to Plenary" type="info" >}} 
 {{< button link="/ask" target="_blank" label="Ask a question" type="dark" >}} 
 {{< button link="/join/" target="_blank" label="Become a member" type="success" >}} 
 {{< button link="/sponsors/" target="_blank" label="Sponsor our activities" type="light" >}}
