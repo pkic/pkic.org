@@ -317,9 +317,7 @@ data:
     - name: Samantha Mabey
       title: Director of Digital Security Solutions Marketing at Entrust
       bio: |
-        Samantha Mabey is the Director of Digital Security Solutions Marketing at Entrust, where she oversees marketing strategy and communications for the Digital Security Solutions portfolio. She is also the host of several acclaimed podcasts, including the Cybersecurity Institute Podcast, where she engages with industry experts on critical topics in cybersecurity and digital trust.
-
-        Previously, Samantha served as a Senior Strategist at McMillan (February 2018-March 2019), refining her expertise in brand strategy and marketing while delivering impactful campaigns for a diverse range of clients.
+        Samantha Mabey is the Director of Digital Security Solutions Marketing at Entrust, where she oversees marketing strategy and communications for the data security and machine identity solutions, as well as leads the efforts around Zero Trust and Post Quantum. She acts as host of several acclaimed podcasts, including the Cybersecurity Institute Podcast, where she engages with industry experts on critical topics in cybersecurity, digital trust, and post quantum preparedness.
 
         Combining her marketing acumen with a passion for digital security, Samantha is a recognized leader and influential voice in the industry.
       social:
