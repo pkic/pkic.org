@@ -131,7 +131,7 @@ data:
 
     - name: Jaime Gómez García
       id: jaime-gomez-garcia
-      title: Head of Quantum at Banco Santander
+      title: Head of Quantum at Banco Santander and Chair of the Quantum Safe Financial Forum
       bio: |
         Jaime Gómez García is a recognized expert in telecommunications, blockchain, and quantum technologies, with an extensive professional background within the financial sector. His contributions as a disseminator of quantum technologies and their consequential influence on enterprises, notably within the financial domain, have garnered him recognition as a LinkedIn Quantum Top Voices in 2022 and 2023. Currently, Jaime is Head of Quantum Technologies at Banco Santander, addressing how quantum computing can be leveraged in benefit of the business and how to tackle the quantum threat to cryptography.
       social:
