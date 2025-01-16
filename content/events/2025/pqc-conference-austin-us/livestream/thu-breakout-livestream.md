@@ -7,7 +7,9 @@ robots: noindex
 
 ---
 
-{{< livestream id="0vH00fZgK2c" >}}
+Use this link if you get an error: https://youtube.com/live/0vH00fZgK2c
+
+{{< livestream id="HUGO_LS_THU_BREAKOUT" >}}
 
 {{< button link="../thu-plenary-livestream/" label="Go to Plenary" type="info" >}} 
 {{< button link="/ask" target="_blank" label="Ask a question" type="dark" >}} 
