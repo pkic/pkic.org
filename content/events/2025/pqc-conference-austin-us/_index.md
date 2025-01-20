@@ -465,7 +465,7 @@ data:
             track: Developers
             speakers:
               - Tomas Gustavsson
-            presentation: 
+            presentation: WED_BREAKOUT_1230_Tomas-Gustavsson-PQC-HSMs-Jan15-2025-v6-FINAL.pdf
             locations:
               - breakout
 
@@ -863,7 +863,7 @@ data:
             track: 
             speakers:
               - Jaime Gómez García
-            presentation: 
+            presentation: THU_PLENARY_1500_Jaime-Gómez-García_Perspectives-on-the-transition-to-PQC-in-the-financial-sector.pdf
             locations:
               - plenary
 
