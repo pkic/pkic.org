@@ -6,3 +6,4 @@ static/pagefind
 # Ignore hugo itself when located here
 hugo
 hugo.*
+static/_pagefind

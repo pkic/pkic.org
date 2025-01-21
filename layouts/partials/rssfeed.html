@@ -1,9 +1,9 @@
 {{- with . -}}
   {{- $t := debug.Timer . -}}
-  {{- with resources.GetRemote . -}}
+  {{- with try (resources.GetRemote .) -}}
     {{- with .Err -}}
       {{- warnf "%s" . -}}
-    {{- else -}}
+    {{- else with .Value -}}
       {{- if or (strings.HasSuffix .MediaType "rss+xml") (strings.HasSuffix .MediaType "atom+xml") -}}
         {{- with . | transform.Unmarshal -}}
           {{- with .channel.item -}}
