@@ -89,10 +89,15 @@
                                             {{ end }}
                                             <p class="fw-bold m-3">
                                                 {{- $title := .title -}}
-                                                {{- with $.Page.Resources.Get .presentation -}}
-                                                    <a href="{{ .RelPermalink }}" title="{{ $title }}" target="_blank">{{- $title -}}</a>
-                                                {{- else -}}
-                                                    {{- .title -}}
+                                                {{- with try ($.Page.Resources.Get .presentation) -}}
+                                                    {{- with .Err -}}
+                                                        {{- warnf "%s" . -}}
+                                                        {{- $title -}}
+                                                    {{- else with .Value -}}
+                                                        <a href="{{ .RelPermalink }}" title="{{ $title }}" target="_blank">{{- $title -}}</a>
+                                                    {{- else -}}
+                                                        {{- $title -}}
+                                                    {{- end -}}
                                                 {{- end -}}
                                             </p>
                                             <div class="text-secondary m-3 fw-light fs-6 opacity-75">
