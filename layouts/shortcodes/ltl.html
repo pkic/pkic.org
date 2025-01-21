@@ -1,18 +1,18 @@
 {{ $latest := dict }}
 {{ $latestUrl := "https://api.github.com/repos/pkic/ltl/releases/latest" }}
-{{ with resources.GetRemote $latestUrl }}
+{{ with try (resources.GetRemote $latestUrl) }}
     {{ with .Err }}
         {{ errorf "%s" . }}
-    {{ else }}
+    {{ else with .Value }}
         {{ $latest = . | transform.Unmarshal }}
     {{end }}
 {{ end }}
 {{ $ltl := dict }}
 {{ $ltlUrl := (printf "https://github.com/pkic/ltl/releases/download/%s/ltl.json" $latest.tag_name) }}
-{{ with resources.GetRemote $ltlUrl }}
+{{ with try (resources.GetRemote $ltlUrl) }}
     {{ with .Err }}
         {{ errorf "%s" . }}
-    {{ else }}
+    {{ else with .Value }}
         {{ $ltl = .Content | transform.Unmarshal }}
     {{end }}
 {{ end }}
