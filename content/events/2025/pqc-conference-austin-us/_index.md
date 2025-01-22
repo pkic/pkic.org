@@ -927,28 +927,12 @@ data:
 
 ## Conference Details
 
-The PKI Consortium is excited to host its third hybrid Post-Quantum Cryptography (PQC) Conference on Wednesday, January 15, and Thursday, January 16, 2025. The event will take place at the Thompson Conference Center, University of Texas, Austin, Texas, US.
+The PKI Consortium hosted its third hybrid Post-Quantum Cryptography (PQC) Conference on Wednesday, January 15, and Thursday, January 16, 2025. The event took place at the Thompson Conference Center, University of Texas, Austin, Texas, US.
 
-This conference is a premier gathering for decision-makers, technical leaders, and industry influencers from both public and private sectors who are deeply invested in the future of cryptography. Attendees can expect a diverse program featuring keynote speeches, breakout sessions, and panel discussions led by thought leaders in PQC.
+This conference was a premier gathering for decision-makers, technical leaders, and industry influencers from both public and private sectors who are deeply invested in the future of cryptography. Attendees experienced a diverse program featuring keynote speeches, breakout sessions, and panel discussions led by thought leaders in PQC.
 
-> The conference is open to all individuals interested in Post-Quantum Cryptography and is **not limited** to PKI Consortium members. 
+> The conference was open to all individuals interested in Post-Quantum Cryptography and was **not limited** to PKI Consortium members. 
 {.callout-info}
-
-## Date and location
-
-**Date:** January 15 and 16, 2025  
-**Location:** [Thompson Conference Center](https://thompsoncenter.utexas.edu/location-and-parking) (University of Texas), Austin, Texas, US  
-**Registration:** [Click here](https://forms.gle/Q83w6wryNbmVktdP9)  
-
-* _This event can be attended in-person or remotely, we strongly recommend to attend in person where possible._
-* _There are no costs to register or attend the conference._
-* _Travel, accommodation and living expenses are not covered, all attendees are responsible to cover their own expenses._
-
-{{< button link="/register" target="_blank" label="Register for this conference" type="dark" >}}  
-
-### Accommodation
-
-To make your stay in Austin as comfortable as possible, we've compiled a list of accommodation options near the Thompson Conference Center. Whether you're looking for a budget-friendly option or a luxurious stay, you'll find plenty of choices to suit your preferences. Visit the [accommodation page](accommodation/) for our detailed suggestions and helpful tips on booking your accommodation.
 
 ## Sponsors
 
@@ -956,25 +940,18 @@ We are immensely grateful to our sponsors:
 
 {{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" height="20" max-width="60" rows=true >}}
 
-#### Become a Sponsor
-
-**Interested in sponsoring the Post-Quantum Cryptography Conference?** For detailed information about sponsorship opportunities, please [contact us](/sponsors/sponsor/). You can also [download the sponsorship brochure](pqc-conference-austin-sponsors.pdf) for a comprehensive overview and pricing of our sponsorship packages.
-
-{{< button link="pqc-conference-austin-sponsors.pdf" target="_blank" label="Explore our sponsorship opportunities" type="outline-success" >}}  
-
 ## Agenda
 
-The conference features a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees can look forward to keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers are not permitted to promote products or services during presentations.
+The conference featured a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees enjoyed keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers were not permitted to promote products or services during presentations.
 
 {{< agenda "agenda" >}}
 
 {{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="Leader" height="20" max-width="60" >}}
 
-Please be aware that speakers are not permitted to promote products or services during their presentations. While commercials, workshops, and pitches may include commercial information, the primary focus of the conference is on educational content.
+Please note that speakers were not permitted to promote products or services during their presentations. While commercials, workshops, and pitches included commercial information, the primary focus of the conference remained on educational content.
 
-This conference is made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
+This conference was made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
 
 {{< figure src="organizational-support.jpg" >}}
 
 For more information about the conference, please contact the PKI Consortium at feedback@pkic.org.
-
