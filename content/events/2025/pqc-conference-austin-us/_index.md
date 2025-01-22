@@ -866,7 +866,6 @@ data:
             presentation: THU_PLENARY_1500_Jaime-Gómez-García_Perspectives-on-the-transition-to-PQC-in-the-financial-sector.pdf
             locations:
               - plenary
-n
           - title: Is your HSM quantum-ready? Here’s what you need to know!
             description: |
               Every currently deployed HSM must be replaced with a quantum-safe HSM. But what is a quantum-safe HSM. First, it must itself utilize quantum-safe root keys and algorithms for its processing. Second, it must support quantum-safe firmware updates to remain agile and current as algorithms and protocols evolve. Third, it must provide access to PQC algorithms for application integration. These capabilities must be bult-in not bolted-on to an existing HSM. An HSM that exposes PQC algorithms but itself uses classic algorithms is NOT quantum-safe. This talk will explore these issues in detail.
