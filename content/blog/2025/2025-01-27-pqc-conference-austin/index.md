@@ -1,7 +1,7 @@
 ---
 title: "Key Takeaways of the PQC Conference in Austin"
 summary: |
-Over two days of intensive programming, experts delivered compelling presentations and engaged in insightful panel discussions, both in plenary sessions and concurrent breakout tracks. This year, the focus shifted decisively from theoretical exploration to concrete, actionable steps for implementing quantum-safe cryptography. The key takeaway was clear: delay poses the greatest risk, and immediate action is essential to achieve quantum resilience.
+  Over two days of intensive programming, experts delivered compelling presentations and engaged in insightful panel discussions, both in plenary sessions and concurrent breakout tracks. This year, the focus shifted decisively from theoretical exploration to concrete, actionable steps for implementing quantum-safe cryptography. The key takeaway was clear: delay poses the greatest risk, and immediate action is essential to achieve quantum resilience.
 authors:
 - Paul van Brouwershaven
 date: 2025-01-30T07:00:00+00:00
