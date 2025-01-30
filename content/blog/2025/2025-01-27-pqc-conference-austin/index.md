@@ -9,7 +9,7 @@ keywords: [PQC, Post-Quantum Cryptography, Conference, Austin, Texas]
 tags: [PQC, Post-Quantum Cryptography, Conference, Austin, Texas]
 ---
 
-**The 2025 PKI Consortium Post-Quantum Cryptography (PQC) Conference in Austin marked a milestone, attracting an unprecedented 2,191 registrants. While 250 attendees gathered in person at the University of Texas at Austin, the conference embraced a hybrid format, with many more joining remotely via the live stream.**
+**The 2025 PKI Consortium [Post-Quantum Cryptography (PQC) Conference in Austin](/events/2025/pqc-conference-austin-us/) marked a milestone, attracting an unprecedented 2,191 registrants. While 250 attendees gathered in person at the University of Texas at Austin, the conference embraced a hybrid format, with many more joining remotely via the live stream.**
 
 Over two days of intensive programming, experts delivered compelling presentations and engaged in insightful panel discussions, both in plenary sessions and concurrent breakout tracks. This year, the focus shifted decisively from theoretical exploration to concrete, actionable steps for implementing quantum-safe cryptography. **The key takeaway was clear: delay poses the greatest risk, and immediate action is essential to achieve quantum resilience**.
 
