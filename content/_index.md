@@ -16,7 +16,7 @@ menu:
 ---
 
 {{< alert >}}
-The slides and initial session recordings from the **Post-Quantum Cryptography Conference in Austin** are now available. [Click on a session title in the agenda to download the slides](/events/2025/pqc-conference-austin-us/) and check our [YouTube channel](https://www.youtube.com/@PKIConsortium) for the first recordings.
+The slides and recordings from the **Post-Quantum Cryptography Conference in Austin** are now available. [Click on a session title in the agenda to download the slides](/events/2025/pqc-conference-austin-us/), you can also check our [YouTube channel](https://www.youtube.com/@PKIConsortium) with all the recordings.
 {{< /alert >}}
 
 ## PKI Consortium

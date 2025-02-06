@@ -362,7 +362,7 @@ data:
             speakers: 
               - Paul van Brouwershaven
               - Albert de Ruiter
-            youtube: 
+            youtube: rISH4pTyVE0
             presentation: WED_PLENARY_0900-Welcome.pdf
             locations:
               - plenary
@@ -374,6 +374,7 @@ data:
               Professor Aaronson will provide a personal perspective on the current state and future prospects of quantum computing, addressing its implications for cryptography and the pressing question of how long current public-key cryptographic systems might remain secure. Following his talk, Professor Aaronson will engage in an open Q&A session, inviting discussion on any aspects of quantum computing.
             speakers:
               - Scott Aaronson
+            youtube: DQFyQgA_GE4
             locations:
               - plenary
 
@@ -389,7 +390,7 @@ data:
             speakers:
               - Bill Newhouse
               - Andrew Regenscheid
-            youtube: 
+            youtube: KFZm-zw4I50
             presentation: WED_PLENARY_1000_Bill-N_Andrew-R_NIST-PQ-Crypto-Update.pdf
             locations:
               - plenary
@@ -406,6 +407,7 @@ data:
             track: 
             speakers:
               - Morgan Stern
+            youtube: 5X21D8SPWrc
             presentation: WED_PLENARY_1130_Morgan-Stern_UNCL_PQ_PKI_conf_talk_20250115_v2.pdf
             locations:
               - plenary
@@ -416,6 +418,7 @@ data:
             track: 
             speakers:
               - Alessandro Amadori
+            youtube: 2mx2GM2N6M0
             presentation: WED_BREAKOUT_1130_Alessandro-Amadori_Migrating-and-benchmarking-a-banking-application.pdf
             locations:
               - breakout
@@ -428,6 +431,7 @@ data:
             track: Beginners
             speakers:
               - Tim Callan
+            youtube: Nvceoy3pDc0
             presentation: WED_PLENARY_1200_Tim-Callan_ELI5-Implementing-Dig-Certs-for-a-PQ-World.pdf
             locations:
               - plenary
@@ -440,6 +444,7 @@ data:
             track: 
             speakers:
               - Mike Ounsworth
+            youtube: 26lxuHIdvLg
             presentation: WED_BREAKOUT_1200_Mike-Ounsworth_Architecting-PKI-Hierarchies-for-Graceful-PQ-Migration.pdf
             locations:
               - breakout
@@ -455,6 +460,7 @@ data:
               - Jaime Gómez García
               - Scott Stuewe 
               - Samantha Mabey *
+            youtube: li9gnwU9aIU
             locations:
               - plenary
 
@@ -465,6 +471,7 @@ data:
             track: Developers
             speakers:
               - Tomas Gustavsson
+            youtube: UfL4Qm5yk_0
             presentation: WED_BREAKOUT_1230_Tomas-Gustavsson-PQC-HSMs-Jan15-2025-v6-FINAL.pdf
             locations:
               - breakout
@@ -482,6 +489,7 @@ data:
             speakers:
               - Blair Canavan
             presentation: WED_PLENARY_1400_Blair-Canavan_2025-is-Here-How-to-get-your-PQC-Readiness-Plan-Underway.pdf
+            youtube: AB8W4csqCbE
             locations:
               - plenary
 
@@ -491,6 +499,7 @@ data:
             track: 
             speakers:
               - Ini Kong
+            youtube: 6BpAWMNM3CM
             presentation: WED_BREAKOUT_1400_Ini-Kong_Online-Q-Safe-Readiness-Tool.pdf
             locations:
               - breakout
@@ -503,6 +512,7 @@ data:
             track: 
             speakers:
               - Jeff Stapleton
+            youtube: GUHynaGq_Fs
             presentation: WED_PLENARY_1430_Jeff-Stapleton_X9-FI-PKI-PQC-Readiness-and-crypto-agiltity-for-FI-Services.pdf
             locations:
               - plenary
@@ -515,6 +525,7 @@ data:
             track: Migration
             speakers:
               - Jan Klaußner
+            youtube: glSs-kk8kmU
             presentation: WED_BREAKOUT_1430_Jan-Klaußner_Hybrid-PQC-E-Mail-Communication-Easing-Migration-Pain.pdf
             locations:
               - breakout
@@ -529,6 +540,7 @@ data:
             track: WebPKI
             speakers:
               - Luke Valenta
+            youtube: 1JS-IfjCXc0
             presentation: WED_PLENARY_1500_Luke-Valenta_Why-the-Internet-isnt-ready-for-PQ-Certificates.pdf
             locations:
               - plenary
@@ -541,6 +553,7 @@ data:
             track: 
             speakers:
               - Axel York Poschmann
+            youtube: -G5aFotuhoI
             presentation: WED_BREAKOUT_1500_Axel-Poschmann-Q-Safe-Secure-Boot-How-hard-can-it-be.pdf
             locations:
               - breakout
@@ -560,6 +573,7 @@ data:
               - Jeff Stapleton
               - Tomas Gustavsson
               - Ralph Spencer Poore *
+            youtube: jKLbwdp6EUM
             locations:
               - plenary
 
@@ -573,6 +587,7 @@ data:
             speakers:
               - Luke Valenta
             track: WebPKI
+            youtube: Cfkknxdz-1I
             presentation: WED_BREAKOUT_1600_Luke-Valenta_Making-PQ-Signatures-work-in-the-WebPKI.pdf
             locations:
               - breakout
@@ -590,6 +605,7 @@ data:
               - Garfield Jones
               - Lory Thorpe
               - Ralph Spencer Poore *
+            youtube: QBy4bL6Ke_k
             locations:
               - plenary
 
@@ -635,6 +651,7 @@ data:
             track: 
             speakers:
               - Andrew Regenscheid
+            youtube: dDas-NWezUY
             presentation: THU_PLENARY_0900_Update-on-the-NIST-standardization-of-additional-signature-schemes.pdf
             locations:
               - plenary
@@ -647,6 +664,7 @@ data:
             track: 
             speakers:
               - Mike Ounsworth
+            youtube: D5ugYzdgfXY
             presentation: THU_BREAKOUT_0900_Mike-Ounsworth_PQC-Standardization-at-the-IETF.pdf
             locations:
               - breakout
@@ -659,6 +677,7 @@ data:
             track: 
             speakers:
               - Roman Cinkais
+            youtube: atsxOm3LWUc
             presentation: THU_PLENARY_0930_Roman-Cinkais_Is-a-CBOM-Enough.pdf
             locations:
               - plenary
@@ -669,6 +688,7 @@ data:
             track: 
             speakers:
               - Corey Bonnell
+            youtube: hcU1pw5tiSA
             presentation: THU_BREAKOUT_0930_Corey-Bonnell_PQC-Interoperability-Project.pdf 
             locations:
               - breakout
@@ -681,6 +701,7 @@ data:
             track: 
             speakers:
               - Jonathan Smith
+            youtube: 1QRyRWBQ63U
             presentation: THU_PLENARY_1000_Jonathan-Smith_FIPS-140-3-and-PQC.pdf
             locations:
               - plenary
@@ -693,6 +714,7 @@ data:
             track: 
             speakers:
               - Iñigo Barreira
+            youtube: WHAoIE2PuVo
             presentation: THU_BREAKOUT_1000_Iñigo-Barreira_ETSI-ESI_QSC-PQC-conference.pdf
             locations:
               - breakout
@@ -713,6 +735,7 @@ data:
               - Eric Amador
               - Nils Gerhardt
               - John Buselli *
+            youtube: hyFjpo-D724
             locations:
               - plenary
 
@@ -724,6 +747,7 @@ data:
             track: WebPKI
             speakers:
               - Syed Suleman Ahmad
+            youtube: EXjY5LuYm6E
             presentation: THU_BREAKOUT_1100_Syed-Suleman-Ahmad_Lessons-Learned-from-Testing-Millions-of-Servers-for-PQ-Compatibility.pdf
             locations:
               - breakout
@@ -736,6 +760,7 @@ data:
             track: 
             speakers:
               - Alessandro Amadori
+            youtube: o3fBUIu0yFI
             presentation: THU_PLENARY_1130_Alessandro-Amadori_Crypto-Asset-Discovery-Tooling–an-Overview-of-Capabilities-Characteristics-and-Gaps.pdf
             locations:
               - plenary
@@ -747,6 +772,7 @@ data:
             speakers:
               - Panos Kampanakis
               - Mila Anastasova
+            youtube: Y0F22jf5mYg
             presentation: THU_BREAKOUT_1130_Panos-Kampanakis_How-much-will-ML-DSA-affect-Webpage-Metrics.pdf
             locations:
               - breakout
@@ -760,6 +786,7 @@ data:
             track: 
             speakers:
               - Bill Newhouse
+            youtube: 0FKV5sXeQhI
             presentation: THU_PLENARY_1200_Bill-Newhouse_NIST-National-CCOE-Migration-to-PQC.pdf
             locations:
               - plenary
@@ -771,6 +798,7 @@ data:
             speakers:
               - Mila Anastasova
               - Panos Kampanakis
+            youtube: CwP6iBdygRc
             presentation: THU_BREAKOUT_1200_Mila-Anastasova_The-impact-of-ML-KEM-and-ML-DSA-on-mTLS-connection-Time-To-Last-Byte.pdf
             locations:
               - breakout
@@ -787,6 +815,7 @@ data:
             track: 
             speakers:
               - Alexander Löw
+            youtube: dBsymlmASsw
             presentation: THU_PLENARY_1230_Alexander-Löw_Practical-Insights-from-Following-NIST-SP-1800-38B.pdf
             locations:
               - plenary
@@ -799,6 +828,7 @@ data:
               - Jeff Stapleton
               - David Hook
               - Mike Ounsworth
+            youtube: 6HETTS4d0U8
             presentation: THU_BREAKOUT_1230_X9-146-QTLS-20241220.pdf
             locations:
               - breakout
@@ -815,6 +845,7 @@ data:
             track: Industry
             speakers:
               - Giuseppe Bruno
+            youtube: RRxhvCl0tMw
             presentation: THU_PLENARY_1400_Giuseppe-Bruno_Communication-among-FI-What-are-the-available-answers-to-the-quantum-threat_1_16v1.pdf
             locations:
               - plenary
@@ -825,6 +856,7 @@ data:
             track: 
             speakers:
               - Erik Hieta-aho
+            youtube: H6aJo3ugmys
             presentation: THU_BREAKOUT_1400_Erik-Hieta-aho_Hybrid-PQC_Digital-Signatures-and-SSI.pdf
             locations:
               - breakout
@@ -841,6 +873,7 @@ data:
             track: 
             speakers:
               - José Hernández Pérez
+            youtube: XXDuZDQ1iis
             presentation: THU_PLENARY_1430_Jose-Hernandez_Workforce-Education-Programs-in-PQ-Cryptography-final.pdf
             locations:
               - plenary
@@ -851,6 +884,7 @@ data:
             track: 
             speakers:
               - Jan Klaußner
+            youtube: fKdZNjgsNdg
             presentation: THU_BREAKOUT_1430_Jan-Klaußner_Quantum-Key-Distribution–What-is-done-and-what-is-to-come.pdf
             locations:
               - breakout
@@ -863,15 +897,18 @@ data:
             track: 
             speakers:
               - Jaime Gómez García
+            youtube: HywJXpEOvFQ
             presentation: THU_PLENARY_1500_Jaime-Gómez-García_Perspectives-on-the-transition-to-PQC-in-the-financial-sector.pdf
             locations:
               - plenary
+          
           - title: Is your HSM quantum-ready? Here’s what you need to know!
             description: |
               Every currently deployed HSM must be replaced with a quantum-safe HSM. But what is a quantum-safe HSM. First, it must itself utilize quantum-safe root keys and algorithms for its processing. Second, it must support quantum-safe firmware updates to remain agile and current as algorithms and protocols evolve. Third, it must provide access to PQC algorithms for application integration. These capabilities must be bult-in not bolted-on to an existing HSM. An HSM that exposes PQC algorithms but itself uses classic algorithms is NOT quantum-safe. This talk will explore these issues in detail.
             track: Hardware
             speakers:
               - Bruno Couillard
+            youtube: w35gzRJlqBw
             presentation: THU_BREAKOUT_1500_Bruno-Couillard_Is-your-HSM-quantum-ready-Heres-what-you-need-to-know.pdf
             locations:
               - breakout
@@ -884,6 +921,7 @@ data:
             track: 
             speakers:
               - Yarkin Doroz
+            youtube: dXaE6OvGllI
             presentation: THU_PLENARY_1530_Yarkin-Doroz_Accelerated-Quantum-Supercomputing-and-PQC.pdf
             locations:
               - plenary
@@ -902,6 +940,7 @@ data:
             track: 
             speakers:
               - Nils Gerhardt
+            youtube: o9YiFFu3qYo
             presentation: THU_BREAKOUT_1530_Nils-Gerhardt_Security-Data-in-the-Quantum-Era-From-the-Root-of-Trust-to-Protecting-Ecosystems.pdf
             locations:
               - breakout
@@ -913,6 +952,7 @@ data:
             speakers:
               - Paul van Brouwershaven
               - Albert de Ruiter
+            youtube: 5X4IKZjK9eU
             presentation: THU_PLENARY_1600-Closing.pdf
             locations:
               - plenary
