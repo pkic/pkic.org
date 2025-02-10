@@ -1,0 +1,79 @@
+id: versasec
+name: Versasec AB
+slogan: Managing Digital Identities
+website: https://www.versasec.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Entrust is dedicated to securing identities, data, and transactions around the globe
+
+# membership
+memberSince: 2024-12-24
+memberType: F
+workingGroups:
+  - PKIMM
+  - TCWG
+  
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://www.versasec.com/blog/
+  feed: https://versasec.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://versasec.com/news/
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://versasec.com/job-openings/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://x.com/versasec
+  facebook: https://www.facebook.com/Versasec
+  instagram: undefined
+  linkedin: https://www.linkedin.com/company/Versasec
+  youtube: https://www.youtube.com/c/Versasec
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Tatjana Suhorukova
+    role: Business Development Analyst
+    social:
+      linkedin: https://www.linkedin.com/in/tatjanasuhorukova
+    description: Tatjana Suhorukova is a Business Development Analyst at Versasec. She brings over 15 years of expertise in project management across various industries with a strong background in business and marketing. Mrs Suhorukova specializes in driving global business development strategies and delivering measurable results. At Versasec, Tatjana leverages her skills to strategic partnerships and lead go-to-market strategies to accelerate the company's growth.
+
+  - name: William Houry
+    role: VP Worldwide Sales
+    social:
+      twitter: https://x.com/whoury
+      linkedin: https://www.linkedin.com/in/williamhoury
+    description: William Houry is Vice President of Worldwide Sales at Versasec, a global leader in the identity access management space for two decades. 
+
+      Houry has directed teams to design innovative, customer-centric, identity solutions and deliver cutting-edge technologies to market. Previously, Houry was Product Specialist and Product Manager at Gemalto, later acquired by Thales. 
+
+  - name: Anders Adolfsson
+    role: Product Manager
+    social:
+      twitter: https://x.com/anddo79
+      linkedin: https://www.linkedin.com/in/andersadolfsson/
+    description: Anders Adolfsson is Versasec’s Global Product Manager. He is an experienced solutions architect with extensive experience in bringing products and ideas to the market, mostly with new and emerging technologies for Fortune 500 enterprises. Anders has been with Versasec for nearly 10 years and brings to his position more than 25 years of experience in IT, sales, pre-sales, services, project management, and development. Before being Product Manager, Adolfsson worked as a Technical Consultant in the Nordics Region and as IT Director. 
+
+  - name: Joerg Dettmann
+    role: Chief Technology Officer
+    social:
+      linkedin: https://www.linkedin.com/in/joerg-dettmann-26867a18/
+    description: Joerg Dettmann currently serves as Chief Technology Officer at Versasec. He is a co-founder at Versasec.
+      
+      Dettmann has three decades of experience in software development, PKI, smart cards, and identity management. He previously served in similar roles at Gemalto and startup Celo Communications.
