@@ -1,10 +1,10 @@
 id: dohatec-ca
-name: Dohatec New Media
-slogan:
-website: https://dohatec-ca.com.bd
+name: Dohatec Certifying Authority
+slogan: excellence,always
+website: http://www.dohatec-ca.com.bd/DohatecCA/index.jsp
 
 # Short description, longer content can be placed in `content/members/`
-description: Dohatec New Media is a trusted, qualified and licensed CA and issues Digital Certificates according to Bangladesh Law. Dohatec CA issues Digital Certificates for authentication, Digital Signature, Encryption, securing Website (SSL) and Email (Secure- Email).
+description: An international software vendor fuelled by professional competence and pride in a Digital World, enhancing earnings from the global marketplace and enriching the workforce intellectually,professionally and economically.
 
 # membership
 memberSince: 2024-04-16
@@ -17,8 +17,8 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
-  feed: 
+  url: https://blog.dohatec.com/
+  feed: https://blog.dohatec.com/
   language: en_US
 
 # Press Releases
@@ -29,16 +29,16 @@ press:
 
 # Careers
 careers: 
-  url: 
+  url: https://dohatec.com/Career.aspx
   feed: 
   language: en_US
 
 # Social media
 social:
   twitter: 
-  facebook: 
+  facebook: https://www.facebook.com/dohatec
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/dohatec-new-media/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -51,4 +51,4 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/nuzhat-nafis-42970656/
-    description: Nuzhat Atiqua is the Security Architect at Dohatec New Media and represents the organization at the PKI Consortium.
+    description: Nuzhat is the Security Architect and operational head PKI at Dohatec New Media and represents the organization at the PKI Consortium.
