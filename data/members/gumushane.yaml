@@ -8,7 +8,7 @@ description: Gümüşhane Üniversitesi, Üniversite, Study in Turkey, universit
 
 # membership
 memberSince: 2024-11-06
-memberType: null
+memberType: H5
 workingGroups:
 
 # sponsor
@@ -50,5 +50,5 @@ representatives:
     role: Assistant Professor
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/samet-tonyali-911ab922/
     description: Samet is the Assistant Professor at Gümüşhane University and represents the organization at the PKI Consortium.
