@@ -16,10 +16,8 @@ menu:
 ---
 
 {{< alert >}}
-The PKI Consortium is excited to host its third hybrid **Post-Quantum Cryptography (PQC) Conference** on Wednesday, January 15, and Thursday, January 16, 2025. [Click here for more details and to register](/events/2025/pqc-conference-austin-us/).
+The slides and recordings from the **Post-Quantum Cryptography Conference in Austin** are now available. [Click on a session title in the agenda to download the slides](/events/2025/pqc-conference-austin-us/), you can also check our [YouTube channel](https://www.youtube.com/@PKIConsortium) with all the recordings.
 {{< /alert >}}
-
-{{< youtube id=WUu_KizQV30 loading=lazy allowFullScreen=true autoplay=true loop=true >}}
 
 ## PKI Consortium
 

@@ -74,11 +74,11 @@ data:
         He is broadly interested in computer security, network and protocol measurement, applied cryptography, privacy, elliptic curves, and distributed systems.
       website: https://www.linkedin.com/in/lukevalenta/
     
-    - name: Joey Lupo
-      title: Product Security Architect at QuSecure, Inc
+    - name: Roman Cinkais
+      title: Co-founder at 3Key Company
       bio: |
-        Joey’s strength and passion are in all things security, cryptography, and code. For the last 2 and a half years, he has worked at QuSecure as a Product Security Architect and Software Engineer. He completed an MSc in Cyber Security, Privacy, and Trust from the University of Edinburgh as a 2021 scholarship award winner of the St. Andrew’s Society of the State of New York. Before that, he graduated summa cum laude from Amherst College, where he studied mathematics and computer science and was captain of the Division III men’s ice hockey team.
-      website: https://www.linkedin.com/in/joey-lupo
+        Roman is the co-founder of 3Key Company, which provides services and products related to security in information technology. He has long been involved in public key infrastructure and the development of trust services such as certificate management, digital signature, and cryptographic key management. In 2021, he founded an open-source project called CZERTAINLY for trust service lifecycle management, which aims to help companies increase cryptographic agility and protect against external and internal cyber threats.
+      website: https://www.linkedin.com/in/roman-cinkais/
 
     - name: Giuseppe Bruno
       title: Head of Division at Bank of Italy
@@ -131,7 +131,7 @@ data:
 
     - name: Jaime Gómez García
       id: jaime-gomez-garcia
-      title: Head of Quantum at Banco Santander
+      title: Head of Quantum at Banco Santander and Chair of the Quantum Safe Financial Forum
       bio: |
         Jaime Gómez García is a recognized expert in telecommunications, blockchain, and quantum technologies, with an extensive professional background within the financial sector. His contributions as a disseminator of quantum technologies and their consequential influence on enterprises, notably within the financial domain, have garnered him recognition as a LinkedIn Quantum Top Voices in 2022 and 2023. Currently, Jaime is Head of Quantum Technologies at Banco Santander, addressing how quantum computing can be leveraged in benefit of the business and how to tackle the quantum threat to cryptography.
       social:
@@ -219,16 +219,12 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/sulemanahmadd/
 
-    - name: Reshmi TR
-      title: Scientist at Society for Electronic Transactions and Security (SETS)
+    - name: Ini Kong
+      title: PhD Researcher at Delft University of Technology
       bio: |
-        Dr. TR Reshmi is currently working as a Scientist under Cryptology and Computing Research group in Society for Electronic Transactions and Security (SETS) Chennai Under Office of Principal Scientific Adviser to the Government of India. Her active projects are in the areas of Blockchain, 5G Security, Ransomware Analysis and AI/ML for Cybersecurity. 
-
-        Dr. Reshmi, an alumnus of Anna University, received her Ph.D. in Information & Communication Engineering from Anna University in 2015. Currently, she has around 15 years of industrial, academic and research experience in the field of computer science and engineering.  She has delivered several keynote addresses and presented papers in a number of reputed national and international conferences and also has authored 30 papers in SCI and Scopus Indexed technical journals. Further, to her credit, Dr Reshmi has one patents granted and 2 under progress for grant approval.
-
-        Dr. Reshmi is an IPv6 Forum Certified Engineer (Silver). She is an active member of several professional societies and forums such as IETF, ISOC, IPv6 forum, IAENG to name a few and also a member in few working groups & committees in her professional areas.
+        Ini Kong is a PhD Researcher in the Department of Engineering Systems and Services at Delft University of Technology. Under the supervision of Prof.dr.ir. Marijn Janssen and Prof.dr.ir Nitesh Bharosa, her PhD research focuses on Public Key Infrastructure (PKI) systems that facilitate digital communication and information exchange. The aim of the research is to guide organizations transitioning toward Quantum-safe (QS) PKI systems and extend knowledge on the development of a stages-of-growth model for QS transition. Her PhD research is part of a larger project called HAPKIDO (Hybrid Approach for quantum-safe Public Key Infrastructure Development for Organizations) funded by NWO (Netherlands Organization for Scientific Research). The project delivers sector-based plans towards QS PKIs, including hybrid PKIs that demonstrate how QS solutions will work with existing infrastructures, and governance models that guide organizations toward a QS future.
       social:
-        linkedin: https://www.linkedin.com/in/reshmi-tr-2323a862/
+        linkedin: https://www.linkedin.com/in/ini-kong-7bbb75147/
 
     - name: Iñigo Barreira
       id: inigo-barreira
@@ -290,19 +286,6 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/jonathan-smith-a2488999/
 
-    - name: Kunal Abhishek
-      title: Scientist and Head of Department (Cyber Security - Quantum Technology) at C-DAC, Ministry of Electronics & IT (India)
-      bio: |
-        Dr. Kunal Abhishek is a Scientist ‘E’ at the Centre for Development of Advanced Computing (C-DAC), where he leads the Cyber Security, Forensics, and Quantum Technology Groups, driving advanced cyber security solutions for government organizations. Before joining C-DAC, he served as Group Head at SETS Chennai and spent seven years at WESEE, Indian Navy, developing indigenous cryptographic and information security solutions.  
-
-        He has spearheaded key Government of India PKI initiatives, including Lakshman (Strategic PKI), e-Abhedya (ECC-based PKI), and a proprietary elliptic curve PKI, while designing cryptographic tools like GANGA (secure RNG), GHOST (trusted elliptic curves), and ADRISHYA (mobile VPN). Dr. Kunal played a pivotal role in national policy development, contributing to India’s Cryptography Roadmap and IT Act amendments introducing ECC-based Digital Signature Rules. 
-
-        As a trusted consultant to strategic agencies, he has authored the forthcoming *Deciphering Tactics, Techniques and Procedures of Ransomware(s) – 1989 to 2023. He is also co-leading a government project on HPC-based quantum accelerators for supercomputers.
-
-        With 19 years of experience in R&D and deployment, Dr. Kunal’s expertise spans Cryptography, Quantum Technology, and Secure Kernel Development. He holds an M.S. in Software Systems from BITS Pilani and a Ph.D. in Computer Science from Bharathidasan University, specializing in Applied Cryptography, with research published in leading journals and conferences.
-      social:
-        linkedin: 
-
     - name: Nils Gerhardt
       title: Chief Technology Officer at Utimaco
       bio: |
@@ -324,6 +307,47 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/yarkindoroz/
 
+    - name: Ralph Spencer Poore
+      title: Vice Chair of the PQC Working Group of the PKI Consortium
+      bio: |
+        Ralph Spencer Poore is a seasoned technologist with over 50 years of experience in information assurance. He boasts a diverse background as an inventor, author, and instructor, specializing in computer security, information systems audit, applied cryptography, intellectual property, and computer forensics. Ralph serves as Vice Chair of the PQC Working Group of the PKI Consortium, actively contributing to the advancement of post-quantum cryptography.
+      social:
+        linkedin: https://www.linkedin.com/in/ralphspencerpoore/
+
+    - name: Samantha Mabey
+      title: Director of Digital Security Solutions Marketing at Entrust
+      bio: |
+        Samantha Mabey is the Director of Digital Security Solutions Marketing at Entrust, where she oversees marketing strategy and communications for the data security and machine identity solutions, as well as leads the efforts around Zero Trust and Post Quantum. She acts as host of several acclaimed podcasts, including the Cybersecurity Institute Podcast, where she engages with industry experts on critical topics in cybersecurity, digital trust, and post quantum preparedness.
+
+        Combining her marketing acumen with a passion for digital security, Samantha is a recognized leader and influential voice in the industry.
+      social:
+        linkedin: https://www.linkedin.com/in/samanthamabey/
+
+    - name: John Buselli
+      title: Offering Manager at IBM Quantum
+      bio: |
+        John Buselli is an Offering Manager for the IBM Quantum Group and is currently focused on the development and delivery of IBM’s Quantum Safe Program.  
+        In this role, he oversees product strategy, market development and customer-facing programs.  
+        Since joining IBM Research in 2015, John has focused on cyber security, confidential computing, privacy-enhancing technologies, data governance and securing AI Analytic initiatives.
+        He previously led a global team at IBM tasked with building an Information Governance/Compliance Practice within the IBM software organization.   
+        His career has been focused on establishing and expanding initial markets, products and operations for early-stage software firms including Verity (purchased by HP), and KVS (acquired by Symantec) Princeton Softech (purchased by IBM) as well as senior leadership roles at Seer Technologies and Texas Instruments.
+      social:
+        linkedin: https://www.linkedin.com/in/johnbuselli/
+
+    - name: Garfield Jones
+      title: Associate Chief of Strategic Technology at U.S. Department of Homeland Security
+      bio: |
+        Garfield S. Jones is the Associate Chief of Strategic Technology for the Cybersecurity and Infrastructure Security Agency. 
+
+        Dr. Jones is responsible for developing the strategy and providing guidance on the use of innovative and leading-edge technology across CISA, including articulating and documenting the future technology vision to achieve the organization’s mission objectives and goals.         
+
+        ​​​​​​​Dr. Jones was Deputy Program Manager for the Continuous Diagnostics and Mitigation (CDM) Program responsible for Systems Engineering, Architecture, and Testing. Prior to joining DHS, Dr. Jones worked as a Systems Engineer developing complex weapons, geographic, and information systems for agencies such as Office of Naval Intelligence (ONI), National Geospatial Intelligence Agency (NGA), and the Naval Criminal Investigative Service (NCIS). In 2018, he retired from the Army Reserves after serving 25 years (16 years active duty and nine years reservist) as an Information Systems Warrant Officer.         
+
+        Dr. Jones holds a Doctor of Engineering in Industrial and Systems Engineering with a concentration in Machine Learning and Artificial Intelligence. He serves as a professor at two universities teaching Computer Science and Systems Engineering. Dr. Jones filed for a patent regarding the use of the Probabilistic Neural Network (PNN) for Vulnerabilities Risk Calculation of a Text Document and he was granted the patent in 2023.  He is currently working on a second patent.
+      social:
+        linkedin: https://www.linkedin.com/in/garfield-jones-d-eng-0aba558b/
+
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     # Wednesday -------------------------------------------------------------------
@@ -338,8 +362,8 @@ data:
             speakers: 
               - Paul van Brouwershaven
               - Albert de Ruiter
-            youtube: 
-            presentation: 
+            youtube: rISH4pTyVE0
+            presentation: WED_PLENARY_0900-Welcome.pdf
             locations:
               - plenary
 
@@ -350,6 +374,7 @@ data:
               Professor Aaronson will provide a personal perspective on the current state and future prospects of quantum computing, addressing its implications for cryptography and the pressing question of how long current public-key cryptographic systems might remain secure. Following his talk, Professor Aaronson will engage in an open Q&A session, inviting discussion on any aspects of quantum computing.
             speakers:
               - Scott Aaronson
+            youtube: DQFyQgA_GE4
             locations:
               - plenary
 
@@ -365,8 +390,8 @@ data:
             speakers:
               - Bill Newhouse
               - Andrew Regenscheid
-            youtube: 
-            presentation: 
+            youtube: KFZm-zw4I50
+            presentation: WED_PLENARY_1000_Bill-N_Andrew-R_NIST-PQ-Crypto-Update.pdf
             locations:
               - plenary
 
@@ -382,6 +407,8 @@ data:
             track: 
             speakers:
               - Morgan Stern
+            youtube: 5X21D8SPWrc
+            presentation: WED_PLENARY_1130_Morgan-Stern_UNCL_PQ_PKI_conf_talk_20250115_v2.pdf
             locations:
               - plenary
 
@@ -391,6 +418,8 @@ data:
             track: 
             speakers:
               - Alessandro Amadori
+            youtube: 2mx2GM2N6M0
+            presentation: WED_BREAKOUT_1130_Alessandro-Amadori_Migrating-and-benchmarking-a-banking-application.pdf
             locations:
               - breakout
 
@@ -402,6 +431,8 @@ data:
             track: Beginners
             speakers:
               - Tim Callan
+            youtube: Nvceoy3pDc0
+            presentation: WED_PLENARY_1200_Tim-Callan_ELI5-Implementing-Dig-Certs-for-a-PQ-World.pdf
             locations:
               - plenary
 
@@ -413,6 +444,8 @@ data:
             track: 
             speakers:
               - Mike Ounsworth
+            youtube: 26lxuHIdvLg
+            presentation: WED_BREAKOUT_1200_Mike-Ounsworth_Architecting-PKI-Hierarchies-for-Graceful-PQ-Migration.pdf
             locations:
               - breakout
 
@@ -426,6 +459,8 @@ data:
               - Lory Thorpe
               - Jaime Gómez García
               - Scott Stuewe 
+              - Samantha Mabey *
+            youtube: li9gnwU9aIU
             locations:
               - plenary
 
@@ -436,6 +471,8 @@ data:
             track: Developers
             speakers:
               - Tomas Gustavsson
+            youtube: UfL4Qm5yk_0
+            presentation: WED_BREAKOUT_1230_Tomas-Gustavsson-PQC-HSMs-Jan15-2025-v6-FINAL.pdf
             locations:
               - breakout
 
@@ -451,17 +488,19 @@ data:
             track: 
             speakers:
               - Blair Canavan
+            presentation: WED_PLENARY_1400_Blair-Canavan_2025-is-Here-How-to-get-your-PQC-Readiness-Plan-Underway.pdf
+            youtube: AB8W4csqCbE
             locations:
               - plenary
 
-          - title: "Quantum-Safe Solutions for Permissioned Blockchain Networks: A Hyperledger Fabric Case Study"
+          - title: Online Quantum-safe Readiness Tool
             description: |
-              This presentation explores the integration of Post-Quantum Cryptographic (PQC) solutions within the permissioned blockchain framework of Hyperledger Fabric. Focusing on applications such as supply chain management, land registration, and certificate validation, the talk will highlight how Hyperledger Fabric has been tailored to meet security needs in both academia and industry. Public Key Infrastructure (PKI) is central to these implementations, ensuring identity management and secure communication via TLS validations, with chain codes customized for specific uses.
-
-              The rise of quantum computing presents significant vulnerabilities for classical cryptographic algorithms used within these blockchain networks. In response, a quantum-safe PKI using Crystal Dilithium-based digital signatures has been developed and tested within Hyperledger Fabric, achieving successful implementation. Attempts to integrate SPINCS+, however, revealed compatibility challenges, emphasizing the need for adapting permissioned blockchain systems as quantum threats emerge. This talk will share early results of deploying a PQC-enabled certifying authority in Hyperledger Fabric, offering insights into essential modifications for a quantum-resistant blockchain environment.
+              The list of standardization based on Post-Quantum Cryptography (PQC) and the NIST IR 8547 initial public draft signal that organizations should begin preparing for their transitions to PQC standards. While transitions to PQC standards cannot be addressed in isolation due to interdependencies that organizations depend on, there are many uncertainties that prevent organizations from taking actionable steps. In order to navigate the complexities of transitions, an online quantum readiness assessment tool is developed to guide organizations. With a multi-dimensional approach, the tool recognizes various dimensions that organizations should consider when transitioning their existing infrastructures. What sets this tool apart from other available tool is its foundation in the scientific methods, utilizing empirical data and addressing context specific transition challenges relevant to PKIs. Since it remains crucial for organizations to gain an overview of transition progress, the tool allows organizations to focus on areas that have low readiness levels and adjust their strategies with a set of possible recommendations. 
             track: 
             speakers:
-              - Reshmi TR
+              - Ini Kong
+            youtube: 6BpAWMNM3CM
+            presentation: WED_BREAKOUT_1400_Ini-Kong_Online-Q-Safe-Readiness-Tool.pdf
             locations:
               - breakout
 
@@ -473,6 +512,8 @@ data:
             track: 
             speakers:
               - Jeff Stapleton
+            youtube: GUHynaGq_Fs
+            presentation: WED_PLENARY_1430_Jeff-Stapleton_X9-FI-PKI-PQC-Readiness-and-crypto-agiltity-for-FI-Services.pdf
             locations:
               - plenary
 
@@ -484,6 +525,8 @@ data:
             track: Migration
             speakers:
               - Jan Klaußner
+            youtube: glSs-kk8kmU
+            presentation: WED_BREAKOUT_1430_Jan-Klaußner_Hybrid-PQC-E-Mail-Communication-Easing-Migration-Pain.pdf
             locations:
               - breakout
 
@@ -497,6 +540,8 @@ data:
             track: WebPKI
             speakers:
               - Luke Valenta
+            youtube: 1JS-IfjCXc0
+            presentation: WED_PLENARY_1500_Luke-Valenta_Why-the-Internet-isnt-ready-for-PQ-Certificates.pdf
             locations:
               - plenary
 
@@ -508,6 +553,8 @@ data:
             track: 
             speakers:
               - Axel York Poschmann
+            youtube: -G5aFotuhoI
+            presentation: WED_BREAKOUT_1500_Axel-Poschmann-Q-Safe-Secure-Boot-How-hard-can-it-be.pdf
             locations:
               - breakout
 
@@ -523,7 +570,10 @@ data:
             track: Panel discussion
             speakers:
               - Bill Newhouse
-              - Kunal Abhishek
+              - Jeff Stapleton
+              - Tomas Gustavsson
+              - Ralph Spencer Poore *
+            youtube: jKLbwdp6EUM
             locations:
               - plenary
 
@@ -537,6 +587,8 @@ data:
             speakers:
               - Luke Valenta
             track: WebPKI
+            youtube: Cfkknxdz-1I
+            presentation: WED_BREAKOUT_1600_Luke-Valenta_Making-PQ-Signatures-work-in-the-WebPKI.pdf
             locations:
               - breakout
 
@@ -550,7 +602,10 @@ data:
             track: Panel discussion
             speakers:
               - Andrew Regenscheid
+              - Garfield Jones
               - Lory Thorpe
+              - Ralph Spencer Poore *
+            youtube: QBy4bL6Ke_k
             locations:
               - plenary
 
@@ -596,6 +651,8 @@ data:
             track: 
             speakers:
               - Andrew Regenscheid
+            youtube: dDas-NWezUY
+            presentation: THU_PLENARY_0900_Update-on-the-NIST-standardization-of-additional-signature-schemes.pdf
             locations:
               - plenary
 
@@ -607,6 +664,8 @@ data:
             track: 
             speakers:
               - Mike Ounsworth
+            youtube: D5ugYzdgfXY
+            presentation: THU_BREAKOUT_0900_Mike-Ounsworth_PQC-Standardization-at-the-IETF.pdf
             locations:
               - breakout
 
@@ -617,7 +676,9 @@ data:
               A number of organizations are framing the migration to post-quantum cryptography (PQC) as an opportunity to affect broader IT security modernization across their organizations, especially as it relates to managing the full life cycle of cryptographic algorithms, libraries, and protocols. This presentation introduces the idea of a Cryptographic Bill of Materials (CBOM), often considered a key element of this IT modernization effort. We compare and contrast CBOM with the more familiar Software Bill of Materials (SBOM), paying particular attention to how the cryptographic ecosystem poses unique challenges compared to software-at-large. For example, many cryptographic protocols include a negotiation phase over the wire, complicating the effort to know exactly which algorithm was used in any given protocol handshake. We explore the types of cryptographic assurance that a CBOM can and cannot provide for an organization. Finally, we describe how supplementary efforts such as key management, real-time cryptographic monitoring, and the ability to execute historical queries are needed to fill in the operational gaps of a CBOM.
             track: 
             speakers:
-              - Joey Lupo
+              - Roman Cinkais
+            youtube: atsxOm3LWUc
+            presentation: THU_PLENARY_0930_Roman-Cinkais_Is-a-CBOM-Enough.pdf
             locations:
               - plenary
 
@@ -627,6 +688,8 @@ data:
             track: 
             speakers:
               - Corey Bonnell
+            youtube: hcU1pw5tiSA
+            presentation: THU_BREAKOUT_0930_Corey-Bonnell_PQC-Interoperability-Project.pdf 
             locations:
               - breakout
 
@@ -638,6 +701,8 @@ data:
             track: 
             speakers:
               - Jonathan Smith
+            youtube: 1QRyRWBQ63U
+            presentation: THU_PLENARY_1000_Jonathan-Smith_FIPS-140-3-and-PQC.pdf
             locations:
               - plenary
 
@@ -649,6 +714,8 @@ data:
             track: 
             speakers:
               - Iñigo Barreira
+            youtube: WHAoIE2PuVo
+            presentation: THU_BREAKOUT_1000_Iñigo-Barreira_ETSI-ESI_QSC-PQC-conference.pdf
             locations:
               - breakout
 
@@ -667,6 +734,8 @@ data:
               - Ed Reynolds
               - Eric Amador
               - Nils Gerhardt
+              - John Buselli *
+            youtube: hyFjpo-D724
             locations:
               - plenary
 
@@ -678,6 +747,8 @@ data:
             track: WebPKI
             speakers:
               - Syed Suleman Ahmad
+            youtube: EXjY5LuYm6E
+            presentation: THU_BREAKOUT_1100_Syed-Suleman-Ahmad_Lessons-Learned-from-Testing-Millions-of-Servers-for-PQ-Compatibility.pdf
             locations:
               - breakout
 
@@ -689,6 +760,8 @@ data:
             track: 
             speakers:
               - Alessandro Amadori
+            youtube: o3fBUIu0yFI
+            presentation: THU_PLENARY_1130_Alessandro-Amadori_Crypto-Asset-Discovery-Tooling–an-Overview-of-Capabilities-Characteristics-and-Gaps.pdf
             locations:
               - plenary
 
@@ -699,6 +772,8 @@ data:
             speakers:
               - Panos Kampanakis
               - Mila Anastasova
+            youtube: Y0F22jf5mYg
+            presentation: THU_BREAKOUT_1130_Panos-Kampanakis_How-much-will-ML-DSA-affect-Webpage-Metrics.pdf
             locations:
               - breakout
 
@@ -711,6 +786,8 @@ data:
             track: 
             speakers:
               - Bill Newhouse
+            youtube: 0FKV5sXeQhI
+            presentation: THU_PLENARY_1200_Bill-Newhouse_NIST-National-CCOE-Migration-to-PQC.pdf
             locations:
               - plenary
 
@@ -721,6 +798,8 @@ data:
             speakers:
               - Mila Anastasova
               - Panos Kampanakis
+            youtube: CwP6iBdygRc
+            presentation: THU_BREAKOUT_1200_Mila-Anastasova_The-impact-of-ML-KEM-and-ML-DSA-on-mTLS-connection-Time-To-Last-Byte.pdf
             locations:
               - breakout
 
@@ -736,6 +815,8 @@ data:
             track: 
             speakers:
               - Alexander Löw
+            youtube: dBsymlmASsw
+            presentation: THU_PLENARY_1230_Alexander-Löw_Practical-Insights-from-Following-NIST-SP-1800-38B.pdf
             locations:
               - plenary
 
@@ -747,6 +828,8 @@ data:
               - Jeff Stapleton
               - David Hook
               - Mike Ounsworth
+            youtube: 6HETTS4d0U8
+            presentation: THU_BREAKOUT_1230_X9-146-QTLS-20241220.pdf
             locations:
               - breakout
 
@@ -762,6 +845,8 @@ data:
             track: Industry
             speakers:
               - Giuseppe Bruno
+            youtube: RRxhvCl0tMw
+            presentation: THU_PLENARY_1400_Giuseppe-Bruno_Communication-among-FI-What-are-the-available-answers-to-the-quantum-threat_1_16v1.pdf
             locations:
               - plenary
 
@@ -771,6 +856,8 @@ data:
             track: 
             speakers:
               - Erik Hieta-aho
+            youtube: H6aJo3ugmys
+            presentation: THU_BREAKOUT_1400_Erik-Hieta-aho_Hybrid-PQC_Digital-Signatures-and-SSI.pdf
             locations:
               - breakout
 
@@ -786,6 +873,8 @@ data:
             track: 
             speakers:
               - José Hernández Pérez
+            youtube: XXDuZDQ1iis
+            presentation: THU_PLENARY_1430_Jose-Hernandez_Workforce-Education-Programs-in-PQ-Cryptography-final.pdf
             locations:
               - plenary
 
@@ -795,6 +884,8 @@ data:
             track: 
             speakers:
               - Jan Klaußner
+            youtube: fKdZNjgsNdg
+            presentation: THU_BREAKOUT_1430_Jan-Klaußner_Quantum-Key-Distribution–What-is-done-and-what-is-to-come.pdf
             locations:
               - breakout
 
@@ -806,15 +897,19 @@ data:
             track: 
             speakers:
               - Jaime Gómez García
+            youtube: HywJXpEOvFQ
+            presentation: THU_PLENARY_1500_Jaime-Gómez-García_Perspectives-on-the-transition-to-PQC-in-the-financial-sector.pdf
             locations:
               - plenary
-
+          
           - title: Is your HSM quantum-ready? Here’s what you need to know!
             description: |
               Every currently deployed HSM must be replaced with a quantum-safe HSM. But what is a quantum-safe HSM. First, it must itself utilize quantum-safe root keys and algorithms for its processing. Second, it must support quantum-safe firmware updates to remain agile and current as algorithms and protocols evolve. Third, it must provide access to PQC algorithms for application integration. These capabilities must be bult-in not bolted-on to an existing HSM. An HSM that exposes PQC algorithms but itself uses classic algorithms is NOT quantum-safe. This talk will explore these issues in detail.
             track: Hardware
             speakers:
               - Bruno Couillard
+            youtube: w35gzRJlqBw
+            presentation: THU_BREAKOUT_1500_Bruno-Couillard_Is-your-HSM-quantum-ready-Heres-what-you-need-to-know.pdf
             locations:
               - breakout
 
@@ -826,6 +921,8 @@ data:
             track: 
             speakers:
               - Yarkin Doroz
+            youtube: dXaE6OvGllI
+            presentation: THU_PLENARY_1530_Yarkin-Doroz_Accelerated-Quantum-Supercomputing-and-PQC.pdf
             locations:
               - plenary
 
@@ -843,10 +940,24 @@ data:
             track: 
             speakers:
               - Nils Gerhardt
+            youtube: o9YiFFu3qYo
+            presentation: THU_BREAKOUT_1530_Nils-Gerhardt_Security-Data-in-the-Quantum-Era-From-the-Root-of-Trust-to-Protecting-Ecosystems.pdf
             locations:
               - breakout
     
       - time: "16:00"
+        sessions:
+          - title: Closing remarks
+            description: 
+            speakers:
+              - Paul van Brouwershaven
+              - Albert de Ruiter
+            youtube: 5X4IKZjK9eU
+            presentation: THU_PLENARY_1600-Closing.pdf
+            locations:
+              - plenary
+
+      - time: "16:10"
         title: Networking
 
       - time: "18:00"
@@ -856,28 +967,12 @@ data:
 
 ## Conference Details
 
-The PKI Consortium is excited to host its third hybrid Post-Quantum Cryptography (PQC) Conference on Wednesday, January 15, and Thursday, January 16, 2025. The event will take place at the Thompson Conference Center, University of Texas, Austin, Texas, US.
+The PKI Consortium hosted its third hybrid Post-Quantum Cryptography (PQC) Conference on Wednesday, January 15, and Thursday, January 16, 2025. The event took place at the Thompson Conference Center, University of Texas, Austin, Texas, US.
 
-This conference is a premier gathering for decision-makers, technical leaders, and industry influencers from both public and private sectors who are deeply invested in the future of cryptography. Attendees can expect a diverse program featuring keynote speeches, breakout sessions, and panel discussions led by thought leaders in PQC.
+This conference was a premier gathering for decision-makers, technical leaders, and industry influencers from both public and private sectors who are deeply invested in the future of cryptography. Attendees experienced a diverse program featuring keynote speeches, breakout sessions, and panel discussions led by thought leaders in PQC.
 
-> The conference is open to all individuals interested in Post-Quantum Cryptography and is **not limited** to PKI Consortium members. 
+> The conference was open to all individuals interested in Post-Quantum Cryptography and was **not limited** to PKI Consortium members. 
 {.callout-info}
-
-## Date and location
-
-**Date:** January 15 and 16, 2025  
-**Location:** [Thompson Conference Center](https://thompsoncenter.utexas.edu/location-and-parking) (University of Texas), Austin, Texas, US  
-**Registration:** [Click here](https://forms.gle/Q83w6wryNbmVktdP9)  
-
-* _This event can be attended in-person or remotely, we strongly recommend to attend in person where possible._
-* _There are no costs to register or attend the conference._
-* _Travel, accommodation and living expenses are not covered, all attendees are responsible to cover their own expenses._
-
-{{< button link="/register" target="_blank" label="Register for this conference" type="dark" >}}  
-
-### Accommodation
-
-To make your stay in Austin as comfortable as possible, we've compiled a list of accommodation options near the Thompson Conference Center. Whether you're looking for a budget-friendly option or a luxurious stay, you'll find plenty of choices to suit your preferences. Visit the [accommodation page](accommodation/) for our detailed suggestions and helpful tips on booking your accommodation.
 
 ## Sponsors
 
@@ -885,25 +980,18 @@ We are immensely grateful to our sponsors:
 
 {{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" height="20" max-width="60" rows=true >}}
 
-#### Become a Sponsor
-
-**Interested in sponsoring the Post-Quantum Cryptography Conference?** For detailed information about sponsorship opportunities, please [contact us](/sponsors/sponsor/). You can also [download the sponsorship brochure](pqc-conference-austin-sponsors.pdf) for a comprehensive overview and pricing of our sponsorship packages.
-
-{{< button link="pqc-conference-austin-sponsors.pdf" target="_blank" label="Explore our sponsorship opportunities" type="outline-success" >}}  
-
 ## Agenda
 
-The conference features a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees can look forward to keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers are not permitted to promote products or services during presentations.
+The conference featured a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees enjoyed keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers were not permitted to promote products or services during presentations.
 
 {{< agenda "agenda" >}}
 
 {{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="Leader" height="20" max-width="60" >}}
 
-Please be aware that speakers are not permitted to promote products or services during their presentations. While commercials, workshops, and pitches may include commercial information, the primary focus of the conference is on educational content.
+Please note that speakers were not permitted to promote products or services during their presentations. While commercials, workshops, and pitches included commercial information, the primary focus of the conference remained on educational content.
 
-This conference is made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
+This conference was made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
 
 {{< figure src="organizational-support.jpg" >}}
 
 For more information about the conference, please contact the PKI Consortium at feedback@pkic.org.
-

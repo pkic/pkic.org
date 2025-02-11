@@ -3,10 +3,10 @@
   {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
     {{- with .blog.feed -}}
       {{- $feedURL := urls.Parse . -}}
-      {{- with resources.GetRemote . -}}
+      {{- with try (resources.GetRemote .) -}}
         {{- with .Err -}}
           {{- warnf "%s" . -}}
-        {{- else -}}
+        {{- else with .Value -}}
           {{- if strings.HasSuffix .MediaType "rss+xml" -}}
             {{- with . | transform.Unmarshal -}}
               {{- range $i, $item := .channel.item -}}
