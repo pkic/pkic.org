@@ -4,12 +4,13 @@ slogan:
 website: https://www.vttresearch.com
 
 # Short description, longer content can be placed in `content/members/`
-description: We help you to science up your solutions and achieve tomorrow’s breakthroughs.​
+description: We help you to science up your solutions and achieve tomorrow’s breakthroughs.
 
 # membership
 memberSince: 2024-11-06
-memberType: null
+memberType: H3
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -50,5 +51,5 @@ representatives:
     role: Senior Scientist
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/erikhietaaho/
     description: Erik is the Senior Scientist at VTT, Research Center of Finland and represents the organization at the PKI Consortium.
