@@ -8,8 +8,10 @@ description: I have been advising and consulting on public key infrastructure so
 
 # membership
 memberSince: 2024-12-24
-memberType: null
+memberType: H2
 workingGroups:
+  - PQC
+  - PKIMM
 
 # sponsor
 sponsor:
@@ -50,5 +52,5 @@ representatives:
     role: Managing Consultant
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://linkedin.com/in/andrewwillett/ 
     description: Andrew is the Managing Consultant at Antarctic Group and represents the organization at the PKI Consortium.
