@@ -38,7 +38,7 @@ social:
   twitter: undefined
   facebook: undefined
   instagram: undefined
-  linkedin: undefined
+  linkedin: https://www.linkedin.com/company/eid-easy/
   youtube: undefined
 
 # Here you can list those who represent or have represented the member.
@@ -50,5 +50,5 @@ representatives:
     role: Board member
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/smartman/
     description: Margus is the Board member at eID Easy and represents the organization at the PKI Consortium.
