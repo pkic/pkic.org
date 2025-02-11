@@ -1,15 +1,18 @@
-id: banco
+id: bradesco
 name: Banco Bradesco
 slogan:
 website: https://banco.bradesco
 
 # Short description, longer content can be placed in `content/members/`
-description: Conheça nossas facilidades e aproveite os serviços on-line que te ajudam a cuidar do seu dinheiro. Acesse já!
+description: O Bradesco é um dos líderes do setor financeiro privado e um dos maiores empregadores na categoria. Além disso, apresenta o melhor índice de eficiência entre os bancos de varejo.
 
 # membership
 memberSince: 2024-11-06
-memberType: null
+memberType: H3
 workingGroups:
+  - TCWG
+  - PQC
+  - PKIMM
 
 # sponsor
 sponsor:
@@ -38,7 +41,7 @@ social:
   twitter: undefined
   facebook: undefined
   instagram: undefined
-  linkedin: undefined
+  linkedin: https://www.linkedin.com/company/bradesco/
   youtube: undefined
 
 # Here you can list those who represent or have represented the member.
@@ -50,5 +53,5 @@ representatives:
     role: IT Security Specialist
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://br.linkedin.com/in/luciano-carolino
     description: Luciano is the IT Security Specialist at Banco Bradesco and represents the organization at the PKI Consortium.
