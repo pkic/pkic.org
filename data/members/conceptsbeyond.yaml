@@ -8,8 +8,9 @@ description: Provide PKI architecture, design, implementation, WebTrust audit su
 
 # membership
 memberSince: 2024-12-24
-memberType: null
+memberType: H2
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -50,5 +51,5 @@ representatives:
     role: Senior II Computer Scientist/Systems Analyst
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/sandy-schoen-105868/
     description: Sandra is the Senior II Computer Scientist/Systems Analyst at Concepts Beyond and represents the organization at the PKI Consortium.
