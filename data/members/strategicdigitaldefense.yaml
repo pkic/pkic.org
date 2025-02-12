@@ -4,12 +4,15 @@ slogan:
 website: https://strategicdigitaldefense.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: Founder, Principal, GM
+description: Design, implement and maintain cybersecurity and cryptographic technologies to protect your brand, your firm's irreplaceable competitive advantage, your customers' confidential information, your communications and your way of doing business.
 
 # membership
 memberSince: 2024-12-24
-memberType: null
+memberType: H2
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -50,5 +53,5 @@ representatives:
     role: Chief Cybersecurity Architect and General Manager
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://linkedin.com/in/dtklein
     description: David is the Chief Cybersecurity Architect and General Manager at Strategic Digital Defense, LLC and represents the organization at the PKI Consortium.
