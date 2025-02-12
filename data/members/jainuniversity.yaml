@@ -8,8 +8,9 @@ description: School of Computer Science & Information Technology
 
 # membership
 memberSince: 2024-11-06
-memberType: null
+memberType: H5
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:

@@ -8,9 +8,10 @@ description: Second Factor is an IT services consulting company focused on secur
 
 # membership
 memberSince: 2023-08-02
-memberType: H
+memberType: H2
 workingGroups:
   - TCWG
+  - PQC
 # sponsor
 sponsor:
   level: 
