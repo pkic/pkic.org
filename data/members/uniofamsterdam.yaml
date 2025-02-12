@@ -1,4 +1,4 @@
-id: uva
+id: uniofamsterdam
 name: University of Amsterdam
 slogan:
 website: https://projects.illc.uva.nl/quantumimpact/
@@ -8,8 +8,9 @@ description: I am pursuing my PhD at the University of Amsterdam in the Philosop
 
 # membership
 memberSince: 2024-11-06
-memberType: null
+memberType: H5
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
