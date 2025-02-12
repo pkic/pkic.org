@@ -8,8 +8,10 @@ description: A única empresa que suporta um Ecossistema de Cyber-Segurança que
 
 # membership
 memberSince: 2024-12-24
-memberType: null
+memberType: H2
 workingGroups:
+  - PKIMM
+  - PQC  
 
 # sponsor
 sponsor:
@@ -50,5 +52,5 @@ representatives:
     role: CEO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/mauricio-medina-72899/
     description: Mauricio is the CEO at Consequor Tecnologia and represents the organization at the PKI Consortium.
