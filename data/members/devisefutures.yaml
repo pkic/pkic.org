@@ -8,8 +8,11 @@ description: Devise Futures is an innovative organization dedicated to advancing
 
 # membership
 memberSince: 2024-12-24
-memberType: null
+memberType: H2
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -50,5 +53,5 @@ representatives:
     role: CEO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/josepinamiranda/
     description: José is the CEO at Devise Futures - IT Solutions, Lda and represents the organization at the PKI Consortium.
