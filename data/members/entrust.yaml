@@ -74,6 +74,8 @@ representatives:
   
       Paul served in the industry for over twenty years and is an active member of industry standards and regulatory groups such as ETSI. 
       Paul has been actively promoting public awareness for internet security and industry best practices prior to the widespread move to adopt security by default.
+    till: 2025-03-31
+    hidden: true
 
   - name: Chris Bailey
     role: VP of Strategy and Business Development – Certificate Services
