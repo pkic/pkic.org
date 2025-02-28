@@ -1,10 +1,10 @@
 id: versasec
-name: Versasec AB
+name: Versasec
 slogan: Managing Digital Identities
 website: https://www.versasec.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: Entrust is dedicated to securing identities, data, and transactions around the globe
+description: Award-winning credential management system, enabling certificate-based and FIDO authentication methods.
 
 # membership
 memberSince: 2024-12-24
@@ -12,7 +12,7 @@ memberType: F
 workingGroups:
   - PKIMM
   - TCWG
-  
+
 # sponsor
 sponsor:
   level: 
@@ -20,32 +20,28 @@ sponsor:
 # Blog posts
 blog: 
   url: https://www.versasec.com/blog/
-  feed: https://versasec.com/feed/
   language: en_US
 
 # Press Releases
 press: 
   url: https://versasec.com/news/
-  feed: 
   language: en_US
 
 # Careers
 careers: 
   url: https://versasec.com/job-openings/
-  feed: 
   language: en_US
 
 # Social media
 social:
   twitter: https://x.com/versasec
   facebook: https://www.facebook.com/Versasec
-  instagram: undefined
   linkedin: https://www.linkedin.com/company/Versasec
   youtube: https://www.youtube.com/c/Versasec
 
 # Here you can list those who represent or have represented the member.
 #
-# Those wo no longer represent an organization might have written blog posts,
+# Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Tatjana Suhorukova
@@ -63,6 +59,7 @@ representatives:
 
       Houry has directed teams to design innovative, customer-centric, identity solutions and deliver cutting-edge technologies to market. Previously, Houry was Product Specialist and Product Manager at Gemalto, later acquired by Thales. 
 
+
   - name: Anders Adolfsson
     role: Product Manager
     social:
@@ -75,5 +72,5 @@ representatives:
     social:
       linkedin: https://www.linkedin.com/in/joerg-dettmann-26867a18/
     description: Joerg Dettmann currently serves as Chief Technology Officer at Versasec. He is a co-founder at Versasec.
-      
+    
       Dettmann has three decades of experience in software development, PKI, smart cards, and identity management. He previously served in similar roles at Gemalto and startup Celo Communications.
