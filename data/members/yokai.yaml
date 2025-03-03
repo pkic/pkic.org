@@ -1,0 +1,52 @@
+id: yokai
+name: Yokai
+slogan: Empowering Secure Collaboration from Battlefield to Boardroom
+website: https://yokai.network
+
+# Short description, longer content can be placed in `content/members/`
+description: Yokai Network delivers military-grade end-to-end encrypted collaboration platforms for defense and enterprise, securing sensitive workspace data with quantum-resistant technology while maintaining modern usability.
+
+# membership
+memberSince: 2025-02-27
+memberType: A
+workingGroups:
+  - PQC
+  - IoT
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://yokai.network/blog
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/yokai_network
+  linkedin: https://www.linkedin.com/company/yokainetwork
+
+# Here you can list those who represent or have represented the member.
+#
+representatives:
+  - name: Krishna Chaitanya R
+    role: Founder & CEO
+    social:
+      linkedin: https://www.linkedin.com/in/chaitanya-rk/
+    description:
+      Krishna Chaitanya R (Chai) is the Founder and CEO of Yokai Network, with over a decade of experience in cybersecurity. His expertise spans Application Security, Vulnerability Research, Fuzzing, and Exploit Development, with particular focus on securing communication systems including Messengers, Browsers, and Basebands across multiple platforms.
+
+      At Yokai Network, Chai leads development of end-to-end encrypted collaboration solutions that bring advanced cryptographic principles to enterprise collaboration tools. His focus is on delivering quantum-resistant cryptography and zero-knowledge architectures that enable secure collaboration for defense agencies, government entities, and critical infrastructure operators.
+
+  - name: Karim Hijazi
+    role: Advisory Board Member
+    social:
+      linkedin: https://www.linkedin.com/in/karimhijazi/
+    description: Karim Hijazi serves as a Security Advisor to Yokai, bringing his extensive expertise as Founder & CEO of Vigilocity. His distinguished background includes work as a former director of intelligence for Mandiant and a former contractor for the US intelligence community, providing him with unique insights into advanced persistent threats and nation-state level cryptographic security requirements. Karim's experience informs Yokai's approach to developing secure communication protocols that meet the exacting standards of defense and intelligence applications.
+
+  - name: Pradeep Atmaram
+    role: Chief Operating Officer
+    social:
+      linkedin: https://www.linkedin.com/in/pradeepatmaram/
+    description: Pradeep Atmaram serves as Chief Operating Officer at Yokai Network, overseeing operational excellence, go-to-market strategy, and business development. With over 10 years of marketing leadership experience across Singapore, India, and the Middle East markets, he brings deep expertise in scaling secure technology solutions for regulated industries. At Yokai, Pradeep manages strategic partnerships and enterprise deployment of secure collaboration tools, with particular focus on financial services, telecommunications, and government sectors throughout the APAC region.
