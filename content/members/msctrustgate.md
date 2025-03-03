@@ -7,7 +7,7 @@ title: MSC Trustgate
 
 ---
 
-## A Licensed Certification Authority since 1969
+## A Licensed Certification Authority since 1999
 
 MSC Trustgate is a trusted and licensed Certification Authority (CA), regulated by the Malaysian Communications and Multimedia Commission (MCMC). Since its establishment, MSC Trustgate has been authorized to issue and manage digital certificates and identities based on Public Key Infrastructure (PKI). Our digital certificates are legally recognized under Malaysia’s Digital Signature Act 1997 (DSA 1997) and the Digital Signature Regulation 1998 (DSR 1998), ensuring that all digitally signed documents have legal standing.
 
