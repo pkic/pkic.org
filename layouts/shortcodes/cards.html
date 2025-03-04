@@ -20,7 +20,11 @@
             {{ if .links }}
             <div class="d-flex flex-column mt-auto">
               {{ range .links }}
-              <a href="{{ .url }}" class="btn {{ with .class }}{{ . }}{{ else }}btn-outline-primary{{ end }} mb-2">{{ .text }}</a>
+              {{- $u := urls.Parse .url -}}
+              <a href="{{ .url }}" 
+                class="btn {{ with .class }}{{ . }}{{ else }}btn-outline-primary{{ end }} mb-2"
+                {{- if $u.IsAbs }} target="_blank" rel="external"{{ end -}}
+                >{{ .text }}</a>
               {{ end }}
             </div>
             {{ end }}
