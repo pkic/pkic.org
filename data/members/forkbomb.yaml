@@ -1,0 +1,85 @@
+id: forkbomb
+name: Forkbomb
+slogan: Cryptography, SSI, PQC
+website: https://forkbomb.solutions/
+
+# Short description, longer content can be placed in `content/members/`
+description: Forkbomb builds components and solutions for applied Cryptography, Decentralized Identities and DPP
+
+# membership
+memberSince: 2025-02-27
+memberType: F
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: 
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: 
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/forkbomb/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Andrea D'Intino
+    role: CEO, co-founder
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/andrea-d-intino/
+    description:
+        First job as videogame developer, worked in sales with CAD/CAM global leaders for over a decade, built and marketed a file tagging solution. Technical coordinator of DECODE and REFLOW and consortium lead of the EBSI PCP with Dyne.org. Runs sales and operations at Forkbomb. Member of W3C, IEEE, ISO, RenAIssance (romecall.org).
+
+  - name: Puria Nafisi Azizi
+    role: CTO, co-founder
+    social:
+      github: https://github.com/puria
+      
+    description: 
+        360° developer, hacktivist, lettering, techno-politics and open source enthusiast, worked with multinational companies around the world and as teacher. After running countless projects within Dyne.org, he is leading development at Forkbomb.
+    hidden: true
+    
+  - name: Puria Nafisi Azizi
+    role: CTO, co-founder
+    social:
+      twitter: https://twitter.com/vanbroup
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    description: 
+        360° developer, hacktivist, lettering, techno-politics and open source enthusiast, worked with multinational companies around the world and as teacher. After running countless projects within Dyne.org, he is leading development at Forkbomb.
+    hidden: true
+
+  - name: Denis "Jaromil" Roio
+    role: Chief Scientific Officer, co-founder
+    social:
+      blog: https://jaromil.dyne.org/
+      linkedin: https://www.linkedin.com/in/jaromil/
+    description: 
+        Software developer, applied cryptographer, artist, hacktivist, author, public speaker, published author, holds a Ph.D. in philosophy. Founder of Dyne.org, involved with free and open-source software since the early 90’s, leads the scientific research at Forkbomb.
+    hidden: true
+
+   
