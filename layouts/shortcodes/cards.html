@@ -3,7 +3,7 @@
 <section id="{{ with $yaml.section_id }}{{ . }}{{ else }}cards-section{{ end }}" class="{{ with $yaml.section_class }}{{ . }}{{ end }}">
   <div class="row">
     {{ range $yaml.cards }}
-      <div class="{{ with .width }}{{ . }}{{ else }}col{{ end }} mb-4">
+      <div class="{{ with .width }}{{ . }}{{ else }}col-md{{ end }} mb-4">
         <div class="card {{ with .card_class }}{{ . }}{{ end }} h-100">
           {{ with .image }}
           <img src="{{ . }}" class="card-img-top" alt="{{ $.card_title }}">
