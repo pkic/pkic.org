@@ -14,8 +14,8 @@ workingGroups:
   - PQC
   
 # sponsor
-sponsor:
-  level: Bronze
+# sponsor:
+#  level: Bronze
 
 # Blog posts
 blog: 
