@@ -1,0 +1,83 @@
+id: msctrustgate
+name: MSC Trustgate
+slogan: Sign with Trust. Trust in Trustgate.
+website: https://www.msctrustgate.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: MSC Trustgate, a licensed Certification Authority under Malaysia's Digital Signature Act 1997 since 2000, offers a comprehensive range of digital trust services, including digital certificates, digital signature solutions, and date/time stamping services. Our mission is to build digital trust through secure and reliable PKI solutions.
+
+# membership
+memberSince: 2025-03-07
+memberType: A
+workingGroups:
+  - CA
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.msctrustgate.com/career
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: https://www.facebook.com/msctrustgate
+  instagram: https://www.instagram.com/msctrustgate/
+  linkedin: https://www.linkedin.com/company/msctrustgate/
+  youtube: https://www.youtube.com/@msctrustgate
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Hazhar Ismail
+    role: Executive Director & Chief Technology Officer
+    social:
+      twitter: https://twitter.com/hazharismail
+      linkedin: https://www.linkedin.com/in/hazhar-ismail/
+    description:
+      Hazhar Ismail has been with MSC Trustgate since 2001, serving as one of the pioneering members of the team. He began his journey as a System Analyst, developing and deploying PKI and digital signature solutions.
+
+      Over the years, Hazhar transitioned to managing CA operations and currently holds the positions of Executive Director and Chief Technology Officer. In these roles, he promotes PKI and digital trust, providing valuable insights into digital certificates and digital signature technologies.
+
+      Hazhar also represents MSC Trustgate in various working groups and forums at both the national and international levels, including The CA/B Forum and the Cloud Signature Consortium.
+
+  - name: Khairil Nizam Abdul Malek
+    role: Manager, ICT & CA Operation
+    social:
+      twitter: 
+      linkedin: 
+    description: 
+      Khairil Nizam is an experienced Technical Consultant with a proven track record of building lasting client relationships and delivering innovative solutions. Highly skilled in server hardware and component configuration, as well as system failure analysis. 
+      
+      Backed by over two decades of expertise in computer networking and a deep understanding of Public Key Infrastructure. Adept at cloud implementation and project management, offering a combination of technical proficiency and leadership to successfully manage complex projects.
+
+  - name: Zurina Zolkaffly
+    role: Manager, Governance, Risk and Compliance
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/zz07/
+    description:
+      Zurina Zolkaffly has a background in IT Security Governance, risk management, and compliance. With 20 years in the IT security industry, she currently serves as the Governance, Risk & Compliance Manager, and ISMS Lead Auditor at MSC Trustgate.com Sdn. Bhd.
+      
+      Ms. Zurina has been working in public key infrastructure (PKI) since 2017. She is MSC Trustgate's representative in the CA/Browser Forum since 2022. She is now implementing and overseeing the organization's GRC framework, ensuring regulatory compliance, mitigating risks, and maintaining operational integrity.
