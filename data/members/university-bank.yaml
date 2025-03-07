@@ -1,0 +1,54 @@
+id: university-bank
+name: University Bancorp
+slogan:
+website: https://www.university-bank.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Your Local Community Bank - Offering personal and business banking solutions, and mortgage lending, in Ann Arbor and Ypsilanti, Michigan.
+
+# membership
+memberSince: 2025-03-07
+memberType: E
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.university-bank.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Mick Talley
+    role: Director & Chair of Audit.
+    social:
+      twitter: 
+      linkedin: 
+    description: Mick is the Director & Chair of Audit. at University Bancorp and represents the organization at the PKI Consortium.
