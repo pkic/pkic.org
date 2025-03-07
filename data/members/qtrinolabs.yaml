@@ -1,0 +1,92 @@
+id: qtrinolabs
+name: QTrino Labs
+slogan: Securing Tomorrow, Today
+website: https://www.qtrinolabs.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: QTrino labs is dedicated to ensure that your critical and valuable assets remain protected today as well as tomorrow in the quantum era.
+
+# membership
+memberSince: 2025-03-07
+memberType: H3
+workingGroups:
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://www.qtrinolabs.com/blog/
+  feed: https://www.qtrinolabs.com/blog-feed.xml
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.qtrinolabs.com/careers
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/qtrinolabs
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Prof. (Dr.) Jawar Singh
+    role: Founder and Director 
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/jawar-singh-25495a17/
+    description: Prof. Jawar Singh is a founder and director at QTrino Labs Pvt. Ltd.,  with over two decades of experience in research, teaching, and industry collaboration. He began his academic journey with a bachelor�s in Electrical Engineering, followed by a Master�s in Measurement and Instrumentation from IIT Roorkee, and a Ph.D. in Computer Science and Engineering from the University of Bristol, UK. 
+      
+      Prof. Singh's innovative contributions are reflected in his intellectual property portfolio, which includes two US patents in SRAM design and five Indian patents in the fields of security and neuromorphic computing, highlighting his expertise in advanced technologies.
+      
+      Driven by a passion for innovation, Prof. Singh transitioned his research expertise into entrepreneurship activities in post-quantum cryptographic solutions, developing hardware and software technologies to secure digital systems against quantum threats. 
+  - name: Anup Kumar
+    role: Chief Finance Officer
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/anup-kumar-469861165/
+    description: Anup Kumar is the Chief Technology Officer at QTrino Labs Pvt. Ltd., a thought Leadership in Cyber Security for IoT, IT and OT devices. To create Cyber Threat Model on CIA model. Outreach to STQC, Smart City , various departments of GoB, Metro Rail, etc. 
+
+      As a Project Manager in IIT Patna, part of TIH for Creating an ecosystem "Analytics 7.0"in speech, texts and video analytics to evolve a solution that minimize the skill gap between students/professionals and industry in IIT Patna on an endeavour of " Samriddh Bharat..Saksham Bharat". Believe in strengthening resources that leads to strong economy.
+
+      Experienced Assistant Professor with a demonstrated history of working in the education management industry. Skilled in Placement Services, Customer Relationship Management (CRM), Sales Management, Event Management, and Placement Assistance. Strong education professional with a MBA focused in Business, Management, Marketing, and Related Support Services from Jaipuria Institute of management. Launched many organisations and created History with many Brands. A thorough thinker and problem solver at any situation.
+  - name: Abhishek Sriwastav
+    role: Chief Technology Officer
+    social:
+      twitter: https://twitter.com/abhishekdotai
+      linkedin: linkedin:https://www.linkedin.com/in/abhishek-sriwastav/
+    description: Abhishek Sriwastav is the Chief Technology Officer at QTrino Labs Pvt. Ltd., and is dedicated to building secure, quantum-resilient solutions that empower organizations to stay future-ready. Backed by Startup India and StartUp Bihar, QTrino is at the forefront of innovation in post-quantum cryptography, driving advancements in secure communication and data management. QTrino is recognized by the National Quantum Mission, Government of India, and the National Working Group on Quantum Technology, Telecommunication Engineering Centre - Government of India, for its innovative contributions in creating the quantum-proof ecosystem.
+      
+      Abhishek is passionate about blending his expertise in Quantum Resilient Cryptography, Cybersecurity, Artificial Intelligence, and Machine Learning, to solve complex, real-world problems. He thrives on transforming technical challenges into scalable and reliable solutions, ensuring organizations stay protected from emerging security threats of the future.
+  - name: Abhraneel Saha
+    role: Director, Policy & Compliance
+    social:
+      linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
+    description: Abhraneel Saha is the Chief Technology Officer at QTrino Labs Pvt. Ltd., He is passionate about the intersection of AI and chip design, with experience in machine learning and FPGA design. 
+      
+      He is involved in quantum-safe cryptographic solutions and actively researching the integration of AI and hardware to develop innovative solutions in this domain. Beyond my academic pursuits, I enjoy reading and sharing insights on science, philosophy, and music. 
+  - name: Partha Sarathi Dutta
+    role: Chief Technology Officer
+    social:
+      linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
+    description: Partha S. Dutta serves as Chief Technology Office at QTrino Labs Pvt. Ltd., He is passionate and driven VLSI Design Engineer with experience in Analog and Digital domains. 
+     
+     Adept at translating complex algorithms into optimized hardware architectures. Strong foundation in digital design principles and hands-on experience in FPGA and ASIC development.
