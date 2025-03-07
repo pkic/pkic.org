@@ -1,0 +1,54 @@
+id: decentcybersecurity
+name: Decent Cybersecurity s.r.o.
+slogan:
+website: https://decentcybersecurity.eu/
+
+# Short description, longer content can be placed in `content/members/`
+description: Decent Cybersecurity is a European cybersecurity company at the forefront of AI, post-quantum cryptography, and quantum-resistant blockchain solutions. Under the leadership of Matej Michalko and Michaela Abel, our organization has established a strong presence across Europe with offices in Slovakia, Czech Republic, Poland, Ireland, and the United Kingdom. We hold NATO, EU, and National Security Clearance (Secret), demonstrating our commitment to handling sensitive security matters at the highest levels.  Our recent selection as a winner in the PQ-REACT Open Call #1 for our CRISP-Q project (Cryptographic Resilience Implementation for Secure Post-Quantum Systems) underscores our expertise in implementing FIPS 203-compliant post-quantum cryptography. We specialize in protecting critical sectors including space and satellite communications, aerospace and defense, drone and unmanned traffic management, government agencies, and critical infrastructure.  We seek to join the PKI Consortium to contribute our expertise while collaborating with industry leaders in shaping the future of PKI. Our experience in implementing quantum-resistant solutions positions us to share valuable insights and participate meaningfully in developing practical migration pathways for quantum-resistant algorithms. We believe our work in the CRISP-Q project offers unique perspectives on the challenges and solutions in transitioning to post-quantum cryptography.  Our goal is to actively contribute to the consortium's mission by sharing our expertise in implementing post-quantum cryptographic solutions, participating in working groups focused on post-quantum transition strategies, and helping develop frameworks for seamless transition to quantum-resistant solutions. We are particularly interested in supporting the broader adoption of quantum-resistant cryptography through educational initiatives and practical implementation guidelines.  By joining the PKI Consortium, we aim to collaborate with fellow members in advancing the development of practical, implementable quantum-resistant security measures while contributing to the consortium's efforts in addressing emerging cryptographic challenges. Our experience in working with critical infrastructure and government agencies provides us with valuable insights that we believe will benefit the consortium's work in establishing robust standards and best practices for the future of PKI.
+
+# membership
+memberSince: 2025-03-07
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://decentcybersecurity.eu/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Matej Michalko
+    role: CEO and Chairman
+    social:
+      twitter: 
+      linkedin: 
+    description: Matej is the CEO and Chairman at Decent Cybersecurity s.r.o. and represents the organization at the PKI Consortium.
