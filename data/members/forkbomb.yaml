@@ -1,0 +1,54 @@
+id: forkbomb
+name: Forkbomb B.V.
+slogan:
+website: http://forkbomb.solutions/
+
+# Short description, longer content can be placed in `content/members/`
+description: Cryptography, decentralized identities, Digital Product Passport
+
+# membership
+memberSince: 2025-03-07
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://forkbomb.solutions/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Andrea D'Intino
+    role: CEO and co-founder
+    social:
+      twitter: 
+      linkedin: 
+    description: Andrea is the CEO and co-founder at Forkbomb B.V. and represents the organization at the PKI Consortium.
