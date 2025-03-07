@@ -8,8 +8,10 @@ description: I am Dr. Reza Azarderakhsh, a researcher and entrepreneur specializ
 
 # membership
 memberSince: 2025-03-07
-memberType: null
+memberType: H4
 workingGroups:
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +37,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
