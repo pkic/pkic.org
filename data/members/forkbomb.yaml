@@ -48,14 +48,16 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Andrea D'Intino
+    id: andrea-dintino
     role: CEO, co-founder
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/andrea-d-intino/
     description:
-        First job as videogame developer, worked in sales with CAD/CAM global leaders for over a decade, built and marketed a file tagging solution. Technical coordinator of DECODE and REFLOW and consortium lead of the EBSI PCP with Dyne.org. Runs sales and operations at Forkbomb. Member of W3C, IEEE, ISO, RenAIssance (romecall.org).
+        Passionate about cryptography and digital identity, I specialize in post-quantum cryptography (PQC) and EUDI-ARF. My work spans PQC transitions, digital signatures (PaDES/CaDES), and identity frameworks like EUDI-ARF and W3C-VC, currently focusing on EUDIW compliance/interoperability and components for crypto-agility and hybrid cryptography. Member of multiple standardization and alliances (W3C, ISO, IEEE, PKIC, RenAissence), published multiple papers on cryptography and keynote speaker on cryptography and digital identity.
 
   - name: Puria Nafisi Azizi
+    id: puria-nafisi-azizi
     role: CTO, co-founder
     social:
       github: https://github.com/puria
@@ -63,17 +65,9 @@ representatives:
     description: 
         360° developer, hacktivist, lettering, techno-politics and open source enthusiast, worked with multinational companies around the world and as teacher. After running countless projects within Dyne.org, he is leading development at Forkbomb.
     hidden: true
-    
-  - name: Puria Nafisi Azizi
-    role: CTO, co-founder
-    social:
-      twitter: https://twitter.com/vanbroup
-      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
-    description: 
-        360° developer, hacktivist, lettering, techno-politics and open source enthusiast, worked with multinational companies around the world and as teacher. After running countless projects within Dyne.org, he is leading development at Forkbomb.
-    hidden: true
 
   - name: Denis "Jaromil" Roio
+    id: dennis-jaromil-roio
     role: Chief Scientific Officer, co-founder
     social:
       blog: https://jaromil.dyne.org/
