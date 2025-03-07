@@ -1,0 +1,54 @@
+id: cryptonext-security
+name: CryptoNext Security
+slogan:
+website: https://www.cryptonext-security.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Software vendor, spin-off of French institutes of research (INRIA, CNRS, Sorbonne University), founded in 2019, CryptoNext Security provides solutions to manage the quantum threat and migrate IT infrastructure, apps and embedded products to Quantum Safe, from the discovery of cryptographic assets to the crypto-agile remediation with PQC solutions.
+
+# membership
+memberSince: 2025-03-07
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Florent Grosmaitre
+    role: CEO
+    social:
+      twitter: 
+      linkedin: 
+    description: Florent is the CEO at CryptoNext Security and represents the organization at the PKI Consortium.
