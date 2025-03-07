@@ -1,0 +1,54 @@
+id: blackcanadianmedia
+name: Data & Scientific Inc.
+slogan:
+website: https://www.blackcanadianmedia.ca/
+
+# Short description, longer content can be placed in `content/members/`
+description: I am the founder of Data & Scientific Inc., founded 1989, and active in Identity, Access Management and PKI. We are a Canadian company but also active in the export market. Data & Scientific deployed the secure database for the national ID implementation in one of our export market countries. we have been involved with PKI projects since 2005.  We are also actively investigating Quantum computing.
+
+# membership
+memberSince: 2025-03-07
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.blackcanadianmedia.ca/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Tope Akinbiyi
+    role: Executive Vice President
+    social:
+      twitter: 
+      linkedin: 
+    description: Tope is the Executive Vice President at Data & Scientific Inc. and represents the organization at the PKI Consortium.
