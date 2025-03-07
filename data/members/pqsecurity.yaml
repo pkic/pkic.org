@@ -1,0 +1,54 @@
+id: pqsecurity
+name: PQSecure
+slogan:
+website: https://www.pqsecurity.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: I am Dr. Reza Azarderakhsh, a researcher and entrepreneur specializing in cryptographic engineering and cybersecurity. With a background in both academia and industry, I have extensive experience in the development of classical and post-quantum cryptographic (PQC) solutions. I serve as a Principal Investigator (PI) on various research projects focusing on the hardware and software implementation of cryptographic algorithms, including their protection against side-channel and fault attacks. I have contributed to the field through impactful publications, patents, and tutorials on cryptographic engineering, and I am passionate about advancing the field of quantum-safe cryptography.  About PQSecure: PQSecure is a pioneering company dedicated to developing cryptographic solutions for IoT devices, embedded systems, and secure silicon chips. Our mission is to ensure the security of digital systems in the quantum era by designing efficient and robust post-quantum cryptographic (PQC) solutions. PQSecure's offerings include flexible hardware and software implementations of PQC algorithms, all equipped with advanced countermeasures against side-channel and fault injection attacks. As a member of the PKI Consortium, we aim to contribute our expertise to the advancement of public key infrastructure (PKI) systems by ensuring their transition to quantum-safe standards while maintaining high levels of security, performance, and interoperability.
+
+# membership
+memberSince: 2025-03-07
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://pqsecurity.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Reza Azarderakhsh
+    role: CEO
+    social:
+      twitter: 
+      linkedin: 
+    description: Reza is the CEO at PQSecure and represents the organization at the PKI Consortium.
