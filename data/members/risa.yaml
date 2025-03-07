@@ -1,0 +1,54 @@
+id: risa
+name: Rwanda Information Society Authority (RISA)
+slogan:
+website: https://www.risa.gov.rw/
+
+# Short description, longer content can be placed in `content/members/`
+description: In our country (Rwanda), we have adopted the enhancement of digital security and trust using the PKI features. I am currently the head of the PKI department and on of the PKI pionners in the country. With the digitization journey that our country is currently following, we strongly believe that the use of PKI will help in building a strogn trust in the online exchanges.
+
+# membership
+memberSince: 2025-03-07
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Bonaventure KARIKUMUTIMA
+    role: National PKI Division Manager
+    social:
+      twitter: 
+      linkedin: 
+    description: Bonaventure is the National PKI Division Manager at Rwanda Information Society Authority (RISA) and represents the organization at the PKI Consortium.
