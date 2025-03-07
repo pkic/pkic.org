@@ -1,4 +1,4 @@
-id: btinternet
+id: ambrose
 name: Ambrose Business Associates **Website**:
 slogan:
 website: undefined
@@ -8,9 +8,11 @@ description: PKI Security Architect running my own consultancy business
 
 # membership
 memberSince: 2025-03-07
-memberType: null
+memberType: H2
 workingGroups:
-
+  - TCWG
+  - PKIMM
+  - PQC
 # sponsor
 sponsor:
   level: 
@@ -50,5 +52,5 @@ representatives:
     role: PKI Architect
     social:
       twitter: 
-      linkedin: 
-    description: Andrew is the PKI Architect at Ambrose Business Associates **Website**: and represents the organization at the PKI Consortium.
+      linkedin: http://linkedin.com/in/andrew-walter-morris-smith-60304524
+    description: Andrew is the PKI Architect at Ambrose Business Associates and represents the organization at the PKI Consortium.
