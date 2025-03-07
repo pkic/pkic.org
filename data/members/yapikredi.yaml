@@ -1,0 +1,54 @@
+id: yapikredi
+name: Yapi Kredi Bank
+slogan:
+website: https://www.yapikredi.com.tr
+
+# Short description, longer content can be placed in `content/members/`
+description: Yapı Kredi ayrıcalığı ile kredi, sigorta, ödeme ve daha fazla işlemlerinizi hemen gerçekleştirin! Yapı Kredi avantajları hakkında detaylı bilgi için tıklayın.
+
+# membership
+memberSince: 2025-03-07
+memberType: G
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Serkan KIRKKULAÇ
+    role: Data and Endpoint Security Manager
+    social:
+      twitter: 
+      linkedin: 
+    description: Serkan is the Data and Endpoint Security Manager at Yapi Kredi Bank and represents the organization at the PKI Consortium.
