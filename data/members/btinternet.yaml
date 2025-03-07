@@ -1,0 +1,54 @@
+id: btinternet
+name: Ambrose Business Associates **Website**:
+slogan:
+website: undefined
+
+# Short description, longer content can be placed in `content/members/`
+description: PKI Security Architect running my own consultancy business
+
+# membership
+memberSince: 2025-03-07
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Andrew Smith
+    role: PKI Architect
+    social:
+      twitter: 
+      linkedin: 
+    description: Andrew is the PKI Architect at Ambrose Business Associates **Website**: and represents the organization at the PKI Consortium.
