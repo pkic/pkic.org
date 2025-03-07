@@ -1,0 +1,60 @@
+id: quantumbridge
+name: Quantum Bridge
+slogan: Securing Tomorrow, Today.
+website: https://qubridge.io/
+
+# Short description, longer content can be placed in `content/members/`
+description: Quantum Bridge delivers scalable, quantum-safe key distribution to future-proof network security.
+
+# membership
+memberSince: 2025-02-27
+memberType: A
+workingGroups:
+  - CA
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://qubridge.io/blog/
+  #feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://qubridge.io/news/
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://qubridge.io/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  #twitter: 
+  #facebook: 
+  #instagram: 
+  linkedin: https://www.linkedin.com/company/quantum-bridge-technologies/
+  #youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Melchior Aelmans
+    role: Chief Growth Officer
+    social:
+      #twitter: 
+      linkedin: https://www.linkedin.com/in/melchioraelmans/
+    description:
+      Melchior Aelmans is the Chief Growth Officer at Quantum Bridge, leading strategic initiatives to drive the adoption of quantum-safe networking solutions. 
+      With extensive expertise in telecommunications, cybersecurity, and cryptographic resilience, he works closely with industry leaders, policymakers, and enterprises to shape the future of secure digital communications.
