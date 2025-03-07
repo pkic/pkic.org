@@ -1,0 +1,54 @@
+id: bitmintalk
+name: BitMint
+slogan:
+website: https://bitmintalk.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Advanced Cyber Security Technology, privacy, and cyber freedom technology.  Trans-Vernam Quantum Safe Cryptography
+
+# membership
+memberSince: 2025-03-07
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.bitmintalk.com/blog-feed.xml
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Gideon Samid
+    role: Chief Technology Officer
+    social:
+      twitter: 
+      linkedin: 
+    description: Gideon is the Chief Technology Officer at BitMint and represents the organization at the PKI Consortium.
