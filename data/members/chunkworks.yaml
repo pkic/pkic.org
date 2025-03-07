@@ -1,0 +1,54 @@
+id: chunkworks
+name: Chunk Works
+slogan:
+website: https://www.chunkworks.net
+
+# Short description, longer content can be placed in `content/members/`
+description: We are a startup focusing on securing data towards post-quantum. We have built our own hybrid encryption and agility. (with max 255 algoritms to be used) This library is an out-of-the-box method to keep the software (in RUST) lightweight but also operational towards legacy and augmented. Every company is able to choose how much, when, where, and in which timeframe they want to transition. Keeping budgets to transit in perspective but also the change in setup minimal. Also, our public keys are totally different and approached from a seed-based perspective.  The software is up and running at several companies in pilot or paid form.
+
+# membership
+memberSince: 2025-03-07
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://chunkworks.net/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Dennis Schouten
+    role: co-founder
+    social:
+      twitter: 
+      linkedin: 
+    description: Dennis is the co-founder at Chunk Works and represents the organization at the PKI Consortium.
