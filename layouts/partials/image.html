@@ -32,27 +32,28 @@
         {{- end -}}
     {{- end -}}
     
-    {{- $robotoBlack := "" -}}
-    {{- $robotoLight := "" -}}
-    {{- with try (resources.GetRemote "https://github.com/google/fonts/raw/113bac0943d5b85dcc6c2c01b48fae88d4b5c52a/ofl/roboto/static/Roboto-Black.ttf") -}}
-        {{- with .Err -}}
-            {{- errorf "Failed to load font: %s" . -}}
-        {{- else with .Value -}}
-            {{- $robotoBlack = . -}}
-        {{- else -}}
-            {{- warnf "Failed to load font: %s" . -}}
-        {{- end -}}
+   {{- $robotoBlack := resources.GetRemote "https://github.com/google/fonts/raw/113bac0943d5b85dcc6c2c01b48fae88d4b5c52a/ofl/roboto/static/Roboto-Black.ttf" -}}
+{{- if $robotoBlack -}}
+    {{- with $robotoBlack.Err -}}
+        {{- errorf "Failed to load font: %s" . -}}
+    {{- else -}}
+        {{- $robotoBlack = $robotoBlack -}}
     {{- end -}}
+{{- else -}}
+    {{- warnf "Failed to load Roboto Black font" -}}
+{{- end -}}
 
-    {{- with try (resources.GetRemote "https://github.com/google/fonts/raw/113bac0943d5b85dcc6c2c01b48fae88d4b5c52a/ofl/roboto/static/Roboto-Light.ttf") -}}
-        {{- with .Err -}}
-            {{- errorf "Failed to load font: %s" . -}}
-        {{- else with .Value -}}
-            {{- $robotoLight = . -}}
-        {{- else -}}
-            {{- warnf "Failed to load font: %s" . -}}
-        {{- end -}}
+{{- $robotoLight := resources.GetRemote "https://github.com/google/fonts/raw/113bac0943d5b85dcc6c2c01b48fae88d4b5c52a/ofl/roboto/static/Roboto-Light.ttf" -}}
+{{- if $robotoLight -}}
+    {{- with $robotoLight.Err -}}
+        {{- errorf "Failed to load font: %s" . -}}
+    {{- else -}}
+        {{- $robotoLight = $robotoLight -}}
     {{- end -}}
+{{- else -}}
+    {{- warnf "Failed to load Roboto Light font" -}}
+{{- end -}}
+
 
     {{- $img := resources.Get "/images/pkic-og.png"  -}}
     {{- $img = $img | images.Filter (
