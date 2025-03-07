@@ -1,7 +1,7 @@
 id: ambrose
 name: Ambrose Business Associates **Website**:
 slogan:
-website: undefined
+website: 
 
 # Short description, longer content can be placed in `content/members/`
 description: PKI Security Architect running my own consultancy business
@@ -13,6 +13,7 @@ workingGroups:
   - TCWG
   - PKIMM
   - PQC
+
 # sponsor
 sponsor:
   level: 
@@ -20,7 +21,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: null
+  feed: 
   language: en_US
 
 # Press Releases
@@ -37,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
