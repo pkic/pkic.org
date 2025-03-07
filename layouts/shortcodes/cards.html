@@ -1,0 +1,43 @@
+{{ $yaml := .Inner | transform.Unmarshal }}
+
+<section id="{{ with $yaml.section_id }}{{ . }}{{ else }}cards-section{{ end }}" class="{{ with $yaml.section_class }}{{ . }}{{ end }}">
+  <div class="row">
+    {{ range $yaml.cards }}
+      <div class="{{ with .width }}{{ . }}{{ else }}col-md{{ end }} mb-4">
+        <div class="card {{ with .card_class }}{{ . }}{{ end }} h-100">
+          {{ with .image }}
+          <img src="{{ . }}" class="card-img-top" alt="{{ $.card_title }}">
+          {{ end }}
+          {{ with .header }}
+          <div class="card-header">
+            {{ .content | markdownify }}
+          </div>
+          {{ end }}
+          <div class="card-body d-flex flex-column">
+            {{ with .title }}<h5 class="card-title">{{ . }}</h5>{{ end }}
+            {{ with .text }}<p class="card-text">{{ . | markdownify }}</p>{{ end }}
+            
+            {{ if .links }}
+            <div class="d-flex flex-column mt-auto">
+              {{ range .links }}
+              {{- $u := urls.Parse .url -}}
+              <a href="{{ .url }}" 
+                class="btn {{ with .class }}{{ . }}{{ else }}btn-outline-primary{{ end }} mb-2"
+                {{- if $u.IsAbs }} target="_blank" rel="external"{{ end -}}
+                >{{ .text }}</a>
+              {{ end }}
+            </div>
+            {{ end }}
+
+          </div>
+          
+          {{ with .footer }}
+          <div class="card-footer {{ with .class }}{{ . }}{{ end }}">
+            {{ .content | markdownify }}
+          </div>
+          {{ end }}
+        </div>
+      </div>
+    {{ end }}
+  </div>
+</section>
