@@ -1,0 +1,54 @@
+id: qtrinolabs
+name: QTrino Labs Pvt Ltd
+slogan:
+website: https://www.qtrinolabs.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: QTrino Labs is driven by a deep passion for cryptography, a commitment to innovation, and the belief that cybersecurity should be a proactive, not reactive, endeavor. With expertise in post quantum cryptography (PQC), we strive to make security an enabler of progress rather than a limitation. We ensure that your most valuable assets remain protected—today, tomorrow, and in the quantum era.
+
+# membership
+memberSince: 2025-03-07
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.qtrinolabs.com/blog-feed.xml
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jawar Singh
+    role: CEO
+    social:
+      twitter: 
+      linkedin: 
+    description: Jawar is the CEO at QTrino Labs Pvt Ltd and represents the organization at the PKI Consortium.
