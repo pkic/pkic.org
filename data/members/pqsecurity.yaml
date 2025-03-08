@@ -1,0 +1,56 @@
+id: pqsecurity
+name: PQSecure
+slogan:
+website: https://www.pqsecurity.com
+
+# Short description, longer content can be placed in `content/members/`
+description: PQSecure is a pioneering company dedicated to developing cryptographic solutions for IoT devices, embedded systems, and secure silicon chips.
+
+# membership
+memberSince: 2025-03-07
+memberType: H4
+workingGroups:
+  - TCWG
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://pqsecurity.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Reza Azarderakhsh
+    role: CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/reza-azarderakhsh-39777042/
+    description: Reza is the CEO at PQSecure and represents the organization at the PKI Consortium.
