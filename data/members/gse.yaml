@@ -1,0 +1,54 @@
+id: gse
+name: Gestión de Seguridad Electrónica
+slogan:
+website: https://gse.com.co
+
+# Short description, longer content can be placed in `content/members/`
+description: I'm Leonardo Maldonado, Partnerships Director at GSE, that is the biggest PKI - Certification Authority in Colombia We are members of Cloud Signature Consortium and listed in ATTL
+
+# membership
+memberSince: 2025-03-08
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: LEONARDO MALDONADO CONTRERAS
+    role: PARTNERSHIPS DIRECTOR
+    social:
+      twitter: 
+      linkedin: 
+    description: LEONARDO is the PARTNERSHIPS DIRECTOR at Gestión de Seguridad Electrónica and represents the organization at the PKI Consortium.
