@@ -1,0 +1,66 @@
+id: gse
+name: GESTION DE SEGURIDAD ELECTRONICA S.A. - GSE
+slogan: Lead change with digital confidence and advanced technology
+website: https://gse.com.co
+
+# Short description, longer content can be placed in `content/members/`
+description: We are GSE, transforming companies into the digital era with secure, reliable certification services.
+
+# membership
+memberSince: 2025-03-08
+memberType: A
+workingGroups:
+  - CA
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: https://www.instagram.com/somosgse
+  linkedin: https://www.linkedin.com/company/gestion-de-seguridad-electronica/posts/?feedView=all
+  youtube: https://www.youtube.com/@GSE_S.A
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Alvaro de Borja Carreras Amoros
+    role: Executive President
+    social:
+      linkedin: https://www.linkedin.com/in/borjacarreras/
+    description: Borja Carreras is an entrepreneur passionate about disruptive digital innovation and user-centric transformation. With a background in Business Administration from Madrid, my expertise includes software development, cybersecurity, UX/UI design, marketing, and blockchain technology. Specialized in creating secure, seamless digital experiences and solving challenges related to digital identity and security.
+      
+      Driven by a commitment to social impact, focus on inclusive opportunities and innovation, ensuring technology serves as a tool for positive change. If you're interested in digital identity solutions, cybersecurity, or how technology can drive global progress, let's connect. I'm always open to discussing new ideas and collaborations.
+  - name: Cesar Abril
+    role: CTO
+    social:
+      linkedin: https://www.linkedin.com/in/c%C3%A9sar-abril-905b2a3a/
+    description: Technology and digital security leader with over 12 years of experience in software development and managing high-performance teams. As CTO at GSE, he drives innovative solutions in cybersecurity and digital identity technologies. A specialist in DevOps, Cloud Computing, and data modeling, he combines strategic vision with deep technical expertise to ensure the development of robust and scalable products.
+
+      His expertise includes software architecture and security architecture in cloud environments, with a strong focus on digital identity protection and secure data management. His career spans the implementation of advanced DevSecOps practices, the design of resilient infrastructures, and the optimization of development processes through automation and agile methodologies. With strong leadership in building and managing high-performance teams, he drives the adoption of emerging technologies to enhance security and efficiency in highly regulated digital environments.
