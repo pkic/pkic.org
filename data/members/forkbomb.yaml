@@ -14,33 +14,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
-  language: 
+press:
+  url:
+  feed:
+  language:
 
 # Careers
-careers: 
-  url: 
-  feed: 
-  language: 
+careers:
+  url:
+  feed:
+  language:
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
+  twitter:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/forkbomb/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,7 +51,7 @@ representatives:
     id: andrea-dintino
     role: CEO, co-founder
     social:
-      twitter: 
+      twitter:
       linkedin: https://www.linkedin.com/in/andrea-d-intino/
     description:
         Passionate about cryptography and digital identity, I specialize in post-quantum cryptography (PQC) and EUDI-ARF. My work spans PQC transitions, digital signatures (PaDES/CaDES), and identity frameworks like EUDI-ARF and W3C-VC, currently focusing on EUDIW compliance/interoperability and components for crypto-agility and hybrid cryptography. Member of multiple standardization and alliances (W3C, ISO, IEEE, PKIC, RenAissence), published multiple papers on cryptography and keynote speaker on cryptography and digital identity.
@@ -61,19 +61,17 @@ representatives:
     role: CTO, co-founder
     social:
       github: https://github.com/puria
-      
-    description: 
+
+    description:
         360° developer, hacktivist, lettering, techno-politics and open source enthusiast, worked with multinational companies around the world and as teacher. After running countless projects within Dyne.org, he is leading development at Forkbomb.
     hidden: true
 
   - name: Denis "Jaromil" Roio
-    id: dennis-jaromil-roio
+    id: jaromil
     role: Chief Scientific Officer, co-founder
     social:
       blog: https://jaromil.dyne.org/
       linkedin: https://www.linkedin.com/in/jaromil/
-    description: 
-        Software developer, applied cryptographer, artist, hacktivist, author, public speaker, published author, holds a Ph.D. in philosophy. Founder of Dyne.org, involved with free and open-source software since the early 90’s, leads the scientific research at Forkbomb.
-    hidden: true
-
-   
+      github: https://github.com/jaromil
+    description:
+        Doctor of philosophy and author of various software tools, he chairs and facilitates the Security Interest Group (SING) for the World Wide Web foundation (W3C) and is co-founder of the association of Italian cryptographers De Componendis Cifris and among the first adherents of the Vatican initiative on algorithmics (Rome Call). Already in 2001 he was the author of the first completely free live CD operating system (dynebolic), he received the Vilém Flusser prize in Berlin  in 2009 and was named among the best 100 social entrepreneurs in Europe and among the young leaders of Friends of Europe.
