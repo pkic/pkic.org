@@ -1,15 +1,18 @@
 id: decentcybersecurity
-name: Decent Cybersecurity s.r.o.
-slogan:
+name: Decent Cybersecurity
+slogan: Pioneering cyber defense for tomorrow
 website: https://decentcybersecurity.eu/
 
 # Short description, longer content can be placed in `content/members/`
-description: Decent Cybersecurity is a European cybersecurity company at the forefront of AI, post-quantum cryptography, and quantum-resistant blockchain solutions. Under the leadership of Matej Michalko and Michaela Abel, our organization has established a strong presence across Europe with offices in Slovakia, Czech Republic, Poland, Ireland, and the United Kingdom. We hold NATO, EU, and National Security Clearance (Secret), demonstrating our commitment to handling sensitive security matters at the highest levels.  Our recent selection as a winner in the PQ-REACT Open Call #1 for our CRISP-Q project (Cryptographic Resilience Implementation for Secure Post-Quantum Systems) underscores our expertise in implementing FIPS 203-compliant post-quantum cryptography. We specialize in protecting critical sectors including space and satellite communications, aerospace and defense, drone and unmanned traffic management, government agencies, and critical infrastructure.  We seek to join the PKI Consortium to contribute our expertise while collaborating with industry leaders in shaping the future of PKI. Our experience in implementing quantum-resistant solutions positions us to share valuable insights and participate meaningfully in developing practical migration pathways for quantum-resistant algorithms. We believe our work in the CRISP-Q project offers unique perspectives on the challenges and solutions in transitioning to post-quantum cryptography.  Our goal is to actively contribute to the consortium's mission by sharing our expertise in implementing post-quantum cryptographic solutions, participating in working groups focused on post-quantum transition strategies, and helping develop frameworks for seamless transition to quantum-resistant solutions. We are particularly interested in supporting the broader adoption of quantum-resistant cryptography through educational initiatives and practical implementation guidelines.  By joining the PKI Consortium, we aim to collaborate with fellow members in advancing the development of practical, implementable quantum-resistant security measures while contributing to the consortium's efforts in addressing emerging cryptographic challenges. Our experience in working with critical infrastructure and government agencies provides us with valuable insights that we believe will benefit the consortium's work in establishing robust standards and best practices for the future of PKI.
+description: Decent Cybersecurity provides cutting-edge, quantum-resistant cybersecurity solutions.
 
 # membership
 memberSince: 2025-03-07
 memberType: F
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -23,23 +26,23 @@ blog:
 
 # Press Releases
 press: 
-  url: 
+  url: https://decentcybersecurity.eu/news/
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://decentcybersecurity.eu/careers/
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter:
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/decentcybersecurity
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -47,8 +50,24 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Matej Michalko
-    role: CEO and Chairman
+    role: CEO
     social:
-      twitter: 
-      linkedin: 
-    description: Matej is the CEO and Chairman at Decent Cybersecurity s.r.o. and represents the organization at the PKI Consortium.
+      twitter:
+      linkedin: https://www.linkedin.com/in/matmichalko/
+    description: Matej Michalko is a leader in post-quantum cybersecurity, AI, and blockchain with over 15 years of industry experience. As Founder, CEO, and Chairman of Decent Cybersecurity since 2015, he developed dCore, the world's first blockchain platform dedicated to media, aerospace & defense, and cybersecurity, with a focus on post-quantum cryptography.
+
+      Mr. Michalko has guided Decent Cybersecurity to become a key participant in the €32M AIDA project funded by the European Defence Fund. Under his leadership, the company offers innovative post-quantum cryptographic solutions including CryptoSleuth, CyberFort Blockchain, and SecureSat Guardian, holding NATO, EU, and national security clearances at the "Secret" level.
+
+      Recognized by Forbes 30 under 30, Mr. Michalko has expanded Decent Cybersecurity internationally with offices across five countries. He began mining Bitcoin in 2010 and has since pioneered several blockchain and post-quantum cryptography initiatives globally. He continues to drive innovation in quantum-resistant cybersecurity solutions for critical sectors worldwide.
+
+
+  - name: Michaela Abel
+    role: COO
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/michaelaabel888/
+    description:  Michaela Abel is a leader in post-quantum cybersecurity, AI, and blockchain technologies. As a Founder and Board Member of Decent Cybersecurity since 2021, she has contributed to the development of innovative solutions including dCore, the world's first blockchain platform dedicated to media, aerospace & defense, and cybersecurity.
+
+      Ms. Abel has played a key role in Decent Cybersecurity's participation in the €32M AIDA project funded by the European Defence Fund. Her work has been recognized in major publications including Bloomberg and Forbes. She also founded Composys, pioneering composable collections technology in the NFT space.
+
+      At Decent Cybersecurity, Ms. Abel helps oversee a portfolio of advanced security products including CryptoSleuth, CyberFort Blockchain, and SecureSat Guardian. The company operates internationally with security clearances at the "Secret" level from NATO, EU, and national authorities. She continues to drive innovation in quantum-resistant cybersecurity solutions for critical sectors globally.
