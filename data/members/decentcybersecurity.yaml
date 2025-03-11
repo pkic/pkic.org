@@ -1,0 +1,73 @@
+id: decentcybersecurity
+name: Decent Cybersecurity
+slogan: Pioneering cyber defense for tomorrow
+website: https://decentcybersecurity.eu/
+
+# Short description, longer content can be placed in `content/members/`
+description: Decent Cybersecurity provides cutting-edge, quantum-resistant cybersecurity solutions.
+
+# membership
+memberSince: 2025-03-07
+memberType: F
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://decentcybersecurity.eu/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://decentcybersecurity.eu/news/
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://decentcybersecurity.eu/careers/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter:
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/decentcybersecurity
+  youtube:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Matej Michalko
+    role: CEO
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/matmichalko/
+    description: Matej Michalko is a leader in post-quantum cybersecurity, AI, and blockchain with over 15 years of industry experience. As Founder, CEO, and Chairman of Decent Cybersecurity since 2015, he developed dCore, the world's first blockchain platform dedicated to media, aerospace & defense, and cybersecurity, with a focus on post-quantum cryptography.
+
+      Mr. Michalko has guided Decent Cybersecurity to become a key participant in the €32M AIDA project funded by the European Defence Fund. Under his leadership, the company offers innovative post-quantum cryptographic solutions including CryptoSleuth, CyberFort Blockchain, and SecureSat Guardian, holding NATO, EU, and national security clearances at the "Secret" level.
+
+      Recognized by Forbes 30 under 30, Mr. Michalko has expanded Decent Cybersecurity internationally with offices across five countries. He began mining Bitcoin in 2010 and has since pioneered several blockchain and post-quantum cryptography initiatives globally. He continues to drive innovation in quantum-resistant cybersecurity solutions for critical sectors worldwide.
+
+
+  - name: Michaela Abel
+    role: COO
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/michaelaabel888/
+    description:  Michaela Abel is a leader in post-quantum cybersecurity, AI, and blockchain technologies. As a Founder and Board Member of Decent Cybersecurity since 2021, she has contributed to the development of innovative solutions including dCore, the world's first blockchain platform dedicated to media, aerospace & defense, and cybersecurity.
+
+      Ms. Abel has played a key role in Decent Cybersecurity's participation in the €32M AIDA project funded by the European Defence Fund. Her work has been recognized in major publications including Bloomberg and Forbes. She also founded Composys, pioneering composable collections technology in the NFT space.
+
+      At Decent Cybersecurity, Ms. Abel helps oversee a portfolio of advanced security products including CryptoSleuth, CyberFort Blockchain, and SecureSat Guardian. The company operates internationally with security clearances at the "Secret" level from NATO, EU, and national authorities. She continues to drive innovation in quantum-resistant cybersecurity solutions for critical sectors globally.
