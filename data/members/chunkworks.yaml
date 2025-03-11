@@ -1,10 +1,10 @@
 id: chunkworks
 name: Chunk Works
-slogan:
+slogan: Intelligent, quantum-secure data platform
 website: https://www.chunkworks.net
 
 # Short description, longer content can be placed in `content/members/`
-description: We are a startup focusing on securing data towards post-quantum. We have built our own hybrid encryption and agility. (with max 255 algoritms to be used) This library is an out-of-the-box method to keep the software (in RUST) lightweight but also operational towards legacy and augmented. Every company is able to choose how much, when, where, and in which timeframe they want to transition. Keeping budgets to transit in perspective but also the change in setup minimal. Also, our public keys are totally different and approached from a seed-based perspective.  The software is up and running at several companies in pilot or paid form.
+description: Chunk Works provides software that transforms any public or private cloud or on-premises infrastructure into a post-quantum-ready decentralized zero knowledge network. Our software creates an easy transition to post-quantum cryptography (PQC) faster, easier, and more cost-effective by seamlessly integrating with existing systems or hardware.
 
 # membership
 memberSince: 2025-03-07
@@ -17,13 +17,13 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://chunkworks.net/blog/
   feed: https://chunkworks.net/feed/
   language: en_US
 
 # Press Releases
 press: 
-  url: 
+  url: https://chunkworks.net/press/
   feed: 
   language: en_US
 
@@ -35,11 +35,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/chunkworksofficial/
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -47,8 +47,14 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Dennis Schouten
-    role: co-founder
+    role: Founder, Sales & Partner Management
     social:
       twitter: 
-      linkedin: 
-    description: Dennis is the co-founder at Chunk Works and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/schoutendennis/
+    description: Dennis is an outgoing and visionary professional dedicated to safeguarding data privacy and security against current and future threats. His expertise in data protection has driven Chunk Works to the forefront of innovation, advancing quantum encryption, hybrid encryption, and true crypto agility to ensure resilient and future-proof data security. 
+  - name: Peter Willemsen
+    role: Founder, Lead development & Innovation
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/codebuffet/
+    description: Peter is a self-taught expert and seasoned software architect specializing in advanced DLT architecture solutions. With deep expertise in Rust, data security, hybrid cryptography, crypto-agility, AI, and deep learning, he develops innovative and resilient systems for the future of secure computing.
