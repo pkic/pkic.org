@@ -1,59 +1,62 @@
 id: cereneveracruz
 name: Centro de Rehabilitacion Neuropsicologica
-slogan:
+slogan: Centro de Rehabilitacion Neuropsicologica
 website: https://cereneveracruz.com.mx
 
 # Short description, longer content can be placed in `content/members/`
-description: 
-
-
-
-
-
+description: We are a small clinic working on the human side of cybersecurity integration of algorithms and neurotechnology. Currently working on rubber-hose crypto analysis.
 
 # membership
 memberSince: 2025-03-07
-memberType: null
+memberType: H2
 workingGroups:
-
+  - PKIMM
+  - PQC
+  - TCWG
+  
 # sponsor
 sponsor:
   level: 
 
 # Blog posts
 blog: 
-  url: 
+  url: https://cereneveracruz.com.mx/newsletter/
   feed: 
-  language: en_US
+  language: es-ES
 
 # Press Releases
 press: 
   url: 
   feed: 
-  language: en_US
+  language: es-ES
 
 # Careers
 careers: 
-  url: 
+  url: https://cereneveracruz.com.mx/mod/page/view.php?id=362
   feed: 
-  language: en_US
+  language: es-ES
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: ttps://twitter.com/veracruzcerene
+  facebook:
+  instagram:
+  linkedin:
+  youtube: https://www.youtube.com/@CERENEVERACRUZ
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Adrian Guzman
+  - name: Dr. Adrian Guzman
     role: Head Scientist
     social:
-      twitter: 
-      linkedin: 
-    description: Adrian is the Head Scientist at Centro de Rehabilitacion Neuropsicologica and represents the organization at the PKI Consortium.
+      twitter: https://x.com/phdadrianguzman
+      linkedin: https://www.linkedin.com/in/adrianguzman/
+    description: Dr. Guzman has served as Head Scientist for Centro de Rehabilitación Neuropsicologica since January 2024, His Research Interests are the Intersection of Neurotechnology and Cybersecurity.
+
+  - name: NeuroPsychologist Ana Viveros
+    role: Director of Centro de Rehabilitacion Neuropsicologica
+    description:
+    hidden: true
