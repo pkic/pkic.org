@@ -1,10 +1,10 @@
-id: lawtrust
-name: Lawtrust
+id: altronsecurity
+name: Altron Security
 slogan: Information Security Solutions
-website: https://www.lawtrust.co.za/
+website: https://www.altronsecurity.com
 
 # Short description, longer content can be placed in `content/members/`
-description: "We have always believed that we should play a pioneering role in our industry, and have achieved some significant firsts over the years:  We are the first African Certificate Authority to achieve ISO 21188 and WebTrust Certification We are the first African Certificate Authority to be included in the Adobe Approved Trust List (AATL) We are the first Certificate Authority to be accredited for the provision of Advanced Electronic Signatures under the ECT Act We are the only African Trust Centre to be contracted by the EU to extend identity and signature validation through the Future Trust project"
+description: Altron Security is Africa’s leading high-trust Digital Trust Services provider, being the first accredited authentication service provider in South Africa Altron Security is accredited under the requirements of the Electronic Communications Act of 2002 to provide Advanced Electronic Signature (AeSign) solutions and the Adobe Approved Trust List. Altron Security has become a foundational element of South African society, through the Digital Trust Services provided to government and industry.
 
 # membership
 memberSince: 2023-09-26
@@ -18,7 +18,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: https://www.lawtrust.co.za/feed/
+  feed:
   language: en_US
 
 # Press Releases
@@ -36,9 +36,9 @@ careers:
 # Social media
 social:
   twitter: 
-  facebook: https://www.facebook.com/lawtrustinfosec
+  facebook: https://www.facebook.com/AltronS/
   instagram: 
-  linkedin: https://www.linkedin.com/company/lawtrust/
+  linkedin: https://www.linkedin.com/company/altron-security/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
