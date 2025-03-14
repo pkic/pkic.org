@@ -1,0 +1,46 @@
+id: terra-quantum
+name: Terra Quantum
+slogan: Quantum is Now
+website: https://terraquantum.swiss/
+
+description: Terra Quantum is leading quantum technology company, pioneering deep tech innovations across software, hardware and quantum security.
+
+memberSince: 2025-02-28
+memberType: F
+workingGroups:
+  - PQC
+
+sponsor:
+  level:
+
+blog:
+  url: https://terraquantum.swiss/news
+  feed:
+  language: en_US
+
+press:
+  url: https://terraquantum.swiss/publications
+  feed:
+  language: en_US
+
+careers:
+  url: https://terraquantum.swiss/careers
+  feed:
+  language: en_US
+
+social:
+  twitter: https://x.com/terraquantum_ag
+  facebook: undefined
+  instagram: undefined
+  linkedin: https://www.linkedin.com/company/terra-quantum-ag/
+  youtube: https://www.youtube.com/channel/UCQq9JIV1S0-DkHv9AgkcS1w
+
+representatives:
+  - name: Florian Neukart
+    role: Chief Product Officer
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/florian-neukart-3a729591/
+    description:
+      Prof. Dr. Florian Neukart is the Chief Product Officer at Terra Quantum and serves on several advisory boards, including the Board of Trustees of the International Foundation of Artificial Intelligence and Quantum Computing, the Quantum Strategy Institute, KI Park, and Quantum.Tech. He also co-authored Germany’s National Roadmap for Quantum Computing.
+      In addition to his industry work, Mr Neukart pursues academic research and teaching as a Professor of Quantum Computing at the Leiden Institute of Advanced Computer Science (LIACS). He has authored books on artificial intelligence, energy, and cosmology, edited a volume on quantum technology, and published over 130 scientific articles spanning quantum computing, space technology, and autonomous systems.
