@@ -6,12 +6,9 @@ website: https://terraquantum.swiss/
 description: Terra Quantum is leading quantum technology company, pioneering deep tech innovations across software, hardware and quantum security.
 
 memberSince: 2025-02-28
-memberType: A
+memberType: F
 workingGroups:
-  - CA
-  - PKIMM
   - PQC
-  - TCWG
 
 sponsor:
   level:
