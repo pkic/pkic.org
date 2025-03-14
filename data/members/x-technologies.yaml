@@ -1,0 +1,54 @@
+id: x-technologies
+name: X Technologies, Inc.
+slogan:
+website: https://x-technologies.com
+
+# Short description, longer content can be placed in `content/members/`
+description: I am a seasoned Solution Architect specializing in Public Key Infrastructure (PKI). Leveraging extensive experience in cryptographic standards, certificate management, and secure digital identity, I currently lead the X Technologies Innovation team, focusing on emerging PKI innovations. As part of my work, I developed a custom algorithm discovery and inventory solution—an essential tool for ensuring organizations are ready for the PQC algorithm transition.  My leadership approach bridges the gap between advanced technical requirements and mission objectives, providing secure, efficient, and future-ready PKI solutions. Over my career, I have overseen high-stakes projects end-to-end, ensuring they adhere to established guidelines and best practices while driving continuous innovation. By integrating next-generation cryptographic algorithms, streamlining certificate lifecycles, and championing best-in-class security architectures, I help organizations navigate the rapidly changing cyber landscape.  Outside of my PKI-focused endeavors, I am dedicated to personal growth and fostering strong communities. As a Prepare/Enrich-certified marriage counselor, I have guided couples toward healthier relationships, honing my communication and leadership skills.  I also embrace a well-rounded life, maintaining interests in fitness, culinary exploration, and a deep passion for coffee—an enthusiasm I hope to transform into a coastal coffee roasting venture. Whether exploring the next frontier in PKI innovation, discussing algorithm upgrades, or simply connecting over a great cup of coffee, I value collaboration and community as the driving forces behind meaningful progress.
+
+# membership
+memberSince: 2025-03-14
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Thomas Clark
+    role: Solution Architect
+    social:
+      twitter: 
+      linkedin: 
+    description: Thomas is the Solution Architect at X Technologies, Inc. and represents the organization at the PKI Consortium.
