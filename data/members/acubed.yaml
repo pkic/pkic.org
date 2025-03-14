@@ -1,15 +1,17 @@
 id: acubed
 name: Acubed.it
-slogan:
+slogan: Designing Secure Applications
 website: https://www.acubed.it
 
 # Short description, longer content can be placed in `content/members/`
-description: At Acubed.IT, we are cross-domain specialists, committed to delivering cost-effective, cyber-secure solutions. Based in the UK, our team of experts collaborate with HM Government and the Public Sector to build & integrate powerful and highly secure applications that automate and transform business processes. Our extensive knowledge in secure cloud solution design enables us to deliver digital solutions that are user-focused, scalable, and cost effective. 
+description: acubed.it collaborates with government departments in the UK to design and build secure applications leveraging cross-domain & cyber security expertise.
 
 # membership
 memberSince: 2025-03-07
 memberType: F
 workingGroups:
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -17,7 +19,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://www.acubed.it/the-cdha-chronicles
   feed: https://www.acubed.it/blog-feed.xml
   language: en_US
 
@@ -35,11 +37,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter:
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/acubed-it
+  youtube: https://www.youtube.com/channel/UChdkqKAf1r_KaW-p4DGXUPw
 
 # Here you can list those who represent or have represented the member.
 #
@@ -47,8 +49,14 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Amit Gupta
-    role: CEO
+    role: CEO & Founder, acubed.it
     social:
-      twitter: 
-      linkedin: 
-    description: Amit is the CEO at Acubed.it and represents the organization at the PKI Consortium.
+      twitter: https://twitter.com/
+      linkedin: https://www.linkedin.com/in/amit-gupta-1131b96/
+    description: As the Founder and CEO of acubed.it, Amit leads a dynamic team of software developers and architects who are passionate about crafting innovative and secure cross-security domain solutions for the UK government and our valued clients.
+
+      With over two decades of experience in software development, Amit brings a broad range of expertise in various technologies and methodologies. His career has been marked by significant contributions to large-scale digital transformation initiatives in both public and private sectors.
+
+      The journey that led Amit to establish acubed.it was driven by a clear vision. Amit recognised the vital need to enhance and optimise government processes. Through unwavering dedication and a profound focus on security, his mission is to make a meaningful impact in the technology and security landscape.
+
+      One of Amit and his team's proudest achievements is the development of the Cross Domain Hybrid Application (CDHA) Framework, a revolutionary solution that empowers government agencies to seamlessly span security boundaries while maintaining the highest levels of security and usability. CDHA is a game-changer, and we're excited to bring it to organisations that are committed to innovation and security.
