@@ -1,0 +1,56 @@
+id: incert
+name: INCERT GIE
+slogan:
+website: https://www.incert.lu/
+
+# Short description, longer content can be placed in `content/members/`
+description: Incert is a center of expertise. Services based on knowledge & experience 
+acquired in cryptography, eTravel documents, cybersecurity & artificial 
+intelligence.
+
+# membership
+memberSince: 2025-03-07
+memberType: C
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Benoit Poletti
+    role: CEO
+    social:
+      twitter: 
+      linkedin: 
+    description: Benoit is the CEO at INCERT GIE and represents the organization at the PKI Consortium.
