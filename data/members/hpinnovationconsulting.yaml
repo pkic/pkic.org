@@ -1,0 +1,54 @@
+id: hpinnovationconsulting
+name: Hernandez Perez Innovation Consulting
+slogan:
+website: https://hpinnovationconsulting.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: I am a Research Specialist in High-Performance Computing at Florida State University and I use my experience in education to help companies learn and apply emerging tech such as PQC. My company HPI Consulting focuses on curriculum development for these emerging technologies, advising on curriculum deployment and how to incorporate these curriculums into the everyday responsibilties of personnel.
+
+# membership
+memberSince: 2025-03-07
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://hpinnovationconsulting.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jose Hernandez
+    role: Educational Consultant
+    social:
+      twitter: 
+      linkedin: 
+    description: Jose is the Educational Consultant at Hernandez Perez Innovation Consulting and represents the organization at the PKI Consortium.
