@@ -4,11 +4,11 @@ slogan:
 website: https://cypher-z.github.io
 
 # Short description, longer content can be placed in `content/members/`
-description: I am Yiming Zhang, currently a postdoctoral researcher at Tsinghua University, a premier research institution in Asia. My primary research interests lie in the security risks of Internet infrastructure, with a particular focus on the security of public key infrastructure (PKI). My work is driven purely by academic and research pursuits, without any profit motive.  I have a strong background in PKI research, evidenced by my publication as the first author in CCS 2021, one of the top four conferences on network security:  Rusted Anchors: A National Client-Side View of Hidden Root CAs in the Web PKI Ecosystem, [CCS' 21] https://doi.org/10.1145/3460120.3484768
+description: Tsinghua University, a premier research institution in Asia. 
 
 # membership
 memberSince: 2025-03-07
-memberType: null
+memberType: H5
 workingGroups:
 
 # sponsor
@@ -35,11 +35,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
