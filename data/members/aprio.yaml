@@ -10,6 +10,9 @@ description: Future-focused business advisory and accounting services for entrep
 memberSince: 2025-03-07
 memberType: D
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: Partner, Information Assurance Services
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/jeffreyfward/
     description: Jeff is the Partner, Information Assurance Services at Aprio and represents the organization at the PKI Consortium.
