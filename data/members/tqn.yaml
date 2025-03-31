@@ -1,0 +1,55 @@
+id: tqn
+name: Tasmanian Quantum Network Quantum Safe Transition Working Group
+slogan:
+website: 
+
+# Short description, longer content can be placed in `content/members/`
+description: I founded the Tasmanian Quantum Network (Australia) in 2023 to foster a quantum ecosystem in our state and started the TQN Quantum Safe Transition Working Group from July 2024.
+
+# membership
+memberSince: 2025-03-07
+memberType: H3
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Muria Roberts
+    role: Chair
+    social:
+      twitter: 
+      linkedin: 
+    description: Muria is the Chair at Tasmanian Quantum Network Quantum Safe Transition Working Group and represents the organization at the PKI Consortium.
