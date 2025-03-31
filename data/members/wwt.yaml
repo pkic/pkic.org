@@ -8,8 +8,11 @@ description: Explore on-demand technology labs, thought leadership and a portfol
 
 # membership
 memberSince: 2025-03-07
-memberType: null
+memberType: H2
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,20 +38,20 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: RICKY BOYD
+  - name: Ricky BOYD
     role: Sr. Consulting Solution Architect
     social:
       twitter: 
-      linkedin: 
-    description: RICKY is the Sr. Consulting Solution Architect at World Wide Technology and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/rickyboyd/
+    description: Ricky is the Sr. Consulting Solution Architect at World Wide Technology and represents the organization at the PKI Consortium.
