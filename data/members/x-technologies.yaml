@@ -1,0 +1,55 @@
+id: x-technologies
+name: X Technologies, Inc.
+slogan:
+website: https://x-technologies.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Since 1998, X Technologies has been providing high quality engineering, information technology, information security, program support, manufacturing and repair services to federal and commercial organizations.
+
+# membership
+memberSince: 2025-03-14
+memberType: null
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Thomas Clark
+    role: Solution Architect
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/thomas-clark-13887a202/
+    description: Thomas is the Solution Architect at X Technologies, Inc. and represents the organization at the PKI Consortium.
