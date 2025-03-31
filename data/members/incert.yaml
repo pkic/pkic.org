@@ -4,14 +4,13 @@ slogan:
 website: https://www.incert.lu/
 
 # Short description, longer content can be placed in `content/members/`
-description: Incert is a center of expertise. Services based on knowledge & experience 
-acquired in cryptography, eTravel documents, cybersecurity & artificial 
-intelligence.
+description: Incert is a center of expertise. Services based on knowledge & experience acquired in cryptography, eTravel documents, cybersecurity & artificial intelligence.
 
 # membership
 memberSince: 2025-03-07
-memberType: C
+memberType: H1
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -37,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,5 +51,5 @@ representatives:
     role: CEO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/benoit-poletti-lux
     description: Benoit is the CEO at INCERT GIE and represents the organization at the PKI Consortium.
