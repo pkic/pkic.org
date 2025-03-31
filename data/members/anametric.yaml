@@ -1,0 +1,55 @@
+id: anametric
+name: Anametric, Inc.
+slogan:
+website: https://anametric.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Anametric, is an Austin, Texas based startup developing quantum photonic solutions for cybersecurity. We work closely with teams at Southern Methodist University in Dallas and under contract with the US DoD as well as with commercial networking companies. The team at Anametric is currently executing multiple, multi-year contracts with the US Air Force and the US Army as well as subcontracting to Leidos on a DARPA program for Quantum Networking (QuANET). We are designing and building our quantum photonic chips at the AIM Photonics fab (Albany, NY) and at Tower Semiconductor (Newport Beach CA). Combining patented and patent-pending quantum and classical technologies, Anametric’s devices support a wide range of next-generation cybersecurity functions, including the upcoming massive worldwide transition to post-quantum cybersecurity (PQC), among other mission-critical functions for both the government and commercial markets.
+
+# membership
+memberSince: 2025-03-07
+memberType: F
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://anametric.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: William Oxford
+    role: CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/wil-oxford/
+    description: William is the CEO at Anametric, Inc. and represents the organization at the PKI Consortium.
