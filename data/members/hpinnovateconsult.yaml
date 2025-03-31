@@ -19,7 +19,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: https://hpinnovationconsulting.com/feed/
+  feed:
   language: en_US
 
 # Press Releases
