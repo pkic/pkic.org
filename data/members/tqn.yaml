@@ -1,15 +1,16 @@
-id: protonmail
+id: tqn
 name: Tasmanian Quantum Network Quantum Safe Transition Working Group
 slogan:
 website: 
 
 # Short description, longer content can be placed in `content/members/`
-description: I am an educator and cybersecurity professional upskilling to specialise in quantum cybersecurity. I founded the Tasmanian Quantum Network (Australia) in 2023 to foster a quantum ecosystem in our state and started the TQN Quantum Safe Transition Working Group from July 2024.
+description: I founded the Tasmanian Quantum Network (Australia) in 2023 to foster a quantum ecosystem in our state and started the TQN Quantum Safe Transition Working Group from July 2024.
 
 # membership
 memberSince: 2025-03-07
-memberType: null
+memberType: H3
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
