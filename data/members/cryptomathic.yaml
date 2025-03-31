@@ -1,0 +1,54 @@
+id: cryptomathic
+name: Cryptomathic Inc
+slogan:
+website: https://www.cryptomathic.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Cryptomathic's robust cryptographic solutions protect sensitive information from unauthorized access. Trusted by global organizations across all industries.
+
+# membership
+memberSince: 2025-03-07
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Davin Cooke
+    role: Director of Business Development US
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/davin-cooke/
+    description: Davin is the Director of Business Development US at Cryptomathic Inc and represents the organization at the PKI Consortium.
