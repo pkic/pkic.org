@@ -1,0 +1,57 @@
+id: futurex
+name: Futurex
+slogan:
+website: https://www.futurex.com
+
+# Short description, longer content can be placed in `content/members/`
+description: For over 40 years, Futurex has been the industry leader in enterprise data protection solutions. All Futurex products are securely built and signed in the USA.
+
+# membership
+memberSince: 2025-03-07
+memberType: F
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Comron Moeni
+    role: Director of Compliance
+    social:
+      twitter: 
+      linkedin: 
+    description: Comron is the Director of Compliance at Futurex and represents the organization at the PKI Consortium.
