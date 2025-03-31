@@ -4,12 +4,15 @@ slogan:
 website: https://www.uom.edu.pk
 
 # Short description, longer content can be placed in `content/members/`
-description: <p class="text-justify">I feel honoured to serve University of Malakand as its 7th Vice-Chancellor. Creating a conducive learning environment is my top priority and I am looking forward to making UOM, a distinctive place of learning and academic discourse for innovations and discoveries, where students are prepared to solve the challenging problems of the changing world and Pakistan. I believe that our faculty members, staff, and students have the essential potentials to take the University further on the path of success with collaboration, tea...
+description: A distinctive place of learning and academic discourse for innovations and discoveries, where students are prepared to solve the challenging problems of the changing world and Pakistan.
 
 # membership
 memberSince: 2025-03-07
-memberType: null
+memberType: H4
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: Assistant Professor
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/dr-mohammad-faisal-6a49ab289/
     description: Dr Mohammad is the Assistant Professor at University of Malakand and represents the organization at the PKI Consortium.
