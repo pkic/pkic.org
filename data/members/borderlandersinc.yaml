@@ -8,8 +8,11 @@ description: Implementing security solutions for telecommunications and logistic
 
 # membership
 memberSince: 2025-03-07
-memberType: null
+memberType: H7
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: CTO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/olegsunko/
     description: Oleg is the CTO at Borderlanders Inc and represents the organization at the PKI Consortium.
