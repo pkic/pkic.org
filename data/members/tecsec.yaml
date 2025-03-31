@@ -10,6 +10,8 @@ description: TecSec’s focus is on Information Security and Information Access 
 memberSince: 2025-03-14
 memberType: G
 workingGroups:
+  - PKIMM
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +37,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +52,5 @@ representatives:
     role: CEO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/jay-wack-298211/
     description: Jay is the CEO at Tecsec and represents the organization at the PKI Consortium.
