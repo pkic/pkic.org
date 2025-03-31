@@ -1,0 +1,56 @@
+id: wisekey
+name: WISeKey SA
+slogan:
+website: https://wisekey.com
+
+# Short description, longer content can be placed in `content/members/`
+description: WISeKey is a leading global cybersecurity company deploying large scale digital identity ecosystems for people and objects using Blockchain, AI and IoT
+
+# membership
+memberSince: 2025-03-07
+memberType: A
+workingGroups:
+  - CA
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.wisekey.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Pedro Fuentes
+    role: Trust Services Manager
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/fuentespedro/
+    description: Pedro is the Trust Services Manager at WISeKey SA and represents the organization at the PKI Consortium.
