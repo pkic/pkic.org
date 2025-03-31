@@ -8,8 +8,9 @@ description: I am a Research Specialist in High-Performance Computing at Florida
 
 # membership
 memberSince: 2025-03-07
-memberType: null
+memberType: H6
 workingGroups:
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +51,5 @@ representatives:
     role: Educational Consultant
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/jose-hernandez-a49170145/
     description: Jose is the Educational Consultant at Hernandez Perez Innovation Consulting and represents the organization at the PKI Consortium.
