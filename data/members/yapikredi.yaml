@@ -10,6 +10,9 @@ description: Yapı Kredi ayrıcalığı ile kredi, sigorta, ödeme ve daha fazla
 memberSince: 2025-03-07
 memberType: G
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: Data and Endpoint Security Manager
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/serkankirkkulac
     description: Serkan is the Data and Endpoint Security Manager at Yapi Kredi Bank and represents the organization at the PKI Consortium.
