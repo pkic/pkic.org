@@ -1,0 +1,55 @@
+id: essendi
+name: essendi it GmbH
+slogan:
+website: https://www.essendi.de
+
+# Short description, longer content can be placed in `content/members/`
+description: Als IT Firma fokussieren wir uns auf die Bereiche Zertifikatsmanagement, Softwaretest, IT-Beratung und individuelle Softwareentwicklung. Erfahren Sie mehr!
+
+# membership
+memberSince: 2025-03-14
+memberType: F
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.essendi.de/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Sarah Zügel
+    role: CEO of essendi it
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/sarah-z%C3%BCgel-325929b4/
+    description: Sarah is the CEO of essendi it at essendi it GmbH and represents the organization at the PKI Consortium.
