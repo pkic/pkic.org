@@ -1,0 +1,57 @@
+id: borderlandersinc
+name: Borderlanders Inc
+slogan:
+website: https://borderlandersinc.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Implementing security solutions for telecommunications and logistics
+
+# membership
+memberSince: 2025-03-07
+memberType: H7
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Oleg Sunko
+    role: CTO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/olegsunko/
+    description: Oleg is the CTO at Borderlanders Inc and represents the organization at the PKI Consortium.
