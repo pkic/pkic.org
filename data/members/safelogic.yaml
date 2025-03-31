@@ -1,0 +1,54 @@
+id: safelogic
+name: SafeLogic
+slogan:
+website: https://www.safelogic.com
+
+# Short description, longer content can be placed in `content/members/`
+description: SafeLogic provides validated & interoperable cryptography software that satisfies FIPS 140, CMMC v2.0, FedRAMP, and PQC requirements. Request consultation.
+
+# membership
+memberSince: 2025-03-31
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jake Maynard
+    role: Director of Engineering
+    social:
+      twitter: 
+      linkedin: 
+    description: Jake is the Director of Engineering at SafeLogic and represents the organization at the PKI Consortium.
