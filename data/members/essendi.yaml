@@ -10,6 +10,7 @@ description: Als IT Firma fokussieren wir uns auf die Bereiche Zertifikatsmanage
 memberSince: 2025-03-14
 memberType: F
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +51,5 @@ representatives:
     role: CEO of essendi it
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/sarah-z%C3%BCgel-325929b4/
     description: Sarah is the CEO of essendi it at essendi it GmbH and represents the organization at the PKI Consortium.
