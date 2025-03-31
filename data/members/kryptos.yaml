@@ -4,12 +4,13 @@ slogan:
 website: https://kryptos.com.tr/
 
 # Short description, longer content can be placed in `content/members/`
-description: Dr. Faruk SARI, born in İzmir in 1968, holds a Ph.D. in Electronics and Communications Engineering from Istanbul Technical University, with research experience at Virginia Tech and the U.S. Naval Research Laboratory. He has also earned degrees in Theology and Sociology. He has held key research roles in the defense industry, including positions at ITU Defense Research Center, the Naval Research Center, STM, and TÜBİTAK. In 2005, he co-founded CTech Bilişim, contributing to its strategic growth, stock market listing, and advancements in cybersecurity and defense technologies. Currently, he is the co-founder of Cyber Quanta, focusing on Post-Quantum Cryptography (PQC)-based Data and IoT Security solutions. He actively engages in industry leadership, serving on the Istanbul Chamber of Industry Council, TÜBİTAK Marmara Teknokent Board, MUSIAD Digital Transformation Board, and SAHA Istanbul Cybersecurity Working Group, among others. He also supports university-industry collaborations through advisory roles.
+description: Dr. Faruk SARI, born in İzmir in 1968, holds a Ph.D. in Electronics and Communications Engineering from Istanbul Technical University, with research experience at Virginia Tech and the U.S. Naval Research Laboratory.
 
 # membership
 memberSince: 2025-03-07
 memberType: F
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +51,5 @@ representatives:
     role: CEO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/faruk-sari-phd-753738a/
     description: FARUK is the CEO at Cyber Quanta / Kryptos and represents the organization at the PKI Consortium.
