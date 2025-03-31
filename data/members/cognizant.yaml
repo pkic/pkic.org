@@ -1,0 +1,57 @@
+id: cognizant
+name: Cognizant Technology solutions
+slogan:
+website: https://www.cognizant.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Anticipate trends. Drive meaningful change. Outthink your competition. That’s the power of intuition—and we can engineer it. Learn more.
+
+# membership
+memberSince: 2025-03-07
+memberType: H2
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Rasool Kareem Irfan M
+    role: Security architect
+    social:
+      twitter: 
+      linkedin: https://linkedin.com/in/rasoolirfan
+    description: Rasool Kareem Irfan is the Security architect at Cognizant Technology solutions and represents the organization at the PKI Consortium.
