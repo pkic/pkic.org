@@ -8,7 +8,7 @@ description: I'm  a consultant working in the IAM and PKI space for more than 25
 
 # membership
 memberSince: 2025-03-07
-memberType: null
+memberType: H6
 workingGroups:
 
 # sponsor
@@ -35,11 +35,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +50,5 @@ representatives:
     role: CEO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/melvas/
     description: Göran is the CEO at ID-Fix AB and represents the organization at the PKI Consortium.
