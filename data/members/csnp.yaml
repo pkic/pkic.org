@@ -1,0 +1,56 @@
+id: csnp
+name: CyberSecurity NonProfit (CSNP)
+slogan:
+website: https://csnp.org
+
+# Short description, longer content can be placed in `content/members/`
+description: CSNP is a 501(c)(3) nonprofit organization dedicated to transforming global cybersecurity. We strive to create a secure and equitable digital world by providing accessible education, driving innovation, and empowering diverse communities
+
+# membership
+memberSince: 2025-03-07
+memberType: H2
+workingGroups:
+  - PKIMM
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.csnp.org/blog-feed.xml
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Abdel Sy Fane
+    role: Executive Director
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/abdelsyfane/
+    description: Abdel is the Executive Director at CyberSecurity NonProfit (CSNP) and represents the organization at the PKI Consortium.
