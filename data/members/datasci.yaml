@@ -4,12 +4,14 @@ slogan:
 website: https://www.datasci.net/
 
 # Short description, longer content can be placed in `content/members/`
-description: We use PKI as backbone to verification software. Our application is based on ejbca 2016 version
+description: We are a Canadian company but also active in the export market. Data & Scientific deployed the secure database for the national ID implementation in one of our export market countries. we have been involved with PKI projects since 2005.  We are also actively investigating Quantum computing.
 
 # membership
 memberSince: 2025-03-07
 memberType: F
 workingGroups:
+ - PKIMM
+ - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +37,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +52,5 @@ representatives:
     role: Executive Vice President
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/data-and-scientific/
     description: Tope is the Executive Vice President at Data & Scientific Inc. and represents the organization at the PKI Consortium.
