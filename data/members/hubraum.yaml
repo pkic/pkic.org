@@ -1,0 +1,55 @@
+id: hubraum
+name: hubraum - technology incubator of Deutsche Telekom Group
+slogan:
+website: https://www.hubraum.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Our tech incubator helps to take your product to the next level As startup incubator we offer coworking spaces, investments access to Deutsche Telekom
+
+# membership
+memberSince: 2025-03-07
+memberType: H2
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Wojciech Pawlak
+    role: Technology Expert
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/wpawlak/
+    description: Wojciech is the Technology Expert at hubraum - technology incubator of Deutsche Telekom Group and represents the organization at the PKI Consortium.
