@@ -1,0 +1,55 @@
+id: 0trust
+name: Foard Consulting LLC
+slogan:
+website: https://www.0trust.pro
+
+# Short description, longer content can be placed in `content/members/`
+description: Foard Consulting LLC provides consulting services to organizations that support the US federal government. Principle leadership has been involved in federal ICAM as both a government leader and a consulting contractor for over 20 years and has participated in post quantum cryptography strategy and plans within the federal government.
+
+# membership
+memberSince: 2025-03-07
+memberType: H2
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Ross Foard
+    role: Owner
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/ross-foard/
+    description: Ross is the Owner at Foard Consulting LLC and represents the organization at the PKI Consortium.
