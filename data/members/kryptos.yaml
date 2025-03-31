@@ -1,0 +1,55 @@
+id: kryptos
+name: Cyber Quanta / Kryptos
+slogan:
+website: https://kryptos.com.tr/
+
+# Short description, longer content can be placed in `content/members/`
+description: Dr. Faruk SARI, born in İzmir in 1968, holds a Ph.D. in Electronics and Communications Engineering from Istanbul Technical University, with research experience at Virginia Tech and the U.S. Naval Research Laboratory.
+
+# membership
+memberSince: 2025-03-07
+memberType: F
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://kryptos.com.tr/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: FARUK SARI
+    role: CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/faruk-sari-phd-753738a/
+    description: FARUK is the CEO at Cyber Quanta / Kryptos and represents the organization at the PKI Consortium.
