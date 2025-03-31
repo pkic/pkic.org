@@ -1,0 +1,55 @@
+id: hpinnovateconsult
+name: Hernandez Perez Innovation Consulting
+slogan:
+website: https://hpinnovationconsulting.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: HPI Consulting focuses on curriculum development for these emerging technologies, advising on curriculum deployment and how to incorporate these curriculums into the everyday responsibilties of personnel.
+
+# membership
+memberSince: 2025-03-07
+memberType: H6
+workingGroups:
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed:
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jose Hernandez
+    role: Educational Consultant
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/jose-hernandez-a49170145/
+    description: Jose is the Educational Consultant at Hernandez Perez Innovation Consulting and represents the organization at the PKI Consortium.
