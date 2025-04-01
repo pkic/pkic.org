@@ -1,7 +1,7 @@
 id: evertrust
 name: EVERTRUST
-slogan: 
-website: https://www.evertrust.fr/
+slogan:
+website: https://www.evertrust.io/
 
 # Short description, longer content can be placed in `content/members/`
 description: "EVERTRUST is a French software vendor specialized in a key sector of cybersecurity: trust management software."
@@ -14,42 +14,48 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: https://evertrust.fr/learn/
-  feed: 
+blog:
+  url: https://evertrust.io/blog/
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: https://evertrust.fr/press-releases/
-  feed: 
+press:
+  url: https://evertrust.io/newsroom/
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://www.welcometothejungle.com/fr/companies/evertrust/jobs
-  feed: 
+  feed:
   language: fr_FR
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
+  twitter:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/evertrust-sas
-  youtube: https://www.youtube.com/channel/UCKp8-JCNtss0aKskPx2FvKw
+  youtube: https://www.youtube.com/@Evertrust_io
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Alexandre Aufrere
-    role: Partner, CTO
+  - name: Jean-Julien Alvado
+    role: Co-founder & CEO - Evertrust
     social:
-      twitter: 
-      linkedin: https://www.linkedin.com/in/alexandreaufrere/
-    description: Alexandre is the CTO of EVERTRUST and one of the co-founders of the company. He has more than 15 years of experience in the digital trust field, and represents EVERTRUST at the PKI Consortium.
+      twitter:
+      linkedin: https://www.linkedin.com/in/jeanjulienalvado/
+    description: Engineer from UTC with a Master's from EPITA, Jean-Julien has built his expertise in cybersecurity since 2003. After eight years implementing security solutions at Total and similar projects for Sanofi and Technimp, he revealed a consistent industry problem certificate management tools that hindered rather than helped security teams. In 2017, he co-founded Evertrust to address this challenge. Under his leadership, the company evolved from security consulting to developing a comprehensive Certificate Lifecycle Management software and a Signing authority engine that serves major organizations worldwide amid increasing security and compliance demands.
+  - name: Kamel Ferchouche
+    role: Co-Founder & COO - Evertrust
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/kamel-ferchouche-438a741/
+    description: With a Master's in Computer Networking from UPMC, Kamel has focused on infrastructure security since his early career. After spending seven years managing access control mechanisms at Total and holding cybersecurity roles at enterprise-scale companies like Thales and ENGIE, he identified the challenges organizations faced with digital certificate infrastructure before co-founding Evertrust in 2017. Today, Kamel leads Evertrust's operations and product implementation strategies, ensuring that the company's digital trust solutions effectively address the complex security and compliance needs of major organizations worldwide.
