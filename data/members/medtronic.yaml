@@ -10,7 +10,7 @@ description: People-centered, data-driven, personalized. Solving our world’s b
 memberSince: 2025-03-31
 memberType: G
 workingGroups:
-
+  - PQC
 # sponsor
 sponsor:
   level: 
@@ -35,11 +35,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +50,5 @@ representatives:
     role: Senior Distinguished Systems Security Engineer
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/tom-wolf-5ab920/
     description: Tom is the Senior Distinguished Systems Security Engineer at Medtronic and represents the organization at the PKI Consortium.
