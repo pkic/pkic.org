@@ -1,0 +1,54 @@
+id: medtronic
+name: Medtronic
+slogan:
+website: https://www.medtronic.com/en-us/index.html
+
+# Short description, longer content can be placed in `content/members/`
+description: People-centered, data-driven, personalized. Solving our world’s biggest health challenges with advanced technology.
+
+# membership
+memberSince: 2025-03-31
+memberType: G
+workingGroups:
+  - PQC
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Tom Wolf
+    role: Senior Distinguished Systems Security Engineer
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/tom-wolf-5ab920/
+    description: Tom is the Senior Distinguished Systems Security Engineer at Medtronic and represents the organization at the PKI Consortium.
