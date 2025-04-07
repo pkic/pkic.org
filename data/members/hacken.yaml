@@ -1,0 +1,54 @@
+id: hacken
+name: Hacken
+slogan:
+website: https://hacken.io
+
+# Short description, longer content can be placed in `content/members/`
+description: Hacken is a trusted blockchain security auditor on a mission to make Web3 a safer place by contributing to security standards.
+
+# membership
+memberSince: 2025-03-31
+memberType: H2
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Bryn Bennett
+    role: SBDM
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/skrillah
+    description: Bryn is the SBDM at Hacken and represents the organization at the PKI Consortium.
