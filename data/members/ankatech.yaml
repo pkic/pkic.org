@@ -1,0 +1,55 @@
+id: ankatech
+name: AnkaTech
+slogan:
+website: https://www.ankatech.co
+
+# Short description, longer content can be placed in `content/members/`
+description: Next-gen cybersecurity solutions with NIST-certified post-quantum encryption for ultimate data protection.
+
+# membership
+memberSince: 2025-03-31
+memberType: F
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://ankatech.co/home/f.rss
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Javier Galindo
+    role: CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/javier-galindo-34890318/
+    description: Javier is the CEO at AnkaTech and represents the organization at the PKI Consortium.
