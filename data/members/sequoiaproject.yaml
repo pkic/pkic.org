@@ -1,0 +1,57 @@
+id: sequoiaproject
+name: Healtheway Inc Dba the Sequoia Proj
+slogan:
+website: https://sequoiaproject.org/
+
+# Short description, longer content can be placed in `content/members/`
+description: The independent, trusted advocate for nationwide health information exchange.
+
+# membership
+memberSince: 2025-03-31
+memberType: D
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://sequoiaproject.org/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Matt Blackmon
+    role: Standards and Conformance Testing Programs Manager
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/mattblackmon/
+    description: Matt is the Standards and Conformance Testing Programs Manager at Healtheway Inc Dba the Sequoia Proj and represents the organization at the PKI Consortium.
