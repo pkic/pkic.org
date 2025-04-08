@@ -4,14 +4,14 @@ draft: false
 id: evertrust
 title: EVERTRUST
 ---
+European digital trust infrastructure provider
 
-EVERTRUST is a French software vendor specialized in a key sector of cybersecurity: trust management software.
+Evertrust delivers advanced machine identity management systems for enterprises seeking digital sovereignty and automated certificate lifecycle control. The company enables security teams to establish trustworthy digital infrastructures by unifying PKI and CLM capabilities, automating certificate operations, and ensuring crypto-readiness for emerging threats.
 
-Founded in 2017, our aim is to deliver operational solutions, secured and efficient which allow both IT security and certificate lifecycle management, which expirations are the origins of major incidents impacting both corporate identity and security access.
+Organizations across banking, defense, healthcare, and government sectors trust Evertrust to secure their digital keys and certificates across multi-cloud environments, Kubernetes clusters, MDM ecosystems, and IoT deployments.
 
-Our knowledge regarding the different infrastructures allows us to identify “missing links” with available solutions, and to answer IT systems (DevOps, Cloud, IoT...) challenges.
+Founded in 2017 and headquartered in France, Evertrust develops 100% European code for PKI and certificate management, providing institutions greater control over their digital identities and data sovereignty.
 
-Our various software: STREAM (CA/VA) and HORIZON (RA/CLM) have been developed to satisfy needs on the delivering, the automatization and to offer trust services.
-They can be integrated both on-premises, in the cloud or as a service, with a non-intrusive methodology which is simple and efficient. 
+Products include Horizon (certificate lifecycle management) and Stream (certificate authority, validation authority, and timestamping authority). Deploy your way: on-premises, containerized, or SaaS—with seamless integration for Microsoft ADCS, AWS, Google Cloud, Azure, Entrust, Digicert, and other leading providers.
 
-We have customers all over the EMEA region, in direct or through our network of partners.
+With over 20 years of combined security expertise, Evertrust addresses challenges in post-quantum cryptography and AI-driven threats while maintaining the highest standards of identity verification and certificate management.
