@@ -8,8 +8,11 @@ description: Chase online; credit cards, mortgages, commercial banking, auto loa
 
 # membership
 memberSince: 2025-03-31
-memberType: null
+memberType: H3
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: PKI Lead
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/podalakur/
     description: Sreenivas is the PKI Lead at JP Morgan and represents the organization at the PKI Consortium.
