@@ -1,0 +1,54 @@
+id: ezsign
+name: PT Solusi Identitas Global Net
+slogan:
+website: https://ezsign.id
+
+# Short description, longer content can be placed in `content/members/`
+description: ezsign.id is an Indonesian-based provider of secure and legally compliant electronic signature solutions, functioning as a registered Certification Authority (CA) under KOMINFO, which facilitates digital document signing through web and mobile applications, complete with features like e-Meterai, time stamping, and document management, catering to both individual and corporate needs while prioritizing data security and the validity of electronic transactions.
+
+# membership
+memberSince: 2025-04-10
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://ezsign.id/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Muhammad Fajar Masputra
+    role: Engineering Manager
+    social:
+      twitter: 
+      linkedin: 
+    description: Muhammad Fajar is the Engineering Manager at PT Solusi Identitas Global Net and represents the organization at the PKI Consortium.
