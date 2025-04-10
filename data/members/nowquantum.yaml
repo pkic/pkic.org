@@ -1,0 +1,54 @@
+id: nowquantum
+name: NowQuantum
+slogan:
+website: https://www.nowquantum.net
+
+# Short description, longer content can be placed in `content/members/`
+description: Building Quantum Ecosystem
+
+# membership
+memberSince: 2025-03-31
+memberType: H6
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Ian Meletios
+    role: Business Strategy
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/ianmeletios/
+    description: Ian is the Business Strategy at NowQuantum and represents the organization at the PKI Consortium.
