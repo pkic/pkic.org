@@ -10,6 +10,9 @@ description: Soluciones para la firma electrónica y digital de documentos elect
 memberSince: 2025-04-02
 memberType: G
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: Founder & CEO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/robertominoletti/
     description: Roberto is the Founder & CEO at Trusthub LLC and represents the organization at the PKI Consortium.
