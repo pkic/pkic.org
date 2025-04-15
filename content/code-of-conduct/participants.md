@@ -10,6 +10,7 @@ heroDescription: This page must be read together with the other parts of the [Co
 ---
 
 ## Introduction
+
 The PKI Consortium (the “PKIC”) is comprised of a global group of professionals with differences in language, skills, expertise, experience, and backgrounds. Participants include PKIC Members and third parties (non-members). To maintain a professional and productive environment, it is necessary Participants of the PKIC to follow the letter and spirit of this Code. This Code applies to all official PKIC activities, such as meetings, teleconferences, mailing lists, conferences, and other PKIC functions. The PKIC is committed to maintaining a professional and respectful environment.
 
 All Participant representatives are expected to behave in a collegial and professional manner in accordance with this Code. Participants will familiarize their representatives with this Code and require them to comply with the letter and spirit of this Code.
@@ -52,7 +53,18 @@ These are the policies for upholding the Code.
 
 4. Participants agree to take appropriate action in the event any of their representatives violate the Code. Such action could include warning, reprimanding, suspending, removing or replacing the representative who has violated the Code, depending on the severity of the violation. Depending on the number and severity of violations, the PKIC may impose consequences such as excluding a representative from certain meetings, removing or banning a representative from a (online) discussion, and suspending a representative from certain PKIC activities.
 
+## Use of AI Meeting Assistants
+
+To protect the privacy and integrity of discussions within the PKI Consortium, the use of AI assistants for processing audio and video is generally prohibited, except for those explicitly approved by the PKIC. The PKIC does not have the capacity to review the terms and conditions of every available AI tool and therefore restricts their use to known, approved solutions.
+
+1. AI assistants must not be used to process, record, or analyze voice (audio) or facial (video) data unless explicitly approved by the PKIC.
+2. The use of unapproved AI assistants for transcription, analysis, or storage of PKIC meetings is prohibited.
+3. The PKIC permits the use of Microsoft Teams' built-in transcription feature for generating meeting minutes.
+4. Participants must ensure that any approved AI meeting assistants comply with PKIC privacy and data handling policies.
+5. Violations of this policy may result in appropriate corrective actions, including exclusion from PKIC meetings or activities.
+
 ## Maintaining Civil Discourse Among Participants
+
 Members of the PKI Consortium (PKIC) wish to promote the organizations success by maintaining a constructive character in all PKIC discussions. They observe the character of some of the (online) discussions and at meetings, and conclude that sarcasm and ad hominem attacks impede progress by discouraging the sharing of ideas and encouraging the entrenchment of positions. For these reasons, the participants want to take active steps to avoid these behaviors in their own communications.
 It is recognized that it will be difficult to find the right balance between the need for free expression of ideas and the desire to conduct discussions with civility. Nevertheless, the members want to seek that balance.
 
