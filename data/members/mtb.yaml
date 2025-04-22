@@ -1,0 +1,54 @@
+id: mtb
+name: M&T Bank
+slogan:
+website: https://Www.mtb.com
+
+# Short description, longer content can be placed in `content/members/`
+description: With a community bank approach, M&T Bank helps people reach their personal and business goals with banking, mortgage, loan and investment services.
+
+# membership
+memberSince: 2025-04-22
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Kevn Ha
+    role: VP, Encryption Engineering Lead
+    social:
+      twitter: 
+      linkedin: 
+    description: Kevn is the VP, Encryption Engineering Lead at M&T Bank and represents the organization at the PKI Consortium.
