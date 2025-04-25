@@ -621,7 +621,11 @@ We are immensely grateful to our sponsors:
 
 ## Agenda
 
-The conference featured a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees enjoyed keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers were not permitted to promote products or services during presentations.
+The conference features a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees can look forward to keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers are not permitted to promote products or services during presentations.
+
+> Please note that this is a **preliminary agenda** and is subject to change. Final details, including topics, abstracts, speakers, panels, workshops and time slots, will be updated here in the coming weeks and months, with **more speakers and panels to be announced**, we still have limited availability for speakers.  
+> {{< button link="/call" target="_blank" label="Propose a Talk or Panel" type="outline-danger" >}}  
+{.callout-warning}
 
 {{< agenda "agenda" >}}
 
