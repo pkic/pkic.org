@@ -8,7 +8,7 @@ heroDescription: We are immensely grateful to those who sponsor the PKI Consorti
 
 heroButton: 
     label: Download the PKI Consortium Sponsor Brochure
-    link: pkic-sponsors.pdf
+    link: ../pkic-sponsors.pdf
 ---
 
 ## Become a sponsor or request more information
