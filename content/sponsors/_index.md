@@ -15,4 +15,8 @@ menu:
     main:
 ---
 
+{{< alert >}}
+[Download the PKI Consortium Sponsor Brochure](pkic-sponsors.pdf)
+{{< /alert >}}
+
 {{< sponsors level="all" height="25" max-width="75" rows=true >}}
