@@ -3,6 +3,6 @@ date: 2024-08-29T00:00:00Z
 draft: false
 title: PQC Conference Registration
 
-redirect: https://forms.office.com/r/3KFeVCT2N5
+redirect: https://forms.gle/uPr8ETSfycTJa3ddA
 
 ---
