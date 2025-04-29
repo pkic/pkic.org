@@ -1,0 +1,54 @@
+id: coranlabs
+name: CORAN LABS
+slogan:
+website: https://www.coranlabs.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Aditya Koranga is a leading expert in Post-Quantum Cryptography (PQC), Telco Security, and cloud-native technologies, currently serving as the Vice Chair of Post Quantum Cryptography Alliance(PQCA) TAC (LF) & Chief Security Architect at CORAN LABS, playing a pivotal role in designing and implementing quantum-resistant cryptographic suites and frameworks. Aditya's expertise spans a range of open-source projects, including liboqs, OpenSSL, cuPQC, oqs-provider, Bouncy Castle, CIRCL, StrongSwan, etc. Along with PQC, his work extends into Quantum Random Number Generators (QRNG) & Quantum Key Distribution (QKD). Aditya leads open-source communities such as ngKore and Magma India, and drives the integration of PQCA projects into Linux Foundation Networking (LFN) and Linux Foundation Connectivity (LFC) projects, different use cases & domains such as successful integration of Open Quantum Safe + PQ Code Package with Kubernetes Operator, Telecom, O-RAN & eBPF related projects and has releasesd blogs and videos around it. Aditya also focuses on PQC optimization for KEM algorithms, modifying distribution methods, noise sampling, and NTT reduction schemes. He has worked on PQC benchmarking, hardware/software crypto acceleration, and authored several technical blogs, white papers, technical reports, deployment videos and has patents in Post quantum security. Beyond his technical expertise, Aditya is a writer, poet, and rapper(sometimes, on the weekends) who enjoys reading standards & RFCs before going to bed.  CoRAN Labs is actively working on post-quantum cryptography (PQC) and its application in securing different domains such as telecom(post quantum telecom network), cloud native(k8s), etc. We provide reference implementations and migration strategies to help networks transition to quantum-safe architectures. Our contributions also include multiple implementation of  quantum-safe security measures across several open-source initiatives, with more in progress.
+
+# membership
+memberSince: 2025-04-29
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Aditya Koranga
+    role: Chief Security Architect
+    social:
+      twitter: 
+      linkedin: 
+    description: Aditya is the Chief Security Architect at CORAN LABS and represents the organization at the PKI Consortium.
