@@ -10,6 +10,9 @@ description: PKI Trust Manager Suite aimed at simplying your management of PKI s
 memberSince: 2025-04-29
 memberType: F
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: CEO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/munis-badar
     description: Munis is the CEO at Securetron and represents the organization at the PKI Consortium.
