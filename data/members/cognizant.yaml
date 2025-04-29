@@ -1,10 +1,10 @@
 id: cognizant
 name: Cognizant Technology solutions
-slogan:
+slogan: Engineering modern business
 website: https://www.cognizant.com
 
 # Short description, longer content can be placed in `content/members/`
-description: Anticipate trends. Drive meaningful change. Outthink your competition. That’s the power of intuition—and we can engineer it. Learn more.
+description: Engineering modern business to improve everyday lives. Over the past 30 years, we’ve built relationships with market-leading companies around the world. That’s the power of intuition—and we can engineer it. Learn more.
 
 # membership
 memberSince: 2025-03-07
@@ -38,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  twitter: https://x.com/cognizant
+  facebook: https://www.facebook.com/Cognizant
+  instagram: https://www.instagram.com/cognizant/#
+  linkedin: https://www.linkedin.com/company/cognizant/ 
+  youtube: https://www.youtube.com/cognizant
 
 # Here you can list those who represent or have represented the member.
 #
