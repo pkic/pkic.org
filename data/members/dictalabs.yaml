@@ -1,0 +1,57 @@
+id: dictalabs
+name: DictaLabs LLC
+slogan:
+website: https://dictalabs.com
+
+# Short description, longer content can be placed in `content/members/`
+description: DictaLabs is a pioneering provider of Public Key Infrastructure (PKI), digital signatures, and cryptographic solutions, dedicated to enhancing trust and security in digital transactions. With its flagship products, vScrawl (a remote digital signature platform) and Crypto Engine (a secure API gateway for cryptographic operations and HSM integration), DictaLabs is committed to delivering affordable, scalable, and standards-compliant security solutions.
+
+# membership
+memberSince: 2025-04-22
+memberType: G
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://dictalabs.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Azmat Ullah Khan
+    role: Founder / Director
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/azmat-ullah-khan
+    description: Azmat Ullah is the Founder / Director at DictaLabs LLC and represents the organization at the PKI Consortium.
