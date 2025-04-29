@@ -16,3 +16,8 @@ menu:
 ---
 
 {{< sponsors level="all" height="25" max-width="75" rows=true >}}
+
+## Information for Sponsors
+
+Discover sponsorship opportunities by downloading the [Sponsor Brochure](pkic-sponsors.pdf) from the PKI Consortium!
+

@@ -18,7 +18,7 @@ heroDescription: January 15 and 16, 2025 - Austin, Texas, US | Online
 
 data:
   name: Post-Quantum Cryptography Conference
-  draft: true
+  draft: false
   timezone: America/Chicago
 
   # Locations with sessions in parallel -----------------------------------------
