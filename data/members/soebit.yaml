@@ -4,12 +4,15 @@ slogan:
 website: https://soebit.com
 
 # Short description, longer content can be placed in `content/members/`
-description: Soenil Soebedar is a solution-oriented IT & cybersecurity professional who spent more than 32 years in the IT sector, 22 years as a freelancer & founder of SOEBIT Cybersecurity in the Netherlands (Europe) and 12 years in the Cyber Security area as an Ethical Hacker, Penetration tester, PKI/Cryptography specialist/Architect, Senior Security Engineer, Senior SOC Specialist. He lives and studies in the Netherlands, born in Suriname (South America).  He has experience in a number of industries such as Finance and Banking, Energy, Government, Healthcare, Education and Consulting and a lot of international experience working in teams and individually.  SOEBIT Cybersecurity SOEBIT is a solution-oriented Cybersecurity, Training, Service & Consultancy Company established in 2003 In the Netherlands (Europe) and registered as SOEBIT BV (Pvt.Ltd). Since the last 12 years in the Cyber Security area as Ethical Hacker, Penetration tester, PKI/Cryptography specialist, Forensic Investigator and Senior SOC Specialist.  SOEBIT has experience in a number of industries such as Finance and Banking, Energy, Government, Healthcare, Education and Consulting and a lot of international experience to work in teams and individually, in multiple countries and several cultures: France, Germany, Belgium, UK, Dubai, India, Singapore, Suriname, and Netherlands. All our International trainers (in Europe & Asia) and consultancy hold a valid International cybersecurity certifications such as Ethical Hacker, RCCE, CCISO, CISSP, CISM, CISA, CHFI, CTIA, EDRP, ECIH, ECES, Mobile Forensics, cryptography & advanced penetration testing etc. We had conducted the Cybersecurity virtual workshops, training and webinars for IT Professionals, colleges universities & Defence Department in The Netherlands, France, Denmark, UK, USA, Canada, Suriname, India, Bangladesh, Ghana, Nigeria, Dubai, Abu Dabhi, Thailand, Singapore & Malaysia.
+description: Soenil Soebedar is a solution-oriented IT & cybersecurity professional who spent more than 32 years in the IT sector, 22 years as a freelancer & founder of SOEBIT Cybersecurity in the Netherlands (Europe) and 12 years in the Cyber Security area as an Ethical Hacker, Penetration tester, PKI/Cryptography specialist/Architect, Senior Security Engineer, Senior SOC Specialist.
 
 # membership
 memberSince: 2025-04-22
-memberType: null
+memberType: H2
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: Founder, Cryptography & PKI/HSM Specialist
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/soenil-soebedar-51b1364
     description: Soenil is the Founder, Cryptography & PKI/HSM Specialist at SOEBIT Cybersecurity and represents the organization at the PKI Consortium.
