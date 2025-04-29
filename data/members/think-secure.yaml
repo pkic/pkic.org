@@ -8,8 +8,10 @@ description: I am a sr Security advisor and since the 1990s involved with inform
 
 # membership
 memberSince: 2025-04-10
-memberType: null
+memberType: H2
 workingGroups:
+  - PKIMM
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +37,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +52,5 @@ representatives:
     role: Sr. Security Advisor
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/thinksecure
     description: Thomas is the Sr. Security Advisor at Think Secure and represents the organization at the PKI Consortium.
