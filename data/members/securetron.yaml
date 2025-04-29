@@ -1,0 +1,57 @@
+id: securetron
+name: Securetron
+slogan:
+website: https://securetron.net
+
+# Short description, longer content can be placed in `content/members/`
+description: PKI Trust Manager Suite aimed at simplying your management of PKI service, giving visibility to expiring certificates, and discovering vulnerabilities across
+
+# membership
+memberSince: 2025-04-29
+memberType: F
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://securetron.net/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Munis Badar
+    role: CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/munis-badar
+    description: Munis is the CEO at Securetron and represents the organization at the PKI Consortium.
