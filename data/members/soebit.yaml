@@ -1,0 +1,57 @@
+id: soebit
+name: SOEBIT Cybersecurity
+slogan:
+website: https://soebit.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Soenil Soebedar is a solution-oriented IT & cybersecurity professional who spent more than 32 years in the IT sector, 22 years as a freelancer & founder of SOEBIT Cybersecurity in the Netherlands (Europe) and 12 years in the Cyber Security area as an Ethical Hacker, Penetration tester, PKI/Cryptography specialist/Architect, Senior Security Engineer, Senior SOC Specialist.
+
+# membership
+memberSince: 2025-04-22
+memberType: H2
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://soebit.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Soenil Soebedar
+    role: Founder, Cryptography & PKI/HSM Specialist
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/soenil-soebedar-51b1364
+    description: Soenil is the Founder, Cryptography & PKI/HSM Specialist at SOEBIT Cybersecurity and represents the organization at the PKI Consortium.
