@@ -1,10 +1,10 @@
 id: securetron
 name: Securetron
-slogan:
+slogan: Next Generation of PKI - No Going Back!
 website: https://securetron.net
 
 # Short description, longer content can be placed in `content/members/`
-description: PKI Trust Manager Suite aimed at simplying your management of PKI service, giving visibility to expiring certificates, and discovering vulnerabilities across
+description: Securetron is a leading provider of Keys, Certificates, and Digital Signatures Management solution aimed at Simplifying Digital Identity and Data Protection.
 
 # membership
 memberSince: 2025-04-29
@@ -20,29 +20,29 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://www.securetron.net/documentation/
   feed: https://securetron.net/feed/
   language: en_US
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.securetron.net/newsroom/press-releases
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://www.securetron.net/careers
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  twitter: https://x.com/Securetron_Inc
+  facebook: https://www.facebook.com/Securetron_Net
+  instagram: https://www.instagram.com/SecuretronNet
+  linkedin: https://www.linkedin.com/company/Securetron
+  youtube: https://www.youtube.com/c/Securetron
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,8 +50,16 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Munis Badar
-    role: CEO
+    role: Founder & CEO
     social:
-      twitter: 
-      linkedin: https://www.linkedin.com/in/munis-badar
-    description: Munis is the CEO at Securetron and represents the organization at the PKI Consortium.
+      twitter: https://x.com/munisbadar
+      linkedin: https://www.linkedin.com/in/munis-badar/
+    description: Munis Badar is the Founder & CEO of Securetron who has worked across multiple industries addressing complex security challenges over 20 years. He is a visionary leader with a passion for innovation and cybersecurity. 
+
+    - name: Liubov Mikhalkina
+    role: VP of Strategy and Business Development – Certificate Services
+    social:
+      linkedin: https://www.linkedin.com/in/liuba-mikhalkina-690475212/
+    description: Liubov Mikhalkina is the VP of Strategy and Business Development – Certificate Services at Securetron. 
+      She is a seasoned professional with a strong background in business development and strategic planning. She has previously worked at Ikea and Bell as a Cyber Security Export in Compliance and Risk Management.
+
