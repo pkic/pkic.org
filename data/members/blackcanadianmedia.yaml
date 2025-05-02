@@ -20,7 +20,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: https://www.blackcanadianmedia.ca/feed/
+  #feed: https://www.blackcanadianmedia.ca/feed/
   language: en_US
 
 # Press Releases

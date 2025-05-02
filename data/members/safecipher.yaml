@@ -1,7 +1,8 @@
 id: safecipher
 name: Safecipher
 slogan: Preparing for Post Quantum Cryptography
-website: https://pkiconsultants.safecipher.com/index.html
+#website: https://pkiconsultants.safecipher.com/index.html
+website:
 
 # Short description, longer content can be placed in `content/members/`
 description: SafeCipher focuses on Public Key Infrastructure (PKI), Hardware Security Modules (HSM), and Quantum-Resistant Cryptography.
@@ -18,7 +19,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: https://pkiconsultants.safecipher.com/feed.html
+  #feed: https://pkiconsultants.safecipher.com/feed.html
   language: en_US
 
 # Press Releases
