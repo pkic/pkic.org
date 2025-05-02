@@ -1,7 +1,7 @@
 ---
 date: 2025-04-29T10:05:10Z
 draft: false
-id: Securetron
+id: securetron
 title: Securetron
 
 ---
