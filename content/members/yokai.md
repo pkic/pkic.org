@@ -1,16 +1,12 @@
 ---
-date: 2025-02-28T14:49:10Z
+date: 2025-05-02T06:43:00Z
 draft: false
 id: yokai
 title: Yokai Network
 ---
 
-## Empowering Secure Collaboration from Battlefield to Boardroom
+## Foundational Infrastructure for the Multi-Agent Economy
 
-Yokai Network provides military-grade end-to-end encrypted collaboration solutions that secure sensitive communications and data across the entire workspace ecosystem - from project management and document sharing to email. The company offers quantum-resistant security infrastructure designed for defense agencies, critical infrastructure, and enterprises requiring the highest level of data protection while maintaining modern usability.
+Yokai provides the foundational infrastructure powering the emerging autonomous agent economy through our distributed secure messaging protocol. We implement quantum-resistant cryptographic protocols that process over a million messages per second, enabling both human teams and AI agents to discover, coordinate, and share context with absolute security across organizational boundaries—creating the standardized foundation necessary for the Internet of Agents.
 
-## Transforming Secure Collaboration
-
-Yokai delivers true end-to-end encrypted workspace and email solutions utilizing modern and post-quantum cryptography. Our protocol implements forward secrecy and post-compromise security with zero-knowledge architecture ensuring only authorized users can access sensitive communications.
-
-With its specialized expertise in application security and protocol (Yokai Quantum) implementation, Yokai operates at the intersection of military-grade security and enterprise usability. Through our Yokai Quantum, we enable comprehensive secure collaboration across organizations while maintaining complete data sovereignty.
+Our comprehensive platform combines cryptographic identity systems, capability-based discovery mechanisms, and tamper-evident verification protocols to ensure agents can establish verifiable trust relationships. By integrating high-performance real-time communication with persistent messaging capabilities, Yokai enables efficient discovery and secure utilization of specialized agent capabilities across distributed networks, creating a cryptographically secured connectivity layer for agent-to-agent interactions while maintaining zero-knowledge verification and cross-organizational trust boundaries.
