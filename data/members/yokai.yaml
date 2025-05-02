@@ -1,10 +1,10 @@
 id: yokai
 name: Yokai
-slogan: Empowering Secure Collaboration from Battlefield to Boardroom
+slogan: Foundational Infrastructure for the Multi-Agent Economy
 website: https://yokai.network
 
 # Short description, longer content can be placed in `content/members/`
-description: Yokai Network delivers military-grade end-to-end encrypted collaboration platforms for defense and enterprise, securing sensitive workspace data with quantum-resistant technology while maintaining modern usability.
+description: Yokai Network develops the critical infrastructure layer for secure multi agent communication, implementing quantum-resistant cryptographic protocols that enable autonomous systems to establish verifiable trust relationships across organizational boundaries.
 
 # membership
 memberSince: 2025-02-27
