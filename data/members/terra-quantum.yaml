@@ -8,7 +8,9 @@ description: Terra Quantum is leading quantum technology company, pioneering dee
 memberSince: 2025-02-28
 memberType: F
 workingGroups:
+  - PKIMM
   - PQC
+  - TCWG
 
 sponsor:
   level:
