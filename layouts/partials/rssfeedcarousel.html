@@ -2,29 +2,52 @@
 {{- range $.Site.Data.members -}}
   {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
     {{- with .blog.feed -}}
-      {{- $t := debug.Timer . -}}
-      {{- with try (resources.GetRemote .) -}}
-        {{- with .Err -}}
-          {{- warnf "%s" . -}}
-        {{- else with .Value -}}
-          {{- if or (strings.HasSuffix .MediaType "rss+xml") (strings.HasSuffix .MediaType "atom+xml") -}}
-            {{- with . | transform.Unmarshal -}}
-              {{- range $i, $item := .channel.item -}}
-                {{- $newItem := dict -}}
-                {{- range $k, $v := $item -}}
-                  {{- if eq $k "pubDate" -}}
-                    {{- $newItem = merge $newItem (dict $k (time $v)) -}}
-                  {{- else -}}
-                    {{- $newItem = merge $newItem (dict $k $v) -}}
+      {{- $feedURL := . -}}
+      {{- $t := debug.Timer $feedURL -}}
+      {{- $remote := try (resources.GetRemote $feedURL) -}}
+      {{- if $remote.Err -}}
+        {{- warnf "Error fetching remote feed %q: %s" $feedURL $remote.Err -}}
+      {{- else -}}
+        {{- $content := $remote.Value -}}
+        {{- if not (or (strings.HasSuffix $content.MediaType "rss+xml") (strings.HasSuffix $content.MediaType "atom+xml")) -}}
+          {{- warnf "Invalid media type for feed %q: %s" $feedURL $content.MediaType -}}
+        {{- else -}}
+          {{- $unmarshaled := try (transform.Unmarshal $content.Content) -}}
+          {{- if $unmarshaled.Err -}}
+            {{- warnf "Error unmarshaling feed %q: %s" $feedURL $unmarshaled.Err -}}
+          {{- else -}}
+            {{- with $unmarshaled.Value.channel.item -}}
+              {{- if eq (printf "%T" .) "[]interface {}" -}}
+                {{- range $item := . -}}
+                  {{- $newItem := dict -}}
+                  {{- range $k, $v := $item -}}
+                    {{- if eq $k "pubDate" -}}
+                      {{- if $v -}}
+                        {{- $timeValue := try (time $v) -}}
+                        {{- if $timeValue.Err -}}
+                          {{- warnf "Error parsing pubDate %q in feed %q: %s" $v $feedURL $timeValue.Err -}}
+                          {{- $newItem = merge $newItem (dict $k nil) -}}
+                        {{- else -}}
+                          {{- $newItem = merge $newItem (dict $k $timeValue.Value) -}}
+                        {{- end -}}
+                      {{- else -}}
+                        {{- warnf "pubDate is empty for item in feed %q" $feedURL -}}
+                        {{- $newItem = merge $newItem (dict $k nil) -}}
+                      {{- end -}}
+                    {{- else -}}
+                      {{- $newItem = merge $newItem (dict $k $v) -}}
+                    {{- end -}}
                   {{- end -}}
+                  {{- $items = $items | append $newItem -}}
                 {{- end -}}
-                {{- $items = $items | append $newItem -}}
+              {{- else -}}
+                {{- warnf "channel.item in feed %q is not a slice, skipping items: (Type: %T, Value: %v)" $feedURL . (printf "%T" .) -}}
               {{- end -}}
+            {{- else -}}
+              {{- warnf "channel.item not found in feed %q" $feedURL -}}
             {{- end -}}
           {{- end -}}
         {{- end -}}
-      {{- else -}}
-        {{- warnf "Unable to get RSS feed from %q" . -}}
       {{- end -}}
       {{- $t.Stop -}}
     {{- end -}}
