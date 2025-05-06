@@ -1,10 +1,10 @@
 id: synestate
 name: Synestate
-slogan:
+slogan: Security & Securities
 website: https://synestate.com
 
 # Short description, longer content can be placed in `content/members/`
-description: Synestate pursues R&D, cryptography, and high-tech finance ventures. The business group, founded by Naol Duga Jebessa, is registered in New York (USA) and Addis Ababa (ETH). Our affiliations include the Linux Foundation Decentralized Trust, ACM/SIGOPS, and Trust Over IP, among others.
+description: Synestate pursues R&D, cryptography, and high-tech finance ventures.
 
 # membership
 memberSince: 2025-04-29
@@ -19,7 +19,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: https://synestate.com/feed/
+  feed: https://synestate.com/
   language: en_US
 
 # Press Releases
@@ -28,7 +28,7 @@ press:
   feed: 
   language: en_US
 
-# Careers
+# Careers:
 careers: 
   url: 
   feed: 
@@ -36,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  twitter: https://twitter.com/synestate
+  # facebook: 
+  # instagram: 
+  # linkedin: 
+  # youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +50,6 @@ representatives:
   - name: Naol Duga Jebessa
     role: Founder
     social:
-      twitter: 
+      github: https://github.com/naolduga/awesome-blockchain
       linkedin: https://www.linkedin.com/in/naolduga
-    description: Naol Duga is the Founder at Synestate and represents the organization at the PKI Consortium.
+    description: Naol Duga is the Founder & Principal Consultant at Synestate and represents the organization at the PKI Consortium.
