@@ -633,10 +633,8 @@ The conference features a balanced program with strategic, informational, and ed
 
 Please note that speakers were not permitted to promote products or services during their presentations. While commercials, workshops, and pitches included commercial information, the primary focus of the conference remained on educational content.
 
-<!--
 This conference was made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
 
 {{< figure src="organizational-support.jpg" >}}
--->
 
 For more information about the conference, please contact the PKI Consortium at feedback@pkic.org.
