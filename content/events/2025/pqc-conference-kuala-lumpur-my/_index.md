@@ -643,9 +643,9 @@ The conference features a balanced program with strategic, informational, and ed
 
 {{< sponsors sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="Leader" height="20" max-width="60" >}}
 
-Please note that speakers were not permitted to promote products or services during their presentations. While commercials, workshops, and pitches included commercial information, the primary focus of the conference remained on educational content.
+Please note that speakers are not permitted to promote products or services during their presentations. While commercials, workshops, and pitches included commercial information, the primary focus of the conference remains on educational content.
 
-This conference was made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
+This conference is made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
 
 {{< figure src="organizational-support.jpg" >}}
 
