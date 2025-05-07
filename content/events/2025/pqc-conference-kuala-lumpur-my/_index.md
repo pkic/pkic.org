@@ -14,6 +14,10 @@ outputs:
  - event-agenda
 
 params:
+  heroButton: 
+    label: Don't be too late, Register Now (free)!
+    link: /register
+
   heroTitle: Post-Quantum Cryptography Conference
   heroImage: sunset_at_kuala_lumpur.jpg
   heroImageCredit: YongBoi
@@ -135,7 +139,7 @@ data:
 
       - time: "9:30"
         sessions:
-          - title: To be announced shortly
+          - title: Keynote
             description: |
               The speaker(s) for this session will be announced soon!
             track: 
@@ -148,7 +152,7 @@ data:
 
       - time: "10:00"
         sessions:
-          - title: To be announced shortly
+          - title: Keynote
             description: |
               The speaker(s) for this session will be announced soon!
             track: 
@@ -592,7 +596,7 @@ data:
 
 ## Conference Details
 
-From Tuesday, October 28 to Thursday, October 30, 2025, the PKI Consortium will host its fourth Post-Quantum Cryptography (PQC) Conference at the Connexion Conference & Event Centre in Kuala Lumpur, Malaysia.
+From **Tuesday, October 28 to Thursday, October 30, 2025**, the PKI Consortium will host its fourth Post-Quantum Cryptography (PQC) Conference at the Connexion Conference & Event Centre in Kuala Lumpur, Malaysia.
 
 This premier three-day event begins with hands-on workshops, followed by two days of expert-led talks, panels, and breakout sessions. It attracts top executives, technical leaders, and practitioners from both the public and private sectors, all focused on shaping the future of cryptography.
 
@@ -628,8 +632,8 @@ We are immensely grateful to our sponsors:
 
 The conference features a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees can look forward to keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers are not permitted to promote products or services during presentations.
 
-> Please note that this is a **preliminary agenda** and is subject to change. Final details, including topics, abstracts, speakers, panels, workshops and time slots, will be updated here in the coming weeks and months, with **more speakers and panels to be announced**, we still have limited availability for speakers.  
-> {{< button link="/call" target="_blank" label="Propose a Talk or Panel" type="outline-danger" >}}  
+> Please note that this is a **preliminary agenda** and is subject to change. Final details, including topics, abstracts, speakers, panels, workshops and time slots, will be updated here in the coming weeks and months, with **more speakers and panels to be announced**.  
+> {{< button link="/call" target="_blank" label="Call for Abstracts - Submit a proposal for a talk, panel discussion, or workshop" type="outline-danger" >}}  
 {.callout-warning}
 
 {{< agenda "agenda" >}}
