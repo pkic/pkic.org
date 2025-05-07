@@ -13,8 +13,13 @@ outputs:
  - event-session
  - event-agenda
 
-heroTitle: Post-Quantum Cryptography Conference
-heroDescription: October 28 - 30, 2025 - Kuala Lumpur, Malaysia | Online
+params:
+  heroTitle: Post-Quantum Cryptography Conference
+  heroImage: sunset_at_kuala_lumpur.jpg
+  heroImageCredit: YongBoi
+  heroImageLicense: CC BY-SA 4.0
+  heroImageLicenseURL: https://commons.m.wikimedia.org/wiki/File:Sunset_at_Kuala_Lumpur.jpg
+  heroDescription: October 28 - 30, 2025 - Kuala Lumpur, Malaysia | Online
 
 data:
   name: Post-Quantum Cryptography Conference
