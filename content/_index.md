@@ -16,7 +16,7 @@ menu:
 ---
 
 {{< alert >}}
-The slides and recordings from the **Post-Quantum Cryptography Conference in Austin** are now available. [Click on a session title in the agenda to download the slides](/events/2025/pqc-conference-austin-us/), you can also check our [YouTube channel](https://www.youtube.com/@PKIConsortium) with all the recordings.
+Don't miss the **free** hybrid **Post-Quantum Cryptography Conference in Kuala Lumpur, Malaysia**, scheduled for October 28 - 30, 2025. Register now at [pkic.org/register](/register)! If you'd like to speak or lead a session, submit a proposal (abstract) for a talk, panel discussion, or workshop at [pkic.org/call](/call).
 {{< /alert >}}
 
 
@@ -47,12 +47,18 @@ cards:
     text: "Facilitate information exchange, encouraging discussions and sharing insights on various aspects of Post-Quantum Cryptography."
     card_class: "working-group-card"
     links:
+      - text: "Next PQC Conference (Kuala Lumpur)"
+        url: "/events/2025/pqc-conference-kuala-lumpur-my/"
+        class: "btn-sm btn-primary"
+      - text: "Call for Abstracts"
+        url: "/call"
+        class: "btn-sm fw-bold btn-warning"
       - text: "PQC Capabilities Matrix (PQCCM)"
         url: "/pqccm/"
-        class: "btn-sm btn-primary"
-      - text: "Last PQC Conference"
-        url: "/events/2025/pqc-conference-austin-us/"
         class: "btn-sm btn-secondary"
+      - text: "Last PQC Conference (Austin)"
+        url: "/events/2025/pqc-conference-austin-us/"
+        class: "btn-sm btn-outline-primary"
       - text: "Blog Posts about PQC"
         url: "/tags/pqc/"
         class: "btn-sm btn-outline-secondary"
