@@ -44,7 +44,10 @@ data:
   speakers:
     - name: Paul van Brouwershaven
       title: Chair PKI Consortium and Director of Technology at SSL.com
-      bio: Paul van Brouwershaven is Director of Technology at SSL.com, Chair of the PKI Consortium.
+      bio: |
+        Paul van Brouwershaven is a distinguished leader in cybersecurity with over two decades of experience specializing in Public Key Infrastructure (PKI). He currently serves as the Director of Technology at SSL.com. In addition to his role, Paul chairs the PKI Consortium and also leads its PQC Working Group. Prior to his current roles, Paul held the position of Director Technology Compliance at Entrust and was the Technology Solutions Director at GlobalSign.  
+
+        Beyond his leadership roles, Paul is also the Owner of Digitorus, a specialized software development and consultancy company he founded in 2016. Digitorus focuses on PKI, Digital Signatures, and Trustworthy Systems. His extensive expertise in PKI is further highlighted by his past role as Vice Chair of the CA/Browser Forum, where he contributed to defining industry standards for digital certificates.
       social:
         twitter: https://twitter.com/vanbroup
         linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
