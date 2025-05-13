@@ -1,0 +1,57 @@
+id: sonicai
+name: Sonic AI
+slogan:
+website: https://www.sonicai.ai
+
+# Short description, longer content can be placed in `content/members/`
+description: Sonic AI is a proprietary signal injection protocol working with numerous governing bodies and rights owners to achieve content authenticity and verification.
+
+# membership
+memberSince: 2025-05-08
+memberType: G
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.sonicai.ai/blog-feed.xml
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Marc Gray
+    role: CEO
+    social:
+      twitter: 
+      linkedin: 
+    description: Marc is the CEO at Sonic AI and represents the organization at the PKI Consortium.
