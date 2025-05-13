@@ -1,10 +1,11 @@
 id: essendi
 name: essendi it GmbH
-slogan:
-website: https://www.essendi.de
+slogan: We secure connected worlds
+website: https://www.essendi.de/en
 
 # Short description, longer content can be placed in `content/members/`
-description: Als IT Firma fokussieren wir uns auf die Bereiche Zertifikatsmanagement, Softwaretest, IT-Beratung und individuelle Softwareentwicklung. Erfahren Sie mehr!
+description: essendi it – We secure connected worlds. Building a Secure Basis for Trust. essendi it Group is a European and Swiss expert in digital security, helping organizations manage cryptographic assets and prepare for a quantum-safe future. We secure connected worlds.
+
 
 # membership
 memberSince: 2025-03-14
@@ -18,38 +19,44 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
-  feed: https://www.essendi.de/feed/
+  url: https://www.essendi.de/en/magazine/
+  feed: https://www.essendi.de/en/feed/
   language: en_US
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.essendi.de/en/news/
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://www.essendi.de/karriere/
   feed: 
-  language: en_US
+  language: de
 
 # Social media
 social:
   twitter: 
   facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  instagram: https://www.instagram.com/essendi_it/
+  linkedin: https://www.linkedin.com/company/essendi-it-gmbh/
+  youtube: https://www.youtube.com/@essendixc
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Sarah Zügel
-    role: CEO of essendi it
+  - name: Sarah Zugel
+    role: CEO
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/sarah-z%C3%BCgel-325929b4/
-    description: Sarah is the CEO of essendi it at essendi it GmbH and represents the organization at the PKI Consortium.
+    description: Sarah is the CEO of essendi it GmbH and represents the organization at the PKI Consortium.
+
+      Sarah earned her MA degree in Economics and Management (Honours) at the University of St Andrews in Scotland in 2010.
+      
+      She began her career with essendi it in 2011, gaining experience in IT consulting for financial service providers, while also establishing herself in key account management and market development for the certificate management solution essendi xc. As CEO of essendi it since December 2020, Sarah is committed to maintaining valuable and long-term corporate partnerships. She is responsible for the business areas of IT security and certificate management including the market expansion of essendi xc.
+      
+      She shares her expertise in certificate management as a speaker at exhibitions like it-sa or secIT and is an active member of TeleTrust.
