@@ -1,10 +1,10 @@
 id: essendi
-name: essendi it GmbH
+name: essendi it Group
 slogan: We secure connected worlds
 website: https://www.essendi.de/en
 
 # Short description, longer content can be placed in `content/members/`
-description: essendi it – We secure connected worlds. Building a Secure Basis for Trust. essendi it Group is a European and Swiss expert in digital security, helping organizations manage cryptographic assets and prepare for a quantum-safe future. We secure connected worlds.
+description: Building a Secure Basis for Trust. essendi it Group is a European and Swiss expert in digital security, helping organizations manage cryptographic assets and prepare for a quantum-safe future.
 
 
 # membership
@@ -48,7 +48,7 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Sarah Zugel
+  - name: Sarah Zuegel
     role: CEO
     social:
       twitter: 

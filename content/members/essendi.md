@@ -2,7 +2,7 @@
 date: 2025-05-13T14:49:10Z
 draft: false
 id: essendi
-title: essendi it GmbH
+title: essendi it Group
 
 ---
 
