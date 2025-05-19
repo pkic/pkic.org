@@ -610,7 +610,7 @@ This premier three-day event begins with hands-on workshops, followed by two day
 
 **Date:** Tuesday, October 28 to Thursday, October 30, 2025  
 **Location:** [Connexion Conference & Event Centre](https://connexioncec.com/), Kuala Lumpur, Malaysia  
-**Registration:** [Click here](/call)  
+**Registration:** [Click here](/register)
 
 * _This event can be attended in-person or remotely, we strongly recommend to attend in person where possible._
 * _Workshops can only be attended in-person._
