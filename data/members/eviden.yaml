@@ -37,7 +37,7 @@ careers:
 # Social media
 social:
   twitter: https://x.com/Eviden_Security
-  facebook: undefined
+  facebook:
   instagram: https://www.instagram.com/evidenlive/
   linkedin: https://www.linkedin.com/showcase/eviden-cybersecurity/
   youtube: https://www.youtube.com/@EvidenLive
@@ -47,22 +47,6 @@ social:
 # Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Simon Ulmer
-    role: Group VP - Head of Digital ID Cybersecurity products
-    social:
-      twitter: https://x.com/UlmerSimon
-      linkedin: https://www.linkedin.com/in/simonulmer/
-    description: |
-      Simon has a passion for technology and storytelling. He explains how software solves problems, empowers users, and transforms industries. Passion is contagious, and he prides himself in igniting enthusiasm, engagement and growth in his team and when connecting with clients.
-
-      He is currently leading a multinational software development business unit in the domain of secure digital identities as Group VP (Vice-President) Head of Digital Identity and CEO (Chief Executive Officer) of several legal entities. He was able to build technical expertise in the area of software development, IT infrastructures and cryptography. He oversees the development lifecycle of the Group software solutions with a focus on revenue and customers, taking in to account the market, the product, security best practices, and regulatory requirements. He pushes his team to meet project deadlines, innovate and ensure the quality of deliverables. Managing a multinational team requires effective leadership skills to ensure cohesion, collaboration, and productivity across different cultures, and languages. His language skills in English, French and German and his experience immersed in foreign cultures in the US, Germany, France, UK and China, are key asset in this regard.
-
-      Previously he held the position of Industry CTO (Chief Technology Officer) creating technology innovation, delivering value-added solutions, and serving as an advisor to clients. He functioned as a thought leader and spokesperson, sharing insights, trends, and best practices related to technology innovation and digital transformation. His main goal was co-creating solutions that address his client’s business challenges and opportunities.
-
-      While in charge of the global strategic alliance between Atos and Siemens, he worked to expand the digital value proposition of the two companies. By developing a joint go to market strategy and managing an investment fund, he created value for both organizations and their customers.
-
-      Working for the French administration in entrepreneurship, startups, and innovation. He has also lead several turnarounds which required a combination of leadership, strategic thinking, financial acumen (understanding financial statements, cash flow management, and budgeting), operational expertise (identifying inefficiencies, streamlining workflows, and optimizing performance across functional areas), and interpersonal skills to effectively navigate challenges, communicate changes, manage resistance, and put the company back on the path of sustainable growth. He successfully leads negotiations to secure support for the turnaround plans.
-
   - name: Vasco Gomes
     role: Global CTO Cybersecurity Products
     social:
