@@ -1,0 +1,54 @@
+id: ramar
+name: RAMAR SA
+slogan:
+website: https://www.ramar.ch
+
+# Short description, longer content can be placed in `content/members/`
+description: I am a security consultant and researcher - the topic of my thesis for my MSc in Cybersecurity from the University of Liverpool was "Preparing for Post-Quantum Security" and I continue to research and promote awareness around this topic. I am now studying for an MBA in Cybersecurity with EC Council University and hope to complete a PhD after that.
+
+# membership
+memberSince: 2025-05-31
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Calvert Marshall
+    role: CISO
+    social:
+      twitter: 
+      linkedin: 
+    description: Calvert is the CISO at RAMAR SA and represents the organization at the PKI Consortium.
