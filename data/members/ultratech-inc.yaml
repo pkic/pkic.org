@@ -35,11 +35,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +50,5 @@ representatives:
     role: Director de desarrollo de software
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/eduardocampione/
     description: Eduardo is the Director de desarrollo de software at Ultratech inc and represents the organization at the PKI Consortium.
