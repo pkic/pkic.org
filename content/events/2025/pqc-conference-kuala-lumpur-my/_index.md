@@ -5,6 +5,9 @@ title: Post-Quantum Cryptography Conference - October 28 - 30, 2025 - Kuala Lump
 summary: |
   This premier three-day event begins with hands-on workshops, followed by two days of expert-led talks, panels, and breakout sessions. It attracts top executives, technical leaders, and practitioners from both the public and private sectors, all focused on shaping the future of cryptography.
 
+aliases:
+ - /pqcc
+
 layout: single
 outputs:
  - html
