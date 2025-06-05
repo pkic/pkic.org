@@ -1,10 +1,10 @@
-id: p3ss
-name: Backdoor Global, Inc.
+id: gellum
+name: Gellum
 slogan: Your Trusted Technology Partner
-website: https://www.p3ss.com/
+website: https://gellum.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: Protocol 3 Suite Solutions is the technology division of Backdoor Global, Inc., providing comprehensive IT solutions to businesses of all sizes.
+description: Gellum is the technology division of Backdoor Global, Inc., providing comprehensive IT solutions to businesses of all sizes.
 
 # membership
 memberSince: 2024-06-18
@@ -17,37 +17,44 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: https://www.p3ss.com/blog
+  url: https://www.gellum.com/blog
   feed: 
   language: en_US
 
 # Press Releases
 press: 
-  url: https://www.p3ss.com/blog
+  url: https://www.gellum.com/blog
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: https://secure.p3ss.com/open.php
+  url: https://gellum.com/contacto
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: https://x.com/backdoorHQ
-  facebook: 
+  twitter: https://x.com/gellum_com
+  facebook: https://fb.com/gellumcom
   instagram: 
-  linkedin: https://www.linkedin.com/company/backdoorglobal
-  youtube: 
+  linkedin: 
+  youtube: https://www.youtube.com/@gellumcom
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
+  - name: Venancio Cespedes
+    role: CEO - Co-Founder
+    social:
+      twitter: https://x.com/venywest
+      linkedin: https://www.linkedin.com/in/venywest/
+    description: Venancio is the Co-Founder at Gellum (Backdoor Global, Inc. / VCTS VAULT LTD) and represents the organization at the PKI Consortium.
+
   - name: Euder Villamizar
-    role: CEO
+    role: Co-Founder
     social:
       twitter: https://x.com/neugocho
       linkedin: https://www.linkedin.com/in/euder-villamizar-94374231/
@@ -56,9 +63,3 @@ representatives:
          
          He graduated in Systems Engineering from UNEFA in 2011. Currently, he is an outsourcing consultant for SAP ABAP/Workflow and the chief of software development and CEO at Backdoor Global, Inc., a company whose mission is to eliminate barriers to entry and introduce computer solutions into daily life in Latin America.
   
-  - name: Venancio Cespedes
-    role: Co-Founder
-    social:
-      twitter: https://x.com/venywest
-      linkedin: https://www.linkedin.com/in/venywest/
-    description: Venancio is the Co-Founder at Backdoor Global, Inc. and represents the organization at the PKI Consortium.
