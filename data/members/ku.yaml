@@ -1,0 +1,54 @@
+id: ku
+name: Kathmandu University
+slogan:
+website: https://ku.edu.np/
+
+# Short description, longer content can be placed in `content/members/`
+description: Kathmandu University (KU) is an autonomous, not-for-profit, self-funding public institution established by an Act of Parliament in December 1991. It is an institution of higher learning dedicated to maintaining the standard of academic excellence in various classical and professional disciplines. The mission statement of the University is “to provide quality education for leadership”. The vision is “to become a world-class university devoted to bringing knowledge and technology to the service of mankind”.
+
+# membership
+memberSince: 2025-06-14
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Gokul K.C
+    role: Associate Professor
+    social:
+      twitter: 
+      linkedin: 
+    description: Gokul is the Associate Professor at Kathmandu University and represents the organization at the PKI Consortium.
