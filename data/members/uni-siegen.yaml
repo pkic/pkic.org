@@ -1,0 +1,54 @@
+id: uni-siegen
+name: 
+slogan:
+website: https://www.uni-siegen.de/personalprofile/ritu-dhaulakhandi
+
+# Short description, longer content can be placed in `content/members/`
+description: I’m a 1st year PhD student at the University of Siegen actively working in the field of quantum cryptography under the supervision of Dr. Ramona Wolf. The main part of my PhD concentrates on writing security proofs for QKD protocols and also incorporating resources from quantum foundations (quantum correlations) for a more practical application of QKD scheme in a lab setting.
+
+# membership
+memberSince: 2025-06-14
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Ritu Dhaulakhandi
+    role: PhD student
+    social:
+      twitter: 
+      linkedin: 
+    description: Ritu is the PhD student at  and represents the organization at the PKI Consortium.
