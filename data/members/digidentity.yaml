@@ -1,54 +1,71 @@
 id: digidentity
-name: Digidentity B.V.
-slogan:
-website: https://digidentity.eu
+name: Digidentity
+slogan: Digidentity - digital identity made easy
+website: https://www.digidentity.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: Digidentity offers trusted digital identity solutions with high-assured identities for businesses, developers, and governments worldwide. Join us now.
+description: Digidentity develops products focused on a secure digital identity, where the user and their privacy are key. Our technology supplies digital identities, electronic signatures and identity proofing products to more than 20 million people of different nationalities. Digidentity provides more than 300 million secure online transactions per year between people, organisations, and governments. 
 
 # membership
 memberSince: 2025-06-14
 memberType: A
 workingGroups:
+  - CA
+  - PQC
+  
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
-# Blog posts
-blog: 
-  url: 
-  feed: 
-  language: en_US
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.digidentity.eu/our-company/news
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://careers.digidentity.eu/
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/digidentity-bv
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Sander Remmerswaal
-    role: Chief Security Office
+  - name: Marcel Wendt
+    role: Chief Technology Officer, Founder
     social:
       twitter: 
-      linkedin: 
-    description: Sander is the Chief Security Office at Digidentity B.V. and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/mwendt/
+    description:
+      Marcel Wendt, CTO and Founder of Digidentity, is a serial entrepreneur known for his forward-thinking approach. Over the last decades, Marcel has gained recognition for his innovative thinking and his extensive experience in mobile technology. He received degrees in Electrical Engineering and Information Technology from the University of Applied Science in The Hague and founded three successful international companies. 
+
+      As Digidentity's CTO, he is responsible for the technical direction of the company, sits on the Strategic Council for Digital Identity in the Netherlands, led by the Dutch government and the EUDI Wallet Consortium (EWC), and consults for several international digital identity research parties.
+
+  - name: Fred Slikker
+    role: Chief Executive Officer
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/fredslikker/
+    description: 
+      Fred Slikker, Managing Director at Digidentity since 2020, has a proven track record in leading international companies. With his focus and customer-centric mindset, Fred shapes the strategic direction of the company and is involved in developing Digidentity's portfolio of identity management solutions. He is also one of the driving forces behind building partnerships with (semi-)government organisations and the business sector.
+
+  - name: Sander Remmerswaal
+    role: Chief Security Officer
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/sander-r-788b253a/
+    description:
+      Sander Remmerswaal, Chief Security Officer and Compliance Officer since 2018, has worked in security, compliance and privacy for nearly 30 years. Sander has been working with eID, eSignatures, PKI and cryptography the last 15 years. Previously, Sander worked for BSI The Netherlands as Trust Services and ISO27001 Lead Auditor. 
