@@ -1,15 +1,18 @@
 id: uber
 name: Uber
-slogan:
+slogan: On our way
 website: https://www.uber.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: I'm currently part of the Engineering Security organization at Uber, and I'm mostly working with authentication across workloads and hosts. I'm mostly studying and implementing different PKIs at Uber, which are responsible to identify all services running in the production environment, but I'm also responsible for managing certificates for publicly exposed domains, corporate devices and employees.
+description: Reimagine the way the world moves for the better.
 
 # membership
 memberSince: 2025-05-20
-memberType: null
+memberType: H3
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -18,7 +21,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: null
+  feed:
   language: en_US
 
 # Press Releases
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: Software Engineer
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/lucasrodcarneiro/
     description: Lucas is the Software Engineer at Uber and represents the organization at the PKI Consortium.
