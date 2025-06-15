@@ -1,0 +1,57 @@
+id: uber
+name: Uber
+slogan: On our way
+website: https://www.uber.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Reimagine the way the world moves for the better.
+
+# membership
+memberSince: 2025-05-20
+memberType: H3
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed:
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Lucas Rodrigues Carneiro
+    role: Software Engineer
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/lucasrodcarneiro/
+    description: Lucas is the Software Engineer at Uber and represents the organization at the PKI Consortium.
