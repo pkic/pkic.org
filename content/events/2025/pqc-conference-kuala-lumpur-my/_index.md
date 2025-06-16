@@ -65,7 +65,71 @@ data:
         twitter: 
         linkedin: 
 
+    - name: Michael Osborne
+      title: CTO IBM Quantum Safe at IBM Research
+      bio: |
+        Michael Osborne is an IBM Distinguished Engineer and the global CTO for IBM Quantum Safe. He leads the cryptographic research activities at the IBM Research Center in Rüschlikon, Switzerland. His current focus includes advancing new generations of advanced cryptography, such as those selected by NIST as the next generation of PQC algorithms. He also leads the development of methods and technologies to help organizations migrate to use new Quantum-Safe standards.
+      website: https://research.ibm.com/people/michael-osborne
+      social:
+        linkedin: https://www.linkedin.com/in/michael-osborne-qsafe/
 
+    - name: Tan Wai Kaey
+      title: IoT & Cybersecurity Engineer
+      bio: |
+        Tan Wai Kaey is an IoT and Cybersecurity Engineer with a strong academic foundation and professional certifications, including CEH (Certified Ethical Hacker), CC (Certified in Cybersecurity), and CCNA (Cisco Certified Network Associate). Her expertise includes penetration testing, vulnerability assessment, secure software development, and cryptography. She has contributed to projects involving secure web applications, database management, and lightweight post-quantum cryptographic solutions. As the former cybersecurity lead for the Google Developer Student Club (GDSC), she led workshops and initiatives to enhance technical skills and promote cybersecurity awareness.
+      social:
+        linkedin: https://www.linkedin.com/in/casey-tan-profile/
+
+    - name: Basil Hess
+      title: Senior Research Engineer at IBM Research
+      bio: |
+        Basil is a Senior Research Engineer at IBM Research Europe - Zurich. His focus is on the implementation side of cryptography, quantum-safe cryptography and quantum-safe migration.
+        
+        The projects he is involved include Open Quantum Safe - software for prototyping quantum-resistant cryptography, he's a co-author of CycloneDX CBOM (Cryptography Bill of Materials), and two submissions to the NIST PQC Standardization for additional digital signature schemes: MAYO and SQIsign.
+        
+        Basil holds a PhD in Information Systems and a MSc in Computer Science, both from ETH Zurich.
+      website: https://research.ibm.com/people/basil-hess
+      social:
+        linkedin: https://research.ibm.com/people/basil-hess
+        github: https://github.com/bhess
+
+    - name: Octavian Maciu
+      title: Hardware Product Manager at PQShield
+      bio: |
+        Octavian Maciu is a Hardware Product Manager at PQShield, where he contributes to the development and evolution of the company’s hardware offerings during a pivotal time for Post-Quantum Cryptography (PQC). With a background in hardware design, he brings a blend of technical expertise and product insight to the role.
+
+        Before joining PQShield, Octavian worked on advanced semiconductor and hardware technologies at Qualcomm, and conducted research at the French National Centre for Scientific Research (CNRS). He holds a Master of Science in Micro and Nanoelectronics from the University of Strasbourg.
+
+        At PQShield, his work focuses on enabling secure, efficient hardware implementations that meet the demands of quantum-resilient cryptographic standards.
+      social:
+        linkedin: https://www.linkedin.com/in/omaciu/
+
+    - name: Tan Teik Guan
+      title: CEO at pQCee
+      bio: |
+        Dr. Tan Teik Guan is the CEO and Co-founder of pQCee, a startup dedicated to helping organizations achieve post-quantum cryptographic readiness. A specialist in cryptographic security design and integration, he has led the implementation of secure systems for financial institutions, government agencies, and enterprises across Asia.
+
+        Before founding pQCee, Dr. Tan spent over a decade at the helm of DS3, a multi-factor authentication solutions provider, which he led to a successful acquisition. His work bridges theoretical cryptography and real-world applications, earning him a trusted reputation in the field.
+
+        He holds a BSc and MSc in Computer Science from the National University of Singapore and a PhD in Information Systems from the Singapore University of Technology and Design. He continues to be active in cybersecurity standards and policy development, with a strong interest in advancing quantum-resilient infrastructures.
+      social:
+        linkedin: https://www.linkedin.com/in/teikguan
+        
+    - name: David Hook
+      title: VP Software Engineering at Keyfactor
+      bio: |
+        David has been working on Cryptography APIs and secure protocols since the mid-1990s and in IT and open-source since the mid-1980s. He is a founder and still active committer of the Legion of the Bouncy Castle Cryptography project which began in the year 2000 and provides APIs in Java, C#, and Kotlin. David founded Crypto Workshop, now part of Keyfactor, in 2012 in order to better support the Bouncy Castle APIs and its user community. Shortly after, he led the work on the FIPS certification of the Bouncy Castle APIs, resulting in their first certifications in 2016. His deep interest is in providing tools to simplify the development of solutions that make use of cryptography and secure protocols, with an emphasis on standards-based approaches. He is based in Melbourne, Australia.
+      social:
+        linkedin: https://www.linkedin.com/in/david-hook-29b720/
+
+    - name: Alexander Löw
+      id: alexander-loew
+      title: CEO at Data-Warehouse
+      bio: |
+        Dr. Alexander Löw is the CEO of Data-Warehouse GmbH and serves as a Senator in the German Senate of Economy. He holds the position of Vice President of the German Cybersecurity Council Association and is the innovative mind behind IQIMS and PCert. With a deep understanding of cybersecurity since the 1980s and 25 years of experience as a Data Protection Officer (DPO), Alexander has a strong focus on Public Key Infrastructure (PKI). He has been involved in the conceptualization, building, and maintenance of industrial and governmental CAs (e.g., Macao, German Airforce, BMW) since 2001. In 2012, following a significant APT attack, he began automating PKI processes to enhance cybersecurity. Since 2014, he has been actively involved in publishing and presenting on PKI and cybersecurity topics, and has been conducting PKI trainings for the German BSI Alliance for Cybersecurity since 2015. In 2024, he joined the NIST Post-Quantum Migration Working Group to contribute to the development of standard 1800-38B.
+      social:
+        linkedin: https://www.linkedin.com/in/dr-alexander-loew/
+    
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -175,14 +239,13 @@ data:
 
       - time: "11:30"
         sessions:
-          - title: To be announced shortly
+          - title: "PKI Agility and the Difference to Cryptographic Agility: Lessons from the Past and Present"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              Cryptographic agility is often misunderstood as purely a technical problem. This presentation challenges that assumption, arguing that agility requirements are context-dependent, often organizational in nature, and ultimately a subset of broader organizational agility.
+
+              We begin by classifying different types of PKI agility according to the need for being agile. This includes replacing the underlying cryptographic algorithms and why size matters,  re-issuing certificates, replacing certificates hierarchies, reacting to key compromise and migrating to quantum safety. Through concrete examples, we show how lack of agility impacts dimensions differently. Some of the lessons date back 20 years to the transition from RSA to ECC and the experience gained deploying hybrid systems in sensitive government projects. Other lessons are more recent, for example the hybrid secure-boot mechanism on the IBM mainframe.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Michael Osborne
             locations:
               - plenary
 
@@ -262,14 +325,11 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: "The PQC Landscape: Protocols and Standards"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              Following the initial announcement of three PQC standards by NIST in 2024, and the subsequent announcement of a fourth more recently and a fifth on the way, a global game of catch up has started among standards bodies to lift the protocols and algorithm applications out of the classical era into PQC. The presentation will look at the current state of standards efforts in regards to protocols and applications and provide some thoughts on how things are evolving and why,
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - David Hook
             locations:
               - breakout
 
@@ -338,14 +398,11 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: Working on Quantum-Safe Encrypted Emails
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              In the presentation, we will share how we implemented PQC encryption of emails which can inter-operate between Microsoft Office365 and Google Gmail. We will describe the motivation, requirements, design and architecture of how email encryption can be achieved, and how key management is carried out seamlessly. The outcome is that we can start to protect emails against harvest-now-decrypt-later attacks.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Tan Teik Guan
             locations:
               - breakout
 
@@ -373,7 +430,7 @@ data:
             locations:
               - breakout
 
-      - time: "16:55"
+      - time: "17:00"
         sessions:
           - title: Closing remarks for day 2
             description: 
@@ -383,7 +440,7 @@ data:
             locations:
               - plenary
 
-      - time: "17:00"
+      - time: "17:05"
         sessions:
         title: Networking
 
@@ -408,14 +465,11 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: "Advancing Cryptographic Transparency: CBOM Standardization in CycloneDX"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              As quantum-safe migration and supply chain security become critical priorities, the Cryptography Bill of Materials (CBOM) is emerging as a foundational concept and standard for cryptographic visibility and assurance. This session explores the standardization of CBOM within OWASP’s CycloneDX 1.6, highlighting its role in cataloging cryptographic assets and their dependencies, including PQC primitives and hybrids. It will also preview upcoming enhancements in CycloneDX 1.7, including standardized algorithm naming and improved interoperability for certificates and keys, both essential for quantum readiness and cryptographic agility. The talk will show how CBOM integrates into the broader xBOM ecosystem - spanning Software, Hardware, SaaS, AI, and Operations - to support unified cryptographic governance across complex environments.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Basil Hess
             locations:
               - breakout
 
@@ -584,7 +638,116 @@ data:
             presentation: 
             locations:
               - plenary
-    
+
+          - title: "Crypto Agility by Design: Securing PQC with Updatable HW/FW Co-design"
+            description: |
+              Hardware/firmware co-design provides a critical advantage in post-quantum cryptographic deployments by enabling agility against evolving threats. Unlike immutable hardware-only roots of trust-potentially vulnerable to future side-channel attacks and costly remediation-co-designed systems allow field updates to mitigate emerging vulnerabilities. Real-world incidents like Checkm8 highlight the risk of static hardware. In contrast, updateable firmware enables proactive responses, including SCA patching, parameter updates, and crypto migration. This talk explores how co-design enhances security lifecycle resilience, accelerates secure development, and supports crypto agility-vital for PQC in constrained, real-world environments.
+            speakers:
+              - Octavian Maciu
+            locations:
+              - breakout
+
+      - time: "14:30"
+        sessions:
+          - title: To be announced shortly
+            description: |
+              The speaker(s) for this session will be announced soon!
+            track: 
+            speakers:
+              - TBD
+            youtube:
+            presentation: 
+            locations:
+              - plenary
+
+          - title: "Post-Quantum Firmware Signing in IoT: Practical PQC-FOTA Implementation"
+            description: |
+              As quantum computing advances, the cryptographic integrity of long-lived IoT devices is increasingly at risk. This presentation demonstrates a practical approach to securing Firmware Over-the-Air (FOTA) updates on ESP32-based IoT devices using Post-Quantum Cryptography (PQC).
+
+              We explore how NIST-standardized digital signature algorithms-ML-DSA (FIPS 204, formerly CRYSTALS-Dilithium) and SLH-DSA (FIPS 205, formerly SPHINCS+)-can be integrated into the ESP32 secure boot process to replace classical RSA/ECDSA schemes. Using the Open Quantum Safe (OQS) library, we implement PQC signing on resource-constrained hardware and evaluate the trade-offs in performance, code size, and interoperability.
+
+              The presentation features real-world deployment on ESP32 hardware, and includes practical guidance on hybrid signing approaches (e.g., ECDSA + ML-DSA) for maintaining backward compatibility. Tools such as ESP-IDF, PlatformIO, and custom signing scripts are used throughout.
+            speakers:
+              - Tan Wai Kaey
+            locations:
+              - breakout
+            
+      - time: "15:00"
+        sessions:
+          - title: To be announced shortly
+            description: |
+              The speaker(s) for this session will be announced soon!
+            track: 
+            speakers:
+              - TBD
+            youtube:
+            presentation: 
+            locations:
+              - plenary
+
+          - title: To be announced shortly
+            description: |
+              The speaker(s) for this session will be announced soon!
+            track: 
+            speakers:
+              - TBD
+            youtube:
+            presentation: 
+            locations:
+              - breakout
+
+      - time: "15:30"
+        title: Break
+        sponsor: 
+
+      - time: "16:00"
+        sessions:
+          - title: To be announced shortly
+            description: |
+              The speaker(s) for this session will be announced soon!
+            track: 
+            speakers:
+              - TBD
+            youtube:
+            presentation: 
+            locations:
+              - plenary
+
+          - title: To be announced shortly
+            description: |
+              The speaker(s) for this session will be announced soon!
+            track: 
+            speakers:
+              - TBD
+            youtube:
+            presentation: 
+            locations:
+              - breakout
+
+      - time: "16:30"
+        sessions:
+          - title: To be announced shortly
+            description: |
+              The speaker(s) for this session will be announced soon!
+            track: 
+            speakers:
+              - TBD
+            youtube:
+            presentation: 
+            locations:
+              - plenary
+
+          - title: To be announced shortly
+            description: |
+              The speaker(s) for this session will be announced soon!
+            track: 
+            speakers:
+              - TBD
+            youtube:
+            presentation: 
+            locations:
+              - breakout
+
       - time: "17:00"
         sessions:
           - title: Closing remarks
