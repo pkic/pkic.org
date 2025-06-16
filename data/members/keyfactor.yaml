@@ -15,9 +15,10 @@ workingGroups:
   - TCWG
   
 # sponsor
-# Upgraded to Silver to Platinum on 2024-01-01
+# Upgraded from Silver to Platinum on 2024-01-01
+# Upgraded from Platinum to Titanium on 2025-06-01
 sponsor:
-  level: Platinum
+  level: Titanium
 
 # Blog posts
 blog: 
