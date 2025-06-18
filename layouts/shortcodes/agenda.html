@@ -1,156 +1,434 @@
 {{- $data := partial "add-headshots.html" . -}}
 {{- with $data.agenda -}}
-    <div class="mt-2 mb-4">
+    <div class="position-relative" id="agenda-container">
         {{- if gt (len .) 1 -}}
-        <nav id="agenda-tabs">
-            <div class="nav nav-tabs" id="nav-tab" role="tablist" data-scroll-target="agenda">
+        <!-- Day tabs -->
+        <div class="d-flex justify-content-between align-items-center mb-3">
+            <ul class="nav nav-tabs flex-grow-1" id="agenda-tabs" role="tablist">
                 {{- $counter := 0 -}}
                 {{- range $day, $items := . -}}
-                    <button class="nav-link{{ if eq $counter 0 }} active{{ end }}" id='nav-{{ ( $day | time.Format "Monday" ) | urlize }}-tab' data-bs-toggle="tab" data-bs-target='#nav-{{ ( $day | time.Format "Monday" ) | urlize }}' type="button" role="tab" aria-controls="nav-{{ $day | urlize }}" aria-selected="true" title='{{ $day | time.Format ":date_full" }}'>{{ $day | time.Format "Monday" }}</button>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link{{ if eq $counter 0 }} active{{ end }}" 
+                            id="nav-{{ $day | time.Format "Monday" | strings.ToLower }}-tab" 
+                            data-bs-toggle="tab" 
+                            data-bs-target="#nav-{{ $day | time.Format "Monday" | strings.ToLower }}" 
+                            type="button" role="tab">
+                            {{ $day | time.Format "Monday" }}
+                        </button>
+                    </li>
                     {{- $counter = add $counter 1 -}}
                 {{- end -}}
-                <button class="nav-link" id="nav-speakers-tab" data-bs-toggle="tab" data-bs-target="#nav-speakers" type="button" role="tab" aria-controls="nav-speakers" aria-selected="true">Speakers</button>
-            </div>
-        </nav>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" id="nav-speakers" 
+                            data-bs-toggle="tab" 
+                            data-bs-target="#speakers" 
+                            type="button" role="tab">
+                        Speakers
+                    </button>
+                </li>
+            </ul>
+        </div>
         {{- end -}}
 
-        {{- $locations := slice -}}
-        {{- with $data.locations.order -}}
-            {{- $locations = . -}}
-        {{- end -}}
+         <!-- Full screen button -->
+        <button class="btn btn-outline-primary float-end" id="fullscreen-btn" title="Toggle Fullscreen">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-angle-expand" viewBox="0 0 16 16">
+                <path fill-rule="evenodd" d="M5.828 10.172a.5.5 0 0 0-.707 0l-4.096 4.096V11.5a.5.5 0 0 0-1 0v3.975a.5.5 0 0 0 .5.5H4.5a.5.5 0 0 0 0-1H1.732l4.096-4.096a.5.5 0 0 0 0-.707m4.344-4.344a.5.5 0 0 0 .707 0l4.096-4.096V4.5a.5.5 0 1 0 1 0V.525a.5.5 0 0 0-.5-.5H11.5a.5.5 0 0 0 0 1h2.768l-4.096 4.096a.5.5 0 0 0 0 .707"/>
+            </svg>
+        </button>
 
-        {{- $counter := 0 -}}
-        {{- range $day, $items := . -}}
-            <div class="tab-content overflow-x-auto" id="nav-tabContent">
-                <div class="mt-1 tab-pane fade" id="nav-speakers" role="tabpanel" aria-labelledby="nav-speakers-tab">
-                    <div class="container border pt-4">
+        <div class="tab-content">
+            <!-- Speakers tab -->
+            <div class="tab-pane fade" id="speakers" role="tabpanel">
+                <div class="row g-3">
                     {{- range sort $data.speakers "name" -}}
-                        <div class="p-3 border-bottom">
-                            {{ $title := (printf "%s - %s" .name .title) }}
-                            {{ with .headshot }}
-                                <img src="{{ .x150 }}" class="rounded-circle float-start me-3" width="100" height="100" alt="{{ $title }}" />
-                            {{ end }}
-                            <strong class="fs-2">
-                                {{- if .website -}}
-                                    <a href="{{ .website }}" target="_blank">{{- .name -}}</a>
-                                {{- else if .social.linkedin -}}
-                                    <a href="{{ .social.linkedin }}" target="_blank">{{- .name -}}</a>
-                                {{- else -}}
-                                    <a href="#">{{- .name -}}</a>
-                                {{end}}
-                            </strong><br />
-                            <strong>{{- .title -}}</strong>
-                            <div class="p-4 fst-italic">{{- .bio -}}</div>
+                        <div class="col-md-6 col-lg-4">
+                            <div class="card h-100">
+                                <div class="card-body text-center">
+                                    {{ with .headshot }}
+                                        <img src="{{ .x150 }}" class="rounded-circle mb-3" width="80" height="80" alt="{{ .name }}">
+                                    {{ else }}
+                                        <div class="bg-primary rounded-circle d-inline-flex align-items-center justify-content-center mb-3" 
+                                             style="width: 80px; height: 80px; color: white; font-size: 2rem; font-weight: 600;">
+                                            {{ substr .name 0 1 | upper }}
+                                        </div>
+                                    {{ end }}
+                                    <h5 class="card-title">{{ .name }}</h5>
+                                    <p class="card-text text-muted">{{ .title }}</p>
+                                    {{- if .bio -}}
+                                        <p class="card-text small">{{ .bio | markdownify }}</p>
+                                    {{- end -}}
+                                    {{- if or .website .social -}}
+                                    <div class="d-flex justify-content-center gap-2">
+                                        {{- if .website -}}
+                                        <a href="{{ .website }}" target="_blank" title="Website" class="linkArea px-1">
+                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                                <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm7.5-6.923c-.67.204-1.335.82-1.887 1.855-.143.268-.276.56-.395.872.705.157 1.472.257 2.282.287V1.077zM4.249 3.539c.142-.384.304-.744.481-1.078a6.7 6.7 0 0 1 .597-.933A7.01 7.01 0 0 0 2.255 3.131c.43.16.865.301 1.994.408zM3.509 7.5c.036-1.07.188-2.087.436-3.008a9.124 9.124 0 0 1-1.565-.667A6.964 6.964 0 0 0 1.018 7.5h2.49zm1.4-2.741a12.344 12.344 0 0 0-.4 2.741H7.5V5.091c-.91-.03-1.783-.145-2.591-.332zM8.5 5.09V7.5h2.99a12.342 12.342 0 0 0-.399-2.741c-.808.187-1.681.301-2.591.332zM4.51 8.5c.035.987.176 1.914.399 2.741A13.612 13.612 0 0 1 7.5 10.91V8.5H4.51zm3.99 0v2.409c.91.03 1.783.145 2.591.332.223-.827.364-1.754.4-2.741H8.5zm-3.282 3.696c.12.312.252.604.395.872.552 1.035 1.218 1.65 1.887 1.855V11.91c-.81.03-1.577.13-2.282.287zm.11 2.276a6.696 6.696 0 0 1-.598-.933 8.853 8.853 0 0 1-.481-1.079 8.38 8.38 0 0 0-1.992.408 7.01 7.01 0 0 0 3.071 1.604zM8.5 14.923c.67-.204 1.335-.82 1.887-1.855.143-.268.276-.56.395-.872A12.63 12.63 0 0 0 8.5 11.91v3.014zm2.717-2.109c.142.384.304.744.481 1.078.181.32.384.618.597.933a7.01 7.01 0 0 0 3.071-1.604 8.241 8.241 0 0 0-1.992-.408 8.854 8.854 0 0 1-.481 1.079zm.6-2.882c-.212-.314-.437-.616-.677-.906a8.19 8.19 0 0 0-1.565.667c.248.92.4 1.938.436 3.008h2.49a6.964 6.964 0 0 0-1.362-3.825z"/>
+                                            </svg>
+                                        </a>
+                                        {{- end -}}
+                                        {{- with .social -}}
+                                            {{- partial "social.html" . -}}
+                                        {{- end -}}
+                                    </div>
+                                    {{- end -}}
+                                </div>
+                            </div>
                         </div>
-                    {{- end -}}  
-                    </div>
+                    {{- end -}}
                 </div>
-                <div class="mt-1 tab-pane fade{{ if eq $counter 0 }} active show{{ end }}" id='nav-{{ ( $day | time.Format "Monday" ) | urlize }}' role="tabpanel" aria-labelledby="nav-{{ $day | urlize }}-tab">
-                    <div class="d-flex flex-column align-items-start">
-                        <!-- a column per location -->
-                        {{- with $locations -}}
-                            {{- if gt (len .) 1 -}}
-                                <div class="d-flex flex-row border-end bg-dark text-white">
-                                    <div class="agenda-time"></div>
-                                    {{- range . -}}
-                                        <div class="agenda-content border-start py-2">
-                                            <span class="fs-4 mx-3">{{ strings.FirstUpper . }}</span>
+            </div>
+
+            <!-- Day tabs -->
+            {{- $counter := 0 -}}
+            {{- range $day, $items := . -}}
+                {{- $locations := slice -}}
+                {{- $dayKey := $day | time.Format "2006-01-02" -}}
+                {{- if index $data.locations $dayKey -}}
+                    {{- $locations = (index $data.locations $dayKey).order -}}
+                {{- else -}}
+                    {{- with $data.locations.order -}}
+                        {{- $locations = . -}}
+                    {{- end -}}
+                {{- end -}}
+
+                <div class="tab-pane fade{{ if eq $counter 0 }} active show{{ end }}" 
+                     id="nav-{{ $day | time.Format "Monday" | strings.ToLower }}" role="tabpanel">
+                    
+                    <!-- Mobile single column view -->
+                    <div class="d-md-none mobile-agenda">
+                        {{- range $timeSlot := $items -}}
+                            <div class="mobile-time-row">
+                                <div class="mobile-time">
+                                    <span class="time-main">{{ $timeSlot.time }}</span>
+                                    {{ $dateTime := (time.AsTime (printf "%sT%s:00" $day $timeSlot.time) $data.timezone).UTC }}
+                                    <time class="time-local localTime" datetime="{{ $dateTime.Format "2006-01-02T15:04:05Z" }}">
+                                        {{ $dateTime.Format "15:04" }} UTC
+                                    </time>
+                                </div>
+                            </div>
+                            
+                            {{- if not $timeSlot.sessions -}}
+                                <!-- Break -->
+                                <div class="mobile-break">
+                                    {{ $timeSlot.title }}
+                                </div>
+                            {{- else -}}
+                                <!-- Sessions for all locations -->
+                                {{- range $locationIndex, $location := $locations -}}
+                                    {{- $sessions := where $timeSlot.sessions "locations" "intersect" (slice $location) -}}
+                                    {{- if $sessions -}}
+                                        {{- range $sessions -}}
+                                            <div class="mobile-session-card location-{{ $locationIndex }}-session" 
+                                                 data-bs-toggle="modal" 
+                                                 data-bs-target="#sessionModal-{{ .title | urlize }}">
+
+                                                <div class="mobile-location-badge location-{{ $locationIndex }}">
+                                                    {{ strings.FirstUpper (replace $location "_" " ") }}
+                                                </div>
+                                                <div class="mobile-session-content">
+                                                    <h6 class="session-title">{{ .title }}</h6>
+                                                    {{- if .speakers -}}
+                                                        <div class="mobile-speakers">
+                                                            {{- range $speaker := .speakers -}}
+                                                                {{- $speakerName := trim $speaker " *" -}}
+                                                                {{- range $data.speakers -}}
+                                                                    {{- if eq $speakerName .name -}}
+                                                                        <div class="mobile-speaker">
+                                                                            {{ with .headshot }}
+                                                                                <img src="{{ .x150 }}" class="mobile-speaker-avatar" alt="{{ .name }}">
+                                                                            {{ else }}
+                                                                                <div class="mobile-speaker-avatar speaker-initial">
+                                                                                    {{ substr .name 0 1 | upper }}
+                                                                                </div>
+                                                                            {{ end }}
+                                                                            <div class="mobile-speaker-info">
+                                                                                <div class="speaker-name">{{ .name }}{{- if hasSuffix $speaker " *" -}} <span class="badge text-bg-warning ms-2">Moderator</span>{{- end -}}</div>
+                                                                                <div class="speaker-role">{{ .title }}</div>
+                                                                            </div>
+                                                                        </div>
+                                                                    {{- end -}}
+                                                                {{- end -}}
+                                                            {{- end -}}
+                                                        </div>
+                                                    {{- end -}}
+                                                    {{- if .description -}}
+                                                        <div class="mobile-session-preview">{{ .description | markdownify }}</div>
+                                                    {{- end -}}
+                                                </div>
+                                            </div>
+                                        {{- end -}}
+                                    {{- end -}}
+                                {{- end -}}
+                            {{- end -}}
+                        {{- end -}}
+                    </div>
+
+                    <!-- Desktop grid view -->
+                    <div class="d-none d-md-block desktop-agenda">
+
+                        <!-- Location filter buttons -->
+                        {{- if gt (len $locations) 1 -}}
+                            <div class="location-filters mb-3">
+                                <button class="btn btn-outline-secondary btn-sm me-3" id="select-all-locations">
+                                    All Locations
+                                </button>
+                                {{- range $locationIndex, $location := $locations -}}
+                                    <button class="location-filter-btn location-{{ $locationIndex }}" 
+                                            data-location="{{ $locationIndex }}">
+                                        {{ strings.FirstUpper (replace $location "_" " ") }}
+                                    </button>
+                                {{- end -}}
+                            </div>
+                        {{- end -}}
+
+                        <!-- Agenda Grid -->
+                        <div class="agenda-grid-container">
+                            <div class="agenda-grid" data-locations="{{ len $locations }}">
+                                <!-- Schedule rows -->
+                                {{- range $timeSlot := $items -}}
+                                    <!-- Time cell -->
+                                    <div class="agenda-time">
+                                        <div class="time-main">{{ $timeSlot.time }}</div>
+                                        {{ $dateTime := (time.AsTime (printf "%sT%s:00" $day $timeSlot.time) $data.timezone).UTC }}
+                                        <time class="time-local localTime" datetime="{{ $dateTime.Format "2006-01-02T15:04:05Z" }}">
+                                            {{ $dateTime.Format "15:04" }} UTC
+                                        </time>
+                                    </div>
+
+                                    {{- if not $timeSlot.sessions -}}
+                                        <!-- Break spanning all locations -->
+                                        <div class="agenda-break" style="grid-column: 2 / -1;">
+                                            <div class="break-card">
+                                                {{ $timeSlot.title }}
+                                            </div>
+                                        </div>
+                                    {{- else -}}
+                                        <!-- Session cells for each location -->
+                                        {{- range $locationIndex, $location := $locations -}}
+                                            <div class="agenda-session location-{{ $locationIndex }}" data-location="{{ $locationIndex }}">
+                                                {{- $sessions := where $timeSlot.sessions "locations" "intersect" (slice $location) -}}
+                                                {{- if $sessions -}}
+                                                    {{- range $sessions -}}
+                                                        <div class="session-card location-{{ $locationIndex }}-session" data-bs-toggle="modal" data-bs-target="#sessionModal-{{ .title | urlize }}">
+                                                            <div class="session-content">
+                                                                <h6 class="session-title">{{ .title }}</h6>
+                                                                
+                                                                {{- if .speakers -}}
+                                                                    <div class="session-speakers">
+                                                                        {{- range $speaker := .speakers -}}
+                                                                            {{- $speakerName := trim $speaker " *" -}}
+                                                                            {{- range $data.speakers -}}
+                                                                                {{- if eq $speakerName .name -}}
+                                                                                    <div class="speaker-info">
+                                                                                        {{ with .headshot }}
+                                                                                            <img src="{{ .x150 }}" class="speaker-avatar" alt="{{ .name }}">
+                                                                                        {{ else }}
+                                                                                            <div class="speaker-avatar speaker-initial">
+                                                                                                {{ substr .name 0 1 | upper }}
+                                                                                            </div>
+                                                                                        {{ end }}
+                                                                                        <div class="speaker-details">
+                                                                                            <div class="speaker-name">{{ .name }}{{- if hasSuffix $speaker " *" -}} <span class="badge text-bg-warning ms-2">Moderator</span>{{- end -}}</div>
+                                                                                            <div class="speaker-role">{{ .title }}</div>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                {{- end -}}
+                                                                            {{- end -}}
+                                                                        {{- end -}}
+                                                                    </div>
+                                                                {{- end -}}
+                                                                
+                                                                {{- if .description -}}
+                                                                    <div class="session-preview-wrapper">
+                                                                        <div class="session-preview-gradient">{{ .description | markdownify }}</div>
+                                                                    </div>
+                                                                {{- end -}}
+                                                            </div>
+                                                            {{- if or .youtube .presentation -}}
+                                                            <div class="card-footer bg-light border-0 p-2">
+                                                                <div class="d-flex gap-2 justify-content-end">
+                                                                    {{- if .youtube -}}
+                                                                        <button class="btn btn-outline-danger btn-sm" onclick="event.stopPropagation();" data-bs-toggle="modal" data-bs-target="#sessionModal-{{ .title | urlize }}">
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-youtube" viewBox="0 0 16 16">
+                                                                                <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.01 2.01 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.01 2.01 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31 31 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.01 2.01 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A100 100 0 0 1 7.858 2zM6.4 5.209v4.818l4.157-2.408z"/>
+                                                                            </svg>
+                                                                            <span class="d-none d-lg-inline">Watch</span>
+                                                                        </button>
+                                                                    {{- end -}}
+                                                                    {{- if .presentation -}}
+                                                                        {{- with try ($.Page.Resources.Get .presentation) -}}
+                                                                            {{- with .Value -}}
+                                                                                <a href="{{ .RelPermalink }}" target="_blank" onclick="event.stopPropagation();" class="btn btn-outline-primary btn-sm">
+                                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-filetype-pdf" viewBox="0 0 16 16">
+                                                                                        <path fill-rule="evenodd" d="M14 4.5V14a2 2 0 0 1-2 2h-1v-1h1a1 1 0 0 0 1-1V4.5h-2A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v9H2V2a2 2 0 0 1 2-2h5.5zM1.6 11.85H0v3.999h.791v-1.342h.803q.43 0 .732-.173.305-.175.463-.474a1.4 1.4 0 0 0 .161-.677q0-.375-.158-.677a1.2 1.2 0 0 0-.46-.477q-.3-.18-.732-.179m.545 1.333a.8.8 0 0 1-.085.38.57.57 0 0 1-.238.241.8.8 0 0 1-.375.082H.788V12.48h.66q.327 0 .512.181.185.183.185.522m1.217-1.333v3.999h1.46q.602 0 .998-.237a1.45 1.45 0 0 0 .595-.689q.196-.45.196-1.084 0-.63-.196-1.075a1.43 1.43 0 0 0-.589-.68q-.396-.234-1.005-.234zm.791.645h.563q.371 0 .609.152a.9.9 0 0 1 .354.454q.118.302.118.753a2.3 2.3 0 0 1-.068.592 1.1 1.1 0 0 1-.196.422.8.8 0 0 1-.334.252 1.3 1.3 0 0 1-.483.082h-.563zm3.743 1.763v1.591h-.79V11.85h2.548v.653H7.896v1.117h1.606v.638z"/>
+                                                                                    </svg>
+                                                                                    <span class="d-none d-lg-inline">Slides</span>
+                                                                                </a>
+                                                                            {{- end -}}
+                                                                        {{- end -}}
+                                                                    {{- end -}}
+                                                                </div>
+                                                            </div>
+                                                            {{- end -}}
+                                                        </div>
+                                                    {{- end -}}
+                                                {{- end -}}
+                                            </div>
+                                        {{- end -}}
+                                    {{- end -}}
+                                {{- end -}}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Modals for this day - accessible from both mobile and desktop -->
+                    {{- range $timeSlot := $items -}}
+                        {{- if $timeSlot.sessions -}}
+                            {{- range $locationIndex, $location := $locations -}}
+                                {{- $sessions := where $timeSlot.sessions "locations" "intersect" (slice $location) -}}
+                                {{- if $sessions -}}
+                                    {{- range $sessions -}}
+                                        <!-- Enhanced Modal -->
+                                        <div class="modal fade session-modal" id="sessionModal-{{ .title | urlize }}" tabindex="-1" aria-labelledby="sessionModal-{{ .title | urlize }}-label" aria-hidden="true">
+                                            <div class="modal-dialog modal-xl modal-fullscreen-md-down">
+                                                <div class="modal-content location-{{ $locationIndex }}-modal">
+                                                    <div class="modal-header">
+                                                        <div class="modal-title-container">
+                                                            <h2 class="modal-title mb-2">{{ .title }}</h2>
+                                                            <div class="session-meta">
+                                                                <span class="time-badge-modal">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-clock" viewBox="0 0 16 16">
+                                                                        <path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/>
+                                                                        <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/>
+                                                                    </svg>
+                                                                    {{ $timeSlot.time }}
+                                                                </span>
+                                                                <span class="location-badge-modal">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-geo-alt" viewBox="0 0 16 16">
+                                                                        <path d="M12.166 8.94c-.524 1.062-1.234 2.12-1.96 3.07A32 32 0 0 1 8 14.58a32 32 0 0 1-2.206-2.57c-.726-.95-1.436-2.008-1.96-3.07C3.304 7.867 3 6.862 3 6a5 5 0 0 1 10 0c0 .862-.305 1.867-.834 2.94M8 16s6-5.686 6-10A6 6 0 0 0 2 6c0 4.314 6 10 6 10"/>
+                                                                        <path d="M8 8a2 2 0 1 1 0-4 2 2 0 0 1 0 4m0 1a3 3 0 1 0 0-6 3 3 0 0 0 0 6"/>
+                                                                    </svg>
+                                                                    {{ strings.FirstUpper (replace $location "_" " ") }}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                                                    </div>
+                                                    <div class="modal-body">
+                                                        {{- if .youtube -}}
+                                                            <div class="mb-4">
+                                                                <div class="ratio ratio-16x9 bg-light">
+                                                                    <iframe width="100%" height="100%" src="https://www.youtube-nocookie.com/embed/{{ .youtube }}{{ if not (strings.Contains .youtube "?") }}?{{ else }}&{{ end }}theme=light&modestbranding=1" title="{{ .title -}}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+                                                                </div>
+                                                            </div>
+                                                        {{- end -}}
+                                                        
+                                                        {{- if .description -}}
+                                                            <div class="mb-4">
+                                                                <h6 class="section-title">
+                                                                    Abstract
+                                                                </h6>
+                                                                <div class="session-description">{{ .description | markdownify }}</div>
+                                                            </div>
+                                                        {{- end -}}
+                                                        
+                                                        {{- if .speakers -}}
+                                                            <div class="mb-4">
+                                                                <h6 class="section-title">
+                                                                    Speakers
+                                                                </h6>
+                                                                {{- range $speaker := .speakers -}}
+                                                                    {{- $speakerName := trim $speaker " *" -}}
+                                                                    {{- range $data.speakers -}}
+                                                                        {{- if eq $speakerName .name -}}
+                                                                            <div class="speaker-card">
+                                                                                {{ with .headshot }}
+                                                                                    <img src="{{ .x150 }}" class="speaker-photo" alt="{{ .name }}">
+                                                                                {{ else }}
+                                                                                    <div class="speaker-photo speaker-initial-large">
+                                                                                        {{ substr .name 0 1 | upper }}
+                                                                                    </div>
+                                                                                {{ end }}
+                                                                                <div class="speaker-info-card">
+                                                                                    <h6 class="speaker-name-card">
+                                                                                        {{ .name }}
+                                                                                        {{- if hasSuffix $speaker " *" -}}
+                                                                                            <span class="badge bg-warning ms-2">Moderator</span>
+                                                                                        {{- end -}}
+                                                                                        {{- if or .website .social -}}
+                                                                                            <span class="float-end">
+                                                                                                {{- if .website -}}
+                                                                                                    <a href="{{ .website }}" target="_blank" title="Website" class="linkArea px-1">
+                                                                                                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+                                                                                                            <path d="M0 8a8 8 0 1 1 16 0A8 8 0 0 1 0 8zm7.5-6.923c-.67.204-1.335.82-1.887 1.855-.143.268-.276.56-.395.872.705.157 1.472.257 2.282.287V1.077zM4.249 3.539c.142-.384.304-.744.481-1.078a6.7 6.7 0 0 1 .597-.933A7.01 7.01 0 0 0 2.255 3.131c.43.16.865.301 1.994.408zM3.509 7.5c.036-1.07.188-2.087.436-3.008a9.124 9.124 0 0 1-1.565-.667A6.964 6.964 0 0 0 1.018 7.5h2.49zm1.4-2.741a12.344 12.344 0 0 0-.4 2.741H7.5V5.091c-.91-.03-1.783-.145-2.591-.332zM8.5 5.09V7.5h2.99a12.342 12.342 0 0 0-.399-2.741c-.808.187-1.681.301-2.591.332zM4.51 8.5c.035.987.176 1.914.399 2.741A13.612 13.612 0 0 1 7.5 10.91V8.5H4.51zm3.99 0v2.409c.91.03 1.783.145 2.591.332.223-.827.364-1.754.4-2.741H8.5zm-3.282 3.696c.12.312.252.604.395.872.552 1.035 1.218 1.65 1.887 1.855V11.91c-.81.03-1.577.13-2.282.287zm.11 2.276a6.696 6.696 0 0 1-.598-.933 8.853 8.853 0 0 1-.481-1.079 8.38 8.38 0 0 0-1.992.408 7.01 7.01 0 0 0 3.071 1.604zM8.5 14.923c.67-.204 1.335-.82 1.887-1.855.143-.268.276-.56.395-.872A12.63 12.63 0 0 0 8.5 11.91v3.014zm2.717-2.109c.142.384.304.744.481 1.078.181.32.384.618.597.933a7.01 7.01 0 0 0 3.071-1.604 8.241 8.241 0 0 0-1.992-.408 8.854 8.854 0 0 1-.481 1.079zm.6-2.882c-.212-.314-.437-.616-.677-.906a8.19 8.19 0 0 0-1.565.667c.248.92.4 1.938.436 3.008h2.49a6.964 6.964 0 0 0-1.362-3.825z"/>
+                                                                                                        </svg>
+                                                                                                    </a>
+                                                                                                {{- end -}}
+                                                                                                {{- with .social -}}
+                                                                                                    {{- partial "social.html" . -}}
+                                                                                                {{- end -}}
+                                                                                            </span>
+                                                                                        {{- end -}}
+                                                                                    </h6>
+                                                                                    <p class="speaker-title-card">{{ .title }}</p>
+                                                                                    {{- if .bio -}}
+                                                                                        <p class="speaker-bio">{{ .bio | markdownify }}</p>
+                                                                                    {{- end -}}
+                                                                                </div>
+                                                                            </div>
+                                                                        {{- end -}}
+                                                                    {{- end -}}
+                                                                {{- end -}}
+                                                            </div>
+                                                        {{- end -}}
+                                                    </div>
+                                                    {{- if or .youtube .presentation -}}
+                                                        <div class="modal-footer">
+                                                            {{- if .youtube -}}
+                                                                <a href="https://www.youtube.com/watch?v={{ .youtube }}" target="_blank" 
+                                                                   class="btn btn-danger" onclick="event.stopPropagation();">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-youtube" viewBox="0 0 16 16">
+                                                                        <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.01 2.01 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.01 2.01 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31 31 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.01 2.01 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A100 100 0 0 1 7.858 2zM6.4 5.209v4.818l4.157-2.408z"/>
+                                                                    </svg> Watch Recording
+                                                                </a>
+                                                            {{- end -}}
+                                                            {{- if .presentation -}}
+                                                                {{- with try ($.Page.Resources.Get .presentation) -}}
+                                                                    {{- with .Value -}}
+                                                                        <a href="{{ .RelPermalink }}" target="_blank" 
+                                                                           class="btn btn-primary" onclick="event.stopPropagation();">
+                                                                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-filetype-pdf" viewBox="0 0 16 16">
+                                                                                <path fill-rule="evenodd" d="M14 4.5V14a2 2 0 0 1-2 2h-1v-1h1a1 1 0 0 0 1-1V4.5h-2A1.5 1.5 0 0 1 9.5 3V1H4a1 1 0 0 0-1 1v9H2V2a2 2 0 0 1 2-2h5.5zM1.6 11.85H0v3.999h.791v-1.342h.803q.43 0 .732-.173.305-.175.463-.474a1.4 1.4 0 0 0 .161-.677q0-.375-.158-.677a1.2 1.2 0 0 0-.46-.477q-.3-.18-.732-.179m.545 1.333a.8.8 0 0 1-.085.38.57.57 0 0 1-.238.241.8.8 0 0 1-.375.082H.788V12.48h.66q.327 0 .512.181.185.183.185.522m1.217-1.333v3.999h1.46q.602 0 .998-.237a1.45 1.45 0 0 0 .595-.689q.196-.45.196-1.084 0-.63-.196-1.075a1.43 1.43 0 0 0-.589-.68q-.396-.234-1.005-.234zm.791.645h.563q.371 0 .609.152a.9.9 0 0 1 .354.454q.118.302.118.753a2.3 2.3 0 0 1-.068.592 1.1 1.1 0 0 1-.196.422.8.8 0 0 1-.334.252 1.3 1.3 0 0 1-.483.082h-.563zm3.743 1.763v1.591h-.79V11.85h2.548v.653H7.896v1.117h1.606v.638z"/>
+                                                                            </svg> Download Slides
+                                                                        </a>
+                                                                    {{- end -}}
+                                                                {{- end -}}
+                                                            {{- end -}}
+                                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                                                        </div>
+                                                    {{- end -}}
+                                                </div>
+                                            </div>
                                         </div>
                                     {{- end -}}
-                                </div>
-                            {{- end -}}
-                        {{- end -}}
-
-                        {{- range $items -}}
-                        <div class="d-flex flex-row border-bottom{{ if not .sessions }} bg-secondary text-white{{ end }}">
-                            <!-- time -->
-                            <div class="agenda-time text-end py-2">
-                                {{ $dateTime := (time.AsTime (printf "%sT%s:00" $day .time) $data.timezone).UTC }}
-                                <time datetime="{{ $dateTime.Format "2006-01-02T15:04:05Z07:00" }}" class="opacity-25 fs-3 me-3">{{ .time }}</time>
-                                <time datetime="{{ $dateTime.Format "2006-01-02T15:04:05Z07:00" }}" class="opacity-25 fs-6 me-3 fw-lighter d-block localTime">🕑</time>
-                            </div>
-
-                            {{- if not .sessions -}}
-                                <div class="agenda-content border-start py-2 align-middle">
-                                    <span class="opacity-25 fs-1 fw-bold mx-3">{{ .title }}</span>
-                                </div>
-                                {{- range seq (sub (len $locations ) 1) }}
-                                    <div class="agenda-content"></div>
-                                {{- end -}}
-                                
-                            {{- else -}}
-
-                                {{- $slot := . -}}
-                                {{- range $locations -}}
-                                    {{- range where $slot.sessions "locations" "intersect" (slice .) -}}
-                                        <div class="{{ if or .youtube (gt (len $locations) 1) }}agenda-content {{ end }}border-start d-inline-block position-relative">
-                                            {{ with .track }}
-                                                <span class="position-absolute top-0 end-0 me-2 mt-2 badge rounded-pill shadow bg-warning">{{ . }}</span>
-                                            {{ end }}
-                                            <p class="fw-bold m-3">
-                                                {{- $title := .title -}}
-                                                {{- with try ($.Page.Resources.Get .presentation) -}}
-                                                    {{- with .Err -}}
-                                                        {{- warnf "%s" . -}}
-                                                        {{- $title -}}
-                                                    {{- else with .Value -}}
-                                                        <a href="{{ .RelPermalink }}" title="{{ $title }}" target="_blank">{{- $title -}}</a>
-                                                    {{- else -}}
-                                                        {{- $title -}}
-                                                    {{- end -}}
-                                                {{- end -}}
-                                            </p>
-                                            <div class="text-secondary m-3 fw-light fs-6 opacity-75">
-                                                {{- range .speakers -}}
-                                                {{- $speaker := . -}}
-                                                    {{- range $.Page.Params.data.speakers -}}
-                                                        {{- if eq (trim $speaker " *") .name -}}
-                                                        <strong>
-                                                            {{- if .website -}}
-                                                                <a href="{{ .website }}" title="{{ .bio }}" target="_blank">{{- .name -}}</a>
-                                                            {{- else if .social.linkedin -}}
-                                                                <a href="{{ .social.linkedin }}" title="{{ .bio }}" target="_blank">{{- .name -}}</a>
-                                                            {{- else -}}
-                                                                <a href="#" title="{{ .bio }}">{{- .name -}}</a>
-                                                            {{end}}
-                                                        </strong>  
-                                                        {{- if (hasSuffix $speaker " *") -}}
-                                                            <span class="badge rounded-pill bg-primary">Moderator</span>
-                                                        {{- end -}}
-                                                        <span> - </span>
-                                                        <span>{{- .title -}}</span> 
-                                                        <br />
-                                                        {{- end -}}    
-                                                    {{- end -}}
-                                                {{- end -}}
-                                            </div>
-                                            <div class="opacity-75 m-3">{{- .description | markdownify -}}</div>
-
-                                        {{- if eq (len $locations) 1 -}}
-                                            </div>
-                                        {{- end -}}
-
-                                        {{- if .youtube -}}
-                                            <div class="{{ if eq (len $locations) 1 }}agenda-content {{ end }}ratio ratio-16x9">
-                                                <iframe width="100%" height="100%" src="https://www.youtube-nocookie.com/embed/{{ .youtube }}{{ if not (strings.Contains .youtube "?") }}?{{ else }}&{{ end }}theme=light&modestbranding=1" title="{{ .title -}}" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
-                                            </div>
-                                        {{- end -}}
-
-                                        {{- if gt (len $locations) 1 -}}
-                                            </div>
-                                        {{- end -}}
-                                            
-                                    {{- else -}}
-                                        <div class="agenda-content border-start d-inline-block pt-2 position-relative"></div>
-                                    {{- end -}}
                                 {{- end -}}
                             {{- end -}}
-                        </div>
                         {{- end -}}
-                    </div>
+                    {{- end -}}
                 </div>
-            </div>
-            {{- $counter = add $counter 1 -}}
-        {{- end -}}
+                {{- $counter = add $counter 1 -}}
+            {{- end -}}
+        </div>
     </div>
+
+    {{ $js := resources.Get "js/event-agenda.js" }}
+    {{ $params := dict }}
+    {{ $sourceMap := cond hugo.IsProduction "" "inline" }}
+    {{ $opts := dict "sourceMap" $sourceMap "minify" hugo.IsProduction "target" "es2018" "params" $params }}
+    {{ $js = $js | js.Build $opts }}
+    {{ if hugo.IsProduction }}
+    {{ $js = $js | fingerprint }}
+    {{ end }} 
+    <script src="{{ $js.RelPermalink }}" {{ if hugo.IsProduction }}integrity="{{ $js.Data.Integrity }}"{{ end }} defer></script>
 {{- end -}}
