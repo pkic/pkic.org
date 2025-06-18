@@ -43,6 +43,14 @@ data:
       color: navy 
       livestream: https://pkic.org/events/2025/pqc-conference-kuala-lumpur-my/livestream/#Breakout
 
+    2025-10-28:
+      order: [room_1, room_2, room_3, room_4, room_5]
+      room_1:
+      room_2:
+      room_3:
+      room_4:
+      room_5:
+
   # Speakers --------------------------------------------------------------------
   speakers:
     - name: Paul van Brouwershaven
@@ -52,8 +60,8 @@ data:
 
         Beyond his leadership roles, Paul is also the Owner of Digitorus, a specialized software development and consultancy company he founded in 2016. Digitorus focuses on PKI, Digital Signatures, and Trustworthy Systems. His extensive expertise in PKI is further highlighted by his past role as Vice Chair of the CA/Browser Forum, where he contributed to defining industry standards for digital certificates.
       social:
-        twitter: https://twitter.com/vanbroup
         linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+        x: https://x.com/vanbroup
         github: https://github.com/vanbroup
         ietf: https://datatracker.ietf.org/person/paul.vanbrouwershaven@digitorus.com
 
@@ -62,7 +70,7 @@ data:
       bio: |
         Albert de Ruiter operates the Policy Authority at Logius, the digital government service organization of the Netherlands. He is also a member of the QvC (Quantum Secure Cryptography) working group of the Dutch government, a board member of HAPKIDO, and a member of the PKI Consortium. Albert is known for introducing the idea of a Post-Quantum Cryptography Conference to the PKI Consortium in 2022.
       social:
-        twitter: 
+        x: 
         linkedin: 
 
     - name: Michael Osborne
@@ -130,6 +138,26 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/dr-alexander-loew/
     
+    - name: Alexey Bocharnikov
+      title: APAC Quantum Security Lead at Accenture
+      bio: |
+        Alexey, a Director at Accenture, brings over 15 years of expertise in cybersecurity strategy, risk management, quantum computing, and cryptography. He currently holds the position of APAC Quantum Security Lead and Director of Cyber Strategy at AN/Z.
+        
+        Prior to Accenture, Alexey honed his expertise at EY, contributing to the Global Innovation Quantum Technology Lab and leading Global Quantum Security efforts. Before EY, Alexey served as a County Information Security Officer at Deutsche Bank's Moscow Branch. 
+        
+        Alexey is a vocal advocate for best practices and proactive risk management in cyber strategy and quantum security. His thought leadership includes authoring articles, contributing to international reports, producing educational videos, and speaking at industry conferences.
+        
+      social:
+        linkedin: https://www.linkedin.com/in/alexeybocharnikov/
+        x: https://x.com/sumprior
+          
+    - name: Tomas Gustavsson
+      title: Chief PKI Officer at Keyfactor
+      bio: |
+        Tomas Gustavsson is the chief public key infrastructure (PKI) officer at Keyfactor. He pioneered open-source public key infrastructure with EJBCA, now embraced by thousands of organizations. With a background in computer science, Tomas established EJBCA to fortify trusted digital identities globally. He advocates for cybersecurity through innovation, collaboration, and open-source principles.
+      social:
+        linkedin: https://www.linkedin.com/in/tgustavsson/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -141,10 +169,56 @@ data:
           - title: Workshops
             description: |
               Workshops kick off the conference on Day 1, offering a focused environment for technical deep dives, practical training, expert roundtables, and hands-on exploration of post-quantum cryptography, secure architectures, crypto agility, and related topics.
+
+              They run in parallel across multiple rooms, with smaller group sizes to encourage interaction. Registration is available on a first-come, first-served basis.
             speakers: 
               - TBD
             locations:
-              - plenary
+              - room_1
+
+          - title: "PKI and Crypto Agility: Know Your Infrastructure"
+            description: |
+              _Building and Monitoring Your Cryptographic Inventory with PCert_
+
+              This workshop offers a deep dive into cryptographic discovery and inventory practices essential for organizations aiming to establish robust CBOM (Cryptographic Bill of Materials) and SBOM (Software Bill of Materials). Participants will learn how to identify and catalog all cryptographic assets across complex environments, laying the foundation for a comprehensive and actionable cryptographic inventory.
+              
+              **We will explore:**
+
+              * What needs to be discovered and collected to ensure full cryptographic visibility,
+              * How to build a universal cryptographic inventory that supports ongoing operational and compliance needs,
+              * Automation strategies for cryptographic management processes, including analysis, risk assessment, and prioritization aligned with the organizational context.
+              
+              Additionally, we will address the challenges of managing systems of systems and intricate network topologies. The workshop will compare agent-based and agentless approaches to cryptographic discovery, including real-world implementation examples highlighting trade-offs and success factors.
+              
+              Importantly, this session is designed to empower both technical teams and decision-makers. By reframing cryptographic challenges as data and asset management problems, the workshop reduces complexity and enables strategic engagement with existing technological capabilities.
+              ___
+
+              _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
+            speakers: 
+              - Alexander Löw
+            locations:
+              - room_2
+
+          - title: To be announced shortly 
+            description: This workshop will be announced shortly
+            speakers: 
+              - TBD
+            locations:
+              - room_3
+
+          - title: To be announced shortly 
+            description: This workshop will be announced shortly
+            speakers: 
+              - TBD
+            locations:
+              - room_4
+
+          - title: To be announced shortly 
+            description: This workshop will be announced shortly
+            speakers: 
+              - TBD
+            locations:
+              - room_5
 
       - time: "11:00"
         title: Break
@@ -152,12 +226,16 @@ data:
 
       - time: "11:30"
         sessions:
-          - title: Workshops
-            description: They take place in multiple rooms in parallel.
+          - title: Continuation of the morning workshop 
+            description: The morning workshop continues until lunch.
             speakers: 
               - TBD
             locations:
-              - plenary
+              - room_1
+              - room_2
+              - room_3
+              - room_4
+              - room_5
 
       - time: "13:00"
         title: Lunch
@@ -165,26 +243,57 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: Workshops
-            description: Registration will be on a first come first served basis.
+          - title: To be announced shortly
+            description: This workshop will be announced shortly
             speakers: 
               - TBD
             locations:
-              - plenary
+              - room_1
+
+          - title: To be announced shortly 
+            description: This workshop will be announced shortly
+            speakers: 
+              - TBD
+            locations:
+              - room_2
+
+          - title: To be announced shortly 
+            description: This workshop will be announced shortly
+            speakers: 
+              - TBD
+            locations:
+              - room_3
+
+          - title: To be announced shortly 
+            description: This workshop will be announced shortly
+            speakers: 
+              - TBD
+            locations:
+              - room_4
+
+          - title: To be announced shortly 
+            description: This workshop will be announced shortly
+            speakers: 
+              - TBD
+            locations:
+              - room_5
 
       - time: "15:30"
         title: Break
         sponsor: 
 
       - time: "16:00"
-        sessions:
-          - title: Workshops
-            description: Workshops take several hours and take place in smaller groups.
+        sessions:           
+          - title: Continuation of the afternoon workshop 
+            description: The afternoon workshop continues until the end of the day.
             speakers: 
               - TBD
             locations:
-              - plenary
-              
+              - room_1
+              - room_2
+              - room_3
+              - room_4
+              - room_5
 
       - time: "18:00"
         title: End of Day One
@@ -262,14 +371,16 @@ data:
 
       - time: "12:00"
         sessions:
-          - title: To be announced shortly
+          - title: "Quantum Security in Practice: Lessons from a Dozen of Client Engagements"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              The quantum threat is no longer theoretical—it’s becoming a strategic concern for cybersecurity leaders. This session shares insights from a dozen client case studies across industries and regions, highlighting how organizations are preparing for quantum risk in practical terms.
+              
+              Through real examples from field engagements, the talk explores how security teams are assessing quantum readiness, making critical decisions with incomplete information, and adapting to shifting standards under real operational pressures.
+              
+              Rather than focusing on abstract principles, the session offers a grounded look at quantum security in action. Designed to resonate with technically savvy professionals, the narrative blends foundational context with hands-on application—providing actionable takeaways for those navigating the evolving path toward post-quantum resilience.
+              
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Alexey Bocharnikov
             locations:
               - plenary
 
@@ -370,14 +481,11 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: "Real-World Readiness for PQC: Gaps, Gains, and Groundwork"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              The migration to quantum safe algorithms have started. Many of the pieces needed to migrate are now there and can be used in practice, but there are still gaps so an organization's full use of PKI is not yet possible to migrate. The depth and width of this algorithmic migration is so vast that it will be continuous work for years to come filling in gaps as we go. This presentation will take a look at a number of practical use cases that has been tested and proven to work, as well as use cases where it is currently not possible to migrate. Standards, software, hardware and other components will be judged depending on their readiness or not, and of course some performance tests. Are you ready to get your hands dirty?
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Tomas Gustavsson
             locations:
               - breakout
 
