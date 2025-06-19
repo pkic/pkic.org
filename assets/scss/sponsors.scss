@@ -1,0 +1,20 @@
+.sponsors {
+    a {
+       text-decoration: none;
+    }
+
+    .sponsor-level {
+        color: #bbb;
+        font-size: 0.7em;
+    }
+
+    .sponsor-logo {
+        width: 100%;
+        height: auto;
+        object-fit: contain;
+        max-height: calc(15px + (15px * (var(--sponsor-weight) - 1)));
+        max-width: calc(100px + (50px * (var(--sponsor-weight) - 1)));
+        min-height: 15px;
+        min-width: 75px;
+    }
+}

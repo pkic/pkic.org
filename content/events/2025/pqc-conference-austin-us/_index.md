@@ -978,7 +978,7 @@ This conference was a premier gathering for decision-makers, technical leaders, 
 
 We are immensely grateful to our sponsors:
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" height="20" max-width="60" rows=true >}}
+{{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" >}}
 
 ## Agenda
 

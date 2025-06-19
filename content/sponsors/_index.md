@@ -15,7 +15,7 @@ menu:
     main:
 ---
 
-{{< sponsors level="all" height="25" max-width="75" rows=true >}}
+{{< sponsors-level level="all" >}}
 
 ## Information for Sponsors
 

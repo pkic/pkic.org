@@ -69,12 +69,6 @@ main {
     color: currentColor;
 }
 
-.sponsor-logo {
-    margin: 20px;
-    margin-right: 30px;
-    margin-left: 30px;
-}
-
 .member-logo {
     margin: 20px;
     margin-right: 30px;
@@ -202,10 +196,6 @@ main h4 {
     font-size: 1.1em;
     padding-top: 1em;
     font-weight: 500 !important;
-}
-
-.sponsors a {
-    text-decoration: none;
 }
 
 .banner {
@@ -793,3 +783,4 @@ self-assessment {
     }
 }
 
+@import "sponsors";

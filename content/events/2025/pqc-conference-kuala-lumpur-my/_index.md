@@ -897,7 +897,7 @@ This premier three-day event begins with hands-on workshops, followed by two day
 
 We are immensely grateful to our sponsors:
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" height="20" max-width="60" rows=true >}}
+{{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" >}}
 
 #### Become a Sponsor
 
