@@ -168,19 +168,17 @@
                     <div class="d-none d-md-block desktop-agenda">
 
                         <!-- Location filter buttons -->
-                        {{- if gt (len $locations) 1 -}}
-                            <div class="location-filters mb-3">
-                                <button class="btn btn-outline-secondary btn-sm me-3" id="select-all-locations">
-                                    All Locations
+                        <div class="location-filters mb-3">
+                            <button class="btn btn-outline-secondary btn-sm me-3" id="select-all-locations">
+                                All Locations
+                            </button>
+                            {{- range $locationIndex, $location := $locations -}}
+                                <button class="location-filter-btn location-{{ $locationIndex }}" 
+                                        data-location="{{ $locationIndex }}">
+                                    {{ strings.FirstUpper (replace $location "_" " ") }}
                                 </button>
-                                {{- range $locationIndex, $location := $locations -}}
-                                    <button class="location-filter-btn location-{{ $locationIndex }}" 
-                                            data-location="{{ $locationIndex }}">
-                                        {{ strings.FirstUpper (replace $location "_" " ") }}
-                                    </button>
-                                {{- end -}}
-                            </div>
-                        {{- end -}}
+                            {{- end -}}
+                        </div>
 
                         <!-- Agenda Grid -->
                         <div class="agenda-grid-container">
