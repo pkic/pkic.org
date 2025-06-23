@@ -158,6 +158,16 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/tgustavsson/
 
+    - name: Shane Kelly
+      title: Principal Crypto Architect at DigiCert
+      bio: |
+        Shane Kelly has worked on solving various software security problems for his customers, from bespoke embedded systems to large-scale cloud-based deployments. Mr. Kelly has spent over eight years implementing, integrating, and optimizing post-quantum algorithms.
+        
+        At DigiCert, Kelly provides secure, robust, customer-oriented post-quantum cryptography solutions. His focus is on making the transition from current cryptographic solutions to post-quantum solutions as simple as possible given the enormous challenges involved.
+      website: https://www.digicert.com/blog/author/shane-kelly
+      social:
+        linkedin: https://www.linkedin.com/in/shane-kelly-bb61a154/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -358,14 +368,11 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: The internet is ready for some PQC certificates
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              The size of PQC certificate chains has thrown a wrench into plans to migrate to PQC. A full certificate chain using ML-DSA-65 will cause problems for some systems out there however there are alternatives. This talk explores those alternatives and argues that we should be using some PQC in our certificates right now. The talk will also explore what a future PKI could look like at the conclusion of NISTs additional signature competition.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Shane Kelly
             locations:
               - breakout
 
