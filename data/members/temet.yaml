@@ -1,0 +1,54 @@
+id: temet
+name: TEMET AG
+slogan:
+website: https://www.temet.ch
+
+# Short description, longer content can be placed in `content/members/`
+description: TEMET AG is an owner-managed consulting company based in Zurich that specialises in highly qualified consulting services in the field of information security and cyber security. Our focus is on the Swiss market, where we can count over 155 renowned companies from various industries among our valued customers. With a dedicated team of 14 experienced security consultants, we are committed to ensuring the security and resilience of our clients on a daily basis and in various roles.
+
+# membership
+memberSince: 2025-06-24
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Andre Clerc
+    role: Managing Security Consultant
+    social:
+      twitter: 
+      linkedin: 
+    description: Andre is the Managing Security Consultant at TEMET AG and represents the organization at the PKI Consortium.
