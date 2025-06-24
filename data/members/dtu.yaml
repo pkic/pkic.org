@@ -1,0 +1,54 @@
+id: dtu
+name: DTU
+slogan:
+website: https://orbit.dtu.dk/en/persons/togu-novriansyah-turnip
+
+# Short description, longer content can be placed in `content/members/`
+description: I am currently pursuing his Ph.D. degree in the Department of Technology Engineering at Denmark Technical University, Denmark. My research interests are in the areas of information security and cryptography, as well as network security.
+
+# membership
+memberSince: 2025-06-24
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Togu Turnip
+    role: PhD Student
+    social:
+      twitter: 
+      linkedin: 
+    description: Togu is the PhD Student at DTU and represents the organization at the PKI Consortium.
