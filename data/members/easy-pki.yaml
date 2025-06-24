@@ -1,0 +1,71 @@
+id: easy-pki
+name: Easy-PKI
+slogan: A Concierge Consulting Company
+website: https://www.easy-PKI.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Easy-PKI is committed to simplifying the use of PKI, Digital Certificates, PQC, and Encryption Technologies
+
+# membership
+memberSince: 2025-05-28
+memberType: H2
+workingGroups:
+  - PQC
+  
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://www.easy-PKI.com/Easy-PKI-Blog
+  feed:
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Tim Thompson
+    role: Founder & CEO
+    social:
+      twitter: 
+      linkedin: 
+    description: Tim Thompson has a career spanning 37+ years in IT & CyberSecurity and has an unswerving passion for Data Protection.
+      
+      Mr. Thompson managed all Encryption & Data Protection world wide for AT&T Services for 22 years.  He has worked on projects ranging from PKI deployments, Public & Private Digital Certificate projects, utilizing PKI to generate Revenue, and most recently one of the guiding members of the PQC efforts at AT&T.
+	    
+      Mr. Thompson has invented or co-invented 30 published patents in the areas of Digital Certificates, Encryption, and bio-metrics.
+	  
+      Mr. Thompson actively monitors the Encryption, Certificate, and PQC industry and standards body's.
+      
+      Mr. Thompson is a graduate of The Ohio State University with a Bachelors Degree in Electrical Engineering and a 2nd in Computer Science.
+
+  - name: Brian Novack
+    role: Consultant
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/brian-novack-10478b1/
+    description: Brian is a consultant at Easy-PKI.
+    hidden: false
