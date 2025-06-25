@@ -182,8 +182,12 @@
             align-items: center;
             justify-content: center;
         }
+
+        .sponsors-list {
+            display: inline;
+        }
     
-        .sponsors a {
+        .sponsors-list a {
             margin: 15px 15px;
             text-decoration: none;
         }
@@ -191,6 +195,7 @@
         .sponsor-logo {
             height: 50px;
             max-width: 100px;
+            margin: 20px;
         }
     
         .dimmed {
@@ -343,19 +348,22 @@
 
     <div id="footer">
         <div id="sponsors">
-            {{ .Scratch.Set "level" "Leader" }}
-            {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Austin 2025" }}
+            {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Kuala Lumpur 2025" }}
+            {{ .Scratch.Set "level" "Diamond" }}    
+            {{ partial "sponsors.html" . }}
     
+            {{ .Scratch.Set "level" "Titanium" }}
+            {{ partial "sponsors.html" . }}
+
+            {{ .Scratch.Set "level" "Leader" }}  
             {{ partial "sponsors.html" . }}
     
             {{ .Scratch.Set "level" "Platinum" }}
-            {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Austin 2025" }}
-    
             {{ partial "sponsors.html" . }}
         </div>
 
         <div id="textbar" class="yellow-black">
-            January 15 and 16, 2025 - Austin, TX (US) | Online
+            October 28 - 30, 2025 - Kuala Lumpur, Malaysia | Online
         </div>
         <div class="dimmed">
             PKI Consortium Inc. is registered as a 501(c)(6) non-profit entity (“business league”) under Utah law
