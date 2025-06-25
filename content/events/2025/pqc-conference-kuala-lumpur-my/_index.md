@@ -168,6 +168,108 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/shane-kelly-bb61a154/
 
+    - name: Sudha Iyer
+      title: Head Cybersecurity Architect at Citi 
+      bio: |
+        Sudha Iyer is Head Cybersecurity Architect at Citi, a founding member of the FS-ISAC PQC group, and an international project leader at ISO for blockchain and smart contract security. She has 23 years of experience in cryptographic architecture and is deeply engaged in cross-sector cybersecurity forums and leads several cryptographic and data security standards efforts. 
+      social:
+        linkedin: https://www.linkedin.com/in/sudhaeiyer
+
+    - name: Efstathia Katsigianni
+      title: IBM Quantum Safe Project Executive at IBM Research & Development
+      bio: |
+        Dr. Efstathia Katsigianni works as an IBM Quantum Safe Project Executive in Berlin, Germany. She is also an IBM Quantum Ambassador and holds a doctoral degree in mathematics. Efstathia has 7 years of experience working in Cybersecurity with focus on cryptography, quantum-safe cryptography, public key infrastructures and automotive security as well as cryptographic key management solutions. In her current role, she works as part of IBM Research on innovative solutions and is responsible for their implementation for customers. 
+      social:
+        linkedin: https://www.linkedin.com/in/efstathia-katsigianni/
+
+    - name: Navaneeth Rameshan
+      title: Senior Research Developer at IBM Research
+      bio: |
+        Dr. Navaneeth Rameshan is a senior research developer at IBM Research - Zurich, focused on applied cryptography and cloud security. He is driven by building tangible solutions to real-world security challenges, with multiple contributions across IBM Cloud services including Key Protect, Hyper Protect Crypto Service, Secrets Manager, and the IBM Kubernetes Service.
+        
+        His work includes quantum-safe integrations across diverse stacks, scalable middleware for HSMs and private PKI systems —many of which are deployed and in production today. He has also led architectural efforts to enable seamless migration to post-quantum cryptography. With a hands-on, systems-level approach, he aims to bridge research and engineering to make quantum-safe security practical at scale.
+      social:
+        linkedin: https://www.linkedin.com/in/navaneeth-rameshan/
+
+    - name: Greg Wetmore
+      title: VP Software Development at Entrust
+      bio: |
+        Greg Wetmore leads the global team responsible for building and enhancing the digital security product portfolio at Entrust, such as the Identity, Data Security, and Critical Infrastructure solutions. Greg joined Entrust in 2000 and has held a number of leadership positions on the engineering team over that period. Greg is a key industry advisor and speaks regularly on topics like digital identity, IoT, Zero Trust and post-quantum security. Greg holds an Engineering degree from Queen’s University Kingston, Ontario, Canada.
+      social:
+        linkedin: https://www.linkedin.com/in/gregwetmore/
+
+    - name: Jonathan Jackson
+      title: Senior Director, Strategic Solutions at BlackBerry Malaysia
+      bio: |
+        Jonathan has over two decades experience in helping organisations across APAC and EMEA deal with the ever-evolving cyber threats across multiple sectors – including government, defense, intelligence, energy, health, critical infrastructure, finance and legal.   He specialises in cybersecurity, threat intelligence and digital forensics, and has an in-depth understanding of the ASEAN cybersecurity threat landscape – since being based in Kuala Lumpur since mid-2023. 
+        
+        In Jonathan’s role, he regularly advises ministers, boards and executives on how to manage, predict and prevent the threats to IoT, networks, applications, endpoints and people.  Currently he is dedicated to supporting Malaysia’s cyber-resilience initiatives and the establishment of BlackBerry’s new Cybersecurity Center of Excellence.  Jonathan also participates in the ASEAN Cyber Crime Task Force, facilitating public-private cyber capability.
+        
+        Jonathan has been with BlackBerry for over 12 years and was the Head of Security Advisory for BlackBerry ANZ before leading a team as Director of Engineering for Asia Pacific & Japan. Prior to this, he worked for Nokia where he held a number of roles focusing on security and digital transformation.
+      social:
+        linkedin: https://www.linkedin.com/in/jonathanjackson1/
+
+    - name: Blair Canavan
+      title: Director, Alliances at Thales
+      bio: |
+        Blair has 30+ years of IT cybersecurity sales, channel, marketing, and business development experience. Blair continuously expanded his cybersecurity and cryptographic expertise starting with Symantec and several cyber start-ups including Chrysalis-ITS (Thales), InfoSec Global, Crypto4A and since September 2019, back with Thales’ Global Technology Alliances team, including the Quantum cryptography portfolio. Blair recently represented the Canadian Forum for Digital Infrastructure Resilience (CFDIR) to articulate the standards and Government guidance at Mobile World Congress (MWC) in 2023. He is an avid presenter, start-up consultant, and IT industry contributor. Blair holds an Hons.BA from the University of Waterloo, and Wilfrid Laurier University, Ontario, Canada.  
+      social:
+        linkedin: https://www.linkedin.com/in/blair-canavan-5b708a2/
+
+    - name: Giuseppe Damiano
+      title: Director of Product Management at Entrust
+      bio: |
+        Giuseppe is currently the Director of Product Management for the nShield product portfolio offering at Entrust.
+
+        Giuseppe is a senior expert in developing and managing PKI solutions and infrastructures, data security, and electronic payment systems with more than 30 years of experience. He has a very strong knowledge of IT architecture security, PKI solutions, HSMs, e-procurement, e-invoicing, digital certificates for electronic signatures, electronic seals, and time stamping.
+
+        During his professional career, as CTO of a Qualified Trust Service Provider, Giuseppe has successfully deployed large-scale projects for major Italian banks, insurance companies, and certification authorities, managing more than 20 million qualified digital certificates using solutions developed in-house.
+
+        Notable achievements include setting up one of the biggest Qualified Remote Signature infrastructures in Europe, remote signature server solutions capable of hosting large numbers of certificates independently of the HSM capacity, designing HSM solutions to manage data security for electronic payment instruments. Together with one of the most important smart-card manufacturers, he defined and implemented the first prototype of a digital signature system based on a GSM SIM. The project was nominated in 2005 by the European IST-Prize as one of Europe’s most innovative projects of the year.
+
+        Giuseppe has actively contributed to writing one of the first technical API standards for Cloud Signature. The standard is defined by the Cloud Signature Consortium and adopted by ETSI.
+
+        He has also actively contributed to writing one of the first proposals for Distributed Ledger Timestamp based on standard PKI formats and blockchain evidence.
+      social:
+        linkedin: https://www.linkedin.com/in/gdamiano/
+
+    - name: Bruno Couillard
+      title: Co-Founder & CEO at Crypto4A
+      bio: |
+        Bruno Couillard is the CEO and co-founder of Crypto4A Technologies Inc., where he leads the development of cutting-edge crypto-agile and post-quantum cybersecurity solutions, including the QxHSM and QxEDGE. With over 35 years of experience in cryptography, key management, and quantum-safe technology, Bruno has worked extensively in both commercial and military applications.
+
+        Previously, he co-founded Chrysalis-ITS and spearheaded the development of the Luna HSM, now a part of Thales. He also contributed to the creation of the PKCS#11 Standard. In addition to his entrepreneurial work, Bruno has served as a cryptographic evaluator for the Canadian Government and played a key role in the Canadian Cryptographic Modernization Program (CCMP).
+
+        Bruno is an active board member of Quantum Industry Canada (QIC), co-chair of the Quantum Industry Developers and Users Working Group, and a member of the Canadian National Quantum Strategy committee. Through these roles, he continues to promote and shape a quantum-safe cybersecurity ecosystem.
+      social:
+        linkedin: https://www.linkedin.com/in/brunocouillard/
+
+    - name: John Buselli
+      title: Offering Manager at IBM Quantum
+      bio: |
+        John Buselli is an Offering Manager for the IBM Quantum Group and is currently focused on the development and delivery of IBM’s Quantum Safe Program.  
+        In this role, he oversees product strategy, market development and customer-facing programs.  
+        Since joining IBM Research in 2015, John has focused on cyber security, confidential computing, privacy-enhancing technologies, data governance and securing AI Analytic initiatives.
+        He previously led a global team at IBM tasked with building an Information Governance/Compliance Practice within the IBM software organization.   
+        His career has been focused on establishing and expanding initial markets, products and operations for early-stage software firms including Verity (purchased by HP), and KVS (acquired by Symantec) Princeton Softech (purchased by IBM) as well as senior leadership roles at Seer Technologies and Texas Instruments.
+      social:
+        linkedin: https://www.linkedin.com/in/johnbuselli/
+
+    - name: Zsolt Rózsahegyi
+      id: zsolt-rozsahegyi
+      title: CEO at i4p informatics
+      bio: |
+        Zsolt Rózsahegyi is CEO and co-founder of i4p Informatics. He holds engineering degrees from the Technical University of Budapest and Carnegie Mellon University. Zsolt was previously founder and CEO of one of Europe’s first Qualified Trust Service Providers and played a key role in shaping Hungary’s electronic signature legislation. His expertise spans applied cryptography, PKI, timestamping, secure software development, and quantum-safe systems.
+      social:
+        linkedin: https://www.linkedin.com/in/zsoltrozsahegyi/
+
+    - name: Nils Gerhardt
+      title: Chief Technology Officer at Utimaco
+      bio: |
+        Nils Gerhardt has 20 years’ experience in the cyber security industry. In his current role, Nils is the Chief Technology Officer for Utimaco, a leading provider of cyber security solutions, and supervisory board member of ISITS AG. Before joining Utimaco, Nils worked at Giesecke + Devrient in various executive management roles with regional and global responsibilities in Germany, Canada, and the USA. As Chairman of the Board of GlobalPlatform, a global industry organization, Nils brought major companies together to define the standards for secure digital services and devices.
+      social:
+        linkedin: https://www.linkedin.com/in/nils-gerhardt-38b6691/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -391,14 +493,13 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: A Framework for Cryptographic Agility
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              Cryptography is no longer a "set it and forget it" component of software architecture. With the rapid emergence of post-quantum cryptographic standards and the constant discovery of new vulnerabilities, organizations face a growing need to adapt quickly without rewriting applications every time the cryptographic landscape shifts.
+              
+              This talk will focus on the practical aspects of designing cryptographic systems that enable organizations to transition to post-quantum cryptography in a crypto-agile manner. By embedding agility into the way cryptography is consumed through abstraction, policy, key lifecycle management, and pluggable backends, organizations can avoid costly re-architecture each time cryptographic standards evolve. The framework is modular and composable, allowing teams to adopt incremental levels of cryptographic agility. This allows organizations to evolve toward a truly agile posture at a pace aligned with their security, performance, and compliance needs.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Navaneeth Rameshan
             locations:
               - breakout
 
@@ -432,14 +533,12 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: To be announced shortly
+          - title: "ASEAN’s Post-Quantum Future: Securing Communications in an Era of Disruptive Change"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              As [ASEAN](https://en.wikipedia.org/wiki/ASEAN) economies surge toward digital evolution. the foundation of secure communications is facing an existential challenge. The rise of quantum computing is an imminent reality that threatens to dismantle traditional encryption, leaving government data, diplomatic channels & commercial transactions vulnerable to unprecedented risks - including 'harvest now, decrypt later' threats. Discuss the profound implications of quantum computing on SEA's cybersecurity landscape and the urgent need for proactive preparation & public-private sector synergy. In a region of diverse technological maturity, escalating cyber threats & heightened geopolitical risk, building quantum-resilient communications is not only a technical necessity—it is fundamental to national security, economic stability & ASEAN’s collective digital sovereignty.
+            track: Panel Discussion
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Jonathan Jackson
             locations:
               - plenary
 
@@ -453,14 +552,11 @@ data:
 
       - time: "14:30"
         sessions:
-          - title: To be announced shortly
+          - title: A structured approach to the quantum-safe transformation
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and  understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Efstathia Katsigianni
             locations:
               - plenary
 
@@ -569,12 +665,27 @@ data:
 
       - time: "9:00"
         sessions:
-          - title: To be announced shortly
+          - title: "PQC Integration in HSMs: From Standards to Strategy"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              With the release of NIST’s first set of post-quantum cryptographic standards, the conversation around quantum readiness has moved from research into execution. For organizations relying on hardware-based trust anchors, this shift raises immediate strategic and operational questions: What do these new standards mean for existing HSM deployments? How do performance, certification, and lifecycle planning change in a post-quantum world?
+
+              This panel brings together senior leaders from major HSM vendors and PQC experts to provide a clear, business-relevant update on the state of post-quantum integration in hardware cryptographic modules. Building on insights from previous sessions in Austin and Amsterdam, the panel will outline how vendors are approaching the integration of PQC algorithms, what early performance benchmarks indicate, and where the roadblocks lie in certification, customer adoption, and operational interoperability.
+
+              Attendees will gain a practical understanding of the timelines, trade-offs, and architectural considerations shaping the next generation of secure hardware, across both on-premises and cloud HSM landscapes. The discussion will also address how to prepare governance and procurement processes to accommodate cryptographic agility and ensure continuity of trust in regulated and high-assurance environments. 
+
+              This session is essential for CISOs, CTOs, compliance leaders, and architects looking to align their cryptographic infrastructure with emerging quantum-safe mandates, without compromising on performance, reliability, or compliance.
+
+              ---
+              _This panel discussion runs for 55 minutes and continues in the next session block._
+
+            track: Panel Discussion
             speakers:
-              - TBD
+              - Bruno Couillard
+              - Giuseppe Damiano
+              - Blair Canavan
+              - Nils Gerhardt
+              - Zsolt Rózsahegyi
+              - John Buselli *
             youtube:
             presentation: 
             locations:
@@ -590,14 +701,9 @@ data:
 
       - time: "9:30"
         sessions:
-          - title: To be announced shortly
+          - title: "Continuation: PQC Integration in HSMs: From Standards to Strategy"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
-            speakers:
-              - TBD
-            youtube:
-            presentation: 
+              This session continues the panel discussion on PQC integration in HSMs, focusing on the evolving landscape from standardization efforts to real-world deployment strategies. 
             locations:
               - plenary
 
@@ -642,14 +748,13 @@ data:
 
       - time: "11:00"
         sessions:
-          - title: To be announced shortly
+          - title: CISOs call to action for Quantum Readiness
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              The session covers practical priorities in the quantum readiness Journey for financial industry.
+              This session provides a focused update for C-level leaders on the financial sector’s preparedness for post-quantum cryptography. It covers recent developments across NIST, IETF, PCI DSS, and other regulatory bodies, highlighting their impact on existing architectures and risk postures.
+              We will examine sector-specific challenges, current sandbox and testing efforts, and practical collaboration options available to institutions. The session concludes with a tactical roadmap that CISOs and senior executives can use to align with upcoming mandates and reduce transition risk.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Sudha Iyer
             locations:
               - plenary
 
@@ -743,14 +848,11 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: To be announced shortly
+          - title: "Crypto-Agility: How it’s both a Critical Component and a Complex Challenge"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              The time to prepare for the quantum threat is upon us, and the move from traditional crypto to PQC will touch just about every cryptographic system and piece of infrastructure. To make the transition, organizations need visibility into their cryptographic estate (hardware, software, keys, certificates, secrets, etc.) and ensure they have built in crypto-agility. How does one achieve a mature crypto-agile security practice? By defining crypto-agility and understanding what it looks like for your organization. But crypto-agility is much more than moving from one system or algorithm to another. It’s about people, processes and technology. It’s about visualizing your cryptographic assets, implementing policy, driving compliance and more. In this session, we’ll discuss in detail the necessary elements to achieve a mature crypto-agile security practice, and how to overcome the challenges to get there.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Greg Wetmore
             locations:
               - plenary
 
