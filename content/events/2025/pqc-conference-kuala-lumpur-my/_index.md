@@ -219,17 +219,11 @@ data:
     - name: Giuseppe Damiano
       title: Director of Product Management at Entrust
       bio: |
-        Giuseppe is currently the Director of Product Management for the nShield product portfolio offering at Entrust.
+        Giuseppe is currently the Vice President of Product Management for the HSM product offering at Entrust. With over 30 years of experience, he is a senior expert in developing and managing PKI solutions and infrastructures, data security, and electronic payment systems.
 
-        Giuseppe is a senior expert in developing and managing PKI solutions and infrastructures, data security, and electronic payment systems with more than 30 years of experience. He has a very strong knowledge of IT architecture security, PKI solutions, HSMs, e-procurement, e-invoicing, digital certificates for electronic signatures, electronic seals, and time stamping.
+        Giuseppe is also an ETSI member. He has actively contributed defining one of the first technical API standard for Cloud Signature services. The standard was [adopted by the Cloud Signature Consortium and by ETSI](https://cloudsignatureconsortium.org/2019/04/02/etsi-collaboration/).
 
-        During his professional career, as CTO of a Qualified Trust Service Provider, Giuseppe has successfully deployed large-scale projects for major Italian banks, insurance companies, and certification authorities, managing more than 20 million qualified digital certificates using solutions developed in-house.
-
-        Notable achievements include setting up one of the biggest Qualified Remote Signature infrastructures in Europe, remote signature server solutions capable of hosting large numbers of certificates independently of the HSM capacity, designing HSM solutions to manage data security for electronic payment instruments. Together with one of the most important smart-card manufacturers, he defined and implemented the first prototype of a digital signature system based on a GSM SIM. The project was nominated in 2005 by the European IST-Prize as one of Europe’s most innovative projects of the year.
-
-        Giuseppe has actively contributed to writing one of the first technical API standards for Cloud Signature. The standard is defined by the Cloud Signature Consortium and adopted by ETSI.
-
-        He has also actively contributed to writing one of the first proposals for Distributed Ledger Timestamp based on standard PKI formats and blockchain evidence.
+        Furthermore, he has contributed to write one of the first [proposal for Distributed Ledger Timestamp](https://www.ietf.org/id/draft-intesigroup-dlts-03.html) based on a standard PKI format and blockchain evidence. 
       social:
         linkedin: https://www.linkedin.com/in/gdamiano/
 
