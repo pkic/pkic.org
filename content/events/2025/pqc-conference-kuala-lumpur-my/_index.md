@@ -217,7 +217,7 @@ data:
         linkedin: https://www.linkedin.com/in/blair-canavan-5b708a2/
 
     - name: Giuseppe Damiano
-      title: Director of Product Management at Entrust
+      title: Vice President of Product Management for the HSM product offering at Entrust
       bio: |
         Giuseppe is currently the Vice President of Product Management for the HSM product offering at Entrust. With over 30 years of experience, he is a senior expert in developing and managing PKI solutions and infrastructures, data security, and electronic payment systems.
 
