@@ -8,8 +8,9 @@ description: Kathmandu University (KU) is an autonomous, not-for-profit, self-fu
 
 # membership
 memberSince: 2025-06-14
-memberType: null
+memberType: H4
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +51,5 @@ representatives:
     role: Associate Professor
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/gokul-k-c-6157a63a/
     description: Gokul is the Associate Professor at Kathmandu University and represents the organization at the PKI Consortium.
