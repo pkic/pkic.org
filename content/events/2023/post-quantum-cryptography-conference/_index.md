@@ -244,7 +244,7 @@ The conference was open for anyone interested in preparing for Post-Quantum Cryp
 
 We are immensely grateful to our sponsors: 
 
-{{< sponsors level="all" height="20" max-width="60" rows=true >}}
+{{< sponsors-level level="all" >}}
 
 Would you like to sponsor the Post-Quantum PKI conference? Please contact us [using this form](/sponsors/sponsor/).
 

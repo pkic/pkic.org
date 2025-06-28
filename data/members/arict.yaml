@@ -1,0 +1,55 @@
+id: arict
+name: Arict
+slogan:
+website: https://arict.eu
+
+# Short description, longer content can be placed in `content/members/`
+description: Arict Consulting provides advice and solutions for ICT system integrations, from A2B, B2B, G2G or in between, with security, privacy and reliability is mind.
+
+# membership
+memberSince: 2025-06-14
+memberType: H6
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Ernst Van Nigtevecht
+    role: Architect
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/ejvann/
+    description: Ernst is the Architect at Arict and represents the organization at the PKI Consortium.
