@@ -10,6 +10,7 @@ description: TWCA is currently the largest certificate authority in Taiwan. In a
 memberSince: 2025-06-24
 memberType: A
 workingGroups:
+  - CA
 
 # sponsor
 sponsor:
@@ -35,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +51,5 @@ representatives:
     role: Director
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/chyahung-tsai-934948128/
     description: ChyaHung is the Director at TAIWAN-CA Inc. and represents the organization at the PKI Consortium.
