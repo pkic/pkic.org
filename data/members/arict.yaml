@@ -1,15 +1,16 @@
 id: arict
 name: Arict
 slogan:
-website: Https://arict.eu
+website: https://arict.eu
 
 # Short description, longer content can be placed in `content/members/`
-description: ARict Consulting. ICT Architectuur en Realisatie. Veilig en betrouwbaar. Voor A2A, B2b, G2G integraties. ICT Architecture and Realisation. Secure and reliable. For A2A, B2B, G2G integrations.
+description: Arict Consulting provides advice and solutions for ICT system integrations, from A2B, B2B, G2G or in between, with security, privacy and reliability is mind.
 
 # membership
 memberSince: 2025-06-14
-memberType: null
+memberType: H6
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +51,5 @@ representatives:
     role: Architect
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/ejvann/
     description: Ernst is the Architect at Arict and represents the organization at the PKI Consortium.
