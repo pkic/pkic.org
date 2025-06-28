@@ -8,8 +8,10 @@ description: TEMET AG is an owner-managed consulting company based in Zurich tha
 
 # membership
 memberSince: 2025-06-24
-memberType: null
+memberType: H2
 workingGroups:
+  - PKIMM
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +37,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +52,5 @@ representatives:
     role: Managing Security Consultant
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/andr%C3%A9-clerc-561b2a1a0/
     description: Andre is the Managing Security Consultant at TEMET AG and represents the organization at the PKI Consortium.
