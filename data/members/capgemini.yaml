@@ -8,8 +8,9 @@ description: A global leader in consulting, technology services and digital tran
 
 # membership
 memberSince: 2025-06-14
-memberType: null
+memberType: H2
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +51,5 @@ representatives:
     role: Security Architect
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/daniel-schoeman-66072830/
     description: Daniel is the Security Architect at Capgemini Outsourcing GmbH and represents the organization at the PKI Consortium.
