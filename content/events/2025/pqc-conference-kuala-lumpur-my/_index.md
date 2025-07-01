@@ -187,7 +187,7 @@ data:
       bio: |
         Dr. Navaneeth Rameshan is a senior research developer at IBM Research - Zurich, focused on applied cryptography and cloud security. He is driven by building tangible solutions to real-world security challenges, with multiple contributions across IBM Cloud services including Key Protect, Hyper Protect Crypto Service, Secrets Manager, and the IBM Kubernetes Service.
         
-        His work includes quantum-safe integrations across diverse stacks, scalable middleware for HSMs and private PKI systems —many of which are deployed and in production today. He has also led architectural efforts to enable seamless migration to post-quantum cryptography. With a hands-on, systems-level approach, he aims to bridge research and engineering to make quantum-safe security practical at scale.
+        His work includes quantum-safe integrations across diverse stacks, scalable middleware for HSMs and private PKI systems, many of which are deployed and in production today. He has also led architectural efforts to enable seamless migration to post-quantum cryptography. With a hands-on, systems-level approach, he aims to bridge research and engineering to make quantum-safe security practical at scale.
       social:
         linkedin: https://www.linkedin.com/in/navaneeth-rameshan/
 
@@ -509,11 +509,11 @@ data:
         sessions:
           - title: "Quantum Security in Practice: Lessons from a Dozen of Client Engagements"
             description: |
-              The quantum threat is no longer theoretical—it’s becoming a strategic concern for cybersecurity leaders. This session shares insights from a dozen client case studies across industries and regions, highlighting how organizations are preparing for quantum risk in practical terms.
+              The quantum threat is no longer theoretical, it’s becoming a strategic concern for cybersecurity leaders. This session shares insights from a dozen client case studies across industries and regions, highlighting how organizations are preparing for quantum risk in practical terms.
               
               Through real examples from field engagements, the talk explores how security teams are assessing quantum readiness, making critical decisions with incomplete information, and adapting to shifting standards under real operational pressures.
               
-              Rather than focusing on abstract principles, the session offers a grounded look at quantum security in action. Designed to resonate with technically savvy professionals, the narrative blends foundational context with hands-on application—providing actionable takeaways for those navigating the evolving path toward post-quantum resilience.
+              Rather than focusing on abstract principles, the session offers a grounded look at quantum security in action. Designed to resonate with technically savvy professionals, the narrative blends foundational context with hands-on application, providing actionable takeaways for those navigating the evolving path toward post-quantum resilience.
               
             speakers:
               - Alexey Bocharnikov
@@ -562,7 +562,7 @@ data:
         sessions:
           - title: "ASEAN’s Post-Quantum Future: Securing Communications in an Era of Disruptive Change"
             description: |
-              As [ASEAN](https://en.wikipedia.org/wiki/ASEAN) economies surge toward digital evolution. the foundation of secure communications is facing an existential challenge. The rise of quantum computing is an imminent reality that threatens to dismantle traditional encryption, leaving government data, diplomatic channels & commercial transactions vulnerable to unprecedented risks - including 'harvest now, decrypt later' threats. Discuss the profound implications of quantum computing on SEA's cybersecurity landscape and the urgent need for proactive preparation & public-private sector synergy. In a region of diverse technological maturity, escalating cyber threats & heightened geopolitical risk, building quantum-resilient communications is not only a technical necessity—it is fundamental to national security, economic stability & ASEAN’s collective digital sovereignty.
+              As [ASEAN](https://en.wikipedia.org/wiki/ASEAN) economies surge toward digital evolution. the foundation of secure communications is facing an existential challenge. The rise of quantum computing is an imminent reality that threatens to dismantle traditional encryption, leaving government data, diplomatic channels & commercial transactions vulnerable to unprecedented risks - including 'harvest now, decrypt later' threats. Discuss the profound implications of quantum computing on SEA's cybersecurity landscape and the urgent need for proactive preparation & public-private sector synergy. In a region of diverse technological maturity, escalating cyber threats & heightened geopolitical risk, building quantum-resilient communications is not only a technical necessity, it is fundamental to national security, economic stability & ASEAN’s collective digital sovereignty.
             track: Panel Discussion
             speakers:
               - Jonathan Jackson
@@ -800,7 +800,7 @@ data:
         sessions:
           - title: Overcoming Challenges in Post-Quantum Cryptography Adoption
             description: |
-              With the release of standards for Post-Quantum Cryptography (PQC) algorithms, the cryptographic community faces a paradigm shift. Unlike RSA, ECC, and DH—which were often regarded as "silver bullets" due to their efficiency in key size, signature size, and performance—current PQC algorithms introduce significant challenges. 
+              With the release of standards for Post-Quantum Cryptography (PQC) algorithms, the cryptographic community faces a paradigm shift. Unlike RSA, ECC, and DH, which were often regarded as "silver bullets" due to their efficiency in key size, signature size, and performance, current PQC algorithms introduce significant challenges. 
               
               This session will explore the practical obstacles of integrating PQC algorithms into existing products and services. Topics include the use of embedded systems that leverage LMS or ML-DSA signatures to verify component integrity, and the implications for services delivering image signature solutions, particularly with regard to backend HSM operations and compliance with CNSA 2.0. Finally, we examine how open-source PKI management tools, purpose-built for PQC, can help meet these challenges by providing scalable and adaptable infrastructures for orchestrating post-quantum cryptographic operations.
             speakers:
@@ -979,7 +979,7 @@ data:
 
           - title: Evaluating the Practical Capabilities of Contemporary Quantum Processors in Breaking AES Encryption
             description: |
-              As quantum computing advances, assessing the potential of current architectures to threaten AES encryption is essential. This study evaluates leading quantum processors—IBM, Google, Zuchongzhi 2, Microsoft, Rigetti, IonQ, and Honeywell—focusing on quantum gate complexity, qubit coherence time, and scalability trade-offs. It demonstrates how these systems, when scaled to thousands of qubits with error correction, could compromise AES security. The findings offer clearer insight into the timeline of quantum threats, aiding in strategic planning for mitigation and PQC migration. Enhancing AES robustness through longer key sizes and hybrid models is also explored to strengthen cryptographic readiness.
+              As quantum computing advances, assessing the potential of current architectures to threaten AES encryption is essential. This study evaluates leading quantum processors, IBM, Google, Zuchongzhi 2, Microsoft, Rigetti, IonQ, and Honeywell, focusing on quantum gate complexity, qubit coherence time, and scalability trade-offs. It demonstrates how these systems, when scaled to thousands of qubits with error correction, could compromise AES security. The findings offer clearer insight into the timeline of quantum threats, aiding in strategic planning for mitigation and PQC migration. Enhancing AES robustness through longer key sizes and hybrid models is also explored to strengthen cryptographic readiness.
             speakers:
               - Dr. -Ing. Somrak Petchartee
             locations:
