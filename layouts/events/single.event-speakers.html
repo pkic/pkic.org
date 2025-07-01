@@ -296,6 +296,22 @@
         body.speaker-card-mode #speaker-card {
             display: block !important;
         }
+
+        @media print {
+            @page {
+                size: auto;
+                margin: 0;
+                padding: 50px;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+            }
+
+            body {
+                margin: 0;
+                padding: 0;
+            }
+        }
+        
     </style>
 
     {{ $js := resources.Get "js/event-speaker-card.js" }}
