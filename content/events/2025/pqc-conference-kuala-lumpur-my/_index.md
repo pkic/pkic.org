@@ -776,7 +776,7 @@ data:
 
       - time: "11:00"
         sessions:
-          - title: CISOs call to action for Quantum Readiness
+          - title: The ABCs (Accelerated, Better and Cheaper) to Cryptographic Resilience
             description: |
               The session covers practical priorities in the quantum readiness Journey for financial industry.
               This session provides a focused update for C-level leaders on the financial sector’s preparedness for post-quantum cryptography. It covers recent developments across NIST, IETF, PCI DSS, and other regulatory bodies, highlighting their impact on existing architectures and risk postures.
