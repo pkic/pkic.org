@@ -264,6 +264,39 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/nils-gerhardt-38b6691/
 
+    - name: Somrak Petchartee
+      title: Research Operations Manager, Innovation Center NT Telecom Public Company Limited
+      bio: |
+        Dr.-Ing. Somrak Petchartee is a researcher and engineer with over 30 years of experience in robotics, embedded systems, sensor technology, and post-quantum cryptography. He holds a Doctor of Engineering from the Federal Armed Forces University in Munich, where his research focused on tactile sensing for object manipulation. He also earned a Master of Engineering in Computer Science from the Asian Institute of Technology and a Bachelor of Engineering in Telecommunications, with first-class honors, from King Mongkut’s Institute of Technology Ladkrabang.
+
+        His career spans roles in academia, defense, and industry, including leadership in advanced R&D projects at NT Telecom and collaborations on quantum sensing and indoor positioning with Thammasat University. Dr. Petchartee is a prolific author with numerous publications in tactile sensing and intelligent systems, and a regular speaker at major technology forums across Asia.
+
+        His work has been recognized with multiple honors, including the SEPO Thailand Innovation Award and the Emerald Literati Award for Excellence. He continues to drive innovation in secure and intelligent systems through interdisciplinary research and practical application.
+      social:
+        linkedin: https://www.linkedin.com/in/dr-ing-somrak-petchartee-34024136/
+
+    - name: Ronny Döring
+      id: ronny-doring
+      title: R&D System Engineer at Deutsche Telekom AG
+      bio: |
+        Ronny Döring is an R&D System Engineer at Deutsche Telekom AG, T-Labs, with a focus on post-quantum cryptography and secure communication protocols. He coordinates experimental work in the T-Labs Quantum Lab and explores the practical integration of advanced cryptographic technologies.
+
+        As part of the EU project OpenQKD, Ronny has demonstrated how quantum key distribution (QKD) and post-quantum cryptography (PQC) can be integrated into core network infrastructures, enhancing the resilience and future-readiness of digital communication systems. His research and implementation efforts aim to build a secure communications framework that combines both quantum and classical technologies to meet the challenges of tomorrow’s digital landscape.
+      social:
+        linkedin: https://www.linkedin.com/in/rnnydrng/
+
+    - name: Frank Michaud
+      title: Principal Enginer Tech Lead for Cisco Crypo Services at Cisco
+      bio: |
+        Frank Michaud has been the technical leader of Cisco Cryptographic Services (CS) since October 2022, playing a pivotal role within the Senior Tech Talent of the Cisco Security & Trust organization. He leads the Post-Quantum Cryptography (PQC) transition for CS, provides critical security guidance to Cisco Business Units, and pioneers innovative Public Key Infrastructure (PKI) solutions. Frank is widely recognized as a leading technical expert in the identity domain across the industry and serves as a technology advisor to Cisco's Security CTO.
+
+        Since joining Cisco in 2016, Frank has been instrumental in driving innovation across IoT security, edge computing, identity management, authentication, and software security. His career, which began in 2000, includes significant contributions at leading security companies such as Kudelski Nagravision and NXP Semiconductors, where he developed foundational software solutions, hardware designs, and security architectures for highly sensitive domains.
+
+        Frank has actively contributed to several standards bodies and consortia, including GlobalPlatform and IEEE. Over the course of his career, he has been the driving force behind 15 patents, demonstrating his sustained commitment to advancing security technologies and solutions. He has also presented at the RSA Conference (RSAC), where he addressed topics related to PQC.
+      social:
+        linkedin: https://www.linkedin.com/in/frankmichaud/
+        x: https://x.com/fmiche76
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -765,14 +798,13 @@ data:
 
       - time: "11:30"
         sessions:
-          - title: To be announced shortly
+          - title: Overcoming Challenges in Post-Quantum Cryptography Adoption
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              With the release of standards for Post-Quantum Cryptography (PQC) algorithms, the cryptographic community faces a paradigm shift. Unlike RSA, ECC, and DH—which were often regarded as "silver bullets" due to their efficiency in key size, signature size, and performance—current PQC algorithms introduce significant challenges. 
+              
+              This session will explore the practical obstacles of integrating PQC algorithms into existing products and services. Topics include the use of embedded systems that leverage LMS or ML-DSA signatures to verify component integrity, and the implications for services delivering image signature solutions, particularly with regard to backend HSM operations and compliance with CNSA 2.0. Finally, we examine how open-source PKI management tools, purpose-built for PQC, can help meet these challenges by providing scalable and adaptable infrastructures for orchestrating post-quantum cryptographic operations.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Frank Michaud
             locations:
               - plenary
 
@@ -896,14 +928,11 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: "Authenticity Guaranteed: Verifying Video Integrity on Consumer Devices with Post-Quantum Signatures"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              As AI-generated video content becomes increasingly convincing, ensuring the authenticity of video material is more critical than ever. This session presents a novel method for verifying the integrity of video streams or files using post-quantum digital signatures. Designed for deployment on consumer devices, the approach safeguards against tampering and deepfake manipulation, even in a future where quantum computing threatens classical cryptographic schemes. Join us to explore the architecture, implementation, and real-world applications of this quantum-resistant solution for trusted video authentication.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Ronny Döring
             locations:
               - breakout
 
@@ -948,14 +977,11 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: Evaluating the Practical Capabilities of Contemporary Quantum Processors in Breaking AES Encryption
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              As quantum computing advances, assessing the potential of current architectures to threaten AES encryption is essential. This study evaluates leading quantum processors—IBM, Google, Zuchongzhi 2, Microsoft, Rigetti, IonQ, and Honeywell—focusing on quantum gate complexity, qubit coherence time, and scalability trade-offs. It demonstrates how these systems, when scaled to thousands of qubits with error correction, could compromise AES security. The findings offer clearer insight into the timeline of quantum threats, aiding in strategic planning for mitigation and PQC migration. Enhancing AES robustness through longer key sizes and hybrid models is also explored to strengthen cryptographic readiness.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Dr. -Ing. Somrak Petchartee
             locations:
               - breakout
 
