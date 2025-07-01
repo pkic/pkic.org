@@ -121,6 +121,9 @@ outputFormats:
   event-session:
     mediatype: text/html
     baseName: event-session
+  event-speakers:
+    mediatype: text/html
+    baseName: event-speakers
   event-data:
     mediatype: application/json
     isPlainText: true
