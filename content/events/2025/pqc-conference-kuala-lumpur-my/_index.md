@@ -14,6 +14,7 @@ outputs:
  - event-data
  - event-overlays
  - event-session
+ - event-speakers
  - event-agenda
 
 params:
@@ -265,13 +266,13 @@ data:
         linkedin: https://www.linkedin.com/in/nils-gerhardt-38b6691/
 
     - name: Somrak Petchartee
-      title: Research Operations Manager, Innovation Center NT Telecom Public Company Limited
+      title: Research Operations Manager, NT Telecom Public Company Limited
       bio: |
-        Dr.-Ing. Somrak Petchartee is a researcher and engineer with over 30 years of experience in robotics, embedded systems, sensor technology, and post-quantum cryptography. He holds a Doctor of Engineering from the Federal Armed Forces University in Munich, where his research focused on tactile sensing for object manipulation. He also earned a Master of Engineering in Computer Science from the Asian Institute of Technology and a Bachelor of Engineering in Telecommunications, with first-class honors, from King Mongkut’s Institute of Technology Ladkrabang.
+        Dr.-Ing. Somrak Petchartee is a seasoned researcher and engineer with over 30 years of multidisciplinary experience encompassing radio frequency (RF) design, high-performance computing with FPGA, robotics, embedded systems, sensor technology, and post-quantum cryptography. He earned his Doctor of Engineering from the University of the Federal Armed Forces, Munich, where his doctoral research addressed tactile sensing for object manipulation. He also holds a Master of Engineering in Computer Science from the Asian Institute of Technology and a Bachelor of Engineering in Telecommunications (First-Class Honors) from King Mongkut’s Institute of Technology Ladkrabang.
 
-        His career spans roles in academia, defense, and industry, including leadership in advanced R&D projects at NT Telecom and collaborations on quantum sensing and indoor positioning with Thammasat University. Dr. Petchartee is a prolific author with numerous publications in tactile sensing and intelligent systems, and a regular speaker at major technology forums across Asia.
+        Dr. Petchartee has held pivotal roles across academia, defense, and industry, leading advanced research initiatives at NT Telecom and contributing to collaborative projects in quantum sensing and Single Proton Detector in partnership with Thammasat University. His scholarly contributions span numerous publications in tactile sensing, intelligent systems, and quantum technologies. He is also a regular invited speaker at prominent technology and innovation forums across Asia.
 
-        His work has been recognized with multiple honors, including the SEPO Thailand Innovation Award and the Emerald Literati Award for Excellence. He continues to drive innovation in secure and intelligent systems through interdisciplinary research and practical application.
+        His work has been recognized with several prestigious awards, including the SEPO Thailand Innovation Award, the Best Paper Award from the Journal of Computers for his research on polynomial dynamic time wraping (DTW), and the Emerald Literati Award for Excellence. Dr. Petchartee remains committed to advancing secure and intelligent systems through interdisciplinary research and applied innovation.
       social:
         linkedin: https://www.linkedin.com/in/dr-ing-somrak-petchartee-34024136/
 
