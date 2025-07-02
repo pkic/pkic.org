@@ -1,10 +1,10 @@
 id: twca
 name: TAIWAN-CA Inc.
-slogan:
-website: https://www.twca.com.tw
+slogan: Build a Cornerstone of Trusted Society with Trustworthy Identification Mechanism
+website: https://www.twca.com.tw/index?lang=en
 
 # Short description, longer content can be placed in `content/members/`
-description: TWCA is currently the largest certificate authority in Taiwan. In addition to issuing certificates for the domestic financial sector, we also issue TLS and S/MIME certificates internationally. I am the Director in charge of CA development, and currently also serve as the main point of contact for the CA/Browser Forum.
+description: TWCA is a leading independent certification authority technology company in Taiwan. It develops, licenses, supports, and sells certificate service, SSL, PKI security software, FINTECH security solution and finance security solution.
 
 # membership
 memberSince: 2025-06-24
@@ -37,19 +37,7 @@ careers:
 # Social media
 social:
   twitter: 
-  facebook: 
+  facebook: https://www.facebook.com/TWCAInc 
   instagram: 
   linkedin: 
-  youtube: 
-
-# Here you can list those who represent or have represented the member.
-#
-# Those wo no longer represent an organization might have written blog posts,
-# to keep the attribution a from/till data range can be included.
-representatives:
-  - name: ChyaHung Tsai
-    role: Director
-    social:
-      twitter: 
-      linkedin: https://www.linkedin.com/in/chyahung-tsai-934948128/
-    description: ChyaHung is the Director at TAIWAN-CA Inc. and represents the organization at the PKI Consortium.
+  youtube: https://www.youtube.com/@twid3180
