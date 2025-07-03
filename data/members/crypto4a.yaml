@@ -13,7 +13,9 @@ workingGroups:
   - PQC
 
 # sponsor
+# titanium since 2025-07-01
 sponsor:
+  level: Titanium
   sponsoring:
     "Post-Quantum Cryptography Conference Austin 2025":
       level: Innovator
