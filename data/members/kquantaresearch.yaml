@@ -1,0 +1,54 @@
+id: kquantaresearch
+name: Kquanta Research LlP
+slogan:
+website: https://www.kquantaresearch.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Explore our comprehensive market research services tailored for businesses looking to gain valuable insights to drive growth and success.
+
+# membership
+memberSince: 2025-07-04
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Anita Nandi-Ray
+    role: Policy Director
+    social:
+      twitter: 
+      linkedin: 
+    description: Anita is the Policy Director at Kquanta Research LlP and represents the organization at the PKI Consortium.
