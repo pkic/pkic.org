@@ -601,14 +601,13 @@ data:
 
       - time: "15:00"
         sessions:
-          - title: To be announced shortly
+          - title: "PQC in Action: From Global Standards to Secure Deployments"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              This session delivers the latest insights into Post Quantum Cryptography (PQC), beginning with an update on current standards, regulatory developments, and emerging technologies. It continues by connecting these advancements to real-world customer projects, illustrating how PQC is being applied across industries. As PQC moves from theory to deployment, attendees will explore how organizations are securing digital communications, implementing hybrid encryption, and enabling secure firmware updates. The session offers practical knowledge and implementation strategies — providing a clear view of the current state of PQC standardization, industry adoption, and the technical challenges of real-world integration.
             speakers:
-              - TBD
+              - Nils Gerhardt
             youtube:
-            presentation: 
+            presentation:
             locations:
               - plenary
 
