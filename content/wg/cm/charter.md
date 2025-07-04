@@ -10,7 +10,7 @@ heroDescription: By bringing together experts and stakeholders from across indus
 
 ---
 
-# Cryptographic Module Working Group Charter (TCWG)
+# Cryptographic Module Working Group Charter (CM)
 
 This Working Group Charter has been created according to the “Working Groups” section of the Bylaws of the PKI Consortium (“PKIC”). In the event of a conflict between this Charter and any provision in either the Bylaws or the IPR Policy, the provision in the Bylaws or IPR Policy shall take precedence.
 
@@ -19,7 +19,7 @@ This Working Group Charter has been created according to the “Working Groups�
 | | |
 |-|-|
 | **Name** |  Cryptographic Module |
-| **Abbreviation** | TCWG |
+| **Abbreviation** | CM |
 | **Mission** | To make PKI knowledge more widely available and to provide a mechanism for organizations to attest (potential) employees on their knowledge. |
 | **Chair** | Zsolt Rózsahegyi (i4p informatics) |
 | **Vice Chair** | Daniel Cervera (Microsoft) |
@@ -41,7 +41,7 @@ The scope of this working group is to provide a comprehensive platform for discu
 
 ## Objectives and Goals
 
-The objectives and goals of the CM WG are to:
+The objectives and goals of the Cryptographic Module Working Group are to:
 
 - Address general cryptographic module related topics and challenges,
 - Coordinate the development of practical and secure solutions to problems on its working plan,
