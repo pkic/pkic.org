@@ -12,6 +12,7 @@ memberType: F
 workingGroups:
   - PKIMM
   - PQC
+  - CM
   
 # sponsor
 sponsor:

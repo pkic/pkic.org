@@ -12,6 +12,7 @@ memberType: A
 workingGroups:
   - PQC
   - TCWG
+  - CM
 
 # sponsor
 sponsor:

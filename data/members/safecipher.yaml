@@ -11,6 +11,7 @@ description: SafeCipher focuses on Public Key Infrastructure (PKI), Hardware Sec
 memberSince: 2024-04-16
 memberType: H3
 workingGroups:
+  - CM
 
 # sponsor
 sponsor:

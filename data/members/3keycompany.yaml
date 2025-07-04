@@ -12,6 +12,7 @@ memberType: F
 workingGroups:
   - PKIMM
   - TCWG
+  - CM
 
 # sponsor
 sponsor:

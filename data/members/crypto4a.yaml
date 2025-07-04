@@ -11,6 +11,7 @@ memberSince: 2023-04-21
 memberType: F
 workingGroups:
   - PQC
+  - CM
 
 # sponsor
 # titanium since 2025-07-01

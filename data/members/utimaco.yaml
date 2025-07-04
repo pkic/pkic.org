@@ -11,6 +11,7 @@ memberSince: 2021-06-21
 memberType: F
 workingGroups:
  - PQC
+ - CM
 
 # sponsor
 sponsor:

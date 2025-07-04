@@ -12,6 +12,7 @@ memberType: A
 workingGroups:
   - CA
   - PKIMM
+  - CM
 
 # sponsor
 sponsor:
