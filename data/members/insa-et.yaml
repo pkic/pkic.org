@@ -11,9 +11,10 @@ description: The Information Network Security Administration was established for
 memberSince: 2023-01-16
 memberType: H1
 workingGroups:
- - PQC
+ - CM
  - PKIMM
-
+ - PQC
+ 
 # sponsor
 sponsor:
   level: 
