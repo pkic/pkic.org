@@ -8,8 +8,11 @@ description: Explore our comprehensive market research services tailored for bus
 
 # membership
 memberSince: 2025-07-04
-memberType: null
+memberType: H2
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: Policy Director
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/anitanandi/
     description: Anita is the Policy Director at Kquanta Research LlP and represents the organization at the PKI Consortium.
