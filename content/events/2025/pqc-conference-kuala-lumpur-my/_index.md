@@ -648,7 +648,7 @@ data:
             locations:
               - plenary
 
-          - title: Turning Quantum Threats into Opportunities: Modernizing WebPKI with QUIC and Metrics-Driven Insights
+          - title: "Turning Quantum Threats into Opportunities: Modernizing WebPKI with QUIC and Metrics-Driven Insights"
             description: |
               "As the web accelerates toward Post-Quantum Cryptography (PQC), many discussions focus on key exchange and signature upgrades in TLS. This session takes a metrics-driven technical lens to argue and accelerate PQC migration and a catalyst for a necessary transformation of the WebPKI HTTPS/TLS stack with QUIC.
               We will present a comprehensive analysis of the performance, latency, and security implications of PQC along with recent and upcoming changes to WebPKI in the context of QUIC and HTTP/3, including:
