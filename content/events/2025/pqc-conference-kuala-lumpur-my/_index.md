@@ -990,7 +990,7 @@ data:
               This session is designed for architects, security engineers, and decision-makers who need to answer the increasingly common question: What should we do, and why?
             track: 
             speakers:
-              - Sven Rajala
+              - Sven Rajala *
               - Sudha Iyer
               - Corey Bonnell
               - Tadahiko Ito
