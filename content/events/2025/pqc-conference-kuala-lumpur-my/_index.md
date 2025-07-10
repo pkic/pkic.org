@@ -298,6 +298,66 @@ data:
         linkedin: https://www.linkedin.com/in/frankmichaud/
         x: https://x.com/fmiche76
 
+    - name: Pieter Schneider
+      title: Program Manager Quantum Secure Cryptography at Dutch Ministry of the Interior & Kingdom Relations
+      bio: |
+        Pieter Schneider works as Program Manager Quantum Secure Cryptography NL (QvC-NL) at CIO Rijk of the Ministry of the Interior & Kingdom Relations. Pieter has a broad background in the security domain and cybersecurity. In his current role, he manages the QvC-NL program, which aims to help the Netherlands manage the risks of quantum technology on cryptography in time.
+      social:
+        linkedin: nl.linkedin.com/in/pietersdr
+
+    - name: Muralidharan Palanisamy
+      title: CSO  at AppViewX Inc
+      bio: |
+        Muralidharan Palanisamy is the Co-Founder and Chief Solutions Officer at AppViewX, where he leads enterprise solutions focused on scalable security automation, certificate lifecycle management, and crypto-agility. With over 20 years of experience in designing and delivering high-performance workload management systems for web-scale online banking and financial platforms, he brings a unique blend of practical systems engineering and forward-looking cryptographic strategy.
+      
+        His background includes building resilient infrastructure for high-availability, low-latency environments that demand airtight security and compliance. Muralidharan has led transformative initiatives across PKI modernization, TLS automation, and DNS-based trust models—working closely with Fortune 500 institutions navigating zero-trust, crypto-diversity, and now post-quantum readiness.
+      
+        As quantum computing accelerates, he advocates for a holistic approach to crypto transformation—where post-quantum migration intersects with operational resilience, automation, and real-world workload demands. He is a regular contributor to industry thought leadership and a passionate voice for secure, scalable, and agile trust frameworks in the post-quantum era.
+      social:
+        linkedin: https://www.linkedin.com/in/muralidharanpalanisamy/
+
+    - name: Alessandro Amadori
+      title: Cryptographer at TNO
+      bio: |
+        Alessandro Amadori is a cryptographer at TNO focusing on the migration to Post-quantum Cryptography. He holds a PhD from Eindhoven University of Technology in cryptographic implementations. He has contributed in several PQC migration projects like HAPKIDO, and is one a co-author of the second edition of the PQC migration handbook.
+      social:
+        linkedin: https://www.linkedin.com/in/alessandro-amadori-4b2149b8/
+
+    - name: Sven Rajala
+      title: International PKI Man of Mystery at Keyfactor
+      bio: |
+        An award winning seasoned cyber-security consultant with extensive subject matter expertise on PKI, automation of PKI/Signing Solutions, and containers. I have over 18 years of experience working in both the private sector and with federal government departments and agencies. I am frequently called upon to participate in client discussions, presentations, and seminars on topics including PKI, EJBCA, and PKI Devsecops. I also host the Key Master series by Keyfactor found on the YouTube Keyfactor Developers channel.
+      social:
+        linkedin: https://www.linkedin.com/in/international-pki-man-of-mystery/
+
+    - name: Corey Bonnell
+      title: Industry Technology Strategist
+      bio: |
+        Corey Bonnell is a Technology Strategist at DigiCert. He has over 15 years of engineering experience in several domains with a deep focus on Public Key Infrastructure. Corey represents DigiCert in several standards organizations, such as the CA/Browser Forum, ETSI, and IETF. He has been involved in the standardization process of emerging standards relating to post-quantum cryptography and is a frequent participant in IETF post-quantum cryptography hackathons.
+      social:
+        linkedin: https://www.linkedin.com/in/coreybonnell/
+
+    - name: Tadahiko Ito
+      title: Senior Researcher
+      bio: |
+        Tadahiko Ito is a Senior Researcher at Intelligent Systems Laboratory, SECOM CO., LTD. His research at SECOM includes cryptographic protocols, policy management, cryptographic key management, and planning for PQC transitions. He is a member of the CRYPTREC (Cryptographic Technology Research Working Group) PQC Research Working Group. Since 2017, he has represented SECOM Trust Systems at the CA/B Forum. He has co-authored several IETF RFCs, including RFC 8813, RFC 9295, and RFC 9336, among other publications. Before joining SECOM, his research topics at University of Tsukuba were Universally Composable security protocol design and homomorphic encryption algorithms, and he is (very) surprised to find an opportunity to put such knowledge to use.
+      social:
+        linkedin: https://www.linkedin.com/in/tadahiko-ito-b1b674160/
+
+    - name: Ganesh Mallaya
+      title:  at AppViewX Inc
+      bio: |
+        Ganesh Mallaya is a Distinguished Architect at AppViewX, where he has helped revolutionize certificate lifecycle management (CLM) and PKI solutions for global enterprises. A member of the CA/Browser Forum and a Harvard-certified cybersecurity strategist, he serves as a trusted advisor to organizations on post-quantum cryptography (PQC), digital trust infrastructure, and CLM modernization across complex, regulated environments
+      social:
+        linkedin: https://www.linkedin.com/in/ganeshmallaya/
+
+    - name: Danny Setyowati
+      title: Student at Republic of Indonesia Defense University
+      bio: |
+        Cyber Defense Engineering Student from Republic of Indonesia Defense University
+      social:
+        linkedin: 
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -588,12 +648,16 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: Turning Quantum Threats into Opportunities: Modernizing WebPKI with QUIC and Metrics-Driven Insights
             description: |
-              The speaker(s) for this session will be announced soon!
+              "As the web accelerates toward Post-Quantum Cryptography (PQC), many discussions focus on key exchange and signature upgrades in TLS. This session takes a metrics-driven technical lens to argue and accelerate PQC migration and a catalyst for a necessary transformation of the WebPKI HTTPS/TLS stack with QUIC.
+              We will present a comprehensive analysis of the performance, latency, and security implications of PQC along with recent and upcoming changes to WebPKI in the context of QUIC and HTTP/3, including:
+              Latency Benchmarks: Comparing TLS 1.3 over TCP vs QUIC,  0-RTT and session resumption and security posture shifts.
+              Early results from hybrid PQC handshakes (e.g., X25519 + Kyber) over QUIC, with handshake size, CPU & memory footprint,Impact of short-lived certificates and ACME automation on revocation, incident response, and operational risk.
+              Protocol Layer Efficiency: Analysis of QUIC, multi-stream behavior, and WebPKI’s role in seamless multi-origin TLS"
             track: 
             speakers:
-              - TBD
+              - Muralidharan Palanisamy
             youtube:
             presentation: 
             locations:
@@ -625,12 +689,12 @@ data:
 
       - time: "16:00"
         sessions:
-          - title: To be announced shortly
+          - title: "Get Fit For The Qubit: The Dutch approach to a Quantum Secure Society"
             description: |
-              The speaker(s) for this session will be announced soon!
+              This presentation gives a thorough overview of the Dutch Roadmap and Ambitions concerning a Quantum Safe Society. This roadmap has been established in 2023, but went through various changes as the attention towards the subject of Quantum Computing grew. Besides the involvement of the central government, also knowledge institutions helped in developing the roadmap. The presentation will cover how the roadmap came to be, the various challenges it met along the way and how those challenges were met. The presentation will also include a forecast towards 2026 and beyond, on what the Dutch Government aims to achieve on the national level, not only on the Governmental level, but also for Vital Industries. And how will the European Commissions’ Coordinated Implementation Roadmap for the Transition to Post-Quantum Cryptography Influence the current Dutch efforts? I’ll address all this during this presentation! 
             track: 
             speakers:
-              - TBD
+              - Pieter Schneider
             youtube:
             presentation: 
             locations:
@@ -785,12 +849,12 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: Hybrid Quantum-Safe Cryptography for Electric Vehicle Charging Infrastructure
             description: |
-              The speaker(s) for this session will be announced soon!
+              Europe is advancing in EV adoption to combat climate change and support renewable energy. This shift requires redesigning the energy infrastructure for charging demands. The DITM project aims to create a digital infrastructure for automated transport, enhancing safety, efficiency, and sustainability. The EnergyPod, part of DITM, optimizes EV charging and manages grid interaction. To secure against future quantum threats, TNO, NXP, and Infiniot upgraded OCPP with hybrid quantum-safe cryptography (TLS handshake and X.509 certificates). This protocol was tested on the NXP “i.MX 8” board, similar to those in real charging stations, and will be used in the EnergyPod. Various migration scenarios were tested, and a dashboard was developed to monitor real-time quantum-safe communication. In this talk, I will discuss the setup, process, challenges, and key takeaways from migrating a high-level protocol to hybrid PQC.
             track: 
             speakers:
-              - TBD
+              - Alessandro Amadori
             youtube:
             presentation: 
             locations:
@@ -917,12 +981,19 @@ data:
             
       - time: "15:00"
         sessions:
-          - title: To be announced shortly
+          - title: "PQC in Practice: Why This, Not That?"
             description: |
-              The speaker(s) for this session will be announced soon!
+              As the industry accelerates preparations for the post-quantum era, a growing number of organizations are grappling with a practical question: Which PQC deployment strategy is right for us? Should we adopt hybrid certificates, go pure post-quantum, use composite keys, or run dual cryptographic infrastructures? Each approach offers different trade-offs in terms of risk, interoperability, compliance, and operational complexity.
+      
+              This panel brings together leading experts and implementers to explore real-world use cases, deployment decisions, and the rationale behind them. Panelists will share insights into how organizations are evaluating the threat landscape, aligning cryptographic agility with business needs, and choosing between strategies.
+      
+              This session is designed for architects, security engineers, and decision-makers who need to answer the increasingly common question: What should we do, and why?
             track: 
             speakers:
-              - TBD
+              - Sven Rajala
+              - Sudha Iyer
+              - Corey Bonnell
+              - Tadahiko Ito
             youtube:
             presentation: 
             locations:
@@ -942,23 +1013,28 @@ data:
 
       - time: "16:00"
         sessions:
-          - title: To be announced shortly
+          - title: "Crypto-Agile PKI: A Strategic Blueprint for Post-Quantum Trust"
             description: |
-              The speaker(s) for this session will be announced soon!
+              "Quantum computing is reshaping the foundations of digital trust, and PKI must be the first to adapt. While NIST-standard algorithms like ML-KEM and ML-DSA progress toward adoption, organizations face a deeper challenge: evolving legacy PKI into a crypto-agile, automated, and future-ready infrastructure. This session presents a concise 20-minute blueprint for enabling that transition, without starting from scratch.
+      
+              We’ll explore three strategic priorities:
+              1) Assess cryptographic exposure across TLS, S/MIME, code signing, and device identity.
+              2) Embed crypto-agility and automation into certificate lifecycles using hybrid certs (draft-ietf-lamps-x509-slhdsa-09), short-lived certificates, and ACME-based issuance models.
+              3) Align PKI governance with emerging standards from NIST(1800-38B), ETSI, CAB Forum, and IETF."
             track: 
             speakers:
-              - TBD
+              - Ganesh Mallaya
             youtube:
             presentation: 
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: Implementing Hybrid TLS with ML-KEM-768 for Post-Quantum Security in Mobile IIoT Deployments
             description: |
-              The speaker(s) for this session will be announced soon!
+              This study integrates post-quantum cryptography into mobile IIoT via Cisco Packet Tracer models of Mobile Manufacturing Trucks and a centralized Security Operations Center. Trucks deploy sensors, routers and Quantum Shieldz AX200 modules and the SOC uses AX300DS and AXMS100DS. Hybrid TLS merges ECDHE with the ML-KEM-768 key-encapsulation mechanism (as standardized in NIST FIPS 203) . Node-RED and MQTT simulate real-time sensor streams over channels secured by SHA-3 integrity checks and QRNG keys. Tests show a 1.3× handshake-latency increase, under 300 ms responsiveness and anomaly detection under 1.5 s, meeting IEC 62443. Simulated MITM, DoS and outages yield seamless failover and state restoration. These findings confirm PQC feasibility in resource-constrained mobile IIoT and highlight the need for quantum-safe strategies. Future work will explore AI anomaly prediction, lattice signatures and hardware attestation.
             track: 
             speakers:
-              - TBD
+              - Danny Setyowati
             youtube:
             presentation: 
             locations:
@@ -981,7 +1057,7 @@ data:
             description: |
               As quantum computing advances, assessing the potential of current architectures to threaten AES encryption is essential. This study evaluates leading quantum processors, IBM, Google, Zuchongzhi 2, Microsoft, Rigetti, IonQ, and Honeywell, focusing on quantum gate complexity, qubit coherence time, and scalability trade-offs. It demonstrates how these systems, when scaled to thousands of qubits with error correction, could compromise AES security. The findings offer clearer insight into the timeline of quantum threats, aiding in strategic planning for mitigation and PQC migration. Enhancing AES robustness through longer key sizes and hybrid models is also explored to strengthen cryptographic readiness.
             speakers:
-              - Dr. -Ing. Somrak Petchartee
+              - Somrak Petchartee
             locations:
               - breakout
 
