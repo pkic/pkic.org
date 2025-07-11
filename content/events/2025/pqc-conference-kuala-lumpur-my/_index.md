@@ -303,7 +303,7 @@ data:
       bio: |
         Pieter Schneider works as Program Manager Quantum Secure Cryptography NL (QvC-NL) at CIO Rijk of the Ministry of the Interior & Kingdom Relations. Pieter has a broad background in the security domain and cybersecurity. In his current role, he manages the QvC-NL program, which aims to help the Netherlands manage the risks of quantum technology on cryptography in time.
       social:
-        linkedin: nl.linkedin.com/in/pietersdr
+        linkedin: https://www.linkedin.com/in/pietersdr
 
     - name: Muralidharan Palanisamy
       title: CSO  at AppViewX Inc
