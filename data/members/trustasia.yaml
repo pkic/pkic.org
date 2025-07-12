@@ -16,8 +16,9 @@ workingGroups:
   - PQC
 
 # sponsor
+# Upgraded from Bronze to Silver on 2025-07-10
 sponsor:
-  level: Bronze
+  level: Silver
 
 # Blog posts
 blog: 
