@@ -340,7 +340,7 @@ data:
     - name: Tadahiko Ito
       title: Senior Researcher
       bio: |
-        Tadahiko Ito is a Senior Researcher at Intelligent Systems Laboratory, SECOM CO., LTD. His research at SECOM includes cryptographic protocols, policy management, cryptographic key management, and planning for PQC transitions. He is a member of the CRYPTREC (Cryptographic Technology Research Working Group) PQC Research Working Group. Since 2017, he has represented SECOM Trust Systems at the CA/B Forum. He has co-authored several IETF RFCs, including RFC 8813, RFC 9295, and RFC 9336, among other publications. Before joining SECOM, his research topics at University of Tsukuba were Universally Composable security protocol design and homomorphic encryption algorithms, and he is (very) surprised to find an opportunity to put such knowledge to use.
+        Tadahiko Ito is a Senior Researcher at Intelligent Systems Laboratory, SECOM CO., LTD. His research at SECOM includes cryptographic protocols, policy management, cryptographic key management, and planning for PQC transitions. He is a member of the CRYPTREC (Cryptographic Technology Research Working Group) PQC Research Working Group. Since 2017, he has represented SECOM Trust Systems at the CA/B Forum. He has co-authored several IETF RFCs, including RFC 8813, RFC 9295, and RFC 9336, among other publications.
       social:
         linkedin: https://www.linkedin.com/in/tadahiko-ito-b1b674160/
 
