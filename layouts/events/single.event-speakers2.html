@@ -313,7 +313,7 @@
         
     </style>
 
-    {{ $js := resources.Get "js/event-speaker-card-3rd.js" }}
+    {{ $js := resources.Get "js/event-speaker-card.js" }}
     {{ $params := dict }}
     {{ $sourceMap := cond hugo.IsProduction "" "inline" }}
     {{ $opts := dict "sourceMap" $sourceMap "minify" hugo.IsProduction "target" "es2018" "params" $params }}
