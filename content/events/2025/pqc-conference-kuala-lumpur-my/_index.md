@@ -15,6 +15,7 @@ outputs:
  - event-overlays
  - event-session
  - event-speakers
+ - event-speakers2 
  - event-agenda
 
 params:
