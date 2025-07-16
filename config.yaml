@@ -124,6 +124,9 @@ outputFormats:
   event-speakers:
     mediatype: text/html
     baseName: event-speakers
+  event-speakers2:
+    mediatype: text/html
+    baseName: event-speakers2    
   event-data:
     mediatype: application/json
     isPlainText: true
