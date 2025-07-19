@@ -1,10 +1,10 @@
 id: uber
 name: Uber
 slogan: On our way
-website: https://www.uber.com/
+website: https://www.uber.com
 
 # Short description, longer content can be placed in `content/members/`
-description: Reimagine the way the world moves for the better.
+description: We reimagine the way the world moves for the better.
 
 # membership
 memberSince: 2025-05-20
@@ -20,38 +20,50 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://eng.uber.com
   feed:
   language: en_US
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.uber.com/newsroom
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://careers.uber.com
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  twitter: https://twitter.com/uber
+  facebook: https://www.facebook.com/uber
+  instagram: https://instagram.com/uber
+  linkedin: https://www.linkedin.com/company/1815218
+  youtube: https://www.youtube.com/channel/UCgnxoUwDmmyzeigmmcf0hZA
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Lucas Rodrigues Carneiro
+  - name: Pavel Kruhlei
+    role: Engineering Manager
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/pavel-kruhlei/
+    description: Pavel is an Engineering Manager at Uber, PKI Officer on the Platform Security team, and represents the organization at the PKI Consortium.
+  - name: Artem Myagkov
+    role: Senior Software Engineer
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/artem-myagkov-b9290930/
+    description: Artem is a Senior Software Engineer at Uber, PKI Officer on the Platform Security team, and represents the organization at the PKI Consortium.
+  - name: Lucas Carneiro
     role: Software Engineer
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/lucasrodcarneiro/
-    description: Lucas is the Software Engineer at Uber and represents the organization at the PKI Consortium.
+    description: Lucas is a Software Engineer at Uber, PKI Officer on the Platform Security team, and represents the organization at the PKI Consortium.
