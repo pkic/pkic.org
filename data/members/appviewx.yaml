@@ -1,4 +1,4 @@
-id: AVX
+id: appviewx
 name: AppViewX
 slogan: Automate certificate lifecycle management with AppViewX for efficiency, security, and compliance!
 website: https://www.appviewx.com/
@@ -16,8 +16,9 @@ workingGroups:
   - CM
 
 # sponsor
+# Upgraded to Silver on 2025-07-19
 sponsor:
-  level:
+  level: Silver
 
 # Blog posts
 blog: 
