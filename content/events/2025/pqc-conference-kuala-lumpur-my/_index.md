@@ -380,10 +380,10 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/hao-qin-18888r/?originalSubdomain=sg
 
-    - name: Hewa Waduge Udara Pathum
+    - name: Udara Pathum
       title: Senior Software Engineer at WSO2
       bio: |
-        I am a Senior Software Engineer at WSO2 and working on the post-quantum research team since 2023. My work focuses on integrating post-quantum cryptographic algorithms into real-world IAM and PKI systems. I have authored several articles sharing practical insights from PQC research and development, especially on hybrid cryptographic transitions and PQC adoption roadmaps.
+        Udara Pathum is a Senior Software Engineer at WSO2, leading initiatives in post-quantum cryptography (PQC) since 2023. He focuses on integrating PQC algorithms into real-world identity and access management (IAM) and public key infrastructure (PKI) systems, ensuring they are future-ready against quantum threats. Udara has authored several articles sharing real-world insights on PQC integration, hybrid cryptographic transitions, and adoption strategies. His goal is to help organizations future-proof their security infrastructure without disrupting existing systems.
       social:
         linkedin: https://lk.linkedin.com/in/hwupathum
 
@@ -406,6 +406,20 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/andrew-cheung-a7b8ba5/
 
+    - name: Stefan van den Berg
+      title: Researcher Cryptography and Cyber Security at TNO
+      bio: |
+        Stefan van den Berg is a cryptographer at the department Applied Cryptography and Quantum Algorithms at TNO. He has a background in information security and embedded systems. His work focuses on development of various Privacy-Enhancing Technologies, Post-Quantum Cryptography solutions and Quantum Applications.
+      social:
+        linkedin: https://www.linkedin.com/in/stefan-van-den-berg-3aa2b0129/
+
+    - name: Sven Konings
+      title: Software Developer
+      bio: |
+        Konings is a Software Developer at ZYNYO, working on digital signatures. As part of the HAPKIDO project he is working on the transition to quantum-safe digital signatures. Sven studied at the University of Twente and graduated in both masters Computer Science and Science Education and Communication."
+      social:
+        linkedin: https://www.linkedin.com/in/svenkonings/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -414,13 +428,21 @@ data:
 
       - time: "9:00"
         sessions:
-          - title: Workshops
+          - title: "Advancing CBOM: Hands-On with CycloneDX v1.7 and PKI Extensions"
             description: |
-              Workshops kick off the conference on Day 1, offering a focused environment for technical deep dives, practical training, expert roundtables, and hands-on exploration of post-quantum cryptography, secure architectures, crypto agility, and related topics.
+              _The Linux Foundation CBOM with ClycloneDX_
 
-              They run in parallel across multiple rooms, with smaller group sizes to encourage interaction. Registration is available on a first-come, first-served basis.
-            speakers: 
-              - TBD
+              The CBOM workshop will help participants understand and become familiar with the  upcoming extensions to the CycloneDX CBOM standard v1.7. In particular new extensions targeted at reporting PKI certificates. We are actively talking to industry vendors who have expressed interest in collaborating on this workshop.
+              
+              **We will explore:**
+
+              * Use open-source software recently transferred to the Linux Foundation.  The software will be used as a basis for a hands-on section of the course.
+              * Become familiar with the  upcoming extensions to the CycloneDX CBOM standard v1.7
+              ___
+
+               _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
+            speakers:
+              - Michael Osborne
             locations:
               - room_1
 
@@ -447,24 +469,57 @@ data:
             locations:
               - room_2
 
-          - title: To be announced shortly 
-            description: This workshop will be announced shortly
-            speakers: 
-              - TBD
+          - title: "Enabling Quantum-Safe, Crypto -Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
+            description: |
+              As quantum computing threatens modern cryptography, organizations must prepare their infrastructure for a post-quantum world. Hardware security modules (HSMs) — key to digital trust — must evolve. This workshop covers the strategic and technical foundations of quantum-safe security, focusing on Crypto4A’s 5th-generation QxHSM™.
+
+              **We will explore:**
+              
+              * Part 1: Business Imperatives (2 hrs) - Explore drivers behind PQC adoption, including regulations, risk mitigation, and use cases like harvest-now-decrypt-later. Learn what defines a quantum-safe HSM and how QxHSM™ supports crypto-agility, reduces complexity, and ensures trust and compliance.
+              * Part 2: Technical Foundations (1.5 hrs) - Dive into PQC integration, key management, and secure HSM architecture. A live demo of QxHSM™ highlights key creation, usage, policy control, and agility.
+              
+              Join us to learn how to future-proof your cryptographic systems using quantum-safe security that’s built in — not bolted on.
+            speakers:
+              - Bruno Couillard
+              - Olivier Couillard
+              - Robert Grapes
             locations:
               - room_3
 
-          - title: To be announced shortly 
-            description: This workshop will be announced shortly
-            speakers: 
-              - TBD
+          - title: Securing the future Internet of Things with ML-KEM and ML-DSA
+            description: |
+              Today's Internet of Things (IoT) relies on a variety of protocols and communications technologies…CoAP, LwM2M, LoRaWAN, NB-IoT, Wi-Fi, Thread … many of which are not quantum-safe. 
+              
+              While large-scale quantum computers capable of breaking current encryption aren't yet available, the concept of ""harvest now, decrypt later"" is a significant concern. Now that NIST has released final versions of its first three Post-Quantum Cryptography (PQC) standards the race is on to make IoT quantum-safe.
+              
+              **We will explore:**
+
+              * Learn what it takes to make an MQTT-based IoT solution quantum safe. 
+              * Implement and transmit data between a device and an MQTT broker using MQTT with TLS 1.3, ML-KEM, and ML-DSA using open-source tools. 
+              ___
+              
+              _In order to fully participate in this workshop you will need a Ubuntu 22.04 (arm64 or x64) virtual machine capable of running Mosquitto MQTT broker, Wireshark and some client tools (2-4GB RAM, 15-20GB disk)._
+            speakers:
+              - Kevin Hilscher
             locations:
               - room_4
 
-          - title: To be announced shortly 
-            description: This workshop will be announced shortly
-            speakers: 
-              - TBD
+          - title: Create your own quantum-safe signed PDF documents with hybrid cryptography
+            description: |
+              This workshop is from a collaborative effort between TNO and Zynyo. Standards are now established and libraries are being released, the integration of Post-Quantum Cryptography into products is increasing. However, the adoption of PQC is not yet universal across all scenarios and use-cases. This workshop provides a unique opportunity for participants to create signed PDF documents using hybrid PQC using software DSS that creates digital signatures based on ETSI standards in line with European legislation such as the eIDAS regulation.  
+
+              **We will explore:**
+
+              * Participants will sign PDF documents using different types of hybrid certificates,
+              * validate signatures to confirm their authenticity and integrity, 
+              * Visualize signed PDFs and have tangible proof of their validity.
+              ___
+
+              _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
+            speakers:
+              - Alessandro Amadori
+              - Sven Konings
+              - Stefan van den Berg
             locations:
               - room_5
 
@@ -498,17 +553,42 @@ data:
             locations:
               - room_1
 
-          - title: To be announced shortly 
-            description: This workshop will be announced shortly
+          - title: "Hands-On PQC Migration: From Cryptographic asset inventory to PQC Crypto-agility"
+            description: |
+              With NIST setting a clear 2030 deadline for the deprecation of RSA and ECC in favor of quantum-safe algorithms, organizations face an urgent need to assess and modernize their cryptographic landscape. This workshop offers a practical, end-to-end session on post-quantum cryptography (PQC) migration—starting with cryptographic asset discovery and inventory, through quantum risk assessment, and culminating in the replacement of legacy algorithms with NIST-approved PQC standards.
+
+              **We will explore:**
+
+              * Create a PQC PKI and hybrid PKI using EJBCA, 
+              * Issue a signing certificate to SignServer, and demonstrate how to integrate with a hardware security module (HSM) to secure cryptographic keys and operations—bridging the gap between proof of concept and real world deployment. 
+              * Demonstrate cryptographic asset monitoring and automatic cryptographic migration using Keyfactor solutions, 
+              * Highlight the key steps for PQC transition at scale and with agility.
+
+              This session will equip you with the tools and strategies needed to future-proof your quantum safe cryptographic infrastructure.
+              ___
+
+              _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
             speakers: 
-              - TBD
+              - Tomas Gustavsson
+              - Chris Hickman
+              - Tony Chen
             locations:
               - room_2
 
-          - title: To be announced shortly 
-            description: This workshop will be announced shortly
-            speakers: 
-              - TBD
+          - title: "Enabling Quantum-Safe, Crypto -Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
+            description: |
+              As quantum computing threatens modern cryptography, organizations must prepare their infrastructure for a post-quantum world. Hardware security modules (HSMs) — key to digital trust — must evolve. This workshop covers the strategic and technical foundations of quantum-safe security, focusing on Crypto4A’s 5th-generation QxHSM™.
+
+              **We will explore:**
+              
+              * Part 1: Business Imperatives (2 hrs) - Explore drivers behind PQC adoption, including regulations, risk mitigation, and use cases like harvest-now-decrypt-later. Learn what defines a quantum-safe HSM and how QxHSM™ supports crypto-agility, reduces complexity, and ensures trust and compliance.
+              * Part 2: Technical Foundations (1.5 hrs) - Dive into PQC integration, key management, and secure HSM architecture. A live demo of QxHSM™ highlights key creation, usage, policy control, and agility.
+              
+              Join us to learn how to future-proof your cryptographic systems using quantum-safe security that’s built in — not bolted on.
+            speakers:
+              - Bruno Couillard
+              - Olivier Couillard
+              - Robert Grapes
             locations:
               - room_3
 
@@ -850,7 +930,7 @@ data:
             description: |
               The quantum threat demands urgent upgrades to IAM systems, spanning TLS, PKI (encryption and digital signatures), and SSO protocols like SAML and OIDC. This session outlines practical strategies for transitioning to post-quantum cryptography, emphasizing post-quantum TLS (e.g., ML-KEM) and quantum-safe PKI. We highlight hybrid encryption and hybrid digital signatures to enable smooth migration with backward compatibility. Additionally, we provide actionable post-quantum recommendations for organizations to ensure crypto agility and resilience in identity management.
             speakers:
-              - Hewa Waduge Udara Pathum
+              - Udara Pathum
             youtube:
             presentation: 
             locations:
