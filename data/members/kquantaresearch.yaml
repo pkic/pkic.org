@@ -1,6 +1,6 @@
 id: kquantaresearch
 name: Kquanta Research LlP
-slogan:
+slogan: Shaping Tomorrow ,Today
 website: https://www.kquantaresearch.com
 
 # Short description, longer content can be placed in `content/members/`
@@ -20,7 +20,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://kquantaresearch.com/insights
   feed: 
   language: en_US
 
@@ -38,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  twitter: https://x.com/KquantaResearch
   facebook: 
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/company/105374266/admin/dashboard/
+  youtube: https://www.youtube.com/@kquantaresearchllp
 
 # Here you can list those who represent or have represented the member.
 #
