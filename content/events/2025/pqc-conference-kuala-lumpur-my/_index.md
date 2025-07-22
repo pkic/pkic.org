@@ -406,6 +406,20 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/andrew-cheung-a7b8ba5/
 
+    - name: Stefan van den Berg
+      title: Researcher Cryptography and Cyber Security at TNO
+      bio: |
+        Stefan van den Berg is a cryptographer at the department Applied Cryptography and Quantum Algorithms at TNO. He has a background in information security and embedded systems. His work focuses on development of various Privacy-Enhancing Technologies, Post-Quantum Cryptography solutions and Quantum Applications.
+      social:
+        linkedin: https://www.linkedin.com/in/stefan-van-den-berg-3aa2b0129/
+
+    - name: Sven Konings
+      title: Software Developer
+      bio: |
+        Konings is a Software Developer at ZYNYO, working on digital signatures. As part of the HAPKIDO project he is working on the transition to quantum-safe digital signatures. Sven studied at the University of Twente and graduated in both masters Computer Science and Science Education and Communication."
+      social:
+        linkedin: https://www.linkedin.com/in/svenkonings/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -417,7 +431,7 @@ data:
           - title: "Advancing CBOM: Hands-On with CycloneDX v1.7 and PKI Extensions"
             description: |
               _The Linux Foundation CBOM with ClycloneDX_
-              
+
               The CBOM workshop will help participants understand and become familiar with the  upcoming extensions to the CycloneDX CBOM standard v1.7. In particular new extensions targeted at reporting PKI certificates. We are actively talking to industry vendors who have expressed interest in collaborating on this workshop.
               
               **We will explore:**
@@ -504,6 +518,8 @@ data:
               _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
             speakers:
               - Alessandro Amadori
+              - Sven Konings
+              - Stefan van den Berg
             locations:
               - room_5
 
