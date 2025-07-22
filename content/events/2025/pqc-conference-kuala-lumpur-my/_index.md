@@ -359,6 +359,53 @@ data:
       social:
         linkedin: 
 
+    - name: Kevin Hilscher
+      title: Sr. Director, Product Management at DigiCert
+      bio: |
+        Kevin works at the intersection of IoT and cybersecurity. Kevin is the product leader for the DigiCert Device Trust portfolio of products, focused on securing the Internet of Things (IoT). Kevin’s passion is for building platforms and device software for securing connected products, helping customers focus on building a superior connect product and not security “plumbing”. Kevin routinely speaks at industry conferences on the topic of IoT, product security, post-quantum cryptography (PQC), and IoT cybersecurity regulations. Kevin came to DigiCert from Microsoft Azure IoT, where he spent 7 years working with IoT customers, helping them build and secure connected products. 
+      social:
+        linkedin: https://www.linkedin.com/in/kevinhilscher/
+
+    - name: Jing Yan Haw
+      title: Senior Research Fellow at Centre for Quantum Technologies, National University of Singapore
+      bio: |
+        Dr. Jing Yan Haw is a Senior Researcher and technical lead at the National Quantum-Safe Network (NQSN), Centre for Quantum Technologies, National University of Singapore. With over a decade of experience in quantum science, he focuses on quantum key distribution (QKD), quantum security validation, and quantum-safe standards. He serves as an editor for the IMDA-TSAC Quantum Communication Networks Task Force and as a committee member of the Singapore Computer Society’s Quantum Technology SIG. He also contributes to ITU-T Q15/17 “Quantum-based Security” and ETSI ISG QKD standards. Dr. Haw earned his PhD from the Australian National University in experimental quantum communication and has published in Nature Photonics, Nature Communications, PRX Quantum, and Optica.
+      social:
+        linkedin: https://www.linkedin.com/in/jing-yan-haw-11657250/
+
+    - name: Hao Qin
+      title: Senior Research Fellow at Centre for Quantum Technologies, National University of Singapore
+      bio: |
+        Dr. Hao Qin is a senior researcher in National Quantum-Safe Network, affiliated with Centre for Quantum Technologies, National University of Singapore. He serves as the co-chair of the Quantum Communication Networks Task Force under Singapore's IMDA, vice chair of the Joint Coordination Activity on Quantum Key Distribution Networks and associate rapporteur for Q15/17 "Quantum-based Security" under the UN’s ITU. His research focuses on the practical aspects of quantum communication networks, including implementation security and testing evaluation, network and key management, use cases and applications, as well as standardization and certification.
+      social:
+        linkedin: https://www.linkedin.com/in/hao-qin-18888r/?originalSubdomain=sg
+
+    - name: Hewa Waduge Udara Pathum
+      title: Senior Software Engineer at WSO2
+      bio: |
+        I am a Senior Software Engineer at WSO2 and working on the post-quantum research team since 2023. My work focuses on integrating post-quantum cryptographic algorithms into real-world IAM and PKI systems. I have authored several articles sharing practical insights from PQC research and development, especially on hybrid cryptographic transitions and PQC adoption roadmaps.
+      social:
+        linkedin: https://lk.linkedin.com/in/hwupathum
+
+    - name: Reza Azarderakhsh
+      title: CTO at PQSecure and FAU
+      bio: |
+        Dr. Reza Azarderakhsh is a Professor at Florida Atlantic University and the CEO of PQSecure Technologies. He is a leading expert in post-quantum cryptographic engineering, specializing in secure hardware/software co-design, side-channel protections, and formal verification. Dr. Azarderakhsh has published over 140 papers in top-tier conferences and journals related to post-quantum cryptography, contributing significantly to national and international efforts in quantum-safe security for embedded and constrained systems.
+      social:
+        linkedin: https://www.linkedin.com/in/reza-azarderakhsh-39777042/
+
+    - name: Andrew Cheung
+      title: President & CEO at 01 Communique Laboratory Inc.
+      bio: |
+        Mr. Cheung boasts over 25 years of invaluable experience as a Chief Executive Officer and Chief Technology Officer. Throughout his illustrious career, he has consistently spearheaded cutting-edge innovations, and driven product
+        development, resulting in a portfolio of 9 patents within the computer software industry. Notably, his outstanding contributions were recognized with a nomination for the prestigious Ernst and Young Entrepreneur-Of-The-Year award in 2001.
+        
+        Since founding his company in 1992, Andrew has positioned himself as a technology pioneer in Post-Quantum Cybersecurity and Remote Access technologies.   With over 15 years of hands-on experience and extensive expertise in patent application, prosecution, and litigation processes, he has established himself as a formidable force in the field.
+        
+        He remains at the forefront of technological advancements, with his latest innovation focusing on cybersecurity.  His groundbreaking work in Post-Quantum Cryptography (PQC), leveraging NIST-approved quantum-resistant algorithms, is a testament to his forward-thinking approach.  By combining his PQC engine with patent-protected measures into a wide array of applications, including cryptocurrencies, emails, and AI machine learning systems.  This proactive approach ensures robust protection against potential cyber threats posed by quantum computers, thereby safeguarding the integrity of classical computer systems as we know them today. 
+      social:
+        linkedin: https://www.linkedin.com/in/andrew-cheung-a7b8ba5/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -799,16 +846,15 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: Transitioning to Post-Quantum Cryptography in IAM
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              The quantum threat demands urgent upgrades to IAM systems, spanning TLS, PKI (encryption and digital signatures), and SSO protocols like SAML and OIDC. This session outlines practical strategies for transitioning to post-quantum cryptography, emphasizing post-quantum TLS (e.g., ML-KEM) and quantum-safe PKI. We highlight hybrid encryption and hybrid digital signatures to enable smooth migration with backward compatibility. Additionally, we provide actionable post-quantum recommendations for organizations to ensure crypto agility and resilience in identity management.
             speakers:
-              - TBD
+              - Hewa Waduge Udara Pathum
             youtube:
             presentation: 
             locations:
-              - breakout
+              - breakout"
 
       - time: "10:00"
         sessions:
@@ -823,12 +869,11 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: "PQC Formal VErification: Challenges and Tools for Formal Verification of Post-Quantum Cryptography"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              As post-quantum cryptography advances toward deployment, formal verification becomes essential for ensuring trust in both hardware and software implementations. Each PQC algorithm—such as ML-KEM, ML-DSA, and SLH-DSA—presents unique challenges, and while tools like Cryptol, SAW, and Coq offer valuable support, no single framework offers a complete solution. In this talk, we introduce an effort focused on practical formal assurance for PQC. We will demonstrate how Cryptol and SAW can verify key properties of ML-KEM and ML-DSA components. We also highlight the growing role of Rust in cryptographic implementations and discuss the importance of verifying PQC libraries in memory-safe languages. Our goal is to promote scalable, implementation-aware formal methods to ensure secure and verifiable PQC adoption.
             speakers:
-              - TBD
+              - Reza Azarderakhsh
             youtube:
             presentation: 
             locations:
@@ -873,37 +918,35 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: "NQSN Singapore: Quantum-Safe Network Testbed with Versatile Reference Applications"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              We present the strategic vision and technical foundations of Singapore’s National Quantum-Safe Network (NQSN)—a resilient, fully interoperable quantum-safe testbed. Built on production-grade fiber infrastructure in a star-topology layout, the network supports multi-protocol quantum key distribution (QKD) from multiple vendors. A centralized key and network management system ensures interoperability and enables seamless integration across heterogeneous quantum and classical technologies. The testbed also supports diverse reference applications, including data center interconnects, edge computing, hybrid QKD–post-quantum cryptography (PQC) encryption, and multi-layer security across the OSI stack. These efforts demonstrate the feasibility, adaptability, and real-world relevance of deploying quantum-safe technologies in complex network environments.
             speakers:
-              - TBD
+              - Jing Yan Haw
+              - Hao Qin
             youtube:
-            presentation: 
+            presentation:  
             locations:
-              - breakout
-
+              - breakout"
 
       - time: "12:00"
         sessions:
-          - title: To be announced shortly
+          - title: "From Inventory to Action: Navigating the Next Phase of PQC Transition"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              Over the past few years, cybersecurity professionals worldwide have been urged—by security agencies and consultants alike—to kickstart their post-quantum cryptographic transition with a cryptographic inventory. Many have taken that advice to heart, amassing vast amounts of cryptographic data. Now, organizations face the critical question: how do we turn this information into action? 
+              This presentation explores that very question. We’ll examine the next critical steps in the PQC transition from multiple perspectives—technical, strategic, and operational—and offer actionable guidance including prioritizing frameworks, risk-based approaches, and implementation timelines to help organizations turn insight into meaningful progress.
             speakers:
-              - TBD
+              - Bruno Couillard
             youtube:
             presentation: 
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: "Beyond the Quantum Threat: Demonstrating Real-World Blockchain Resilience"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              Cryptocurrencies rely on PKI to ensure the authenticity and integrity of transactions through digital signatures. At the heart of this trust model is Public Key Infrastructure (PKI), which underpins the authenticity and integrity of every transaction within a blockchain network. PKI ensures that digital signatures—whether from payers initiating cryptocurrency transfers or validators confirming blocks—are verifiable and tamper-proof. RSA and ECC have long secured this ecosystem, but quantum computing threatens to break these algorithms via Shor’s algorithm, enabling private key recovery. An existing cryptocurrency network has been successfully transitioned to quantum-safety by using NIST finalist post-quantum algorithms, preserving performance, interoperability, and trust. This work demonstrates not only the feasibility but also the urgency of adapting PKI for a secure, post-quantum blockchain future.
             speakers:
-              - TBD
+              - Andrew Cheung
             youtube:
             presentation: 
             locations:
