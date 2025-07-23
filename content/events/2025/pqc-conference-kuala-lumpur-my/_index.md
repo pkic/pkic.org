@@ -420,6 +420,23 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/svenkonings/
 
+    - name: Tony Chen
+      title: Solutions Engineer
+      bio: |
+        Meet Tony Chen, the cybersecurity wizard with over 9 years of PKI magic up his sleeve! As an Asia-Pacific and Japan Solution Engineer at Keyfactor, he’s the go-to guy for all things secure and know-how of solutions to keep the digital world safe and sound.
+      social:
+        linkedin: https://www.linkedin.com/in/tony-chen-he/
+
+    - name: Chris Hickman
+      title: Security Officer
+      bio: |
+        As Chief Security Officer at Keyfactor, Chris Hickman is at the forefront of advancing the company’s position as a leader of digital trust security solutions in the technical landscape of cryptographic infrastructure and digital certificates. With extensive experience in smart card management systems, PKI design, and directory services, Chris is committed to integrating the voice of the customer into Keyfactor’s platform to drive innovative solutions and accelerate digital trust in the evolving security landscape. He spearheads Keyfactor’s post-quantum cryptography (PQC) strategies to support organizations in their quantum-readiness journeys. He remains an industry-wide trusted resource on enhancing digital trust through SaaS-delivered PKI solutions and certificate lifecycle automation software to support security teams of modern enterprises. 
+      social:
+        linkedin: https://www.linkedin.com/in/chrishickman613/
+
+
+ 
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
