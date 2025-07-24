@@ -330,6 +330,7 @@ data:
         An award winning seasoned cyber-security consultant with extensive subject matter expertise on PKI, automation of PKI/Signing Solutions, and containers. I have over 18 years of experience working in both the private sector and with federal government departments and agencies. I am frequently called upon to participate in client discussions, presentations, and seminars on topics including PKI, EJBCA, and PKI Devsecops. I also host the Key Master series by Keyfactor found on the YouTube Keyfactor Developers channel.
       social:
         linkedin: https://www.linkedin.com/in/international-pki-man-of-mystery/
+        github: https://github.com/svenska-primekey
 
     - name: Corey Bonnell
       title: Industry Technology Strategist
@@ -434,7 +435,12 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/chrishickman613/
 
-
+    - name: Lim Huck Hai
+      title: Managing Partner - Consulting at Baker Tilly Malaysia
+      bio: |
+        Huck Hai is leading a team of PKI, PQC and AI professionals at Baker Tilly and is a founding member of ACPMIT, based in Budapest, Hungary.  Throughout his career, Huck has led numerous WebTrust for Certification Authorities audits, successfully delivered under KPMG, BDO, and now Baker Tilly. He is an active member of the Institute of Chartered Accountants in England and Wales (ICAEW) Tech Faculty Board and serves as the elected President of the Association of Certified Fraud Examiners (ACFE) - Malaysia Chapter. Huck has played a significant role in collaborating with authorities on National Root CA, Post-Quantum Cryptography (PQC), Cybersecurity, and Artificial Intelligence (AI). He was engaged by the Government of Malaysia in the implementation of the Digital Signature Act 1997 and Digital Signature Regulations 1998.
+      social:
+        linkedin: https://www.linkedin.com/in/huckhai-lim-847234a/
  
 
   # Agenda ----------------------------------------------------------------------
@@ -855,12 +861,15 @@ data:
 
       - time: "16:30"
         sessions:
-          - title: To be announced shortly
+          - title: Navigating the Quantum Era – A Strategic Path to Resilience
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              This panel discussion isn't just about understanding the quantum threat; it's about charting a clear, actionable course for enterprises to achieve resilience in the quantum era. We'll dissect the impending quantum threat and explore the critical migration strategy to secure enterprises for the quantum era, today and tomorrow.
+              The panel will commence by contrasting the divergent national and regional strategies being pursued globally. From the collaborative, coordinated model of the European Union to more sovereign, state-driven approaches, the panel will highlight the nuances of each. This deep dive will also dissect the global landscape of Post-Quantum Cryptography (PQC) migration specifically relevant to the EU and Asia Pacific regions. We'll contrast these national strategies – focusing on Collaborative, Sovereign, and Capacity-building efforts – against the NIST standardization baseline, a crucial benchmark for the industry.
+              The core objective of this panel is to synthesize these divergent paths into a clear, actionable framework for business and technical leaders. We'll move beyond the theoretical to deliberate a practical strategy that transforms PQC migration from a complex technical challenge into a strategic imperative for risk mitigation, operational resilience, and securing a sustainable competitive advantage in the quantum era.
             speakers:
-              - TBD
+              - Lim Huck Hai*
+              - Albert Ruiter
+              - William Gee
             youtube:
             presentation: 
             locations:
