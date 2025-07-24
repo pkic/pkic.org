@@ -338,6 +338,7 @@ data:
         Corey Bonnell is a Technology Strategist at DigiCert. He has over 15 years of engineering experience in several domains with a deep focus on Public Key Infrastructure. Corey represents DigiCert in several standards organizations, such as the CA/Browser Forum, ETSI, and IETF. He has been involved in the standardization process of emerging standards relating to post-quantum cryptography and is a frequent participant in IETF post-quantum cryptography hackathons.
       social:
         linkedin: https://www.linkedin.com/in/coreybonnell/
+        ietf: https://datatracker.ietf.org/person/corey.bonnell@digicert.com
 
     - name: Tadahiko Ito
       title: Senior Researcher
@@ -345,6 +346,7 @@ data:
         Tadahiko Ito is a Senior Researcher at Intelligent Systems Laboratory, SECOM CO., LTD. His research at SECOM includes cryptographic protocols, policy management, cryptographic key management, and planning for PQC transitions. He is a member of the CRYPTREC (Cryptographic Technology Research Working Group) PQC Research Working Group. Since 2017, he has represented SECOM Trust Systems at the CA/B Forum. He has co-authored several IETF RFCs, including RFC 8813, RFC 9295, and RFC 9336, among other publications.
       social:
         linkedin: https://www.linkedin.com/in/tadahiko-ito-b1b674160/
+        ietf: https://datatracker.ietf.org/person/Tadahiko%20Ito
 
     - name: Ganesh Mallaya
       title:  at AppViewX Inc
