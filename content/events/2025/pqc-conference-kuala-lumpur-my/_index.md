@@ -870,7 +870,7 @@ data:
               The core objective of this panel is to synthesize these divergent paths into a clear, actionable framework for business and technical leaders. We'll move beyond the theoretical to deliberate a practical strategy that transforms PQC migration from a complex technical challenge into a strategic imperative for risk mitigation, operational resilience, and securing a sustainable competitive advantage in the quantum era.
             speakers:
               - Lim Huck Hai *
-              - Albert Ruiter
+              - Albert de Ruiter
               - William Gee
             youtube:
             presentation: 
