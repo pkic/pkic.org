@@ -869,8 +869,8 @@ data:
               The panel will commence by contrasting the divergent national and regional strategies being pursued globally. From the collaborative, coordinated model of the European Union to more sovereign, state-driven approaches, the panel will highlight the nuances of each. This deep dive will also dissect the global landscape of Post-Quantum Cryptography (PQC) migration specifically relevant to the EU and Asia Pacific regions. We'll contrast these national strategies – focusing on Collaborative, Sovereign, and Capacity-building efforts – against the NIST standardization baseline, a crucial benchmark for the industry.
               The core objective of this panel is to synthesize these divergent paths into a clear, actionable framework for business and technical leaders. We'll move beyond the theoretical to deliberate a practical strategy that transforms PQC migration from a complex technical challenge into a strategic imperative for risk mitigation, operational resilience, and securing a sustainable competitive advantage in the quantum era.
             speakers:
-              - Lim Huck Hai*
-              - Albert Ruiter
+              - Lim Huck Hai *
+              - Albert de Ruiter
               - William Gee
             youtube:
             presentation: 
