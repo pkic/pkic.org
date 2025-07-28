@@ -444,6 +444,17 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/huckhai-lim-847234a/
  
+    - name: Anurag Krishna Sharma
+      title: Scientist  at Advanced Data Processing Research Institute 
+      bio: |
+        I am a Theoretical Computer Scientist working with the Department of Space, Government of India, where I focus on high-assurance systems, secure communication protocols, and advanced computational models. My expertise spans Network Security, Post-Quantum Cryptography, Generative AI, and Quantum Networking, with practical implementation experience using Qiskit, OpenQASM, and IBMQ.
+        
+        I previously collaborated with AIIMS (All India Institute of Medical Sciences) to enhance healthcare infrastructure through technological innovation—particularly in secure data systems and intelligent diagnostics.
+        
+        I hold a Master’s degree in Computer Science from IIT Delhi, where my academic research explored the intersection of cryptographic theory and real-world systems, with applications in quantum-secure communication and privacy-preserving architectures.
+      social:
+        linkedin: https://www.linkedin.com/in/anurag-sharma-099798134/
+
 
   # Agenda ----------------------------------------------------------------------
   agenda:
@@ -1072,14 +1083,13 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: Post Quantum Key Exchange in VPN Using ML-KEM-768
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              This paper presents a user-space integration of ML-KEM-768, a post-quantum key encapsulation mechanism standardized by NIST, with WireGuard, a modern VPN protocol. Rather than modifying the kernel-level X25519 elliptic-curve Diffie-Hellman handshake, the proposed approach establishes a Kyber-based shared secret over sockets and injects it as a pre-shared key (PSK) into WireGuard’s Noise protocol. This en-hances WireGuard’s resistance to quantum attacks without altering its core code. Experimental results demonstrate successful key agreement and acceptable performance overhead, making the solution viable for hybrid VPN deployments in the post-quantum era
             speakers:
-              - TBD
+              - Anurag Krishna Sharma
             youtube:
-            presentation: 
+            presentation:               
             locations:
               - breakout
 
