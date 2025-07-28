@@ -455,6 +455,12 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/anurag-sharma-099798134/
 
+- name: James Howe
+    title: Head of Cryptography at SandboxAQ
+    bio: |
+      Dr James Howe leads the cryptography team at SandboxAQ, overseeing its researchers and serving as the company’s subject matter expert on cryptography. He drives research and guides the design and enhancement of SandboxAQ’s cybersecurity products, with a focus on post-quantum cryptography, cryptographic modernization, and strengthening compliance and risk management capabilities. He is an author of SDitH, a NIST PQC signature scheme candidate, and serves as vice-chair of the ETSI Quantum-Safe Cryptography working group. For more than 10 years, his research has focused on hardware and software implementations, side-channel security, and the practical application of advanced cryptography.
+    social:
+      linkedin: https://www.linkedin.com/in/jameshowe1729/
 
   # Agenda ----------------------------------------------------------------------
   agenda:
@@ -1203,12 +1209,13 @@ data:
 
       - time: "16:30"
         sessions:
-          - title: To be announced shortly
+          - title: "From Noise to Clarity: Adding Intelligence to the PQC Migration"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              Cryptographic inventories in modern enterprises are vast and the resulting alert fatigue often obscures true risk. This talk presents a novel method for automated, context-aware triage of cryptographic vulnerabilities. The technique leverages a large-scale, expert-curated knowledge base of cryptographic objects to enrich an organization's asset inventory.
+              
+              This enrichment process automates expert-level analysis to distinguish benign issues (e.g., a weak key in sample code) from critical threats (the same key in production). By intelligently filtering informational noise & presenting assets in a structured, explorable format, the method transforms data overload into actionable intelligence. We demonstrate how this context-aware triaging enables security teams to isolate root causes & shift from reactive alert management to a strategy of precise, proactive remediation. The cryptographic clarity achieved through this method will significantly accelerate an organization's migration to PQC.
             speakers:
-              - TBD
+              - James Howe
             youtube:
             presentation: 
             locations:
