@@ -966,12 +966,11 @@ data:
 
       - time: "10:00"
         sessions:
-          - title: To be announced shortly
+          - title: "From theory to practice: The way to a cryptographic inventory along NIST 1800-38B"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              This presentation compares 3 currently discussed approaches in building a cryptographic inventory: Focussing into used cryptographic material, using exisiting databases and building a full assessment. Discussing this apporaches compared to the use cases defined by US-NIST and CISA, the presentation shall provide a overview and discuss the potential advantages and disadvantages of each approach.   
             speakers:
-              - TBD
+              - Dr. Alexander Loew
             youtube:
             presentation: 
             locations:
