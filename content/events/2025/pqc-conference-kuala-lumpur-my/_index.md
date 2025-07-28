@@ -456,11 +456,11 @@ data:
         linkedin: https://www.linkedin.com/in/anurag-sharma-099798134/
 
     - name: James Howe
-        title: Head of Cryptography at SandboxAQ
-        bio: |
-          Dr James Howe leads the cryptography team at SandboxAQ, overseeing its researchers and serving as the company’s subject matter expert on cryptography. He drives research and guides the design and enhancement of SandboxAQ’s cybersecurity products, with a focus on post-quantum cryptography, cryptographic modernization, and strengthening compliance and risk management capabilities. He is an author of SDitH, a NIST PQC signature scheme candidate, and serves as vice-chair of the ETSI Quantum-Safe Cryptography working group. For more than 10 years, his research has focused on hardware and software implementations, side-channel security, and the practical application of advanced cryptography.
-        social:
-          linkedin: https://www.linkedin.com/in/jameshowe1729/
+      title: Head of Cryptography at SandboxAQ
+      bio: |
+        Dr James Howe leads the cryptography team at SandboxAQ, overseeing its researchers and serving as the company’s subject matter expert on cryptography. He drives research and guides the design and enhancement of SandboxAQ’s cybersecurity products, with a focus on post-quantum cryptography, cryptographic modernization, and strengthening compliance and risk management capabilities. He is an author of SDitH, a NIST PQC signature scheme candidate, and serves as vice-chair of the ETSI Quantum-Safe Cryptography working group. For more than 10 years, his research has focused on hardware and software implementations, side-channel security, and the practical application of advanced cryptography.
+      social:
+        linkedin: https://www.linkedin.com/in/jameshowe1729/
 
     - name: Olivier Couillard
       title: Technical Product Manager at Crypto4A Technologies, Inc.
