@@ -1035,7 +1035,7 @@ data:
             youtube:
             presentation:  
             locations:
-              - breakout"
+              - breakout
 
       - time: "12:00"
         sessions:
