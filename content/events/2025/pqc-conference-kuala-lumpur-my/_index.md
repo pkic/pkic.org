@@ -560,7 +560,7 @@ data:
               
               Join us to learn how to future-proof your cryptographic systems using quantum-safe security that’s built in — not bolted on.
               ___
-              _*Note:* This session is offered twice: once in the morning at 9:00 AM, and again in the afternoon at 2:00 PM, both in Room 3._
+              _**Note:** This session is offered twice: once in the morning at 9:00 AM, and again in the afternoon at 2:00 PM, both in Room 3._
             speakers:
               - Bruno Couillard
               - Olivier Couillard
@@ -669,7 +669,7 @@ data:
               
               Join us to learn how to future-proof your cryptographic systems using quantum-safe security that’s built in — not bolted on.
               ___
-              _*Note:* This session is offered twice: once in the morning at 9:00 AM, and again in the afternoon at 2:00 PM, both in Room 3._
+              _**Note:** This session is offered twice: once in the morning at 9:00 AM, and again in the afternoon at 2:00 PM, both in Room 3._
             speakers:
               - Bruno Couillard
               - Olivier Couillard
