@@ -444,6 +444,44 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/huckhai-lim-847234a/
  
+    - name: Anurag Krishna Sharma
+      title: Scientist  at Advanced Data Processing Research Institute 
+      bio: |
+        I am a Theoretical Computer Scientist working with the Department of Space, Government of India, where I focus on high-assurance systems, secure communication protocols, and advanced computational models. My expertise spans Network Security, Post-Quantum Cryptography, Generative AI, and Quantum Networking, with practical implementation experience using Qiskit, OpenQASM, and IBMQ.
+        
+        I previously collaborated with AIIMS (All India Institute of Medical Sciences) to enhance healthcare infrastructure through technological innovation—particularly in secure data systems and intelligent diagnostics.
+        
+        I hold a Master’s degree in Computer Science from IIT Delhi, where my academic research explored the intersection of cryptographic theory and real-world systems, with applications in quantum-secure communication and privacy-preserving architectures.
+      social:
+        linkedin: https://www.linkedin.com/in/anurag-sharma-099798134/
+
+    - name: James Howe
+      title: Head of Cryptography at SandboxAQ
+      bio: |
+        Dr James Howe leads the cryptography team at SandboxAQ, overseeing its researchers and serving as the company’s subject matter expert on cryptography. He drives research and guides the design and enhancement of SandboxAQ’s cybersecurity products, with a focus on post-quantum cryptography, cryptographic modernization, and strengthening compliance and risk management capabilities. He is an author of SDitH, a NIST PQC signature scheme candidate, and serves as vice-chair of the ETSI Quantum-Safe Cryptography working group. For more than 10 years, his research has focused on hardware and software implementations, side-channel security, and the practical application of advanced cryptography.
+      social:
+        linkedin: https://www.linkedin.com/in/jameshowe1729/
+
+    - name: Olivier Couillard
+      title: Technical Product Manager at Crypto4A Technologies, Inc.
+      bio: |
+        Olivier joined Crypto4A seven years ago and has since contributed to nearly every facet of the HSM platform. His work spans from RNG design and entropy assessment to firmware development, key management applications, and even web UI implementation. In addition to his technical expertise, Olivier has collaborated with a wide range of customers and has been actively involved in the FIPS 140-2 and 140-3 certification processes.
+      social:
+        linkedin: https://www.linkedin.com/in/olivier-couillard-30627459/
+
+    - name: Inigo Barreira
+      title: ETSI ESI Vice Chair at Sectigo
+      bio: |
+        Inigo Barreira is the ETSI ESI Vice Chair and a senior compliance engineer at Sectigo.  Inigo has more than 20 years of experience running root programs and ensuring CA compliance. 
+      social:
+        linkedin: https://www.linkedin.com/in/inigo-barreira-107690/
+
+    - name: Chris Bailey
+      title: Chair of the Board of Directors and Executive Council
+      bio: |
+        Experienced executive with a demonstrated history of leading and growing cybersecurity software and service organizations. Skilled in Sales, E-commerce, Strategic Planning, Business Development, and Go-to-market Strategy. Strong sales professional with a MBA focused in Strategy and Marketing from Emory University - Goizueta Business School. 
+      social:
+        linkedin: https://www.linkedin.com/in/christophertmbailey/
 
   # Agenda ----------------------------------------------------------------------
   agenda:
@@ -727,8 +765,7 @@ data:
               
               Through real examples from field engagements, the talk explores how security teams are assessing quantum readiness, making critical decisions with incomplete information, and adapting to shifting standards under real operational pressures.
               
-              Rather than focusing on abstract principles, the session offers a grounded look at quantum security in action. Designed to resonate with technically savvy professionals, the narrative blends foundational context with hands-on application, providing actionable takeaways for those navigating the evolving path toward post-quantum resilience.
-              
+              Rather than focusing on abstract principles, the session offers a grounded look at quantum security in action. Designed to resonate with technically savvy professionals, the narrative blends foundational context with hands-on application, providing actionable takeaways for those navigating the evolving path toward post-quantum resilience. 
             speakers:
               - Alexey Bocharnikov
             locations:
@@ -746,14 +783,17 @@ data:
 
       - time: "12:30"
         sessions:
-          - title: To be announced shortly
+          - title: "Scaling Trust: CLM Roadblocks on the Path to Post-Quantum Resilience"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              As enterprises prepare for post-quantum cryptography (PQC), the ability to discover, manage, and transition cryptographic assets at scale has become a mission-critical capability. Certificate Lifecycle Management (CLM) is often seen as the answer, but CLM at enterprise scale is more complex than most anticipate. This panel brings together thought leaders from various CLM vendors and industry experts to unpack the strategic lessons learned and operational friction points that organizations face in aligning CLM systems with quantum-resilient architectures.
             speakers:
-              - TBD
+              - Chris Bailey *
+              - Chris Hickman
+              - Muralidharan Palanisamy
+              - George Parsons
+
             youtube:
-            presentation: 
+            presentation:              
             locations:
               - plenary
 
@@ -877,12 +917,11 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: HSM Advances Supporting quantum-safe PKI Automation
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              New advances in Hardware Security Modules (HSMs) are enabling automation opportunities during certificate issuance. One such advance is the progress on hardware-supported attestation where a CA can ascertain the location and disposition associated with the subject key. This supports enforcing policies such as the ones relating to code signing where subject keys must be generated and held by specialized hardware. The concepts surrounding attestation have been developing quickly within the IETF (RATS working group) and work is underway to bridge the gap to HSMs. Attestation functions within the HSM enable other features such as secure audit, verification of the state of an HSM, origin of keys, and more. It is imperative that this attestation capability be quantum-safe if it is to be relied upon for key management of other quantum-safe assets. Furthermore, as attestation relies on hardware roots of trust, this capability must either be deployed at manufacturing time or with the use of quantum-safe mechanisms. This presentation describes a quantum-safe attestation feature, how it can be employed within a PKI environment, and how it can be securely deployed. It also shows the advances in automation and the improvement in compliance that arises from adopting these techniques.
             speakers:
-              - TBD
+              - Olivier Couillard
             youtube:
             presentation: 
             locations:
@@ -966,12 +1005,15 @@ data:
 
       - time: "10:00"
         sessions:
-          - title: To be announced shortly
+          - title: "Cryptographic Discovery and Inventory: The Hidden Foundation for Enterprise Security"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              Most enterprises are preparing for tighter regulations, certificate renewal challenges, and post-quantum threats — yet few have a complete picture of their cryptographic landscape. Without visibility, automation and resilience remain out of reach.
+
+              This session will reveal how organizations can build a robust cryptographic inventory and discovery process, comparing three leading approaches: targeted scanning of cryptographic material, leveraging existing databases, and full enterprise assessments. We’ll map these strategies to US-NIST and CISA use cases, explore their advantages and limitations, and show how they form the foundation for PKI automation and post-quantum readiness.
+
+              Attendees will leave with actionable steps to uncover, document, and manage cryptographic assets, tackle the 47‑day certificate renewal challenge, and build a scalable, future-ready security posture.
             speakers:
-              - TBD
+              - Dr. Alexander Loew
             youtube:
             presentation: 
             locations:
@@ -1035,7 +1077,7 @@ data:
             youtube:
             presentation:  
             locations:
-              - breakout"
+              - breakout
 
       - time: "12:00"
         sessions:
@@ -1062,25 +1104,25 @@ data:
 
       - time: "12:30"
         sessions:
-          - title: To be announced shortly
+          - title: How ETSI Is Preparing for PQC
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              Settling on PQC algorithms is only part of the journey to make our digital systems safe from the Quantum Apocalypse.  An essential step is for certificates of various types to support PQC and for the regulations to allow them. 
+              
+              ETSI is the governing body empowered by the European Union to give us the eIDAS standard for digital certificates.  In this session you will learn ETSI’s plans for PQC, the status PQC in the standards-making process, and expectations for when PQC-enabled eIDAS certificates will be available. 
             speakers:
-              - TBD
+              - Inigo Barreira
             youtube:
             presentation: 
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: Post Quantum Key Exchange in VPN Using ML-KEM-768
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              This paper presents a user-space integration of ML-KEM-768, a post-quantum key encapsulation mechanism standardized by NIST, with WireGuard, a modern VPN protocol. Rather than modifying the kernel-level X25519 elliptic-curve Diffie-Hellman handshake, the proposed approach establishes a Kyber-based shared secret over sockets and injects it as a pre-shared key (PSK) into WireGuard’s Noise protocol. This en-hances WireGuard’s resistance to quantum attacks without altering its core code. Experimental results demonstrate successful key agreement and acceptable performance overhead, making the solution viable for hybrid VPN deployments in the post-quantum era
             speakers:
-              - TBD
+              - Anurag Krishna Sharma
             youtube:
-            presentation: 
+            presentation:               
             locations:
               - breakout
 
@@ -1194,12 +1236,13 @@ data:
 
       - time: "16:30"
         sessions:
-          - title: To be announced shortly
+          - title: "From Noise to Clarity: Adding Intelligence to the PQC Migration"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              Cryptographic inventories in modern enterprises are vast and the resulting alert fatigue often obscures true risk. This talk presents a novel method for automated, context-aware triage of cryptographic vulnerabilities. The technique leverages a large-scale, expert-curated knowledge base of cryptographic objects to enrich an organization's asset inventory.
+              
+              This enrichment process automates expert-level analysis to distinguish benign issues (e.g., a weak key in sample code) from critical threats (the same key in production). By intelligently filtering informational noise & presenting assets in a structured, explorable format, the method transforms data overload into actionable intelligence. We demonstrate how this context-aware triaging enables security teams to isolate root causes & shift from reactive alert management to a strategy of precise, proactive remediation. The cryptographic clarity achieved through this method will significantly accelerate an organization's migration to PQC.
             speakers:
-              - TBD
+              - James Howe
             youtube:
             presentation: 
             locations:
