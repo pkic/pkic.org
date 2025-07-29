@@ -477,9 +477,15 @@ data:
         linkedin: https://www.linkedin.com/in/inigo-barreira-107690/
 
     - name: Chris Bailey
-      title: Chair of the Board of Directors and Executive Council
+      title: Chair of the Board of Directors and Executive Council of the PKI Consortium and Board Member of AppViewX
       bio: |
-        Experienced executive with a demonstrated history of leading and growing cybersecurity software and service organizations. Skilled in Sales, E-commerce, Strategic Planning, Business Development, and Go-to-market Strategy. Strong sales professional with a MBA focused in Strategy and Marketing from Emory University - Goizueta Business School. 
+        Chris Bailey is a recognized leader in the digital security and Public Key Infrastructure (PKI) industry, with more than 25 years of experience driving innovation, shaping global standards, and building trust across the certificate authority (CA) ecosystem. He currently serves as Board Chair of the PKI Consortium, a nonprofit dedicated to advancing PKI maturity, interoperability, post-quantum readiness, and best practices across industries. He also serves as a Board Member of AppViewX.
+
+        A founding member of the CA/Browser Forum and the PKI Consortium, Chris has played a pivotal role in the creation and global adoption of standards for SSL/TLS certificates and digital trust. He was one of the original architects of the Domain Validation (DV) Certificate, which now secures the vast majority of TLS connections online. His contributions also include launching the first publicly trusted PDF signing certificate, enabling legally binding digital signatures, and co-inventing the Brand Indicators for Message Identification (BIMI) certificate, which displays verified brand logos in supported email clients to enhance trust and combat phishing.
+
+        Chris has held senior leadership roles at Trend Micro, Entrust, and GeoTrust, three prominent companies in the cybersecurity and digital certificate sectors. In these roles, he expanded certificate offerings, guided policy development, and strengthened industry collaboration around trusted identity and encryption technologies.   
+        
+        Driven by a deep commitment to community engagement, standards development, and technical innovation, Chris continues to champion secure digital identity solutions and foster global cooperation throughout the PKI ecosystem.
       social:
         linkedin: https://www.linkedin.com/in/christophertmbailey/
 
