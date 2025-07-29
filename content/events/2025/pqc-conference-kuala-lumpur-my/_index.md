@@ -476,6 +476,13 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/inigo-barreira-107690/
 
+    - name: Chris Bailey
+      title: Chair of the Board of Directors and Executive Council
+      bio: |
+        Experienced executive with a demonstrated history of leading and growing cybersecurity software and service organizations. Skilled in Sales, E-commerce, Strategic Planning, Business Development, and Go-to-market Strategy. Strong sales professional with a MBA focused in Strategy and Marketing from Emory University - Goizueta Business School. 
+      social:
+        linkedin: https://www.linkedin.com/in/christophertmbailey/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -780,7 +787,11 @@ data:
             description: |
               As enterprises prepare for post-quantum cryptography (PQC), the ability to discover, manage, and transition cryptographic assets at scale has become a mission-critical capability. Certificate Lifecycle Management (CLM) is often seen as the answer, but CLM at enterprise scale is more complex than most anticipate. This panel brings together thought leaders from various CLM vendors and industry experts to unpack the strategic lessons learned and operational friction points that organizations face in aligning CLM systems with quantum-resilient architectures.
             speakers:
-              - Chris Bailey
+              - Chris Bailey *
+              - Chris Hickman
+              - Muralidharan Palanisamy
+              - George Parsons
+
             youtube:
             presentation:              
             locations:
