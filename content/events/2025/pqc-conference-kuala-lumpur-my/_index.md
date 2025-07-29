@@ -492,6 +492,14 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/christophertmbailey/
 
+    - name: George Parsons
+      title: Head of PKI Strategy
+      bio: |
+        George Parsons brings over three decades of experience in cryptographic policy, compliance, and automation. As a founder team member of VeriSign, he helped shape the early PKI trust model for the Internet, working closely with Netscape and Microsoft on the development of SSL server enrollment protocols and processes. Today, he leads PKI Strategy at CyberArk, where he helps enterprises modernize their PKI trust infrastructures to support Zero Trust architectures, enable certificate lifecycle automation, and prepare for post-quantum cryptographic transitions.
+      social:
+        linkedin: https://www.linkedin.com/in/georgehparsons/
+
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
