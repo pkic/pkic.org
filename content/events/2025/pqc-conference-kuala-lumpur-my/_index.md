@@ -46,12 +46,13 @@ data:
       livestream: https://pkic.org/events/2025/pqc-conference-kuala-lumpur-my/livestream/#Breakout
 
     2025-10-28:
-      order: [room_1, room_2, room_3, room_4, room_5]
+      order: [room_1, room_2, room_3, room_4, room_5, room_6]
       room_1:
       room_2:
       room_3:
       room_4:
       room_5:
+      room_6:
 
   # Speakers --------------------------------------------------------------------
   speakers:
@@ -356,9 +357,11 @@ data:
         linkedin: https://www.linkedin.com/in/ganeshmallaya/
 
     - name: Danny Setyowati
-      title: Student at Republic of Indonesia Defense University
+      title: Cyber Defense Graduate Scholar
       bio: |
-        Cyber Defense Engineering Student from Republic of Indonesia Defense University
+        With over 14 years of experience in the chemical manufacturing industry, Danny Setyowati has led critical initiatives in IT integration, infrastructure security, and SAP-based enterprise solutions. Her career has been rooted in bridging operational technology (OT) and information technology (IT) to support industrial resilience and innovation.
+        Currently, Danny is pursuing a Master’s degree in Cyber Defense Engineering at the Republic of Indonesia Defense University (Unhan RI) under a prestigious government scholarship. Her research focuses on integrating Post-Quantum Cryptography (PQC) into Industrial Internet of Things (IIoT) environments, emphasizing secure communication frameworks, PQC-based TLS protocols, and quantum-resilient infrastructure for national defense and strategic industries.
+        Danny brings a unique perspective that combines deep industrial insight with cutting-edge cybersecurity strategies, particularly in the context of post-quantum readiness and national critical infrastructure protection.
       social:
         linkedin: 
 
@@ -489,6 +492,14 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/christophertmbailey/
 
+    - name: George Parsons
+      title: Head of PKI Strategy
+      bio: |
+        George Parsons brings over three decades of experience in cryptographic policy, compliance, and automation. As a founder team member of VeriSign, he helped shape the early PKI trust model for the Internet, working closely with Netscape and Microsoft on the development of SSL server enrollment protocols and processes. Today, he leads PKI Strategy at CyberArk, where he helps enterprises modernize their PKI trust infrastructures to support Zero Trust architectures, enable certificate lifecycle automation, and prepare for post-quantum cryptographic transitions.
+      social:
+        linkedin: https://www.linkedin.com/in/georgehparsons/
+
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -538,7 +549,7 @@ data:
             locations:
               - room_2
 
-          - title: "Enabling Quantum-Safe, Crypto -Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
+          - title: "Enabling Quantum-Safe, Crypto-Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
             description: |
               As quantum computing threatens modern cryptography, organizations must prepare their infrastructure for a post-quantum world. Hardware security modules (HSMs) — key to digital trust — must evolve. This workshop covers the strategic and technical foundations of quantum-safe security, focusing on Crypto4A’s 5th-generation QxHSM™.
 
@@ -548,6 +559,8 @@ data:
               * Part 2: Technical Foundations (1.5 hrs) - Dive into PQC integration, key management, and secure HSM architecture. A live demo of QxHSM™ highlights key creation, usage, policy control, and agility.
               
               Join us to learn how to future-proof your cryptographic systems using quantum-safe security that’s built in — not bolted on.
+              ___
+              _**Note:** This session is offered twice: once in the morning at 9:00 AM, and again in the afternoon at 2:00 PM, both in Room 3._
             speakers:
               - Bruno Couillard
               - Olivier Couillard
@@ -608,6 +621,7 @@ data:
               - room_3
               - room_4
               - room_5
+              - room_6
 
       - time: "13:00"
         title: Lunch
@@ -644,7 +658,7 @@ data:
             locations:
               - room_2
 
-          - title: "Enabling Quantum-Safe, Crypto -Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
+          - title: "Enabling Quantum-Safe, Crypto-Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
             description: |
               As quantum computing threatens modern cryptography, organizations must prepare their infrastructure for a post-quantum world. Hardware security modules (HSMs) — key to digital trust — must evolve. This workshop covers the strategic and technical foundations of quantum-safe security, focusing on Crypto4A’s 5th-generation QxHSM™.
 
@@ -654,6 +668,8 @@ data:
               * Part 2: Technical Foundations (1.5 hrs) - Dive into PQC integration, key management, and secure HSM architecture. A live demo of QxHSM™ highlights key creation, usage, policy control, and agility.
               
               Join us to learn how to future-proof your cryptographic systems using quantum-safe security that’s built in — not bolted on.
+              ___
+              _**Note:** This session is offered twice: once in the morning at 9:00 AM, and again in the afternoon at 2:00 PM, both in Room 3._
             speakers:
               - Bruno Couillard
               - Olivier Couillard
@@ -691,6 +707,7 @@ data:
               - room_3
               - room_4
               - room_5
+              - room_6
 
       - time: "18:00"
         title: End of Day One
@@ -1019,13 +1036,13 @@ data:
 
               Attendees will leave with actionable steps to uncover, document, and manage cryptographic assets, tackle the 47‑day certificate renewal challenge, and build a scalable, future-ready security posture.
             speakers:
-              - Dr. Alexander Loew
+              - Alexander Löw
             youtube:
             presentation: 
             locations:
               - plenary
 
-          - title: "PQC Formal VErification: Challenges and Tools for Formal Verification of Post-Quantum Cryptography"
+          - title: "PQC Formal Verification: Challenges and Tools for Formal Verification of Post-Quantum Cryptography"
             description: |
               As post-quantum cryptography advances toward deployment, formal verification becomes essential for ensuring trust in both hardware and software implementations. Each PQC algorithm—such as ML-KEM, ML-DSA, and SLH-DSA—presents unique challenges, and while tools like Cryptol, SAW, and Coq offer valuable support, no single framework offers a complete solution. In this talk, we introduce an effort focused on practical formal assurance for PQC. We will demonstrate how Cryptol and SAW can verify key properties of ML-KEM and ML-DSA components. We also highlight the growing role of Rust in cryptographic implementations and discuss the importance of verifying PQC libraries in memory-safe languages. Our goal is to promote scalable, implementation-aware formal methods to ensure secure and verifiable PQC adoption.
             speakers:
@@ -1110,7 +1127,7 @@ data:
 
       - time: "12:30"
         sessions:
-          - title: How ETSI Is Preparing for PQC
+          - title: How ETSI is Preparing for PQC
             description: |
               Settling on PQC algorithms is only part of the journey to make our digital systems safe from the Quantum Apocalypse.  An essential step is for certificates of various types to support PQC and for the regulations to allow them. 
               
