@@ -499,6 +499,14 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/georgehparsons/
 
+    - name: William Gee
+      title: Vice Chair of the Asia PKI Consortium
+      bio: |
+        William is a Chartered Accountant specialising in the adoption and governance of emerging technologies.  William has extensive experience in Public Key Infrastructure (PKI) and related technologies.  He has been instrumental in supporting the establishment of Hong Kong’s Public Key Infrastructure and related licensing regime.  William further led the development of the technical framework that support the Mutual Recognition of electronic signature certificates issued by Hong Kong and Guangdong, China
+        With advances in blockchain technologies, William participated in several initiatives that leverage PKI and blockchain to enable trusted digital identity for corporates, as well as safeguarding the integrity of trade documents to facilitate cross-border payments and settlement.
+        As Vice Chair of the Asia PKI Consortium, William is collaborating with the PKI industry on raising awareness of the Quantum Threat and advising on transitional approach to Post-Quantum Cryptography.  William is also participating in several initiatives relating to integrating quantum-resistant technologies in digital wallets, blockchain platforms and virtual assets.
+      social:
+        linkedin: https://www.linkedin.com/in/swwgee/
 
   # Agenda ----------------------------------------------------------------------
   agenda:
