@@ -508,6 +508,20 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/swwgee/
 
+    - name: Michiel Marcus
+      title: Cryptographer at TNO
+      bio: |
+        Michiel Marcus is a researcher at the Netherlands Institute of Applied Scientific Research (TNO) and has conducted research on Privacy-Enhancing Technologies, Post-Quantum Cryptography and Formal Verification. He has been actively involved in real-word post-quantum cryptography migrations and led workshops on post-quantum migration.
+      social:
+        linkedin: https://www.linkedin.com/in/michiel-marcus
+
+    - name: Volker Krummel
+      title: Chapter Lead PQC at Utimaco
+      bio: |
+        Volker Krummel is the Chapter Lead PQC at Utimaco, a leading provider of cyber security solutions. Before joining Utimaco Volker worked with governmental institutions and in the financial industry designing cryptographic protocols and solutions for roughly 15 years. Volker holds a PhD in cryptography and is still active in the research of certain topics of cryptography.
+      social:
+        linkedin: https://www.linkedin.com/in/volker-krummel-4ba519174/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -828,14 +842,18 @@ data:
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: "Stateful Hash based Signatures: Practical Enhancements and Lessons learned"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              Stateful hash based signatures provide the best ratio of maturity and efficiency but require the handling of the state in a secure manner.
+              In this talk we show how to leverage the usability and practical efficiency of stateful signature schemes.
+              
+              We show how to (nearly) close the gap between stateful and stateless signature schemes by a high level of automation built on top of a secure distributed state handling scheme.
+
+              Furthermore, we show details and lessons learned of how to increase the efficiency by distributing the key generation process and outsourcing the computation of the public authentication path to trustworthy external modules.
+              
+              Putting all the pieces together results in a highly agile architecture that provides the maximum of flexibility for the whole life span of the use case by fully preserving the security and maturity of the stateful hash based signatures.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Volker Krummel
             locations:
               - breakout
 
@@ -1181,14 +1199,11 @@ data:
 
       - time: "14:30"
         sessions:
-          - title: To be announced shortly
+          - title: "Real-World Post-Quantum Migrations: Lessons Learned and Performance Results"
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              This presentation will share the lessons learned during the migration of several real-world systems to post-quantum cryptography and provide performance data. Specifically, we will cover three use cases carried out by two banks and the Dutch tax authority and zoom in on the technical and non-technical challenges that arose during those use cases. Some of the topics that will be discussed are crypto-agility in code, architectural solutions to blocking vendor dependencies and how to involve vendor management. Additionally, we will give an overview of the performance results of some of the migrated systems.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Michiel Marcus
             locations:
               - plenary
 
