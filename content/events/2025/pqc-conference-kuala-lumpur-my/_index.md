@@ -1032,7 +1032,7 @@ data:
             youtube:
             presentation: 
             locations:
-              - breakout"
+              - breakout
 
       - time: "10:00"
         sessions:
