@@ -18,9 +18,11 @@ workingGroups:
 # sponsor
 sponsor:
   sponsoring:
+    "Post-Quantum Cryptography Conference Kuala Lumpur 2025":
+      level: Leader
     "Post-Quantum Cryptography Conference Austin 2025":
       level: Leader
-
+      
 # Blog posts
 blog: 
   url: https://www.ssl.com/blog/
