@@ -778,6 +778,19 @@ data:
             locations:
               - plenary
 
+      - time: "10:30"
+        sessions:
+          - title: Keynote
+            description: |
+              The speaker(s) for this session will be announced soon!
+            track: 
+            speakers:
+              - TBD
+            youtube:
+            presentation: 
+            locations:
+              - plenary
+              
       - time: "11:00"
         title: Break
         sponsor: 
