@@ -779,8 +779,12 @@ data:
               - plenary
 
       - time: "10:30"
+        title: Break
+        sponsor: 
+        
+      - time: "11:00"
         sessions:
-          - title: Keynote
+          - title: To be announced shortly
             description: |
               The speaker(s) for this session will be announced soon!
             track: 
@@ -790,10 +794,17 @@ data:
             presentation: 
             locations:
               - plenary
-              
-      - time: "11:00"
-        title: Break
-        sponsor: 
+
+          - title: To be announced shortly
+            description: |
+              The speaker(s) for this session will be announced soon!
+            track: 
+            speakers:
+              - TBD
+            youtube:
+            presentation: 
+            locations:
+              - breakout
 
       - time: "11:30"
         sessions:
