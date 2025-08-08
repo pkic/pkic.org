@@ -522,6 +522,21 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/volker-krummel-4ba519174/
 
+    - name: Jaime Gómez García
+      id: jaime-gomez-garcia
+      title: Global Head of the Santander Quantum Threat Program, Chair of the Europol Quantum Safe Financial Forum
+      bio: |
+        Jaime Gómez García is a recognized expert in telecommunications, blockchain, and quantum technologies, with an extensive professional background within the financial sector. His contributions as a disseminator of quantum technologies and their consequential influence on enterprises, notably within the financial domain, have garnered him recognition as a LinkedIn Quantum Top Voices in 2022 and 2023. Currently, Jaime is Head of Quantum Technologies at Banco Santander, addressing how quantum computing can be leveraged in benefit of the business and how to tackle the quantum threat to cryptography.
+      social:
+        linkedin: https://www.linkedin.com/in/jaime-gomez-garcia/
+        
+    - name: Mila Anastasova
+      title: Applied Scientist at Amazon Web Services (AWS)
+      bio: |
+        Mila Anastasova is an applied scientist at Amazon. She has received her PhD degree in Computer Engineering at Florida Atlantic University, in 2024. Her research is focused on the implementation and optimization of classical and post-quantum cryptography algorithms for different low- and high-end target platforms, as well as their integration into security network protocols.
+      social:
+        linkedin: https://www.linkedin.com/in/mila-anastasova/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -784,25 +799,23 @@ data:
         
       - time: "11:00"
         sessions:
-          - title: To be announced shortly
+          - title: Quantum-Safety Timelines in the Financial Sector
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              The financial sector has moved decisively from awareness-building into active implementation of quantum-safe strategies. While 2024 primarily focused on raising awareness, 2025 has marked a significant shift towards concrete implementation activities across numerous financial institutions. The industry is now increasingly prioritizing collaboration, coordination, and streamlined efforts to avoid duplication and enhance efficiency in transitioning to quantum-safe operations.
+              
+              This presentation will outline the latest initiatives that are shaping quantum-safety priorities and timelines within the financial sector. Financial institutions will benefit from practical guidance on building and benchmarking their quantum transition plans, while technology vendors will gain valuable insights into the evolving expectations and specific requirements of financial sector clients.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Jaime Gómez García
             locations:
               - plenary
 
-          - title: To be announced shortly
+          - title: Performance Metric Evaluation of MLWE in Web and other TLS Use-cases
             description: |
-              The speaker(s) for this session will be announced soon!
-            track: 
+              The cryptographic community is actively debating the shift to Post-Quantum PKI as quantum computing progresses and NIST advances standardization. While larger certificate sizes (15–22KB extra) raise concerns about WebPKI performance, the transition is essential. Amazon Private CA, used by thousands, is positioned to support this shift.
+              
+              We’ll present performance data on MLWE-based TLS, analyzing Core Web Vitals and how larger certs affect connection latency and user experience across HTML, JS, and image delivery. We'll cover both parallel and sequential connection patterns. Our mTLS benchmarks span TLS 1.2 vs. 1.3, cipher negotiations (classical vs PQ), and cert sizes from RSA/ECDSA to ML-DSA. Results include handshake-only (TTFB) and full load (TTLB) metrics across scenarios.
             speakers:
-              - TBD
-            youtube:
-            presentation: 
+              - Mila Anastasova
             locations:
               - breakout
 
