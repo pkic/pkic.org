@@ -400,18 +400,6 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/reza-azarderakhsh-39777042/
 
-    - name: Andrew Cheung
-      title: President & CEO at 01 Communique Laboratory Inc.
-      bio: |
-        Mr. Cheung boasts over 25 years of invaluable experience as a Chief Executive Officer and Chief Technology Officer. Throughout his illustrious career, he has consistently spearheaded cutting-edge innovations, and driven product
-        development, resulting in a portfolio of 9 patents within the computer software industry. Notably, his outstanding contributions were recognized with a nomination for the prestigious Ernst and Young Entrepreneur-Of-The-Year award in 2001.
-        
-        Since founding his company in 1992, Andrew has positioned himself as a technology pioneer in Post-Quantum Cybersecurity and Remote Access technologies.   With over 15 years of hands-on experience and extensive expertise in patent application, prosecution, and litigation processes, he has established himself as a formidable force in the field.
-        
-        He remains at the forefront of technological advancements, with his latest innovation focusing on cybersecurity.  His groundbreaking work in Post-Quantum Cryptography (PQC), leveraging NIST-approved quantum-resistant algorithms, is a testament to his forward-thinking approach.  By combining his PQC engine with patent-protected measures into a wide array of applications, including cryptocurrencies, emails, and AI machine learning systems.  This proactive approach ensures robust protection against potential cyber threats posed by quantum computers, thereby safeguarding the integrity of classical computer systems as we know them today. 
-      social:
-        linkedin: https://www.linkedin.com/in/andrew-cheung-a7b8ba5/
-
     - name: Stefan van den Berg
       title: Researcher Cryptography and Cyber Security at TNO
       bio: |
@@ -1182,7 +1170,7 @@ data:
             description: |
               Cryptocurrencies rely on PKI to ensure the authenticity and integrity of transactions through digital signatures. At the heart of this trust model is Public Key Infrastructure (PKI), which underpins the authenticity and integrity of every transaction within a blockchain network. PKI ensures that digital signatures—whether from payers initiating cryptocurrency transfers or validators confirming blocks—are verifiable and tamper-proof. RSA and ECC have long secured this ecosystem, but quantum computing threatens to break these algorithms via Shor’s algorithm, enabling private key recovery. An existing cryptocurrency network has been successfully transitioned to quantum-safety by using NIST finalist post-quantum algorithms, preserving performance, interoperability, and trust. This work demonstrates not only the feasibility but also the urgency of adapting PKI for a secure, post-quantum blockchain future.
             speakers:
-              - Andrew Cheung
+              - William Gee
             youtube:
             presentation: 
             locations:
