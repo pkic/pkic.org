@@ -525,6 +525,13 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/mila-anastasova/
 
+    - name: Lai Seow Yong
+      title: Technical Head, Asia Pacific, Utimaco
+      bio: |
+        Focused and success driven individual with 20 years’ experience in managing and building relationships with some of the largest payment processors and financial institutions together with proven records in building and grooming successful teams in the region.
+      social:
+        linkedin: https://www.linkedin.com/in/seow-yong-lai-90416145/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -702,10 +709,21 @@ data:
             locations:
               - room_3
 
-          - title: To be announced shortly 
-            description: This workshop will be announced shortly
+          - title: "Crypto‑Agile PKI in the Quantum Era: Building Trust with Utimaco’s Quantum Protect"
+            description: |
+              As organizations worldwide prepare for the quantum threat anticipated by 2030, the resilience of Public Key Infrastructure (PKI) will depend on a critical capability: crypto agility. This workshop presents Utimaco’s comprehensive strategy for quantum-safe PKI deployment, anchored around the Quantum Protect application suite for the u.trust General Purpose Hardware Security Module (HSM) Se Series.
+
+              **We will explore:**
+              * Strategic Landscape of Post-Quantum Cryptography (PQC): A concise overview of key global developments, including NIST standardization efforts and emerging cryptographic mechanisms.
+              * Seamless Transition to PQC: Learn how to migrate from classical algorithms like RSA and ECC to NIST-recommended schemes such as ML-KEM, ML-DSA, LMS, and XMSS - delivered as downloadable modules with no hardware replacement required.
+              * Accelerating PQC Adoption with Quantum Protect Simulator: Discover how Utimaco’s free simulator - emulating a physical HSM - enables rapid prototyping and testing of PQC algorithms under real-world conditions, streamlining development and scaling across teams.
+              * Real-World Use Cases and Ecosystem Integrations: Explore practical implementations and industry collaborations, including Utimaco’s partnerships with Keyfactor and InfoSec Global, to deliver scalable PKI and cryptographic inventory solutions across regulated sectors.
+
+              Attendees - both technical and executive - will leave equipped with actionable strategies to embed crypto agility into their PKI roadmaps. The session will cover cryptographic discovery, secure key lifecycle management, and concrete steps for future-proof PQC deployment to safeguard trust infrastructures in the quantum era.
+
             speakers: 
-              - TBD
+              - Nils Gerhardt
+              - Lai Seow Yong
             locations:
               - room_4
 
