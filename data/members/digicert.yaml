@@ -1,0 +1,62 @@
+id: digicert
+name: Digicert
+slogan: Building Trust Into What Matters to you
+website: https://www.digicert.com
+
+# Short description, longer content can be placed in `content/members/`
+description:  |
+  DigiCert is the world's leading provider of scalable TLS/SSL, IoT and PKI solutions for identity and encryption. The most 
+  innovative companies, including 88% of the Fortune 500 and 98 of the 100 top global banks, choose DigiCert for its expertise in 
+  identity and encryption for web servers and Internet of Things devices. DigiCert supports TLS and other digital certificates for 
+  PKI deployments at any scale through its certificate lifecycle management solution, DigiCert CertCentral®. 
+
+# membership
+memberSince: 2025-02-24
+memberType: A
+workingGroups:
+  - CA
+  - PQC
+  - TCWG
+  - PKIMM
+
+# sponsor
+sponsor:
+  level: Silver
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Timothy Hollebeek
+    role: VP of Industry Standards
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/timothy-hollebeek-505b814/
+    description: Timothy Hollebeek has more than 20 years of computer security experience, including eight years working on innovative security research funded by the Defense Advanced Research Projects Agency. He remains heavily involved as DigiCert’s primary representative in multiple industry standards bodies, including the CA/Browser Forum, striving for improved information security practices that work with real-world implementations. A mathematician by trade, Hollebeek spends a lot of time considering security approaches to quantum computing.
