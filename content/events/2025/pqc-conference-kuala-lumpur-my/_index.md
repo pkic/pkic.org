@@ -142,13 +142,13 @@ data:
         linkedin: https://www.linkedin.com/in/dr-alexander-loew/
     
     - name: Alexey Bocharnikov
-      title: APAC Quantum Security Lead at Accenture
+      title: Director for Emerging Technologies in Cyber at Macquarie
       bio: |
-        Alexey, a Director at Accenture, brings over 15 years of expertise in cybersecurity strategy, risk management, quantum computing, and cryptography. He currently holds the position of APAC Quantum Security Lead and Director of Cyber Strategy at AN/Z.
-        
-        Prior to Accenture, Alexey honed his expertise at EY, contributing to the Global Innovation Quantum Technology Lab and leading Global Quantum Security efforts. Before EY, Alexey served as a County Information Security Officer at Deutsche Bank's Moscow Branch. 
-        
-        Alexey is a vocal advocate for best practices and proactive risk management in cyber strategy and quantum security. His thought leadership includes authoring articles, contributing to international reports, producing educational videos, and speaking at industry conferences.
+        Alexey Bocharnikov is Director of Emerging Technologies (Cyber) at Macquarie, where Alexey leads the adoption of advanced security capabilities—including post‑quantum cryptography, AI/ML security—to enable innovation without compromising resilience. With over 15 years of experience in cybersecurity strategy, risk management, quantum risk, and cryptography, Alexey has a proven track record of translating complex risk into actionable strategies.
+
+        Previously, Alexey was a Director at Accenture, serving as APAC Quantum Security Lead and A/NZ Cyber Strategy Delivery Lead. Before that, Alexey contributed to the Global Innovation Quantum Technology Lab at EY and led Global Quantum Security initiatives, delivering more than a dozen cyber strategy programs across the A/NZ region. Earlier in the career, Alexey served as Country Information Security Officer at Deutsche Bank (Moscow), safeguarding business operations and aligning global standards with local needs.
+
+        A recognised advocate for proactive risk management and responsible adoption of emerging technologies, Alexey has authored articles, contributed to international reports, produced educational content, and spoken at industry conferences on quantum security and cyber strategy.
         
       social:
         linkedin: https://www.linkedin.com/in/alexeybocharnikov/
@@ -172,7 +172,7 @@ data:
         linkedin: https://www.linkedin.com/in/shane-kelly-bb61a154/
 
     - name: Sudha Iyer
-      title: Chief/Principal Engineer-PKI & Cryptography
+      title: Chief/Principal Engineer-PKI & Cryptography at Citi
       bio: |
         Sudha Iyer is Head Cybersecurity Architect at Citi, a founding member of the FS-ISAC PQC group, and an international project leader at ISO for blockchain and smart contract security. She has 23 years of experience in cryptographic architecture and is deeply engaged in cross-sector cybersecurity forums and leads several cryptographic and data security standards efforts. 
       social:
@@ -334,7 +334,7 @@ data:
         github: https://github.com/svenska-primekey
 
     - name: Corey Bonnell
-      title: Industry Technology Strategist
+      title: Industry Technology Strategist at DigiCert
       bio: |
         Corey Bonnell is a Technology Strategist at DigiCert. He has over 15 years of engineering experience in several domains with a deep focus on Public Key Infrastructure. Corey represents DigiCert in several standards organizations, such as the CA/Browser Forum, ETSI, and IETF. He has been involved in the standardization process of emerging standards relating to post-quantum cryptography and is a frequent participant in IETF post-quantum cryptography hackathons.
       social:
@@ -342,7 +342,7 @@ data:
         ietf: https://datatracker.ietf.org/person/corey.bonnell@digicert.com
 
     - name: Tadahiko Ito
-      title: Senior Researcher
+      title: Senior Researcher at Intelligent Systems Laboratory, SECOM CO., LTD.
       bio: |
         Tadahiko Ito is a Senior Researcher at Intelligent Systems Laboratory, SECOM CO., LTD. His research at SECOM includes cryptographic protocols, policy management, cryptographic key management, and planning for PQC transitions. He is a member of the CRYPTREC (Cryptographic Technology Research Working Group) PQC Research Working Group. Since 2017, he has represented SECOM Trust Systems at the CA/B Forum. He has co-authored several IETF RFCs, including RFC 8813, RFC 9295, and RFC 9336, among other publications.
       social:
@@ -350,7 +350,7 @@ data:
         ietf: https://datatracker.ietf.org/person/Tadahiko%20Ito
 
     - name: Ganesh Mallaya
-      title:  at AppViewX Inc
+      title: Distinguished Architect at AppViewX Inc
       bio: |
         Ganesh Mallaya is a Distinguished Architect at AppViewX, where he has helped revolutionize certificate lifecycle management (CLM) and PKI solutions for global enterprises. A member of the CA/Browser Forum and a Harvard-certified cybersecurity strategist, he serves as a trusted advisor to organizations on post-quantum cryptography (PQC), digital trust infrastructure, and CLM modernization across complex, regulated environments
       social:
@@ -408,21 +408,21 @@ data:
         linkedin: https://www.linkedin.com/in/stefan-van-den-berg-3aa2b0129/
 
     - name: Sven Konings
-      title: Software Developer
+      title: Software Developer at ZYNYO
       bio: |
         Konings is a Software Developer at ZYNYO, working on digital signatures. As part of the HAPKIDO project he is working on the transition to quantum-safe digital signatures. Sven studied at the University of Twente and graduated in both masters Computer Science and Science Education and Communication."
       social:
         linkedin: https://www.linkedin.com/in/svenkonings/
 
     - name: Tony Chen
-      title: Solutions Engineer
+      title: Solutions Engineer at Keyfactor
       bio: |
         Meet Tony Chen, the cybersecurity wizard with over 9 years of PKI magic up his sleeve! As an Asia-Pacific and Japan Solution Engineer at Keyfactor, he’s the go-to guy for all things secure and know-how of solutions to keep the digital world safe and sound.
       social:
         linkedin: https://www.linkedin.com/in/tony-chen-he/
 
     - name: Chris Hickman
-      title: Security Officer
+      title: Security Officer at Keyfactor
       bio: |
         As Chief Security Officer at Keyfactor, Chris Hickman is at the forefront of advancing the company’s position as a leader of digital trust security solutions in the technical landscape of cryptographic infrastructure and digital certificates. With extensive experience in smart card management systems, PKI design, and directory services, Chris is committed to integrating the voice of the customer into Keyfactor’s platform to drive innovative solutions and accelerate digital trust in the evolving security landscape. He spearheads Keyfactor’s post-quantum cryptography (PQC) strategies to support organizations in their quantum-readiness journeys. He remains an industry-wide trusted resource on enhancing digital trust through SaaS-delivered PKI solutions and certificate lifecycle automation software to support security teams of modern enterprises. 
       social:
@@ -436,7 +436,7 @@ data:
         linkedin: https://www.linkedin.com/in/huckhai-lim-847234a/
  
     - name: Anurag Krishna Sharma
-      title: Scientist  at Advanced Data Processing Research Institute 
+      title: Scientist at Advanced Data Processing Research Institute 
       bio: |
         I am a Theoretical Computer Scientist working with the Department of Space, Government of India, where I focus on high-assurance systems, secure communication protocols, and advanced computational models. My expertise spans Network Security, Post-Quantum Cryptography, Generative AI, and Quantum Networking, with practical implementation experience using Qiskit, OpenQASM, and IBMQ.
         
@@ -481,18 +481,16 @@ data:
         linkedin: https://www.linkedin.com/in/christophertmbailey/
 
     - name: George Parsons
-      title: Head of PKI Strategy
+      title: Head of PKI Strategy at CyberArk
       bio: |
         George Parsons brings over three decades of experience in cryptographic policy, compliance, and automation. As a founder team member of VeriSign, he helped shape the early PKI trust model for the Internet, working closely with Netscape and Microsoft on the development of SSL server enrollment protocols and processes. Today, he leads PKI Strategy at CyberArk, where he helps enterprises modernize their PKI trust infrastructures to support Zero Trust architectures, enable certificate lifecycle automation, and prepare for post-quantum cryptographic transitions.
       social:
         linkedin: https://www.linkedin.com/in/georgehparsons/
 
     - name: William Gee
-      title: Vice Chair of the Asia PKI Consortium
+      title: Senior Advisor to 01 Quantum Inc. and Vice Chair of Asia PKI Consortium
       bio: |
-        William is a Chartered Accountant specialising in the adoption and governance of emerging technologies.  William has extensive experience in Public Key Infrastructure (PKI) and related technologies.  He has been instrumental in supporting the establishment of Hong Kong’s Public Key Infrastructure and related licensing regime.  William further led the development of the technical framework that support the Mutual Recognition of electronic signature certificates issued by Hong Kong and Guangdong, China
-        With advances in blockchain technologies, William participated in several initiatives that leverage PKI and blockchain to enable trusted digital identity for corporates, as well as safeguarding the integrity of trade documents to facilitate cross-border payments and settlement.
-        As Vice Chair of the Asia PKI Consortium, William is collaborating with the PKI industry on raising awareness of the Quantum Threat and advising on transitional approach to Post-Quantum Cryptography.  William is also participating in several initiatives relating to integrating quantum-resistant technologies in digital wallets, blockchain platforms and virtual assets.
+        William is a Chartered Accountant specialising in the adoption and governance of emerging technologies. William has extensive experience in Public Key Infrastructure (PKI) and related technologies. He has been instrumental in supporting the establishment of Hong Kong’s Public Key Infrastructure and related licensing regime. William further led the development of the technical framework that support the Mutual Recognition of electronic signature certificates issued by Hong Kong and Guangdong, China With advances in blockchain technologies, William participated in several initiatives that leverage PKI and blockchain to enable trusted digital identity for corporates, as well as safeguarding the integrity of trade documents to facilitate cross-border payments and settlement. As Vice Chair of the Asia PKI Consortium, William is collaborating with the PKI industry on raising awareness of the Quantum Threat and advising on transitional approach to Post-Quantum Cryptography. William is also participating in several initiatives relating to integrating quantum-resistant technologies in digital wallets, blockchain platforms and virtual assets.
       social:
         linkedin: https://www.linkedin.com/in/swwgee/
 
@@ -526,7 +524,7 @@ data:
         linkedin: https://www.linkedin.com/in/mila-anastasova/
 
     - name: Lai Seow Yong
-      title: Technical Head, Asia Pacific, Utimaco
+      title: Technical Head, Asia Pacific at Utimaco
       bio: |
         Focused and success driven individual with 20 years’ experience in managing and building relationships with some of the largest payment processors and financial institutions together with proven records in building and grooming successful teams in the region.
       social:

@@ -46,9 +46,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Davin Cooke
-    role: Director of Business Development US
+  - name: Emil Hansen
+    role: CTO
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/davin-cooke/
-    description: Davin is the Director of Business Development US at Cryptomathic Inc and represents the organization at the PKI Consortium.
+    description: Emil is the CTO at Cryptomathic Inc and represents the organization at the PKI Consortium.
