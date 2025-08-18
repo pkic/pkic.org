@@ -531,7 +531,7 @@ data:
         linkedin: https://www.linkedin.com/in/seow-yong-lai-90416145/
 
     - name: Muhammad Rezal Kamel Ariffin
-      title: Professor, Department of Mathematics and Statistics, Universiti Putra Malaysia
+      title: Professor at Department of Mathematics and Statistics, Universiti Putra Malaysia
       bio: |
         Prof. Dr. Muhammad Rezal Bin Dato’ Kamel Ariffin received his BSc and MSc degrees in Mathematics from Universiti Putra Malaysia (UPM), Malaysia, in 1999 and 2002, respectively, and his PhD degree in Mathematics from Universiti Kebangsaan Malaysia (UKM), Malaysia, in 2009. He is a Professor with the Department of Mathematics and Statistics, Faculty of Science, UPM.
 
@@ -539,6 +539,17 @@ data:
         
         His overwhelming research interests in cryptography is related to designing and analysing number theoretic based cryptosystems and post-quantum cryptography. He, with his dedicated research team are exploring methods towards the development of post quantum cryptography for seamless drop-in replacement for existing non-post quantum asymmetric cryptosystems and is also hoping to find better methods to reduce the complexity of the RSA problem. He was invited as one of the panels for the 2nd Oxford Post-Quantum Cryptography Summit 2023 at the Mathematical Institute, University of Oxford, United Kingdom in September 2023. And in April 2024, he presented (was represented due to concurrent Eid celebrations) at the 5th NIST PQC Standardization Conference organized by NIST in Washington, USA. Nationally, he has extended his experience to Malaysia’s National Trusted Cryptographic Algorithm List (MySEAL) initiative between 2016 – now. He also was the main lead for the development of the national documents entitled Advisory Report on Preparing Malaysia for Imminent Threats of Quantum Computers in 2017 and the Empowering Malaysia’s Digital Infrastructure in the Era of Quantum Computing in 2023. In 2024, he was the advisor for the event South-East Asia Post Quantum Cryptography (SEA-PQC) held in September 2024 in conjunction with Malaysia Cryptology Week 2024 (MyCRYPTOLOGY Week 2024) between 22 – 26 September 2024. In May 2025, he was appointed as the Director for Malaysia Cryptology Technology and Management Centre (PTPKM). Finally, he also has research interest in chaos dynamical systems. 
       website: https://profile.upm.edu.my/rezal
+
+    - name: Megat Zuhairy Bin Megat Tajuddin
+      title: Chief Executive at National Cyber Security Agency (NACSA), Malaysia
+      bio: |
+        Ir. Dr. Megat has been serving the Government of Malaysia since 1997 and has vast experiences as an engineer in ICT and Telecommunication fields. Besides holding the position as Chief Executive of NACSA, he is also the Registrar in Board of Engineers Malaysia, an ASEAN Certified Professional Engineer, a Certified Knowledge Manager at KM Institute USA and an Adjunct Professor at Universiti Teknologi MARA. Previously he was an Expert of Operating Unit on Policy-Driven Electronic Governance at United Nations University, Portugal before he became the Director of Engineering (ICT) in Competency, Innovation and Performance Division at Public Works Department.
+
+        For the past 26 years, Dr. Megat has been actively developing and implementing policy and strategic plans for Industrial Revolution 4.0 (IR4.0) agenda as well as building human capital capacity in innovation and knowledge management. Apart from that, he was actively involved in various ICT and Telecommunication projects worth more than RM2 billion including hospitals, court houses, universities, police departments, airports and other government offices. He also successfully implemented and supervised the first in the world Total Hospital Information System (THIS) for 13 hospitals nationwide and photovoltaic renewable energy projects for schools, libraries and clinics in remote areas in Malaysia.
+
+        Dr. Megat has a Doctor of Business Administration from Universiti Teknologi MARA, Master of Science in Communications Technology from Ulm University, Germany and Bachelor of Science in Electrical and Computer Engineering (Minor in Economics) from Johns Hopkins University, USA.
+      social:
+        linkedin: https://www.linkedin.com/in/ir-dr-megat-zuhairy-megat-tajuddin-8b150335/
 
   # Agenda ----------------------------------------------------------------------
   agenda:
@@ -798,10 +809,10 @@ data:
         sessions:
           - title: Keynote
             description: |
-              The speaker(s) for this session will be announced soon!
+              The details for this session will follow soon!
             track: 
             speakers:
-              - TBD
+              - Megat Zuhairy Bin Megat Tajuddin
             youtube:
             presentation: 
             locations:
