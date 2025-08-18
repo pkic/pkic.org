@@ -422,7 +422,7 @@ data:
         linkedin: https://www.linkedin.com/in/tony-chen-he/
 
     - name: Chris Hickman
-      title: Security Officer at Keyfactor
+      title: Chief Security Officer at Keyfactor
       bio: |
         As Chief Security Officer at Keyfactor, Chris Hickman is at the forefront of advancing the company’s position as a leader of digital trust security solutions in the technical landscape of cryptographic infrastructure and digital certificates. With extensive experience in smart card management systems, PKI design, and directory services, Chris is committed to integrating the voice of the customer into Keyfactor’s platform to drive innovative solutions and accelerate digital trust in the evolving security landscape. He spearheads Keyfactor’s post-quantum cryptography (PQC) strategies to support organizations in their quantum-readiness journeys. He remains an industry-wide trusted resource on enhancing digital trust through SaaS-delivered PKI solutions and certificate lifecycle automation software to support security teams of modern enterprises. 
       social:
