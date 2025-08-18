@@ -530,6 +530,18 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/seow-yong-lai-90416145/
 
+    - name: Muhammad Rezal Kamel Ariffin
+      title: Professor, Department of Mathematics and Statistics, Universiti Putra Malaysia
+      bio: |
+        Prof. Dr. Muhammad Rezal Bin Dato’ Kamel Ariffin received his BSc and MSc degrees in Mathematics from Universiti Putra Malaysia (UPM), Malaysia, in 1999 and 2002, respectively, and his PhD degree in Mathematics from Universiti Kebangsaan Malaysia (UKM), Malaysia, in 2009. He is a Professor with the Department of Mathematics and Statistics, Faculty of Science, UPM.
+
+        He was the Director for the Institute for Mathematical Research (INSPEM), UPM for the term 2020 - 2023. A total of 10 PhD students in the field of Mathematical Cryptography has graduated under his supervision and 8 for the MSc degree also in the same field of study. Currently he has 3 PhD students undergoing research in Mathematical Cryptography. He has published a combination of more than 150 scientific documents in international journals, conferences, books, book chapters, patents, and policies. In 2007, he pioneered the establishment of the Malaysian Society for Cryptology Research (MSCR). He is the 4th President of MSCR beginning December 2020 till May 2025. 
+        
+        His overwhelming research interests in cryptography is related to designing and analysing number theoretic based cryptosystems and post-quantum cryptography. He, with his dedicated research team are exploring methods towards the development of post quantum cryptography for seamless drop-in replacement for existing non-post quantum asymmetric cryptosystems and is also hoping to find better methods to reduce the complexity of the RSA problem. He was invited as one of the panels for the 2nd Oxford Post-Quantum Cryptography Summit 2023 at the Mathematical Institute, University of Oxford, United Kingdom in September 2023. And in April 2024, he presented (was represented due to concurrent Eid celebrations) at the 5th NIST PQC Standardization Conference organized by NIST in Washington, USA. Nationally, he has extended his experience to Malaysia’s National Trusted Cryptographic Algorithm List (MySEAL) initiative between 2016 – now. He also was the main lead for the development of the national documents entitled Advisory Report on Preparing Malaysia for Imminent Threats of Quantum Computers in 2017 and the Empowering Malaysia’s Digital Infrastructure in the Era of Quantum Computing in 2023. In 2024, he was the advisor for the event South-East Asia Post Quantum Cryptography (SEA-PQC) held in September 2024 in conjunction with Malaysia Cryptology Week 2024 (MyCRYPTOLOGY Week 2024) between 22 – 26 September 2024. In May 2025, he was appointed as the Director for Malaysia Cryptology Technology and Management Centre (PTPKM). Finally, he also has research interest in chaos dynamical systems. 
+      website: https://profile.upm.edu.my/rezal
+      social:
+        linkedin: https://www.linkedin.com/in/seow-yong-lai-90416145/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -1000,6 +1012,7 @@ data:
               The core objective of this panel is to synthesize these divergent paths into a clear, actionable framework for business and technical leaders. We'll move beyond the theoretical to deliberate a practical strategy that transforms PQC migration from a complex technical challenge into a strategic imperative for risk mitigation, operational resilience, and securing a sustainable competitive advantage in the quantum era.
             speakers:
               - Lim Huck Hai *
+              - Muhammad Rezal Kamel Ariffin
               - Pieter Schneider
               - William Gee
             youtube:
