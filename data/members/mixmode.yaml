@@ -1,0 +1,54 @@
+id: mixmode
+name: MixMode
+slogan:
+website: https://mixmode.ai/
+
+# Short description, longer content can be placed in `content/members/`
+description: Real-time threat detection and response powered by Third-Wave AI for cloud, on-premise, and hybrid environments.
+
+# membership
+memberSince: 2025-08-18
+memberType: G
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://mixmode.ai/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Brian Buck
+    role: Sr Product Manager
+    social:
+      twitter: 
+      linkedin: 
+    description: Brian is the Sr Product Manager at MixMode and represents the organization at the PKI Consortium.
