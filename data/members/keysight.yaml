@@ -1,0 +1,54 @@
+id: keysight
+name: Keysight Technologies
+slogan:
+website: https://www.keysight.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: I’m Durga Ramachandran, Innovation Director at Keysight Technologies, where I lead the development of advanced Post-Quantum Cryptography (PQC) solutions. At Keysight, we are at the forefront of securing connected devices and embedded systems against both classical and quantum-era threats.  As the demand for secure-by-design technologies accelerates across industries—from automotive and telecom to aerospace and defense—Keysight’s device security solutions deliver robust, scalable, and future-ready protection.
+
+# membership
+memberSince: 2025-08-27
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Durga Ramachandran
+    role: Innovation Director
+    social:
+      twitter: 
+      linkedin: 
+    description: Durga is the Innovation Director at Keysight Technologies and represents the organization at the PKI Consortium.
