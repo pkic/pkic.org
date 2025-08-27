@@ -531,7 +531,7 @@ data:
         linkedin: https://www.linkedin.com/in/seow-yong-lai-90416145/
 
     - name: Muhammad Rezal Kamel Ariffin
-      title: Professor at Department of Mathematics and Statistics, Universiti Putra Malaysia
+      title: Director at Malaysia Cryptology Technology and Management Centre
       bio: |
         Prof. Dr. Muhammad Rezal Bin Dato’ Kamel Ariffin received his BSc and MSc degrees in Mathematics from Universiti Putra Malaysia (UPM), Malaysia, in 1999 and 2002, respectively, and his PhD degree in Mathematics from Universiti Kebangsaan Malaysia (UKM), Malaysia, in 2009. He is a Professor with the Department of Mathematics and Statistics, Faculty of Science, UPM.
 
