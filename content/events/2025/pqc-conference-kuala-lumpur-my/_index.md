@@ -318,12 +318,12 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/muralidharanpalanisamy/
 
-    - name: Alessandro Amadori
+    - name: Alessandro 
       title: Cryptographer at TNO
       bio: |
-        Alessandro Amadori is a cryptographer at TNO focusing on the migration to Post-quantum Cryptography. He holds a PhD from Eindhoven University of Technology in cryptographic implementations. He has contributed in several PQC migration projects like HAPKIDO, and is one a co-author of the second edition of the PQC migration handbook.
+        Alessandro  is a cryptographer at TNO focusing on the migration to Post-quantum Cryptography. He holds a PhD from Eindhoven University of Technology in cryptographic implementations. He has contributed in several PQC migration projects like HAPKIDO, and is one a co-author of the second edition of the PQC migration handbook.
       social:
-        linkedin: https://www.linkedin.com/in/alessandro-amadori-4b2149b8/
+        linkedin: https://www.linkedin.com/in/alessandro--4b2149b8/
 
     - name: Sven Rajala
       title: International PKI Man of Mystery at Keyfactor
@@ -639,13 +639,16 @@ data:
 
           - title: Create your own quantum-safe signed PDF documents with hybrid cryptography
             description: |
-              This workshop is from a collaborative effort between TNO and Zynyo. Standards are now established and libraries are being released, the integration of Post-Quantum Cryptography into products is increasing. However, the adoption of PQC is not yet universal across all scenarios and use-cases. This workshop provides a unique opportunity for participants to create signed PDF documents using hybrid PQC using software DSS that creates digital signatures based on ETSI standards in line with European legislation such as the eIDAS regulation.  
+              This workshop is from a collaborative effort between TNO and Zynyo. Standards are now established and libraries are being released, the integration of Post-Quantum Cryptography into products is increasing. However, the adoption of PQC is not yet universal across all scenarios and use-cases. This workshop provides a unique opportunity for participants to create signed PDF documents with hybrid PQC. DSS is a software supported by the European commission, whose functionality is the creation of digital signatures based on ETSI standards in line with European legislation such as the eIDAS regulation. TNO and Zynyo adapted DSS to support different types of hybrid certification to increase quantum-readiness.
 
-              **We will explore:**
+              **In this workshop we will:**
 
-              * Participants will sign PDF documents using different types of hybrid certificates,
-              * validate signatures to confirm their authenticity and integrity, 
+              * Explore three different types of hybrid certificates (Catalyst, Composite, Chameleon),
+              * Have an interactive workshop on the construction and validation of hybrid certificates,
+              * Sign PDF documents using different types of hybrid certificates,
+              * Validate signatures to confirm their authenticity and integrity,
               * Visualize signed PDFs and have tangible proof of their validity.
+              
               ___
 
               _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
