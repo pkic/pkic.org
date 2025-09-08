@@ -68,6 +68,11 @@ function getCurrentSession(day, currentTime) {
     });
 }
 
+function normalizeSpeakerName(name) {
+    // Remove trailing spaces and asterisks (for moderators)
+    return name.replace(/\s*\*+$/, '').trim();
+}
+
 function updateSessionAndSpeakers() {
     const selectedSession = sessions[Math.min(currentSessionIndex, sessions.length - 1)] || null;
 
@@ -79,7 +84,9 @@ function updateSessionAndSpeakers() {
         speakersList.innerHTML = '';
 
         selectedSession.speakers.forEach(speakerName => {
-            const speaker = speakersData.find(s => s.name === speakerName);
+            const speaker = speakersData.find(
+                s => normalizeSpeakerName(s.name) === normalizeSpeakerName(speakerName)
+            );
             if (speaker) {
                 const speakerElement = document.createElement('div');
                 speakerElement.classList.add('speaker');
