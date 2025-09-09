@@ -14,6 +14,8 @@ workingGroups:
 
 # sponsor
 sponsor:
+# Started sponsoring the PKIC in August 2025
+  level: Gold
   sponsoring:
     "Post-Quantum Cryptography Conference Amsterdam 2023":
       level: Innovator

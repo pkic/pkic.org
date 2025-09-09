@@ -318,12 +318,12 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/muralidharanpalanisamy/
 
-    - name: Alessandro 
+    - name: Alessandro Amadori
       title: Cryptographer at TNO
       bio: |
         Alessandro  is a cryptographer at TNO focusing on the migration to Post-quantum Cryptography. He holds a PhD from Eindhoven University of Technology in cryptographic implementations. He has contributed in several PQC migration projects like HAPKIDO, and is one a co-author of the second edition of the PQC migration handbook.
       social:
-        linkedin: https://www.linkedin.com/in/alessandro--4b2149b8/
+        linkedin: https://www.linkedin.com/in/alessandro-amadori-4b2149b8/
 
     - name: Sven Rajala
       title: International PKI Man of Mystery at Keyfactor
@@ -435,16 +435,17 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/huckhai-lim-847234a/
  
-    - name: Anurag Krishna Sharma
-      title: Scientist at Advanced Data Processing Research Institute 
-      bio: |
-        I am a Theoretical Computer Scientist working with the Department of Space, Government of India, where I focus on high-assurance systems, secure communication protocols, and advanced computational models. My expertise spans Network Security, Post-Quantum Cryptography, Generative AI, and Quantum Networking, with practical implementation experience using Qiskit, OpenQASM, and IBMQ.
-        
-        I previously collaborated with AIIMS (All India Institute of Medical Sciences) to enhance healthcare infrastructure through technological innovation—particularly in secure data systems and intelligent diagnostics.
-        
-        I hold a Master’s degree in Computer Science from IIT Delhi, where my academic research explored the intersection of cryptographic theory and real-world systems, with applications in quantum-secure communication and privacy-preserving architectures.
-      social:
-        linkedin: https://www.linkedin.com/in/anurag-sharma-099798134/
+    #
+    #- name: Anurag Krishna Sharma
+    #  title: Scientist at Advanced Data Processing Research Institute 
+    #  bio: |
+    #    I am a Theoretical Computer Scientist working with the Department of Space, Government of India, where I focus on high-assurance systems, secure communication #protocols, and advanced computational models. My expertise spans Network Security, Post-Quantum Cryptography, Generative AI, and Quantum Networking, with practical #implementation experience using Qiskit, OpenQASM, and IBMQ.
+    #    
+    #    I previously collaborated with AIIMS (All India Institute of Medical Sciences) to enhance healthcare infrastructure through technological innovation—particularly in #secure data systems and intelligent diagnostics.
+    #    
+    #    I hold a Master’s degree in Computer Science from IIT Delhi, where my academic research explored the intersection of cryptographic theory and real-world systems, #with applications in quantum-secure communication and privacy-preserving architectures.
+    #  social:
+    #    linkedin: https://www.linkedin.com/in/anurag-sharma-099798134/
 
     - name: James Howe
       title: Head of Cryptography at SandboxAQ
@@ -550,6 +551,26 @@ data:
         Dr. Megat has a Doctor of Business Administration from Universiti Teknologi MARA, Master of Science in Communications Technology from Ulm University, Germany and Bachelor of Science in Electrical and Computer Engineering (Minor in Economics) from Johns Hopkins University, USA.
       social:
         linkedin: https://www.linkedin.com/in/ir-dr-megat-zuhairy-megat-tajuddin-8b150335/
+
+    - name: Osamu Terai
+      title: Group CISO of Mizuho Financial Group, Board member of Financial ISAC Japan
+      bio: |
+        Osamu Terai is Group CISO at Mizuho Financial Group, one of the largest Japanese banks, and responsible for all cybersecurity initiatives including PQC transition of the group. Osamu has more than 30 years of experience in financial IT. In 2024, he chaired “Study Group on Deposit-taking Institutions' Response to Post-Quantum Cryptography” (PQC study group) organized by the Financial Services Agency of Japan. After several meetings, the study group released a report titled “Report of the Study Group on Deposit-taking Institutions' Response to Post-Quantum Cryptography” in November 2024. The report was aimed at heightening awareness of senior management of Japanese FIs about the PQC transition.
+
+        Osamu is also a board member of Financial ISAC (F-ISAC) Japan, a non-profit, member-driven organization dedicated to fortifying the cyber defense of Japanese financial institutions. Presently, Osamu leads a working group called Fintech Security WG within F-ISAC Japan. The WG is creating “PQC transition guide for Japanese FIs” to provide practical guidelines such as the transition timelines, prioritization, project team formation and so on. In this capacity, he is at the vanguard of providing guidance on PQC transition, ensuring the security and resilience of Japan's financial sector.
+      social:
+        linkedin: https://www.linkedin.com/in/osamu-terai
+
+# Add once confirmed she will attend
+#    - name: Lory Thorpe
+#      title: Quantum Safe Industry Lead at IBM
+#      bio: |
+#        Driven executive leader with over 20 years senior level global experience in digital transformation and telecommunications with a strong technology, strategy and innovation background (development, architecture, product and solution mgt) in Internet of Things, mobile networks, cloud, security, data analytics/ AI, edge.  Expertise in building, integrating and delivering innovative digital products and solutions to market, across Private and Public sector within Enterprise.
+        
+#        Leading portfolio and industry efforts on application of Quantum Computing and Quantum Safe in Telecommunications in IBM.
+#      social:
+#        linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
+
 
   # Agenda ----------------------------------------------------------------------
   agenda:
@@ -827,13 +848,13 @@ data:
         
       - time: "11:00"
         sessions:
-          - title: Quantum-Safety Timelines in the Financial Sector
+          - title: "PQC Across Verticals: What We’ve Learned, Where We’re Headed"
             description: |
-              The financial sector has moved decisively from awareness-building into active implementation of quantum-safe strategies. While 2024 primarily focused on raising awareness, 2025 has marked a significant shift towards concrete implementation activities across numerous financial institutions. The industry is now increasingly prioritizing collaboration, coordination, and streamlined efforts to avoid duplication and enhance efficiency in transitioning to quantum-safe operations.
-              
-              This presentation will outline the latest initiatives that are shaping quantum-safety priorities and timelines within the financial sector. Financial institutions will benefit from practical guidance on building and benchmarking their quantum transition plans, while technology vendors will gain valuable insights into the evolving expectations and specific requirements of financial sector clients.
+              The transition to post-quantum cryptography (PQC) is not a challenge faced by a single industry—it is a global transformation impacting every sector. In this 30-minute kickoff, we bring together key insights gathered from focused workshops across energy, government, financial services, and healthcare. Each vertical faces unique obstacles—regulatory demands, legacy systems, critical infrastructure dependencies, and high-stakes data protection—yet all share the urgent need for agility and trust in a quantum-ready world. This session distills the highlights from these discussions into a unified perspective: where the sectors stand today, the common themes emerging across industries, and the roadmap ahead. Attendees will walk away with a clear understanding of how PQC adoption is taking shape across the economy and what steps are necessary to drive coordinated, cross-sector progress. 
             speakers:
+              - Scott Rea
               - Jaime Gómez García
+              - Paul van Brouwershaven *
             locations:
               - plenary
 
@@ -849,13 +870,13 @@ data:
 
       - time: "11:30"
         sessions:
-          - title: "PKI Agility and the Difference to Cryptographic Agility: Lessons from the Past and Present"
+          - title: Quantum-Safety Timelines in the Financial Sector
             description: |
-              Cryptographic agility is often misunderstood as purely a technical problem. This presentation challenges that assumption, arguing that agility requirements are context-dependent, often organizational in nature, and ultimately a subset of broader organizational agility.
-
-              We begin by classifying different types of PKI agility according to the need for being agile. This includes replacing the underlying cryptographic algorithms and why size matters,  re-issuing certificates, replacing certificates hierarchies, reacting to key compromise and migrating to quantum safety. Through concrete examples, we show how lack of agility impacts dimensions differently. Some of the lessons date back 20 years to the transition from RSA to ECC and the experience gained deploying hybrid systems in sensitive government projects. Other lessons are more recent, for example the hybrid secure-boot mechanism on the IBM mainframe.
+              The financial sector has moved decisively from awareness-building into active implementation of quantum-safe strategies. While 2024 primarily focused on raising awareness, 2025 has marked a significant shift towards concrete implementation activities across numerous financial institutions. The industry is now increasingly prioritizing collaboration, coordination, and streamlined efforts to avoid duplication and enhance efficiency in transitioning to quantum-safe operations.
+              
+              This presentation will outline the latest initiatives that are shaping quantum-safety priorities and timelines within the financial sector. Financial institutions will benefit from practical guidance on building and benchmarking their quantum transition plans, while technology vendors will gain valuable insights into the evolving expectations and specific requirements of financial sector clients.
             speakers:
-              - Michael Osborne
+              - Jaime Gómez García
             locations:
               - plenary
 
@@ -869,15 +890,13 @@ data:
 
       - time: "12:00"
         sessions:
-          - title: "Quantum Security in Practice: Lessons from a Dozen of Client Engagements"
+          - title: "PKI Agility and the Difference to Cryptographic Agility: Lessons from the Past and Present"
             description: |
-              The quantum threat is no longer theoretical, it’s becoming a strategic concern for cybersecurity leaders. This session shares insights from a dozen client case studies across industries and regions, highlighting how organizations are preparing for quantum risk in practical terms.
-              
-              Through real examples from field engagements, the talk explores how security teams are assessing quantum readiness, making critical decisions with incomplete information, and adapting to shifting standards under real operational pressures.
-              
-              Rather than focusing on abstract principles, the session offers a grounded look at quantum security in action. Designed to resonate with technically savvy professionals, the narrative blends foundational context with hands-on application, providing actionable takeaways for those navigating the evolving path toward post-quantum resilience. 
+              Cryptographic agility is often misunderstood as purely a technical problem. This presentation challenges that assumption, arguing that agility requirements are context-dependent, often organizational in nature, and ultimately a subset of broader organizational agility.
+
+              We begin by classifying different types of PKI agility according to the need for being agile. This includes replacing the underlying cryptographic algorithms and why size matters,  re-issuing certificates, replacing certificates hierarchies, reacting to key compromise and migrating to quantum safety. Through concrete examples, we show how lack of agility impacts dimensions differently. Some of the lessons date back 20 years to the transition from RSA to ECC and the experience gained deploying hybrid systems in sensitive government projects. Other lessons are more recent, for example the hybrid secure-boot mechanism on the IBM mainframe.
             speakers:
-              - Alexey Bocharnikov
+              - Michael Osborne
             locations:
               - plenary
 
@@ -893,17 +912,15 @@ data:
 
       - time: "12:30"
         sessions:
-          - title: "Scaling Trust: CLM Roadblocks on the Path to Post-Quantum Resilience"
+          - title: "Quantum Security in Practice: Lessons from a Dozen of Client Engagements"
             description: |
-              As enterprises prepare for post-quantum cryptography (PQC), the ability to discover, manage, and transition cryptographic assets at scale has become a mission-critical capability. Certificate Lifecycle Management (CLM) is often seen as the answer, but CLM at enterprise scale is more complex than most anticipate. This panel brings together thought leaders from various CLM vendors and industry experts to unpack the strategic lessons learned and operational friction points that organizations face in aligning CLM systems with quantum-resilient architectures.
+              The quantum threat is no longer theoretical, it’s becoming a strategic concern for cybersecurity leaders. This session shares insights from a dozen client case studies across industries and regions, highlighting how organizations are preparing for quantum risk in practical terms.
+              
+              Through real examples from field engagements, the talk explores how security teams are assessing quantum readiness, making critical decisions with incomplete information, and adapting to shifting standards under real operational pressures.
+              
+              Rather than focusing on abstract principles, the session offers a grounded look at quantum security in action. Designed to resonate with technically savvy professionals, the narrative blends foundational context with hands-on application, providing actionable takeaways for those navigating the evolving path toward post-quantum resilience. 
             speakers:
-              - Chris Bailey *
-              - Chris Hickman
-              - Muralidharan Palanisamy
-              - George Parsons
-
-            youtube:
-            presentation:              
+              - Alexey Bocharnikov
             locations:
               - plenary
 
@@ -928,12 +945,16 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: "ASEAN’s Post-Quantum Future: Securing Communications in an Era of Disruptive Change"
+          - title: "Scaling Trust: CLM Roadblocks on the Path to Post-Quantum Resilience"
             description: |
-              As [ASEAN](https://en.wikipedia.org/wiki/ASEAN) economies surge toward digital evolution. the foundation of secure communications is facing an existential challenge. The rise of quantum computing is an imminent reality that threatens to dismantle traditional encryption, leaving government data, diplomatic channels & commercial transactions vulnerable to unprecedented risks - including 'harvest now, decrypt later' threats. Discuss the profound implications of quantum computing on SEA's cybersecurity landscape and the urgent need for proactive preparation & public-private sector synergy. In a region of diverse technological maturity, escalating cyber threats & heightened geopolitical risk, building quantum-resilient communications is not only a technical necessity, it is fundamental to national security, economic stability & ASEAN’s collective digital sovereignty.
-            track: Panel Discussion
+              As enterprises prepare for post-quantum cryptography (PQC), the ability to discover, manage, and transition cryptographic assets at scale has become a mission-critical capability. Certificate Lifecycle Management (CLM) is often seen as the answer, but CLM at enterprise scale is more complex than most anticipate. This panel brings together thought leaders from various CLM vendors and industry experts to unpack the strategic lessons learned and operational friction points that organizations face in aligning CLM systems with quantum-resilient architectures.
             speakers:
-              - Jonathan Jackson
+              - Chris Bailey *
+              - Chris Hickman
+              - Muralidharan Palanisamy
+              - George Parsons
+            youtube:
+            presentation:              
             locations:
               - plenary
 
@@ -947,11 +968,12 @@ data:
 
       - time: "14:30"
         sessions:
-          - title: A structured approach to the quantum-safe transformation
+          - title: "ASEAN’s Post-Quantum Future: Securing Communications in an Era of Disruptive Change"
             description: |
-              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and  understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
+              As [ASEAN](https://en.wikipedia.org/wiki/ASEAN) economies surge toward digital evolution. the foundation of secure communications is facing an existential challenge. The rise of quantum computing is an imminent reality that threatens to dismantle traditional encryption, leaving government data, diplomatic channels & commercial transactions vulnerable to unprecedented risks - including 'harvest now, decrypt later' threats. Discuss the profound implications of quantum computing on SEA's cybersecurity landscape and the urgent need for proactive preparation & public-private sector synergy. In a region of diverse technological maturity, escalating cyber threats & heightened geopolitical risk, building quantum-resilient communications is not only a technical necessity, it is fundamental to national security, economic stability & ASEAN’s collective digital sovereignty.
+            track: Panel Discussion
             speakers:
-              - Efstathia Katsigianni
+              - Jonathan Jackson
             locations:
               - plenary
 
@@ -1027,6 +1049,7 @@ data:
               - Muhammad Rezal Kamel Ariffin
               - Pieter Schneider
               - William Gee
+              - Osamu Terai
             youtube:
             presentation: 
             locations:
@@ -1173,13 +1196,11 @@ data:
 
       - time: "11:30"
         sessions:
-          - title: Overcoming Challenges in Post-Quantum Cryptography Adoption
+          - title: A structured approach to the quantum-safe transformation
             description: |
-              With the release of standards for Post-Quantum Cryptography (PQC) algorithms, the cryptographic community faces a paradigm shift. Unlike RSA, ECC, and DH, which were often regarded as "silver bullets" due to their efficiency in key size, signature size, and performance, current PQC algorithms introduce significant challenges. 
-              
-              This session will explore the practical obstacles of integrating PQC algorithms into existing products and services. Topics include the use of embedded systems that leverage LMS or ML-DSA signatures to verify component integrity, and the implications for services delivering image signature solutions, particularly with regard to backend HSM operations and compliance with CNSA 2.0. Finally, we examine how open-source PKI management tools, purpose-built for PQC, can help meet these challenges by providing scalable and adaptable infrastructures for orchestrating post-quantum cryptographic operations.
+              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and  understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
             speakers:
-              - Frank Michaud
+              - Efstathia Katsigianni
             locations:
               - plenary
 
@@ -1231,13 +1252,13 @@ data:
             locations:
               - plenary
 
-          - title: Post Quantum Key Exchange in VPN Using ML-KEM-768
+          - title: Overcoming Challenges in Post-Quantum Cryptography Adoption
             description: |
-              This paper presents a user-space integration of ML-KEM-768, a post-quantum key encapsulation mechanism standardized by NIST, with WireGuard, a modern VPN protocol. Rather than modifying the kernel-level X25519 elliptic-curve Diffie-Hellman handshake, the proposed approach establishes a Kyber-based shared secret over sockets and injects it as a pre-shared key (PSK) into WireGuard’s Noise protocol. This en-hances WireGuard’s resistance to quantum attacks without altering its core code. Experimental results demonstrate successful key agreement and acceptable performance overhead, making the solution viable for hybrid VPN deployments in the post-quantum era
+              With the release of standards for Post-Quantum Cryptography (PQC) algorithms, the cryptographic community faces a paradigm shift. Unlike RSA, ECC, and DH, which were often regarded as "silver bullets" due to their efficiency in key size, signature size, and performance, current PQC algorithms introduce significant challenges. 
+              
+              This session will explore the practical obstacles of integrating PQC algorithms into existing products and services. Topics include the use of embedded systems that leverage LMS or ML-DSA signatures to verify component integrity, and the implications for services delivering image signature solutions, particularly with regard to backend HSM operations and compliance with CNSA 2.0. Finally, we examine how open-source PKI management tools, purpose-built for PQC, can help meet these challenges by providing scalable and adaptable infrastructures for orchestrating post-quantum cryptographic operations.
             speakers:
-              - Anurag Krishna Sharma
-            youtube:
-            presentation:               
+              - Frank Michaud
             locations:
               - breakout
 
