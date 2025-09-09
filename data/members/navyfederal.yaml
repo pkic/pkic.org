@@ -1,0 +1,59 @@
+id: navyfederal
+name: Navy Federal Credit Union
+slogan: Our members are the mission 
+website: https://www.navyfederal.org/
+
+# Short description, longer content can be placed in `content/members/`
+description: Navy Federal Credit Union is an armed forces bank serving the Navy, Army, Marine Corps, Air Force, Space Force, Coast Guard, veterans, DoD & their families.
+
+# membership
+memberSince: 2025-08-12
+memberType: F
+workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+  
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog: 
+  url: https://www.navyfederal.org/makingcents/blog.html
+  feed:
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://fa-etbx-saasfaprod1.fa.ocs.oraclecloud.com/hcmUI/CandidateExperience/en/sites/nfcu
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://x.com/navyfederal
+  facebook: https://www.facebook.com/NavyFederal
+  instagram: https://instagram.com/navyfederal
+  linkedin: https://www.linkedin.com/company/navy-federal-credit-union
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Kyle Russell
+    role: PKI Engineer
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/kyle-russell-777b281b2/
+    description: Kyle is a PKI Engineer at Navy Federal Credit Union and represents the organization at the PKI Consortium.
+    
