@@ -4,7 +4,7 @@ slogan:
 website: https://www.savyint.com
 
 # Short description, longer content can be placed in `content/members/`
-description: SAVYINT is an IT security company in Sydney, Australia, with an R&D Center in Hanoi and international offices in Singapore, Dubai, Ho Chi Minh City (Vietnam), and Sofia (Bulgaria). With over 20 years of experience, we consistently rank among the leading global information technology enterprises, providing software platforms, system solutions, and services for digital transformation. Our expertise spans Open Banking solutions, information security, and FinTech, particularly in the Finance – Banking & FSI, Government, Manufacturing, Telecommunications, Healthcare, Education, and Media sectors.  We take pride in our team of senior experts, including professionals with more than 30 years of experience in IT and cybersecurity.  Our proprietary solutions are fully designed, researched, and developed in-house by our team of tech experts, using modern technologies and in full compliance with international security and quality standards
+description: Our expertise spans Open Banking solutions, information security, and FinTech, particularly in the Finance/Banking & FSI, Government, Manufacturing, Telecommunications, Healthcare, Education, and Media sectors.
 
 # membership
 memberSince: 2025-08-18
@@ -35,11 +35,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +50,5 @@ representatives:
     role: CTO
     social:
       twitter: 
-      linkedin: 
+      linkedin: http://linkedin.com/in/steve-huang-4139b8158
     description: Steve is the CTO at Savyint Group and represents the organization at the PKI Consortium.
