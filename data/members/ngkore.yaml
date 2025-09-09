@@ -10,6 +10,10 @@ description: NgKore is a research community dedicated to pushing the boundaries 
 memberSince: 2025-08-27
 memberType: G
 workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +39,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +54,5 @@ representatives:
     role: Co-Founder
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/aditya-koranga/
     description: Aditya is the Co-Founder at NgKore and represents the organization at the PKI Consortium.
