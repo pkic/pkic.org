@@ -1,10 +1,10 @@
 id: navyfederal
 name: Navy Federal Credit Union
-slogan: 
+slogan: Our members are the mission 
 website: https://www.navyfederal.org/
 
 # Short description, longer content can be placed in `content/members/`
-description: Navy Federal Credit Union is an armed forces bank serving the Navy, Army, Marine Corps, Air Force, Space Force, Coast Guard, veterans, DoD & their families. 
+description: Navy Federal Credit Union is an armed forces bank serving the Navy, Army, Marine Corps, Air Force, Space Force, Coast Guard, veterans, DoD & their families.
 
 # membership
 memberSince: 2025-08-12
