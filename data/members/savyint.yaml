@@ -10,7 +10,10 @@ description: Our expertise spans Open Banking solutions, information security, a
 memberSince: 2025-08-18
 memberType: F
 workingGroups:
-
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
 # sponsor
 sponsor:
   level: 
