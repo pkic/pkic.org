@@ -561,6 +561,17 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/osamu-terai
 
+# Add once confirmed she will attend
+#    - name: Lory Thorpe
+#      title: Quantum Safe Industry Lead at IBM
+#      bio: |
+#        Driven executive leader with over 20 years senior level global experience in digital transformation and telecommunications with a strong technology, strategy and innovation background (development, architecture, product and solution mgt) in Internet of Things, mobile networks, cloud, security, data analytics/ AI, edge.  Expertise in building, integrating and delivering innovative digital products and solutions to market, across Private and Public sector within Enterprise.
+        
+#        Leading portfolio and industry efforts on application of Quantum Computing and Quantum Safe in Telecommunications in IBM.
+#      social:
+#        linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
+
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -841,7 +852,8 @@ data:
             description: |
               The transition to post-quantum cryptography (PQC) is not a challenge faced by a single industry—it is a global transformation impacting every sector. In this 30-minute kickoff, we bring together key insights gathered from focused workshops across energy, government, financial services, and healthcare. Each vertical faces unique obstacles—regulatory demands, legacy systems, critical infrastructure dependencies, and high-stakes data protection—yet all share the urgent need for agility and trust in a quantum-ready world. This session distills the highlights from these discussions into a unified perspective: where the sectors stand today, the common themes emerging across industries, and the roadmap ahead. Attendees will walk away with a clear understanding of how PQC adoption is taking shape across the economy and what steps are necessary to drive coordinated, cross-sector progress. 
             speakers:
-              - Scott Stuewe
+              - Scott Rea
+              - Jaime Gómez García
               - Paul van Brouwershaven *
             locations:
               - plenary
