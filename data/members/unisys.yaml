@@ -1,10 +1,10 @@
 id: unisys
 name: Unisys
-slogan:
+slogan: Inspired by possibility. Driven by performance.
 website: https://www.unisys.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: I have worked for more than 10 years for a global CA, eMudhra leading technical and funcional expects of PKI. I have worked across globe on this domain. Now working with Unisys taking care of PKI and PQC.
+description: Unisys is a global technology solutions company dedicated to helping people and organizations reach the next breakthrough. And the one after that.
 
 # membership
 memberSince: 2025-08-18
@@ -35,11 +35,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +50,5 @@ representatives:
     role: Vice President Technology
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/rajkrpandey/
     description: Raj is the Vice President Technology at Unisys and represents the organization at the PKI Consortium.
