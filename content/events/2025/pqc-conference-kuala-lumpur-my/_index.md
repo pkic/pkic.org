@@ -318,12 +318,12 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/muralidharanpalanisamy/
 
-    - name: Alessandro 
+    - name: Alessandro Amadori 
       title: Cryptographer at TNO
       bio: |
         Alessandro  is a cryptographer at TNO focusing on the migration to Post-quantum Cryptography. He holds a PhD from Eindhoven University of Technology in cryptographic implementations. He has contributed in several PQC migration projects like HAPKIDO, and is one a co-author of the second edition of the PQC migration handbook.
       social:
-        linkedin: https://www.linkedin.com/in/alessandro--4b2149b8/
+        linkedin: https://www.linkedin.com/in/alessandro-amadori-4b2149b8/
 
     - name: Sven Rajala
       title: International PKI Man of Mystery at Keyfactor
@@ -550,6 +550,15 @@ data:
         Dr. Megat has a Doctor of Business Administration from Universiti Teknologi MARA, Master of Science in Communications Technology from Ulm University, Germany and Bachelor of Science in Electrical and Computer Engineering (Minor in Economics) from Johns Hopkins University, USA.
       social:
         linkedin: https://www.linkedin.com/in/ir-dr-megat-zuhairy-megat-tajuddin-8b150335/
+
+    - name: Osamu Terai
+      title: Group CISO of Mizuho Financial Group, Board member of Financial ISAC Japan
+      bio: |
+        Osamu Terai is Group CISO at Mizuho Financial Group, one of the largest Japanese banks, and responsible for all cybersecurity initiatives including PQC transition of the group. Osamu has more than 30 years of experience in financial IT. In 2024, he chaired “Study Group on Deposit-taking Institutions' Response to Post-Quantum Cryptography” (PQC study group) organized by the Financial Services Agency of Japan. After several meetings, the study group released a report which title is “Report of the Study Group on Deposit-taking Institutions' Response to Post-Quantum Cryptography” in November 2024. The report was aimed at heightening awareness of senior management of Japanese FIs about the PQC transition.
+
+        Osamu is also a board member of Financial ISAC (F-ISAC) Japan, a non-profit, member-driven organization dedicated to fortifying the cyber defense of Japanese financial institutions. Presently, Osamu leads a working group called Fintech Security WG within F-ISAC Japan. The WG is creating “PQC transition guide for Japanese FIs” to provide practical guidelines such as the transition timelines, prioritization, project team formation and so on. In this capacity, he is at the vanguard of providing guidance on PQC transition, ensuring the security and resilience of Japan's financial sector.
+      social:
+        linkedin: https://www.linkedin.com/in/osamu-terai
 
   # Agenda ----------------------------------------------------------------------
   agenda:
