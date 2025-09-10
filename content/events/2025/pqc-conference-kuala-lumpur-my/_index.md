@@ -140,19 +140,20 @@ data:
         Dr. Alexander Löw is the CEO of Data-Warehouse GmbH and serves as a Senator in the German Senate of Economy. He holds the position of Vice President of the German Cybersecurity Council Association and is the innovative mind behind IQIMS and PCert. With a deep understanding of cybersecurity since the 1980s and 25 years of experience as a Data Protection Officer (DPO), Alexander has a strong focus on Public Key Infrastructure (PKI). He has been involved in the conceptualization, building, and maintenance of industrial and governmental CAs (e.g., Macao, German Airforce, BMW) since 2001. In 2012, following a significant APT attack, he began automating PKI processes to enhance cybersecurity. Since 2014, he has been actively involved in publishing and presenting on PKI and cybersecurity topics, and has been conducting PKI trainings for the German BSI Alliance for Cybersecurity since 2015. In 2024, he joined the NIST Post-Quantum Migration Working Group to contribute to the development of standard 1800-38B.
       social:
         linkedin: https://www.linkedin.com/in/dr-alexander-loew/
-    
-    - name: Alexey Bocharnikov
-      title: Director for Emerging Technologies in Cyber at Macquarie
-      bio: |
-        Alexey Bocharnikov is Director of Emerging Technologies (Cyber) at Macquarie, where Alexey leads the adoption of advanced security capabilities—including post‑quantum cryptography, AI/ML security—to enable innovation without compromising resilience. With over 15 years of experience in cybersecurity strategy, risk management, quantum risk, and cryptography, Alexey has a proven track record of translating complex risk into actionable strategies.
 
-        Previously, Alexey was a Director at Accenture, serving as APAC Quantum Security Lead and A/NZ Cyber Strategy Delivery Lead. Before that, Alexey contributed to the Global Innovation Quantum Technology Lab at EY and led Global Quantum Security initiatives, delivering more than a dozen cyber strategy programs across the A/NZ region. Earlier in the career, Alexey served as Country Information Security Officer at Deutsche Bank (Moscow), safeguarding business operations and aligning global standards with local needs.
+    # Cancelled 
+    #- name: Alexey Bocharnikov
+    #  title: Director for Emerging Technologies in Cyber at Macquarie
+    #  bio: |
+    #    Alexey Bocharnikov is Director of Emerging Technologies (Cyber) at Macquarie, where Alexey leads the adoption of advanced security capabilities—including post‑quantum cryptography, AI/ML security—to enable innovation without compromising resilience. With over 15 years of experience in cybersecurity strategy, risk management, quantum risk, and cryptography, Alexey has a proven track record of translating complex risk into actionable strategies.
 
-        A recognised advocate for proactive risk management and responsible adoption of emerging technologies, Alexey has authored articles, contributed to international reports, produced educational content, and spoken at industry conferences on quantum security and cyber strategy.
+    #    Previously, Alexey was a Director at Accenture, serving as APAC Quantum Security Lead and A/NZ Cyber Strategy Delivery Lead. Before that, Alexey contributed to the Global Innovation Quantum Technology Lab at EY and led Global Quantum Security initiatives, delivering more than a dozen cyber strategy programs across the A/NZ region. Earlier in the career, Alexey served as Country Information Security Officer at Deutsche Bank (Moscow), safeguarding business operations and aligning global standards with local needs.
+
+    #    A recognised advocate for proactive risk management and responsible adoption of emerging technologies, Alexey has authored articles, contributed to international reports, produced educational content, and spoken at industry conferences on quantum security and cyber strategy.
         
-      social:
-        linkedin: https://www.linkedin.com/in/alexeybocharnikov/
-        x: https://x.com/sumprior
+    #  social:
+    #    linkedin: https://www.linkedin.com/in/alexeybocharnikov/
+    #    x: https://x.com/sumprior
           
     - name: Tomas Gustavsson
       title: Chief PKI Officer at Keyfactor
@@ -435,7 +436,7 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/huckhai-lim-847234a/
  
-    #
+    # Cancelled
     #- name: Anurag Krishna Sharma
     #  title: Scientist at Advanced Data Processing Research Institute 
     #  bio: |
@@ -912,15 +913,11 @@ data:
 
       - time: "12:30"
         sessions:
-          - title: "Quantum Security in Practice: Lessons from a Dozen of Client Engagements"
+          - title: A structured approach to the quantum-safe transformation
             description: |
-              The quantum threat is no longer theoretical, it’s becoming a strategic concern for cybersecurity leaders. This session shares insights from a dozen client case studies across industries and regions, highlighting how organizations are preparing for quantum risk in practical terms.
-              
-              Through real examples from field engagements, the talk explores how security teams are assessing quantum readiness, making critical decisions with incomplete information, and adapting to shifting standards under real operational pressures.
-              
-              Rather than focusing on abstract principles, the session offers a grounded look at quantum security in action. Designed to resonate with technically savvy professionals, the narrative blends foundational context with hands-on application, providing actionable takeaways for those navigating the evolving path toward post-quantum resilience. 
+              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and  understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
             speakers:
-              - Alexey Bocharnikov
+              - Efstathia Katsigianni
             locations:
               - plenary
 
@@ -1196,11 +1193,14 @@ data:
 
       - time: "11:30"
         sessions:
-          - title: A structured approach to the quantum-safe transformation
+          - title: "From Inventory to Action: Navigating the Next Phase of PQC Transition"
             description: |
-              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and  understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
+              Over the past few years, cybersecurity professionals worldwide have been urged—by security agencies and consultants alike—to kickstart their post-quantum cryptographic transition with a cryptographic inventory. Many have taken that advice to heart, amassing vast amounts of cryptographic data. Now, organizations face the critical question: how do we turn this information into action? 
+              This presentation explores that very question. We’ll examine the next critical steps in the PQC transition from multiple perspectives—technical, strategic, and operational—and offer actionable guidance including prioritizing frameworks, risk-based approaches, and implementation timelines to help organizations turn insight into meaningful progress.
             speakers:
-              - Efstathia Katsigianni
+              - Bruno Couillard
+            youtube:
+            presentation: 
             locations:
               - plenary
 
@@ -1217,12 +1217,13 @@ data:
 
       - time: "12:00"
         sessions:
-          - title: "From Inventory to Action: Navigating the Next Phase of PQC Transition"
+          - title: How ETSI is Preparing for PQC
             description: |
-              Over the past few years, cybersecurity professionals worldwide have been urged—by security agencies and consultants alike—to kickstart their post-quantum cryptographic transition with a cryptographic inventory. Many have taken that advice to heart, amassing vast amounts of cryptographic data. Now, organizations face the critical question: how do we turn this information into action? 
-              This presentation explores that very question. We’ll examine the next critical steps in the PQC transition from multiple perspectives—technical, strategic, and operational—and offer actionable guidance including prioritizing frameworks, risk-based approaches, and implementation timelines to help organizations turn insight into meaningful progress.
+              Settling on PQC algorithms is only part of the journey to make our digital systems safe from the Quantum Apocalypse.  An essential step is for certificates of various types to support PQC and for the regulations to allow them. 
+              
+              ETSI is the governing body empowered by the European Union to give us the eIDAS standard for digital certificates.  In this session you will learn ETSI’s plans for PQC, the status PQC in the standards-making process, and expectations for when PQC-enabled eIDAS certificates will be available. 
             speakers:
-              - Bruno Couillard
+              - Inigo Barreira
             youtube:
             presentation: 
             locations:
@@ -1240,15 +1241,11 @@ data:
 
       - time: "12:30"
         sessions:
-          - title: How ETSI is Preparing for PQC
+          - title: "Crypto-Agility: How it’s both a Critical Component and a Complex Challenge"
             description: |
-              Settling on PQC algorithms is only part of the journey to make our digital systems safe from the Quantum Apocalypse.  An essential step is for certificates of various types to support PQC and for the regulations to allow them. 
-              
-              ETSI is the governing body empowered by the European Union to give us the eIDAS standard for digital certificates.  In this session you will learn ETSI’s plans for PQC, the status PQC in the standards-making process, and expectations for when PQC-enabled eIDAS certificates will be available. 
+              The time to prepare for the quantum threat is upon us, and the move from traditional crypto to PQC will touch just about every cryptographic system and piece of infrastructure. To make the transition, organizations need visibility into their cryptographic estate (hardware, software, keys, certificates, secrets, etc.) and ensure they have built in crypto-agility. How does one achieve a mature crypto-agile security practice? By defining crypto-agility and understanding what it looks like for your organization. But crypto-agility is much more than moving from one system or algorithm to another. It’s about people, processes and technology. It’s about visualizing your cryptographic assets, implementing policy, driving compliance and more. In this session, we’ll discuss in detail the necessary elements to achieve a mature crypto-agile security practice, and how to overcome the challenges to get there.
             speakers:
-              - Inigo Barreira
-            youtube:
-            presentation: 
+              - Greg Wetmore
             locations:
               - plenary
 
@@ -1268,11 +1265,11 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: "Crypto-Agility: How it’s both a Critical Component and a Complex Challenge"
+          - title: "Real-World Post-Quantum Migrations: Lessons Learned and Performance Results"
             description: |
-              The time to prepare for the quantum threat is upon us, and the move from traditional crypto to PQC will touch just about every cryptographic system and piece of infrastructure. To make the transition, organizations need visibility into their cryptographic estate (hardware, software, keys, certificates, secrets, etc.) and ensure they have built in crypto-agility. How does one achieve a mature crypto-agile security practice? By defining crypto-agility and understanding what it looks like for your organization. But crypto-agility is much more than moving from one system or algorithm to another. It’s about people, processes and technology. It’s about visualizing your cryptographic assets, implementing policy, driving compliance and more. In this session, we’ll discuss in detail the necessary elements to achieve a mature crypto-agile security practice, and how to overcome the challenges to get there.
+              This presentation will share the lessons learned during the migration of several real-world systems to post-quantum cryptography and provide performance data. Specifically, we will cover three use cases carried out by two banks and the Dutch tax authority and zoom in on the technical and non-technical challenges that arose during those use cases. Some of the topics that will be discussed are crypto-agility in code, architectural solutions to blocking vendor dependencies and how to involve vendor management. Additionally, we will give an overview of the performance results of some of the migrated systems.
             speakers:
-              - Greg Wetmore
+              - Michiel Marcus
             locations:
               - plenary
 
@@ -1286,11 +1283,21 @@ data:
 
       - time: "14:30"
         sessions:
-          - title: "Real-World Post-Quantum Migrations: Lessons Learned and Performance Results"
+          - title: "PQC in Practice: Why This, Not That?"
             description: |
-              This presentation will share the lessons learned during the migration of several real-world systems to post-quantum cryptography and provide performance data. Specifically, we will cover three use cases carried out by two banks and the Dutch tax authority and zoom in on the technical and non-technical challenges that arose during those use cases. Some of the topics that will be discussed are crypto-agility in code, architectural solutions to blocking vendor dependencies and how to involve vendor management. Additionally, we will give an overview of the performance results of some of the migrated systems.
+              As the industry accelerates preparations for the post-quantum era, a growing number of organizations are grappling with a practical question: Which PQC deployment strategy is right for us? Should we adopt hybrid certificates, go pure post-quantum, use composite keys, or run dual cryptographic infrastructures? Each approach offers different trade-offs in terms of risk, interoperability, compliance, and operational complexity.
+      
+              This panel brings together leading experts and implementers to explore real-world use cases, deployment decisions, and the rationale behind them. Panelists will share insights into how organizations are evaluating the threat landscape, aligning cryptographic agility with business needs, and choosing between strategies.
+      
+              This session is designed for architects, security engineers, and decision-makers who need to answer the increasingly common question: What should we do, and why?
+            track: 
             speakers:
-              - Michiel Marcus
+              - Sven Rajala *
+              - Sudha Iyer
+              - Corey Bonnell
+              - Tadahiko Ito
+            youtube:
+            presentation: 
             locations:
               - plenary
 
@@ -1308,21 +1315,9 @@ data:
             
       - time: "15:00"
         sessions:
-          - title: "PQC in Practice: Why This, Not That?"
+          - title: "Continuation: PQC in Practice: Why This, Not That?"
             description: |
-              As the industry accelerates preparations for the post-quantum era, a growing number of organizations are grappling with a practical question: Which PQC deployment strategy is right for us? Should we adopt hybrid certificates, go pure post-quantum, use composite keys, or run dual cryptographic infrastructures? Each approach offers different trade-offs in terms of risk, interoperability, compliance, and operational complexity.
-      
-              This panel brings together leading experts and implementers to explore real-world use cases, deployment decisions, and the rationale behind them. Panelists will share insights into how organizations are evaluating the threat landscape, aligning cryptographic agility with business needs, and choosing between strategies.
-      
-              This session is designed for architects, security engineers, and decision-makers who need to answer the increasingly common question: What should we do, and why?
-            track: 
-            speakers:
-              - Sven Rajala *
-              - Sudha Iyer
-              - Corey Bonnell
-              - Tadahiko Ito
-            youtube:
-            presentation: 
+              This session continues the panel discussion on PQC in Practice, focusing on which PQC deployment strategy is right for use in real-world deployment strategies. 
             locations:
               - plenary
 
