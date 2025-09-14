@@ -913,11 +913,16 @@ data:
 
       - time: "12:30"
         sessions:
-          - title: A structured approach to the quantum-safe transformation
+          - title: "Scaling Trust: CLM Roadblocks on the Path to Post-Quantum Resilience"
             description: |
-              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and  understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
+              As enterprises prepare for post-quantum cryptography (PQC), the ability to discover, manage, and transition cryptographic assets at scale has become a mission-critical capability. Certificate Lifecycle Management (CLM) is often seen as the answer, but CLM at enterprise scale is more complex than most anticipate. This panel brings together thought leaders from various CLM vendors and industry experts to unpack the strategic lessons learned and operational friction points that organizations face in aligning CLM systems with quantum-resilient architectures.
             speakers:
-              - Efstathia Katsigianni
+              - Chris Bailey *
+              - Chris Hickman
+              - Muralidharan Palanisamy
+              - George Parsons
+            youtube:
+            presentation:
             locations:
               - plenary
 
@@ -942,16 +947,11 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: "Scaling Trust: CLM Roadblocks on the Path to Post-Quantum Resilience"
+          - title: A structured approach to the quantum-safe transformation
             description: |
-              As enterprises prepare for post-quantum cryptography (PQC), the ability to discover, manage, and transition cryptographic assets at scale has become a mission-critical capability. Certificate Lifecycle Management (CLM) is often seen as the answer, but CLM at enterprise scale is more complex than most anticipate. This panel brings together thought leaders from various CLM vendors and industry experts to unpack the strategic lessons learned and operational friction points that organizations face in aligning CLM systems with quantum-resilient architectures.
+              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and  understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
             speakers:
-              - Chris Bailey *
-              - Chris Hickman
-              - Muralidharan Palanisamy
-              - George Parsons
-            youtube:
-            presentation:              
+              - Efstathia Katsigianni
             locations:
               - plenary
 
