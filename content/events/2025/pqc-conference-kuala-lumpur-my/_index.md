@@ -435,18 +435,6 @@ data:
         Huck Hai is leading a team of PKI, PQC and AI professionals at Baker Tilly and is a founding member of ACPMIT, based in Budapest, Hungary.  Throughout his career, Huck has led numerous WebTrust for Certification Authorities audits, successfully delivered under KPMG, BDO, and now Baker Tilly. He is an active member of the Institute of Chartered Accountants in England and Wales (ICAEW) Tech Faculty Board and serves as the elected President of the Association of Certified Fraud Examiners (ACFE) - Malaysia Chapter. Huck has played a significant role in collaborating with authorities on National Root CA, Post-Quantum Cryptography (PQC), Cybersecurity, and Artificial Intelligence (AI). He was engaged by the Government of Malaysia in the implementation of the Digital Signature Act 1997 and Digital Signature Regulations 1998.
       social:
         linkedin: https://www.linkedin.com/in/huckhai-lim-847234a/
- 
-    # Cancelled
-    #- name: Anurag Krishna Sharma
-    #  title: Scientist at Advanced Data Processing Research Institute 
-    #  bio: |
-    #    I am a Theoretical Computer Scientist working with the Department of Space, Government of India, where I focus on high-assurance systems, secure communication #protocols, and advanced computational models. My expertise spans Network Security, Post-Quantum Cryptography, Generative AI, and Quantum Networking, with practical #implementation experience using Qiskit, OpenQASM, and IBMQ.
-    #    
-    #    I previously collaborated with AIIMS (All India Institute of Medical Sciences) to enhance healthcare infrastructure through technological innovation—particularly in #secure data systems and intelligent diagnostics.
-    #    
-    #    I hold a Master’s degree in Computer Science from IIT Delhi, where my academic research explored the intersection of cryptographic theory and real-world systems, #with applications in quantum-secure communication and privacy-preserving architectures.
-    #  social:
-    #    linkedin: https://www.linkedin.com/in/anurag-sharma-099798134/
 
     - name: James Howe
       title: Head of Cryptography at SandboxAQ
@@ -562,12 +550,52 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/osamu-terai
 
+    - name: Steven Gan
+      title: General Manager at Blue Fortress
+      bio: |
+        Steven Gan is a distinguished information security professional, holding the Certified Information Security Manager (CISM) credential. With over two decades of experience in IT Security, he is widely recognized for his profound knowledge and practical expertise.
+ 
+        His credentials span the broad spectrum of cybersecurity, encompassing technology risk assessment, regulatory compliance, identity & access management, application & network security, and infrastructure security. His expertise is particularly evident in his in-depth knowledge and hands-on experience within the financial industry.
+        
+        Prior to joining Blue Fortress, Steven served 11 years at a reputable regional bank in Malaysia. His proven ability to guide teams and organizations towards robust security measures has been consistently acknowledged. A significant highlight of his career is that he was selected among the top 1% of talent across the organization to participate in the prestigious leadership academy program at SMU, Singapore, in 2017, 2019, and 2020—a clear testament to his exceptional leadership skills and potential.
+
+        Steven's invaluable insights, honed over two decades as an end-user within financial institutions, have profoundly enriched his expertise. This extensive understanding of the sector, from multiple perspectives, uniquely equips him to address complex information security challenges with an unparalleled level of proficiency.
+      social:
+        linkedin: https://www.linkedin.com/in/steven-gan-cism-29845889/
+
+    - name: Maeson Maherry
+      title: Chief Operating Officer at Ascertia
+      bio: |
+        With over 20 years of experience in the cybersecurity industry, Maeson enables governments, banks, and enterprises in implementing practical digital trust solutions. His expertise lies in leveraging identity, digital signatures, and cryptography to create value, enhance user experience, and manage risk.
+
+        His insights are shaped by his experience building and scaling a cybersecurity solutions and SaaS company to market leadership, navigating two successful shareholder exits, and leading high-performing technical teams in complex, regulated industries. He now specializes in projects where the goals of security, usability, and business growth must be aligned.
+      social:
+        linkedin: https://www.linkedin.com/in/maeson/
+
+    - name: Wilson Yan
+      title: Channel Solution Engineer Lead at CyberArk APJ
+      bio: |
+        Wilson helps organizations strengthen trust in their digital ecosystems through machine identity security. With over 20 years of experience in information and cyber security, he has served in senior leadership roles at Prudential Assurance Malaysia as Head of Information Security and Data Privacy Officer, the World Health Organization as Information Security Officer, and Ford Motor Company as Security & Controls Champion for Asia Pacific & Africa. He has also held technical roles with PKI and security leaders including Ubizen (later Cybertrust) and Entrust.
+
+        Wilson’s expertise spans PKI, certificate lifecycle automation, and secure identity integration into business applications. Renowned for translating complex security concepts into practical business value, he advises CISOs, architects, and DevOps leaders on scaling security automation and defending against threats to machine identities. Passionate about bridging technology and business, Wilson is a trusted advocate for advancing digital trust across industries.
+      social:
+        linkedin: https://www.linkedin.com/in/wilson-yan/
+
+    - name: Ivan Tan
+      title: Principal Presales Consultant at Thales
+      bio: |
+        Ivan Tan is a seasoned cybersecurity professional with over 20 years of industry experience. As a Principal Presales Consultant, he is widely respected for his strategic thinking and deep technical expertise. Ivan Tan is a recognized specialist in the Thales Data Security portfolio, with a focus on Hardware Security Modules (HSMs), the CipherTrust Data Security Platform (CDSP), and High-Speed Encryptors.
+
+        A passionate advocate for knowledge sharing, Ivan frequently leads webinars and technical sessions to explore the latest developments in data and cloud protection. His professionalism and dedication to excellence have earned him a reputation as a trusted advisor and a consistent driver of impactful results.
+      social:
+        linkedin: https://www.linkedin.com/in/ivantansuanhoe/
+
 # Add once confirmed she will attend
 #    - name: Lory Thorpe
 #      title: Quantum Safe Industry Lead at IBM
 #      bio: |
 #        Driven executive leader with over 20 years senior level global experience in digital transformation and telecommunications with a strong technology, strategy and innovation background (development, architecture, product and solution mgt) in Internet of Things, mobile networks, cloud, security, data analytics/ AI, edge.  Expertise in building, integrating and delivering innovative digital products and solutions to market, across Private and Public sector within Enterprise.
-        
+
 #        Leading portfolio and industry efforts on application of Quantum Computing and Quantum Safe in Telecommunications in IBM.
 #      social:
 #        linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
@@ -680,6 +708,44 @@ data:
               - Stefan van den Berg
             locations:
               - room_5
+
+          - title: "A Practical Guide to PQC Migration: Securing Digital Identities for the Quantum Era"
+            description: |
+              **Module 1: Foundational Concepts & PQC Readiness Strategy**
+              * Overview of the PQC Threat: Introduction to the "Harvest-Now, Decrypt-Later" threat and why immediate action is necessary.
+              * Defining PQC & Crypto-Agility: Understanding the new NIST-approved algorithms and the importance of a "crypto-agile" strategy to future-proof systems.
+              * The PQC Migration Journey: A high-level overview of the PQC migration phases: Discovery, Planning, Remediation, and Execution.
+              
+              **Module 2: PQC Key Generation and Hardware Root of Trust**
+              * Securing the Foundation: The critical role of Hardware Security Modules (HSMs) as the trusted root of all cryptographic operations.
+              * PQC-Enabled HSMs: A technical deep-dive into Thales Luna HSMs and how they securely generate, store, and manage PQC private keys.
+              * Use Case: Secure PQC Key Generation: A live or simulated demonstration of generating a new PQC private key (e.g., using ML-DSA) within a Thales HSM, ensuring it never leaves the hardware boundary. This segment would highlight the FIPS validation of the hardware.
+              
+              **Module 3: PQC Certificate Lifecycle Management**
+              * The PQC Discovery Challenge: Using Venafi's platform to discover and inventory all existing cryptographic assets (certificates, keys, etc.) across an enterprise, identifying which ones are vulnerable.
+              * Managing Hybrid & Pure-PQC Certificates: A walkthrough of how Venafi's control plane manages the full lifecycle of PQC and hybrid certificates, from issuance to revocation, and how this integrates with the Thales HSM.
+              * Use Case: Automated PQC Certificate Issuance: A hands-on demonstration of Venafi's platform orchestrating the creation of a new, PQC-ready certificate. This would show the platform requesting a new PQC key from the Thales HSM and then getting the certificate signed by a PQC-ready CA.
+              
+              **Module 4: PQC-Ready Digital Signatures & Trust Services**
+              * PQC in Action: How Ascertia's digital signature solutions (ADSS Server, SigningHub) integrate with the Venafi-managed PQC certificates.
+              * Ensuring Long-Term Trust: The importance of time-stamping and secure archiving for long-lived documents signed with PQC algorithms.
+              * Use Case: Signing a Document with a PQC-Enabled Certificate: A live demo of an end-user digitally signing a document with a PQC-ready certificate. The demonstration would show the signature being created and validated, proving the document's integrity and authenticity in the post-quantum world.
+              
+              **Module 5: A Unified PQC Migration Lab**
+              * Putting It All Together: This final module would be a capstone demonstration showing a single, integrated use case that combines all three vendor solutions.
+              *  **Use Case: A PQC-Ready Code Signing Pipeline:**
+                  * A new PQC code signing key is generated and protected by a Thales HSM.
+                  * Venafi's platform automatically manages the lifecycle of the code signing certificate associated with that key.
+                  * Ascertia's digital signature technology is used to apply a PQC-enabled signature to a software package.
+                  * The final signed package is then verified to be quantum-resistant.
+            speakers:
+              - Steven Gan
+              - Maeson Maherry
+              - Wilson Yan
+              - Ivan Tan
+            locations:
+              - room_6
+
 
       - time: "11:00"
         title: Break
@@ -913,11 +979,16 @@ data:
 
       - time: "12:30"
         sessions:
-          - title: A structured approach to the quantum-safe transformation
+          - title: "Scaling Trust: CLM Roadblocks on the Path to Post-Quantum Resilience"
             description: |
-              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and  understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
+              As enterprises prepare for post-quantum cryptography (PQC), the ability to discover, manage, and transition cryptographic assets at scale has become a mission-critical capability. Certificate Lifecycle Management (CLM) is often seen as the answer, but CLM at enterprise scale is more complex than most anticipate. This panel brings together thought leaders from various CLM vendors and industry experts to unpack the strategic lessons learned and operational friction points that organizations face in aligning CLM systems with quantum-resilient architectures.
             speakers:
-              - Efstathia Katsigianni
+              - Chris Bailey *
+              - Chris Hickman
+              - Muralidharan Palanisamy
+              - George Parsons
+            youtube:
+            presentation:
             locations:
               - plenary
 
@@ -942,16 +1013,11 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: "Scaling Trust: CLM Roadblocks on the Path to Post-Quantum Resilience"
+          - title: A structured approach to the quantum-safe transformation
             description: |
-              As enterprises prepare for post-quantum cryptography (PQC), the ability to discover, manage, and transition cryptographic assets at scale has become a mission-critical capability. Certificate Lifecycle Management (CLM) is often seen as the answer, but CLM at enterprise scale is more complex than most anticipate. This panel brings together thought leaders from various CLM vendors and industry experts to unpack the strategic lessons learned and operational friction points that organizations face in aligning CLM systems with quantum-resilient architectures.
+              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
             speakers:
-              - Chris Bailey *
-              - Chris Hickman
-              - Muralidharan Palanisamy
-              - George Parsons
-            youtube:
-            presentation:              
+              - Efstathia Katsigianni
             locations:
               - plenary
 
