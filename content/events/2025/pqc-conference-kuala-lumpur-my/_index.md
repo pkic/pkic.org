@@ -553,11 +553,11 @@ data:
     - name: Steven Gan
       title: General Manager at Blue Fortress
       bio: |
-        Steven Gan is a distinguished information security professional, holding the Certified Information Security Manager (CISM) credential, with over two decades of experience in IT Security, he is widely recognized for his profound knowledge and practical expertise.
+        Steven Gan is a distinguished information security professional, holding the Certified Information Security Manager (CISM) credential. With over two decades of experience in IT Security, he is widely recognized for his profound knowledge and practical expertise.
  
         His credentials span the broad spectrum of cybersecurity, encompassing technology risk assessment, regulatory compliance, identity & access management, application & network security, and infrastructure security. His expertise is particularly evident in his in-depth knowledge and hands-on experience within the financial industry.
         
-        Prior to joining Blue Fortress, Steven served 11 years at a reputable regional bank in Malaysia. His proven ability to guide teams and organizations towards robust security measures has been consistently acknowledged. A significant highlight of his career that he was selected among the top 1% of talent across the organization to participate in the prestigious leadership academy program at SMU, Singapore, in 2017, 2019, and 2020—a clear testament to his exceptional leadership skills and potential.
+        Prior to joining Blue Fortress, Steven served 11 years at a reputable regional bank in Malaysia. His proven ability to guide teams and organizations towards robust security measures has been consistently acknowledged. A significant highlight of his career is that he was selected among the top 1% of talent across the organization to participate in the prestigious leadership academy program at SMU, Singapore, in 2017, 2019, and 2020—a clear testament to his exceptional leadership skills and potential.
         
         Steven's invaluable insights, honed over two decades as an end-user within financial institutions, have profoundly enriched his expertise. This extensive understanding of the sector, from multiple perspectives, uniquely equips him to address complex information security challenges with an unparalleled level of proficiency.
       social:
@@ -566,9 +566,9 @@ data:
     - name: Maeson Maherry
       title: Chief Operating Officer at Ascertia
       bio: |
-        With over 20 years of experience in the cybersecurity industry, Maeson enable governments, banks, and enterprises in implementing practical digital trust solutions. His expertise lies in leveraging identity, digital signatures, and cryptography to create value, enhance user experience, and manage risk.
+        With over 20 years of experience in the cybersecurity industry, Maeson enables governments, banks, and enterprises in implementing practical digital trust solutions. His expertise lies in leveraging identity, digital signatures, and cryptography to create value, enhance user experience, and manage risk.
 
-        His insights are shaped by his experience building and scaling a cybersecurity solutions and SaaS company to market leadership, navigating two successful shareholder exits, and leading high-performing technical teams in complex, regulated industries. He now specializes in projects where the goals of security, usability, and business growth must be aligned. 
+        His insights are shaped by his experience building and scaling a cybersecurity solutions and SaaS company to market leadership, navigating two successful shareholder exits, and leading high-performing technical teams in complex, regulated industries. He now specializes in projects where the goals of security, usability, and business growth must be aligned.
       social:
         linkedin: https://www.linkedin.com/in/maeson/
 
@@ -582,11 +582,11 @@ data:
         linkedin: https://www.linkedin.com/in/wilson-yan/
 
     - name: Ivan Tan
-      title: Principal Presales Consultant at Thales 
+      title: Principal Presales Consultant at Thales
       bio: |
         Ivan Tan is a seasoned cybersecurity professional with over 20 years of industry experience. As a Principal Presales Consultant, he is widely respected for his strategic thinking and deep technical expertise. Ivan Tan is a recognized specialist in the Thales Data Security portfolio, with a focus on Hardware Security Modules (HSMs), the CipherTrust Data Security Platform (CDSP), and High-Speed Encryptors.
 
-        A passionate advocate for knowledge sharing, Ivan frequently leads webinars and technical sessions to explore the latest developments in data and cloud protection. His professionalism and dedication to excellence have earned him a reputation as a trusted advisor and a consistent driver of impactful results. 
+        A passionate advocate for knowledge sharing, Ivan frequently leads webinars and technical sessions to explore the latest developments in data and cloud protection. His professionalism and dedication to excellence have earned him a reputation as a trusted advisor and a consistent driver of impactful results.
       social:
         linkedin: https://www.linkedin.com/in/ivantansuanhoe/
 
@@ -711,29 +711,29 @@ data:
 
           - title: "A Practical Guide to PQC Migration: Securing Digital Identities for the Quantum Era"
             description: |
-              ** Module 1: Foundational Concepts & PQC Readiness Strategy **
+              **Module 1: Foundational Concepts & PQC Readiness Strategy**
               * Overview of the PQC Threat: Introduction to the "Harvest-Now, Decrypt-Later" threat and why immediate action is necessary.
               * Defining PQC & Crypto-Agility: Understanding the new NIST-approved algorithms and the importance of a "crypto-agile" strategy to future-proof systems.
               * The PQC Migration Journey: A high-level overview of the PQC migration phases: Discovery, Planning, Remediation, and Execution.
               
-              ** Module 2: PQC Key Generation and Hardware Root of Trust **
+              **Module 2: PQC Key Generation and Hardware Root of Trust**
               * Securing the Foundation: The critical role of Hardware Security Modules (HSMs) as the trusted root of all cryptographic operations.
               * PQC-Enabled HSMs: A technical deep-dive into Thales Luna HSMs and how they securely generate, store, and manage PQC private keys.
               * Use Case: Secure PQC Key Generation: A live or simulated demonstration of generating a new PQC private key (e.g., using ML-DSA) within a Thales HSM, ensuring it never leaves the hardware boundary. This segment would highlight the FIPS validation of the hardware.
               
-              ** Module 3: PQC Certificate Lifecycle Management ** 
+              **Module 3: PQC Certificate Lifecycle Management**
               * The PQC Discovery Challenge: Using Venafi's platform to discover and inventory all existing cryptographic assets (certificates, keys, etc.) across an enterprise, identifying which ones are vulnerable.
               * Managing Hybrid & Pure-PQC Certificates: A walkthrough of how Venafi's control plane manages the full lifecycle of PQC and hybrid certificates, from issuance to revocation, and how this integrates with the Thales HSM.
               * Use Case: Automated PQC Certificate Issuance: A hands-on demonstration of Venafi's platform orchestrating the creation of a new, PQC-ready certificate. This would show the platform requesting a new PQC key from the Thales HSM and then getting the certificate signed by a PQC-ready CA.
               
-              ** Module 4: PQC-Ready Digital Signatures & Trust Services **
+              **Module 4: PQC-Ready Digital Signatures & Trust Services**
               * PQC in Action: How Ascertia's digital signature solutions (ADSS Server, SigningHub) integrate with the Venafi-managed PQC certificates.
               * Ensuring Long-Term Trust: The importance of time-stamping and secure archiving for long-lived documents signed with PQC algorithms.
               * Use Case: Signing a Document with a PQC-Enabled Certificate: A live demo of an end-user digitally signing a document with a PQC-ready certificate. The demonstration would show the signature being created and validated, proving the document's integrity and authenticity in the post-quantum world.
               
-              ** Module 5: A Unified PQC Migration Lab **
+              **Module 5: A Unified PQC Migration Lab**
               * Putting It All Together: This final module would be a capstone demonstration showing a single, integrated use case that combines all three vendor solutions.
-              *  ** Use Case: A PQC-Ready Code Signing Pipeline: **
+              *  **Use Case: A PQC-Ready Code Signing Pipeline:**
                 * A new PQC code signing key is generated and protected by a Thales HSM.
                 * Venafi's platform automatically manages the lifecycle of the code signing certificate associated with that key.
                 * Ascertia's digital signature technology is used to apply a PQC-enabled signature to a software package.
@@ -1015,7 +1015,7 @@ data:
         sessions:
           - title: A structured approach to the quantum-safe transformation
             description: |
-              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and  understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
+              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
             speakers:
               - Efstathia Katsigianni
             locations:
