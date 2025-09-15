@@ -558,7 +558,7 @@ data:
         His credentials span the broad spectrum of cybersecurity, encompassing technology risk assessment, regulatory compliance, identity & access management, application & network security, and infrastructure security. His expertise is particularly evident in his in-depth knowledge and hands-on experience within the financial industry.
         
         Prior to joining Blue Fortress, Steven served 11 years at a reputable regional bank in Malaysia. His proven ability to guide teams and organizations towards robust security measures has been consistently acknowledged. A significant highlight of his career is that he was selected among the top 1% of talent across the organization to participate in the prestigious leadership academy program at SMU, Singapore, in 2017, 2019, and 2020—a clear testament to his exceptional leadership skills and potential.
-        
+
         Steven's invaluable insights, honed over two decades as an end-user within financial institutions, have profoundly enriched his expertise. This extensive understanding of the sector, from multiple perspectives, uniquely equips him to address complex information security challenges with an unparalleled level of proficiency.
       social:
         linkedin: https://www.linkedin.com/in/steven-gan-cism-29845889/
@@ -576,7 +576,7 @@ data:
       title: Channel Solution Engineer Lead at CyberArk APJ
       bio: |
         Wilson helps organizations strengthen trust in their digital ecosystems through machine identity security. With over 20 years of experience in information and cyber security, he has served in senior leadership roles at Prudential Assurance Malaysia as Head of Information Security and Data Privacy Officer, the World Health Organization as Information Security Officer, and Ford Motor Company as Security & Controls Champion for Asia Pacific & Africa. He has also held technical roles with PKI and security leaders including Ubizen (later Cybertrust) and Entrust.
- 
+
         Wilson’s expertise spans PKI, certificate lifecycle automation, and secure identity integration into business applications. Renowned for translating complex security concepts into practical business value, he advises CISOs, architects, and DevOps leaders on scaling security automation and defending against threats to machine identities. Passionate about bridging technology and business, Wilson is a trusted advocate for advancing digital trust across industries.
       social:
         linkedin: https://www.linkedin.com/in/wilson-yan/
@@ -595,7 +595,7 @@ data:
 #      title: Quantum Safe Industry Lead at IBM
 #      bio: |
 #        Driven executive leader with over 20 years senior level global experience in digital transformation and telecommunications with a strong technology, strategy and innovation background (development, architecture, product and solution mgt) in Internet of Things, mobile networks, cloud, security, data analytics/ AI, edge.  Expertise in building, integrating and delivering innovative digital products and solutions to market, across Private and Public sector within Enterprise.
-        
+
 #        Leading portfolio and industry efforts on application of Quantum Computing and Quantum Safe in Telecommunications in IBM.
 #      social:
 #        linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
@@ -734,10 +734,10 @@ data:
               **Module 5: A Unified PQC Migration Lab**
               * Putting It All Together: This final module would be a capstone demonstration showing a single, integrated use case that combines all three vendor solutions.
               *  **Use Case: A PQC-Ready Code Signing Pipeline:**
-                * A new PQC code signing key is generated and protected by a Thales HSM.
-                * Venafi's platform automatically manages the lifecycle of the code signing certificate associated with that key.
-                * Ascertia's digital signature technology is used to apply a PQC-enabled signature to a software package.
-                * The final signed package is then verified to be quantum-resistant.
+                  * A new PQC code signing key is generated and protected by a Thales HSM.
+                  * Venafi's platform automatically manages the lifecycle of the code signing certificate associated with that key.
+                  * Ascertia's digital signature technology is used to apply a PQC-enabled signature to a software package.
+                  * The final signed package is then verified to be quantum-resistant.
             speakers:
               - Steven Gan
               - Maeson Maherry
