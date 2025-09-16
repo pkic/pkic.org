@@ -10,6 +10,10 @@ description: Shree ojas system and techinfra Pvt Ltd is major pki consultant and
 memberSince: 2025-09-09
 memberType: G
 workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +39,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +54,5 @@ representatives:
     role: CEO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/sachin-kumar-2382b922/
     description: Sachin is the CEO at Shree Ojas system and techinfra Pvt Ltd. and represents the organization at the PKI Consortium.
