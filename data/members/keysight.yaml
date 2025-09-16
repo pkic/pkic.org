@@ -10,6 +10,8 @@ description: At Keysight, we empower innovators to explore, design, and bring wo
 memberSince: 2025-08-27
 memberType: F
 workingGroups:
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -23,7 +25,7 @@ blog:
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.keysight.com/us/en/about/newsroom.html
   feed: 
   language: en_US
 
@@ -38,7 +40,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/keysight-device-security-testing/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
