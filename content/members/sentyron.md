@@ -10,7 +10,7 @@ title: Sentyron
 
 For over 20 years, Sentyron (formerly Fox Crypto) has been the leading provider of cryptographic solutions for the Dutch government. As a European company, we focus on providing secure communications solutions for Government, Defence and critical infrastructure.
 
-Our expertise is in protecting state secrets, classified information and other types of sensitive information. Keeping data safe and reliable for threats of today, and tomorrow. We protect what really matters.  
+Our expertise is in protecting state secrets, classified information and other types of sensitive information. Keeping data safe and reliable for threats of today, and tomorrow. We protect what really matters.
 
 We create, and manage cryptographic products. Our products include media and file encryption, network security, domain separation, secure mobile communication, and encryption key management. Our solutions earned the trust of partners across various layers of the Dutch government.
 
