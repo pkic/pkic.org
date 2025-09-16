@@ -1,10 +1,10 @@
-id: foxcrypto
-name: Fox Crypto B.V.
-slogan: For a more secure society
+id: sentyron
+name: Sentyron B.V.
+slogan: Trusted to protect what matters most
 website: https://www.foxcrypto.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: Fox Crypto invents, creates and manages cryptographic products for data encryption, domain separation and key management.
+description: For over 20 years, Sentyron (formerly Fox Crypto) has been the leading provider of cryptographic solutions for the Dutch government. 
 
 # membership
 memberSince: 2024-01-09
@@ -18,28 +18,28 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: https://blog.fox-it.com/
-  feed: https://blog.fox-it.com/feed/
+  url: https://sentyron.com/news/
+  feed:
   language: en_US
 
 # Press Releases
 press: 
-  url: https://www.fox-it.com/nl-en/newsroom/
+  url: https://sentyron.com/news/
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: https://nccgroup.wd3.myworkdayjobs.com/NCC_Group
+  url: https://jobs.foxcrypto.com/
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: https://twitter.com/foxit
+  twitter: 
   facebook: 
   instagram:  
-  linkedin: https://www.linkedin.com/company/fox-it_2/
+  linkedin: https://www.linkedin.com/company/sentyron
   youtube:
 
 # Here you can list those who represent or have represented the member.
