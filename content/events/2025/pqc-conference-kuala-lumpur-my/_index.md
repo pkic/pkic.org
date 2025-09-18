@@ -608,13 +608,28 @@ data:
 
     - name: Scott Rea
       title: Emeritus Board Member at DirectTrust and Global Strategic Advisor at eMudhra 
-      bio: 
+      bio: |
+        Scott Rea is a recognized authority in digital trust and healthcare interoperability, serving as Emeritus Board Member at DirectTrust, where he has helped shape national frameworks for secure health information exchange. His leadership has been instrumental in advancing trust standards across regulated industries, particularly healthcare.
+        
+        Currently, Scott is Senior Vice President – Global Strategic Advisor at eMudhra, a global leader in PKI and digital signing solutions. In this role, he guides strategic direction and product innovation across North America and Europe, helping organizations navigate the evolving landscape of cryptographic trust.
+        
+        Scott’s career spans more than 25 years, with key roles at Digital14, DarkMatter, DigiCert, and Dartmouth College. He has led the design and deployment of national PKI infrastructures, including the UAE’s National Digital ID (UAEPASS), and continues to be a driving force in the global digital identity ecosystem.
+        
+        He holds a degree from Queensland University of Technology and is widely respected for his strategic insight, technical depth, and commitment to advancing secure digital transformation.
       social:
         linkedin: https://www.linkedin.com/in/scott-rea-cissp-19399/
 
     - name: Zygmunt Lozinski
-      title: Quantum Safe Networks at IBM Research
-      bio: 
+      title: Senior Technical Staff Member and Quantum Ambassador at IBM Research
+      bio: |
+        Zygmunt is a Senior Technical Staff Member in IBM Research, where he is responsible for making the world’s networks Quantum-Safe. His research is on migration to Post Quantum Cryptography in telecoms, and on how this can be applied to make other industries Quantum Safe.
+
+        Zygmunt is a co-founder of the GSMA Post Quantum Telco Network Task Force (PQTN) and editor for all its reports. Previously he was Technical Leader for IBM's Telecom Industry. He was responsible for IBM's Telco Network Cloud, Network Edge and 5G Security solutions. He co-lead the design of the first telco edge platform in the world, and co-lead delivery of one of the first telco clouds in Europe. He has also advised on the security of 5G.
+
+        Zygmunt’s interest in cryptology began at school when he found a 1978 issue of the IBM System Journal describing the implementation of the Data Encryption Standard.
+
+        He has filed over 30 patents. He is a member of IEEE, was educated at Imperial College, has lived in 5 countries and worked in 44 countries.
+      website: https://research.ibm.com/people/zygmunt-lozinski
       social:
         linkedin: https://www.linkedin.com/in/zygmuntlozinski/
 
@@ -821,7 +836,7 @@ data:
               - room_7
             track: Roundtable
 
-          - title: "Securing the **Telecommunication Sector** in the Quantum Era: a PQC Readiness Roundtable"
+          - title: "Securing the Telecommunication Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
               **Welcome (20 min)**
 
@@ -864,7 +879,7 @@ data:
               - room_8
             track: Roundtable
           
-          - title: "Securing the **Financial Sector** in the Quantum Era: a PQC Readiness Roundtable"
+          - title: "Securing the Financial Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
               _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
 
@@ -912,7 +927,7 @@ data:
               - room_9
             track: Roundtable
 
-          - title: "Securing the **Healthcare Sector** in the Quantum Era: a PQC Readiness Roundtable"
+          - title: "Securing the Healthcare Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
               _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
       
