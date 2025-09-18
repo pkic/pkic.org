@@ -1,0 +1,54 @@
+id: f-i-ts
+name: Finanz Informatik Technologie Service
+slogan:
+website: https://www.f-i-ts.de/
+
+# Short description, longer content can be placed in `content/members/`
+description: FI-TS ist der größte IT-Dienstleister für Landesbanken und seit 1994 wichtiger Partner von privaten und öffentlichen Banken, Versicherungen und Finanzdienstleistern. Erfahren, effizient, hochverfügbar und compliant.
+
+# membership
+memberSince: 2025-09-18
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Mario Schiener
+    role: Lead Architect Security Services and Cryptography Officer
+    social:
+      twitter: 
+      linkedin: 
+    description: Mario is the Lead Architect Security Services and Cryptography Officer at Finanz Informatik Technologie Service and represents the organization at the PKI Consortium.
