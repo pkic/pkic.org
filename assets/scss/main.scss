@@ -13,6 +13,29 @@ $link-hover-color: $primary;
 
 @import "bootstrap/bootstrap";
 
+// --- Custom PKIC Colors for up to 10 Locations ---
+$pkic-colors: (
+  // PKIC baseline colors
+  "location-0": $green,
+  "location-1": $blue,
+  "location-2": $orange,
+  // Extended color palette
+  "location-3": #dc3545, // red
+  "location-4": #6f42c1, // purple
+  "location-5": #ffc107, // yellow
+  "location-6": #0d6efd, // bright blue
+  "location-7": #6610f2, // indigo
+  "location-8": #fd7e14, // deep orange
+  "location-9": #20c997 // teal
+);
+
+// Function to get color variables
+@function pkic-color($key) {
+  @return map-get($pkic-colors, $key);
+}
+
+// --- General Styles ---
+
 // import font(s)
 @import url(https://fonts.googleapis.com/css?family=Roboto:400,300,700);
 
@@ -212,9 +235,9 @@ main h4 {
         width: 500px;
         min-width: 500px;
     }
- }
+}
 
- @include media-breakpoint-up(lg) { 
+@include media-breakpoint-up(lg) { 
     .agenda-time {
         width: 100px;
         min-width: 100px;
@@ -224,7 +247,7 @@ main h4 {
         width: 570px;
         min-width: 570px;
     }
- }
+}
 
 #agenda-tabs .nav-link {
     background: var(--bs-success-bg-subtle);
@@ -294,10 +317,11 @@ self-assessment {
     width: 100%;
     grid-template-columns: 100px 1fr;
     
-    &[data-locations="2"] { grid-template-columns: 100px repeat(2, 1fr); }
-    &[data-locations="3"] { grid-template-columns: 100px repeat(3, 1fr); }
-    &[data-locations="4"] { grid-template-columns: 100px repeat(4, 1fr); }
-    &[data-locations="5"] { grid-template-columns: 100px repeat(5, 1fr); }
+    @for $i from 2 through 10 {
+      &[data-locations="#{$i}"] {
+        grid-template-columns: 100px repeat($i, 1fr);
+      }
+    }
     
     &[data-locations="6"], &[data-locations="7"], &[data-locations="8"], 
     &[data-locations="9"], &[data-locations="10"] {
@@ -490,70 +514,20 @@ self-assessment {
     margin-bottom: 1rem;
 }
 
-// Location-specific colors - fixed color handling
-.location-0, .location-0-session {
-    --location-color: #{$primary};
-    --location-bg: #{rgba($primary, 0.1)};
-    --location-border: #{rgba($primary, 0.3)};
-}
+// Location-specific colors using a loop
+@each $location, $color in $pkic-colors {
+  .#{$location}, .#{$location}-session {
+    --location-color: #{$color};
+    --location-bg: #{rgba($color, 0.1)};
+    --location-border: #{rgba($color, 0.3)};
+  }
 
-.location-1, .location-1-session {
-    --location-color: #{$blue};
-    --location-bg: #{rgba($blue, 0.1)};
-    --location-border: #{rgba($blue, 0.3)};
-}
-
-.location-2, .location-2-session {
-    --location-color: #{$orange};
-    --location-bg: #{rgba($orange, 0.1)};
-    --location-border: #{rgba($orange, 0.3)};
-}
-
-.location-3, .location-3-session {
-    --location-color: #dc3545;
-    --location-bg: #{rgba(#dc3545, 0.1)};
-    --location-border: #{rgba(#dc3545, 0.3)};
-}
-
-.location-4, .location-4-session {
-    --location-color: #6f42c1;
-    --location-bg: #{rgba(#6f42c1, 0.1)};
-    --location-border: #{rgba(#6f42c1, 0.3)};
-}
-
-.location-0-modal .modal-header {
-    background: linear-gradient(135deg, #{$primary} 0%, #{darken($primary, 15%)} 100%);
+  .#{$location}-modal .modal-header {
+    background: linear-gradient(135deg, #{$color} 0%, #{darken($color, 15%)} 100%);
     color: white;
     border-bottom: none;
     padding: 1.5rem;
-}
-
-.location-1-modal .modal-header {
-    background: linear-gradient(135deg, #{$blue} 0%, #{darken($blue, 15%)} 100%);
-    color: white;
-    border-bottom: none;
-    padding: 1.5rem;
-}
-
-.location-2-modal .modal-header {
-    background: linear-gradient(135deg, #{$orange} 0%, #{darken($orange, 15%)} 100%);
-    color: white;
-    border-bottom: none;
-    padding: 1.5rem;
-}
-
-.location-3-modal .modal-header {
-    background: linear-gradient(135deg, #dc3545 0%, #{darken(#dc3545, 15%)} 100%);
-    color: white;
-    border-bottom: none;
-    padding: 1.5rem;
-}
-
-.location-4-modal .modal-header {
-    background: linear-gradient(135deg, #6f42c1 0%, #{darken(#6f42c1, 15%)} 100%);
-    color: white;
-    border-bottom: none;
-    padding: 1.5rem;
+  }
 }
 
 // Mobile layout
@@ -718,20 +692,16 @@ self-assessment {
 // Responsive design - consolidated
 @include media-breakpoint-down(lg) {
     .agenda-grid {
-        &[data-locations="1"] {
-            grid-template-columns: 100px 1fr;
-        }
-        
-        &[data-locations="2"] {
-            grid-template-columns: 100px repeat(2, minmax(250px, 1fr));
-        }
-        
-        &[data-locations="3"], &[data-locations="4"], &[data-locations="5"], 
-        &[data-locations="6"], &[data-locations="7"], &[data-locations="8"], 
-        &[data-locations="9"], &[data-locations="10"] {
+      @for $i from 1 through 10 {
+        &[data-locations="#{$i}"] {
+          @if $i < 3 {
+            grid-template-columns: 100px repeat($i, minmax(250px, 1fr));
+          } @else {
             grid-template-columns: 100px repeat(3, 200px);
             min-width: calc(100px + 600px + 1.5rem);
+          }
         }
+      }
     }
     
     .time-main {
