@@ -593,9 +593,25 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
 
-    - name: Yang Berusaha Tuan Fabian Bigar
+    - name: Tuan Fabian Bigar
       title: Secretary General of the Ministry of Digital, Malaysia
-      bio: 
+      bio: |
+        Tuan Fabian Bigar currently holds the position of Secretary General at the Ministry of Digital, Malaysia, a role he assumed in June 2024. In this capacity, he is responsible for leading the nation’s digital transformation agenda, encompassing strategic initiatives in digital infrastructure, cybersecurity, innovation, and the digitalization of public services. His stewardship is instrumental in advancing Malaysia’s digital future through integrated policy development and multi-stakeholder collaboration.
+
+        Prior to his current appointment, Tuan Fabian served as the Chief Executive Officer of MyDIGITAL Corporation from April 2021, where he was tasked with overseeing change management and the implementation of the Malaysia Digital Economy Blueprint (MDEB) and the National Fourth Industrial Revolution Policy. He concurrently held the role of Head of the Malaysia Centre for the Fourth Industrial Revolution (Malaysia Centre for 4IR), an affiliate of the World Economic Forum, where he played a key role in positioning Malaysia as a regional leader in digital innovation and governance.
+        
+        His earlier assignments in public service include:
+        
+        * Undersecretary for Policy and International Relations, Ministry of Health
+        * Director, Civil Service Delivery Unit, Prime Minister’s Department
+        * Director, National Key Economic Area - Healthcare, and National Key Results Area - Low Income Households, Performance Management and Delivery Unit (PEMANDU), Prime Minister’s Department
+        * Advisor, Presidential Delivery Bureau, Republic of Tanzania (August-December 2014)
+        
+        Tuan Fabian is widely recognized for his pragmatic and solution-oriented leadership style, characterized by strategic clarity, operational empathy, and a commitment to excellence in public service delivery.
+        
+        He holds a Bachelor of Science degree from Case Western Reserve University, Cleveland, Ohio, and a master's degree in public policy from the National Graduate Institute for Policy Studies, Tokyo.
+        
+        A native of Kuching, Sarawak, Tuan Fabian received his early education at St Joseph’s School, Kuching, and Kolej Tun Datu Tuanku Hj. Bujang, Miri.
       social:
         linkedin: https://www.linkedin.com/in/fabian-bigar-79475813/
 
@@ -1160,7 +1176,7 @@ data:
               The abstract for this session will be added soon!
             track: 
             speakers:
-              - Yang Berusaha Tuan Fabian Bigar
+              - Tuan Fabian Bigar
             youtube:
             presentation: 
             locations:
