@@ -590,17 +590,22 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/ivantansuanhoe/
 
-# Add once confirmed she will attend
-#    - name: Lory Thorpe
-#      title: Quantum Safe Industry Lead at IBM
-#      bio: |
-#        Driven executive leader with over 20 years senior level global experience in digital transformation and telecommunications with a strong technology, strategy and innovation background (development, architecture, product and solution mgt) in Internet of Things, mobile networks, cloud, security, data analytics/ AI, edge.  Expertise in building, integrating and delivering innovative digital products and solutions to market, across Private and Public sector within Enterprise.
+    - name: Lory Thorpe
+      title: Quantum Safe Industry Lead at IBM
+      bio: |
+        Driven executive leader with over 20 years senior level global experience in digital transformation and telecommunications with a strong technology, strategy and innovation background (development, architecture, product and solution mgt) in Internet of Things, mobile networks, cloud, security, data analytics/ AI, edge.  Expertise in building, integrating and delivering innovative digital products and solutions to market, across Private and Public sector within Enterprise.
 
-#        Leading portfolio and industry efforts on application of Quantum Computing and Quantum Safe in Telecommunications in IBM.
-#      social:
-#        linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
+        Leading portfolio and industry efforts on application of Quantum Computing and Quantum Safe in Telecommunications in IBM.
+      social:
+        linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
 
+    - name: Yang Berusaha Tuan Fabian Bigar
+      title: Secretary General of the Ministry of Digital, Malaysia 
+      bio: 
+      social:
+        linkedin: https://www.linkedin.com/in/fabian-bigar-79475813/
 
+        
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -887,10 +892,10 @@ data:
         sessions:
           - title: Keynote
             description: |
-              The speaker(s) for this session will be announced soon!
+              The abstract for this session will be added soon!
             track: 
             speakers:
-              - TBD
+              - Yang Berusaha Tuan Fabian Bigar
             youtube:
             presentation: 
             locations:
@@ -898,9 +903,18 @@ data:
 
       - time: "10:00"
         sessions:
-          - title: Keynote
+          - title: Navigating National Cyber Resilience in the Quantum Era
             description: |
-              The details for this session will follow soon!
+              As the quantum computing horizon draws nearer, the imperative to secure national critical information infrastructure (NCII) against quantum threats becomes a matter of strategic urgency. In this keynote, Ir. Dr. Megat Zuhairy Bin Megat Tajuddin, Chief Executive of Malaysia’s National Cyber Security Agency (NACSA), will explore the evolving landscape of Post-Quantum Cryptography (PQC) through the lens of national security, policy, and technological leadership.
+              
+              Drawing from over two decades of experience in ICT, telecommunications, and strategic innovation, including pioneering work in large-scale digital transformation projects and international policy development. Dr. Megat will outline Malaysia’s roadmap for quantum resilience. His address will highlight:
+              
+              * National strategies for PQC adoption across critical infrastructure and government systems.
+              * Public-private collaboration models to accelerate cryptographic agility and secure transitions.
+              * Regulatory and compliance frameworks aligned with global standards and regional priorities.
+              * The role of ASEAN leadership in shaping the future of quantum-safe digital ecosystems.
+              
+              This keynote will frame Malaysia’s strategic approach to PQC not only as a national imperative but also as a collaborative opportunity, bridging policy, standards, and implementation. Dr. Megat will emphasize the importance of aligning national cybersecurity strategies with global cryptographic transitions, ensuring readiness for secure interoperability in a quantum future.
             track: 
             speakers:
               - Megat Zuhairy Bin Megat Tajuddin
