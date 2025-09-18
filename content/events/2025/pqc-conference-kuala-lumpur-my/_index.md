@@ -935,6 +935,7 @@ data:
             speakers:
               - Scott Rea
               - Jaime Gómez García
+              - Lory Thorpe
               - Paul van Brouwershaven *
             locations:
               - plenary
