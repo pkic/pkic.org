@@ -46,22 +46,30 @@ data:
       livestream: https://pkic.org/events/2025/pqc-conference-kuala-lumpur-my/livestream/#Breakout
 
     2025-10-28:
-      order: [room_1, room_2, room_3, room_4, room_5, room_6]
+      order: [room_1, room_2, room_3, room_4, room_5, room_6, room_7, room_7, room_9, room_10]
       room_1:
       room_2:
       room_3:
       room_4:
       room_5:
       room_6:
+      room_7:
+      room_8:
+      room_9:
+      room_10:
 
   # Speakers --------------------------------------------------------------------
   speakers:
     - name: Paul van Brouwershaven
-      title: Chair PKI Consortium and Director of Technology at SSL.com
+      title: Chair PKI Consortium
       bio: |
-        Paul van Brouwershaven is a distinguished leader in cybersecurity with over two decades of experience specializing in Public Key Infrastructure (PKI). He currently serves as the Director of Technology at SSL.com. In addition to his role, Paul chairs the PKI Consortium and also leads its PQC Working Group. Prior to his current roles, Paul held the position of Director Technology Compliance at Entrust and was the Technology Solutions Director at GlobalSign.  
-
-        Beyond his leadership roles, Paul is also the Owner of Digitorus, a specialized software development and consultancy company he founded in 2016. Digitorus focuses on PKI, Digital Signatures, and Trustworthy Systems. His extensive expertise in PKI is further highlighted by his past role as Vice Chair of the CA/Browser Forum, where he contributed to defining industry standards for digital certificates.
+        Paul van Brouwershaven is a distinguished leader in cybersecurity with over two decades of experience specializing in Public Key Infrastructure (PKI). He chairs the PKI Consortium and leads its Post-Quantum Cryptography (PQC) Working Group, driving collaboration and innovation in digital trust and cryptographic agility.
+        
+        Paul is the Owner of Digitorus, a specialized software development and consultancy company he founded in 2016, focused on PKI, digital signatures, and trustworthy systems. His extensive expertise in PKI is further highlighted by his past role as Vice Chair of the CA/Browser Forum, where he contributed to defining industry standards for digital certificates.
+        
+        Previously, Paul served as Director of Technology at SSL.com, Director Technology Compliance at Entrust, and Technology Solutions Director at GlobalSign.
+        
+        He is currently open to new opportunities where he can apply his unique blend of technical, strategic, and leadership skills to complex challenges—whether in a full-time role or on a contract basis as a trusted advisor.
       social:
         linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
         x: https://x.com/vanbroup
@@ -140,20 +148,6 @@ data:
         Dr. Alexander Löw is the CEO of Data-Warehouse GmbH and serves as a Senator in the German Senate of Economy. He holds the position of Vice President of the German Cybersecurity Council Association and is the innovative mind behind IQIMS and PCert. With a deep understanding of cybersecurity since the 1980s and 25 years of experience as a Data Protection Officer (DPO), Alexander has a strong focus on Public Key Infrastructure (PKI). He has been involved in the conceptualization, building, and maintenance of industrial and governmental CAs (e.g., Macao, German Airforce, BMW) since 2001. In 2012, following a significant APT attack, he began automating PKI processes to enhance cybersecurity. Since 2014, he has been actively involved in publishing and presenting on PKI and cybersecurity topics, and has been conducting PKI trainings for the German BSI Alliance for Cybersecurity since 2015. In 2024, he joined the NIST Post-Quantum Migration Working Group to contribute to the development of standard 1800-38B.
       social:
         linkedin: https://www.linkedin.com/in/dr-alexander-loew/
-
-    # Cancelled 
-    #- name: Alexey Bocharnikov
-    #  title: Director for Emerging Technologies in Cyber at Macquarie
-    #  bio: |
-    #    Alexey Bocharnikov is Director of Emerging Technologies (Cyber) at Macquarie, where Alexey leads the adoption of advanced security capabilities—including post‑quantum cryptography, AI/ML security—to enable innovation without compromising resilience. With over 15 years of experience in cybersecurity strategy, risk management, quantum risk, and cryptography, Alexey has a proven track record of translating complex risk into actionable strategies.
-
-    #    Previously, Alexey was a Director at Accenture, serving as APAC Quantum Security Lead and A/NZ Cyber Strategy Delivery Lead. Before that, Alexey contributed to the Global Innovation Quantum Technology Lab at EY and led Global Quantum Security initiatives, delivering more than a dozen cyber strategy programs across the A/NZ region. Earlier in the career, Alexey served as Country Information Security Officer at Deutsche Bank (Moscow), safeguarding business operations and aligning global standards with local needs.
-
-    #    A recognised advocate for proactive risk management and responsible adoption of emerging technologies, Alexey has authored articles, contributed to international reports, produced educational content, and spoken at industry conferences on quantum security and cyber strategy.
-        
-    #  social:
-    #    linkedin: https://www.linkedin.com/in/alexeybocharnikov/
-    #    x: https://x.com/sumprior
           
     - name: Tomas Gustavsson
       title: Chief PKI Officer at Keyfactor
@@ -600,12 +594,30 @@ data:
         linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
 
     - name: Yang Berusaha Tuan Fabian Bigar
-      title: Secretary General of the Ministry of Digital, Malaysia 
+      title: Secretary General of the Ministry of Digital, Malaysia
       bio: 
       social:
         linkedin: https://www.linkedin.com/in/fabian-bigar-79475813/
 
-        
+    - name: Luke Ibbetson
+      title: Group Research and Development Director at Vodafone Group
+      bio: |
+        Luke Ibbetson leads the Vodafone Group Research and Development organisation, fostering the adoption of disruptive and emerging technologies for the benefit of customers, efficiency and growth. A telco industry professional with over 25 years of experience, Luke is currently shaping Vodafone’s thinking on Quantum technology, 6G, non-terrestrial networks, vehicle autonomy and advanced AI/ML. Luke is Chair of the Next Generation Mobile Networks (NGMN) Board Strategy Committee, Vice Chair of GSMA Post Quantum Telco Networks Task Force, and Chairman of the TechWorks Board and serves as Board member for the UK Telecom Innovation Network (UKTIN), the 5G Automotive Association (5GAA) and several venture backed technology companies including AST Space Mobile. Luke is a proud pioneer of low power wide area IoT and a passionate supporter of innovative thinking – helping to create new opportunities for technology to change lives and society for the better.
+      social:
+        linkedin: https://www.linkedin.com/in/luke-ibbetson-26170b23/
+
+    - name: Scott Rea
+      title: Emeritus Board Member at DirectTrust and Global Strategic Advisor at eMudhra 
+      bio: 
+      social:
+        linkedin: https://www.linkedin.com/in/scott-rea-cissp-19399/
+
+    - name: Zygmunt Lozinski
+      title: Quantum Safe Networks at IBM Research
+      bio: 
+      social:
+        linkedin: https://www.linkedin.com/in/zygmuntlozinski/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -631,6 +643,7 @@ data:
               - Michael Osborne
             locations:
               - room_1
+            track: Workshop
 
           - title: "PKI and Crypto Agility: Know Your Infrastructure"
             description: |
@@ -654,6 +667,7 @@ data:
               - Alexander Löw
             locations:
               - room_2
+            track: Workshop
 
           - title: "Enabling Quantum-Safe, Crypto-Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
             description: |
@@ -673,6 +687,7 @@ data:
               - Robert Grapes
             locations:
               - room_3
+            track: Workshop
 
           - title: Securing the future Internet of Things with ML-KEM and ML-DSA
             description: |
@@ -691,6 +706,7 @@ data:
               - Kevin Hilscher
             locations:
               - room_4
+            track: Workshop
 
           - title: Create your own quantum-safe signed PDF documents with hybrid cryptography
             description: |
@@ -713,30 +729,36 @@ data:
               - Stefan van den Berg
             locations:
               - room_5
+            track: Workshop
 
           - title: "A Practical Guide to PQC Migration: Securing Digital Identities for the Quantum Era"
             description: |
               **Module 1: Foundational Concepts & PQC Readiness Strategy**
+
               * Overview of the PQC Threat: Introduction to the "Harvest-Now, Decrypt-Later" threat and why immediate action is necessary.
               * Defining PQC & Crypto-Agility: Understanding the new NIST-approved algorithms and the importance of a "crypto-agile" strategy to future-proof systems.
               * The PQC Migration Journey: A high-level overview of the PQC migration phases: Discovery, Planning, Remediation, and Execution.
               
               **Module 2: PQC Key Generation and Hardware Root of Trust**
+
               * Securing the Foundation: The critical role of Hardware Security Modules (HSMs) as the trusted root of all cryptographic operations.
               * PQC-Enabled HSMs: A technical deep-dive into Thales Luna HSMs and how they securely generate, store, and manage PQC private keys.
               * Use Case: Secure PQC Key Generation: A live or simulated demonstration of generating a new PQC private key (e.g., using ML-DSA) within a Thales HSM, ensuring it never leaves the hardware boundary. This segment would highlight the FIPS validation of the hardware.
               
               **Module 3: PQC Certificate Lifecycle Management**
+
               * The PQC Discovery Challenge: Using Venafi's platform to discover and inventory all existing cryptographic assets (certificates, keys, etc.) across an enterprise, identifying which ones are vulnerable.
               * Managing Hybrid & Pure-PQC Certificates: A walkthrough of how Venafi's control plane manages the full lifecycle of PQC and hybrid certificates, from issuance to revocation, and how this integrates with the Thales HSM.
               * Use Case: Automated PQC Certificate Issuance: A hands-on demonstration of Venafi's platform orchestrating the creation of a new, PQC-ready certificate. This would show the platform requesting a new PQC key from the Thales HSM and then getting the certificate signed by a PQC-ready CA.
               
               **Module 4: PQC-Ready Digital Signatures & Trust Services**
+
               * PQC in Action: How Ascertia's digital signature solutions (ADSS Server, SigningHub) integrate with the Venafi-managed PQC certificates.
               * Ensuring Long-Term Trust: The importance of time-stamping and secure archiving for long-lived documents signed with PQC algorithms.
               * Use Case: Signing a Document with a PQC-Enabled Certificate: A live demo of an end-user digitally signing a document with a PQC-ready certificate. The demonstration would show the signature being created and validated, proving the document's integrity and authenticity in the post-quantum world.
               
               **Module 5: A Unified PQC Migration Lab**
+
               * Putting It All Together: This final module would be a capstone demonstration showing a single, integrated use case that combines all three vendor solutions.
               *  **Use Case: A PQC-Ready Code Signing Pipeline:**
                   * A new PQC code signing key is generated and protected by a Thales HSM.
@@ -751,6 +773,188 @@ data:
             locations:
               - room_6
 
+          - title: "Government & Regulatory Approaches to PQC: From Policy to Implementation"
+            description: |
+              _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
+
+              **_Draft Agenda_**
+
+              **Welcome (20 min)**
+
+              * What problem are we solving? Why PQC policy and regulation matter now
+              * Objectives and expected outcomes (cross-sector takeaways, commitments)
+
+              **Policy & Guidance Landscape (30 min)**
+
+              * Survey of national and regional PQC guidance and timelines; convergence and gaps
+              * Alignment on standards (e.g., NIST/ETSI/IETF) and sector regulators’ roles
+              * Implications for government systems vs. regulated private sectors
+
+              **The Good, the Bad, and the Necessary: Regulatory Approaches (40 min)**
+
+              * The Good: clarity, urgency, funding, and public–private coordination
+              * The Bad: fragmentation, ambiguous mandates, over-prescription, vendor lock-in
+              * The Necessary: harmonized milestones (e.g., high-risk first), crypto-agility, credible metrics
+              * Balancing mandates vs. incentives; avoiding “checkbox compliance”
+
+              **Implementation Realities in Government & Critical Sectors (30 min)**
+
+              * Discovery and inventory of cryptography; long-lived data & HNDL risk
+              * Legacy/OT constraints, cross-border data flows, and data classification
+              * Key management/roots of trust, certification, and supply chain considerations
+
+              **Mobilizing Industry Action (40 min)**
+
+              * Playbooks and maturity models that sectors can adopt quickly
+              * Procurement levers (crypto-agility requirements, CBOM/SBOM), audits, and reporting
+              * Testbeds, pilots, and lighthouse programs; conformance and interoperability
+              * Public–private partnerships, consortia, and regulator engagement strategies
+
+              **Wrap up and Actions (20 min)**
+
+              * Summary of key insights and areas of consensus
+              * Actionable next steps (owners, milestones, metrics)
+              * Close and feedback collection
+            speakers:
+              - Zygmunt Lozinski
+            locations:
+              - room_7
+            track: Roundtable
+
+          - title: "Securing the **Telecommunication Sector** in the Quantum Era: a PQC Readiness Roundtable"
+            description: |
+              **Welcome (20 min)**
+
+              * Frame the discussion (Aligning standards, strategy, and compliance)
+              * Objectives of the workshop
+               
+              **Deployment scenarios and technical considerations (40 min)**
+
+              * The road to PQC adoption: Technology integration
+              * Challenging scenarios: IoT, NTN, legacy
+              * CBOM in Telco
+              * Supporting other sectors
+               
+              **Industry and Standards Landscape (30 min)**
+
+              * Beyond the algorithms-IETF, ETSI, 3GPP, etc 
+              * Product readiness
+               
+              **Regulation and Compliance Implications (30 min)**
+
+              * Regulation landscape 
+              * Role of regulators and discussion on the international dimension
+               
+              **Strategic planning and investment (40 min)**
+
+              * PQC business case for Telcos
+              * Cost modelling: capex vs opex for PQC migration
+              * Implications for procurement / supply chain management
+              * Collaboration models: industry consortia and partnerships
+               
+              **Wrap up and Actions (20 min)**
+
+              * Summary of key insights
+              * Actionable next steps
+              * Close and feedback collection       
+            speakers: 
+              - Lory Thorpe
+              - Luke Ibbetson
+            locations:
+              - room_8
+            track: Roundtable
+          
+          - title: "Securing the **Financial Sector** in the Quantum Era: a PQC Readiness Roundtable"
+            description: |
+              _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
+
+              ___
+
+              _This session is held under Chatham House Rules and only accessible for attendees in the financial industry._
+
+              **_Draft Agenda_**
+
+              **Welcome (20 min)**
+
+              * Setting the stage: Why PQC matters for financial services
+              * Objectives of the discussion
+
+              **Deployment scenarios and technical considerations (40 min)**
+
+              * PQC in payment systems, core banking, and trading platforms
+              * Integration challenges: legacy infrastructure and interoperability
+              * Securing APIs, cloud services, and cross-border transactions
+
+              **Industry and Standards Landscape (30 min)**
+
+              * Relevant standards: ISO 20022, PCI DSS, FS-ISAC, DORA
+              * Vendor readiness and certification pathways
+
+              **Regulation and Compliance Implications (30 min)**
+
+              * Financial regulations and PQC implications: Basel, GDPR, SEC SAB 121, Reg SCI
+              * Role of regulators and international coordination
+
+              **Strategic planning and investment (40 min)**
+
+              * Building the PQC business case for financial institutions
+              * Cost modelling and procurement considerations
+              * Collaboration models: banks, fintech, and consortia
+
+              **Wrap up and Actions (20 min)**
+
+              * Summary of key insights
+              * Actionable next steps
+              * Close and feedback collection
+            speakers:
+              - Jaime Gómez García
+            locations:
+              - room_9
+            track: Roundtable
+
+          - title: "Securing the **Healthcare Sector** in the Quantum Era: a PQC Readiness Roundtable"
+            description: |
+              _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
+      
+              **_Draft Agenda_**
+
+              **Welcome (20 min)**
+
+              * Setting the stage: Why PQC matters for healthcare
+              * Objectives of the discussion
+
+              **Deployment scenarios and technical considerations (40 min)**
+
+              * PQC in medical devices and IoMT (Internet of Medical Things)
+              * Integration challenges: legacy systems, interoperability, and vendor ecosystems
+              * Protecting patient data and secure communications in clinical environments
+
+              **Industry and Standards Landscape (30 min)**
+
+              * Relevant standards: HL7, FHIR, ETSI, NIST
+              * Vendor readiness and certification pathways
+
+              **Regulation and Compliance Implications (30 min)**
+
+              * HIPAA, GDPR, and PQC implications
+              * Role of regulators and international coordination
+
+              **Strategic planning and investment (40 min)**
+
+              * Building the PQC business case for healthcare organizations
+              * Cost modelling and procurement considerations
+              * Collaboration models: hospitals, vendors, and consortia
+
+              **Wrap up and Actions (20 min)**
+
+              * Summary of key insights
+              * Actionable next steps
+              * Close and feedback collection
+            speakers:
+              - Scott Rea
+            locations:
+              - room_10
+            track: Roundtable
 
       - time: "11:00"
         title: Break
@@ -769,6 +973,10 @@ data:
               - room_4
               - room_5
               - room_6
+              - room_7
+              - room_8
+              - room_9
+              - room_10
 
       - time: "13:00"
         title: Lunch
@@ -804,6 +1012,7 @@ data:
               - Tony Chen
             locations:
               - room_2
+            track: Workshop
 
           - title: "Enabling Quantum-Safe, Crypto-Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
             description: |
@@ -823,6 +1032,7 @@ data:
               - Robert Grapes
             locations:
               - room_3
+            track: Workshop
 
           - title: "Crypto‑Agile PKI in the Quantum Era: Building Trust with Utimaco’s Quantum Protect"
             description: |
@@ -841,6 +1051,7 @@ data:
               - Lai Seow Yong
             locations:
               - room_4
+            track: Workshop
 
           - title: To be announced shortly 
             description: This workshop will be announced shortly
@@ -848,6 +1059,41 @@ data:
               - TBD
             locations:
               - room_5
+
+          - title: To be announced shortly 
+            description: This workshop will be announced shortly
+            speakers: 
+              - TBD
+            locations:
+              - room_6
+
+          - title: To be announced shortly
+            description: This workshop will be announced shortly
+            speakers: 
+              - TBD
+            locations:
+              - room_7
+
+          - title: To be announced shortly
+            description: This workshop will be announced shortly
+            speakers: 
+              - TBD
+            locations:
+              - room_8
+          
+          - title: To be announced shortly
+            description: This workshop will be announced shortly
+            speakers: 
+              - TBD
+            locations:
+              - room_9
+
+          - title: To be announced shortly
+            description: This workshop will be announced shortly
+            speakers: 
+              - TBD
+            locations:
+              - room_10
 
       - time: "15:30"
         title: Break
@@ -866,6 +1112,10 @@ data:
               - room_4
               - room_5
               - room_6
+              - room_7
+              - room_8
+              - room_9
+              - room_10
 
       - time: "18:00"
         title: End of Day One
