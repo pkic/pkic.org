@@ -138,18 +138,15 @@ $link-hover-color: $primary;
 
 // --- Custom PKIC Colors for up to 16 Locations ---
 
-// This map holds the single-color locations
-$pkic-colors: (
+// This map holds all base colors (single colors and former gradient base colors)
+// All locations will now be treated as having a single base color for styling purposes.
+$all-pkic-locations-colors: (
   "location-0": $green,
   "location-1": $blue,
   "location-2": $orange,
   "location-3": $red,
   "location-4": $purple,
   "location-5": $teal,
-);
-
-// This map holds the base colors for the gradients
-$pkic-gradient-colors: (
   "location-6": $indigo,
   "location-7": $coral,
   "location-8": $amber,
@@ -162,35 +159,10 @@ $pkic-gradient-colors: (
   "location-15": $rose,
 );
 
-// A map to store the actual gradient definitions for easy lookup
-$pkic-gradients: (
-  "location-6": linear-gradient(135deg, $indigo, darken($indigo, 15%)),
-  "location-7": linear-gradient(135deg, $coral, darken($coral, 15%)),
-  "location-8": linear-gradient(135deg, $amber, darken($amber, 15%)),
-  "location-9": linear-gradient(135deg, $violet, darken($violet, 15%)),
-  "location-10": linear-gradient(135deg, $green-light, darken($green-light, 15%)),
-  "location-11": linear-gradient(135deg, $blue-light, darken($blue-light, 15%)),
-  "location-12": linear-gradient(135deg, $orange-light, darken($orange-light, 15%)),
-  "location-13": linear-gradient(135deg, $red-light, darken($red-light, 15%)),
-  "location-14": linear-gradient(135deg, $purple-light, darken($purple-light, 15%)),
-  "location-15": linear-gradient(135deg, $rose, darken($rose, 15%)),
-);
-
-// Function to get the base color (for text, etc.)
+// Function to get the base color for any location
 @function pkic-color($key) {
-  @if map-has-key($pkic-colors, $key) {
-    @return map-get($pkic-colors, $key);
-  } @else if map-has-key($pkic-gradient-colors, $key) {
-    @return map-get($pkic-gradient-colors, $key);
-  } @else {
-    @return null;
-  }
-}
-
-// Function to get the gradient
-@function pkic-gradient($key) {
-  @if map-has-key($pkic-gradients, $key) {
-    @return map-get($pkic-gradients, $key);
+  @if map-has-key($all-pkic-locations-colors, $key) {
+    @return map-get($all-pkic-locations-colors, $key);
   } @else {
     @return null;
   }
@@ -536,45 +508,17 @@ self-assessment {
 
 .session-card,
 .mobile-session-card {
-  position: relative; // Needed for the gradient border effect
+  border: 2px solid var(--location-border, #dee2e6); // Default border
   border-radius: 8px;
-  background: var(--location-bg, white);
+  background: white; // Explicitly set white background to override any default
   cursor: pointer;
   transition: all 0.2s ease;
   overflow: hidden;
 
-  // The pseudo-element will act as our "border"
-  &::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    z-index: -1;
-    margin: -2px; // This creates the border thickness
-    border-radius: inherit; // Inherit from parent for rounded corners
-    background: var(--location-border);
-    transition: all 0.2s ease;
-  }
-
   &:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-  }
-}
-
-// For single-color locations, we'll use a standard border for simplicity
-@each $location, $color in $pkic-colors {
-  .#{$location}-session {
-    border: 2px solid rgba($color, 0.3); // Apply a standard border
-    // Hide the pseudo-element for single-color locations
-    &::before {
-      display: none;
-    }
-  }
-  .#{$location}-session:hover {
-    border-color: #{$color}; // Apply solid color border on hover
+    border-color: var(--location-color, #{$primary}); // Hover border color
   }
 }
 
@@ -724,56 +668,42 @@ self-assessment {
   margin-bottom: 1rem;
 }
 
-// Location-specific styles using a loop
-@each $location, $color in $pkic-colors {
+// All Location-specific styles (now unified as single colors)
+@each $location, $color in $all-pkic-locations-colors {
   .#{$location},
   .#{$location}-session {
     --location-color: #{$color};
-    --location-bg: #{rgba($color, 0.1)};
-    --location-border: #{rgba($color, 0.3)};
+    --location-bg: white; // Explicitly set background to white for sessions
+    --location-border: #{rgba($color, 0.3)}; // Border uses the base color with opacity
     --location-text-color: #212529;
     --location-text-color-secondary: #6c757d;
   }
 
+  // Modal header still gets a slight gradient for visual interest, using the base color
   .#{$location}-modal .modal-header {
     background: linear-gradient(135deg, #{$color} 0%, #{darken($color, 15%)} 100%);
     color: white;
     border-bottom: none;
     padding: 1.5rem;
   }
-}
 
-// Gradient Locations
-@each $location, $gradient in $pkic-gradients {
-  $base-color: map-get($pkic-gradient-colors, $location);
-
-  .#{$location},
-  .#{$location}-session {
-    --location-color: #{$base-color};
-    --location-bg: white; // Solid white background
-    --location-border: #{$gradient}; // The gradient is applied here
-    --location-text-color: #212529;
-    --location-text-color-secondary: #6c757d;
+  // Filter button styles
+  .location-filter-btn.#{$location} {
+    background: #{rgba($color, 0.1)}; // Light background for button
+    color: #{$color}; // Text color is the base color
+    border: 2px solid #{rgba($color, 0.3)}; // Border is a lighter shade of the base color
   }
 
-  .#{$location}-modal .modal-header {
-    background: #{$gradient};
-    color: white;
-    border-bottom: none;
-    padding: 1.5rem;
-  }
-
-  // Set the gradient for the filter buttons
-  .location-filter-btn.#{$location},
+  .location-filter-btn.#{$location}:hover,
   .location-filter-btn.#{$location}.active {
-    background: #{$gradient};
-    color: white;
+    background: #{$color}; // Solid color background on hover/active
+    color: white; // White text on hover/active
   }
 
-  .location-filter-btn.#{$location}::after {
+  .location-filter-btn.#{$location}.active::after {
     background: white;
-    color: #{$base-color};
-    border-color: #{$base-color};
+    color: #{$color};
+    border-color: #{$color};
   }
 }
 
@@ -800,7 +730,7 @@ self-assessment {
   font-weight: 600;
 }
 
-// Location filter buttons
+// Location filter buttons (general styles, specific overrides handled in the loop)
 .location-filters {
   display: flex;
   gap: 0.5rem;
@@ -809,9 +739,6 @@ self-assessment {
 }
 
 .location-filter-btn {
-  background: var(--location-bg, #{rgba($primary, 0.1)});
-  color: var(--location-color, #{$primary});
-  border: 2px solid var(--location-border, #{rgba($primary, 0.3)});
   padding: 0.4rem 0.8rem;
   border-radius: 6px;
   font-size: 0.8rem;
@@ -819,12 +746,6 @@ self-assessment {
   cursor: pointer;
   transition: all 0.2s ease;
   position: relative;
-
-  &:hover,
-  &.active {
-    background: var(--location-color, #{$primary});
-    color: white;
-  }
 
   &.active {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -834,8 +755,6 @@ self-assessment {
       position: absolute;
       top: -0.3rem;
       right: -0.3rem;
-      background: white;
-      color: var(--location-color, #{$primary});
       border-radius: 50%;
       width: 1.2rem;
       height: 1.2rem;
@@ -844,7 +763,6 @@ self-assessment {
       justify-content: center;
       font-size: 0.7rem;
       font-weight: bold;
-      border: 2px solid var(--location-color, #{$primary});
     }
   }
 }
