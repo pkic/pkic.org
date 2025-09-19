@@ -1,4 +1,4 @@
-// required to get $orange variable, and other functions and mixins
+// required to get Bootstrap functions and variables
 @import "bootstrap/functions";
 @import "bootstrap/variables";
 
@@ -64,51 +64,51 @@ $gray-900: rgb(13, 27, 42);
 
 // Map of all colors for easy use
 $pkic-colors-map: (
-    "green": $green,
-    "orange": $orange,
-    "blue": $blue,
-    "yellow": $yellow,
-    "red": $red,
-    "purple": $purple,
-    "green-light": $green-light,
-    "green-dark": $green-dark,
-    "green-pale": $green-pale,
-    "green-deep": $green-deep,
-    "orange-light": $orange-light,
-    "orange-dark": $orange-dark,
-    "orange-pale": $orange-pale,
-    "orange-deep": $orange-deep,
-    "blue-light": $blue-light,
-    "blue-dark": $blue-dark,
-    "blue-pale": $blue-pale,
-    "blue-deep": $blue-deep,
-    "yellow-light": $yellow-light,
-    "yellow-dark": $yellow-dark,
-    "yellow-pale": $yellow-pale,
-    "yellow-deep": $yellow-deep,
-    "red-light": $red-light,
-    "red-dark": $red-dark,
-    "red-pale": $red-pale,
-    "red-deep": $red-deep,
-    "purple-light": $purple-light,
-    "purple-dark": $purple-dark,
-    "purple-pale": $purple-pale,
-    "purple-deep": $purple-deep,
-    "teal": $teal,
-    "coral": $coral,
-    "indigo": $indigo,
-    "amber": $amber,
-    "rose": $rose,
-    "violet": $violet,
-    "gray-100": $gray-100,
-    "gray-200": $gray-200,
-    "gray-300": $gray-300,
-    "gray-400": $gray-400,
-    "gray-500": $gray-500,
-    "gray-600": $gray-600,
-    "gray-700": $gray-700,
-    "gray-800": $gray-800,
-    "gray-900": $gray-900,
+  "green": $green,
+  "orange": $orange,
+  "blue": $blue,
+  "yellow": $yellow,
+  "red": $red,
+  "purple": $purple,
+  "green-light": $green-light,
+  "green-dark": $green-dark,
+  "green-pale": $green-pale,
+  "green-deep": $green-deep,
+  "orange-light": $orange-light,
+  "orange-dark": $orange-dark,
+  "orange-pale": $orange-pale,
+  "orange-deep": $orange-deep,
+  "blue-light": $blue-light,
+  "blue-dark": $blue-dark,
+  "blue-pale": $blue-pale,
+  "blue-deep": $blue-deep,
+  "yellow-light": $yellow-light,
+  "yellow-dark": $yellow-dark,
+  "yellow-pale": $yellow-pale,
+  "yellow-deep": $yellow-deep,
+  "red-light": $red-light,
+  "red-dark": $red-dark,
+  "red-pale": $red-pale,
+  "red-deep": $red-deep,
+  "purple-light": $purple-light,
+  "purple-dark": $purple-dark,
+  "purple-pale": $purple-pale,
+  "purple-deep": $purple-deep,
+  "teal": $teal,
+  "coral": $coral,
+  "indigo": $indigo,
+  "amber": $amber,
+  "rose": $rose,
+  "violet": $violet,
+  "gray-100": $gray-100,
+  "gray-200": $gray-200,
+  "gray-300": $gray-300,
+  "gray-400": $gray-400,
+  "gray-500": $gray-500,
+  "gray-600": $gray-600,
+  "gray-700": $gray-700,
+  "gray-800": $gray-800,
+  "gray-900": $gray-900,
 );
 
 // Map Bootstrap's theme colors to your custom colors
@@ -128,33 +128,12 @@ $link-hover-color: $primary;
 // Import Bootstrap after all custom variables and overrides
 @import "bootstrap/bootstrap";
 
-// CSS Custom Properties for easy use (this section was missing semicolons and had a typo)
+// CSS Custom Properties for easy use
 :root {
   // Use Sass variables to define CSS custom properties
   @each $name, $value in $pkic-colors-map {
     --#{$name}: #{$value};
   }
-}
-
-// Example gradient combinations
-.gradient-sunset {
-  background: linear-gradient(135deg, $orange 0%, $red 50%, $purple 100%);
-}
-
-.gradient-ocean {
-  background: linear-gradient(135deg, $blue 0%, $teal 50%, $green 100%);
-}
-
-.gradient-warm {
-  background: linear-gradient(135deg, $yellow 0%, $orange 50%, $coral 100%);
-}
-
-.gradient-cool {
-  background: linear-gradient(135deg, $purple 0%, $blue 50%, $teal 100%);
-}
-
-.gradient-nature {
-  background: linear-gradient(135deg, $green-light 0%, $green 50%, $green-dark 100%);
 }
 
 // --- Custom PKIC Colors for up to 16 Locations ---
@@ -169,35 +148,35 @@ $pkic-colors: (
   "location-5": $teal,
 );
 
-// This map holds the gradient locations
-$pkic-gradients: (
-  "location-6": linear-gradient(135deg, $indigo 0%, $gray-900 100%),
-  "location-7": linear-gradient(135deg, $coral 0%, $gray-900 100%),
-  "location-8": linear-gradient(135deg, $amber 0%, $gray-900 100%),
-  "location-9": linear-gradient(135deg, $violet 0%, $gray-900 100%),
-  "location-10": linear-gradient(135deg, $green-dark 0%, $gray-900 100%),
-  "location-11": linear-gradient(135deg, $blue-dark 0%, $gray-900 100%),
-  "location-12": linear-gradient(135deg, $orange-dark 0%, $gray-900 100%),
-  "location-13": linear-gradient(135deg, $red-dark 0%, $gray-900 100%),
-  "location-14": linear-gradient(135deg, $purple-dark 0%, $gray-900 100%),
-  "location-15": linear-gradient(135deg, $rose 0%, $gray-900 100%),
-);
-
-// A map to hold the base color for gradients
+// This map holds the base colors for the gradients
 $pkic-gradient-colors: (
   "location-6": $indigo,
   "location-7": $coral,
   "location-8": $amber,
   "location-9": $violet,
-  "location-10": $green-dark,
-  "location-11": $blue-dark,
-  "location-12": $orange-dark,
-  "location-13": $red-dark,
-  "location-14": $purple-dark,
+  "location-10": $green-light,
+  "location-11": $blue-light,
+  "location-12": $orange-light,
+  "location-13": $red-light,
+  "location-14": $purple-light,
   "location-15": $rose,
 );
 
-// Function to get color variables
+// A map to store the actual gradient definitions for easy lookup
+$pkic-gradients: (
+  "location-6": linear-gradient(135deg, $indigo, darken($indigo, 15%)),
+  "location-7": linear-gradient(135deg, $coral, darken($coral, 15%)),
+  "location-8": linear-gradient(135deg, $amber, darken($amber, 15%)),
+  "location-9": linear-gradient(135deg, $violet, darken($violet, 15%)),
+  "location-10": linear-gradient(135deg, $green-light, darken($green-light, 15%)),
+  "location-11": linear-gradient(135deg, $blue-light, darken($blue-light, 15%)),
+  "location-12": linear-gradient(135deg, $orange-light, darken($orange-light, 15%)),
+  "location-13": linear-gradient(135deg, $red-light, darken($red-light, 15%)),
+  "location-14": linear-gradient(135deg, $purple-light, darken($purple-light, 15%)),
+  "location-15": linear-gradient(135deg, $rose, darken($rose, 15%)),
+);
+
+// Function to get the base color (for text, etc.)
 @function pkic-color($key) {
   @if map-has-key($pkic-colors, $key) {
     @return map-get($pkic-colors, $key);
@@ -208,12 +187,12 @@ $pkic-gradient-colors: (
   }
 }
 
-// Function to get background (color or gradient)
-@function pkic-bg($key) {
+// Function to get the gradient
+@function pkic-gradient($key) {
   @if map-has-key($pkic-gradients, $key) {
     @return map-get($pkic-gradients, $key);
   } @else {
-    @return pkic-color($key);
+    @return null;
   }
 }
 
@@ -557,17 +536,45 @@ self-assessment {
 
 .session-card,
 .mobile-session-card {
-  border: 2px solid var(--location-border, #dee2e6);
+  position: relative; // Needed for the gradient border effect
   border-radius: 8px;
-  background: var(--location-bg, white); // Updated to use var
+  background: var(--location-bg, white);
   cursor: pointer;
   transition: all 0.2s ease;
   overflow: hidden;
 
+  // The pseudo-element will act as our "border"
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: -1;
+    margin: -2px; // This creates the border thickness
+    border-radius: inherit; // Inherit from parent for rounded corners
+    background: var(--location-border);
+    transition: all 0.2s ease;
+  }
+
   &:hover {
     transform: translateY(-1px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
-    border-color: var(--location-color, #{$primary});
+  }
+}
+
+// For single-color locations, we'll use a standard border for simplicity
+@each $location, $color in $pkic-colors {
+  .#{$location}-session {
+    border: 2px solid rgba($color, 0.3); // Apply a standard border
+    // Hide the pseudo-element for single-color locations
+    &::before {
+      display: none;
+    }
+  }
+  .#{$location}-session:hover {
+    border-color: #{$color}; // Apply solid color border on hover
   }
 }
 
@@ -601,7 +608,7 @@ self-assessment {
   font-weight: 700;
   line-height: 1.3;
   margin-bottom: 0.75rem;
-  color: var(--location-text-color, #212529); // Updated to use var
+  color: var(--location-text-color, #212529);
   flex-shrink: 0;
 }
 
@@ -671,7 +678,7 @@ self-assessment {
 
 .speaker-role {
   font-size: 0.75rem;
-  color: var(--location-text-color-secondary, #6c757d); // Updated to use var
+  color: var(--location-text-color-secondary, #6c757d);
 }
 
 .session-preview-wrapper {
@@ -681,7 +688,7 @@ self-assessment {
 .session-preview-gradient,
 .mobile-session-preview {
   font-size: 0.8rem;
-  color: var(--location-text-color-secondary, #6c757d); // Updated to use var
+  color: var(--location-text-color-secondary, #6c757d);
   margin: 0;
   overflow: hidden;
 }
@@ -736,23 +743,37 @@ self-assessment {
   }
 }
 
+// Gradient Locations
 @each $location, $gradient in $pkic-gradients {
   $base-color: map-get($pkic-gradient-colors, $location);
+
   .#{$location},
   .#{$location}-session {
     --location-color: #{$base-color};
-    --location-bg: #{$gradient};
-    --location-border: #{rgba($base-color, 0.5)};
-    --location-text-color: white;
-    --location-text-color-secondary: #{lighten($base-color, 20%)};
+    --location-bg: white; // Solid white background
+    --location-border: #{$gradient}; // The gradient is applied here
+    --location-text-color: #212529;
+    --location-text-color-secondary: #6c757d;
   }
 
-  // Set the header gradient for the modal
   .#{$location}-modal .modal-header {
     background: #{$gradient};
     color: white;
     border-bottom: none;
     padding: 1.5rem;
+  }
+
+  // Set the gradient for the filter buttons
+  .location-filter-btn.#{$location},
+  .location-filter-btn.#{$location}.active {
+    background: #{$gradient};
+    color: white;
+  }
+
+  .location-filter-btn.#{$location}::after {
+    background: white;
+    color: #{$base-color};
+    border-color: #{$base-color};
   }
 }
 
@@ -859,7 +880,7 @@ self-assessment {
   font-weight: 600;
   font-size: 1.1rem;
   margin-bottom: 1rem;
-  border-bottom: 2px solid var(--location-border, #{rgba($primary, 0.1)}); // Updated to use var
+  border-bottom: 2px solid var(--location-border, #{rgba($primary, 0.1)});
   padding-bottom: 0.5rem;
 }
 
@@ -871,13 +892,13 @@ self-assessment {
   display: flex;
   gap: 1rem;
   padding: 1.5rem;
-  border: 2px solid var(--location-border, #f8f9fa); // Updated to use var
+  border: 2px solid var(--location-border, #f8f9fa);
   border-radius: 8px;
-  background: var(--location-bg-subtle, #f8f9fa); // Added new variable for background
+  background: var(--location-bg-subtle, #f8f9fa);
 
   &:hover {
     border-color: var(--location-color, #{rgba($primary, 0.3)});
-    background: var(--location-bg-hover, #{rgba($primary, 0.02)}); // Added new variable for hover background
+    background: var(--location-bg-hover, #{rgba($primary, 0.02)});
   }
 }
 
@@ -908,7 +929,7 @@ self-assessment {
 }
 
 .speaker-title-card {
-  color: var(--location-text-color-secondary, #6c757d); // Updated to use var
+  color: var(--location-text-color-secondary, #6c757d);
   font-weight: 500;
   margin-bottom: 0.75rem;
 }
