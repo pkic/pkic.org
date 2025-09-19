@@ -46,7 +46,7 @@ data:
       livestream: https://pkic.org/events/2025/pqc-conference-kuala-lumpur-my/livestream/#Breakout
 
     2025-10-28:
-      order: [room_1, room_2, room_3, room_4, room_5, room_6, room_7, room_8, room_9, room_10]
+      order: [room_1, room_2, room_3, room_4, room_5, room_6, room_7, room_8]
       room_1:
       room_2:
       room_3:
@@ -55,8 +55,6 @@ data:
       room_6:
       room_7:
       room_8:
-      room_9:
-      room_10:
 
   # Speakers --------------------------------------------------------------------
   speakers:
@@ -852,97 +850,6 @@ data:
               - room_7
             track: Roundtable
 
-          - title: "Securing the Telecommunication Sector in the Quantum Era: a PQC Readiness Roundtable"
-            description: |
-              **Welcome (20 min)**
-
-              * Frame the discussion (Aligning standards, strategy, and compliance)
-              * Objectives of the workshop
-               
-              **Deployment scenarios and technical considerations (40 min)**
-
-              * The road to PQC adoption: Technology integration
-              * Challenging scenarios: IoT, NTN, legacy
-              * CBOM in Telco
-              * Supporting other sectors
-               
-              **Industry and Standards Landscape (30 min)**
-
-              * Beyond the algorithms-IETF, ETSI, 3GPP, etc 
-              * Product readiness
-               
-              **Regulation and Compliance Implications (30 min)**
-
-              * Regulation landscape 
-              * Role of regulators and discussion on the international dimension
-               
-              **Strategic planning and investment (40 min)**
-
-              * PQC business case for Telcos
-              * Cost modelling: capex vs opex for PQC migration
-              * Implications for procurement / supply chain management
-              * Collaboration models: industry consortia and partnerships
-               
-              **Wrap up and Actions (20 min)**
-
-              * Summary of key insights
-              * Actionable next steps
-              * Close and feedback collection       
-            speakers: 
-              - Lory Thorpe
-              - Luke Ibbetson
-            locations:
-              - room_8
-            track: Roundtable
-          
-          - title: "Securing the Financial Sector in the Quantum Era: a PQC Readiness Roundtable"
-            description: |
-              _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
-
-              ___
-
-              _This session is held under Chatham House Rules and only accessible for attendees in the financial industry._
-
-              **_Draft Agenda_**
-
-              **Welcome (20 min)**
-
-              * Setting the stage: Status of PQC in the financial sector
-              * Objectives of the discussion
-
-              **Collaboration initiatives and overview of latest recommendations**            
-
-              * Summary of workgroups in the financial sectors and their activities
-              * Recommendations and timelines published. How they influence the financial sector.
-
-              **Regulation and Compliance Implications**
-              
-              * Relevant standards: ISO 20022, PCI DSS, FS-ISAC, DORA
-              * Role of regulators and international coordination
-
-              **Analysis of immediate actions**
-
-              * Priority analysis of business use cases
-              * Deep dive on most immediate use cases
-
-              **Strategic planning and investment**
-
-              * Building the PQC business case for financial institutions
-              * Cost modelling and procurement considerations
-              * Collaboration models: banks, fintech, and consortia
-
-              **Wrap up and Actions**
-
-              * Summary of key insights
-              * Actionable next steps
-              * Close and feedback collection
-            speakers:
-              - Jaime Gómez García
-              - Sudha Iyer
-            locations:
-              - room_9
-            track: Roundtable
-
           - title: "Securing the Healthcare Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
               _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
@@ -984,12 +891,11 @@ data:
             speakers:
               - Scott Rea
             locations:
-              - room_10
+              - room_8
             track: Roundtable
 
       - time: "11:00"
         title: Break
-        sponsor: 
 
       - time: "11:30"
         sessions:
@@ -1006,8 +912,6 @@ data:
               - room_6
               - room_7
               - room_8
-              - room_9
-              - room_10
 
       - time: "13:00"
         title: Lunch
@@ -1098,33 +1002,96 @@ data:
             locations:
               - room_6
 
-          - title: To be announced shortly
-            description: This workshop will be announced shortly
+          - title: "Securing the Telecommunication Sector in the Quantum Era: a PQC Readiness Roundtable"
+            description: |
+              **Welcome (20 min)**
+
+              * Frame the discussion (Aligning standards, strategy, and compliance)
+              * Objectives of the workshop
+
+              **Deployment scenarios and technical considerations (40 min)**
+
+              * The road to PQC adoption: Technology integration
+              * Challenging scenarios: IoT, NTN, legacy
+              * CBOM in Telco
+              * Supporting other sectors
+
+              **Industry and Standards Landscape (30 min)**
+
+              * Beyond the algorithms-IETF, ETSI, 3GPP, etc 
+              * Product readiness
+
+              **Regulation and Compliance Implications (30 min)**
+
+              * Regulation landscape 
+              * Role of regulators and discussion on the international dimension  
+
+              **Strategic planning and investment (40 min)**
+
+              * PQC business case for Telcos
+              * Cost modelling: capex vs opex for PQC migration
+              * Implications for procurement / supply chain management
+              * Collaboration models: industry consortia and partnerships  
+
+              **Wrap up and Actions (20 min)**
+
+              * Summary of key insights
+              * Actionable next steps
+              * Close and feedback collection       
             speakers: 
-              - TBD
+              - Lory Thorpe
+              - Luke Ibbetson
             locations:
               - room_7
+            track: Roundtable
+          
+          - title: "Securing the Financial Sector in the Quantum Era: a PQC Readiness Roundtable"
+            description: |
+              _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
 
-          - title: To be announced shortly
-            description: This workshop will be announced shortly
-            speakers: 
-              - TBD
+              ___
+
+              _This session is held under Chatham House Rules and only accessible for attendees in the financial industry._
+
+              **_Draft Agenda_**
+
+              **Welcome (20 min)**
+
+              * Setting the stage: Status of PQC in the financial sector
+              * Objectives of the discussion
+
+              **Collaboration initiatives and overview of latest recommendations**            
+
+              * Summary of workgroups in the financial sectors and their activities
+              * Recommendations and timelines published. How they influence the financial sector.
+
+              **Regulation and Compliance Implications**
+              
+              * Relevant standards: ISO 20022, PCI DSS, FS-ISAC, DORA
+              * Role of regulators and international coordination
+
+              **Analysis of immediate actions**
+
+              * Priority analysis of business use cases
+              * Deep dive on most immediate use cases
+
+              **Strategic planning and investment**
+
+              * Building the PQC business case for financial institutions
+              * Cost modelling and procurement considerations
+              * Collaboration models: banks, fintech, and consortia
+
+              **Wrap up and Actions**
+
+              * Summary of key insights
+              * Actionable next steps
+              * Close and feedback collection
+            speakers:
+              - Jaime Gómez García
+              - Sudha Iyer
             locations:
               - room_8
-          
-          - title: To be announced shortly
-            description: This workshop will be announced shortly
-            speakers: 
-              - TBD
-            locations:
-              - room_9
-
-          - title: To be announced shortly
-            description: This workshop will be announced shortly
-            speakers: 
-              - TBD
-            locations:
-              - room_10
+            track: Roundtable
 
       - time: "15:30"
         title: Break
@@ -1145,8 +1112,6 @@ data:
               - room_6
               - room_7
               - room_8
-              - room_9
-              - room_10
 
       - time: "18:00"
         title: End of Day One
@@ -1206,7 +1171,7 @@ data:
 
       - time: "10:30"
         title: Break
-        sponsor: 
+        sponsor: unsungltd # id of a member or sponsor used to lookup the name and logo
         
       - time: "11:00"
         sessions:

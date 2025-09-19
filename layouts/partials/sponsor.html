@@ -1,0 +1,15 @@
+{{ $id := .id }}
+
+{{ $logoURL := "" }}
+{{ $img := resources.GetMatch (printf "/images/**/%s/%s.*" $id $id) }}
+{{ if not $img }}
+    {{ $img = resources.GetMatch (printf "/images/sponsors/**/%s.*" $id) }}
+{{ end }}
+{{ if $img }}
+    {{ $logoURL = $img.Permalink }}
+{{ end }}
+
+{{ $title := printf "%s is a sponsor" $id }}
+{{ $link := printf `<a href="#" title="%s" target="_blank"><img class="sponsor-logo" alt="%s" title="%s" src="%s"></a>` $title $title $title $logoURL }}
+
+{{- return (dict "name" $id "logo" $logoURL "website" "#" "level" "" "link" $link) -}}
