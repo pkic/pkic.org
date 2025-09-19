@@ -907,38 +907,38 @@ data:
 
               **Welcome (20 min)**
 
-              * Setting the stage: Why PQC matters for financial services
+              * Setting the stage: Status of PQC in the financial sector
               * Objectives of the discussion
 
-              **Deployment scenarios and technical considerations (40 min)**
+              **Collaboration initiatives and overview of latest recommendations**            
 
-              * PQC in payment systems, core banking, and trading platforms
-              * Integration challenges: legacy infrastructure and interoperability
-              * Securing APIs, cloud services, and cross-border transactions
+              * Summary of workgroups in the financial sectors and their activities
+              * Recommendations and timelines published. How they influence the financial sector.
 
-              **Industry and Standards Landscape (30 min)**
-
+              **Regulation and Compliance Implications**
+              
               * Relevant standards: ISO 20022, PCI DSS, FS-ISAC, DORA
-              * Vendor readiness and certification pathways
-
-              **Regulation and Compliance Implications (30 min)**
-
-              * Financial regulations and PQC implications: Basel, GDPR, SEC SAB 121, Reg SCI
               * Role of regulators and international coordination
 
-              **Strategic planning and investment (40 min)**
+              **Analysis of immediate actions**
+
+              * Priority analysis of business use cases
+              * Deep dive on most immediate use cases
+
+              **Strategic planning and investment**
 
               * Building the PQC business case for financial institutions
               * Cost modelling and procurement considerations
               * Collaboration models: banks, fintech, and consortia
 
-              **Wrap up and Actions (20 min)**
+              **Wrap up and Actions**
 
               * Summary of key insights
               * Actionable next steps
               * Close and feedback collection
             speakers:
               - Jaime Gómez García
+              - Sudha Iyer
             locations:
               - room_9
             track: Roundtable
