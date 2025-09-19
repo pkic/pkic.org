@@ -1,6 +1,6 @@
 // required to get Bootstrap functions and variables
 @import "bootstrap/functions";
-@import "bootstrap/variables";
+
 
 // --- PKIC Variable Overrides & Custom Colors ---
 
@@ -126,6 +126,7 @@ $link-color: $primary;
 $link-hover-color: $primary;
 
 // Import Bootstrap after all custom variables and overrides
+@import "bootstrap/variables";
 @import "bootstrap/bootstrap";
 
 // CSS Custom Properties for easy use
