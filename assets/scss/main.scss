@@ -446,6 +446,34 @@ self-assessment {
   overflow: auto !important;
   padding: 1rem !important;
   box-sizing: border-box !important;
+  
+  // New styles for the container within fullscreen mode
+  display: flex !important;
+  flex-direction: column !important;
+  
+  .agenda-grid-container {
+      flex: 1; // Make the container fill the remaining vertical space
+      padding: 1rem; // Add padding for content
+  }
+
+  .agenda-grid {
+      height: 100%; // Make the grid fill its container
+      width: 100%; // Make the grid fill its container
+  }
+
+  // Override fixed widths for the grid items in fullscreen
+  .agenda-time, .agenda-content {
+      width: auto !important;
+      min-width: unset !important;
+  }
+
+  .agenda-time {
+      max-width: 100px; // Add a max-width to the time column to prevent it from growing too large
+  }
+
+  .agenda-session {
+      min-height: unset; // Remove the minimum height
+  }
 }
 
 // Agenda Grid System
