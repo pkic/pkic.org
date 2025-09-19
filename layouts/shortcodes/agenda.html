@@ -30,13 +30,6 @@
         </div>
         {{- end -}}
 
-         <!-- Full screen button -->
-        <button class="btn btn-outline-primary float-end" id="fullscreen-btn" title="Toggle Fullscreen">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-angle-expand" viewBox="0 0 16 16">
-                <path fill-rule="evenodd" d="M5.828 10.172a.5.5 0 0 0-.707 0l-4.096 4.096V11.5a.5.5 0 0 0-1 0v3.975a.5.5 0 0 0 .5.5H4.5a.5.5 0 0 0 0-1H1.732l4.096-4.096a.5.5 0 0 0 0-.707m4.344-4.344a.5.5 0 0 0 .707 0l4.096-4.096V4.5a.5.5 0 1 0 1 0V.525a.5.5 0 0 0-.5-.5H11.5a.5.5 0 0 0 0 1h2.768l-4.096 4.096a.5.5 0 0 0 0 .707"/>
-            </svg>
-        </button>
-
         <div class="tab-content">
             <!-- Speakers tab -->
             <div class="tab-pane fade" id="speakers" role="tabpanel">
@@ -97,6 +90,23 @@
                     
                     <!-- Mobile single column view -->
                     <div class="d-md-none mobile-agenda">
+                        <div class="d-flex justify-content-end mb-3">
+                            <!-- Mobile Control buttons -->
+                            <div class="agenda-controls">
+                                <!-- Expand All Button (icon only) -->
+                                <button id="expand-all-btn-mobile" type="button" class="btn btn-outline-secondary btn-sm me-2" title="Expand All">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-expand" viewBox="0 0 16 16">
+                                        <path fill-rule="evenodd" d="M3.646 9.146a.5.5 0 0 1 .708 0L8 12.793l3.646-3.647a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 0-.708m0-2.292a.5.5 0 0 0 .708 0L8 3.207l3.646 3.647a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 0 0 0 .708"/>
+                                    </svg>
+                                </button>
+                                <!-- Fullscreen button -->
+                                <button id="fullscreen-btn-mobile" type="button" class="btn btn-outline-primary btn-sm" title="Toggle Fullscreen">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-angle-expand" viewBox="0 0 16 16">
+                                        <path fill-rule="evenodd" d="M5.828 10.172a.5.5 0 0 0-.707 0l-4.096 4.096V11.5a.5.5 0 0 0-1 0v3.975a.5.5 0 0 0 .5.5H4.5a.5.5 0 0 0 0-1H1.732l4.096-4.096a.5.5 0 0 0 0-.707m4.344-4.344a.5.5 0 0 0 .707 0l4.096-4.096V4.5a.5.5 0 1 0 1 0V.525a.5.5 0 0 0-.5-.5H11.5a.5.5 0 0 0 0 1h2.768l-4.096 4.096a.5.5 0 0 0 0 .707"/>
+                                    </svg>
+                                </button>
+                            </div>
+                        </div>
                         {{- range $timeSlot := $items -}}
                             <div class="mobile-time-row">
                                 <div class="mobile-time">
@@ -110,9 +120,29 @@
                             
                             {{- if not $timeSlot.sessions -}}
                                 <!-- Break -->
-                                <div class="mobile-break">
+                                {{ if $timeSlot.sponsor }}
+                                    {{ $sponsorData := partial "sponsor.html" (dict "id" $timeSlot.sponsor) }}
+                                    {{ if $sponsorData }}
+                                        <div class="fs-3 me-5">Break</div>
+                                        <div class="d-flex justify-content-center">
+                                            <div class="bg-white rounded p-3 shadow-sm border">
+                                                <a href="#" target="_blank">
+                                                    {{ if $sponsorData.logo }}
+                                                        <img src="{{ $sponsorData.logo }}" width="150" class="img-fluid" style="max-height: 35px; max-width: 150px;">
+                                                    {{ else }}
+                                                        <span class="text-dark fw-bold">{{ $sponsorData.name }}</span>
+                                                    {{ end }}
+                                                </a>
+                                            </div>
+                                        </div>
+                                    {{ else }}
+                                        <div class="fs-3">Break | Sponsored by {{ $timeSlot.sponsor }}</div>
+                                    {{ end }}
+                                {{ else }}
+                                    <div class="mobile-break">
                                     {{ $timeSlot.title }}
-                                </div>
+                                    </div>
+                                {{ end}}
                             {{- else -}}
                                 <!-- Sessions for all locations -->
                                 {{- range $locationIndex, $location := $locations -}}
@@ -166,18 +196,38 @@
 
                     <!-- Desktop grid view -->
                     <div class="d-none d-md-block desktop-agenda">
+                        
+                        <div class="position-relative mb-3">
+                            <!-- Location filter buttons (centered) -->
+                            <div class="d-flex justify-content-center">
+                                <div class="location-filters">
+                                    <button class="btn btn-outline-secondary btn-sm me-3" id="select-all-locations">
+                                        All Locations
+                                    </button>
+                                    {{- range $locationIndex, $location := $locations -}}
+                                        <button class="location-filter-btn location-{{ $locationIndex }}" 
+                                                data-location="{{ $locationIndex }}">
+                                            {{ strings.FirstUpper (replace $location "_" " ") }}
+                                        </button>
+                                    {{- end -}}
+                                </div>
+                            </div>
 
-                        <!-- Location filter buttons -->
-                        <div class="location-filters mb-3">
-                            <button class="btn btn-outline-secondary btn-sm me-3" id="select-all-locations">
-                                All Locations
-                            </button>
-                            {{- range $locationIndex, $location := $locations -}}
-                                <button class="location-filter-btn location-{{ $locationIndex }}" 
-                                        data-location="{{ $locationIndex }}">
-                                    {{ strings.FirstUpper (replace $location "_" " ") }}
+                            <!-- Control buttons (positioned absolutely to the right) -->
+                            <div class="agenda-controls position-absolute top-0 end-0">
+                                <!-- Expand All Button (icon only) -->
+                                <button id="expand-all-btn" type="button" class="btn btn-outline-secondary btn-sm" title="Expand All">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-expand" viewBox="0 0 16 16">
+                                        <path fill-rule="evenodd" d="M3.646 9.146a.5.5 0 0 1 .708 0L8 12.793l3.646-3.647a.5.5 0 0 1 .708.708l-4 4a.5.5 0 0 1-.708 0l-4-4a.5.5 0 0 1 0-.708m0-2.292a.5.5 0 0 0 .708 0L8 3.207l3.646 3.647a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 0 0 0 .708"/>
+                                    </svg>
                                 </button>
-                            {{- end -}}
+                                <!-- Fullscreen button -->
+                                <button id="fullscreen-btn" type="button" class="btn btn-outline-primary btn-sm" title="Toggle Fullscreen">
+                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-arrows-angle-expand" viewBox="0 0 16 16">
+                                        <path fill-rule="evenodd" d="M5.828 10.172a.5.5 0 0 0-.707 0l-4.096 4.096V11.5a.5.5 0 0 0-1 0v3.975a.5.5 0 0 0 .5.5H4.5a.5.5 0 0 0 0-1H1.732l4.096-4.096a.5.5 0 0 0 0-.707m4.344-4.344a.5.5 0 0 0 .707 0l4.096-4.096V4.5a.5.5 0 1 0 1 0V.525a.5.5 0 0 0-.5-.5H11.5a.5.5 0 0 0 0 1h2.768l-4.096 4.096a.5.5 0 0 0 0 .707"/>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
 
                         <!-- Agenda Grid -->
@@ -196,9 +246,32 @@
 
                                     {{- if not $timeSlot.sessions -}}
                                         <!-- Break spanning all locations -->
-                                        <div class="agenda-break" style="grid-column: 2 / -1;">
+                                        <div class="agenda-break">
                                             <div class="break-card">
-                                                {{ $timeSlot.title }}
+                                                {{ if $timeSlot.sponsor }}
+                                                    {{ $sponsorData := partial "sponsor.html" (dict "id" $timeSlot.sponsor) }}
+                                                    {{ if $sponsorData }}
+                                                        <div class="fs-3 me-5">Break</div>
+                                                        <div class="d-flex justify-content-center">
+                                                            <div class="bg-white rounded p-3 shadow-sm border">
+                                                                <a href="#" target="_blank">
+                                                                    {{ if $sponsorData.logo }}
+                                                                        <img src="{{ $sponsorData.logo }}" width="150" class="img-fluid" style="max-height: 35px; max-width: 150px;">
+                                                                    {{ else }}
+                                                                        <span class="text-dark fw-bold">{{ $sponsorData.name }}</span>
+                                                                    {{ end }}
+                                                                </a>
+                                                            </div>
+                                                        </div>
+                                                        <div class="fs-3 ms-5">Break</div>
+                                                    {{ else }}
+                                                        <div class="fs-3">Break | Sponsored by {{ $timeSlot.sponsor }}</div>
+                                                    {{ end }}
+                                                {{ else }}
+                                                <div class="text-center">
+                                                    <div class="fs-3">{{ $timeSlot.title }}</div>
+                                                </div>
+                                                {{ end }}
                                             </div>
                                         </div>
                                     {{- else -}}
