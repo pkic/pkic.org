@@ -1004,6 +1004,8 @@ data:
 
           - title: "Securing the Telecommunication Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
+              _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
+
               **Welcome (20 min)**
 
               * Frame the discussion (Aligning standards, strategy, and compliance)
