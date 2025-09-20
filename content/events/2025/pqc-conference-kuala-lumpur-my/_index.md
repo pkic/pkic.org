@@ -1181,10 +1181,11 @@ data:
             description: |
               The transition to post-quantum cryptography (PQC) is not a challenge faced by a single industry—it is a global transformation impacting every sector. In this 30-minute kickoff, we bring together key insights gathered from focused workshops across energy, government, financial services, and healthcare. Each vertical faces unique obstacles—regulatory demands, legacy systems, critical infrastructure dependencies, and high-stakes data protection—yet all share the urgent need for agility and trust in a quantum-ready world. This session distills the highlights from these discussions into a unified perspective: where the sectors stand today, the common themes emerging across industries, and the roadmap ahead. Attendees will walk away with a clear understanding of how PQC adoption is taking shape across the economy and what steps are necessary to drive coordinated, cross-sector progress. 
             speakers:
-              - Scott Rea
+              - Paul van Brouwershaven *
               - Jaime Gómez García
               - Lory Thorpe
-              - Paul van Brouwershaven *
+              - Scott Rea
+              - Zygmunt Lozinski
             locations:
               - plenary
 
