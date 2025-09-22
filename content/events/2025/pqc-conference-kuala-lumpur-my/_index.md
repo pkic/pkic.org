@@ -1667,12 +1667,13 @@ data:
         sessions:
           - title: "Crypto-Agile PKI: A Strategic Blueprint for Post-Quantum Trust"
             description: |
-              "Quantum computing is reshaping the foundations of digital trust, and PKI must be the first to adapt. While NIST-standard algorithms like ML-KEM and ML-DSA progress toward adoption, organizations face a deeper challenge: evolving legacy PKI into a crypto-agile, automated, and future-ready infrastructure. This session presents a concise 20-minute blueprint for enabling that transition, without starting from scratch.
+              Quantum computing is reshaping the foundations of digital trust, and PKI must be the first to adapt. While NIST-standard algorithms like ML-KEM and ML-DSA progress toward adoption, organizations face a deeper challenge: evolving legacy PKI into a crypto-agile, automated, and future-ready infrastructure. This session presents a blueprint for enabling that transition, without starting from scratch.
       
               We’ll explore three strategic priorities:
-              1) Assess cryptographic exposure across TLS, S/MIME, code signing, and device identity.
-              2) Embed crypto-agility and automation into certificate lifecycles using hybrid certs (draft-ietf-lamps-x509-slhdsa-09), short-lived certificates, and ACME-based issuance models.
-              3) Align PKI governance with emerging standards from NIST(1800-38B), ETSI, CAB Forum, and IETF."
+              
+              1. Assess cryptographic exposure across TLS, S/MIME, code signing, and device identity.
+              2. Embed crypto-agility and automation into certificate lifecycles using hybrid certs (draft-ietf-lamps-x509-slhdsa-09), short-lived certificates, and ACME-based issuance models.
+              3. Align PKI governance with emerging standards from NIST(1800-38B), ETSI, CAB Forum, and IETF.
             track: 
             speakers:
               - Ganesh Mallaya
