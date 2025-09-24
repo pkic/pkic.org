@@ -679,9 +679,9 @@ data:
 
               **We will explore:**
 
-              * Create a PQC PKI and hybrid PKI using EJBCA, 
-              * Issue a signing certificate to SignServer, and demonstrate how to integrate with a hardware security module (HSM) to secure cryptographic keys and operations—bridging the gap between proof of concept and real world deployment. 
-              * Demonstrate cryptographic asset monitoring and automatic cryptographic migration using Keyfactor solutions, 
+              * Create a PQC PKI and hybrid PKI using EJBCA.
+              * Issue a signing certificate to SignServer, and demonstrate how to integrate with a hardware security module (HSM) to secure cryptographic keys and operations—bridging the gap between proof of concept and real-world deployment.
+              * Demonstrate cryptographic asset monitoring and automatic cryptographic migration using Keyfactor solutions.
               * Highlight the key steps for PQC transition at scale and with agility.
 
               This session will equip you with the tools and strategies needed to future-proof your quantum safe cryptographic infrastructure.
