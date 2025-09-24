@@ -673,27 +673,25 @@ data:
             locations:
               - room_1
             track: Workshop
-
-          - title: "PKI and Crypto Agility: Know Your Infrastructure"
+          - title: "Hands-On PQC Migration: From Cryptographic asset inventory to PQC Crypto-agility"
             description: |
-              _Building and Monitoring Your Cryptographic Inventory with PCert_
+              With NIST setting a clear 2030 deadline for the deprecation of RSA and ECC in favor of quantum-safe algorithms, organizations face an urgent need to assess and modernize their cryptographic landscape. This workshop offers a practical, end-to-end session on post-quantum cryptography (PQC) migration—starting with cryptographic asset discovery and inventory, through quantum risk assessment, and culminating in the replacement of legacy algorithms with NIST-approved PQC standards.
 
-              This workshop offers a deep dive into cryptographic discovery and inventory practices essential for organizations aiming to establish robust CBOM (Cryptographic Bill of Materials) and SBOM (Software Bill of Materials). Participants will learn how to identify and catalog all cryptographic assets across complex environments, laying the foundation for a comprehensive and actionable cryptographic inventory.
-              
               **We will explore:**
 
-              * What needs to be discovered and collected to ensure full cryptographic visibility,
-              * How to build a universal cryptographic inventory that supports ongoing operational and compliance needs,
-              * Automation strategies for cryptographic management processes, including analysis, risk assessment, and prioritization aligned with the organizational context.
-              
-              Additionally, we will address the challenges of managing systems of systems and intricate network topologies. The workshop will compare agent-based and agentless approaches to cryptographic discovery, including real-world implementation examples highlighting trade-offs and success factors.
-              
-              Importantly, this session is designed to empower both technical teams and decision-makers. By reframing cryptographic challenges as data and asset management problems, the workshop reduces complexity and enables strategic engagement with existing technological capabilities.
+              * Create a PQC PKI and hybrid PKI using EJBCA, 
+              * Issue a signing certificate to SignServer, and demonstrate how to integrate with a hardware security module (HSM) to secure cryptographic keys and operations—bridging the gap between proof of concept and real world deployment. 
+              * Demonstrate cryptographic asset monitoring and automatic cryptographic migration using Keyfactor solutions, 
+              * Highlight the key steps for PQC transition at scale and with agility.
+
+              This session will equip you with the tools and strategies needed to future-proof your quantum safe cryptographic infrastructure.
               ___
 
               _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
             speakers: 
-              - Alexander Löw
+              - Tomas Gustavsson
+              - Chris Hickman
+              - Tony Chen
             locations:
               - room_2
             track: Workshop
@@ -767,7 +765,7 @@ data:
               * Overview of the PQC Threat: Introduction to the "Harvest-Now, Decrypt-Later" threat and why immediate action is necessary.
               * Defining PQC & Crypto-Agility: Understanding the new NIST-approved algorithms and the importance of a "crypto-agile" strategy to future-proof systems.
               * The PQC Migration Journey: A high-level overview of the PQC migration phases: Discovery, Planning, Remediation, and Execution.
-              
+
               **Module 2: PQC Key Generation and Hardware Root of Trust**
 
               * Securing the Foundation: The critical role of Hardware Security Modules (HSMs) as the trusted root of all cryptographic operations.
@@ -782,16 +780,16 @@ data:
               
               **Module 4: PQC-Ready Digital Signatures & Trust Services**
 
-              * PQC in Action: How Ascertia's digital signature solutions (ADSS Server, SigningHub) integrate with the Venafi-managed PQC certificates.
+              * PQC in Action: How Ascertia's digital signature solutions (ADSS Server, SigningHub) integrate with the Cyberark-managed PQC certificates.
               * Ensuring Long-Term Trust: The importance of time-stamping and secure archiving for long-lived documents signed with PQC algorithms.
               * Use Case: Signing a Document with a PQC-Enabled Certificate: A live demo of an end-user digitally signing a document with a PQC-ready certificate. The demonstration would show the signature being created and validated, proving the document's integrity and authenticity in the post-quantum world.
-              
+
               **Module 5: A Unified PQC Migration Lab**
 
               * Putting It All Together: This final module would be a capstone demonstration showing a single, integrated use case that combines all three vendor solutions.
               *  **Use Case: A PQC-Ready Code Signing Pipeline:**
                   * A new PQC code signing key is generated and protected by a Thales HSM.
-                  * Venafi's platform automatically manages the lifecycle of the code signing certificate associated with that key.
+                  * Cyberark's platform automatically manages the lifecycle of the code signing certificate associated with that key.
                   * Ascertia's digital signature technology is used to apply a PQC-enabled signature to a software package.
                   * The final signed package is then verified to be quantum-resistant.
             speakers:
@@ -919,32 +917,48 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: To be announced shortly
-            description: This workshop will be announced shortly
+          - title: "PKI and Crypto Agility: Know Your Infrastructure"
+            description: |
+              _Building and Monitoring Your Cryptographic Inventory with PCert_
+
+              This workshop offers a deep dive into cryptographic discovery and inventory practices essential for organizations aiming to establish robust CBOM (Cryptographic Bill of Materials) and SBOM (Software Bill of Materials). Participants will learn how to identify and catalog all cryptographic assets across complex environments, laying the foundation for a comprehensive and actionable cryptographic inventory.
+              
+              **We will explore:**
+
+              * What needs to be discovered and collected to ensure full cryptographic visibility,
+              * How to build a universal cryptographic inventory that supports ongoing operational and compliance needs,
+              * Automation strategies for cryptographic management processes, including analysis, risk assessment, and prioritization aligned with the organizational context.
+              
+              Additionally, we will address the challenges of managing systems of systems and intricate network topologies. The workshop will compare agent-based and agentless approaches to cryptographic discovery, including real-world implementation examples highlighting trade-offs and success factors.
+              
+              Importantly, this session is designed to empower both technical teams and decision-makers. By reframing cryptographic challenges as data and asset management problems, the workshop reduces complexity and enables strategic engagement with existing technological capabilities.
+              ___
+
+              _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
             speakers: 
-              - TBD
+              - Alexander Löw
             locations:
               - room_1
 
-          - title: "Hands-On PQC Migration: From Cryptographic asset inventory to PQC Crypto-agility"
+          - title: A Deep Dive into Bouncy Castle, EJBCA, and the Future of PKI
             description: |
-              With NIST setting a clear 2030 deadline for the deprecation of RSA and ECC in favor of quantum-safe algorithms, organizations face an urgent need to assess and modernize their cryptographic landscape. This workshop offers a practical, end-to-end session on post-quantum cryptography (PQC) migration—starting with cryptographic asset discovery and inventory, through quantum risk assessment, and culminating in the replacement of legacy algorithms with NIST-approved PQC standards.
-
-              **We will explore:**
-
-              * Create a PQC PKI and hybrid PKI using EJBCA, 
-              * Issue a signing certificate to SignServer, and demonstrate how to integrate with a hardware security module (HSM) to secure cryptographic keys and operations—bridging the gap between proof of concept and real world deployment. 
-              * Demonstrate cryptographic asset monitoring and automatic cryptographic migration using Keyfactor solutions, 
-              * Highlight the key steps for PQC transition at scale and with agility.
-
-              This session will equip you with the tools and strategies needed to future-proof your quantum safe cryptographic infrastructure.
+              The world of cryptography is at a pivotal moment with the advent of Post-Quantum Cryptography (PQC). This is your chance to engage in a truly technical, interactive session with the minds behind two of the most critical open-source projects in the field.
+ 
+              This workshop is specifically designed for technical professionals and is structured to be driven by your questions and your challenges. We will not be delivering a pre-canned lecture. Instead, the agenda will be a dynamic exploration of multiple topics, shaped by the audience's interests in real-time.
+              
+              You will have direct access to the founders of the open-source projects Bouncy Castle and EJBCA, as well as other Keyfactor experts. We invite you to bring your toughest questions and real-world scenarios across the entire spectrum of the field, from FIPS and PQC readiness to cryptographic inventory and lifecycle management.
+              
+              We will kick things off with a brief, high-level overview to spark conversation, then transition into a lively "Ask Me Anything" session. Throughout the workshop, our experts will tackle your questions with live code, demos, and real-time problem-solving. Based on what is most popular, we will collectively select one or more topics for a dedicated deep-dive session.
+              
+              Whether you're struggling with a specific implementation or simply want to learn more about the future of the industry from the source, this session is for you. Come prepared with your questions, and we will turn them into the content.
               ___
 
               _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
             speakers: 
               - Tomas Gustavsson
-              - Chris Hickman
               - Tony Chen
+              - David Hook
+              - Sven Rajala
             locations:
               - room_2
             track: Workshop
