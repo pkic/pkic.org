@@ -774,10 +774,10 @@ data:
               
               **Module 3: PQC Certificate Lifecycle Management**
 
-              * The PQC Discovery Challenge: Using Venafi's platform to discover and inventory all existing cryptographic assets (certificates, keys, etc.) across an enterprise, identifying which ones are vulnerable.
-              * Managing Hybrid & Pure-PQC Certificates: A walkthrough of how Venafi's control plane manages the full lifecycle of PQC and hybrid certificates, from issuance to revocation, and how this integrates with the Thales HSM.
-              * Use Case: Automated PQC Certificate Issuance: A hands-on demonstration of Venafi's platform orchestrating the creation of a new, PQC-ready certificate. This would show the platform requesting a new PQC key from the Thales HSM and then getting the certificate signed by a PQC-ready CA.
-              
+              * The PQC Discovery Challenge: Using Cyberark's platform to discover and inventory all existing cryptographic assets (certificates, keys, etc.) across an enterprise, identifying which ones are vulnerable.
+              * Managing Hybrid & Pure-PQC Certificates: A walkthrough of how Cyberark's control plane manages the full lifecycle of PQC and hybrid certificates, from issuance to revocation, and how this integrates with the Thales HSM.
+              * Use Case: Automated PQC Certificate Issuance: A hands-on demonstration of Cyberark's platform orchestrating the creation of a new, PQC-ready certificate. This would show the platform requesting a new PQC key from the Thales HSM and then getting the certificate signed by a PQC-ready CA.
+
               **Module 4: PQC-Ready Digital Signatures & Trust Services**
 
               * PQC in Action: How Ascertia's digital signature solutions (ADSS Server, SigningHub) integrate with the Cyberark-managed PQC certificates.
