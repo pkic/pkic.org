@@ -1152,9 +1152,11 @@ data:
 
       - time: "9:30"
         sessions:
-          - title: Keynote
+          - title: Malaysia’s PQC Vision for the Region
             description: |
-              The abstract for this session will be added soon!
+              Digital trust is the foundation of modern economies and societies, and the arrival of quantum computing will test how ready we are to safeguard it. Post-quantum cryptography (PQC) is more than a technical response, it is a catalyst for rethinking how nations, industries, and communities build resilience and foster innovation in a rapidly changing world. In his opening keynote, Tuan Fabian Bigar, Secretary General of the Ministry of Digital, Malaysia, will welcome participants to the PKI Consortium’s PQC Conference in Kuala Lumpur and share Malaysia’s broader vision for a secure, inclusive, and sustainable digital future. 
+
+              He will highlight the role of digital trust as a driver of economic growth, the importance of regional leadership within ASEAN to advance quantum readiness, and the need for global cooperation to ensure that no nation is left behind in this transition. By framing PQC as a shared opportunity rather than just a challenge, his address will set the stage for the conference, inviting all participants, governments, industry, academia, and civil society, to engage in shaping a quantum-secure world.
             track: 
             speakers:
               - Tuan Fabian Bigar
