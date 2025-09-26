@@ -913,9 +913,9 @@ self-assessment {
   }
 
   // Card header background colors for session registration
-  .card-header.#{$location}-session {
-    background-color: #{$color} !important;
-    color: white !important;
+  .card .card-header.#{$location}-session {
+    background-color: #{$color};
+    color: white;
   }
 
   // Accent colors for session registration card bodies

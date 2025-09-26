@@ -37,10 +37,122 @@ class SessionRegistration extends HTMLElement {
       .trim();
   }
 
+  // Helper function to check if a session has valid speaker details
+  hasSpeakerDetails(session) {
+    if (session.speakers && session.speakers.length > 0) {
+      return session.speakers.some(speaker => speaker.headshot || speaker.title || speaker.bio);
+    }
+    return true; // Include sessions with no speakers listed
+  }
+
+  // Helper function to render current registration status
+  renderCurrentRegistration() {
+    return `
+      <!-- Current Registration Status Card -->
+      <div class="card mb-4 location-0-session">
+        <div class="card-header location-0-session">
+          <h5 class="card-title mb-0 text-white">Current Session Registrations</h5>
+        </div>
+        <div class="card-body">
+          <p class="text-muted small">You're already registered for some sessions, great! If you'd like to make any changes, simply resubmit the form below to update your selections.</p>
+          
+          <div class="row">
+            <div class="col-md-6">
+              <div class="card border-primary">
+                <div class="card-body">
+                  <h6 class="card-title text-primary">Current Morning Session</h6>
+                  <p class="card-text fw-bold">${this.userRegistration?.morningSession || 'No selection'}</p>
+                </div>
+              </div>
+            </div>
+            <div class="col-md-6">
+              <div class="card border-primary">
+                <div class="card-body">
+                  <h6 class="card-title text-primary">Current Afternoon Session</h6>
+                  <p class="card-text fw-bold">${this.userRegistration?.afternoonSession || 'No selection'}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Helper function to render session list
+  renderSessionList(sessions, timeSlot, userSelection) {
+    const sessionType = timeSlot === 'morning' ? 'morning' : 'afternoon';
+    const locationClass = timeSlot === 'morning' ? 'location-1-session' : 'location-2-session';
+    const title = timeSlot === 'morning' ? 'Morning Sessions' : 'Afternoon Sessions';
+
+    return `
+      <!-- ${title} Card -->
+      <div class="card mb-4 ${locationClass}">
+        <div class="card-header ${locationClass}">
+          <h5 class="card-title mb-0 text-white">${title}</h5>
+        </div>
+        <div class="card-body">
+          <div class="row">
+            <div class="col-md-6 mb-3">
+              <div class="session-card h-100 ${!userSelection ? 'bg-primary-subtle border-primary' : ''}">
+                <div class="session-content">
+                  <div class="form-check mb-2">
+                    <input class="form-check-input" type="radio" name="${sessionType}" id="${sessionType}-none" value="" ${!userSelection ? 'checked' : ''}>
+                    <label class="form-check-label w-100" for="${sessionType}-none">
+                      <h6 class="session-title mb-2"><strong>No Selection</strong></h6>
+                      <p class="text-muted small">Select this option if you prefer not to attend any ${sessionType} sessions.</p>
+                    </label>
+                  </div>
+                </div>
+              </div>
+            </div>
+            ${sessions.map((s, index) => `
+              <div class="col-md-6 mb-3">
+                <div class="session-card h-100 ${s.available ? (userSelection === s.title ? 'bg-success-subtle border-success' : '') : 'border-warning'}">
+                  <div class="session-content">
+                    <div class="form-check mb-2">
+                      <input class="form-check-input" type="radio" name="${sessionType}" id="${sessionType}-${index}" value="${s.title}" ${userSelection === s.title ? 'checked' : ''} ${s.available ? '' : 'disabled'}>
+                      <label class="form-check-label w-100" for="${sessionType}-${index}">
+                        <h6 class="session-title mb-2"><strong>${s.title}</strong></h6>
+                      </label>
+                    </div>
+                    ${s.speakers && s.speakers.length > 0 ? `
+                      <div class="session-speakers mb-2">
+                        ${s.speakers.map(speaker => `
+                          <div class="speaker-info">
+                            ${speaker.headshot ? `
+                              <img src="${speaker.headshot.x150}" class="speaker-avatar" alt="${speaker.name}">
+                            ` : `
+                              <div class="speaker-avatar speaker-initial">
+                                ${speaker.name.charAt(0).toUpperCase()}
+                              </div>
+                            `}
+                            <div class="speaker-details">
+                              <div class="speaker-name">${speaker.name}</div>
+                              <div class="speaker-role">${speaker.title}</div>
+                            </div>
+                          </div>
+                        `).join('')}
+                      </div>
+                    ` : ''}
+                    ${s.abstract ? `
+                      <div class="session-preview-wrapper">
+                        <div class="session-preview-gradient">${this.stripMarkdown(s.abstract)}</div>
+                      </div>
+                    ` : ''}
+                    ${s.available ? '' : '<p class="text-warning small mt-2"><em>(Full)</em></p>'}
+                  </div>
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   connectedCallback() {
-    console.log('SessionRegistration connected');
     this.userIdWithSignature = window.location.hash.substring(1);
-    console.log('Hash:', this.userIdWithSignature);
     if (!this.userIdWithSignature) {
       this.errorMessage = 'No user ID provided in URL hash.';
       this.isLoading = false;
@@ -56,18 +168,15 @@ class SessionRegistration extends HTMLElement {
     }
     this.userId = parts[0];
     this.signature = parts[1];
-    console.log('User ID:', this.userId, 'Signature:', this.signature);
     this.loadData();
   }
 
   async loadData() {
-    console.log('loadData called');
     this.isLoading = true;
     this.errorMessage = '';
     this.render();
 
     const timeout = setTimeout(() => {
-      console.log('Timeout triggered');
       if (this.isLoading) {
         this.errorMessage = 'Loading timed out. Please check your connection or try again later.';
         this.isLoading = false;
@@ -76,40 +185,32 @@ class SessionRegistration extends HTMLElement {
     }, 10000); // 10 seconds timeout
 
     try {
-      console.log('Starting fetches');
       const [sessionsResponse, registrationResponse] = await Promise.all([
         fetch('/api/events/sessions'),
         fetch(`/api/events/sessions/users/${this.userId}?signature=${encodeURIComponent(this.signature)}`)
       ]);
-      console.log('Fetches completed');
 
       clearTimeout(timeout);
 
       if (!sessionsResponse.ok) {
-        console.log('Sessions response not ok:', sessionsResponse.status);
         throw new Error('Failed to load sessions.');
       }
       if (!registrationResponse.ok) {
-        console.log('Registration response not ok:', registrationResponse.status);
         throw new Error('Failed to load registration.');
       }
 
       this.sessions = await sessionsResponse.json();
       this.userRegistration = await registrationResponse.json();
-      console.log('Data loaded successfully');
     } catch (error) {
-      console.log('Error in loadData:', error);
       clearTimeout(timeout);
       this.errorMessage = error.message;
     } finally {
       this.isLoading = false;
-      console.log('Setting isLoading to false');
       this.render();
     }
   }
 
   async updateRegistration(morningSession, afternoonSession) {
-    console.log('updateRegistration called with', morningSession, afternoonSession);
     this.errorMessage = '';
     this.render();
 
@@ -119,23 +220,26 @@ class SessionRegistration extends HTMLElement {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ morningSession, afternoonSession })
       });
-      console.log('Update response status:', response.status);
 
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Update failed.');
+        let errorMessage = `Update failed with status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          errorMessage = errorData.message || errorMessage;
+        } catch (e) {
+          // The error response was not valid JSON, use the default message
+        }
+        throw new Error(errorMessage);
       }
 
       const result = await response.json();
       if (result.success) {
-        console.log('Update successful, reloading data');
         this.loadData(); // Reload data
       } else {
         this.errorMessage = result.message || 'Update failed.';
         this.render();
       }
     } catch (error) {
-      console.log('Error in updateRegistration:', error);
       this.errorMessage = error.message;
       this.render();
     }
@@ -149,178 +253,16 @@ class SessionRegistration extends HTMLElement {
     } else if (this.errorMessage) {
       content = `<div class="alert alert-danger" role="alert">${this.errorMessage}</div>`;
     } else {
-      const morningSessions = this.sessions.filter(s => s.timeSlot === 'morning').filter(s => {
-        // Skip sessions if speakers are listed but none can be found (no headshot/title data)
-        if (s.speakers && s.speakers.length > 0) {
-          return s.speakers.some(speaker => speaker.headshot || speaker.title || speaker.bio);
-        }
-        return true; // Include sessions with no speakers listed
-      });
-      const afternoonSessions = this.sessions.filter(s => s.timeSlot === 'afternoon').filter(s => {
-        // Skip sessions if speakers are listed but none can be found (no headshot/title data)
-        if (s.speakers && s.speakers.length > 0) {
-          return s.speakers.some(speaker => speaker.headshot || speaker.title || speaker.bio);
-        }
-        return true; // Include sessions with no speakers listed
-      });
+      const morningSessions = this.sessions.filter(s => s.timeSlot === 'morning').filter(s => this.hasSpeakerDetails(s));
+      const afternoonSessions = this.sessions.filter(s => s.timeSlot === 'afternoon').filter(s => this.hasSpeakerDetails(s));
 
       content = `
-        <!-- Current Registration Status Card -->
-        <div class="card mb-4 location-0-session">
-          <div class="card-header location-0-session">
-            <h5 class="card-title mb-0 text-white">Current Session Registrations</h5>
-          </div>
-          <div class="card-body">
-            <p class="text-muted small">You're already registered for some sessions, great! If you'd like to make any changes, simply resubmit the form below to update your selections.</p>
-            
-            <div class="row">
-              <div class="col-md-6">
-                <div class="card border-primary">
-                  <div class="card-body">
-                    <h6 class="card-title text-primary">Current Morning Session</h6>
-                    <p class="card-text fw-bold">${this.userRegistration?.morningSession || 'No selection'}</p>
-                  </div>
-                </div>
-              </div>
-              <div class="col-md-6">
-                <div class="card border-primary">
-                  <div class="card-body">
-                    <h6 class="card-title text-primary">Current Afternoon Session</h6>
-                    <p class="card-text fw-bold">${this.userRegistration?.afternoonSession || 'No selection'}</p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
+        ${this.renderCurrentRegistration()}
 
         <!-- Session Selection Form -->
         <form id="registration-form">
-          <!-- Morning Sessions Card -->
-          <div class="card mb-4 location-1-session">
-            <div class="card-header location-1-session">
-              <h5 class="card-title mb-0 text-white">Morning Sessions</h5>
-            </div>
-            <div class="card-body">
-              <div class="row">
-                <div class="col-md-6 mb-3">
-                  <div class="session-card h-100 ${!this.userRegistration?.morningSession ? 'bg-primary-subtle border-primary' : ''}">
-                    <div class="session-content">
-                      <div class="form-check mb-2">
-                        <input class="form-check-input" type="radio" name="morning" id="morning-none" value="" ${!this.userRegistration?.morningSession ? 'checked' : ''}>
-                        <label class="form-check-label w-100" for="morning-none">
-                          <h6 class="session-title mb-2"><strong>No Selection</strong></h6>
-                          <p class="text-muted small">Select this option if you prefer not to attend any morning sessions.</p>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                ${morningSessions.map((s, index) => `
-                  <div class="col-md-6 mb-3">
-                    <div class="session-card h-100 ${s.available ? (this.userRegistration?.morningSession === s.title ? 'bg-success-subtle border-success' : '') : 'border-warning'}">
-                      <div class="session-content">
-                        <div class="form-check mb-2">
-                          <input class="form-check-input" type="radio" name="morning" id="morning-${index}" value="${s.title}" ${this.userRegistration?.morningSession === s.title ? 'checked' : ''} ${s.available ? '' : 'disabled'}>
-                          <label class="form-check-label w-100" for="morning-${index}">
-                            <h6 class="session-title mb-2"><strong>${s.title}</strong></h6>
-                          </label>
-                        </div>
-                        ${s.speakers && s.speakers.length > 0 ? `
-                          <div class="session-speakers mb-2">
-                            ${s.speakers.map(speaker => `
-                              <div class="speaker-info">
-                                ${speaker.headshot ? `
-                                  <img src="${speaker.headshot.x150}" class="speaker-avatar" alt="${speaker.name}">
-                                ` : `
-                                  <div class="speaker-avatar speaker-initial">
-                                    ${speaker.name.charAt(0).toUpperCase()}
-                                  </div>
-                                `}
-                                <div class="speaker-details">
-                                  <div class="speaker-name">${speaker.name}</div>
-                                  <div class="speaker-role">${speaker.title}</div>
-                                </div>
-                              </div>
-                            `).join('')}
-                          </div>
-                        ` : ''}
-                        ${s.abstract ? `
-                          <div class="session-preview-wrapper">
-                            <div class="session-preview-gradient">${this.stripMarkdown(s.abstract)}</div>
-                          </div>
-                        ` : ''}
-                        ${s.available ? '' : '<p class="text-warning small mt-2"><em>(Full)</em></p>'}
-                      </div>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          </div>
-
-          <!-- Afternoon Sessions Card -->
-          <div class="card mb-4 location-2-session">
-            <div class="card-header location-2-session">
-              <h5 class="card-title mb-0 text-white">Afternoon Sessions</h5>
-            </div>
-            <div class="card-body">
-              <div class="row">
-                <div class="col-md-6 mb-3">
-                  <div class="session-card h-100 ${!this.userRegistration?.afternoonSession ? 'bg-primary-subtle border-primary' : ''}">
-                    <div class="session-content">
-                      <div class="form-check mb-2">
-                        <input class="form-check-input" type="radio" name="afternoon" id="afternoon-none" value="" ${!this.userRegistration?.afternoonSession ? 'checked' : ''}>
-                        <label class="form-check-label w-100" for="afternoon-none">
-                          <h6 class="session-title mb-2"><strong>No Selection</strong></h6>
-                          <p class="text-muted small">Select this option if you prefer not to attend any afternoon sessions.</p>
-                        </label>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                ${afternoonSessions.map((s, index) => `
-                  <div class="col-md-6 mb-3">
-                    <div class="session-card h-100 ${s.available ? (this.userRegistration?.afternoonSession === s.title ? 'bg-success-subtle border-success' : '') : 'border-warning'}">
-                      <div class="session-content">
-                        <div class="form-check mb-2">
-                          <input class="form-check-input" type="radio" name="afternoon" id="afternoon-${index}" value="${s.title}" ${this.userRegistration?.afternoonSession === s.title ? 'checked' : ''} ${s.available ? '' : 'disabled'}>
-                          <label class="form-check-label w-100" for="afternoon-${index}">
-                            <h6 class="session-title mb-2"><strong>${s.title}</strong></h6>
-                          </label>
-                        </div>
-                        ${s.speakers && s.speakers.length > 0 ? `
-                          <div class="session-speakers mb-2">
-                            ${s.speakers.map(speaker => `
-                              <div class="speaker-info">
-                                ${speaker.headshot ? `
-                                  <img src="${speaker.headshot.x150}" class="speaker-avatar" alt="${speaker.name}">
-                                ` : `
-                                  <div class="speaker-avatar speaker-initial">
-                                    ${speaker.name.charAt(0).toUpperCase()}
-                                  </div>
-                                `}
-                                <div class="speaker-details">
-                                  <div class="speaker-name">${speaker.name}</div>
-                                  <div class="speaker-role">${speaker.title}</div>
-                                  </div>
-                              </div>
-                            `).join('')}
-                          </div>
-                        ` : ''}
-                        ${s.abstract ? `
-                          <div class="session-preview-wrapper">
-                            <div class="session-preview-gradient">${this.stripMarkdown(s.abstract)}</div>
-                          </div>
-                        ` : ''}
-                        ${s.available ? '' : '<p class="text-warning small mt-2"><em>(Full)</em></p>'}
-                      </div>
-                    </div>
-                  </div>
-                `).join('')}
-              </div>
-            </div>
-          </div>
+          ${this.renderSessionList(morningSessions, 'morning', this.userRegistration?.morningSession)}
+          ${this.renderSessionList(afternoonSessions, 'afternoon', this.userRegistration?.afternoonSession)}
 
           <!-- Save Button -->
           <div class="text-center mb-4">

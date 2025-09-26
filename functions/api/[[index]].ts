@@ -3,6 +3,8 @@
 
 // A simple in-memory cache for event data.
 let eventDataCache = null;
+let cacheTimestamp = 0;
+const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 const EVENT_DATA_URL = 'https://pkic.org/events/2025/pqc-conference-kuala-lumpur-my/event-data.json';
 const EVENT_DATE = '2025-10-28';
 
@@ -20,7 +22,8 @@ const ROOM_CAPACITY = {
 
 // Helper function to fetch event data and cache it.
 async function getEventData() {
-  if (eventDataCache) {
+  const now = Date.now();
+  if (eventDataCache && (now - cacheTimestamp < CACHE_TTL)) {
     return eventDataCache;
   }
 
@@ -30,6 +33,7 @@ async function getEventData() {
       throw new Error('Failed to fetch event data.');
     }
     eventDataCache = await response.json();
+    cacheTimestamp = now;
     return eventDataCache;
   } catch (error) {
     console.error('Error fetching event data:', error);
@@ -50,8 +54,8 @@ function getSessions(eventData) {
 
   if (eventData && eventData.agenda && eventData.agenda[EVENT_DATE]) {
     const agenda = eventData.agenda[EVENT_DATE];
-    let timeSlot = '';
     agenda.forEach(item => {
+      let timeSlot = '';
       if (item.time && item.time.startsWith('9')) timeSlot = 'morning';
       if (item.time && item.time.startsWith('14')) timeSlot = 'afternoon';
 
@@ -83,12 +87,18 @@ function getSessions(eventData) {
 // Function to get registrations from the KV store.
 async function getRegistrations(kv) {
   const registrations = [];
-  const list = await kv.list();
-  for (const key of list.keys) {
-    const value = await kv.get(key.name, 'json');
-    if (value && value.current) {
-      registrations.push({ userId: key.name, ...value.current });
+  let list_complete = false;
+  let cursor = undefined;
+  while (!list_complete) {
+    const page = await kv.list({ cursor });
+    for (const key of page.keys) {
+      const value = await kv.get(key.name, 'json');
+      if (value && value.current) {
+        registrations.push({ userId: key.name, ...value.current });
+      }
     }
+    list_complete = page.list_complete;
+    cursor = page.cursor;
   }
   return registrations;
 }
@@ -197,10 +207,6 @@ export async function onRequest({ request, env }) {
 
     // Validate the user ID for user-specific API calls.
     const signatureParam = url.searchParams.get('signature');
-    let userId = null;
-    if (signatureParam) {
-      // User ID will be extracted from path
-    }
 
     if (path === '/api/events/sessions') {
       const sessionsWithAvailability = allSessions.map(s => ({
@@ -303,7 +309,7 @@ export async function onRequest({ request, env }) {
         if (!(await verifySignedUserId(signedUserId, env.SECRET_KEY))) {
           return new Response('Forbidden: Invalid signature.', { status: 403 });
         }
-        userId = id;
+        const userId = id;
 
         if (path === `/api/events/sessions/users/${id}`) {
           const userReg = registrations.find(r => r.userId === id);
