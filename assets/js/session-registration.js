@@ -149,19 +149,31 @@ class SessionRegistration extends HTMLElement {
     } else if (this.errorMessage) {
       content = `<div class="alert alert-danger" role="alert">${this.errorMessage}</div>`;
     } else {
-      const morningSessions = this.sessions.filter(s => s.timeSlot === 'morning');
-      const afternoonSessions = this.sessions.filter(s => s.timeSlot === 'afternoon');
+      const morningSessions = this.sessions.filter(s => s.timeSlot === 'morning').filter(s => {
+        // Skip sessions if speakers are listed but none can be found (no headshot/title data)
+        if (s.speakers && s.speakers.length > 0) {
+          return s.speakers.some(speaker => speaker.headshot || speaker.title || speaker.bio);
+        }
+        return true; // Include sessions with no speakers listed
+      });
+      const afternoonSessions = this.sessions.filter(s => s.timeSlot === 'afternoon').filter(s => {
+        // Skip sessions if speakers are listed but none can be found (no headshot/title data)
+        if (s.speakers && s.speakers.length > 0) {
+          return s.speakers.some(speaker => speaker.headshot || speaker.title || speaker.bio);
+        }
+        return true; // Include sessions with no speakers listed
+      });
 
       content = `
-        <div class="card">
-          <div class="card-header">
-            <h5 class="card-title">Session Registrations</h5>
+        <!-- Current Registration Status Card -->
+        <div class="card mb-4 location-0-session">
+          <div class="card-header location-0-session">
+            <h5 class="card-title mb-0 text-white">Current Session Registrations</h5>
           </div>
           <div class="card-body">
-            <p class="text-muted small">You're already registered for some sessions, great! If you'd like to make any changes, simply resubmit this form to update your selections.</p>
+            <p class="text-muted small">You're already registered for some sessions, great! If you'd like to make any changes, simply resubmit the form below to update your selections.</p>
             
-            <!-- Current Registration Status -->
-            <div class="row mb-4">
+            <div class="row">
               <div class="col-md-6">
                 <div class="card border-primary">
                   <div class="card-body">
@@ -179,114 +191,146 @@ class SessionRegistration extends HTMLElement {
                 </div>
               </div>
             </div>
-
-            <hr>
-            <form id="registration-form">
-              <div class="mb-4">
-                <h5 class="mb-3">Select Morning Session</h5>
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <div class="card h-100 ${!this.userRegistration?.morningSession ? 'bg-primary-subtle border-primary' : ''}">
-                      <div class="card-body">
-                        <div class="form-check">
-                          <input class="form-check-input" type="radio" name="morning" id="morning-none" value="" ${!this.userRegistration?.morningSession ? 'checked' : ''}>
-                          <label class="form-check-label" for="morning-none">
-                            <h6 class="card-title mb-1"><strong>No Selection</strong></h6>
-                            <p class="card-text small text-muted">Skip morning session</p>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  ${morningSessions.map((s, index) => `
-                    <div class="col-md-6 mb-3">
-                      <div class="card h-100 ${s.available ? (this.userRegistration?.morningSession === s.title ? 'bg-success-subtle border-success' : '') : 'border-warning'}">
-                        <div class="card-body">
-                          <div class="form-check">
-                            <input class="form-check-input" type="radio" name="morning" id="morning-${index}" value="${s.title}" ${this.userRegistration?.morningSession === s.title ? 'checked' : ''} ${s.available ? '' : 'disabled'}>
-                            <label class="form-check-label" for="morning-${index}">
-                              <h6 class="card-title mb-1"><strong>${s.title}</strong></h6>
-                              ${s.speakers && s.speakers.length > 0 ? `
-                                <div class="mb-2">
-                                  ${s.speakers.map(speaker => `
-                                    <div class="d-inline-block me-2 mb-1">
-                                      ${speaker.headshot ? `
-                                        <img src="${speaker.headshot.x150}" class="speaker-avatar rounded-circle me-1" alt="${speaker.name}" style="width: 24px; height: 24px; object-fit: cover;">
-                                      ` : `
-                                        <div class="speaker-avatar speaker-initial bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center me-1" style="width: 24px; height: 24px; font-size: 12px; font-weight: 600;">
-                                          ${speaker.name.charAt(0).toUpperCase()}
-                                        </div>
-                                      `}
-                                      <small class="text-muted">${speaker.name}</small>
-                                    </div>
-                                  `).join('')}
-                                </div>
-                              ` : ''}
-                              ${s.abstract ? `<p class="card-text small">${this.stripMarkdown(s.abstract).length > 100 ? this.stripMarkdown(s.abstract).substring(0, 100) + '...' : this.stripMarkdown(s.abstract)}</p>` : ''}
-                              ${s.available ? '' : '<p class="card-text small text-warning"><em>(Full)</em></p>'}
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-              <hr>
-              <div class="mb-4">
-                <h5 class="mb-3">Select Afternoon Session</h5>
-                <div class="row">
-                  <div class="col-md-6 mb-3">
-                    <div class="card h-100 ${!this.userRegistration?.afternoonSession ? 'bg-primary-subtle border-primary' : ''}">
-                      <div class="card-body">
-                        <div class="form-check">
-                          <input class="form-check-input" type="radio" name="afternoon" id="afternoon-none" value="" ${!this.userRegistration?.afternoonSession ? 'checked' : ''}>
-                          <label class="form-check-label" for="afternoon-none">
-                            <h6 class="card-title mb-1"><strong>No Selection</strong></h6>
-                            <p class="card-text small text-muted">Skip the afternoon session</p>
-                          </label>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  ${afternoonSessions.map((s, index) => `
-                    <div class="col-md-6 mb-3">
-                      <div class="card h-100 ${s.available ? (this.userRegistration?.afternoonSession === s.title ? 'bg-success-subtle border-success' : '') : 'border-warning'}">
-                        <div class="card-body">
-                          <div class="form-check">
-                            <input class="form-check-input" type="radio" name="afternoon" id="afternoon-${index}" value="${s.title}" ${this.userRegistration?.afternoonSession === s.title ? 'checked' : ''} ${s.available ? '' : 'disabled'}>
-                            <label class="form-check-label" for="afternoon-${index}">
-                              <h6 class="card-title mb-1"><strong>${s.title}</strong></h6>
-                              ${s.speakers && s.speakers.length > 0 ? `
-                                <div class="mb-2">
-                                  ${s.speakers.map(speaker => `
-                                    <div class="d-inline-block me-2 mb-1">
-                                      ${speaker.headshot ? `
-                                        <img src="${speaker.headshot.x150}" class="speaker-avatar rounded-circle me-1" alt="${speaker.name}" style="width: 24px; height: 24px; object-fit: cover;">
-                                      ` : `
-                                        <div class="speaker-avatar speaker-initial bg-primary text-white rounded-circle d-inline-flex align-items-center justify-content-center me-1" style="width: 24px; height: 24px; font-size: 12px; font-weight: 600;">
-                                          ${speaker.name.charAt(0).toUpperCase()}
-                                        </div>
-                                      `}
-                                      <small class="text-muted">${speaker.name}</small>
-                                    </div>
-                                  `).join('')}
-                                </div>
-                              ` : ''}
-                              ${s.abstract ? `<p class="card-text small">${this.stripMarkdown(s.abstract).length > 100 ? this.stripMarkdown(s.abstract).substring(0, 100) + '...' : this.stripMarkdown(s.abstract)}</p>` : ''}
-                              ${s.available ? '' : '<p class="card-text small text-warning"><em>(Full)</em></p>'}
-                            </label>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  `).join('')}
-                </div>
-              </div>
-              <button type="submit" class="btn btn-primary">Update Registration</button>
-              <button type="button" class="btn btn-secondary ms-2" id="deregister-btn">Deregister All</button>
-            </form>
           </div>
+        </div>
+
+        <!-- Session Selection Form -->
+        <form id="registration-form">
+          <!-- Morning Sessions Card -->
+          <div class="card mb-4 location-1-session">
+            <div class="card-header location-1-session">
+              <h5 class="card-title mb-0 text-white">Morning Sessions</h5>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <div class="session-card h-100 ${!this.userRegistration?.morningSession ? 'bg-primary-subtle border-primary' : ''}">
+                    <div class="session-content">
+                      <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="morning" id="morning-none" value="" ${!this.userRegistration?.morningSession ? 'checked' : ''}>
+                        <label class="form-check-label w-100" for="morning-none">
+                          <h6 class="session-title mb-2"><strong>No Selection</strong></h6>
+                          <p class="text-muted small">Select this option if you prefer not to attend any morning sessions.</p>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                ${morningSessions.map((s, index) => `
+                  <div class="col-md-6 mb-3">
+                    <div class="session-card h-100 ${s.available ? (this.userRegistration?.morningSession === s.title ? 'bg-success-subtle border-success' : '') : 'border-warning'}">
+                      <div class="session-content">
+                        <div class="form-check mb-2">
+                          <input class="form-check-input" type="radio" name="morning" id="morning-${index}" value="${s.title}" ${this.userRegistration?.morningSession === s.title ? 'checked' : ''} ${s.available ? '' : 'disabled'}>
+                          <label class="form-check-label w-100" for="morning-${index}">
+                            <h6 class="session-title mb-2"><strong>${s.title}</strong></h6>
+                          </label>
+                        </div>
+                        ${s.speakers && s.speakers.length > 0 ? `
+                          <div class="session-speakers mb-2">
+                            ${s.speakers.map(speaker => `
+                              <div class="speaker-info">
+                                ${speaker.headshot ? `
+                                  <img src="${speaker.headshot.x150}" class="speaker-avatar" alt="${speaker.name}">
+                                ` : `
+                                  <div class="speaker-avatar speaker-initial">
+                                    ${speaker.name.charAt(0).toUpperCase()}
+                                  </div>
+                                `}
+                                <div class="speaker-details">
+                                  <div class="speaker-name">${speaker.name}</div>
+                                  <div class="speaker-role">${speaker.title}</div>
+                                </div>
+                              </div>
+                            `).join('')}
+                          </div>
+                        ` : ''}
+                        ${s.abstract ? `
+                          <div class="session-preview-wrapper">
+                            <div class="session-preview-gradient">${this.stripMarkdown(s.abstract)}</div>
+                          </div>
+                        ` : ''}
+                        ${s.available ? '' : '<p class="text-warning small mt-2"><em>(Full)</em></p>'}
+                      </div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+
+          <!-- Afternoon Sessions Card -->
+          <div class="card mb-4 location-2-session">
+            <div class="card-header location-2-session">
+              <h5 class="card-title mb-0 text-white">Afternoon Sessions</h5>
+            </div>
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-6 mb-3">
+                  <div class="session-card h-100 ${!this.userRegistration?.afternoonSession ? 'bg-primary-subtle border-primary' : ''}">
+                    <div class="session-content">
+                      <div class="form-check mb-2">
+                        <input class="form-check-input" type="radio" name="afternoon" id="afternoon-none" value="" ${!this.userRegistration?.afternoonSession ? 'checked' : ''}>
+                        <label class="form-check-label w-100" for="afternoon-none">
+                          <h6 class="session-title mb-2"><strong>No Selection</strong></h6>
+                          <p class="text-muted small">Select this option if you prefer not to attend any afternoon sessions.</p>
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                ${afternoonSessions.map((s, index) => `
+                  <div class="col-md-6 mb-3">
+                    <div class="session-card h-100 ${s.available ? (this.userRegistration?.afternoonSession === s.title ? 'bg-success-subtle border-success' : '') : 'border-warning'}">
+                      <div class="session-content">
+                        <div class="form-check mb-2">
+                          <input class="form-check-input" type="radio" name="afternoon" id="afternoon-${index}" value="${s.title}" ${this.userRegistration?.afternoonSession === s.title ? 'checked' : ''} ${s.available ? '' : 'disabled'}>
+                          <label class="form-check-label w-100" for="afternoon-${index}">
+                            <h6 class="session-title mb-2"><strong>${s.title}</strong></h6>
+                          </label>
+                        </div>
+                        ${s.speakers && s.speakers.length > 0 ? `
+                          <div class="session-speakers mb-2">
+                            ${s.speakers.map(speaker => `
+                              <div class="speaker-info">
+                                ${speaker.headshot ? `
+                                  <img src="${speaker.headshot.x150}" class="speaker-avatar" alt="${speaker.name}">
+                                ` : `
+                                  <div class="speaker-avatar speaker-initial">
+                                    ${speaker.name.charAt(0).toUpperCase()}
+                                  </div>
+                                `}
+                                <div class="speaker-details">
+                                  <div class="speaker-name">${speaker.name}</div>
+                                  <div class="speaker-role">${speaker.title}</div>
+                                  </div>
+                              </div>
+                            `).join('')}
+                          </div>
+                        ` : ''}
+                        ${s.abstract ? `
+                          <div class="session-preview-wrapper">
+                            <div class="session-preview-gradient">${this.stripMarkdown(s.abstract)}</div>
+                          </div>
+                        ` : ''}
+                        ${s.available ? '' : '<p class="text-warning small mt-2"><em>(Full)</em></p>'}
+                      </div>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+
+          <!-- Save Button -->
+          <div class="text-center mb-4">
+            <button type="submit" class="btn btn-primary btn-lg location-0-session-btn">Save Session Registrations</button>
+          </div>
+        </form>
+
+        <!-- Deregister All Button -->
+        <div class="text-center">
+          <button type="button" class="btn btn-secondary" id="deregister-btn">Deregister All Sessions</button>
         </div>
       `;
     }
@@ -294,9 +338,9 @@ class SessionRegistration extends HTMLElement {
     this.innerHTML = content;
 
     // Attach event listeners
-    const form = this.querySelector('#registration-form');
-    if (form) {
-      form.addEventListener('submit', (e) => {
+    const registrationForm = this.querySelector('#registration-form');
+    if (registrationForm) {
+      registrationForm.addEventListener('submit', (e) => {
         e.preventDefault();
         const morningSelection = this.querySelector('input[name="morning"]:checked')?.value || '';
         const afternoonSelection = this.querySelector('input[name="afternoon"]:checked')?.value || '';

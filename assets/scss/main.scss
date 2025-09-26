@@ -912,6 +912,44 @@ self-assessment {
     --location-text-color-secondary: #6c757d;
   }
 
+  // Card header background colors for session registration
+  .card-header.#{$location}-session {
+    background-color: #{$color} !important;
+    color: white !important;
+  }
+
+  // Accent colors for session registration card bodies
+  .card.#{$location}-session .border-primary {
+    border-color: #{$color} !important;
+  }
+
+  .card.#{$location}-session .text-primary {
+    color: #{$color} !important;
+  }
+
+  .card.#{$location}-session .bg-primary-subtle {
+    background-color: #{rgba($color, 0.1)} !important;
+  }
+
+  .card.#{$location}-session .bg-success-subtle {
+    background-color: #{rgba($color, 0.1)} !important;
+  }
+
+  .card.#{$location}-session .border-success {
+    border-color: #{$color} !important;
+  }
+
+  // Save button colors for session registration
+  .btn.location-0-session-btn {
+    background-color: #{map-get($all-pkic-locations-colors, 'location-0')} !important;
+    border-color: #{map-get($all-pkic-locations-colors, 'location-0')} !important;
+  }
+
+  .btn.location-0-session-btn:hover {
+    background-color: #{darken(map-get($all-pkic-locations-colors, 'location-0'), 10%)} !important;
+    border-color: #{darken(map-get($all-pkic-locations-colors, 'location-0'), 10%)} !important;
+  }
+
   // Modal header still gets a slight gradient for visual interest, using the base color
   .#{$location}-modal .modal-header {
     background: linear-gradient(135deg, #{$color} 0%, #{darken($color, 15%)} 100%);
