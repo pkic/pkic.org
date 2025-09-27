@@ -13,42 +13,16 @@ export async function onRequest({ request, env, params }) {
     const signatureParam = url.searchParams.get('signature');
     const id = params.id as string;
 
-    if (request.method === 'GET') {
-        // Validate signature
-        if (!signatureParam) {
-            return new Response('Forbidden: Signature required.', { status: 403 });
-        }
-        const signedUserId = id + '.' + signatureParam;
-        if (!(await verifySignedUserId(signedUserId, env.SECRET_KEY))) {
-            return new Response('Forbidden: Invalid signature.', { status: 403 });
-        }
-
-        const { results } = await db.prepare("SELECT * FROM registrations WHERE user_id = ?").bind(id).all();
-        const data = results.reduce((acc, row) => {
-            if (row.time_slot === 'morning') {
-                acc.morningSession = row.session_title;
-            } else if (row.time_slot === 'afternoon') {
-                acc.afternoonSession = row.session_title;
-            }
-            return acc;
-        }, { morningSession: null, afternoonSession: null });
-
-        return new Response(JSON.stringify(data), {
-            headers: { 'Content-Type': 'application/json' },
-        });
+    // Validate signature (extracted to run once)
+    if (!signatureParam) {
+        return new Response('Forbidden: Signature required.', { status: 403 });
+    }
+    const signedUserId = id + '.' + signatureParam;
+    if (!(await verifySignedUserId(signedUserId, env.SECRET_KEY))) {
+        return new Response('Forbidden: Invalid signature.', { status: 403 });
     }
 
-    if (request.method === 'POST') {
-        // Validate signature
-        if (!signatureParam) {
-            return new Response('Forbidden: Signature required.', { status: 403 });
-        }
-        const signedUserId = id + '.' + signatureParam;
-        if (!(await verifySignedUserId(signedUserId, env.SECRET_KEY))) {
-            return new Response('Forbidden: Invalid signature.', { status: 403 });
-        }
-
-        const { morningSession, afternoonSession } = await request.json();
+    if (request.method === 'GET') {
 
         // Get current registration
         const { results } = await db.prepare("SELECT * FROM registrations WHERE user_id = ?").bind(id).all();
