@@ -336,34 +336,34 @@ export async function onRequest({ request, env }) {
         if (request.method === 'POST' && path === `/api/events/sessions/users/${id}/update`) {
           const { morningSession, afternoonSession } = await request.json();
 
+          // Get current data before checking availability
+          const currentData = await kv.get(id, 'json') || { current: { morningSession: '', afternoonSession: '' }, changes: [] };
+          const oldRegistration = currentData.current;
+
           // Re-fetch registrations to get the latest state for availability check
           const registrations = await getRegistrations(kv);
           const availability = getAvailability(registrations, allSessions);
 
-          // Check for overbooking.
-          if (morningSession && !availability[morningSession]) {
-            return new Response(JSON.stringify({ success: false, message: 'Morning session is full.' }), {
+          // Check for overbooking, allowing the user to re-save their existing full session.
+          if (morningSession && !availability[morningSession] && morningSession !== oldRegistration.morningSession) {
+            return new Response(JSON.stringify({ success: false, message: `It looks like "${morningSession}" just filled up. Please select a different morning session.` }), {
               status: 409,
               headers: { 'Content-Type': 'application/json' },
             });
           }
-          if (afternoonSession && !availability[afternoonSession]) {
-            return new Response(JSON.stringify({ success: false, message: 'Afternoon session is full.' }), {
+          if (afternoonSession && !availability[afternoonSession] && afternoonSession !== oldRegistration.afternoonSession) {
+            return new Response(JSON.stringify({ success: false, message: `It looks like "${afternoonSession}" just filled up. Please select a different afternoon session.` }), {
               status: 409,
               headers: { 'Content-Type': 'application/json' },
             });
           }
-
-          // Get current data
-          const currentData = await kv.get(id, 'json') || { current: { morningSession: '', afternoonSession: '' }, changes: [] };
-          const old = currentData.current;
 
           // Add to changes
           currentData.changes.push({
             timestamp: Date.now(),
             action: 'update',
-            oldMorning: old.morningSession,
-            oldAfternoon: old.afternoonSession,
+            oldMorning: oldRegistration.morningSession,
+            oldAfternoon: oldRegistration.afternoonSession,
             newMorning: morningSession,
             newAfternoon: afternoonSession
           });

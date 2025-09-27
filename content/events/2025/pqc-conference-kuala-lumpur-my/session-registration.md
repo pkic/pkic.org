@@ -17,8 +17,8 @@ robots: noindex
 
 If you are unable to attend the conference in person, please update your main event registration using the link in your confirmation email, or contact us at contact@pkic.org.
 
-{{< session-registration >}}
+**Please remember to save your registration using the button at the bottom of the page.**
 
-  
+{{< session-registration >}}
 
 {{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" >}}

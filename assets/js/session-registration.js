@@ -7,6 +7,7 @@ class SessionRegistration extends HTMLElement {
     this.userRegistration = null;
     this.isLoading = true;
     this.errorMessage = '';
+    this.successMessage = '';
   }
 
   // Helper function to strip markdown formatting
@@ -58,7 +59,7 @@ class SessionRegistration extends HTMLElement {
           
           <div class="row">
             <div class="col-md-6">
-              <div class="card border-primary">
+              <div class="card border-primary mb-4">
                 <div class="card-body">
                   <h6 class="card-title text-primary">Your Current <strong>Morning</strong> Session</h6>
                   <p class="card-text fw-bold">${this.userRegistration?.morningSession || 'No selection'}</p>
@@ -66,7 +67,7 @@ class SessionRegistration extends HTMLElement {
               </div>
             </div>
             <div class="col-md-6">
-              <div class="card border-primary">
+              <div class="card border-primary mb-4">
                 <div class="card-body">
                   <h6 class="card-title text-primary">Your Current <strong>Afternoon</strong> Session</h6>
                   <p class="card-text fw-bold">${this.userRegistration?.afternoonSession || 'No selection'}</p>
@@ -187,10 +188,11 @@ class SessionRegistration extends HTMLElement {
     this.loadData();
   }
 
-  async loadData() {
-    this.isLoading = true;
-    this.errorMessage = '';
-    this.render();
+  async loadData(skipSpinner = false) {
+    if (!skipSpinner) {
+      this.isLoading = true;
+      this.render();
+    }
 
     const controller = new AbortController();
     const signal = controller.signal;
@@ -235,6 +237,8 @@ class SessionRegistration extends HTMLElement {
   }
 
   async updateRegistration(morningSession, afternoonSession) {
+    // Clear messages immediately for responsiveness
+    this.successMessage = '';
     this.errorMessage = '';
     this.render();
 
@@ -245,23 +249,22 @@ class SessionRegistration extends HTMLElement {
         body: JSON.stringify({ morningSession, afternoonSession })
       });
 
-      if (!response.ok) {
-        let errorMessage = `Update failed with status: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          errorMessage = errorData.message || errorMessage;
-        } catch (e) {
-          // The error response was not valid JSON, use the default message
-        }
-        throw new Error(errorMessage);
-      }
-
       const result = await response.json();
-      if (result.success) {
-        this.loadData(); // Reload data
+
+      if (response.ok && result.success) {
+        this.successMessage = 'Your session registration has been saved successfully!';
+        await this.loadData(); // Reload and re-render
       } else {
-        this.errorMessage = result.message || 'Update failed.';
-        this.render();
+        this.errorMessage = result.message || 'An unknown error occurred.';
+        if (response.status === 409) {
+          // For a conflict, we want to show the error *while* reloading the data.
+          // We render the error first, then loadData without showing the main spinner.
+          this.isLoading = false;
+          this.render();
+          await this.loadData(true); // Pass flag to skip spinner
+        } else {
+          this.render();
+        }
       }
     } catch (error) {
       this.errorMessage = error.message;
@@ -271,38 +274,83 @@ class SessionRegistration extends HTMLElement {
 
   render() {
     let content = '';
+    const hasError = this.errorMessage && this.errorMessage.length > 0;
+    const hasSuccess = this.successMessage && this.successMessage.length > 0;
 
-    if (this.isLoading) {
+    // Priority: Error > Loading > Success > Form
+    if (hasError) {
+      content = this.renderErrorState();
+    } else if (this.isLoading) {
       content = '<div class="text-center"><div class="spinner-border text-primary" role="status"><span class="visually-hidden">Loading...</span></div><p class="mt-2">Loading session data...</p></div>';
-    } else if (this.errorMessage) {
-      content = `<div class="alert alert-danger" role="alert">${this.errorMessage}</div>`;
+    } else if (hasSuccess) {
+      content = this.renderSuccessState();
     } else {
-      const morningSessions = this.sessions.filter(s => s.timeSlot === 'morning').filter(s => this.hasSpeakerDetails(s));
-      const afternoonSessions = this.sessions.filter(s => s.timeSlot === 'afternoon').filter(s => this.hasSpeakerDetails(s));
-
-      content = `
-        ${this.renderCurrentRegistration()}
-
-        <!-- Session Selection Form -->
-        <form id="registration-form">
-          ${this.renderSessionList(morningSessions, 'morning', this.userRegistration?.morningSession)}
-          ${this.renderSessionList(afternoonSessions, 'afternoon', this.userRegistration?.afternoonSession)}
-
-          <!-- Save Button -->
-          <div class="text-center mb-4">
-            <button type="submit" class="btn btn-primary btn-lg location-0-session-btn">Save Session Registrations</button>
-          </div>
-        </form>
-
-        <!-- Deregister All Button -->
-        <div class="text-center">
-          <button type="button" class="btn btn-secondary" id="deregister-btn">Deregister All Sessions</button>
-        </div>
-      `;
+      content = this.renderForm();
     }
 
     this.innerHTML = content;
+    this.attachEventListeners();
 
+    const messageEl = this.querySelector('#error-message, #success-message');
+    if (messageEl) {
+      messageEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
+  renderErrorState() {
+    let messageContent = '';
+    if (this.errorMessage.includes('just filled up')) {
+      messageContent = `
+        <div id="error-message" class="alert alert-danger" role="alert">
+          <h5 class="alert-heading">Save Failed</h5>
+          <p>${this.errorMessage}</p>
+          <hr>
+          <p class="mb-0">The session list is being updated. Please make a new selection.</p>
+        </div>
+      `;
+    } else {
+      messageContent = `<div id="error-message" class="alert alert-danger" role="alert">${this.errorMessage}</div>`;
+    }
+    // Show the form below the error
+    return messageContent + this.renderForm();
+  }
+
+  renderSuccessState() {
+    const successContent = `
+      <div id="success-message" class="alert alert-success" role="alert">
+        ${this.successMessage}
+      </div>
+    `;
+    // Show the form below the success message
+    return successContent + this.renderForm();
+  }
+
+  renderForm() {
+    const morningSessions = this.sessions.filter(s => s.timeSlot === 'morning').filter(s => this.hasSpeakerDetails(s));
+    const afternoonSessions = this.sessions.filter(s => s.timeSlot === 'afternoon').filter(s => this.hasSpeakerDetails(s));
+
+    return `
+      ${this.renderCurrentRegistration()}
+
+      <!-- Session Selection Form -->
+      <form id="registration-form">
+        ${this.renderSessionList(morningSessions, 'morning', this.userRegistration?.morningSession)}
+        ${this.renderSessionList(afternoonSessions, 'afternoon', this.userRegistration?.afternoonSession)}
+
+        <!-- Save Button -->
+        <div class="text-center mb-4">
+          <button type="submit" class="btn btn-primary btn-lg location-0-session-btn">Save Session Registrations</button>
+        </div>
+      </form>
+
+      <!-- Deregister All Button -->
+      <div class="text-center mb-4">
+        <button type="button" class="btn btn-secondary" id="deregister-btn">Deregister All Sessions</button>
+      </div>
+    `;
+  }
+
+  attachEventListeners() {
     // Attach event listeners
     const registrationForm = this.querySelector('#registration-form');
     if (registrationForm) {
