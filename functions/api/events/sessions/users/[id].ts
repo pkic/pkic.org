@@ -3,13 +3,6 @@ import { getEventData, getSessions, getAvailability, verifySignedUserId, updateR
 
 export async function onRequest({ request, env, params }) {
     const url = new URL(request.url);
-    const db = env.DB;
-    const eventData = await getEventData();
-    if (!eventData) {
-        return new Response('Event data not available.', { status: 500 });
-    }
-    const allSessions = getSessions(eventData);
-
     const signatureParam = url.searchParams.get('signature');
     const id = params.id as string;
 
@@ -22,7 +15,31 @@ export async function onRequest({ request, env, params }) {
         return new Response('Forbidden: Invalid signature.', { status: 403 });
     }
 
+    const db = env.DB;
+    const eventData = await getEventData();
+    if (!eventData) {
+        return new Response('Event data not available.', { status: 500 });
+    }
+    const allSessions = getSessions(eventData);
+
     if (request.method === 'GET') {
+        const { results } = await db.prepare("SELECT * FROM registrations WHERE user_id = ?").bind(id).all();
+        const data = results.reduce((acc, row) => {
+            if (row.time_slot === 'morning') {
+                acc.morningSession = row.session_title;
+            } else if (row.time_slot === 'afternoon') {
+                acc.afternoonSession = row.session_title;
+            }
+            return acc;
+        }, { morningSession: null, afternoonSession: null });
+
+        return new Response(JSON.stringify(data), {
+            headers: { 'Content-Type': 'application/json' },
+        });
+    }
+
+    if (request.method === 'POST') {
+        const { morningSession, afternoonSession } = await request.json();
 
         // Get current registration
         const { results } = await db.prepare("SELECT * FROM registrations WHERE user_id = ?").bind(id).all();
@@ -39,13 +56,13 @@ export async function onRequest({ request, env, params }) {
         const availability = await getAvailability(db, allSessions, env);
 
         // Check for overbooking only if the session has changed
-        if (morningSession && morningSession !== currentRegistration.morningSession && !availability[morningSession]) {
+        if (morningSession && morningSession !== currentRegistration.morningSession && !availability.morning?.[morningSession]) {
             return new Response(JSON.stringify({ success: false, message: `It looks like "${morningSession}" just filled up. Please select a different morning session.` }), {
                 status: 409,
                 headers: { 'Content-Type': 'application/json' },
             });
         }
-        if (afternoonSession && afternoonSession !== currentRegistration.afternoonSession && !availability[afternoonSession]) {
+        if (afternoonSession && afternoonSession !== currentRegistration.afternoonSession && !availability.afternoon?.[afternoonSession]) {
             return new Response(JSON.stringify({ success: false, message: `It looks like "${afternoonSession}" just filled up. Please select a different afternoon session.` }), {
                 status: 409,
                 headers: { 'Content-Type': 'application/json' },

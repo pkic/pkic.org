@@ -89,14 +89,20 @@ export function getSessions(eventData) {
 }
 
 // Function to get registrations for a specific session from the D1 database.
-export async function getSessionRegistrations(db, sessionTitle) {
-    const { results } = await db.prepare("SELECT user_id FROM registrations WHERE session_title = ?").bind(sessionTitle).all();
+export async function getSessionRegistrations(db, sessionTitle, timeSlot) {
+    const { results } = await db.prepare("SELECT user_id FROM registrations WHERE session_title = ? AND time_slot = ?").bind(sessionTitle, timeSlot).all();
     return results.map(row => row.user_id);
 }
 
 // Function to get all registrations from the D1 database.
 export async function getAllRegistrations(db) {
     const { results } = await db.prepare("SELECT * FROM registrations").all();
+    return results;
+}
+
+// New function to get all session registrations from the D1 database.
+export async function getAllSessionRegistrations(db) {
+    const { results } = await db.prepare("SELECT user_id, session_title, time_slot FROM registrations").all();
     return results;
 }
 
@@ -117,17 +123,24 @@ export async function updateRegistration(db, userId, sessionTitle, timeSlot, isR
 export async function getAvailability(db, allSessions, env) {
   const roomCapacities = getRoomCapacitiesFromEnv(env);
 
-  const { results: counts } = await db.prepare("SELECT session_title, COUNT(*) as count FROM registrations GROUP BY session_title").all();
-  const sessionCounts = (counts || []).reduce((acc, row) => {
-    acc[row.session_title] = row.count;
-    return acc;
-  }, {});
+  const { results: counts } = await db.prepare("SELECT session_title, time_slot, COUNT(*) as count FROM registrations GROUP BY session_title, time_slot").all();
 
-  const availability = {};
+  const sessionCounts = { morning: {}, afternoon: {} };
+  (counts || []).forEach(row => {
+    if (!sessionCounts[row.time_slot]) {
+      sessionCounts[row.time_slot] = {};
+    }
+    sessionCounts[row.time_slot][row.session_title] = row.count;
+  });
+
+  const availability = { morning: {}, afternoon: {} };
   for (const session of allSessions) {
-    const count = sessionCounts[session.title] || 0;
+    if (!availability[session.timeSlot]) {
+      availability[session.timeSlot] = {};
+    }
+    const count = sessionCounts[session.timeSlot]?.[session.title] || 0;
     const capacity = roomCapacities[session.room] || 0;
-    availability[session.title] = count < capacity;
+    availability[session.timeSlot][session.title] = count < capacity;
   }
   return availability;
 }
@@ -151,13 +164,12 @@ export async function getRoomAvailability(db, allSessions, rooms, env) {
 
   const roomCounts = { morning: {}, afternoon: {} };
   allSessions.forEach(session => {
-    const morningCount = sessionCountsByTimeSlot[session.title]?.morning || 0;
-    const afternoonCount = sessionCountsByTimeSlot[session.title]?.afternoon || 0;
+    const currentSessionRegistrations = sessionCountsByTimeSlot[session.title]?.[session.timeSlot] || 0;
 
     if (session.timeSlot === 'morning') {
-      roomCounts.morning[session.room] = (roomCounts.morning[session.room] || 0) + morningCount;
+      roomCounts.morning[session.room] = (roomCounts.morning[session.room] || 0) + currentSessionRegistrations;
     } else if (session.timeSlot === 'afternoon') {
-      roomCounts.afternoon[session.room] = (roomCounts.afternoon[session.room] || 0) + afternoonCount;
+      roomCounts.afternoon[session.room] = (roomCounts.afternoon[session.room] || 0) + currentSessionRegistrations;
     }
   });
 

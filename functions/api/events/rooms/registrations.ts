@@ -1,5 +1,5 @@
 
-import { getEventData, getSessions, getSessionRegistrations } from '../../utils';
+import { getEventData, getSessions, getAllSessionRegistrations } from '../../utils';
 
 export async function onRequest({ request, env }) {
     const db = env.DB;
@@ -9,20 +9,43 @@ export async function onRequest({ request, env }) {
     }
 
     const allSessions = getSessions(eventData);
-    const rooms = [...new Set(allSessions.map(s => s.room))];
-    const roomRegistrations = {};
-    rooms.forEach(room => {
-        roomRegistrations[room] = { morning: [], afternoon: [] };
+    const roomRegistrations = {
+        morning: {}, // Change to object
+        afternoon: {} // Change to object
+    };
+
+    // Initialize roomRegistrations with room names and empty attendee lists
+    allSessions.forEach(session => {
+        if (session.timeSlot === 'morning') {
+            roomRegistrations.morning[session.room] = roomRegistrations.morning[session.room] || [];
+        } else if (session.timeSlot === 'afternoon') {
+            roomRegistrations.afternoon[session.room] = roomRegistrations.afternoon[session.room] || [];
+        }
     });
 
-    for (const session of allSessions) {
-        const registrants = await getSessionRegistrations(db, session.title);
-        if (session.timeSlot === 'morning') {
-            roomRegistrations[session.room].morning.push(...registrants);
-        } else if (session.timeSlot === 'afternoon') {
-            roomRegistrations[session.room].afternoon.push(...registrants);
+    // Fetch all registrations once
+    const allRegistrations = await getAllSessionRegistrations(db);
+
+    // Process all registrations to populate roomRegistrations
+    allRegistrations.forEach(registration => {
+        // Find the corresponding session to get its room
+        const session = allSessions.find(s => s.title === registration.session_title && s.timeSlot === registration.time_slot);
+        if (session) {
+            const targetTimeSlot = roomRegistrations[registration.time_slot];
+            if (targetTimeSlot) {
+                const targetRoomAttendees = targetTimeSlot[session.room];
+                if (targetRoomAttendees) {
+                    targetRoomAttendees.push(registration.user_id);
+                } else {
+                    console.warn(`Registration found for unknown room within ${registration.time_slot}: ${session.room}`);
+                }
+            } else {
+                console.warn(`Registration found for unknown timeSlot: ${registration.time_slot}`);
+            }
+        } else {
+            console.warn(`Registration found for unknown session: ${registration.session_title} (${registration.time_slot})`);
         }
-    }
+    });
 
     return new Response(JSON.stringify(roomRegistrations), {
         headers: { 'Content-Type': 'application/json' },

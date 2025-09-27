@@ -12,7 +12,7 @@ export async function onRequest({ request, env }) {
     const availability = await getAvailability(db, allSessions, env);
     const sessionsWithAvailability = allSessions.map(s => ({
         ...s,
-        available: availability[s.title]
+        available: availability[s.timeSlot]?.[s.title]
     }));
     return new Response(JSON.stringify(sessionsWithAvailability), {
         headers: { 'Content-Type': 'application/json' },
