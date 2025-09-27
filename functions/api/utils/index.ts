@@ -7,7 +7,7 @@ const EVENT_DATA_URL = 'https://pkic.org/events/2025/pqc-conference-kuala-lumpur
 const EVENT_DATE = '2025-10-28';
 
 // Helper function to get room capacities from environment variable.
-function getRoomCapacitiesFromEnv(env) {
+export function getRoomCapacitiesFromEnv(env) {
   if (env.ROOM_CAPACITIES_JSON) {
     try {
       return JSON.parse(env.ROOM_CAPACITIES_JSON);
@@ -143,7 +143,7 @@ export async function getRoomAvailability(db, allSessions, rooms, env) {
   rooms.forEach(room => {
     const capacity = roomCapacities[room] || 0;
     availability.morning[room] = (roomCounts.morning[room] || 0) < capacity;
-    availability.afternoon[room] = (roomCounts.afternoon[room] || 0) || 0) < capacity;
+    availability.afternoon[room] = (roomCounts.afternoon[room] || 0) < capacity;
   });
   return { availability, counts: roomCounts };
 }
