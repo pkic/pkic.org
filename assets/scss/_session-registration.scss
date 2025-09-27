@@ -34,7 +34,7 @@
 
 // Style the card itself to look like a selected session
 .session-card.registered {
-  background-color: rgba(var(--location-color-rgb), 0.05);
+  background-color: rgba(var(--location-color-rgb), 0.1);
   border-color: var(--location-color);
   border-width: 2px;
 }

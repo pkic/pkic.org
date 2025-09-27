@@ -1,8 +1,8 @@
 
-import { getEventData, getSessions, getRegistrations, getRoomAvailability, ROOM_CAPACITY } from '../../../utils';
+import { getEventData, getSessions, getRoomAvailability, getRoomCapacitiesFromEnv } from '../../utils';
 
 export async function onRequest({ request, env }) {
-    const kv = env.KV_EVENT_REGISTRATION;
+    const db = env.DB;
     const eventData = await getEventData();
     if (!eventData) {
         return new Response('Event data not available.', { status: 500 });
@@ -10,10 +10,10 @@ export async function onRequest({ request, env }) {
 
     const allSessions = getSessions(eventData);
     const rooms = [...new Set(allSessions.map(s => s.room))];
-    const registrations = await getRegistrations(kv);
-    const { availability: roomAvailability, counts } = getRoomAvailability(registrations, allSessions, rooms);
+    const { availability: roomAvailability, counts } = await getRoomAvailability(db, allSessions, rooms, env);
+    const roomCapacities = getRoomCapacitiesFromEnv(env);
     const roomsData = rooms.map(room => {
-        const capacity = ROOM_CAPACITY[room] || 0;
+        const capacity = roomCapacities[room] || 0;
         const morningCount = counts.morning[room] || 0;
         const afternoonCount = counts.afternoon[room] || 0;
         const percentageMorning = capacity > 0 ? Math.round((morningCount / capacity) * 100) : 0;

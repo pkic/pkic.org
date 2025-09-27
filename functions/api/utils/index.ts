@@ -6,17 +6,17 @@ const CACHE_TTL = 10 * 60 * 1000; // 10 minutes
 const EVENT_DATA_URL = 'https://pkic.org/events/2025/pqc-conference-kuala-lumpur-my/event-data.json';
 const EVENT_DATE = '2025-10-28';
 
-// Hardcoded capacity for rooms.
-export const ROOM_CAPACITY = {
-  'room_1': 20,
-  'room_2': 20,
-  'room_3': 36,
-  'room_4': 36,
-  'room_5': 36,
-  'room_6': 96,
-  'room_7': 110,
-  'room_8': 110,
-};
+// Helper function to get room capacities from environment variable.
+function getRoomCapacitiesFromEnv(env) {
+  if (env.ROOM_CAPACITIES_JSON) {
+    try {
+      return JSON.parse(env.ROOM_CAPACITIES_JSON);
+    } catch (error) {
+      console.error('Error parsing ROOM_CAPACITIES_JSON environment variable:', error);
+    }
+  }
+  return {}; // Return empty object if not set or parsing fails
+}
 
 // Helper function to fetch event data and cache it.
 export async function getEventData() {
@@ -88,76 +88,62 @@ export function getSessions(eventData) {
   return sessions;
 }
 
-// Function to get registrations from the KV store.
-export async function getRegistrations(kv) {
-  const registrations = [];
-  let list_complete = false;
-  let cursor = undefined;
-  const allKeys = [];
+// Function to get registrations for a specific session from the D1 database.
+export async function getSessionRegistrations(db, sessionTitle) {
+    const { results } = await db.prepare("SELECT user_id FROM registrations WHERE session_title = ?").bind(sessionTitle).all();
+    return results.map(row => row.user_id);
+}
 
-  while (!list_complete) {
-    const page = await kv.list({ cursor });
-    allKeys.push(...page.keys);
-    list_complete = page.list_complete;
-    cursor = page.cursor;
-  }
+// Function to get all registrations from the D1 database.
+export async function getAllRegistrations(db) {
+    const { results } = await db.prepare("SELECT * FROM registrations").all();
+    return results;
+}
 
-  const values = await Promise.all(allKeys.map(key => kv.get(key.name, 'json')));
-
-  values.forEach((value, index) => {
-    if (value && value.current) {
-      registrations.push({ userId: allKeys[index].name, ...value.current });
+// Function to update a session registration in the D1 database.
+export async function updateRegistration(db, userId, sessionTitle, timeSlot, isRegistering) {
+    if (isRegistering) {
+        return await db.prepare("INSERT OR IGNORE INTO registrations (user_id, session_title, time_slot) VALUES (?, ?, ?)")
+            .bind(userId, sessionTitle, timeSlot)
+            .run();
+    } else {
+        return await db.prepare("DELETE FROM registrations WHERE user_id = ? AND session_title = ?")
+            .bind(userId, sessionTitle)
+            .run();
     }
-  });
-
-  return registrations;
 }
 
 // Function to check session availability.
-export function getAvailability(registrations, allSessions) {
-  const sessionCounts = {};
-  registrations.forEach(reg => {
-    if (reg.morningSession) {
-      sessionCounts[reg.morningSession] = (sessionCounts[reg.morningSession] || 0) + 1;
-    }
-    if (reg.afternoonSession) {
-      sessionCounts[reg.afternoonSession] = (sessionCounts[reg.afternoonSession] || 0) + 1;
-    }
-  });
+export async function getAvailability(db, allSessions, env) {
   const availability = {};
-  allSessions.forEach(session => {
-    const count = sessionCounts[session.title] || 0;
-    const capacity = ROOM_CAPACITY[session.room] || 0;
+  const roomCapacities = getRoomCapacitiesFromEnv(env);
+  for (const session of allSessions) {
+    const { results } = await db.prepare("SELECT COUNT(*) as count FROM registrations WHERE session_title = ?").bind(session.title).all();
+    const count = results[0].count;
+    const capacity = roomCapacities[session.room] || 0;
     availability[session.title] = count < capacity;
-  });
+  }
   return availability;
 }
 
 // Function to check room availability.
-export function getRoomAvailability(registrations, allSessions, rooms) {
-  const sessionCounts = {};
-  registrations.forEach(reg => {
-    if (reg.morningSession) {
-      sessionCounts[reg.morningSession] = (sessionCounts[reg.morningSession] || 0) + 1;
-    }
-    if (reg.afternoonSession) {
-      sessionCounts[reg.afternoonSession] = (sessionCounts[reg.afternoonSession] || 0) + 1;
-    }
-  });
+export async function getRoomAvailability(db, allSessions, rooms, env) {
   const roomCounts = { morning: {}, afternoon: {} };
-  allSessions.forEach(session => {
-    const count = sessionCounts[session.title] || 0;
+  const roomCapacities = getRoomCapacitiesFromEnv(env);
+  for (const session of allSessions) {
+    const { results } = await db.prepare("SELECT COUNT(*) as count FROM registrations WHERE session_title = ?").bind(session.title).all();
+    const count = results[0].count;
     if (session.timeSlot === 'morning') {
       roomCounts.morning[session.room] = (roomCounts.morning[session.room] || 0) + count;
     } else if (session.timeSlot === 'afternoon') {
       roomCounts.afternoon[session.room] = (roomCounts.afternoon[session.room] || 0) + count;
     }
-  });
+  }
   const availability = { morning: {}, afternoon: {} };
   rooms.forEach(room => {
-    const capacity = ROOM_CAPACITY[room] || 0;
+    const capacity = roomCapacities[room] || 0;
     availability.morning[room] = (roomCounts.morning[room] || 0) < capacity;
-    availability.afternoon[room] = (roomCounts.afternoon[room] || 0) < capacity;
+    availability.afternoon[room] = (roomCounts.afternoon[room] || 0) || 0) < capacity;
   });
   return { availability, counts: roomCounts };
 }

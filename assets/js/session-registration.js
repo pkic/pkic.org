@@ -243,7 +243,7 @@ class SessionRegistration extends HTMLElement {
     this.render();
 
     try {
-      const response = await fetch(`/api/events/sessions/users/${this.userId}/update?signature=${encodeURIComponent(this.signature)}`, {
+      const response = await fetch(`/api/events/sessions/users/${this.userId}?signature=${encodeURIComponent(this.signature)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ morningSession, afternoonSession })
@@ -368,6 +368,21 @@ class SessionRegistration extends HTMLElement {
         this.updateRegistration('', '');
       });
     }
+
+    const sessionCards = this.querySelectorAll('.session-card');
+    sessionCards.forEach(card => {
+      card.addEventListener('click', (event) => {
+        // Don't do anything if a link or button inside the card was clicked
+        if (event.target.tagName === 'A' || event.target.tagName === 'BUTTON' || event.target.closest('a, button')) {
+          return;
+        }
+
+        const radio = card.querySelector('input[type="radio"]');
+        if (radio && !radio.disabled) {
+          radio.checked = true;
+        }
+      });
+    });
   }
 }
 
