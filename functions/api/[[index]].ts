@@ -56,8 +56,14 @@ function getSessions(eventData) {
     const agenda = eventData.agenda[EVENT_DATE];
     agenda.forEach(item => {
       let timeSlot = '';
-      if (item.time && item.time.startsWith('9')) timeSlot = 'morning';
-      if (item.time && item.time.startsWith('14')) timeSlot = 'afternoon';
+      if (item.time) {
+        const hour = parseInt(item.time.split(':')[0], 10);
+        if (hour < 12) {
+          timeSlot = 'morning';
+        } else {
+          timeSlot = 'afternoon';
+        }
+      }
 
       if (item.sessions) {
         item.sessions.forEach(session => {
@@ -89,17 +95,23 @@ async function getRegistrations(kv) {
   const registrations = [];
   let list_complete = false;
   let cursor = undefined;
+  const allKeys = [];
+
   while (!list_complete) {
     const page = await kv.list({ cursor });
-    for (const key of page.keys) {
-      const value = await kv.get(key.name, 'json');
-      if (value && value.current) {
-        registrations.push({ userId: key.name, ...value.current });
-      }
-    }
+    allKeys.push(...page.keys);
     list_complete = page.list_complete;
     cursor = page.cursor;
   }
+
+  const values = await Promise.all(allKeys.map(key => kv.get(key.name, 'json')));
+
+  values.forEach((value, index) => {
+    if (value && value.current) {
+      registrations.push({ userId: allKeys[index].name, ...value.current });
+    }
+  });
+
   return registrations;
 }
 
@@ -185,7 +197,6 @@ async function verifySignedUserId(signedUserId, secretKey) {
   }
 }
 
-
 export async function onRequest({ request, env }) {
   const url = new URL(request.url);
   const kv = env.KV_EVENT_REGISTRATION; // Binding for the KV store.
@@ -201,14 +212,13 @@ export async function onRequest({ request, env }) {
 
     const allSessions = getSessions(eventData);
     const rooms = [...new Set(allSessions.map(s => s.room))];
-    const registrations = await getRegistrations(kv);
-    const availability = getAvailability(registrations, allSessions);
-    const { availability: roomAvailability, counts } = getRoomAvailability(registrations, allSessions, rooms);
 
     // Validate the user ID for user-specific API calls.
     const signatureParam = url.searchParams.get('signature');
 
     if (path === '/api/events/sessions') {
+      const registrations = await getRegistrations(kv);
+      const availability = getAvailability(registrations, allSessions);
       const sessionsWithAvailability = allSessions.map(s => ({
         ...s,
         available: availability[s.title]
@@ -219,6 +229,7 @@ export async function onRequest({ request, env }) {
     }
 
     if (path === '/api/events/sessions/registrations') {
+      const registrations = await getRegistrations(kv);
       const sessionRegistrations = {};
       allSessions.forEach(session => {
         sessionRegistrations[session.title] = [];
@@ -237,6 +248,8 @@ export async function onRequest({ request, env }) {
     }
 
     if (path === '/api/events/sessions/rooms') {
+      const registrations = await getRegistrations(kv);
+      const { availability: roomAvailability, counts } = getRoomAvailability(registrations, allSessions, rooms);
       const roomsData = rooms.map(room => {
         const capacity = ROOM_CAPACITY[room] || 0;
         const morningCount = counts.morning[room] || 0;
@@ -260,6 +273,7 @@ export async function onRequest({ request, env }) {
     }
 
     if (path === '/api/events/sessions/rooms/registrations') {
+      const registrations = await getRegistrations(kv);
       const roomRegistrations = {};
       rooms.forEach(room => {
         roomRegistrations[room] = { morning: [], afternoon: [] };
@@ -289,6 +303,7 @@ export async function onRequest({ request, env }) {
       const subpath = parts[1];
 
       if (subpath === 'registrations') {
+        const registrations = await getRegistrations(kv);
         const allUsers = registrations.map(reg => ({
           userId: reg.userId,
           morningSession: reg.morningSession,
@@ -309,11 +324,10 @@ export async function onRequest({ request, env }) {
         if (!(await verifySignedUserId(signedUserId, env.SECRET_KEY))) {
           return new Response('Forbidden: Invalid signature.', { status: 403 });
         }
-        const userId = id;
 
         if (path === `/api/events/sessions/users/${id}`) {
-          const userReg = registrations.find(r => r.userId === id);
-          const data = userReg ? { morningSession: userReg.morningSession, afternoonSession: userReg.afternoonSession } : null;
+          const userRegData = await kv.get(id, 'json');
+          const data = userRegData ? userRegData.current : null;
           return new Response(JSON.stringify(data), {
             headers: { 'Content-Type': 'application/json' },
           });
@@ -321,6 +335,10 @@ export async function onRequest({ request, env }) {
 
         if (request.method === 'POST' && path === `/api/events/sessions/users/${id}/update`) {
           const { morningSession, afternoonSession } = await request.json();
+
+          // Re-fetch registrations to get the latest state for availability check
+          const registrations = await getRegistrations(kv);
+          const availability = getAvailability(registrations, allSessions);
 
           // Check for overbooking.
           if (morningSession && !availability[morningSession]) {

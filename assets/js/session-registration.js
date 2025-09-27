@@ -60,7 +60,7 @@ class SessionRegistration extends HTMLElement {
             <div class="col-md-6">
               <div class="card border-primary">
                 <div class="card-body">
-                  <h6 class="card-title text-primary">Current Morning Session</h6>
+                  <h6 class="card-title text-primary">Your Current <strong>Morning</strong> Session</h6>
                   <p class="card-text fw-bold">${this.userRegistration?.morningSession || 'No selection'}</p>
                 </div>
               </div>
@@ -68,7 +68,7 @@ class SessionRegistration extends HTMLElement {
             <div class="col-md-6">
               <div class="card border-primary">
                 <div class="card-body">
-                  <h6 class="card-title text-primary">Current Afternoon Session</h6>
+                  <h6 class="card-title text-primary">Your Current <strong>Afternoon</strong> Session</h6>
                   <p class="card-text fw-bold">${this.userRegistration?.afternoonSession || 'No selection'}</p>
                 </div>
               </div>
@@ -94,7 +94,7 @@ class SessionRegistration extends HTMLElement {
         <div class="card-body">
           <div class="row">
             <div class="col-md-6 mb-3">
-              <div class="session-card h-100 ${!userSelection ? 'bg-primary-subtle border-primary' : ''}">
+              <div class="session-card h-100 ${!userSelection ? 'registered' : ''}">
                 <div class="session-content">
                   <div class="form-check mb-2">
                     <input class="form-check-input" type="radio" name="${sessionType}" id="${sessionType}-none" value="" ${!userSelection ? 'checked' : ''}>
@@ -106,12 +106,28 @@ class SessionRegistration extends HTMLElement {
                 </div>
               </div>
             </div>
-            ${sessions.map((s, index) => `
+            ${sessions.map((s, index) => {
+              const isRegistered = userSelection === s.title;
+              const isFullForOthers = !s.available && !isRegistered;
+
+              let cardClasses = 'session-card h-100 position-relative';
+              if (isRegistered) {
+                cardClasses += ' registered';
+              } else if (isFullForOthers) {
+                cardClasses += ' full';
+              }
+
+              return `
               <div class="col-md-6 mb-3">
-                <div class="session-card h-100 ${s.available ? (userSelection === s.title ? 'bg-success-subtle border-success' : '') : 'border-warning'}">
+                <div class="${cardClasses}">
+                  ${isFullForOthers ? `
+                    <div class="session-full-overlay">
+                      <span class="session-full-text">FULL</span>
+                    </div>
+                  ` : ''}
                   <div class="session-content">
                     <div class="form-check mb-2">
-                      <input class="form-check-input" type="radio" name="${sessionType}" id="${sessionType}-${index}" value="${s.title}" ${userSelection === s.title ? 'checked' : ''} ${s.available ? '' : 'disabled'}>
+                      <input class="form-check-input" type="radio" name="${sessionType}" id="${sessionType}-${index}" value="${s.title}" ${isRegistered ? 'checked' : ''} ${isFullForOthers ? 'disabled' : ''}>
                       <label class="form-check-label w-100" for="${sessionType}-${index}">
                         <h6 class="session-title mb-2"><strong>${s.title}</strong></h6>
                       </label>
@@ -140,11 +156,11 @@ class SessionRegistration extends HTMLElement {
                         <div class="session-preview-gradient">${this.stripMarkdown(s.abstract)}</div>
                       </div>
                     ` : ''}
-                    ${s.available ? '' : '<p class="text-warning small mt-2"><em>(Full)</em></p>'}
                   </div>
                 </div>
               </div>
-            `).join('')}
+              `;
+            }).join('')}
           </div>
         </div>
       </div>
@@ -176,8 +192,12 @@ class SessionRegistration extends HTMLElement {
     this.errorMessage = '';
     this.render();
 
+    const controller = new AbortController();
+    const signal = controller.signal;
+
     const timeout = setTimeout(() => {
       if (this.isLoading) {
+        controller.abort();
         this.errorMessage = 'Loading timed out. Please check your connection or try again later.';
         this.isLoading = false;
         this.render();
@@ -186,8 +206,8 @@ class SessionRegistration extends HTMLElement {
 
     try {
       const [sessionsResponse, registrationResponse] = await Promise.all([
-        fetch('/api/events/sessions'),
-        fetch(`/api/events/sessions/users/${this.userId}?signature=${encodeURIComponent(this.signature)}`)
+        fetch('/api/events/sessions', { signal }),
+        fetch(`/api/events/sessions/users/${this.userId}?signature=${encodeURIComponent(this.signature)}`, { signal })
       ]);
 
       clearTimeout(timeout);
@@ -202,11 +222,15 @@ class SessionRegistration extends HTMLElement {
       this.sessions = await sessionsResponse.json();
       this.userRegistration = await registrationResponse.json();
     } catch (error) {
-      clearTimeout(timeout);
-      this.errorMessage = error.message;
+      if (error.name !== 'AbortError') {
+        clearTimeout(timeout);
+        this.errorMessage = error.message;
+      }
     } finally {
-      this.isLoading = false;
-      this.render();
+      if (!signal.aborted) {
+        this.isLoading = false;
+        this.render();
+      }
     }
   }
 
