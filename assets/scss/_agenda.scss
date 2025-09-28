@@ -466,6 +466,7 @@
   .#{$location},
   .#{$location}-session {
     --location-color: #{$color};
+    --location-color-rgb: #{red($color)}, #{green($color)}, #{blue($color)};
     --location-bg: white; // Explicitly set background to white for sessions
     --location-border: #{rgba($color, 0.3)}; // Border uses the base color with opacity
     --location-text-color: #212529;

@@ -26,18 +26,20 @@ export async function onRequest({ request, env }) {
     // Fetch all registrations once
     const allRegistrations = await getAllSessionRegistrations(db);
 
+    // Create a lookup map for session rooms
+    const sessionToRoomMap = new Map(allSessions.map(s => [`${s.title}|${s.timeSlot}`, s.room]));
+
     // Process all registrations to populate roomRegistrations
     allRegistrations.forEach(registration => {
-        // Find the corresponding session to get its room
-        const session = allSessions.find(s => s.title === registration.session_title && s.timeSlot === registration.time_slot);
-        if (session) {
+        const room = sessionToRoomMap.get(`${registration.session_title}|${registration.time_slot}`);
+        if (room) {
             const targetTimeSlot = roomRegistrations[registration.time_slot];
             if (targetTimeSlot) {
-                const targetRoomAttendees = targetTimeSlot[session.room];
+                const targetRoomAttendees = targetTimeSlot[room];
                 if (targetRoomAttendees) {
                     targetRoomAttendees.push(registration.user_id);
                 } else {
-                    console.warn(`Registration found for unknown room within ${registration.time_slot}: ${session.room}`);
+                    console.warn(`Registration found for unknown room within ${registration.time_slot}: ${room}`);
                 }
             } else {
                 console.warn(`Registration found for unknown timeSlot: ${registration.time_slot}`);

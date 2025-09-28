@@ -56,7 +56,7 @@ export function getSessions(eventData) {
       let timeSlot = '';
       if (item.time) {
         const hour = parseInt(item.time.split(':')[0], 10);
-        if (hour < 12) {
+        if (hour < 13) {
           timeSlot = 'morning';
         } else {
           timeSlot = 'afternoon';
@@ -79,13 +79,24 @@ export function getSessions(eventData) {
                 website: speakerData.website
               } : { name: speakerName };
             });
-            sessions.push({ title: session.title, room, timeSlot, speakers: enhancedSpeakers, abstract: session.description || '' });
+            sessions.push({ id: slugify(session.title), title: session.title, room, timeSlot, speakers: enhancedSpeakers, abstract: session.description || '' });
           }
         });
       }
     });
   }
   return sessions;
+}
+
+function slugify(text) {
+  return text
+    .normalize('NFD') // Normalize to decompose accents
+    .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-');
 }
 
 // Function to get registrations for a specific session from the D1 database.

@@ -1,5 +1,5 @@
 
-import { getEventData, getSessions, getAvailability, verifySignedUserId, updateRegistration } from '../../../utils';
+import { getEventData, getSessions, getAvailability, verifySignedUserId } from '../../../utils';
 
 export async function onRequest({ request, env, params }) {
     const url = new URL(request.url);

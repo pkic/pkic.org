@@ -436,17 +436,6 @@ self-assessment {
   --pkimm-sticky-top-offset: 56px;
 }
 
-// All Location-specific styles (now unified as single colors)
-@each $location, $color in $all-pkic-locations-colors {
-  .#{$location},
-  .#{$location}-session {
-    --location-color: #{$color};
-    --location-color-rgb: #{red($color)}, #{green($color)}, #{blue($color)};
-    --location-bg: white; // Explicitly set background to white for sessions
-    --location-border: #{rgba($color, 0.3)}; // Border uses the base color with opacity
-  }
-}
-
 @import "agenda";
 @import "sponsors";
 @import "session-registration";
