@@ -117,19 +117,6 @@ export async function getAllSessionRegistrations(db) {
     return results;
 }
 
-// Function to update a session registration in the D1 database.
-export async function updateRegistration(db, userId, sessionTitle, timeSlot, isRegistering) {
-    if (isRegistering) {
-        return await db.prepare("INSERT OR IGNORE INTO registrations (user_id, session_title, time_slot) VALUES (?, ?, ?)")
-            .bind(userId, sessionTitle, timeSlot)
-            .run();
-    } else {
-        return await db.prepare("DELETE FROM registrations WHERE user_id = ? AND session_title = ?")
-            .bind(userId, sessionTitle)
-            .run();
-    }
-}
-
 // Function to check session availability.
 export async function getAvailability(db, allSessions, env) {
   const roomCapacities = getRoomCapacitiesFromEnv(env);
