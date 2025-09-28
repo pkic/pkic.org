@@ -5,7 +5,7 @@ title: Session Registration - Post-Quantum Cryptography Conference - October 28 
 summary:
 
 params:
-  heroTitle: Workshop/Rountable Registration - PQC Conference
+  heroTitle: Workshop/Roundtable Registration - PQC Conference
   heroDescription: October 28 - 30, 2025 - Kuala Lumpur, Malaysia | Online
 
   heroButton: 
