@@ -35,9 +35,11 @@
               
           document.getElementById("role").required = false;
           document.getElementById("organization").required = false;
+          document.getElementById("aboutorganization").required = false;
         } else {
           document.getElementById("role").required = true;
           document.getElementById("organization").required = true;
+          document.getElementById("aboutorganization").required = true;
         }
       }
       matches.forEach(match => {
