@@ -34,7 +34,10 @@ export async function onRequest({ request, env, params }) {
         }, { morningSession: null, afternoonSession: null });
 
         return new Response(JSON.stringify(data), {
-            headers: { 'Content-Type': 'application/json' },
+            headers: { 
+                'Content-Type': 'application/json',
+                'Cache-Control': 'max-age=15',
+            },
         });
     }
 
