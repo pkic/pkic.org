@@ -77,11 +77,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 chevronIcon.style.transform = 'rotate(180deg)';
                 
                 // Hide sidebar after animation completes
-                setTimeout(() => {
+                sidebarMenu.addEventListener('transitionend', () => {
                     sidebarMenu.style.display = 'none';
                     sidebarMenu.classList.add('d-none');
                     sidebarMenu.classList.remove('d-md-block');
-                }, 300);
+                }, { once: true });
             }
         });
     }
