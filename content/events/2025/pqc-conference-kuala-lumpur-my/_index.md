@@ -824,6 +824,10 @@ data:
           - title: "Government & Regulatory Approaches to PQC: From Policy to Implementation"
             description: |
               _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
+              
+              ___
+
+              _This session is held under Chatham House Rules._
 
               **_Draft Agenda_**
 
@@ -872,6 +876,10 @@ data:
           - title: "Securing the Healthcare Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
               _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
+
+              ___
+
+              _This session is held under Chatham House Rules._
       
               **_Draft Agenda_**
 
@@ -1078,6 +1086,10 @@ data:
             description: |
               _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
 
+              ___
+
+              _This session is held under Chatham House Rules._
+
               **Welcome (20 min)**
 
               * Frame the discussion (Aligning standards, strategy, and compliance)
@@ -1125,7 +1137,7 @@ data:
 
               ___
 
-              _This session is held under Chatham House Rules and only accessible for attendees in the financial industry._
+              _This session is held under Chatham House Rules._
 
               **_Draft Agenda_**
 
@@ -1828,23 +1840,18 @@ This premier three-day event begins with hands-on workshops, followed by two day
 
 ## Sponsors
 
-We are immensely grateful to our sponsors:
+We are immensely grateful to our [sponsors](/sponsors/):
 
 {{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" >}}
-
-#### Become a Sponsor
-
-**Interested in sponsoring the Post-Quantum Cryptography Conference?** For detailed information about sponsorship opportunities, please [contact us](/sponsors/sponsor/). You can also [download the sponsorship brochure](pqc-conference-kl-sponsors.pdf) for a comprehensive overview and pricing of our sponsorship packages.
-
-{{< button link="pqc-conference-kl-sponsors.pdf" target="_blank" label="Explore our sponsorship opportunities" type="outline-success" >}}  
 
 ## Agenda
 
 The conference features a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees can look forward to keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers are not permitted to promote products or services during presentations.
 
-> Please note that this is a **preliminary agenda** and is subject to change. Final details, including topics, abstracts, speakers, panels, workshops and time slots, will be updated here in the coming weeks and months, with **more speakers and panels to be announced**.  
-> {{< button link="/call" target="_blank" label="Call for Abstracts - Submit a proposal for a talk, panel discussion, or workshop" type="outline-danger" >}}  
-{.callout-warning}
+**Please note that:**
+
+* **Workshops** and **Roundtables** on **Tuesday** are designed for those attending in person.
+* The **Conference** on **Wednesday** and **Thursday** is available to join in person, remotely, or on-demand.
 
 {{< agenda "agenda" >}}
 
