@@ -647,6 +647,27 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/zygmuntlozinski/
 
+    - name: Jerome Chavanel Bidard
+      title: Director of Product Marketing & Sales Enablement at Cryptomathic
+      bio: |
+        Jerome is Cryptomathic’s Director of Product Marketing & Sales Enablement, working across all product lines. He ensures that Cryptomathic’s products are developed to the highest standard in line with the company’s strategy, whilst striving to solve our customer’s pain points, and establishing Cryptomathic’s position at the heart of security innovations.
+
+        He brings 20 years of experience in securing payments, assets or data across a variety of industries to the Cryptomathic team. Through his diversified background, he works with the Cryptomathic Product Management team to extract the most out of the company’s technological assets and to provide sharp and efficient answers to the industry’s challenges in cybersecurity and regulatory compliance. 
+      website: https://www.cryptomathic.com/jerome-chavanel-bidard
+      social:
+        linkedin: https://www.linkedin.com/in/jerome-chavanel/
+
+    - name: Matt Rose
+      title: Manager Sales Engineer North America at Entrust
+      bio: |
+        Matt Rose leads the Technical Sales Consulting team within Entrust’s Cryptographic Data Security (CDS) division, supporting Federal, Commercial, and strategic accounts across North America. With a focus on collaboration, innovation, and measurable impact, Matt empowers his team to deliver trusted solutions that address today’s complex cybersecurity challenges.
+
+        His team specializes in the Entrust Cryptographic Security Platform, a unified solution for enterprise-scale encryption, key management, hardware security modules (HSMs), and Public Key Infrastructure (PKI). Under Matt’s leadership, the team helps organizations secure digital identities, protect sensitive data, and meet evolving compliance and post-quantum readiness requirements.
+
+        Driven by a forward-thinking mindset, Matt is committed to shaping a resilient digital future through strategic engagement and technical excellence.
+      social:
+        linkedin: https://www.linkedin.com/in/rosematt/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -787,7 +808,7 @@ data:
               **Module 5: A Unified PQC Migration Lab**
 
               * Putting It All Together: This final module would be a capstone demonstration showing a single, integrated use case that combines all three vendor solutions.
-              *  **Use Case: A PQC-Ready Code Signing Pipeline:**
+              * **Use Case: A PQC-Ready Code Signing Pipeline:**
                   * A new PQC code signing key is generated and protected by a Thales HSM.
                   * Cyberark's platform automatically manages the lifecycle of the code signing certificate associated with that key.
                   * Ascertia's digital signature technology is used to apply a PQC-enabled signature to a software package.
@@ -1002,17 +1023,54 @@ data:
               - room_4
             track: Workshop
 
-          - title: To be announced shortly 
-            description: This workshop will be announced shortly
+          - title: "Future-Proofing Cloud Signatures: CSC as the Interoperable Bridge to PQC"
+            description: |
+              The migration to post-quantum cryptography (PQC) is not just a cryptographic upgrade, it is a fundamental shift in how digital trust is implemented across enterprises, identity ecosystems, and service providers. Cloud signatures today operate in a distributed environment where interoperability, compliance, and user experience are critical. For enterprises, the challenge is clear: how to adopt PQC without breaking existing workflows, integrations, and long-term validation strategies.
+
+              The Cloud Signature Consortium (CSC) provides a practical answer. Its open API framework enables all participants (enterprises, identity providers, integrators, and trust services) to adopt PQC progressively, without vendor lock-in or disruptive redesigns. CSC’s reference architecture supports hybrid and composite certificate models, ensuring crypto-agility and future-proofing digital trust services.
+
+              **What You Will Do in This Workshop**
+
+              This is a hands-on, discussion-driven session designed for technical and strategic stakeholders. Participants will:
+
+              * **Experience PQC in Action**: Use your own laptop to generate and apply a hybrid signature (classical + PQC) through a CSC-compliant API. See how PQC algorithms affect signature size, performance, and interoperability in real time.  
+              * **Analyze Real-World Challenges**: Explore the impact of PQC on signature size, bandwidth, and transaction speed, and discuss strategies for optimizing performance in enterprise and cloud environments.  
+              * **Design for Long-Term Validation**: Work through scenarios on how to ensure signatures remain verifiable for decades, considering timestamping, archival, and evolving standards like ETSI, eIDAS 2.0, and NIS2.  
+              * **Collaborate on Migration Strategies**: Map out how CSC’s open framework can help your organization integrate PQC without disrupting identity flows, compliance, or user experience.  
+
+              **What You’ll Need**
+
+              * A laptop with a modern browser (for hands-on signing exercises)
+              * Basic understanding of digital signatures and PKI concepts (no deep cryptography expertise required)
+
+              **What You’ll Learn**
+
+              * How CSC enables interoperability and crypto agility for PQC migration
+              * The technical trade-offs of PQC algorithms: size, performance, and scalability
+              * How to design future-proof validation and compliance strategies
+              * Practical steps to prepare your enterprise for PQC adoption
             speakers: 
-              - TBD
+              - Jerome Chavanel Bidard
             locations:
               - room_5
 
-          - title: To be announced shortly 
-            description: This workshop will be announced shortly
+          - title: "Building Quantum-Safe Trust: A Hands-On Workshop with Entrust"
+            description: |
+              Moving to post-quantum cryptography isn’t just about swapping algorithms - it’s about evolving the entire trust infrastructure. In this interactive workshop, you’ll learn how to build a quantum-ready environment from the ground up using Entrust’s PQ Secure Solutions. From policy and compliance to PKI and HSM operations, participants will experience the full migration lifecycle in one setting.
+
+              **Participants will:**
+
+              * Explore migration strategies, including pure ML-DSA and composite approaches, and when to use each.
+              * Set up PQC-enabled PKI environments and replace RSA certificates with ML-DSA certificates on a live web server.
+              * Generate and manage PQC keys within an Entrust HSM, then sign documents and transactions with quantum-safe assurance.
+              * Use Compliance Manager to inventory crypto assets, monitor adoption, and demonstrate policy alignment.
+              * Benchmark PQC performance (e.g., ML-DSA signing throughput) in a real environment.
+
+              This workshop provides a rare opportunity to gain hands-on experience with the cryptographic foundation for a quantum-safe future - PKI, HSM, and compliance - all in one platform. You’ll leave with practical knowledge and tools to start your organization’s PQC migration today.
             speakers: 
-              - TBD
+              - Giuseppe Damiano
+              - Matt Rose
+              - Greg Wetmore
             locations:
               - room_6
 
@@ -1076,7 +1134,7 @@ data:
               * Setting the stage: Status of PQC in the financial sector
               * Objectives of the discussion
 
-              **Collaboration initiatives and overview of latest recommendations**            
+              **Collaboration initiatives and overview of latest recommendations**           
 
               * Summary of workgroups in the financial sectors and their activities
               * Recommendations and timelines published. How they influence the financial sector.
