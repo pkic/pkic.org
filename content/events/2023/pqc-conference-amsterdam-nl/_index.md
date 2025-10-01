@@ -1105,7 +1105,7 @@ Are you interested in sponsoring the next Post-Quantum Cryptography Conference? 
 
 The presentations can be downloaded by clicking on the session titles. The recordings are embedded below and can also be accessed via the PKI Consortium’s [YouTube channel](https://www.youtube.com/@PKIConsortium).
 
-{{< agenda "agenda" >}}
+{{< agenda >}}
 
 This conference would not be possible without the organizational support of the Post-Quantum Cryptography Working Group and in particular the following organizations:
 

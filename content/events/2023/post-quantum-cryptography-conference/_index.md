@@ -252,7 +252,7 @@ Would you like to sponsor the Post-Quantum PKI conference? Please contact us [us
 
 Below you can find the agenda, slides and recordings.
 
-{{< agenda "agenda" >}}
+{{< agenda >}}
 
 Speakers are prohibited to promote their products or services at this conference.  
 

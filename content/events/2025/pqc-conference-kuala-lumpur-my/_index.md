@@ -32,7 +32,6 @@ params:
 
 data:
   name: Post-Quantum Cryptography Conference
-  draft: true
   timezone: Asia/Kuala_Lumpur
 
   # Locations with sessions in parallel -----------------------------------------
@@ -1853,7 +1852,7 @@ The conference features a balanced program with strategic, informational, and ed
 * **Workshops** and **Roundtables** on **Tuesday** are designed for those attending in person.
 * The **Conference** on **Wednesday** and **Thursday** is available to join in person, remotely, or on-demand.
 
-{{< agenda "agenda" >}}
+{{< agenda default="2025-10-29" >}}
 
 {{< sponsors sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="Leader" height="20" max-width="60" >}}
 
