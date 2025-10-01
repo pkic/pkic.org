@@ -34,9 +34,7 @@ tags:
 title: Leading Certificate Authorities and Microsoft Introduce New Standards to Protect Consumers Online
 
 ---
-<h3 style="text-align: center; margin-bottom: 1em;">
-  The CASC’s Minimum Requirements for Code Signing Certificates enables a common vetting process for all CAs
-</h3>
+## The CASC’s Minimum Requirements for Code Signing Certificates enables a common vetting process for all CAs
 
 **San Francisco –December 8, 2016 –** the Certificate Authority Security Council (CASC), an advocacy group committed to the advancement web security, today announced the Code Signing Working Group has released new Minimum Requirements for Code Signing for use by all Certificate Authorities (CA). These requirements represent the first-ever standardized code signing guidelines. Code signing is the method of using a certificate-based digital signature to sign executables and scripts in order to verify the author’s identity and ensure that the code has not been changed or corrupted. Helping to verify software authenticity and avoid downloading malware and other malicious software is critical to protecting consumers’ online interactions. Microsoft is the first applications software vendor to adopt these guidelines, with others expected to follow.
 
@@ -75,13 +73,13 @@ Microsoft will require CAs that issue code signing certificates for Windows plat
 
 The Certificate Authority Security Council is comprised of leading global Certificate Authorities that are committed to the exploration and promotion of best practices that advance trusted SSL deployment and CA operations as well as the security of the internet in general. While not a standards-setting organization, the CASC works collaboratively to improve understanding of critical policies and their potential impact on the internet infrastructure. More information is available at [https://casecurity.org][10].
 
- [1]: https://www.netmarketshare.com/operating-system-market-share.aspx?qprid=10&qpcustomd=0
- [2]: /uploads/2016/12/Code-Signing-Endorsement.pdf
- [3]: /uploads/2016/12/CASC-Code-Signing.pdf
- [4]: http://bit.ly/X3x9XB
- [5]: http://linkd.in/VSTWdR
- [6]: http://slidesha.re/Ye2dFf
- [7]: http://bit.ly/XE3xRS
- [8]: http://bit.ly/YXYhcP
- [9]: http://bit.ly/VQCIZc
- [10]: https://casecurity.org/
+[1]: https://www.netmarketshare.com/operating-system-market-share.aspx?qprid=10&qpcustomd=0
+[2]: /uploads/2016/12/Code-Signing-Endorsement.pdf
+[3]: /uploads/2016/12/CASC-Code-Signing.pdf
+[4]: http://bit.ly/X3x9XB
+[5]: http://linkd.in/VSTWdR
+[6]: http://slidesha.re/Ye2dFf
+[7]: http://bit.ly/XE3xRS
+[8]: http://bit.ly/YXYhcP
+[9]: http://bit.ly/VQCIZc
+[10]: https://casecurity.org/

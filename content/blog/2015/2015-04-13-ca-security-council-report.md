@@ -26,9 +26,8 @@ aliases:
  - /2015/04/13/ca-security-council-report/
 
 ---
-<h3 style="text-align: center; margin-bottom: 1em;">
-  Only 2 Percent Proceed Past “Untrusted Connection” Message
-</h3>
+
+##  Only 2 Percent Proceed Past “Untrusted Connection” Message
 
 **San Francisco – April 13, 2015 –** The CA Security Council (CASC), an advocacy group committed to the advancement of the security of websites and online transactions, today released its [2015 Consumer Trust Survey][1] which found that validation matters.  While consumers are confused about some aspects of security, they recognize and trust the security that SSL brings to e-commerce sites.  Fifty-three percent of respondents identify the padlock as adding confidence in an e-commerce site, with 42 percent associating the green bar and organization name in the URL with greater safety.
 
@@ -84,21 +83,19 @@ For this report, the CASC commissioned Survata Consumer Research to survey U.S. 
 The CA Security Council (CASC) is comprised of leading global Certificate Authorities that are committed to the exploration and promotion of best practices that advance trusted SSL deployment and CA operations as well as the security of the internet in general. While not a standards-setting organization, the CASC works collaboratively to improve understanding of critical policies and their potential impact on the internet infrastructure. More information is available at [https://casecurity.org][9].
 
 ## Media Contact
+
 Sherri Walkenhorst  
 Connect Marketing  
 (801) 373-7888  
 <sherriw@connectmarketing.com>
 
 
-  ###
-
-
- [1]: http://bit.ly/1I0wC0S
- [2]: http://twitter.com/intent/tweet?text=Study+says+consumers+confused+about+security+but+trust+padlock+%26+green+bar+when+shopping+online:+bit.ly/1I0wC0S
- [3]: http://bit.ly/X3x9XB
- [4]: http://linkd.in/VSTWdR
- [5]: http://slidesha.re/Ye2dFf
- [6]: http://bit.ly/XE3xRS
- [7]: http://bit.ly/YXYhcP
- [8]: http://bit.ly/VQCIZc
- [9]: https://casecurity.org/
+[1]: http://bit.ly/1I0wC0S
+[2]: http://twitter.com/intent/tweet?text=Study+says+consumers+confused+about+security+but+trust+padlock+%26+green+bar+when+shopping+online:+bit.ly/1I0wC0S
+[3]: http://bit.ly/X3x9XB
+[4]: http://linkd.in/VSTWdR
+[5]: http://slidesha.re/Ye2dFf
+[6]: http://bit.ly/XE3xRS
+[7]: http://bit.ly/YXYhcP
+[8]: http://bit.ly/VQCIZc
+[9]: https://casecurity.org/
