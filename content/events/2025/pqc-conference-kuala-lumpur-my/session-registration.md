@@ -10,7 +10,7 @@ params:
 
   heroButton: 
     label: Check the full Agenda
-    link: ../#agenda
+    link: ../#nav-tuesday
 
 robots: noindex
 ---
