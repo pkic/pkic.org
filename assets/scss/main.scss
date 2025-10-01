@@ -448,6 +448,14 @@ main h4 {
   }
 }
 
+#sidebarToggle svg {
+  transition: transform 0.3s ease-in-out;
+}
+
+#sidebar-toggle-button {
+   background: var(--bs-light);
+}
+
 self-assessment {
   --pkimm-sticky-top-offset: 56px;
 }

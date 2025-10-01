@@ -35,6 +35,10 @@ document.addEventListener('DOMContentLoaded', function() {
         const chevronIcon = sidebarToggle.querySelector('svg');
         chevronIcon.style.transition = 'transform 0.3s ease-in-out';
         
+        // Track user preference for sidebar state
+        let userPreference = null; // null = no user preference set yet
+        let isResizing = false;
+        
         // Initialize sidebar state based on current visibility
         // Check if sidebar is currently visible (not d-none and not display:none)
         const isCurrentlyVisible = !sidebarMenu.classList.contains('d-none') && 
@@ -51,38 +55,81 @@ document.addEventListener('DOMContentLoaded', function() {
             chevronIcon.style.transform = 'rotate(180deg)';
         }
         
+        // Function to hide sidebar (used by both click and resize handlers)
+        function hideSidebar() {
+            sidebarMenu.classList.remove('show');
+            
+            // Expand content to full width (12 columns)
+            content.classList.remove('col-md-7', 'ms-sm-auto', 'col-lg-8');
+            content.classList.add('col-11');
+            
+            // Rotate chevron to right (indicating sidebar is closed, can open)
+            chevronIcon.style.transform = 'rotate(180deg)';
+            
+            // Hide sidebar after animation completes
+            sidebarMenu.addEventListener('transitionend', () => {
+                sidebarMenu.style.display = 'none';
+                sidebarMenu.classList.add('d-none');
+                sidebarMenu.classList.remove('d-md-block');
+            }, { once: true });
+        }
+
+        // Function to show sidebar
+        function showSidebar() {
+            sidebarMenu.style.display = 'block';
+            sidebarMenu.classList.remove('d-none');
+            sidebarMenu.classList.add('d-md-block', 'show');
+            
+            // Adjust content to normal width (7/8 columns)
+            content.classList.remove('col-11');
+            content.classList.add('col-md-7', 'ms-sm-auto', 'col-lg-8');
+            
+            // Rotate chevron to left (indicating sidebar is open, can close)
+            chevronIcon.style.transform = 'rotate(0deg)';
+        }
+
         sidebarToggle.addEventListener('click', function() {
+            // User is manually toggling - record their preference
+            userPreference = !sidebarMenu.classList.contains('show');
+            
             // Toggle the sidebar visibility
             if (!sidebarMenu.classList.contains('show')) {
-                // Show sidebar
-                sidebarMenu.style.display = 'block';
-                sidebarMenu.classList.remove('d-none');
-                sidebarMenu.classList.add('d-md-block', 'show');
-                
-                // Adjust content to normal width (8/9 columns)
-                content.classList.remove('col-12');
-                content.classList.add('col-md-8', 'ms-sm-auto', 'col-lg-9');
-                
-                // Rotate chevron to left (indicating sidebar is open, can close)
-                chevronIcon.style.transform = 'rotate(0deg)';
+                showSidebar();
             } else {
-                // Hide sidebar
-                sidebarMenu.classList.remove('show');
-                
-                // Expand content to full width (12 columns)
-                content.classList.remove('col-md-8', 'ms-sm-auto', 'col-lg-9');
-                content.classList.add('col-12');
-                
-                // Rotate chevron to right (indicating sidebar is closed, can open)
-                chevronIcon.style.transform = 'rotate(180deg)';
-                
-                // Hide sidebar after animation completes
-                sidebarMenu.addEventListener('transitionend', () => {
-                    sidebarMenu.style.display = 'none';
-                    sidebarMenu.classList.add('d-none');
-                    sidebarMenu.classList.remove('d-md-block');
-                }, { once: true });
+                hideSidebar();
             }
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', function() {
+            isResizing = true;
+            
+            // Check if we're below the lg breakpoint (992px)
+            if (window.innerWidth < 992) {
+                // Window getting smaller - always hide sidebar
+                if (sidebarMenu.classList.contains('show')) {
+                    hideSidebar();
+                }
+            } else {
+                // Window getting bigger - respect user preference
+                if (userPreference === null) {
+                    // User hasn't made a choice - show sidebar on larger screens
+                    if (!sidebarMenu.classList.contains('show')) {
+                        showSidebar();
+                    }
+                } else if (userPreference === true) {
+                    // User chose to show - restore it
+                    if (!sidebarMenu.classList.contains('show')) {
+                        showSidebar();
+                    }
+                }
+                // If userPreference === false, keep it hidden (user chose to collapse)
+            }
+            
+            // Reset resize flag after a short delay
+            setTimeout(() => {
+                isResizing = false;
+            }, 100);
         });
     }
 });
