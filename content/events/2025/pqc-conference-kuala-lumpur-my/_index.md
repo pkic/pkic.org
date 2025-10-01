@@ -668,6 +668,19 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/rosematt/
 
+    - name: Shaun Chen
+      title: VP APJ Strategic Account Sales Engineering at Thales
+      bio: |
+        Shaun Chen is a cybersecurity and sales engineering leader with over 15 years of experience helping organizations across APAC secure their digital transformation at scale. Combining deep technical expertise with business-driven outcomes, he specializes in cloud and DevSecOps security, risk management, and high-assurance architectures.
+
+        Certified in CCSP and CISSP, Shaun has built and led high-performing pre-sales teams that translate complex security challenges into trusted, compliant solutions—accelerating growth while strengthening resilience.
+
+        His current focus areas include AI security, post-quantum cryptography agility, and sovereignty-aware cloud designs. Shaun works closely with CISOs, regulators, and technology leaders to navigate the evolving threat landscape and adopt emerging innovations with clarity and confidence.
+
+        Passionate about coaching teams and shaping go-to-market strategies, Shaun stays energized by continuous learning—particularly in GenAI, Zero Trust, and next-generation cryptography.
+      social:
+        linkedin: https://www.linkedin.com/in/shaun-chen-ccsp-cissp-30b43ba/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -821,30 +834,6 @@ data:
             locations:
               - room_6
 
-          - title: "Implementing Post-Quantum Cryptography with HSMs: Show & Tell"
-            description: |
-              Implementing post-quantum cryptography shouldn’t feel like a leap into the unknown. In this workshop, you’ll see how Luna HSM enables a smooth transition to PQC through hands-on exercises and real-world scenarios. Together, we’ll explore why crypto agility matters, how to generate and manage PQC and hybrid keys, and what it takes to integrate with PKI, code signing, and key lifecycle management systems. By the end, you’ll understand not just that it works, but how and why it works.
-
-              The transition to post-quantum cryptography (PQC) is one of the most significant challenges facing security architects and PKI professionals today. It’s not just about adopting new algorithms, it’s about ensuring interoperability, crypto agility, and operational resilience in real-world environments.
-
-              This workshop offers a practical, interactive experience where participants will explore how hardware security modules (HSMs) can simplify and secure the PQC migration journey. Through live demonstrations and guided exercises, attendees will learn:
-
-              * How to generate and manage PQC and hybrid keys inside an HSM (Shaun Chen, Thales)
-              * Best practices for integrating PQC into PKI, code signing, and key lifecycle management systems (Chris Hickman, Keyfactor)
-              * Using standard APIs (PKCS#11, KMIP, JCE) for seamless application compatibility
-              * Secure backup, restore, and key wrapping for PQC keys in compliance with emerging standards
-
-              Rather than just telling you “it works”, this session shows you how and why it works. Giving you the confidence to start prototyping PQC-enabled solutions today.
-
-              ___
-
-              _This workshop will be presentation, demo, and open discussion in format._
-            speakers:
-              - Blair Canavan
-            locations:
-              - room_7
-            track: Workshop
-
           - title: "Government & Regulatory Approaches to PQC: From Policy to Implementation"
             description: |
               _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
@@ -961,7 +950,6 @@ data:
               - room_4
               - room_5
               - room_6
-              - room_7
               - room_8
               - room_9
 
@@ -1107,6 +1095,31 @@ data:
             locations:
               - room_6
 
+          - title: "Implementing Post-Quantum Cryptography with HSMs: Show & Tell"
+            description: |
+              Implementing post-quantum cryptography shouldn’t feel like a leap into the unknown. In this workshop, you’ll see how Luna HSM enables a smooth transition to PQC through hands-on exercises and real-world scenarios. Together, we’ll explore why crypto agility matters, how to generate and manage PQC and hybrid keys, and what it takes to integrate with PKI, code signing, and key lifecycle management systems. By the end, you’ll understand not just that it works, but how and why it works.
+
+              The transition to post-quantum cryptography (PQC) is one of the most significant challenges facing security architects and PKI professionals today. It’s not just about adopting new algorithms, it’s about ensuring interoperability, crypto agility, and operational resilience in real-world environments.
+
+              This workshop offers a practical, interactive experience where participants will explore how hardware security modules (HSMs) can simplify and secure the PQC migration journey. Through live demonstrations and guided exercises, attendees will learn:
+
+              * How to generate and manage PQC and hybrid keys inside an HSM (Shaun Chen, Thales)
+              * Best practices for integrating PQC into PKI, code signing, and key lifecycle management systems (Chris Hickman, Keyfactor)
+              * Using standard APIs (PKCS#11, KMIP, JCE) for seamless application compatibility
+              * Secure backup, restore, and key wrapping for PQC keys in compliance with emerging standards
+
+              Rather than just telling you “it works”, this session shows you how and why it works. Giving you the confidence to start prototyping PQC-enabled solutions today.
+
+              ___
+
+              _This workshop will be presentation, demo, and open discussion in format._
+            speakers:
+              - Shaun Chen
+              - Chris Hickman
+            locations:
+              - room_7
+            track: Workshop
+
           - title: "Securing the Telecommunication Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
               _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
@@ -1221,6 +1234,7 @@ data:
               - room_4
               - room_5
               - room_6
+              - room_7
               - room_8
               - room_9
 
