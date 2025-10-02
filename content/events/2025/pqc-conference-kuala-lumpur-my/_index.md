@@ -32,7 +32,6 @@ params:
 
 data:
   name: Post-Quantum Cryptography Conference
-  draft: true
   timezone: Asia/Kuala_Lumpur
 
   # Locations with sessions in parallel -----------------------------------------
@@ -647,6 +646,30 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/zygmuntlozinski/
 
+    - name: Matt Rose
+      title: Manager Sales Engineer North America at Entrust
+      bio: |
+        Matt Rose leads the Technical Sales Consulting team within Entrust’s Cryptographic Data Security (CDS) division, supporting Federal, Commercial, and strategic accounts across North America. With a focus on collaboration, innovation, and measurable impact, Matt empowers his team to deliver trusted solutions that address today’s complex cybersecurity challenges.
+
+        His team specializes in the Entrust Cryptographic Security Platform, a unified solution for enterprise-scale encryption, key management, hardware security modules (HSMs), and Public Key Infrastructure (PKI). Under Matt’s leadership, the team helps organizations secure digital identities, protect sensitive data, and meet evolving compliance and post-quantum readiness requirements.
+
+        Driven by a forward-thinking mindset, Matt is committed to shaping a resilient digital future through strategic engagement and technical excellence.
+      social:
+        linkedin: https://www.linkedin.com/in/rosematt/
+
+    - name: Shaun Chen
+      title: VP APJ Strategic Account Sales Engineering at Thales
+      bio: |
+        Shaun Chen is a cybersecurity and sales engineering leader with over 15 years of experience helping organizations across APAC secure their digital transformation at scale. Combining deep technical expertise with business-driven outcomes, he specializes in cloud and DevSecOps security, risk management, and high-assurance architectures.
+
+        Certified in CCSP and CISSP, Shaun has built and led high-performing pre-sales teams that translate complex security challenges into trusted, compliant solutions—accelerating growth while strengthening resilience.
+
+        His current focus areas include AI security, post-quantum cryptography agility, and sovereignty-aware cloud designs. Shaun works closely with CISOs, regulators, and technology leaders to navigate the evolving threat landscape and adopt emerging innovations with clarity and confidence.
+
+        Passionate about coaching teams and shaping go-to-market strategies, Shaun stays energized by continuous learning—particularly in GenAI, Zero Trust, and next-generation cryptography.
+      social:
+        linkedin: https://www.linkedin.com/in/shaun-chen-ccsp-cissp-30b43ba/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -787,7 +810,7 @@ data:
               **Module 5: A Unified PQC Migration Lab**
 
               * Putting It All Together: This final module would be a capstone demonstration showing a single, integrated use case that combines all three vendor solutions.
-              *  **Use Case: A PQC-Ready Code Signing Pipeline:**
+              * **Use Case: A PQC-Ready Code Signing Pipeline:**
                   * A new PQC code signing key is generated and protected by a Thales HSM.
                   * Cyberark's platform automatically manages the lifecycle of the code signing certificate associated with that key.
                   * Ascertia's digital signature technology is used to apply a PQC-enabled signature to a software package.
@@ -803,6 +826,10 @@ data:
           - title: "Government & Regulatory Approaches to PQC: From Policy to Implementation"
             description: |
               _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
+              
+              ___
+
+              _This session is held under Chatham House Rules._
 
               **_Draft Agenda_**
 
@@ -851,6 +878,10 @@ data:
           - title: "Securing the Healthcare Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
               _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
+
+              ___
+
+              _This session is held under Chatham House Rules._
       
               **_Draft Agenda_**
 
@@ -1002,23 +1033,58 @@ data:
               - room_4
             track: Workshop
 
-          - title: To be announced shortly 
-            description: This workshop will be announced shortly
-            speakers: 
-              - TBD
-            locations:
-              - room_5
+          - title: "Building Quantum-Safe Trust: A Hands-On Workshop with Entrust"
+            description: |
+              Moving to post-quantum cryptography isn’t just about swapping algorithms - it’s about evolving the entire trust infrastructure. In this interactive workshop, you’ll learn how to build a quantum-ready environment from the ground up using Entrust’s PQ Secure Solutions. From policy and compliance to PKI and HSM operations, participants will experience the full migration lifecycle in one setting.
 
-          - title: To be announced shortly 
-            description: This workshop will be announced shortly
+              **Participants will:**
+
+              * Explore migration strategies, including pure ML-DSA and composite approaches, and when to use each.
+              * Set up PQC-enabled PKI environments and replace RSA certificates with ML-DSA certificates on a live web server.
+              * Generate and manage PQC keys within an Entrust HSM, then sign documents and transactions with quantum-safe assurance.
+              * Use Compliance Manager to inventory crypto assets, monitor adoption, and demonstrate policy alignment.
+              * Benchmark PQC performance (e.g., ML-DSA signing throughput) in a real environment.
+
+              This workshop provides a rare opportunity to gain hands-on experience with the cryptographic foundation for a quantum-safe future - PKI, HSM, and compliance - all in one platform. You’ll leave with practical knowledge and tools to start your organization’s PQC migration today.
             speakers: 
-              - TBD
+              - Giuseppe Damiano
+              - Matt Rose
+              - Greg Wetmore
             locations:
               - room_6
+
+          - title: "Implementing Post-Quantum Cryptography with HSMs: Show & Tell"
+            description: |
+              Implementing post-quantum cryptography shouldn’t feel like a leap into the unknown. In this workshop, you’ll see how Luna HSM enables a smooth transition to PQC through hands-on exercises and real-world scenarios. Together, we’ll explore why crypto agility matters, how to generate and manage PQC and hybrid keys, and what it takes to integrate with PKI, code signing, and key lifecycle management systems. By the end, you’ll understand not just that it works, but how and why it works.
+
+              The transition to post-quantum cryptography (PQC) is one of the most significant challenges facing security architects and PKI professionals today. It’s not just about adopting new algorithms, it’s about ensuring interoperability, crypto agility, and operational resilience in real-world environments.
+
+              This workshop offers a practical, interactive experience where participants will explore how hardware security modules (HSMs) can simplify and secure the PQC migration journey. Through live demonstrations and guided exercises, attendees will learn:
+
+              * How to generate and manage PQC and hybrid keys inside an HSM (Shaun Chen, Thales)
+              * Best practices for integrating PQC into PKI, code signing, and key lifecycle management systems (Chris Hickman, Keyfactor)
+              * Using standard APIs (PKCS#11, KMIP, JCE) for seamless application compatibility
+              * Secure backup, restore, and key wrapping for PQC keys in compliance with emerging standards
+
+              Rather than just telling you “it works”, this session shows you how and why it works. Giving you the confidence to start prototyping PQC-enabled solutions today.
+
+              ___
+
+              _This workshop will be presentation, demo, and open discussion in format._
+            speakers:
+              - Shaun Chen
+              - Chris Hickman
+            locations:
+              - room_5
+            track: Workshop
 
           - title: "Securing the Telecommunication Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
               _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
+
+              ___
+
+              _This session is held under Chatham House Rules._
 
               **Welcome (20 min)**
 
@@ -1067,7 +1133,7 @@ data:
 
               ___
 
-              _This session is held under Chatham House Rules and only accessible for attendees in the financial industry._
+              _This session is held under Chatham House Rules._
 
               **_Draft Agenda_**
 
@@ -1076,7 +1142,7 @@ data:
               * Setting the stage: Status of PQC in the financial sector
               * Objectives of the discussion
 
-              **Collaboration initiatives and overview of latest recommendations**            
+              **Collaboration initiatives and overview of latest recommendations**           
 
               * Summary of workgroups in the financial sectors and their activities
               * Recommendations and timelines published. How they influence the financial sector.
@@ -1770,25 +1836,20 @@ This premier three-day event begins with hands-on workshops, followed by two day
 
 ## Sponsors
 
-We are immensely grateful to our sponsors:
+We are immensely grateful to our [sponsors](/sponsors/):
 
 {{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" >}}
-
-#### Become a Sponsor
-
-**Interested in sponsoring the Post-Quantum Cryptography Conference?** For detailed information about sponsorship opportunities, please [contact us](/sponsors/sponsor/). You can also [download the sponsorship brochure](pqc-conference-kl-sponsors.pdf) for a comprehensive overview and pricing of our sponsorship packages.
-
-{{< button link="pqc-conference-kl-sponsors.pdf" target="_blank" label="Explore our sponsorship opportunities" type="outline-success" >}}  
 
 ## Agenda
 
 The conference features a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees can look forward to keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers are not permitted to promote products or services during presentations.
 
-> Please note that this is a **preliminary agenda** and is subject to change. Final details, including topics, abstracts, speakers, panels, workshops and time slots, will be updated here in the coming weeks and months, with **more speakers and panels to be announced**.  
-> {{< button link="/call" target="_blank" label="Call for Abstracts - Submit a proposal for a talk, panel discussion, or workshop" type="outline-danger" >}}  
-{.callout-warning}
+**Please note that:**
 
-{{< agenda "agenda" >}}
+* **Workshops** and **Roundtables** on **Tuesday** are designed for those attending in person.
+* The **Conference** on **Wednesday** and **Thursday** is available to join in person, remotely, or on-demand.
+
+{{< agenda default="2025-10-29" >}}
 
 {{< sponsors sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="Leader" height="20" max-width="60" >}}
 

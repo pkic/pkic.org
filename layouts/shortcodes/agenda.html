@@ -1,5 +1,21 @@
 {{- $data := partial "add-headshots.html" . -}}
 {{- with $data.agenda -}}
+    {{- $today := time.Now | time.Format "2006-01-02" -}}
+    {{- if $data.timezone -}}
+        {{- $today = (time.AsTime time.Now $data.timezone) | time.Format "2006-01-02" -}}
+    {{- end -}}
+    {{- $defaultDay := $.Get "default" -}}
+    {{- $activeDay := "" -}}
+    {{- range $day, $items := . -}}
+        {{- if eq ($day | time.Format "2006-01-02") $today -}}
+            {{- $activeDay = $day | time.Format "2006-01-02" -}}
+        {{- end -}}
+    {{- end -}}
+    {{- if not $activeDay -}}
+        {{- if $defaultDay -}}
+            {{- $activeDay = $defaultDay -}}
+        {{- end -}}
+    {{- end -}}
     <div class="position-relative" id="agenda-container">
         {{- if gt (len .) 1 -}}
         <!-- Day tabs -->
@@ -7,8 +23,10 @@
             <ul class="nav nav-tabs flex-grow-1" id="agenda-tabs" role="tablist">
                 {{- $counter := 0 -}}
                 {{- range $day, $items := . -}}
+                    {{- $dayKey := $day | time.Format "2006-01-02" -}}
+                    {{- $isActive := or (eq $dayKey $activeDay) (and (not $activeDay) (eq $counter 0)) -}}
                     <li class="nav-item" role="presentation">
-                        <button class="nav-link{{ if eq $counter 0 }} active{{ end }}" 
+                        <button class="nav-link{{ if $isActive }} active{{ end }}" 
                             id="nav-{{ $day | time.Format "Monday" | strings.ToLower }}-tab" 
                             data-bs-toggle="tab" 
                             data-bs-target="#nav-{{ $day | time.Format "Monday" | strings.ToLower }}" 
@@ -77,6 +95,7 @@
             {{- range $day, $items := . -}}
                 {{- $locations := slice -}}
                 {{- $dayKey := $day | time.Format "2006-01-02" -}}
+                {{- $isActive := or (eq $dayKey $activeDay) (and (not $activeDay) (eq $counter 0)) -}}
                 {{- if index $data.locations $dayKey -}}
                     {{- $locations = (index $data.locations $dayKey).order -}}
                 {{- else -}}
@@ -85,7 +104,7 @@
                     {{- end -}}
                 {{- end -}}
 
-                <div class="tab-pane fade{{ if eq $counter 0 }} active show{{ end }}" 
+                <div class="tab-pane fade{{ if $isActive }} active show{{ end }}" 
                      id="nav-{{ $day | time.Format "Monday" | strings.ToLower }}" role="tabpanel">
                     
                     <!-- Mobile single column view -->

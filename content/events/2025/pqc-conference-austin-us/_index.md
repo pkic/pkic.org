@@ -976,7 +976,7 @@ We are immensely grateful to our sponsors:
 
 The conference featured a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees enjoyed keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers were not permitted to promote products or services during presentations.
 
-{{< agenda "agenda" >}}
+{{< agenda >}}
 
 {{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="Leader" height="20" max-width="60" >}}
 

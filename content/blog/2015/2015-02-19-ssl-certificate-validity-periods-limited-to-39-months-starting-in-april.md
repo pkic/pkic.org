@@ -22,9 +22,6 @@ title: SSL Certificate Validity Periods Limited to 39 Months Starting in April
 
 
 ---
-<h3 style="margin-bottom: 10px;">
-  __$1__
-</h3>
 
 In accordance with the [CA/Browser Forum Baseline Requirements][1], effective April 1, 2015, Certificate Authorities (CAs) will no longer be able to issue SSL Certificates with a validity period longer than 39 months.
 
