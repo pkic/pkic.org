@@ -58,20 +58,16 @@ document.addEventListener('DOMContentLoaded', function() {
         // Function to hide sidebar (used by both click and resize handlers)
         function hideSidebar() {
             sidebarMenu.classList.remove('show');
+            sidebarMenu.style.display = 'none';
+            sidebarMenu.classList.add('d-none');
+            sidebarMenu.classList.remove('d-md-block');
             
-            // Expand content to full width (12 columns)
+            // Expand content to full width (11 columns)
             content.classList.remove('col-md-7', 'ms-sm-auto', 'col-lg-8');
             content.classList.add('col-11');
             
             // Rotate chevron to right (indicating sidebar is closed, can open)
             chevronIcon.style.transform = 'rotate(180deg)';
-            
-            // Hide sidebar after animation completes
-            sidebarMenu.addEventListener('transitionend', () => {
-                sidebarMenu.style.display = 'none';
-                sidebarMenu.classList.add('d-none');
-                sidebarMenu.classList.remove('d-md-block');
-            }, { once: true });
         }
 
         // Function to show sidebar

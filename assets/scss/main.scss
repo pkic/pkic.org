@@ -1,16 +1,13 @@
 // required to get Bootstrap functions and variables
 @import "bootstrap/functions";
 
-// Sidebar animation styles
+// Sidebar styles (no animation)
 #sidebarMenu {
-    transition: all 0.3s ease-in-out;
-    transform: translateX(-100%);
-    opacity: 0;
+    display: none;
 }
 
 #sidebarMenu.show {
-    transform: translateX(0);
-    opacity: 1;
+    display: block;
 }
 
 #content {
