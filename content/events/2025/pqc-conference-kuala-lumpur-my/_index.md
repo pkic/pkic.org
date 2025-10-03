@@ -783,11 +783,7 @@ data:
 
           - title: "A Practical Guide to PQC Migration: Securing Digital Identities for the Quantum Era"
             description: |
-              **Module 1: Foundational Concepts & PQC Readiness Strategy**
-
-              * Overview of the PQC Threat: Introduction to the "Harvest-Now, Decrypt-Later" threat and why immediate action is necessary.
-              * Defining PQC & Crypto-Agility: Understanding the new NIST-approved algorithms and the importance of a "crypto-agile" strategy to future-proof systems.
-              * The PQC Migration Journey: A high-level overview of the PQC migration phases: Discovery, Planning, Remediation, and Execution.
+              **Module 1: Verifiable everything** - Trust solutions built on trustworthy crypto
 
               **Module 2: PQC Key Generation and Hardware Root of Trust**
 
@@ -798,23 +794,18 @@ data:
               **Module 3: PQC Certificate Lifecycle Management**
 
               * The PQC Discovery Challenge: Using Cyberark's platform to discover and inventory all existing cryptographic assets (certificates, keys, etc.) across an enterprise, identifying which ones are vulnerable.
-              * Managing Hybrid & Pure-PQC Certificates: A walkthrough of how Cyberark's control plane manages the full lifecycle of PQC and hybrid certificates, from issuance to revocation, and how this integrates with the Thales HSM.
-              * Use Case: Automated PQC Certificate Issuance: A hands-on demonstration of Cyberark's platform orchestrating the creation of a new, PQC-ready certificate. This would show the platform requesting a new PQC key from the Thales HSM and then getting the certificate signed by a PQC-ready CA.
+              * Managing Certificates Today and Tomorrow: A walkthrough of how Cyberark's control plane manages the full lifecycle of certificates, from issuance to revocation, for today's certificates and tomorrow's PQC certificate.
+              * Use Case: Automated PQC Certificate Issuance: A hands-on demonstration of Cyberark's platform orchestrating the creation of a new certificate to replace any vulnerable certificate.
 
               **Module 4: PQC-Ready Digital Signatures & Trust Services**
 
-              * PQC in Action: How Ascertia's digital signature solutions (ADSS Server, SigningHub) integrate with the Cyberark-managed PQC certificates.
-              * Ensuring Long-Term Trust: The importance of time-stamping and secure archiving for long-lived documents signed with PQC algorithms.
-              * Use Case: Signing a Document with a PQC-Enabled Certificate: A live demo of an end-user digitally signing a document with a PQC-ready certificate. The demonstration would show the signature being created and validated, proving the document's integrity and authenticity in the post-quantum world.
+              * Use Case: Signing a file with Digital Signature using ML-DSA (Dilithium) algorithm and a PQC-Ready Certificate. A live demo using CMS signature (ML-DSA algorithm) & a PQC-Ready Certificate to sign a file. The demonstration will show signature creation using ADSS Server's Signing Service and signature validation using ADSS Server's Verification Service. The signature format, validity and integrity are checked and displayed.
 
-              **Module 5: A Unified PQC Migration Lab**
+              **Module 5: Wrapping up**
 
-              * Putting It All Together: This final module would be a capstone demonstration showing a single, integrated use case that combines all three vendor solutions.
-              * **Use Case: A PQC-Ready Code Signing Pipeline:**
-                  * A new PQC code signing key is generated and protected by a Thales HSM.
-                  * Cyberark's platform automatically manages the lifecycle of the code signing certificate associated with that key.
-                  * Ascertia's digital signature technology is used to apply a PQC-enabled signature to a software package.
-                  * The final signed package is then verified to be quantum-resistant.
+              * The PQC Migration Journey: A high-level overview of the PQC migration phases: Discovery, Planning, Remediation, and Execution. 
+              * Q&A: An open forum for participants to ask questions about real-world deployment challenges, performance impacts, and best practices.
+
             speakers:
               - Steven Gan
               - Maeson Maherry
