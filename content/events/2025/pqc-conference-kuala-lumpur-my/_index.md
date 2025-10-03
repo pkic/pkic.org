@@ -801,7 +801,7 @@ data:
 
               * Use Case: Signing a file with Digital Signature using ML-DSA (Dilithium) algorithm and a PQC-Ready Certificate. A live demo using CMS signature (ML-DSA algorithm) & a PQC-Ready Certificate to sign a file. The demonstration will show signature creation using ADSS Server's Signing Service and signature validation using ADSS Server's Verification Service. The signature format, validity and integrity are checked and displayed.
 
-              **Module 5: Wrapping up*
+              **Module 5: Wrapping up**
 
               * The PQC Migration Journey: A high-level overview of the PQC migration phases: Discovery, Planning, Remediation, and Execution. 
               * Q&A: An open forum for participants to ask questions about real-world deployment challenges, performance impacts, and best practices.
