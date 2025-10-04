@@ -7,7 +7,7 @@
     <title>{{ .Title }} - Event Session</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
-    
+
         :root {
             --blue: rgba(90, 155, 213, 0.98);
             --orange: #ed7d31;
@@ -17,49 +17,49 @@
             --padding: 15px 25px;
             --min-height: 30px;
         }
-    
+
         body {
             margin: 0;
             padding: var(--margin);
             background-color: black;
             /* background-color: rgba(0, 0, 0, 0); */
-    
+
             font-family: 'Roboto', sans-serif;
             font-size: 1em;
         }
-    
+
         #header {
             position: relative;
             font-weight: bolder;
             font-size: 1.7em;
             margin-bottom: var(--margin);
         }
-    
+
         .white-orange {
             display: inline-block;
             background-color: white;
             color: var(--orange);
             padding: var(--padding);
         }
-    
+
         .orange-white {
             background-color: var(--orange);
             color: white;
             padding: var(--padding);
         }
-    
+
         .white-blue {
             background-color: white;
             color: var(--blue);
             padding: var(--padding);
         }
-    
+
         .blue-white {
             background-color: var(--blue);
             color: white;
             padding: var(--padding);
         }
-    
+
         .yellow-black {
             background-color: var(--yellow);
             color: black;
@@ -67,31 +67,31 @@
             font-weight: bolder;
             padding: var(--padding);
         }
-    
+
         #logo {
             position: relative;
             float: right;
             width: 20vh;
         }
-    
+
         #logo-element {
             position: fixed;
             top: 10vh;
             right: 50px;
             width: 75vh;
         }
-    
+
         #session {
             position: relative;
         }
-    
+
         .centered {
             width: auto;
             height: auto;
             font-size: 1em;
             margin-bottom: var(--margin);
         }
-    
+
         .fullscreen {
             font-size: 1em;
             width: 100vw;
@@ -99,23 +99,20 @@
             display: flex;
             flex-direction: column;
         }
-    
-        .fullscreen>#subject {
-        }
-    
+
         .fullscreen>#speakers {
             flex: 1 1 auto;
         }
-    
+
         #session>div {
             min-height: var(--min-height);
         }
-    
+
         #session #title {
             font-size: 2em;
             font-weight: bolder;
         }
-    
+
         #session #description {
             margin: 10px 0;
             font-size: 0.9em;
@@ -126,6 +123,178 @@
             flex-wrap: wrap;
         }
 
+        /* Headshot wrapper for badge positioning */
+        .headshot-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+
+        /* Moderator Badge - positioned at bottom right of headshot */
+        .moderator-badge {
+            position: absolute;
+            bottom: 5px;
+            right: 5px;
+            background-color: var(--orange);
+            color: white;
+            font-size: 0.5em;
+            font-weight: bold;
+            padding: 3px 6px;
+            border-radius: 3px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid white;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+            z-index: 10;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+            white-space: nowrap;
+        }
+
+        /* Default/Grid Layout: 1-3 speakers per row */
+        #speakersList.layout-default {
+            flex-wrap: wrap;
+        }
+
+        #speakersList.layout-default:has(> :last-child:nth-child(4)) {
+            flex-wrap: wrap;
+        }
+
+        #speakersList.layout-default:not(:has(> :nth-child(4))) .speaker {
+            flex: 1 1 100%;
+        }
+
+        #speakersList.layout-default .speaker {
+            font-size: 1.4em;
+            margin-bottom: 5px;
+            flex: 1 1 45%;
+            box-sizing: border-box;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        #speakersList.layout-default .speaker .headshot-wrapper {
+            margin-right: var(--margin);
+            flex-shrink: 0;
+        }
+
+        #speakersList.layout-default .speaker .headshot {
+            background-color: rgba(255, 255, 255, 0.3);
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+        }
+
+        #speakersList.layout-default .speaker .speaker-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Panel Layout: All headshots in a row, names below */
+        #speakersList.layout-panel {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        #speakersList.layout-panel .headshots-row {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 30px;
+        }
+
+        #speakersList.layout-panel .headshot-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            width: 180px;
+        }
+
+        #speakersList.layout-panel .headshot-wrapper {
+            position: relative;
+            margin: 0 0 15px 0;
+        }
+
+        #speakersList.layout-panel .headshot {
+            background-color: rgba(255, 255, 255, 0.3);
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            flex-shrink: 0;
+        }
+
+        #speakersList.layout-panel .speaker-info {
+            width: 100%;
+            min-height: 80px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+        }
+
+        #speakersList.layout-panel .name {
+            font-weight: bolder;
+            font-size: 1.3em;
+            line-height: 1.3;
+            margin-bottom: 5px;
+            width: 100%;
+        }
+
+        #speakersList.layout-panel .title {
+            font-weight: lighter;
+            font-size: 0.9em;
+            line-height: 1.2;
+            width: 100%;
+        }
+
+        /* Vertical Layout: Speakers stacked with headshot on left */
+        #speakersList.layout-vertical {
+            display: flex;
+            flex-direction: column;
+            gap: 25px;
+        }
+
+        #speakersList.layout-vertical .speaker {
+            display: flex;
+            align-items: flex-start;
+            font-size: 1.3em;
+            min-height: 120px;
+        }
+
+        #speakersList.layout-vertical .headshot {
+            background-color: rgba(255, 255, 255, 0.3);
+            width: 120px;
+            height: 120px;
+            border-radius: 50%;
+            margin-right: 25px;
+            flex-shrink: 0;
+        }
+
+        #speakersList.layout-vertical .speaker-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            min-height: 120px;
+        }
+
+        #speakersList.layout-vertical .name {
+            font-weight: bolder;
+            font-size: 1.2em;
+            line-height: 1.3;
+            margin-bottom: 5px;
+        }
+
+        #speakersList.layout-vertical .title {
+            font-weight: lighter;
+            font-size: 0.85em;
+            line-height: 1.2;
+        }
+
+        /* Legacy support - remove these after migration */
         #speakersList:has(> :last-child:nth-child(4)) {
             flex-wrap: wrap;
         }
@@ -133,24 +302,24 @@
         #speakersList:not(:has(> :nth-child(4))) .speaker {
             flex: 1 1 100%;
         }
-    
+
         #session .speaker {
             font-size: 1.4em;
             margin-bottom: 5px;
             flex: 1 1 45%;
             box-sizing: border-box;
         }
-    
+
         #session .speaker .name {
             font-weight: bolder;
             font-size: 1.2em;
         }
-    
+
         #session .speaker .title {
             font-weight: lighter;
             font-size: 0.8em;
         }
-    
+
         #session .speaker .headshot {
             background-color: rgba(255, 255, 255, 0.3);
             width: 100px;
@@ -159,7 +328,7 @@
             margin-right: var(--margin);
             float: left;
         }
-    
+
         #footer {
             position: relative;
             width: 100%;
@@ -175,7 +344,7 @@
             flex-direction: row;
             flex-wrap: wrap;
         }
-    
+
         /* Sponsors partial */
         .sponsors {
             display: flex;
@@ -186,7 +355,7 @@
         .sponsors-list {
             display: inline;
         }
-    
+
         .sponsors-list a {
             margin: 15px 15px;
             text-decoration: none;
@@ -197,13 +366,188 @@
             max-width: 100px;
             margin: 20px;
         }
-    
+
         .dimmed {
             color: rgba(255, 255, 255, 0.3);
             font-size: 0.8em;
             padding: 10px;
         }
-    
+
+        /* Clean/Minimal Mode - Hide everything except speakers */
+        body.clean-mode {
+            background-color: black;
+            padding: var(--margin);
+            margin: 0;
+        }
+
+        body.clean-mode #header {
+            display: none;
+        }
+
+        body.clean-mode #footer {
+            display: none;
+        }
+
+        body.clean-mode #logo-element {
+            display: none;
+        }
+
+        body.clean-mode #session {
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            position: fixed;
+            top: 0;
+            left: 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        body.clean-mode #subject {
+            display: none;
+        }
+
+        body.clean-mode #subject.show-title {
+            display: block;
+            background-color: transparent;
+            color: white;
+            text-align: center;
+            margin-bottom: 20px;
+            padding: 0;
+        }
+
+        body.clean-mode #subject.show-title #title {
+            font-size: 2em;
+            font-weight: bolder;
+            color: white;
+            margin-bottom: 0;
+        }
+
+        body.clean-mode #subject.show-title #description {
+            display: none;
+        }
+
+        body.clean-mode #speakers {
+            width: 100%;
+            height: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: transparent;
+            color: white;
+        }
+
+        body.clean-mode #speakersList {
+            width: 100%;
+            max-width: 1400px;
+            padding: 40px;
+        }
+
+        /* Adjust panel layout for clean mode */
+        body.clean-mode #speakersList.layout-panel .headshots-row {
+            display: flex;
+            justify-content: center;
+            flex-wrap: wrap;
+            gap: 40px;
+        }
+
+        body.clean-mode #speakersList.layout-panel .headshot-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            text-align: center;
+            width: 200px;
+        }
+
+        body.clean-mode #speakersList.layout-panel .headshot-wrapper {
+            position: relative;
+            margin: 0 0 15px 0;
+        }
+
+        body.clean-mode #speakersList.layout-panel .headshot {
+            width: 150px;
+            height: 150px;
+            background-color: rgba(255, 255, 255, 0.3);
+            flex-shrink: 0;
+        }
+
+        body.clean-mode #speakersList.layout-panel .moderator-badge {
+            font-size: 0.6em;
+            padding: 4px 8px;
+            bottom: 10px;
+            right: 10px;
+        }
+
+        body.clean-mode #speakersList.layout-panel .speaker-info {
+            width: 200px;
+            min-height: 100px;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start;
+            align-items: center;
+        }
+
+        body.clean-mode #speakersList.layout-panel .speaker-names {
+            display: none;
+        }
+
+        body.clean-mode #speakersList.layout-panel .name {
+            color: white;
+            font-size: 1.3em;
+            font-weight: bolder;
+            line-height: 1.3;
+            margin-bottom: 5px;
+            width: 100%;
+        }
+
+        body.clean-mode #speakersList.layout-panel .title {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 0.9em;
+            line-height: 1.2;
+            width: 100%;
+        }
+
+        /* Adjust vertical layout for clean mode */
+        body.clean-mode #speakersList.layout-vertical .speaker {
+            min-height: 150px;
+        }
+
+        body.clean-mode #speakersList.layout-vertical .headshot-wrapper {
+            position: relative;
+        }
+
+        body.clean-mode #speakersList.layout-vertical .headshot {
+            width: 150px;
+            height: 150px;
+            background-color: rgba(255, 255, 255, 0.3);
+        }
+
+        body.clean-mode #speakersList.layout-vertical .moderator-badge {
+            font-size: 0.6em;
+            padding: 4px 8px;
+            bottom: 10px;
+            right: 10px;
+        }
+
+        body.clean-mode #speakersList.layout-vertical .speaker-info {
+            min-height: 150px;
+            justify-content: center;
+        }
+
+        body.clean-mode #speakersList.layout-vertical .name {
+            color: white;
+            font-size: 1.5em;
+            line-height: 1.3;
+        }
+
+        body.clean-mode #speakersList.layout-vertical .title {
+            color: rgba(255, 255, 255, 0.8);
+            font-size: 1em;
+            line-height: 1.2;
+        }
+
         /* Full HD resolution */
         @media (min-width: 1920px) {
             :root {
@@ -219,11 +563,11 @@
                 position: fixed;
                 z-index: 100;
             }
-    
+
             #header {
                 position: fixed;
             }
-    
+
             #footer {
                 position: fixed;
                 bottom: var(--margin);
@@ -238,7 +582,7 @@
                 align-items: center;
                 justify-content: left;
             }
-    
+
             /* Sponsors partial */
             .sponsors {
                 display: inline-block;
@@ -267,19 +611,19 @@
                 margin-bottom: calc(-1 * (0.8em + 20px));
             }
         }
-    
+
         @media (max-width: 1200px) {
             body {
                 font-size: 1.1em;
             }
         }
-    
+
         @media (max-width: 768px) {
             body {
                 font-size: 0.9em;
             }
         }
-    
+
         @media (max-width: 480px) {
             body {
                 font-size: 0.7em;
@@ -349,15 +693,15 @@
     <div id="footer">
         <div id="sponsors">
             {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Kuala Lumpur 2025" }}
-            {{ .Scratch.Set "level" "Diamond" }}    
+            {{ .Scratch.Set "level" "Diamond" }}
             {{ partial "sponsors.html" . }}
-    
+
             {{ .Scratch.Set "level" "Titanium" }}
             {{ partial "sponsors.html" . }}
 
-            {{ .Scratch.Set "level" "Leader" }}  
+            {{ .Scratch.Set "level" "Leader" }}
             {{ partial "sponsors.html" . }}
-    
+
             {{ .Scratch.Set "level" "Platinum" }}
             {{ partial "sponsors.html" . }}
         </div>
