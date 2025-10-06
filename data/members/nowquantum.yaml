@@ -1,10 +1,10 @@
 id: nowquantum
 name: NowQuantum
-slogan:
+slogan: The future is now
 website: https://www.nowquantum.net
 
 # Short description, longer content can be placed in `content/members/`
-description: Building Quantum Ecosystem
+description: NowQuantum is pioneering B2B applications for critical infrastructure industries, including finance and telecommunications, by combining advanced AI with a post-quantum safe architecture, ensuring institutions stay ahead of both today’s and tomorrow’s security threats.
 
 # membership
 memberSince: 2025-03-31
@@ -38,7 +38,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/nowquantum/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -47,8 +47,8 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Ian Meletios
-    role: Business Strategy
+    role: CEO
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/ianmeletios/
-    description: Ian is the Business Strategy at NowQuantum and represents the organization at the PKI Consortium.
+    description: Ian is the CEO at NowQuantum and represents the organization at the PKI Consortium.
