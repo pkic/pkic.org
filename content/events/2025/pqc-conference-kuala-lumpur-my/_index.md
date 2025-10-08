@@ -207,7 +207,7 @@ data:
     - name: Blair Canavan
       title: Director, Alliances at Thales
       bio: |
-        Blair has 30+ years of IT cybersecurity sales, channel, marketing, and business development experience. Blair continuously expanded his cybersecurity and cryptographic expertise starting with Symantec and several cyber start-ups including Chrysalis-ITS (Thales), InfoSec Global, Crypto4A and since September 2019, back with Thales’ Global Technology Alliances team, including the Quantum cryptography portfolio. Blair recently represented the Canadian Forum for Digital Infrastructure Resilience (CFDIR) to articulate the standards and Government guidance at Mobile World Congress (MWC) in 2023. He is an avid presenter, start-up consultant, and IT industry contributor. Blair holds an Hons.BA from the University of Waterloo, and Wilfrid Laurier University, Ontario, Canada.  
+        Blair has 35+ years of cybersecurity sales, marketing and business development expertise. Blair started his cybersecurity and cryptographic career with Symantec, followed by Chrysalis-ITS (Thales), Titus (Fortra), Black Duck (Synopsys), InfoSec Global (Keyfactor) and Crypto4A. Blair was recruited back to Thales’ Global Technology Alliances team in 2019, tasked with the development and curation of the PKI and Post Quantum Cryptography (PQC) portfolio.  He is an avid presenter, webinar host and global PQC industry contributor, including the CFDIR PQC WG and founder of Thales’ PQC Palooza event held during the RSA Conference. Blair holds an Hons.BA Co-op from the University of Waterloo and Business Option from Wilfrid Laurier University, Ontario, Canada.
       social:
         linkedin: https://www.linkedin.com/in/blair-canavan-5b708a2/
 
