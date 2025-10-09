@@ -11,6 +11,7 @@ memberSince: 2024-02-06
 memberType: H1
 workingGroups:
  - CM
+ - PQC
  
 # sponsor
 sponsor:

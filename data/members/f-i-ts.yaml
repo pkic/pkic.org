@@ -8,8 +8,9 @@ description: FI-TS ist der größte IT-Dienstleister für Landesbanken und seit 
 
 # membership
 memberSince: 2025-09-18
-memberType: null
+memberType: H2
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +51,5 @@ representatives:
     role: Lead Architect Security Services and Cryptography Officer
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://de.linkedin.com/in/mario-schiener
     description: Mario is the Lead Architect Security Services and Cryptography Officer at Finanz Informatik Technologie Service and represents the organization at the PKI Consortium.
