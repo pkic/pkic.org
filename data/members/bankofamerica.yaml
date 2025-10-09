@@ -4,12 +4,14 @@ slogan:
 website: https://www.bankofamerica.com/information/corporate/
 
 # Short description, longer content can be placed in `content/members/`
-description: The Bank of America Businesses & Institutions site map provides a list of pages available for Bank of America Merrill Lynch. Also listed are the global connection points available for businesses and corporations.
+description: Bank of America is a global financial institution providing banking, investing, asset management, and other financial services to individuals, small and middle-market businesses, large corporations, and governments.
 
 # membership
 memberSince: 2025-10-06
-memberType: null
+memberType: H3
 workingGroups:
+  - PKIMM
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +37,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +52,5 @@ representatives:
     role: VP PKI Governance
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/christopher-davis-2a413551/
     description: Chris is the VP PKI Governance at Bank of America and represents the organization at the PKI Consortium.
