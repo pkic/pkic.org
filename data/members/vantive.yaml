@@ -24,13 +24,13 @@ blog:
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.vantive.com/news
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://jobs.vantive.com/
   feed: 
   language: en_US
 
