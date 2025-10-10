@@ -672,6 +672,15 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/shaun-chen-ccsp-cissp-30b43ba/
 
+    - name: Sarah McCarthy
+      title: Quantum Readiness Program Lead at Citi
+      bio: |
+        As the Quantum Readiness Program Lead at Citi, Sarah McCarthy focusses on developing effective solutions to ensure the security of financial systems amid emerging quantum threats. Before joining Citi, Sarah was Cryptographic Strategist at evolutionQ, where she spearheaded the development of quantum-safe network solutions and advocated for proactive preparation for the quantum computing era. Prior to that, she held a Research Fellow position at the Institute for Quantum Computing (IQC) at the University of Waterloo, following her PhD from Queen’s University Belfast. Her academic background supports her deep expertise, enabling her to stay at the forefront of quantum-safe solutions and bridge the gap from theoretical research to practical deployment.
+ 
+        A sought-after speaker known for her clear and engaging style, she has presented at events worldwide and is a key PC member for ETSI/IQC Quantum-Safe Cryptography Conference. Sarah was also named one of the Top 50 Women in Quantum by The Quantum Insider.
+      social:
+        linkedin: https://www.linkedin.com/in/sarahmccarthyphd/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -1163,6 +1172,7 @@ data:
             speakers:
               - Jaime Gómez García
               - Sudha Iyer
+              - Sarah McCarthy
             locations:
               - room_8
             track: Roundtable
