@@ -186,12 +186,14 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/navaneeth-rameshan/
 
-    - name: Greg Wetmore
-      title: VP Software Development at Entrust
+    - name: Samantha Mabey
+      title: Director of Digital Security Solutions Marketing at Entrust
       bio: |
-        Greg Wetmore leads the global team responsible for building and enhancing the digital security product portfolio at Entrust, such as the Identity, Data Security, and Critical Infrastructure solutions. Greg joined Entrust in 2000 and has held a number of leadership positions on the engineering team over that period. Greg is a key industry advisor and speaks regularly on topics like digital identity, IoT, Zero Trust and post-quantum security. Greg holds an Engineering degree from Queen’s University Kingston, Ontario, Canada.
+        Samantha Mabey is the Director of Digital Security Solutions Marketing at Entrust, where she oversees marketing strategy and communications for the data security and machine identity solutions, as well as leads the efforts around Zero Trust and Post Quantum. She acts as host of several acclaimed podcasts, including the Cybersecurity Institute Podcast, where she engages with industry experts on critical topics in cybersecurity, digital trust, and post quantum preparedness.
+
+        Combining her marketing acumen with a passion for digital security, Samantha is a recognized leader and influential voice in the industry.
       social:
-        linkedin: https://www.linkedin.com/in/gregwetmore/
+        linkedin: https://www.linkedin.com/in/samanthamabey/
 
     - name: Jonathan Jackson
       title: Senior Director, Strategic Solutions at BlackBerry Malaysia
@@ -670,6 +672,15 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/shaun-chen-ccsp-cissp-30b43ba/
 
+    - name: Sarah McCarthy
+      title: Quantum Readiness Program Lead at Citi
+      bio: |
+        As the Quantum Readiness Program Lead at Citi, Sarah McCarthy focusses on developing effective solutions to ensure the security of financial systems amid emerging quantum threats. Before joining Citi, Sarah was Cryptographic Strategist at evolutionQ, where she spearheaded the development of quantum-safe network solutions and advocated for proactive preparation for the quantum computing era. Prior to that, she held a Research Fellow position at the Institute for Quantum Computing (IQC) at the University of Waterloo, following her PhD from Queen’s University Belfast. Her academic background supports her deep expertise, enabling her to stay at the forefront of quantum-safe solutions and bridge the gap from theoretical research to practical deployment.
+ 
+        A sought-after speaker known for her clear and engaging style, she has presented at events worldwide and is a key PC member for ETSI/IQC Quantum-Safe Cryptography Conference. Sarah was also named one of the Top 50 Women in Quantum by The Quantum Insider.
+      social:
+        linkedin: https://www.linkedin.com/in/sarahmccarthyphd/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -1040,7 +1051,6 @@ data:
             speakers: 
               - Giuseppe Damiano
               - Matt Rose
-              - Greg Wetmore
             locations:
               - room_6
 
@@ -1162,6 +1172,7 @@ data:
             speakers:
               - Jaime Gómez García
               - Sudha Iyer
+              - Sarah McCarthy
             locations:
               - room_8
             track: Roundtable
@@ -1648,7 +1659,8 @@ data:
             description: |
               The time to prepare for the quantum threat is upon us, and the move from traditional crypto to PQC will touch just about every cryptographic system and piece of infrastructure. To make the transition, organizations need visibility into their cryptographic estate (hardware, software, keys, certificates, secrets, etc.) and ensure they have built in crypto-agility. How does one achieve a mature crypto-agile security practice? By defining crypto-agility and understanding what it looks like for your organization. But crypto-agility is much more than moving from one system or algorithm to another. It’s about people, processes and technology. It’s about visualizing your cryptographic assets, implementing policy, driving compliance and more. In this session, we’ll discuss in detail the necessary elements to achieve a mature crypto-agile security practice, and how to overcome the challenges to get there.
             speakers:
-              - Greg Wetmore
+              - Samantha Mabey
+              - Matt Rose
             locations:
               - plenary
 
