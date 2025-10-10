@@ -187,7 +187,7 @@ data:
         linkedin: https://www.linkedin.com/in/navaneeth-rameshan/
 
     - name: Samantha Mabey
-      title: Director of Digital Security Solutions Marketing at Entrust
+      title: Director of Product Marketing for the Data Security Solutions at Entrust
       bio: |
         Samantha Mabey is the Director of Product Marketing for the Data Security Solutions at Entrust, where she oversees marketing strategy and communications for the cryptographic security solutions, as well as leads the efforts around Zero Trust and Post Quantum. She acts as host of several acclaimed podcasts, including the Cybersecurity Institute Podcast, where she engages with industry experts on critical topics in cybersecurity, digital trust, and post quantum preparedness.
 
@@ -322,7 +322,7 @@ data:
     - name: Sven Rajala
       title: International PKI Man of Mystery at Keyfactor
       bio: |
-        Sven is an award-winning cybersecurity consultant with over 18 years of experience in PKI, automation of PKI and signing solutions, and containerized deployments. Svens career spans both the private sector and federal government, where he has helped organizations design, modernize, and secure their digital trust infrastructure.
+        Sven is an award-winning cybersecurity consultant with over 18 years of experience in PKI, automation of PKI and signing solutions, and containerized deployments. Sven's career spans both the private sector and federal government, where he has helped organizations design, modernize, and secure their digital trust infrastructure.
 
         Recognized for his subject matter expertise in PKI and DevSecOps, he is often invited to lead client discussions, presentations, and technical seminars on EJBCA, PKI architectures, and automation best practices.
 
