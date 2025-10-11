@@ -19,7 +19,7 @@ enableEmoji: true
 ignoreErrors: ["error-remote-getjson"]
 
 # it can take some time to query the rss feeds
-timeout: 300s
+timeout: 600s
 
 taxonomies:
   tag: tags
