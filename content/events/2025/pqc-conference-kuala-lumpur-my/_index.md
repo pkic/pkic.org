@@ -187,9 +187,9 @@ data:
         linkedin: https://www.linkedin.com/in/navaneeth-rameshan/
 
     - name: Samantha Mabey
-      title: Director of Digital Security Solutions Marketing at Entrust
+      title: Director of Product Marketing for the Data Security Solutions at Entrust
       bio: |
-        Samantha Mabey is the Director of Digital Security Solutions Marketing at Entrust, where she oversees marketing strategy and communications for the data security and machine identity solutions, as well as leads the efforts around Zero Trust and Post Quantum. She acts as host of several acclaimed podcasts, including the Cybersecurity Institute Podcast, where she engages with industry experts on critical topics in cybersecurity, digital trust, and post quantum preparedness.
+        Samantha Mabey is the Director of Product Marketing for the Data Security Solutions at Entrust, where she oversees marketing strategy and communications for the cryptographic security solutions, as well as leads the efforts around Zero Trust and Post Quantum. She acts as host of several acclaimed podcasts, including the Cybersecurity Institute Podcast, where she engages with industry experts on critical topics in cybersecurity, digital trust, and post quantum preparedness.
 
         Combining her marketing acumen with a passion for digital security, Samantha is a recognized leader and influential voice in the industry.
       social:
@@ -322,7 +322,11 @@ data:
     - name: Sven Rajala
       title: International PKI Man of Mystery at Keyfactor
       bio: |
-        An award winning seasoned cyber-security consultant with extensive subject matter expertise on PKI, automation of PKI/Signing Solutions, and containers. I have over 18 years of experience working in both the private sector and with federal government departments and agencies. I am frequently called upon to participate in client discussions, presentations, and seminars on topics including PKI, EJBCA, and PKI Devsecops. I also host the Key Master series by Keyfactor found on the YouTube Keyfactor Developers channel.
+        Sven is an award-winning cybersecurity consultant with over 18 years of experience in PKI, automation of PKI and signing solutions, and containerized deployments. Sven's career spans both the private sector and federal government, where he has helped organizations design, modernize, and secure their digital trust infrastructure.
+
+        Recognized for his subject matter expertise in PKI and DevSecOps, he is often invited to lead client discussions, presentations, and technical seminars on EJBCA, PKI architectures, and automation best practices.
+
+        Sven also hosts The Key Master series by Keyfactor, featured on the Keyfactor Developers YouTube channel, where he shares insights and interviews to help the PKI community deepen its technical knowledge.
       social:
         linkedin: https://www.linkedin.com/in/international-pki-man-of-mystery/
         github: https://github.com/svenska-primekey
