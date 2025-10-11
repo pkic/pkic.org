@@ -1,6 +1,19 @@
 // required to get Bootstrap functions and variables
 @import "bootstrap/functions";
 
+// Sidebar styles (no animation)
+#sidebarMenu {
+    display: none;
+}
+
+#sidebarMenu.show {
+    display: block;
+}
+
+#content {
+    transition: all 0.3s ease-in-out;
+}
+
 
 // --- PKIC Variable Overrides & Custom Colors ---
 
@@ -430,6 +443,14 @@ main h4 {
   .bd-placeholder-img-lg {
     font-size: 3.5rem;
   }
+}
+
+#sidebarToggle svg {
+  transition: transform 0.3s ease-in-out;
+}
+
+#sidebar-toggle-button {
+   background: var(--bs-light);
 }
 
 self-assessment {
