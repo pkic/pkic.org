@@ -693,11 +693,11 @@ data:
 
       - time: "9:00"
         sessions:
-          - title: "Advancing CBOM: Hands-On with CycloneDX v1.7 and PKI Extensions"          
+          - title: "Advancing CBOM: Hands-On with CycloneDX v1.7 and PKI Extensions"
             description: |
-              _The Linux Foundation CBOM with ClycloneDX_
+              _The Linux Foundation CBOM with CycloneDX_
 
-              The CBOM workshop will help participants understand and become familiar with the  upcoming extensions to the CycloneDX CBOM standard v1.7. In particular new extensions targeted at reporting PKI certificates. We are actively talking to industry vendors who have expressed interest in collaborating on this workshop.
+              The CBOM workshop will help participants understand and become familiar with the upcoming extensions to the CycloneDX CBOM standard v1.7. In particular new extensions targeted at reporting PKI certificates. We are actively talking to industry vendors who have expressed interest in collaborating on this workshop.
               
               **We will explore:**
 
@@ -721,13 +721,13 @@ data:
                       *	Findings Analysis
                       *	Integration into CI/CD pipelines
               * Discussion and Next Steps
-                      *	Other contributions
-                      * Contributing to the Linux Foundation
-                      * Alignment with SPDX
+                  *	Other contributions
+                  * Contributing to the Linux Foundation
+                  * Alignment with SPDX
 
               ___
 
-               _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._                      
+               _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
             speakers:
               - Michael Osborne
             locations:
