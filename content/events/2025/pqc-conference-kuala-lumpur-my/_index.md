@@ -707,34 +707,34 @@ data:
 
               **CBOM Fundamentals (30 min)**
 
-                  * Overview of CBOMs and their purpose
-                  *	Progress of international standardization
-                  *	Relationship between SBOMs and CBOMs
-                  * An update on the new CycloneDX standard, including PKI
+              * Overview of CBOMs and their purpose
+              *	Progress of international standardization
+              *	Relationship between SBOMs and CBOMs
+              * An update on the new CycloneDX standard, including PKI
 
               **CBOM Use Cases (45 min)**
 
-                  * Telco Example (GSMA)
-                  * Product Use Cases
-                  *	Open Source Software Use Case
+              * Telco Example (GSMA)
+              * Product Use Cases
+              *	Open Source Software Use Case
 
               **Break (20 min)**
 
               **Open-Source Tooling (70 min)**
 
-                  * SCANOSS Open Source
-                      * Introduction
-                      *	Software demonstration
-                  * Linux Foundation CBOM Toolkit
-                      * Source Code / End Point
-                      *	Findings Analysis
-                      *	Integration into CI/CD pipelines
+              * SCANOSS Open Source
+                  * Introduction
+                  *	Software demonstration
+              * Linux Foundation CBOM Toolkit
+                  * Source Code / End Point
+                  *	Findings Analysis
+                  *	Integration into CI/CD pipelines
 
               **Discussion and Next Steps (30 min)**
-              
-                  *	Other contributions
-                  * Contributing to the Linux Foundation
-                  * Alignment with SPDX
+
+              *	Other contributions
+              * Contributing to the Linux Foundation
+              * Alignment with SPDX
 
               ___
 
