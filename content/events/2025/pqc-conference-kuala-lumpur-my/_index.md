@@ -695,14 +695,47 @@ data:
         sessions:
           - title: "Advancing CBOM: Hands-On with CycloneDX v1.7 and PKI Extensions"
             description: |
-              _The Linux Foundation CBOM with ClycloneDX_
+              _**The Linux Foundation CBOM with CycloneDX**_
 
-              The CBOM workshop will help participants understand and become familiar with the  upcoming extensions to the CycloneDX CBOM standard v1.7. In particular new extensions targeted at reporting PKI certificates. We are actively talking to industry vendors who have expressed interest in collaborating on this workshop.
+              The CBOM workshop will help participants understand and become familiar with the upcoming extensions to the CycloneDX CBOM standard v1.7. In particular new extensions targeted at reporting PKI certificates. We are actively talking to industry vendors who have expressed interest in collaborating on this workshop.
               
               **We will explore:**
 
-              * Use open-source software recently transferred to the Linux Foundation.  The software will be used as a basis for a hands-on section of the course.
-              * Become familiar with the  upcoming extensions to the CycloneDX CBOM standard v1.7
+              **Welcome & Introductions (15 min)**
+
+              * Introduction to Linux Foundation PQCA
+
+              **CBOM Fundamentals (30 min)**
+
+              * Overview of CBOMs and their purpose
+              *	Progress of international standardization
+              *	Relationship between SBOMs and CBOMs
+              * An update on the new CycloneDX standard, including PKI
+
+              **CBOM Use Cases (45 min)**
+
+              * Telco Example (GSMA)
+              * Product Use Cases
+              *	Open Source Software Use Case
+
+              **Break (20 min)**
+
+              **Open-Source Tooling (70 min)**
+
+              * SCANOSS Open Source
+                  * Introduction
+                  *	Software demonstration
+              * Linux Foundation CBOM Toolkit
+                  * Source Code / End Point
+                  *	Findings Analysis
+                  *	Integration into CI/CD pipelines
+
+              **Discussion and Next Steps (30 min)**
+
+              *	Other contributions
+              * Contributing to the Linux Foundation
+              * Alignment with SPDX
+
               ___
 
                _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
@@ -831,10 +864,6 @@ data:
 
           - title: "Government & Regulatory Approaches to PQC: From Policy to Implementation"
             description: |
-              _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
-              
-              ___
-
               _This session is held under Chatham House Rules._
 
               **_Draft Agenda_**
@@ -883,10 +912,6 @@ data:
 
           - title: "Securing the Healthcare Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
-              _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
-
-              ___
-
               _This session is held under Chatham House Rules._
       
               **_Draft Agenda_**
@@ -1085,10 +1110,6 @@ data:
 
           - title: "Securing the Telecommunication Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
-              _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
-
-              ___
-
               _This session is held under Chatham House Rules._
 
               **Welcome (20 min)**
@@ -1134,10 +1155,6 @@ data:
           
           - title: "Securing the Financial Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
-              _We are currently seeking discussion leaders and active contributors for this roundtable. If you are interested, please contact us at **contact@pkic.org**._
-
-              ___
-
               _This session is held under Chatham House Rules._
 
               **_Draft Agenda_**
