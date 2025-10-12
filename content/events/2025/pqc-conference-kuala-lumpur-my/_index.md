@@ -702,15 +702,18 @@ data:
               **We will explore:**
 
               **Welcome & Introductions (15 min)**
+
               * Introduction to Linux Foundation PQCA
 
               **CBOM Fundamentals (30 min)**
+
                   * Overview of CBOMs and their purpose
                   *	Progress of international standardization
                   *	Relationship between SBOMs and CBOMs
                   * An update on the new CycloneDX standard, including PKI
 
               **CBOM Use Cases (45 min)**
+
                   * Telco Example (GSMA)
                   * Product Use Cases
                   *	Open Source Software Use Case
@@ -718,6 +721,7 @@ data:
               **Break (20 min)**
 
               **Open-Source Tooling (70 min)**
+
                   * SCANOSS Open Source
                       * Introduction
                       *	Software demonstration
@@ -727,6 +731,7 @@ data:
                       *	Integration into CI/CD pipelines
 
               **Discussion and Next Steps (30 min)**
+              
                   *	Other contributions
                   * Contributing to the Linux Foundation
                   * Alignment with SPDX
