@@ -695,24 +695,29 @@ data:
         sessions:
           - title: "Advancing CBOM: Hands-On with CycloneDX v1.7 and PKI Extensions"
             description: |
-              _The Linux Foundation CBOM with CycloneDX_
+              _**The Linux Foundation CBOM with CycloneDX**_
 
               The CBOM workshop will help participants understand and become familiar with the upcoming extensions to the CycloneDX CBOM standard v1.7. In particular new extensions targeted at reporting PKI certificates. We are actively talking to industry vendors who have expressed interest in collaborating on this workshop.
               
               **We will explore:**
 
-              * Welcome & Introductions
+              **Welcome & Introductions (15 min)**
               * Introduction to Linux Foundation PQCA
-              * CBOM Fundamentals
+
+              **CBOM Fundamentals (30 min)**
                   * Overview of CBOMs and their purpose
                   *	Progress of international standardization
                   *	Relationship between SBOMs and CBOMs
-              * An update on the new CycloneDX standard, including PKI
-              * CBOM Use Cases
+                  * An update on the new CycloneDX standard, including PKI
+
+              **CBOM Use Cases (45 min)**
                   * Telco Example (GSMA)
                   * Product Use Cases
                   *	Open Source Software Use Case
-              * Open-Source Tooling
+
+              **Break (20 min)**
+
+              **Open-Source Tooling (70 min)**
                   * SCANOSS Open Source
                       * Introduction
                       *	Software demonstration
@@ -720,7 +725,8 @@ data:
                       * Source Code / End Point
                       *	Findings Analysis
                       *	Integration into CI/CD pipelines
-              * Discussion and Next Steps
+
+              **Discussion and Next Steps (30 min)**
                   *	Other contributions
                   * Contributing to the Linux Foundation
                   * Alignment with SPDX
