@@ -19,7 +19,9 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: https://kryptos.com.tr/feed/
+  # Temporarily disabled: RSS feed returns HTML (text/html; charset=utf-8) instead of XML/RSS
+  # Reference: CI report - feed validation failure
+  # feed: https://kryptos.com.tr/feed/
   language: en_US
 
 # Press Releases

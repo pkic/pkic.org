@@ -19,7 +19,9 @@ sponsor:
 # Blog posts
 blog: 
   url:  https://synestate.com/
-  feed: https://synestate.com/feed/
+  # Temporarily disabled: RSS feed returns HTML (text/html; charset=utf-8) instead of XML/RSS
+  # Reference: CI report - feed validation failure
+  # feed: https://synestate.com/feed/
   language: en_US
 
 # Press Releases
