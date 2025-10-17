@@ -764,7 +764,7 @@ data:
               - Chris Hickman
               - Tony Chen
             locations:
-              - room_2
+              - room_8
             track: Workshop
 
           - title: "Enabling Quantum-Safe, Crypto-Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
@@ -951,7 +951,7 @@ data:
             speakers:
               - Scott Rea
             locations:
-              - room_8
+              - room_2
             track: Roundtable
 
       - time: "11:00"
