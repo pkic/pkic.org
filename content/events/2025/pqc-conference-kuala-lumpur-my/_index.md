@@ -1022,7 +1022,7 @@ data:
               - David Hook
               - Sven Rajala
             locations:
-              - room_2
+              - room_8
             track: Workshop
 
           - title: "Enabling Quantum-Safe, Crypto-Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
@@ -1150,7 +1150,7 @@ data:
               - Lory Thorpe
               - Luke Ibbetson
             locations:
-              - room_7
+              - room_2
             track: Roundtable
           
           - title: "Securing the Financial Sector in the Quantum Era: a PQC Readiness Roundtable"
@@ -1188,7 +1188,7 @@ data:
               - Sudha Iyer
               - Sarah McCarthy
             locations:
-              - room_8
+              - room_7
             track: Roundtable
 
       - time: "15:30"
