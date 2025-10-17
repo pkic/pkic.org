@@ -21,7 +21,9 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: https://www.sonicai.ai/blog-feed.xml
+  # Temporarily disabled: RSS feed returns invalid Content-Type (text/plain; charset=utf-8) instead of XML/RSS
+  # Reference: CI report - feed validation failure
+  # feed: https://www.sonicai.ai/blog-feed.xml
   language: en_US
 
 # Press Releases
