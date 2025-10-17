@@ -1167,29 +1167,22 @@ data:
               **Collaboration initiatives and overview of latest recommendations**           
 
               * Summary of workgroups in the financial sectors and their activities
-              * Recommendations and timelines published. How they influence the financial sector.
+              * Recommendations and timelines published. How they influence the financial sector. Overview of FS-ISAC’s publication.
 
-              **Regulation and Compliance Implications**
+              **Assessing Migration Priorities**
               
-              * Relevant standards: ISO 20022, PCI DSS, FS-ISAC, DORA
-              * Role of regulators and international coordination
+              * A methodology to assess migration priority of business use cases
 
-              **Analysis of immediate actions**
+              **Hands-on workshop: Analysis of business use cases**
 
-              * Priority analysis of business use cases
-              * Deep dive on most immediate use cases
-
-              **Strategic planning and investment**
-
-              * Building the PQC business case for financial institutions
-              * Cost modelling and procurement considerations
-              * Collaboration models: banks, fintech, and consortia
+              * Identification of business use cases
+              * Prioritization analysis
 
               **Wrap up and Actions**
 
-              * Summary of key insights
-              * Actionable next steps
-              * Close and feedback collection
+              * A prioritized list of business use cases
+              * Selection of immediate actions
+              * Next steps
             speakers:
               - Jaime Gómez García
               - Sudha Iyer
