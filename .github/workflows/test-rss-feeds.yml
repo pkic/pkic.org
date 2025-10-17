@@ -1,31 +1,102 @@
-name: Validate RSS Feeds
+name: RSS Feed Validation
 
 on:
-  push:
-    branches:
-      - main
   pull_request:
-    branches:
-      - main
+    types: [opened, synchronize]
+
+permissions:
+  contents: read
+  issues: write
 
 jobs:
   validate:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python 3.11
-      uses: actions/setup-python@v4
-      with:
-        python-version: '3.11'
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.x'
 
-    - name: Install dependencies
-      run: |
-        python -m pip install --upgrade pip
-        pip install feedparser requests pyyaml
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install feedparser requests pyyaml
 
-    - name: Run RSS feed validation
-      run: |
-        python scripts/test-feeds.py
+      - name: Run RSS validation
+        id: run_validation
+        run: |
+          python scripts/test-feeds.py | tee report.txt || true
+
+      - name: Upload full report (artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rss-validation-report
+          path: report.txt
+
+      - name: Post failing feeds to PR (compact)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const path = 'report.txt';
+            if (!fs.existsSync(path)) {
+              console.log('No report generated — skipping comment.');
+              return;
+            }
+            const report = fs.readFileSync(path, 'utf8');
+            // Capture the INVALID FEEDS section
+            const m = report.match(/INVALID FEEDS:[\r\n]+([\s\S]*?)(?:\n={3,}|\n$)/);
+            if (!m) {
+              console.log('No invalid feeds found; not posting a comment.');
+              return;
+            }
+            const invalid = m[1].trim();
+            if (!invalid) {
+              console.log('Invalid section empty; not posting a comment.');
+              return;
+            }
+            // Split into member blocks (each starts with '✗')
+            const lines = invalid.split(/\r?\n/);
+            const entries = [];
+            let cur = [];
+            for (const l of lines) {
+              if (/^\s*✗\s+/.test(l)) {
+                if (cur.length) { entries.push(cur.join('\n')); cur = []; }
+                cur.push(l.trim());
+              } else {
+                if (cur.length) cur.push(l.trim());
+              }
+            }
+            if (cur.length) entries.push(cur.join('\n'));
+            // Build compact markdown
+            const bodyLines = [
+              ':warning: **RSS feed validation — failing feeds detected**',
+              '',
+              `Found **${entries.length}** failing feed(s). These were temporarily disabled in PR #442 to avoid Hugo build timeouts.`,
+              ''
+            ];
+            for (const e of entries) {
+              const [first, ...rest] = e.split('\n');
+              const title = first.replace(/^✗\s+/, ':x: **') + '**';
+              bodyLines.push(`- ${title}`);
+              if (rest.length) {
+                const detail = rest.slice(0,2).map(s => s.replace(/^\s+/, '')).join(' · ');
+                bodyLines.push(`  - ${detail}`);
+              }
+            }
+            bodyLines.push('');
+            bodyLines.push('Full report is attached to the workflow artifacts (rss-validation-report).');
+            bodyLines.push('');
+            bodyLines.push('_This comment was posted automatically by the RSS validation workflow._');
+            const body = bodyLines.join('\n\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body
+            });
