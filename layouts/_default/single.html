@@ -7,12 +7,14 @@
 <div class="{{ if not .Params.fullwidth }}container{{ else }}container-fluid{{ end }}">
     <div class="row">
         {{- if $.Page.FirstSection.Param "sideMenu" -}}
-        <nav id="sidebarMenu" class="col-md-4 col-lg-3 d-md-block bg-light sidebar collapse">
+        {{- partial "sidebar-toggle.html" . -}}
+
+        <nav id="sidebarMenu" class="col-md-4 col-lg-3 d-md-block bg-light sidebar collapse sidebar-collapsible">
             <div class="position-sticky p-3 sidebar-sticky">
                 {{ partial "menu.html" . }}
             </div>
         </nav>
-        <div id="content" class="col-md-8 ms-sm-auto col-lg-9 p-4" data-pagefind-body>
+        <div id="content" class="col-md-7 ms-sm-auto col-lg-8 p-4" data-pagefind-body>
         {{- else -}}
         <div id="content" class="p-4" data-pagefind-body>
         {{- end -}}
