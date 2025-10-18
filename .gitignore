@@ -9,6 +9,11 @@ hugo.*
 static/_pagefind
 
 # Python cache
+.venv
 __pycache__/
 *.py[cod]
 *$py.class
+
+# Cloudflare
+.wrangler/
+.cache/
