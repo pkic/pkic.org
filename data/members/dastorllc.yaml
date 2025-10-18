@@ -18,7 +18,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: https://dastorllc.com/feed/
+  #feed: https://dastorllc.com/feed/
   language: en_US
 
 # Press Releases
