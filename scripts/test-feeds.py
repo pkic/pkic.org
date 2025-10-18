@@ -15,6 +15,11 @@ Features:
 - Produces detailed summary report
 - Exits with non-zero code if any feed is invalid or times out
 
+Retry configuration:
+ - FEED_RETRY_ATTEMPTS: number of retry attempts for transient errors (default: 3)
+ - FEED_RETRY_BACKOFF: backoff multiplier for exponential backoff (default: 1.5)
+ - FEED_RETRY_JITTER: maximum jitter in seconds added to backoff sleep (default: 0.3)
+
 Usage:
     python3 scripts/test-feeds.py
 
@@ -37,6 +42,7 @@ import yaml
 import time
 import requests
 import feedparser
+import random
 from pathlib import Path
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Dict, List, Tuple, Optional
@@ -45,6 +51,65 @@ from typing import Dict, List, Tuple, Optional
 TIMEOUT_SECONDS = 10
 MAX_WORKERS = 10
 MEMBERS_DIR = "data/members"
+# Retry configuration (can be overridden with environment variables)
+RETRY_MAX_ATTEMPTS = int(os.environ.get('FEED_RETRY_ATTEMPTS', '3'))
+# Backoff factor used as multiplier for exponential backoff (sleep = backoff * factor^(attempt-1))
+RETRY_BACKOFF_FACTOR = float(os.environ.get('FEED_RETRY_BACKOFF', '1.5'))
+RETRY_JITTER_SECONDS = float(os.environ.get('FEED_RETRY_JITTER', '0.3'))
+
+
+def request_with_retries(method: str, url: str, **kwargs) -> requests.Response:
+    """Perform an HTTP request with retries for transient errors and 5xx responses.
+
+    Args:
+        method: HTTP method ('get', 'head', etc.)
+        url: The URL to request
+        **kwargs: Passed to requests.request (timeout, headers, stream, allow_redirects, ...)
+
+    Returns:
+        requests.Response on success
+
+    Raises:
+        requests.exceptions.RequestException if all attempts fail
+    """
+    attempt = 0
+    last_exc = None
+
+    while attempt < RETRY_MAX_ATTEMPTS:
+        attempt += 1
+        try:
+            resp = requests.request(method, url, **kwargs)
+
+            # Retry on server errors (5xx) and Too Many Requests (429)
+            if resp.status_code >= 500 or resp.status_code == 429:
+                msg = f"Server returned {resp.status_code}"
+                last_exc = requests.exceptions.HTTPError(msg)
+                if attempt >= RETRY_MAX_ATTEMPTS:
+                    resp.raise_for_status()
+                # else fall-through to sleep and retry
+            else:
+                return resp
+
+        except requests.exceptions.Timeout as e:
+            last_exc = e
+            # transient, let it retry
+        except requests.exceptions.RequestException as e:
+            # For network-related errors, we may want to retry
+            last_exc = e
+
+        # If we reach here, we will retry unless we've exhausted attempts
+        if attempt >= RETRY_MAX_ATTEMPTS:
+            break
+
+        # Exponential backoff with optional jitter
+        backoff = (RETRY_BACKOFF_FACTOR ** (attempt - 1))
+        sleep_time = backoff + random.uniform(0, RETRY_JITTER_SECONDS)
+        time.sleep(sleep_time)
+
+    # All attempts failed — raise last exception if available
+    if last_exc:
+        raise last_exc
+    raise requests.exceptions.RequestException("Unknown error during request_with_retries")
 
 
 class FeedValidationResult:
@@ -131,30 +196,31 @@ def check_content_type(url: str, timeout: int) -> Tuple[bool, Optional[str], Opt
         Tuple of (is_valid, content_type, error_message)
     """
     try:
-        # Try HEAD request first (faster)
-        response = requests.head(url, timeout=timeout, allow_redirects=True)
-        content_type = response.headers.get('content-type', '').lower()
-        
-        # If HEAD doesn't give us content-type, try GET
-        if not content_type or 'html' in content_type:
-            response = requests.get(url, timeout=timeout, stream=True)
-            content_type = response.headers.get('content-type', '').lower()
-        
+        # Try HEAD request first (faster). Use retry wrapper for transient errors.
+        response = request_with_retries('head', url, timeout=timeout, allow_redirects=True)
+        content_type = response.headers.get('content-type', '') if response is not None else ''
+        content_type = content_type.lower()
+
+        # If HEAD doesn't give us content-type or returns an error-like status, try GET
+        if (not content_type or 'html' in content_type) or (response is not None and response.status_code >= 400):
+            response = request_with_retries('get', url, timeout=timeout, stream=True)
+            content_type = response.headers.get('content-type', '').lower() if response is not None else ''
+
         # Check if it's a valid feed content type
         valid_types = ['xml', 'rss', 'atom', 'application/rss+xml', 
                       'application/atom+xml', 'text/xml', 'application/xml']
-        
+
         is_valid = any(valid_type in content_type for valid_type in valid_types)
-        
+
         # Check for HTML responses (common mistake)
         if 'html' in content_type:
             return False, content_type, "Content-Type is HTML, not XML/RSS"
-        
+
         if not is_valid:
             return False, content_type, f"Invalid Content-Type: {content_type}"
-            
+
         return True, content_type, None
-        
+
     except requests.exceptions.Timeout:
         return False, None, "Request timeout during content-type check"
     except requests.exceptions.RequestException as e:
@@ -180,20 +246,20 @@ def validate_feed(member_id: str, url: str, timeout: int = TIMEOUT_SECONDS) -> F
         # Step 1: Check content type
         is_valid_type, content_type, error_msg = check_content_type(url, timeout)
         result.content_type = content_type
-        
+
         if not is_valid_type:
             result.status = "invalid_content_type"
             result.error_message = error_msg
             return result
-        
+
         # Step 2: Parse feed with feedparser
-        # Set timeout by using requests session
-        response = requests.get(url, timeout=timeout)
+        # Use GET with retries to fetch the feed body
+        response = request_with_retries('get', url, timeout=timeout)
         result.response_time = time.time() - start_time
-        
+
         # Parse the feed
         feed = feedparser.parse(response.content)
-        
+
         # Check for parsing errors (bozo bit)
         if feed.bozo:
             result.status = "parsing_error"
@@ -204,16 +270,16 @@ def validate_feed(member_id: str, url: str, timeout: int = TIMEOUT_SECONDS) -> F
                 # Continue validation for minor encoding issues
             else:
                 return result
-        
+
         # Check if feed has required fields
         if not hasattr(feed, 'feed'):
             result.status = "invalid_structure"
             result.error_message = "Feed does not have required 'feed' structure"
             return result
-        
+
         # Extract feed information
         result.feed_title = feed.feed.get('title', 'No title')
-        
+
         # Check for entries
         if not hasattr(feed, 'entries') or len(feed.entries) == 0:
             result.status = "no_entries"
@@ -222,23 +288,23 @@ def validate_feed(member_id: str, url: str, timeout: int = TIMEOUT_SECONDS) -> F
             # This is a warning, not a failure
             result.valid = True
             return result
-        
+
         result.entry_count = len(feed.entries)
-        
+
         # Validation successful
         result.valid = True
         result.status = "valid"
-        
+
     except requests.exceptions.Timeout:
         result.status = "timeout"
         result.error_message = f"Request timeout after {timeout} seconds"
         result.response_time = timeout
-        
+
     except requests.exceptions.RequestException as e:
         result.status = "request_error"
         result.error_message = f"Request error: {str(e)}"
         result.response_time = time.time() - start_time
-        
+
     except Exception as e:
         result.status = "unknown_error"
         result.error_message = f"Unexpected error: {str(e)}"
