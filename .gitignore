@@ -7,3 +7,8 @@ static/pagefind
 hugo
 hugo.*
 static/_pagefind
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
