@@ -34,6 +34,7 @@ jobs:
         if: github.event_name == 'pull_request'
         uses: actions/github-script@v6
         with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
             const fs = require('fs');
             const path = 'report.txt';
@@ -87,9 +88,20 @@ jobs:
             bodyLines.push('');
             bodyLines.push('_This comment was posted automatically by the RSS validation workflow._');
             const body = bodyLines.join('\n\n');
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body
-            });
+            try {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body
+              });
+            } catch (err) {
+              const status = err && (err.status || (err.response && err.response.status));
+              if (status === 403) {
+                console.log('Permission error when posting comment (403)');
+              } else {
+                // Re-throw unexpected errors so the workflow still fails for
+                // genuine problems.
+                throw err;
+              }
+            }
