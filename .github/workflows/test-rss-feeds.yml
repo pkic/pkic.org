@@ -10,6 +10,7 @@ permissions:
 
 jobs:
   validate:
+    name: Validate RSS Feeds
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
