@@ -4,7 +4,7 @@ slogan:
 website: https://www.cybertrustconsulting.co.nz
 
 # Short description, longer content can be placed in `content/members/`
-description: CyberTrust consulting is a boutique cybersecurity company that specialises in PKI, PQC consulting and Identity Security. We help organisations build future-proof digital trust infrastructures by combining decades of industry experience with a sharp focus on emerging cryptographic threats and identity risks. With experience spanning banking, government, insurance, aviation, and technology sectors across Africa, Australia, New Zealand, and the United States, the CyberTrust team has led complex identity and cryptography programs from the ground up. Our collective background includes leadership in initiatives like Digital Identity New Zealand, where Paul served as Chair, supporting a vision for a trustworthy, inclusive digital future for Aotearoa New Zealand.
+description: CyberTrust consulting is a boutique cybersecurity company that specialises in PKI, PQC consulting and Identity Security.
 
 # membership
 memberSince: 2025-10-14
