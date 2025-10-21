@@ -685,6 +685,24 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/sarahmccarthyphd/
 
+    - name: Anestis Bechtsoudis
+      title: Cybersecurity Engineering Director at CENSUS Labs
+      bio: |
+        Anestis Bechtsoudis is a cybersecurity engineering leader focused on trusted computing platforms and modern protocol security. With 14 years of experience, he has supported organizations in defense, finance, healthcare, critical infrastructure, and technology design and validate resilient products, secure communications, identity, attestation, and key management at scale.
+
+        He began as a hardware security researcher, moved into product security assessments, and now leads Cybersecurity Engineering at CENSUS Labs, covering architecture, development, assessment, and integration across edge and cloud platforms.
+
+        His current work centers on confidential computing, trustworthy systems, and securing AI-enabled workloads. He drives Zero Trust adoption, cryptographic stack modernization, risk classification frameworks, and practical migration to post-quantum cryptography. He also designs privacy-preserving and distributed trust architectures that align security goals with the operational constraints of modern systems.
+      social:
+        linkedin: https://www.linkedin.com/in/anestis-bechtsoudis-3aa225317/
+
+    - name: Samuel Tseitkin
+      title: CEO of ExeQuantum
+      bio: |
+        Samuel Tseitkin is the founder of ExeQuantum, an Australian company focused on helping governments and critical industries transition securely to post-quantum cryptography. His work emphasizes practical frameworks that help identity, healthcare, and trust-service providers maintain data integrity and compliance through the quantum transition. Samuel collaborates with public and private institutions across the Middle East, Africa, and APAC to design verifiable, standards-aligned PQC infrastructure that strengthens national trust ecosystems.
+      social:
+        linkedin: https://www.linkedin.com/in/samuel-tseitkin-2a4b9718a/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -950,6 +968,8 @@ data:
               * Close and feedback collection
             speakers:
               - Scott Rea
+              - Anestis Bechtsoudis
+              - Samuel Tseitkin
             locations:
               - room_2
             track: Roundtable
