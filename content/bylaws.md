@@ -85,7 +85,9 @@ There are no membership fees. We encourage (but do not require) all Members to b
 
 To support the activities of the PKI Consortium we accept sponsors and donations. Sponsors will be listed on the PKIC website and may receive benefits as described in the sponsorship brochure, but do not gain any other special treatment or rights. Sponsors and donations may support the development of specific projects but will never be permitted to influence the outcome of a policy.
 
-Information about sponsorship levels, donation options, and related benefits will be published at http://pkic.org/sponsors and revised and updated on a regular basis.
+Information about sponsorship levels, donation options, and related benefits will be published at http://pkic.org/sponsors and revised and updated on a regular basis. 
+
+The Executive Council shall oversee the Sponsors and Donations program. Substantial changes will be shared with the Members, who may raise objections or request a vote by the Executive Council.
 
 PKIC may establish a bank account or may deposit funds with a third-party company (e.g., a support company providing services to PKIC) to hold without interest and apply to invoices approved by the Chair or the Vice-Chair and the Executive Council on PKIC’s behalf.
 
