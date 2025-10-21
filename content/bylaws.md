@@ -81,22 +81,13 @@ Changes in Membership Criteria: The membership eligibility criteria may be chang
 
 There are no membership fees. We encourage (but do not require) all Members to become a sponsor.
 
-## 4. Sponsors
+## 4. Sponsors and Donations
 
-To support the activities of the PKI Consortium we accept sponsors and donations. Sponsors will be listed on the PKIC website but do not gain any other special treatment or rights. Sponsors and donations can support the development of specific projects but will never be permitted to influence the outcome of a policy.
+To support the activities of the PKI Consortium we accept sponsors and donations. Sponsors will be listed on the PKIC website and may receive benefits as described in the sponsorship brochure, but do not gain any other special treatment or rights. Sponsors and donations may support the development of specific projects but will never be permitted to influence the outcome of a policy.
 
-| Sponsor Level   | Annual Donation       |
-|-----------------|----------------------:|
-| Diamond         |   Starting at $50,000 |
-| Titanium        |               $25,000 |
-| Platinum        |               $15,000 |
-| Gold            |               $10,000 |
-| Silver          |                $5,000 |
-| Bronze          |                $2,500 |
+Information about sponsorship levels, donation options, and related benefits will be published at http://pkic.org/sponsors and revised and updated on a regular basis. 
 
-- Single donations can be made at any amount.
-- The PKIC's public list of sponsors will be updated as soon as feasible, but at least within three (3) months.
-- A 10% discount is given when a sponsor commits a sponsorship for three (3) or more years.
+The Executive Council shall oversee the Sponsors and Donations program. Substantial changes will be shared with the Members, who may raise objections or request a vote by the Executive Council.
 
 PKIC may establish a bank account or may deposit funds with a third-party company (e.g., a support company providing services to PKIC) to hold without interest and apply to invoices approved by the Chair or the Vice-Chair and the Executive Council on PKIC’s behalf.
 
