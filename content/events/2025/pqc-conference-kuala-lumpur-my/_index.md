@@ -503,13 +503,6 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/jaime-gomez-garcia/
         
-    - name: Mila Anastasova
-      title: Applied Scientist at Amazon Web Services (AWS)
-      bio: |
-        Mila Anastasova is an applied scientist at Amazon. She has received her PhD degree in Computer Engineering at Florida Atlantic University, in 2024. Her research is focused on the implementation and optimization of classical and post-quantum cryptography algorithms for different low- and high-end target platforms, as well as their integration into security network protocols.
-      social:
-        linkedin: https://www.linkedin.com/in/mila-anastasova/
-
     - name: Lai Seow Yong
       title: Technical Head, Asia Pacific at Utimaco
       bio: |
@@ -702,6 +695,23 @@ data:
         Samuel Tseitkin is the founder of ExeQuantum, an Australian company focused on helping governments and critical industries transition securely to post-quantum cryptography. His work emphasizes practical frameworks that help identity, healthcare, and trust-service providers maintain data integrity and compliance through the quantum transition. Samuel collaborates with public and private institutions across the Middle East, Africa, and APAC to design verifiable, standards-aligned PQC infrastructure that strengthens national trust ecosystems.
       social:
         linkedin: https://www.linkedin.com/in/samuel-tseitkin-2a4b9718a/
+
+    - name: David Turkington
+      title: Head of Technology APAC at GSMA
+      bio: |
+        David has worked in mobile networks engineering for nearly 40 years, his experience includes standards, coverage rollout and optimization, networking and security, analytics, and machine learning.
+
+        His career began at the Mobile Systems Division, British Telecom Research Laboratories in Martlesham Heath, UK, designing hardware and software for cordless systems.
+
+        He was seconded to CellularOne in New York, where he was responsible for a range of activities, including planning and optimization, fraud detection, and special coverage projects until 1993.
+
+        Since 1993 he has been in Hong Kong, initially with SmarTone, and then working in a wide variety of roles and projects in the region, and beyond, specializing in network engineering for network operators, system integrators, equipment vendors, and an APAC IoT solution provider.
+
+        At GSMA he is responsible for coordinating various mobile industry technology initiatives, including 5G, cybersecurity, AI and IoT in the APAC region.
+
+        David is a member of the Institute of Engineering and Technology and a Chartered Engineer.
+      social:
+        linkedin: https://www.linkedin.com/in/davidturkington
 
   # Agenda ----------------------------------------------------------------------
   agenda:
@@ -1307,13 +1317,17 @@ data:
             locations:
               - plenary
 
-          - title: Performance Metric Evaluation of MLWE in Web and other TLS Use-cases
+          - title: "PQC in Mobile Networks: Insights from the GSMA Task Force"
             description: |
-              The cryptographic community is actively debating the shift to Post-Quantum PKI as quantum computing progresses and NIST advances standardization. While larger certificate sizes (15–22KB extra) raise concerns about WebPKI performance, the transition is essential. Amazon Private CA, used by thousands, is positioned to support this shift.
-              
-              We’ll present performance data on MLWE-based TLS, analyzing Core Web Vitals and how larger certs affect connection latency and user experience across HTML, JS, and image delivery. We'll cover both parallel and sequential connection patterns. Our mTLS benchmarks span TLS 1.2 vs. 1.3, cipher negotiations (classical vs PQ), and cert sizes from RSA/ECDSA to ML-DSA. Results include handshake-only (TTFB) and full load (TTLB) metrics across scenarios.
+              The GSMA Post Quantum Telco Network Task Force (PQTN-TF), formed in collaboration with IBM and Vodafone, is a global initiative to prepare the telecommunications sector for the cryptographic challenges posed by quantum computing. With over 60 participating organizations (including network operators, technology providers, regulators, and governments) the PQTN-TF serves as a platform for collaboration, testing, and publishing practical guidance for quantum-safe migration.
+
+              This presentation provides a technical update on PQTN-TF’s work, focusing on the implications of post-quantum cryptography (PQC) for mobile networks. It examines how 5G’s service-based architecture, distributed cloud infrastructure, and enhanced identity protection mechanisms reshape the threat landscape, while legacy vulnerabilities such as downgrade attacks and IMSI catchers persist.
+
+              We highlight PQTN-TF’s contributions to crypto-agility, including risk assessments, migration strategies, and alignment with global government initiatives and NIST timelines. Special attention is given to PQC integration challenges in telecom environments, such as key management, performance overhead, and interoperability across network functions and devices.
+
+              Attendees will gain insight into how PQTN-TF is helping the industry move from awareness to action, ensuring mobile networks remain secure in the post-quantum era.
             speakers:
-              - Mila Anastasova
+              - David Turkington
             locations:
               - breakout
 
