@@ -67,7 +67,7 @@ function render() {
 }
 
 async function load() {
-    questionTextEl.textContent = 'Loading…';
+    questionTextEl.textContent = '...';
     askerEl.textContent = '';
     try {
         const res = await fetch(buildBaseUrl());
@@ -89,8 +89,34 @@ async function load() {
 document.addEventListener('keydown', e => {
     if (e.key === 'ArrowLeft') { e.preventDefault(); if (current > 0) { current--; render(); } }
     if (e.key === 'ArrowRight') { e.preventDefault(); if (current < filtered.length - 1) { current++; render(); } }
+    
+    // Refresh data: Ctrl+R or R key
     const isCtrl = e.ctrlKey || e.metaKey;
-    if (isCtrl && (e.key === 'r' || e.key === 'R')) { e.preventDefault(); load(); }
+    if ((isCtrl && (e.key === 'r' || e.key === 'R')) || e.key === 'r' || e.key === 'R') { 
+        e.preventDefault(); 
+        load(); 
+        console.log('Refreshing data...');
+    }
+    
+    // Toggle between original and AI versions: T key
+    if (e.key === 't' || e.key === 'T') {
+        e.preventDefault();
+        const hash = readHash();
+        const currentShow = (hash.show && hash.show.toLowerCase() === 'ai') ? 'ai' : 'original';
+        const newShow = currentShow === 'ai' ? 'original' : 'ai';
+        
+        // Build new hash with toggled show parameter
+        const params = new URLSearchParams(window.location.hash.slice(1));
+        params.set('show', newShow);
+        window.location.hash = params.toString();
+        
+        console.log(`Switching to ${newShow} questions...`);
+    }
+});
+
+// Listen for hash changes and reload data
+window.addEventListener('hashchange', () => {
+    load();
 });
 
 // initial load
