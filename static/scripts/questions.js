@@ -62,7 +62,7 @@ function render() {
     // Only render both together to avoid partial display on first load
     if (text) {
         questionTextEl.textContent = text;
-        askerEl.textContent = asker ? `— ${asker}` : '';
+        askerEl.textContent = asker ? `— ${asker}` : '— Anonymous';
     }
 }
 
