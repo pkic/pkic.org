@@ -1317,7 +1317,7 @@ data:
             locations:
               - plenary
 
-          - title: PQC in Mobile Networks: Insights from the GSMA Task Force
+          - title: "PQC in Mobile Networks: Insights from the GSMA Task Force"
             description: |
               The GSMA Post Quantum Telco Network Task Force (PQTN-TF), formed in collaboration with IBM and Vodafone, is a global initiative to prepare the telecommunications sector for the cryptographic challenges posed by quantum computing. With over 60 participating organizations (including network operators, technology providers, regulators, and governments) the PQTN-TF serves as a platform for collaboration, testing, and publishing practical guidance for quantum-safe migration.
 
