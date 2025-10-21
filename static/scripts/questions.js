@@ -59,12 +59,16 @@ function render() {
     const asker = (row && row.c && row.c[0]) ? ((typeof row.c[0].v !== 'undefined') ? row.c[0].v : row.c[0].f) : '';
     const text = (row && row.c && row.c[1]) ? ((typeof row.c[1].v !== 'undefined') ? row.c[1].v : row.c[1].f) : '';
 
-    questionTextEl.textContent = text || '';
-    askerEl.textContent = asker ? `— ${asker}` : '';
+    // Only render both together to avoid partial display on first load
+    if (text) {
+        questionTextEl.textContent = text;
+        askerEl.textContent = asker ? `— ${asker}` : '';
+    }
 }
 
 async function load() {
-    questionTextEl.textContent = 'Loading…'; askerEl.textContent = '';
+    questionTextEl.textContent = 'Loading…';
+    askerEl.textContent = '';
     try {
         const res = await fetch(buildBaseUrl());
         const txt = await res.text();
@@ -77,6 +81,7 @@ async function load() {
     } catch (e) {
         console.error('load error', e);
         questionTextEl.textContent = 'Error: ' + e.message;
+        askerEl.textContent = '';
     }
 }
 
