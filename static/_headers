@@ -5,4 +5,8 @@ https://:project.pages.dev/*
     X-Frame-Options: DENY
     X-Content-Type-Options: nosniff
     Referrer-Policy: strict-origin-when-cross-origin
-    Content-Security-Policy: default-src 'none'; img-src 'self' https://i.ytimg.com data:; form-action 'self'; base-uri 'self'; connect-src 'self' https://fonts.gstatic.com/s/roboto/ data:; block-all-mixed-content; style-src 'unsafe-inline' 'self' https://fonts.googleapis.com/; font-src https://fonts.gstatic.com/s/roboto/; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/; frame-src https://www.youtube-nocookie.com/ https://www.youtube.com/ https://player.vimeo.com/; media-src https://i.ytimg.com https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4;
+    Content-Security-Policy: default-src 'none'; img-src 'self' https://pkic.org https://i.ytimg.com data:; form-action 'self'; base-uri 'self'; connect-src 'self' https://fonts.gstatic.com/s/roboto/ data:; block-all-mixed-content; style-src 'unsafe-inline' 'self' https://fonts.googleapis.com/; font-src https://fonts.gstatic.com/s/roboto/; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/; frame-src https://www.youtube-nocookie.com/ https://www.youtube.com/ https://player.vimeo.com/; media-src https://i.ytimg.com https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4;
+
+/questions
+    ! Content-Security-Policy
+    Content-Security-Policy: default-src 'none'; img-src 'self' https://pkic.org data:; form-action 'self'; base-uri 'self'; connect-src 'self' https://fonts.gstatic.com/s/roboto/ https://docs.google.com/spreadsheets/d/ data:; block-all-mixed-content; style-src 'unsafe-inline' 'self' https://fonts.googleapis.com/; font-src https://fonts.gstatic.com/s/roboto/; script-src 'self' 

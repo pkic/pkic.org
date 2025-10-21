@@ -1,0 +1,56 @@
+id: keysight
+name: Keysight Technologies
+slogan: Design, Emulation, and Test Solutions to Connect and Secure the World
+website: https://www.keysight.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: At Keysight, we empower innovators to explore, design, and bring world-changing technologies to life. Our software-centric solutions serve across the design and development environment, enabling you to deliver tomorrow’s breakthroughs at speed and with reduced risk.
+
+# membership
+memberSince: 2025-08-27
+memberType: F
+workingGroups:
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://www.keysight.com/us/en/about/newsroom.html
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/keysight-device-security-testing/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Durga Ramachandran
+    role: Innovation Director
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/durga-ramachandran-04969766/
+    description: Durga is the Innovation Director at Keysight Technologies and represents the organization at the PKI Consortium.

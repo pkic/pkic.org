@@ -20,7 +20,9 @@ sponsor:
 # Blog posts
 blog: 
   url: https://www.creaplus.com/resources/blog
-  feed: https://www.creaplus.com/resources/blog?format=feed&type=rss
+  # Temporarily disabled: RSS feed returns HTML (text/html; charset=utf-8) instead of XML/RSS
+  # Reference: CI report - feed validation failure
+  # feed: https://www.creaplus.com/resources/blog?format=feed&type=rss
   language: en_US
 
 # Social media

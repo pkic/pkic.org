@@ -1,0 +1,57 @@
+id: cybertrustconsulting
+name: CyberTrust Consulting
+slogan:
+website: https://www.cybertrustconsulting.co.nz
+
+# Short description, longer content can be placed in `content/members/`
+description: CyberTrust consulting is a boutique cybersecurity company that specialises in PKI, PQC consulting and Identity Security.
+
+# membership
+memberSince: 2025-10-14
+memberType: H2
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.cybertrustconsulting.co.nz/blog-feed.xml
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Paul Platen
+    role: Principal Consultant
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/paul-platen-cige-cist-ciam-3988974/
+    description: Paul is the Principal Consultant at CyberTrust Consulting and represents the organization at the PKI Consortium.

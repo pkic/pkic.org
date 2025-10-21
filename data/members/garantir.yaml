@@ -18,7 +18,9 @@ sponsor:
 # Blog posts
 blog: 
   url: https://garantir.io/blog/
-  feed: https://garantir.io/feed/
+  # Temporarily disabled: RSS feed returns HTML (text/html) instead of XML/RSS
+  # Reference: CI report - feed validation failure
+  # feed: https://garantir.io/feed/
   language: en_US
 
 # Press Releases

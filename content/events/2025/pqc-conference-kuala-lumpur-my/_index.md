@@ -32,7 +32,6 @@ params:
 
 data:
   name: Post-Quantum Cryptography Conference
-  draft: true
   timezone: Asia/Kuala_Lumpur
 
   # Locations with sessions in parallel -----------------------------------------
@@ -46,22 +45,28 @@ data:
       livestream: https://pkic.org/events/2025/pqc-conference-kuala-lumpur-my/livestream/#Breakout
 
     2025-10-28:
-      order: [room_1, room_2, room_3, room_4, room_5, room_6]
+      order: [room_1, room_2, room_3, room_4, room_5, room_6, room_7, room_8]
       room_1:
       room_2:
       room_3:
       room_4:
       room_5:
       room_6:
+      room_7:
+      room_8:
 
   # Speakers --------------------------------------------------------------------
   speakers:
     - name: Paul van Brouwershaven
-      title: Chair PKI Consortium and Director of Technology at SSL.com
+      title: Chair PKI Consortium
       bio: |
-        Paul van Brouwershaven is a distinguished leader in cybersecurity with over two decades of experience specializing in Public Key Infrastructure (PKI). He currently serves as the Director of Technology at SSL.com. In addition to his role, Paul chairs the PKI Consortium and also leads its PQC Working Group. Prior to his current roles, Paul held the position of Director Technology Compliance at Entrust and was the Technology Solutions Director at GlobalSign.  
-
-        Beyond his leadership roles, Paul is also the Owner of Digitorus, a specialized software development and consultancy company he founded in 2016. Digitorus focuses on PKI, Digital Signatures, and Trustworthy Systems. His extensive expertise in PKI is further highlighted by his past role as Vice Chair of the CA/Browser Forum, where he contributed to defining industry standards for digital certificates.
+        Paul van Brouwershaven is a distinguished leader in cybersecurity with over two decades of experience specializing in Public Key Infrastructure (PKI). He chairs the PKI Consortium and leads its Post-Quantum Cryptography (PQC) Working Group, driving collaboration and innovation in digital trust and cryptographic agility.
+        
+        Paul is the Owner of Digitorus, a specialized software development and consultancy company he founded in 2016, focused on PKI, digital signatures, and trustworthy systems. His extensive expertise in PKI is further highlighted by his past role as Vice Chair of the CA/Browser Forum, where he contributed to defining industry standards for digital certificates.
+        
+        Previously, Paul served as Director of Technology at SSL.com, Director Technology Compliance at Entrust, and Technology Solutions Director at GlobalSign.
+        
+        He is currently open to new opportunities where he can apply his unique blend of technical, strategic, and leadership skills to complex challenges—whether in a full-time role or on a contract basis as a trusted advisor.
       social:
         linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
         x: https://x.com/vanbroup
@@ -140,19 +145,6 @@ data:
         Dr. Alexander Löw is the CEO of Data-Warehouse GmbH and serves as a Senator in the German Senate of Economy. He holds the position of Vice President of the German Cybersecurity Council Association and is the innovative mind behind IQIMS and PCert. With a deep understanding of cybersecurity since the 1980s and 25 years of experience as a Data Protection Officer (DPO), Alexander has a strong focus on Public Key Infrastructure (PKI). He has been involved in the conceptualization, building, and maintenance of industrial and governmental CAs (e.g., Macao, German Airforce, BMW) since 2001. In 2012, following a significant APT attack, he began automating PKI processes to enhance cybersecurity. Since 2014, he has been actively involved in publishing and presenting on PKI and cybersecurity topics, and has been conducting PKI trainings for the German BSI Alliance for Cybersecurity since 2015. In 2024, he joined the NIST Post-Quantum Migration Working Group to contribute to the development of standard 1800-38B.
       social:
         linkedin: https://www.linkedin.com/in/dr-alexander-loew/
-    
-    - name: Alexey Bocharnikov
-      title: Director for Emerging Technologies in Cyber at Macquarie
-      bio: |
-        Alexey Bocharnikov is Director of Emerging Technologies (Cyber) at Macquarie, where Alexey leads the adoption of advanced security capabilities—including post‑quantum cryptography, AI/ML security—to enable innovation without compromising resilience. With over 15 years of experience in cybersecurity strategy, risk management, quantum risk, and cryptography, Alexey has a proven track record of translating complex risk into actionable strategies.
-
-        Previously, Alexey was a Director at Accenture, serving as APAC Quantum Security Lead and A/NZ Cyber Strategy Delivery Lead. Before that, Alexey contributed to the Global Innovation Quantum Technology Lab at EY and led Global Quantum Security initiatives, delivering more than a dozen cyber strategy programs across the A/NZ region. Earlier in the career, Alexey served as Country Information Security Officer at Deutsche Bank (Moscow), safeguarding business operations and aligning global standards with local needs.
-
-        A recognised advocate for proactive risk management and responsible adoption of emerging technologies, Alexey has authored articles, contributed to international reports, produced educational content, and spoken at industry conferences on quantum security and cyber strategy.
-        
-      social:
-        linkedin: https://www.linkedin.com/in/alexeybocharnikov/
-        x: https://x.com/sumprior
           
     - name: Tomas Gustavsson
       title: Chief PKI Officer at Keyfactor
@@ -194,12 +186,14 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/navaneeth-rameshan/
 
-    - name: Greg Wetmore
-      title: VP Software Development at Entrust
+    - name: Samantha Mabey
+      title: Director of Product Marketing for the Data Security Solutions at Entrust
       bio: |
-        Greg Wetmore leads the global team responsible for building and enhancing the digital security product portfolio at Entrust, such as the Identity, Data Security, and Critical Infrastructure solutions. Greg joined Entrust in 2000 and has held a number of leadership positions on the engineering team over that period. Greg is a key industry advisor and speaks regularly on topics like digital identity, IoT, Zero Trust and post-quantum security. Greg holds an Engineering degree from Queen’s University Kingston, Ontario, Canada.
+        Samantha Mabey is the Director of Product Marketing for the Data Security Solutions at Entrust, where she oversees marketing strategy and communications for the cryptographic security solutions, as well as leads the efforts around Zero Trust and Post Quantum. She acts as host of several acclaimed podcasts, including the Cybersecurity Institute Podcast, where she engages with industry experts on critical topics in cybersecurity, digital trust, and post quantum preparedness.
+
+        Combining her marketing acumen with a passion for digital security, Samantha is a recognized leader and influential voice in the industry.
       social:
-        linkedin: https://www.linkedin.com/in/gregwetmore/
+        linkedin: https://www.linkedin.com/in/samanthamabey/
 
     - name: Jonathan Jackson
       title: Senior Director, Strategic Solutions at BlackBerry Malaysia
@@ -215,7 +209,7 @@ data:
     - name: Blair Canavan
       title: Director, Alliances at Thales
       bio: |
-        Blair has 30+ years of IT cybersecurity sales, channel, marketing, and business development experience. Blair continuously expanded his cybersecurity and cryptographic expertise starting with Symantec and several cyber start-ups including Chrysalis-ITS (Thales), InfoSec Global, Crypto4A and since September 2019, back with Thales’ Global Technology Alliances team, including the Quantum cryptography portfolio. Blair recently represented the Canadian Forum for Digital Infrastructure Resilience (CFDIR) to articulate the standards and Government guidance at Mobile World Congress (MWC) in 2023. He is an avid presenter, start-up consultant, and IT industry contributor. Blair holds an Hons.BA from the University of Waterloo, and Wilfrid Laurier University, Ontario, Canada.  
+        Blair has 35+ years of cybersecurity sales, marketing and business development expertise. Blair started his cybersecurity and cryptographic career with Symantec, followed by Chrysalis-ITS (Thales), Titus (Fortra), Black Duck (Synopsys), InfoSec Global (Keyfactor) and Crypto4A. Blair was recruited back to Thales’ Global Technology Alliances team in 2019, tasked with the development and curation of the PKI and Post Quantum Cryptography (PQC) portfolio.  He is an avid presenter, webinar host and global PQC industry contributor, including the CFDIR PQC WG and founder of Thales’ PQC Palooza event held during the RSA Conference. Blair holds an Hons.BA Co-op from the University of Waterloo and Business Option from Wilfrid Laurier University, Ontario, Canada.
       social:
         linkedin: https://www.linkedin.com/in/blair-canavan-5b708a2/
 
@@ -321,14 +315,18 @@ data:
     - name: Alessandro Amadori
       title: Cryptographer at TNO
       bio: |
-        Alessandro Amadori is a cryptographer at TNO focusing on the migration to Post-quantum Cryptography. He holds a PhD from Eindhoven University of Technology in cryptographic implementations. He has contributed in several PQC migration projects like HAPKIDO, and is one a co-author of the second edition of the PQC migration handbook.
+        Alessandro  is a cryptographer at TNO focusing on the migration to Post-quantum Cryptography. He holds a PhD from Eindhoven University of Technology in cryptographic implementations. He has contributed in several PQC migration projects like HAPKIDO, and is one a co-author of the second edition of the PQC migration handbook.
       social:
         linkedin: https://www.linkedin.com/in/alessandro-amadori-4b2149b8/
 
     - name: Sven Rajala
       title: International PKI Man of Mystery at Keyfactor
       bio: |
-        An award winning seasoned cyber-security consultant with extensive subject matter expertise on PKI, automation of PKI/Signing Solutions, and containers. I have over 18 years of experience working in both the private sector and with federal government departments and agencies. I am frequently called upon to participate in client discussions, presentations, and seminars on topics including PKI, EJBCA, and PKI Devsecops. I also host the Key Master series by Keyfactor found on the YouTube Keyfactor Developers channel.
+        Sven is an award-winning cybersecurity consultant with over 18 years of experience in PKI, automation of PKI and signing solutions, and containerized deployments. Sven's career spans both the private sector and federal government, where he has helped organizations design, modernize, and secure their digital trust infrastructure.
+
+        Recognized for his subject matter expertise in PKI and DevSecOps, he is often invited to lead client discussions, presentations, and technical seminars on EJBCA, PKI architectures, and automation best practices.
+
+        Sven also hosts The Key Master series by Keyfactor, featured on the Keyfactor Developers YouTube channel, where he shares insights and interviews to help the PKI community deepen its technical knowledge.
       social:
         linkedin: https://www.linkedin.com/in/international-pki-man-of-mystery/
         github: https://github.com/svenska-primekey
@@ -434,17 +432,6 @@ data:
         Huck Hai is leading a team of PKI, PQC and AI professionals at Baker Tilly and is a founding member of ACPMIT, based in Budapest, Hungary.  Throughout his career, Huck has led numerous WebTrust for Certification Authorities audits, successfully delivered under KPMG, BDO, and now Baker Tilly. He is an active member of the Institute of Chartered Accountants in England and Wales (ICAEW) Tech Faculty Board and serves as the elected President of the Association of Certified Fraud Examiners (ACFE) - Malaysia Chapter. Huck has played a significant role in collaborating with authorities on National Root CA, Post-Quantum Cryptography (PQC), Cybersecurity, and Artificial Intelligence (AI). He was engaged by the Government of Malaysia in the implementation of the Digital Signature Act 1997 and Digital Signature Regulations 1998.
       social:
         linkedin: https://www.linkedin.com/in/huckhai-lim-847234a/
- 
-    - name: Anurag Krishna Sharma
-      title: Scientist at Advanced Data Processing Research Institute 
-      bio: |
-        I am a Theoretical Computer Scientist working with the Department of Space, Government of India, where I focus on high-assurance systems, secure communication protocols, and advanced computational models. My expertise spans Network Security, Post-Quantum Cryptography, Generative AI, and Quantum Networking, with practical implementation experience using Qiskit, OpenQASM, and IBMQ.
-        
-        I previously collaborated with AIIMS (All India Institute of Medical Sciences) to enhance healthcare infrastructure through technological innovation—particularly in secure data systems and intelligent diagnostics.
-        
-        I hold a Master’s degree in Computer Science from IIT Delhi, where my academic research explored the intersection of cryptographic theory and real-world systems, with applications in quantum-secure communication and privacy-preserving architectures.
-      social:
-        linkedin: https://www.linkedin.com/in/anurag-sharma-099798134/
 
     - name: James Howe
       title: Head of Cryptography at SandboxAQ
@@ -531,7 +518,7 @@ data:
         linkedin: https://www.linkedin.com/in/seow-yong-lai-90416145/
 
     - name: Muhammad Rezal Kamel Ariffin
-      title: Professor at Department of Mathematics and Statistics, Universiti Putra Malaysia
+      title: Director at Malaysia Cryptology Technology and Management Centre
       bio: |
         Prof. Dr. Muhammad Rezal Bin Dato’ Kamel Ariffin received his BSc and MSc degrees in Mathematics from Universiti Putra Malaysia (UPM), Malaysia, in 1999 and 2002, respectively, and his PhD degree in Mathematics from Universiti Kebangsaan Malaysia (UKM), Malaysia, in 2009. He is a Professor with the Department of Mathematics and Statistics, Faculty of Science, UPM.
 
@@ -551,6 +538,171 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/ir-dr-megat-zuhairy-megat-tajuddin-8b150335/
 
+    - name: Osamu Terai
+      title: Group CISO of Mizuho Financial Group, Board member of Financial ISAC Japan
+      bio: |
+        Osamu Terai is Group CISO at Mizuho Financial Group, one of the largest Japanese banks, and responsible for all cybersecurity initiatives including PQC transition of the group. Osamu has more than 30 years of experience in financial IT. In 2024, he chaired “Study Group on Deposit-taking Institutions' Response to Post-Quantum Cryptography” (PQC study group) organized by the Financial Services Agency of Japan. After several meetings, the study group released a report titled “Report of the Study Group on Deposit-taking Institutions' Response to Post-Quantum Cryptography” in November 2024. The report was aimed at heightening awareness of senior management of Japanese FIs about the PQC transition.
+
+        Osamu is also a board member of Financial ISAC (F-ISAC) Japan, a non-profit, member-driven organization dedicated to fortifying the cyber defense of Japanese financial institutions. Presently, Osamu leads a working group called Fintech Security WG within F-ISAC Japan. The WG is creating “PQC transition guide for Japanese FIs” to provide practical guidelines such as the transition timelines, prioritization, project team formation and so on. In this capacity, he is at the vanguard of providing guidance on PQC transition, ensuring the security and resilience of Japan's financial sector.
+      social:
+        linkedin: https://www.linkedin.com/in/osamu-terai
+
+    - name: Steven Gan
+      title: General Manager at Blue Fortress
+      bio: |
+        Steven Gan is a distinguished information security professional, holding the Certified Information Security Manager (CISM) credential. With over two decades of experience in IT Security, he is widely recognized for his profound knowledge and practical expertise.
+ 
+        His credentials span the broad spectrum of cybersecurity, encompassing technology risk assessment, regulatory compliance, identity & access management, application & network security, and infrastructure security. His expertise is particularly evident in his in-depth knowledge and hands-on experience within the financial industry.
+        
+        Prior to joining Blue Fortress, Steven served 11 years at a reputable regional bank in Malaysia. His proven ability to guide teams and organizations towards robust security measures has been consistently acknowledged. A significant highlight of his career is that he was selected among the top 1% of talent across the organization to participate in the prestigious leadership academy program at SMU, Singapore, in 2017, 2019, and 2020—a clear testament to his exceptional leadership skills and potential.
+
+        Steven's invaluable insights, honed over two decades as an end-user within financial institutions, have profoundly enriched his expertise. This extensive understanding of the sector, from multiple perspectives, uniquely equips him to address complex information security challenges with an unparalleled level of proficiency.
+      social:
+        linkedin: https://www.linkedin.com/in/steven-gan-cism-29845889/
+
+    - name: Maeson Maherry
+      title: Chief Operating Officer at Ascertia
+      bio: |
+        With over 20 years of experience in the cybersecurity industry, Maeson enables governments, banks, and enterprises in implementing practical digital trust solutions. His expertise lies in leveraging identity, digital signatures, and cryptography to create value, enhance user experience, and manage risk.
+
+        His insights are shaped by his experience building and scaling a cybersecurity solutions and SaaS company to market leadership, navigating two successful shareholder exits, and leading high-performing technical teams in complex, regulated industries. He now specializes in projects where the goals of security, usability, and business growth must be aligned.
+      social:
+        linkedin: https://www.linkedin.com/in/maeson/
+
+    - name: Wilson Yan
+      title: Channel Solution Engineer Lead at CyberArk APJ
+      bio: |
+        Wilson helps organizations strengthen trust in their digital ecosystems through machine identity security. With over 20 years of experience in information and cyber security, he has served in senior leadership roles at Prudential Assurance Malaysia as Head of Information Security and Data Privacy Officer, the World Health Organization as Information Security Officer, and Ford Motor Company as Security & Controls Champion for Asia Pacific & Africa. He has also held technical roles with PKI and security leaders including Ubizen (later Cybertrust) and Entrust.
+
+        Wilson’s expertise spans PKI, certificate lifecycle automation, and secure identity integration into business applications. Renowned for translating complex security concepts into practical business value, he advises CISOs, architects, and DevOps leaders on scaling security automation and defending against threats to machine identities. Passionate about bridging technology and business, Wilson is a trusted advocate for advancing digital trust across industries.
+      social:
+        linkedin: https://www.linkedin.com/in/wilson-yan/
+
+    - name: Ivan Tan
+      title: Principal Presales Consultant at Thales
+      bio: |
+        Ivan Tan is a seasoned cybersecurity professional with over 20 years of industry experience. As a Principal Presales Consultant, he is widely respected for his strategic thinking and deep technical expertise. Ivan Tan is a recognized specialist in the Thales Data Security portfolio, with a focus on Hardware Security Modules (HSMs), the CipherTrust Data Security Platform (CDSP), and High-Speed Encryptors.
+
+        A passionate advocate for knowledge sharing, Ivan frequently leads webinars and technical sessions to explore the latest developments in data and cloud protection. His professionalism and dedication to excellence have earned him a reputation as a trusted advisor and a consistent driver of impactful results.
+      social:
+        linkedin: https://www.linkedin.com/in/ivantansuanhoe/
+
+    - name: Lory Thorpe
+      title: Quantum Safe Industry Lead at IBM
+      bio: |
+        Driven executive leader with over 20 years senior level global experience in digital transformation and telecommunications with a strong technology, strategy and innovation background (development, architecture, product and solution mgt) in Internet of Things, mobile networks, cloud, security, data analytics/ AI, edge.  Expertise in building, integrating and delivering innovative digital products and solutions to market, across Private and Public sector within Enterprise.
+
+        Leading portfolio and industry efforts on application of Quantum Computing and Quantum Safe in Telecommunications in IBM.
+      social:
+        linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
+
+    - name: Tuan Fabian Bigar
+      title: Secretary General of the Ministry of Digital, Malaysia
+      bio: |
+        Tuan Fabian Bigar currently holds the position of Secretary General at the Ministry of Digital, Malaysia, a role he assumed in June 2024. In this capacity, he is responsible for leading the nation’s digital transformation agenda, encompassing strategic initiatives in digital infrastructure, cybersecurity, innovation, and the digitalization of public services. His stewardship is instrumental in advancing Malaysia’s digital future through integrated policy development and multi-stakeholder collaboration.
+
+        Prior to his current appointment, Tuan Fabian served as the Chief Executive Officer of MyDIGITAL Corporation from April 2021, where he was tasked with overseeing change management and the implementation of the Malaysia Digital Economy Blueprint (MDEB) and the National Fourth Industrial Revolution Policy. He concurrently held the role of Head of the Malaysia Centre for the Fourth Industrial Revolution (Malaysia Centre for 4IR), an affiliate of the World Economic Forum, where he played a key role in positioning Malaysia as a regional leader in digital innovation and governance.
+        
+        His earlier assignments in public service include:
+        
+        * Undersecretary for Policy and International Relations, Ministry of Health
+        * Director, Civil Service Delivery Unit, Prime Minister’s Department
+        * Director, National Key Economic Area - Healthcare, and National Key Results Area - Low Income Households, Performance Management and Delivery Unit (PEMANDU), Prime Minister’s Department
+        * Advisor, Presidential Delivery Bureau, Republic of Tanzania (August-December 2014)
+        
+        Tuan Fabian is widely recognized for his pragmatic and solution-oriented leadership style, characterized by strategic clarity, operational empathy, and a commitment to excellence in public service delivery.
+        
+        He holds a Bachelor of Science degree from Case Western Reserve University, Cleveland, Ohio, and a master's degree in public policy from the National Graduate Institute for Policy Studies, Tokyo.
+        
+        A native of Kuching, Sarawak, Tuan Fabian received his early education at St Joseph’s School, Kuching, and Kolej Tun Datu Tuanku Hj. Bujang, Miri.
+      social:
+        linkedin: https://www.linkedin.com/in/fabian-bigar-79475813/
+
+    - name: Luke Ibbetson
+      title: Group Research and Development Director at Vodafone Group
+      bio: |
+        Luke Ibbetson leads the Vodafone Group Research and Development organisation, fostering the adoption of disruptive and emerging technologies for the benefit of customers, efficiency and growth. A telco industry professional with over 25 years of experience, Luke is currently shaping Vodafone’s thinking on Quantum technology, 6G, non-terrestrial networks, vehicle autonomy and advanced AI/ML. Luke is Chair of the Next Generation Mobile Networks (NGMN) Board Strategy Committee, Vice Chair of GSMA Post Quantum Telco Networks Task Force, and Chairman of the TechWorks Board and serves as Board member for the UK Telecom Innovation Network (UKTIN), the 5G Automotive Association (5GAA) and several venture backed technology companies including AST Space Mobile. Luke is a proud pioneer of low power wide area IoT and a passionate supporter of innovative thinking – helping to create new opportunities for technology to change lives and society for the better.
+      social:
+        linkedin: https://www.linkedin.com/in/luke-ibbetson-26170b23/
+
+    - name: Scott Rea
+      title: Emeritus Board Member at DirectTrust and Global Strategic Advisor at eMudhra 
+      bio: |
+        Scott Rea is a recognized authority in digital trust and healthcare interoperability, serving as Emeritus Board Member at DirectTrust, where he has helped shape national frameworks for secure health information exchange. His leadership has been instrumental in advancing trust standards across regulated industries, particularly healthcare.
+        
+        Currently, Scott is Senior Vice President – Global Strategic Advisor at eMudhra, a global leader in PKI and digital signing solutions. In this role, he guides strategic direction and product innovation across North America and Europe, helping organizations navigate the evolving landscape of cryptographic trust.
+        
+        Scott’s career spans more than 25 years, with key roles at Digital14, DarkMatter, DigiCert, and Dartmouth College. He has led the design and deployment of national PKI infrastructures, including the UAE’s National Digital ID (UAEPASS), and continues to be a driving force in the global digital identity ecosystem.
+        
+        He holds a degree from Queensland University of Technology and is widely respected for his strategic insight, technical depth, and commitment to advancing secure digital transformation.
+      social:
+        linkedin: https://www.linkedin.com/in/scott-rea-cissp-19399/
+
+    - name: Zygmunt Lozinski
+      title: Senior Technical Staff Member and Quantum Ambassador at IBM Research
+      bio: |
+        Zygmunt is a Senior Technical Staff Member in IBM Research, where he is responsible for making the world’s networks Quantum-Safe. His research is on migration to Post Quantum Cryptography in telecoms, and on how this can be applied to make other industries Quantum Safe.
+
+        Zygmunt is a co-founder of the GSMA Post Quantum Telco Network Task Force (PQTN) and editor for all its reports. Previously he was Technical Leader for IBM's Telecom Industry. He was responsible for IBM's Telco Network Cloud, Network Edge and 5G Security solutions. He co-lead the design of the first telco edge platform in the world, and co-lead delivery of one of the first telco clouds in Europe. He has also advised on the security of 5G.
+
+        Zygmunt’s interest in cryptology began at school when he found a 1978 issue of the IBM System Journal describing the implementation of the Data Encryption Standard.
+
+        He has filed over 30 patents. He is a member of IEEE, was educated at Imperial College, has lived in 5 countries and worked in 44 countries.
+      website: https://research.ibm.com/people/zygmunt-lozinski
+      social:
+        linkedin: https://www.linkedin.com/in/zygmuntlozinski/
+
+    - name: Matt Rose
+      title: Manager Sales Engineer North America at Entrust
+      bio: |
+        Matt Rose leads the Technical Sales Consulting team within Entrust’s Cryptographic Data Security (CDS) division, supporting Federal, Commercial, and strategic accounts across North America. With a focus on collaboration, innovation, and measurable impact, Matt empowers his team to deliver trusted solutions that address today’s complex cybersecurity challenges.
+
+        His team specializes in the Entrust Cryptographic Security Platform, a unified solution for enterprise-scale encryption, key management, hardware security modules (HSMs), and Public Key Infrastructure (PKI). Under Matt’s leadership, the team helps organizations secure digital identities, protect sensitive data, and meet evolving compliance and post-quantum readiness requirements.
+
+        Driven by a forward-thinking mindset, Matt is committed to shaping a resilient digital future through strategic engagement and technical excellence.
+      social:
+        linkedin: https://www.linkedin.com/in/rosematt/
+
+    - name: Shaun Chen
+      title: VP APJ Strategic Account Sales Engineering at Thales
+      bio: |
+        Shaun Chen is a cybersecurity and sales engineering leader with over 15 years of experience helping organizations across APAC secure their digital transformation at scale. Combining deep technical expertise with business-driven outcomes, he specializes in cloud and DevSecOps security, risk management, and high-assurance architectures.
+
+        Certified in CCSP and CISSP, Shaun has built and led high-performing pre-sales teams that translate complex security challenges into trusted, compliant solutions—accelerating growth while strengthening resilience.
+
+        His current focus areas include AI security, post-quantum cryptography agility, and sovereignty-aware cloud designs. Shaun works closely with CISOs, regulators, and technology leaders to navigate the evolving threat landscape and adopt emerging innovations with clarity and confidence.
+
+        Passionate about coaching teams and shaping go-to-market strategies, Shaun stays energized by continuous learning—particularly in GenAI, Zero Trust, and next-generation cryptography.
+      social:
+        linkedin: https://www.linkedin.com/in/shaun-chen-ccsp-cissp-30b43ba/
+
+    - name: Sarah McCarthy
+      title: Quantum Readiness Program Lead at Citi
+      bio: |
+        As the Quantum Readiness Program Lead at Citi, Sarah McCarthy focusses on developing effective solutions to ensure the security of financial systems amid emerging quantum threats. Before joining Citi, Sarah was Cryptographic Strategist at evolutionQ, where she spearheaded the development of quantum-safe network solutions and advocated for proactive preparation for the quantum computing era. Prior to that, she held a Research Fellow position at the Institute for Quantum Computing (IQC) at the University of Waterloo, following her PhD from Queen’s University Belfast. Her academic background supports her deep expertise, enabling her to stay at the forefront of quantum-safe solutions and bridge the gap from theoretical research to practical deployment.
+ 
+        A sought-after speaker known for her clear and engaging style, she has presented at events worldwide and is a key PC member for ETSI/IQC Quantum-Safe Cryptography Conference. Sarah was also named one of the Top 50 Women in Quantum by The Quantum Insider.
+      social:
+        linkedin: https://www.linkedin.com/in/sarahmccarthyphd/
+
+    - name: Anestis Bechtsoudis
+      title: Cybersecurity Engineering Director at CENSUS Labs
+      bio: |
+        Anestis Bechtsoudis is a cybersecurity engineering leader focused on trusted computing platforms and modern protocol security. With 14 years of experience, he has supported organizations in defense, finance, healthcare, critical infrastructure, and technology design and validate resilient products, secure communications, identity, attestation, and key management at scale.
+
+        He began as a hardware security researcher, moved into product security assessments, and now leads Cybersecurity Engineering at CENSUS Labs, covering architecture, development, assessment, and integration across edge and cloud platforms.
+
+        His current work centers on confidential computing, trustworthy systems, and securing AI-enabled workloads. He drives Zero Trust adoption, cryptographic stack modernization, risk classification frameworks, and practical migration to post-quantum cryptography. He also designs privacy-preserving and distributed trust architectures that align security goals with the operational constraints of modern systems.
+      social:
+        linkedin: https://www.linkedin.com/in/anestis-bechtsoudis-3aa225317/
+
+    - name: Samuel Tseitkin
+      title: CEO of ExeQuantum
+      bio: |
+        Samuel Tseitkin is the founder of ExeQuantum, an Australian company focused on helping governments and critical industries transition securely to post-quantum cryptography. His work emphasizes practical frameworks that help identity, healthcare, and trust-service providers maintain data integrity and compliance through the quantum transition. Samuel collaborates with public and private institutions across the Middle East, Africa, and APAC to design verifiable, standards-aligned PQC infrastructure that strengthens national trust ecosystems.
+      social:
+        linkedin: https://www.linkedin.com/in/samuel-tseitkin-2a4b9718a/
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -561,14 +713,47 @@ data:
         sessions:
           - title: "Advancing CBOM: Hands-On with CycloneDX v1.7 and PKI Extensions"
             description: |
-              _The Linux Foundation CBOM with ClycloneDX_
+              _**The Linux Foundation CBOM with CycloneDX**_
 
-              The CBOM workshop will help participants understand and become familiar with the  upcoming extensions to the CycloneDX CBOM standard v1.7. In particular new extensions targeted at reporting PKI certificates. We are actively talking to industry vendors who have expressed interest in collaborating on this workshop.
+              The CBOM workshop will help participants understand and become familiar with the upcoming extensions to the CycloneDX CBOM standard v1.7. In particular new extensions targeted at reporting PKI certificates. We are actively talking to industry vendors who have expressed interest in collaborating on this workshop.
               
               **We will explore:**
 
-              * Use open-source software recently transferred to the Linux Foundation.  The software will be used as a basis for a hands-on section of the course.
-              * Become familiar with the  upcoming extensions to the CycloneDX CBOM standard v1.7
+              **Welcome & Introductions (15 min)**
+
+              * Introduction to Linux Foundation PQCA
+
+              **CBOM Fundamentals (30 min)**
+
+              * Overview of CBOMs and their purpose
+              *	Progress of international standardization
+              *	Relationship between SBOMs and CBOMs
+              * An update on the new CycloneDX standard, including PKI
+
+              **CBOM Use Cases (45 min)**
+
+              * Telco Example (GSMA)
+              * Product Use Cases
+              *	Open Source Software Use Case
+
+              **Break (20 min)**
+
+              **Open-Source Tooling (70 min)**
+
+              * SCANOSS Open Source
+                  * Introduction
+                  *	Software demonstration
+              * Linux Foundation CBOM Toolkit
+                  * Source Code / End Point
+                  *	Findings Analysis
+                  *	Integration into CI/CD pipelines
+
+              **Discussion and Next Steps (30 min)**
+
+              *	Other contributions
+              * Contributing to the Linux Foundation
+              * Alignment with SPDX
+
               ___
 
                _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
@@ -576,7 +761,244 @@ data:
               - Michael Osborne
             locations:
               - room_1
+            track: Workshop
+          - title: "Hands-On PQC Migration: From Cryptographic asset inventory to PQC Crypto-agility"
+            description: |
+              With NIST setting a clear 2030 deadline for the deprecation of RSA and ECC in favor of quantum-safe algorithms, organizations face an urgent need to assess and modernize their cryptographic landscape. This workshop offers a practical, end-to-end session on post-quantum cryptography (PQC) migration—starting with cryptographic asset discovery and inventory, through quantum risk assessment, and culminating in the replacement of legacy algorithms with NIST-approved PQC standards.
 
+              **We will explore:**
+
+              * Create a PQC PKI and hybrid PKI using EJBCA.
+              * Issue a signing certificate to SignServer, and demonstrate how to integrate with a hardware security module (HSM) to secure cryptographic keys and operations—bridging the gap between proof of concept and real-world deployment.
+              * Demonstrate cryptographic asset monitoring and automatic cryptographic migration using Keyfactor solutions.
+              * Highlight the key steps for PQC transition at scale and with agility.
+
+              This session will equip you with the tools and strategies needed to future-proof your quantum safe cryptographic infrastructure.
+              ___
+
+              _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
+            speakers: 
+              - Tomas Gustavsson
+              - Chris Hickman
+              - Tony Chen
+            locations:
+              - room_8
+            track: Workshop
+
+          - title: "Enabling Quantum-Safe, Crypto-Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
+            description: |
+              As quantum computing threatens modern cryptography, organizations must prepare their infrastructure for a post-quantum world. Hardware security modules (HSMs) — key to digital trust — must evolve. This workshop covers the strategic and technical foundations of quantum-safe security, focusing on Crypto4A’s 5th-generation QxHSM™.
+
+              **We will explore:**
+              
+              * Part 1: Business Imperatives (2 hrs) - Explore drivers behind PQC adoption, including regulations, risk mitigation, and use cases like harvest-now-decrypt-later. Learn what defines a quantum-safe HSM and how QxHSM™ supports crypto-agility, reduces complexity, and ensures trust and compliance.
+              * Part 2: Technical Foundations (1.5 hrs) - Dive into PQC integration, key management, and secure HSM architecture. A live demo of QxHSM™ highlights key creation, usage, policy control, and agility.
+              
+              Join us to learn how to future-proof your cryptographic systems using quantum-safe security that’s built in — not bolted on.
+              ___
+              _**Note:** This session is offered twice: once in the morning at 9:00 AM, and again in the afternoon at 2:00 PM, both in Room 3._
+            speakers:
+              - Bruno Couillard
+              - Olivier Couillard
+              - Robert Grapes
+            locations:
+              - room_3
+            track: Workshop
+
+          - title: Securing the future Internet of Things with ML-KEM and ML-DSA
+            description: |
+              Today's Internet of Things (IoT) relies on a variety of protocols and communications technologies…CoAP, LwM2M, LoRaWAN, NB-IoT, Wi-Fi, Thread … many of which are not quantum-safe. 
+              
+              While large-scale quantum computers capable of breaking current encryption aren't yet available, the concept of ""harvest now, decrypt later"" is a significant concern. Now that NIST has released final versions of its first three Post-Quantum Cryptography (PQC) standards the race is on to make IoT quantum-safe.
+              
+              **We will explore:**
+
+              * Learn what it takes to make an MQTT-based IoT solution quantum safe. 
+              * Implement and transmit data between a device and an MQTT broker using MQTT with TLS 1.3, ML-KEM, and ML-DSA using open-source tools. 
+              ___
+              
+              _In order to fully participate in this workshop you will need a Ubuntu 22.04 (arm64 or x64) virtual machine capable of running Mosquitto MQTT broker, Wireshark and some client tools (2-4GB RAM, 15-20GB disk)._
+            speakers:
+              - Kevin Hilscher
+            locations:
+              - room_4
+            track: Workshop
+
+          - title: Create your own quantum-safe signed PDF documents with hybrid cryptography
+            description: |
+              This workshop is from a collaborative effort between TNO and Zynyo. Standards are now established and libraries are being released, the integration of Post-Quantum Cryptography into products is increasing. However, the adoption of PQC is not yet universal across all scenarios and use-cases. This workshop provides a unique opportunity for participants to create signed PDF documents with hybrid PQC. DSS is a software supported by the European commission, whose functionality is the creation of digital signatures based on ETSI standards in line with European legislation such as the eIDAS regulation. TNO and Zynyo adapted DSS to support different types of hybrid certification to increase quantum-readiness.
+
+              **In this workshop we will:**
+
+              * Explore three different types of hybrid certificates (Catalyst, Composite, Chameleon),
+              * Have an interactive workshop on the construction and validation of hybrid certificates,
+              * Sign PDF documents using different types of hybrid certificates,
+              * Validate signatures to confirm their authenticity and integrity,
+              * Visualize signed PDFs and have tangible proof of their validity.
+              
+              ___
+
+              _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
+            speakers:
+              - Alessandro Amadori
+              - Sven Konings
+              - Stefan van den Berg
+            locations:
+              - room_5
+            track: Workshop
+
+          - title: "A Practical Guide to PQC Migration: Securing Digital Identities for the Quantum Era"
+            description: |
+              **Module 1: Verifiable everything** - Trust solutions built on trustworthy crypto
+
+              **Module 2: PQC Key Generation and Hardware Root of Trust**
+
+              * Securing the Foundation: The critical role of Hardware Security Modules (HSMs) as the trusted root of all cryptographic operations.
+              * PQC-Enabled HSMs: A technical deep-dive into Thales Luna HSMs and how they securely generate, store, and manage PQC private keys.
+              * Use Case: Secure PQC Key Generation: A live or simulated demonstration of generating a new PQC private key (e.g., using ML-DSA) within a Thales HSM, ensuring it never leaves the hardware boundary. This segment would highlight the FIPS validation of the hardware.
+              
+              **Module 3: PQC Certificate Lifecycle Management**
+
+              * The PQC Discovery Challenge: Using Cyberark's platform to discover and inventory all existing cryptographic assets (certificates, keys, etc.) across an enterprise, identifying which ones are vulnerable.
+              * Managing Certificates Today and Tomorrow: A walkthrough of how Cyberark's control plane manages the full lifecycle of certificates, from issuance to revocation, for today's certificates and tomorrow's PQC certificate.
+              * Use Case: Automated PQC Certificate Issuance: A hands-on demonstration of Cyberark's platform orchestrating the creation of a new certificate to replace any vulnerable certificate.
+
+              **Module 4: PQC-Ready Digital Signatures & Trust Services**
+
+              * Use Case: Signing a file with Digital Signature using ML-DSA (Dilithium) algorithm and a PQC-Ready Certificate. A live demo using CMS signature (ML-DSA algorithm) & a PQC-Ready Certificate to sign a file. The demonstration will show signature creation using ADSS Server's Signing Service and signature validation using ADSS Server's Verification Service. The signature format, validity and integrity are checked and displayed.
+
+              **Module 5: Wrapping up**
+
+              * The PQC Migration Journey: A high-level overview of the PQC migration phases: Discovery, Planning, Remediation, and Execution. 
+              * Q&A: An open forum for participants to ask questions about real-world deployment challenges, performance impacts, and best practices.
+
+            speakers:
+              - Steven Gan
+              - Maeson Maherry
+              - Wilson Yan
+              - Ivan Tan
+            locations:
+              - room_6
+
+          - title: "Government & Regulatory Approaches to PQC: From Policy to Implementation"
+            description: |
+              _This session is held under Chatham House Rules._
+
+              **_Draft Agenda_**
+
+              **Welcome (20 min)**
+
+              * What problem are we solving? Why PQC policy and regulation matter now
+              * Objectives and expected outcomes (cross-sector takeaways, commitments)
+
+              **Policy & Guidance Landscape (30 min)**
+
+              * Survey of national and regional PQC guidance and timelines; convergence and gaps
+              * Alignment on standards (e.g., NIST/ETSI/IETF) and sector regulators’ roles
+              * Implications for government systems vs. regulated private sectors
+
+              **The Good, the Bad, and the Necessary: Regulatory Approaches (40 min)**
+
+              * The Good: clarity, urgency, funding, and public–private coordination
+              * The Bad: fragmentation, ambiguous mandates, over-prescription, vendor lock-in
+              * The Necessary: harmonized milestones (e.g., high-risk first), crypto-agility, credible metrics
+              * Balancing mandates vs. incentives; avoiding “checkbox compliance”
+
+              **Implementation Realities in Government & Critical Sectors (30 min)**
+
+              * Discovery and inventory of cryptography; long-lived data & HNDL risk
+              * Legacy/OT constraints, cross-border data flows, and data classification
+              * Key management/roots of trust, certification, and supply chain considerations
+
+              **Mobilizing Industry Action (40 min)**
+
+              * Playbooks and maturity models that sectors can adopt quickly
+              * Procurement levers (crypto-agility requirements, CBOM/SBOM), audits, and reporting
+              * Testbeds, pilots, and lighthouse programs; conformance and interoperability
+              * Public–private partnerships, consortia, and regulator engagement strategies
+
+              **Wrap up and Actions (20 min)**
+
+              * Summary of key insights and areas of consensus
+              * Actionable next steps (owners, milestones, metrics)
+              * Close and feedback collection
+            speakers:
+              - Zygmunt Lozinski
+            locations:
+              - room_7
+            track: Roundtable
+
+          - title: "Securing the Healthcare Sector in the Quantum Era: a PQC Readiness Roundtable"
+            description: |
+              _This session is held under Chatham House Rules._
+      
+              **_Draft Agenda_**
+
+              **Welcome (20 min)**
+
+              * Setting the stage: Why PQC matters for healthcare
+              * Objectives of the discussion
+
+              **Deployment scenarios and technical considerations (40 min)**
+
+              * PQC in medical devices and IoMT (Internet of Medical Things)
+              * Integration challenges: legacy systems, interoperability, and vendor ecosystems
+              * Protecting patient data and secure communications in clinical environments
+
+              **Industry and Standards Landscape (30 min)**
+
+              * Relevant standards: HL7, FHIR, ETSI, NIST
+              * Vendor readiness and certification pathways
+
+              **Regulation and Compliance Implications (30 min)**
+
+              * HIPAA, GDPR, and PQC implications
+              * Role of regulators and international coordination
+
+              **Strategic planning and investment (40 min)**
+
+              * Building the PQC business case for healthcare organizations
+              * Cost modelling and procurement considerations
+              * Collaboration models: hospitals, vendors, and consortia
+
+              **Wrap up and Actions (20 min)**
+
+              * Summary of key insights
+              * Actionable next steps
+              * Close and feedback collection
+            speakers:
+              - Scott Rea
+              - Anestis Bechtsoudis
+              - Samuel Tseitkin
+            locations:
+              - room_2
+            track: Roundtable
+
+      - time: "11:00"
+        title: Break
+
+      - time: "11:30"
+        sessions:
+          - title: Continuation of the morning workshop 
+            description: The morning workshop continues until lunch.
+            speakers: 
+              - TBD
+            locations:
+              - room_1
+              - room_2
+              - room_3
+              - room_4
+              - room_5
+              - room_6
+              - room_7
+              - room_8
+
+      - time: "13:00"
+        title: Lunch
+        sponsor: 
+
+      - time: "14:00"
+        sessions:
           - title: "PKI and Crypto Agility: Know Your Infrastructure"
             description: |
               _Building and Monitoring Your Cryptographic Inventory with PCert_
@@ -598,116 +1020,30 @@ data:
             speakers: 
               - Alexander Löw
             locations:
-              - room_2
-
-          - title: "Enabling Quantum-Safe, Crypto-Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
-            description: |
-              As quantum computing threatens modern cryptography, organizations must prepare their infrastructure for a post-quantum world. Hardware security modules (HSMs) — key to digital trust — must evolve. This workshop covers the strategic and technical foundations of quantum-safe security, focusing on Crypto4A’s 5th-generation QxHSM™.
-
-              **We will explore:**
-              
-              * Part 1: Business Imperatives (2 hrs) - Explore drivers behind PQC adoption, including regulations, risk mitigation, and use cases like harvest-now-decrypt-later. Learn what defines a quantum-safe HSM and how QxHSM™ supports crypto-agility, reduces complexity, and ensures trust and compliance.
-              * Part 2: Technical Foundations (1.5 hrs) - Dive into PQC integration, key management, and secure HSM architecture. A live demo of QxHSM™ highlights key creation, usage, policy control, and agility.
-              
-              Join us to learn how to future-proof your cryptographic systems using quantum-safe security that’s built in — not bolted on.
-              ___
-              _**Note:** This session is offered twice: once in the morning at 9:00 AM, and again in the afternoon at 2:00 PM, both in Room 3._
-            speakers:
-              - Bruno Couillard
-              - Olivier Couillard
-              - Robert Grapes
-            locations:
-              - room_3
-
-          - title: Securing the future Internet of Things with ML-KEM and ML-DSA
-            description: |
-              Today's Internet of Things (IoT) relies on a variety of protocols and communications technologies…CoAP, LwM2M, LoRaWAN, NB-IoT, Wi-Fi, Thread … many of which are not quantum-safe. 
-              
-              While large-scale quantum computers capable of breaking current encryption aren't yet available, the concept of ""harvest now, decrypt later"" is a significant concern. Now that NIST has released final versions of its first three Post-Quantum Cryptography (PQC) standards the race is on to make IoT quantum-safe.
-              
-              **We will explore:**
-
-              * Learn what it takes to make an MQTT-based IoT solution quantum safe. 
-              * Implement and transmit data between a device and an MQTT broker using MQTT with TLS 1.3, ML-KEM, and ML-DSA using open-source tools. 
-              ___
-              
-              _In order to fully participate in this workshop you will need a Ubuntu 22.04 (arm64 or x64) virtual machine capable of running Mosquitto MQTT broker, Wireshark and some client tools (2-4GB RAM, 15-20GB disk)._
-            speakers:
-              - Kevin Hilscher
-            locations:
-              - room_4
-
-          - title: Create your own quantum-safe signed PDF documents with hybrid cryptography
-            description: |
-              This workshop is from a collaborative effort between TNO and Zynyo. Standards are now established and libraries are being released, the integration of Post-Quantum Cryptography into products is increasing. However, the adoption of PQC is not yet universal across all scenarios and use-cases. This workshop provides a unique opportunity for participants to create signed PDF documents using hybrid PQC using software DSS that creates digital signatures based on ETSI standards in line with European legislation such as the eIDAS regulation.  
-
-              **We will explore:**
-
-              * Participants will sign PDF documents using different types of hybrid certificates,
-              * validate signatures to confirm their authenticity and integrity, 
-              * Visualize signed PDFs and have tangible proof of their validity.
-              ___
-
-              _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
-            speakers:
-              - Alessandro Amadori
-              - Sven Konings
-              - Stefan van den Berg
-            locations:
-              - room_5
-
-      - time: "11:00"
-        title: Break
-        sponsor: 
-
-      - time: "11:30"
-        sessions:
-          - title: Continuation of the morning workshop 
-            description: The morning workshop continues until lunch.
-            speakers: 
-              - TBD
-            locations:
-              - room_1
-              - room_2
-              - room_3
-              - room_4
-              - room_5
-              - room_6
-
-      - time: "13:00"
-        title: Lunch
-        sponsor: 
-
-      - time: "14:00"
-        sessions:
-          - title: To be announced shortly
-            description: This workshop will be announced shortly
-            speakers: 
-              - TBD
-            locations:
               - room_1
 
-          - title: "Hands-On PQC Migration: From Cryptographic asset inventory to PQC Crypto-agility"
+          - title: A Deep Dive into Bouncy Castle, EJBCA, and the Future of PKI
             description: |
-              With NIST setting a clear 2030 deadline for the deprecation of RSA and ECC in favor of quantum-safe algorithms, organizations face an urgent need to assess and modernize their cryptographic landscape. This workshop offers a practical, end-to-end session on post-quantum cryptography (PQC) migration—starting with cryptographic asset discovery and inventory, through quantum risk assessment, and culminating in the replacement of legacy algorithms with NIST-approved PQC standards.
-
-              **We will explore:**
-
-              * Create a PQC PKI and hybrid PKI using EJBCA, 
-              * Issue a signing certificate to SignServer, and demonstrate how to integrate with a hardware security module (HSM) to secure cryptographic keys and operations—bridging the gap between proof of concept and real world deployment. 
-              * Demonstrate cryptographic asset monitoring and automatic cryptographic migration using Keyfactor solutions, 
-              * Highlight the key steps for PQC transition at scale and with agility.
-
-              This session will equip you with the tools and strategies needed to future-proof your quantum safe cryptographic infrastructure.
+              The world of cryptography is at a pivotal moment with the advent of Post-Quantum Cryptography (PQC). This is your chance to engage in a truly technical, interactive session with the minds behind two of the most critical open-source projects in the field.
+ 
+              This workshop is specifically designed for technical professionals and is structured to be driven by your questions and your challenges. We will not be delivering a pre-canned lecture. Instead, the agenda will be a dynamic exploration of multiple topics, shaped by the audience's interests in real-time.
+              
+              You will have direct access to the founders of the open-source projects Bouncy Castle and EJBCA, as well as other Keyfactor experts. We invite you to bring your toughest questions and real-world scenarios across the entire spectrum of the field, from FIPS and PQC readiness to cryptographic inventory and lifecycle management.
+              
+              We will kick things off with a brief, high-level overview to spark conversation, then transition into a lively "Ask Me Anything" session. Throughout the workshop, our experts will tackle your questions with live code, demos, and real-time problem-solving. Based on what is most popular, we will collectively select one or more topics for a dedicated deep-dive session.
+              
+              Whether you're struggling with a specific implementation or simply want to learn more about the future of the industry from the source, this session is for you. Come prepared with your questions, and we will turn them into the content.
               ___
 
               _To get the most out of this interactive experience, attendees are strongly encouraged to bring a laptop. Hands-on activities and guided tooling demonstrations will be included throughout the session._
             speakers: 
               - Tomas Gustavsson
-              - Chris Hickman
               - Tony Chen
+              - David Hook
+              - Sven Rajala
             locations:
-              - room_2
+              - room_8
+            track: Workshop
 
           - title: "Enabling Quantum-Safe, Crypto-Agile Security with Crypto4A's QxHSM™: Business & Technical Insights"
             description: |
@@ -727,6 +1063,7 @@ data:
               - Robert Grapes
             locations:
               - room_3
+            track: Workshop
 
           - title: "Crypto‑Agile PKI in the Quantum Era: Building Trust with Utimaco’s Quantum Protect"
             description: |
@@ -745,13 +1082,134 @@ data:
               - Lai Seow Yong
             locations:
               - room_4
+            track: Workshop
 
-          - title: To be announced shortly 
-            description: This workshop will be announced shortly
+          - title: "Building Quantum-Safe Trust: A Hands-On Workshop with Entrust"
+            description: |
+              Moving to post-quantum cryptography isn’t just about swapping algorithms - it’s about evolving the entire trust infrastructure. In this interactive workshop, you’ll learn how to build a quantum-ready environment from the ground up using Entrust’s PQ Secure Solutions. From policy and compliance to PKI and HSM operations, participants will experience the full migration lifecycle in one setting.
+
+              **Participants will:**
+
+              * Explore migration strategies, including pure ML-DSA and composite approaches, and when to use each.
+              * Set up PQC-enabled PKI environments and replace RSA certificates with ML-DSA certificates on a live web server.
+              * Generate and manage PQC keys within an Entrust HSM, then sign documents and transactions with quantum-safe assurance.
+              * Use Compliance Manager to inventory crypto assets, monitor adoption, and demonstrate policy alignment.
+              * Benchmark PQC performance (e.g., ML-DSA signing throughput) in a real environment.
+
+              This workshop provides a rare opportunity to gain hands-on experience with the cryptographic foundation for a quantum-safe future - PKI, HSM, and compliance - all in one platform. You’ll leave with practical knowledge and tools to start your organization’s PQC migration today.
             speakers: 
-              - TBD
+              - Giuseppe Damiano
+              - Matt Rose
+            locations:
+              - room_6
+
+          - title: "Implementing Post-Quantum Cryptography with HSMs: Show & Tell"
+            description: |
+              Implementing post-quantum cryptography shouldn’t feel like a leap into the unknown. In this workshop, you’ll see how Luna HSM enables a smooth transition to PQC through hands-on exercises and real-world scenarios. Together, we’ll explore why crypto agility matters, how to generate and manage PQC and hybrid keys, and what it takes to integrate with PKI, code signing, and key lifecycle management systems. By the end, you’ll understand not just that it works, but how and why it works.
+
+              The transition to post-quantum cryptography (PQC) is one of the most significant challenges facing security architects and PKI professionals today. It’s not just about adopting new algorithms, it’s about ensuring interoperability, crypto agility, and operational resilience in real-world environments.
+
+              This workshop offers a practical, interactive experience where participants will explore how hardware security modules (HSMs) can simplify and secure the PQC migration journey. Through live demonstrations and guided exercises, attendees will learn:
+
+              * How to generate and manage PQC and hybrid keys inside an HSM (Shaun Chen, Thales)
+              * Best practices for integrating PQC into PKI, code signing, and key lifecycle management systems (Chris Hickman, Keyfactor)
+              * Using standard APIs (PKCS#11, KMIP, JCE) for seamless application compatibility
+              * Secure backup, restore, and key wrapping for PQC keys in compliance with emerging standards
+
+              Rather than just telling you “it works”, this session shows you how and why it works. Giving you the confidence to start prototyping PQC-enabled solutions today.
+
+              ___
+
+              _This workshop will be presentation, demo, and open discussion in format._
+            speakers:
+              - Shaun Chen
+              - Chris Hickman
             locations:
               - room_5
+            track: Workshop
+
+          - title: "Securing the Telecommunication Sector in the Quantum Era: a PQC Readiness Roundtable"
+            description: |
+              _This session is held under Chatham House Rules._
+
+              **Welcome (20 min)**
+
+              * Frame the discussion (Aligning standards, strategy, and compliance)
+              * Objectives of the workshop
+
+              **Deployment scenarios and technical considerations (40 min)**
+
+              * The road to PQC adoption: Technology integration
+              * Challenging scenarios: IoT, NTN, legacy
+              * CBOM in Telco
+              * Supporting other sectors
+
+              **Industry and Standards Landscape (30 min)**
+
+              * Beyond the algorithms-IETF, ETSI, 3GPP, etc 
+              * Product readiness
+
+              **Regulation and Compliance Implications (30 min)**
+
+              * Regulation landscape 
+              * Role of regulators and discussion on the international dimension  
+
+              **Strategic planning and investment (40 min)**
+
+              * PQC business case for Telcos
+              * Cost modelling: capex vs opex for PQC migration
+              * Implications for procurement / supply chain management
+              * Collaboration models: industry consortia and partnerships  
+
+              **Wrap up and Actions (20 min)**
+
+              * Summary of key insights
+              * Actionable next steps
+              * Close and feedback collection       
+            speakers: 
+              - Lory Thorpe
+              - Luke Ibbetson
+            locations:
+              - room_2
+            track: Roundtable
+          
+          - title: "Securing the Financial Sector in the Quantum Era: a PQC Readiness Roundtable"
+            description: |
+              _This session is held under Chatham House Rules._
+
+              **_Draft Agenda_**
+
+              **Welcome (20 min)**
+
+              * Setting the stage: Status of PQC in the financial sector
+              * Objectives of the discussion
+
+              **Collaboration initiatives and overview of latest recommendations**           
+
+              * Summary of workgroups in the financial sectors and their activities
+              * Recommendations and timelines published. How they influence the financial sector. Overview of FS-ISAC’s publication.
+
+              **Assessing Migration Priorities**
+              
+              * A methodology to assess migration priority of business use cases
+
+              **Hands-on workshop: Analysis of business use cases**
+
+              * Identification of business use cases
+              * Prioritization analysis
+
+              **Wrap up and Actions**
+
+              * A prioritized list of business use cases
+              * Selection of immediate actions
+              * Next steps
+            speakers:
+              - Jaime Gómez García
+              - Sudha Iyer
+              - Sarah McCarthy
+            locations:
+              - room_7
+            track: Roundtable
 
       - time: "15:30"
         title: Break
@@ -770,6 +1228,8 @@ data:
               - room_4
               - room_5
               - room_6
+              - room_7
+              - room_8
 
       - time: "18:00"
         title: End of Day One
@@ -794,12 +1254,14 @@ data:
 
       - time: "9:30"
         sessions:
-          - title: Keynote
+          - title: Malaysia’s PQC Vision for the Region
             description: |
-              The speaker(s) for this session will be announced soon!
+              Digital trust is the foundation of modern economies and societies, and the arrival of quantum computing will test how ready we are to safeguard it. Post-quantum cryptography (PQC) is more than a technical response, it is a catalyst for rethinking how nations, industries, and communities build resilience and foster innovation in a rapidly changing world. In his opening keynote, Tuan Fabian Bigar, Secretary General of the Ministry of Digital, Malaysia, will welcome participants to the PKI Consortium’s PQC Conference in Kuala Lumpur and share Malaysia’s broader vision for a secure, inclusive, and sustainable digital future. 
+
+              He will highlight the role of digital trust as a driver of economic growth, the importance of regional leadership within ASEAN to advance quantum readiness, and the need for global cooperation to ensure that no nation is left behind in this transition. By framing PQC as a shared opportunity rather than just a challenge, his address will set the stage for the conference, inviting all participants, governments, industry, academia, and civil society, to engage in shaping a quantum-secure world.
             track: 
             speakers:
-              - TBD
+              - Tuan Fabian Bigar
             youtube:
             presentation: 
             locations:
@@ -807,9 +1269,18 @@ data:
 
       - time: "10:00"
         sessions:
-          - title: Keynote
+          - title: Navigating National Cyber Resilience in the Quantum Era
             description: |
-              The details for this session will follow soon!
+              As the quantum computing horizon draws nearer, the imperative to secure national critical information infrastructure (NCII) against quantum threats becomes a matter of strategic urgency. In this keynote, Ir. Dr. Megat Zuhairy Bin Megat Tajuddin, Chief Executive of Malaysia’s National Cyber Security Agency (NACSA), will explore the evolving landscape of Post-Quantum Cryptography (PQC) through the lens of national security, policy, and technological leadership.
+              
+              Drawing from over two decades of experience in ICT, telecommunications, and strategic innovation, including pioneering work in large-scale digital transformation projects and international policy development. Dr. Megat will outline Malaysia’s roadmap for quantum resilience. His address will highlight:
+              
+              * National strategies for PQC adoption across critical infrastructure and government systems.
+              * Public-private collaboration models to accelerate cryptographic agility and secure transitions.
+              * Regulatory and compliance frameworks aligned with global standards and regional priorities.
+              * The role of ASEAN leadership in shaping the future of quantum-safe digital ecosystems.
+              
+              This keynote will frame Malaysia’s strategic approach to PQC not only as a national imperative but also as a collaborative opportunity, bridging policy, standards, and implementation. Dr. Megat will emphasize the importance of aligning national cybersecurity strategies with global cryptographic transitions, ensuring readiness for secure interoperability in a quantum future.
             track: 
             speakers:
               - Megat Zuhairy Bin Megat Tajuddin
@@ -820,17 +1291,19 @@ data:
 
       - time: "10:30"
         title: Break
-        sponsor: 
+        sponsor: unsungltd # id of a member or sponsor used to lookup the name and logo
         
       - time: "11:00"
         sessions:
-          - title: Quantum-Safety Timelines in the Financial Sector
+          - title: "PQC Across Verticals: What We’ve Learned, Where We’re Headed"
             description: |
-              The financial sector has moved decisively from awareness-building into active implementation of quantum-safe strategies. While 2024 primarily focused on raising awareness, 2025 has marked a significant shift towards concrete implementation activities across numerous financial institutions. The industry is now increasingly prioritizing collaboration, coordination, and streamlined efforts to avoid duplication and enhance efficiency in transitioning to quantum-safe operations.
-              
-              This presentation will outline the latest initiatives that are shaping quantum-safety priorities and timelines within the financial sector. Financial institutions will benefit from practical guidance on building and benchmarking their quantum transition plans, while technology vendors will gain valuable insights into the evolving expectations and specific requirements of financial sector clients.
+              The transition to post-quantum cryptography (PQC) is not a challenge faced by a single industry—it is a global transformation impacting every sector. In this 30-minute kickoff, we bring together key insights gathered from focused workshops across energy, government, financial services, and healthcare. Each vertical faces unique obstacles—regulatory demands, legacy systems, critical infrastructure dependencies, and high-stakes data protection—yet all share the urgent need for agility and trust in a quantum-ready world. This session distills the highlights from these discussions into a unified perspective: where the sectors stand today, the common themes emerging across industries, and the roadmap ahead. Attendees will walk away with a clear understanding of how PQC adoption is taking shape across the economy and what steps are necessary to drive coordinated, cross-sector progress. 
             speakers:
+              - Paul van Brouwershaven *
               - Jaime Gómez García
+              - Lory Thorpe
+              - Scott Rea
+              - Zygmunt Lozinski
             locations:
               - plenary
 
@@ -846,13 +1319,13 @@ data:
 
       - time: "11:30"
         sessions:
-          - title: "PKI Agility and the Difference to Cryptographic Agility: Lessons from the Past and Present"
+          - title: Quantum-Safety Timelines in the Financial Sector
             description: |
-              Cryptographic agility is often misunderstood as purely a technical problem. This presentation challenges that assumption, arguing that agility requirements are context-dependent, often organizational in nature, and ultimately a subset of broader organizational agility.
-
-              We begin by classifying different types of PKI agility according to the need for being agile. This includes replacing the underlying cryptographic algorithms and why size matters,  re-issuing certificates, replacing certificates hierarchies, reacting to key compromise and migrating to quantum safety. Through concrete examples, we show how lack of agility impacts dimensions differently. Some of the lessons date back 20 years to the transition from RSA to ECC and the experience gained deploying hybrid systems in sensitive government projects. Other lessons are more recent, for example the hybrid secure-boot mechanism on the IBM mainframe.
+              The financial sector has moved decisively from awareness-building into active implementation of quantum-safe strategies. While 2024 primarily focused on raising awareness, 2025 has marked a significant shift towards concrete implementation activities across numerous financial institutions. The industry is now increasingly prioritizing collaboration, coordination, and streamlined efforts to avoid duplication and enhance efficiency in transitioning to quantum-safe operations.
+              
+              This presentation will outline the latest initiatives that are shaping quantum-safety priorities and timelines within the financial sector. Financial institutions will benefit from practical guidance on building and benchmarking their quantum transition plans, while technology vendors will gain valuable insights into the evolving expectations and specific requirements of financial sector clients.
             speakers:
-              - Michael Osborne
+              - Jaime Gómez García
             locations:
               - plenary
 
@@ -866,15 +1339,13 @@ data:
 
       - time: "12:00"
         sessions:
-          - title: "Quantum Security in Practice: Lessons from a Dozen of Client Engagements"
+          - title: "PKI Agility and the Difference to Cryptographic Agility: Lessons from the Past and Present"
             description: |
-              The quantum threat is no longer theoretical, it’s becoming a strategic concern for cybersecurity leaders. This session shares insights from a dozen client case studies across industries and regions, highlighting how organizations are preparing for quantum risk in practical terms.
-              
-              Through real examples from field engagements, the talk explores how security teams are assessing quantum readiness, making critical decisions with incomplete information, and adapting to shifting standards under real operational pressures.
-              
-              Rather than focusing on abstract principles, the session offers a grounded look at quantum security in action. Designed to resonate with technically savvy professionals, the narrative blends foundational context with hands-on application, providing actionable takeaways for those navigating the evolving path toward post-quantum resilience. 
+              Cryptographic agility is often misunderstood as purely a technical problem. This presentation challenges that assumption, arguing that agility requirements are context-dependent, often organizational in nature, and ultimately a subset of broader organizational agility.
+
+              We begin by classifying different types of PKI agility according to the need for being agile. This includes replacing the underlying cryptographic algorithms and why size matters,  re-issuing certificates, replacing certificates hierarchies, reacting to key compromise and migrating to quantum safety. Through concrete examples, we show how lack of agility impacts dimensions differently. Some of the lessons date back 20 years to the transition from RSA to ECC and the experience gained deploying hybrid systems in sensitive government projects. Other lessons are more recent, for example the hybrid secure-boot mechanism on the IBM mainframe.
             speakers:
-              - Alexey Bocharnikov
+              - Michael Osborne
             locations:
               - plenary
 
@@ -898,9 +1369,8 @@ data:
               - Chris Hickman
               - Muralidharan Palanisamy
               - George Parsons
-
             youtube:
-            presentation:              
+            presentation:
             locations:
               - plenary
 
@@ -925,12 +1395,11 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: "ASEAN’s Post-Quantum Future: Securing Communications in an Era of Disruptive Change"
+          - title: A structured approach to the quantum-safe transformation
             description: |
-              As [ASEAN](https://en.wikipedia.org/wiki/ASEAN) economies surge toward digital evolution. the foundation of secure communications is facing an existential challenge. The rise of quantum computing is an imminent reality that threatens to dismantle traditional encryption, leaving government data, diplomatic channels & commercial transactions vulnerable to unprecedented risks - including 'harvest now, decrypt later' threats. Discuss the profound implications of quantum computing on SEA's cybersecurity landscape and the urgent need for proactive preparation & public-private sector synergy. In a region of diverse technological maturity, escalating cyber threats & heightened geopolitical risk, building quantum-resilient communications is not only a technical necessity, it is fundamental to national security, economic stability & ASEAN’s collective digital sovereignty.
-            track: Panel Discussion
+              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
             speakers:
-              - Jonathan Jackson
+              - Efstathia Katsigianni
             locations:
               - plenary
 
@@ -944,11 +1413,12 @@ data:
 
       - time: "14:30"
         sessions:
-          - title: A structured approach to the quantum-safe transformation
+          - title: "ASEAN’s Post-Quantum Future: Securing Communications in an Era of Disruptive Change"
             description: |
-              As the risk increases for a ‘cryptographically relevant quantum computer’ to appear, the high level of complexity, required time, and the required cost of a migration to adopt quantum-safe cryptography become apparent. Priorities for the quantum-safe migration need to become therefore clear and an organization-wide migration program needs to be set-up. This presentation will describe an approach to migrating to quantum-safe cryptography, drawing on real customer examples from different industries. It will explore the challenges of each stage and discuss some concrete steps taken in both strategic and technical dimensions. This presentation will describe a phased approach, starting with establishing awareness and  understanding of the quantum-impact on an organization, as well as the establishment of a structured model for an efficient transformation. It will also focus on where cryptographic monitoring and cryptographic agility elements fit into this journey.
+              As [ASEAN](https://en.wikipedia.org/wiki/ASEAN) economies surge toward digital evolution. the foundation of secure communications is facing an existential challenge. The rise of quantum computing is an imminent reality that threatens to dismantle traditional encryption, leaving government data, diplomatic channels & commercial transactions vulnerable to unprecedented risks - including 'harvest now, decrypt later' threats. Discuss the profound implications of quantum computing on SEA's cybersecurity landscape and the urgent need for proactive preparation & public-private sector synergy. In a region of diverse technological maturity, escalating cyber threats & heightened geopolitical risk, building quantum-resilient communications is not only a technical necessity, it is fundamental to national security, economic stability & ASEAN’s collective digital sovereignty.
+            track: Panel Discussion
             speakers:
-              - Efstathia Katsigianni
+              - Jonathan Jackson
             locations:
               - plenary
 
@@ -1024,6 +1494,7 @@ data:
               - Muhammad Rezal Kamel Ariffin
               - Pieter Schneider
               - William Gee
+              - Osamu Terai
             youtube:
             presentation: 
             locations:
@@ -1170,13 +1641,14 @@ data:
 
       - time: "11:30"
         sessions:
-          - title: Overcoming Challenges in Post-Quantum Cryptography Adoption
+          - title: "From Inventory to Action: Navigating the Next Phase of PQC Transition"
             description: |
-              With the release of standards for Post-Quantum Cryptography (PQC) algorithms, the cryptographic community faces a paradigm shift. Unlike RSA, ECC, and DH, which were often regarded as "silver bullets" due to their efficiency in key size, signature size, and performance, current PQC algorithms introduce significant challenges. 
-              
-              This session will explore the practical obstacles of integrating PQC algorithms into existing products and services. Topics include the use of embedded systems that leverage LMS or ML-DSA signatures to verify component integrity, and the implications for services delivering image signature solutions, particularly with regard to backend HSM operations and compliance with CNSA 2.0. Finally, we examine how open-source PKI management tools, purpose-built for PQC, can help meet these challenges by providing scalable and adaptable infrastructures for orchestrating post-quantum cryptographic operations.
+              Over the past few years, cybersecurity professionals worldwide have been urged—by security agencies and consultants alike—to kickstart their post-quantum cryptographic transition with a cryptographic inventory. Many have taken that advice to heart, amassing vast amounts of cryptographic data. Now, organizations face the critical question: how do we turn this information into action? 
+              This presentation explores that very question. We’ll examine the next critical steps in the PQC transition from multiple perspectives—technical, strategic, and operational—and offer actionable guidance including prioritizing frameworks, risk-based approaches, and implementation timelines to help organizations turn insight into meaningful progress.
             speakers:
-              - Frank Michaud
+              - Bruno Couillard
+            youtube:
+            presentation: 
             locations:
               - plenary
 
@@ -1193,12 +1665,13 @@ data:
 
       - time: "12:00"
         sessions:
-          - title: "From Inventory to Action: Navigating the Next Phase of PQC Transition"
+          - title: How ETSI is Preparing for PQC
             description: |
-              Over the past few years, cybersecurity professionals worldwide have been urged—by security agencies and consultants alike—to kickstart their post-quantum cryptographic transition with a cryptographic inventory. Many have taken that advice to heart, amassing vast amounts of cryptographic data. Now, organizations face the critical question: how do we turn this information into action? 
-              This presentation explores that very question. We’ll examine the next critical steps in the PQC transition from multiple perspectives—technical, strategic, and operational—and offer actionable guidance including prioritizing frameworks, risk-based approaches, and implementation timelines to help organizations turn insight into meaningful progress.
+              Settling on PQC algorithms is only part of the journey to make our digital systems safe from the Quantum Apocalypse.  An essential step is for certificates of various types to support PQC and for the regulations to allow them. 
+              
+              ETSI is the governing body empowered by the European Union to give us the eIDAS standard for digital certificates.  In this session you will learn ETSI’s plans for PQC, the status PQC in the standards-making process, and expectations for when PQC-enabled eIDAS certificates will be available. 
             speakers:
-              - Bruno Couillard
+              - Inigo Barreira
             youtube:
             presentation: 
             locations:
@@ -1216,25 +1689,22 @@ data:
 
       - time: "12:30"
         sessions:
-          - title: How ETSI is Preparing for PQC
+          - title: "Crypto-Agility: How it’s both a Critical Component and a Complex Challenge"
             description: |
-              Settling on PQC algorithms is only part of the journey to make our digital systems safe from the Quantum Apocalypse.  An essential step is for certificates of various types to support PQC and for the regulations to allow them. 
-              
-              ETSI is the governing body empowered by the European Union to give us the eIDAS standard for digital certificates.  In this session you will learn ETSI’s plans for PQC, the status PQC in the standards-making process, and expectations for when PQC-enabled eIDAS certificates will be available. 
+              The time to prepare for the quantum threat is upon us, and the move from traditional crypto to PQC will touch just about every cryptographic system and piece of infrastructure. To make the transition, organizations need visibility into their cryptographic estate (hardware, software, keys, certificates, secrets, etc.) and ensure they have built in crypto-agility. How does one achieve a mature crypto-agile security practice? By defining crypto-agility and understanding what it looks like for your organization. But crypto-agility is much more than moving from one system or algorithm to another. It’s about people, processes and technology. It’s about visualizing your cryptographic assets, implementing policy, driving compliance and more. In this session, we’ll discuss in detail the necessary elements to achieve a mature crypto-agile security practice, and how to overcome the challenges to get there.
             speakers:
-              - Inigo Barreira
-            youtube:
-            presentation: 
+              - Samantha Mabey
+              - Matt Rose
             locations:
               - plenary
 
-          - title: Post Quantum Key Exchange in VPN Using ML-KEM-768
+          - title: Overcoming Challenges in Post-Quantum Cryptography Adoption
             description: |
-              This paper presents a user-space integration of ML-KEM-768, a post-quantum key encapsulation mechanism standardized by NIST, with WireGuard, a modern VPN protocol. Rather than modifying the kernel-level X25519 elliptic-curve Diffie-Hellman handshake, the proposed approach establishes a Kyber-based shared secret over sockets and injects it as a pre-shared key (PSK) into WireGuard’s Noise protocol. This en-hances WireGuard’s resistance to quantum attacks without altering its core code. Experimental results demonstrate successful key agreement and acceptable performance overhead, making the solution viable for hybrid VPN deployments in the post-quantum era
+              With the release of standards for Post-Quantum Cryptography (PQC) algorithms, the cryptographic community faces a paradigm shift. Unlike RSA, ECC, and DH, which were often regarded as "silver bullets" due to their efficiency in key size, signature size, and performance, current PQC algorithms introduce significant challenges. 
+              
+              This session will explore the practical obstacles of integrating PQC algorithms into existing products and services. Topics include the use of embedded systems that leverage LMS or ML-DSA signatures to verify component integrity, and the implications for services delivering image signature solutions, particularly with regard to backend HSM operations and compliance with CNSA 2.0. Finally, we examine how open-source PKI management tools, purpose-built for PQC, can help meet these challenges by providing scalable and adaptable infrastructures for orchestrating post-quantum cryptographic operations.
             speakers:
-              - Anurag Krishna Sharma
-            youtube:
-            presentation:               
+              - Frank Michaud
             locations:
               - breakout
 
@@ -1244,11 +1714,11 @@ data:
 
       - time: "14:00"
         sessions:
-          - title: "Crypto-Agility: How it’s both a Critical Component and a Complex Challenge"
+          - title: "Real-World Post-Quantum Migrations: Lessons Learned and Performance Results"
             description: |
-              The time to prepare for the quantum threat is upon us, and the move from traditional crypto to PQC will touch just about every cryptographic system and piece of infrastructure. To make the transition, organizations need visibility into their cryptographic estate (hardware, software, keys, certificates, secrets, etc.) and ensure they have built in crypto-agility. How does one achieve a mature crypto-agile security practice? By defining crypto-agility and understanding what it looks like for your organization. But crypto-agility is much more than moving from one system or algorithm to another. It’s about people, processes and technology. It’s about visualizing your cryptographic assets, implementing policy, driving compliance and more. In this session, we’ll discuss in detail the necessary elements to achieve a mature crypto-agile security practice, and how to overcome the challenges to get there.
+              This presentation will share the lessons learned during the migration of several real-world systems to post-quantum cryptography and provide performance data. Specifically, we will cover three use cases carried out by two banks and the Dutch tax authority and zoom in on the technical and non-technical challenges that arose during those use cases. Some of the topics that will be discussed are crypto-agility in code, architectural solutions to blocking vendor dependencies and how to involve vendor management. Additionally, we will give an overview of the performance results of some of the migrated systems.
             speakers:
-              - Greg Wetmore
+              - Michiel Marcus
             locations:
               - plenary
 
@@ -1261,28 +1731,6 @@ data:
               - breakout
 
       - time: "14:30"
-        sessions:
-          - title: "Real-World Post-Quantum Migrations: Lessons Learned and Performance Results"
-            description: |
-              This presentation will share the lessons learned during the migration of several real-world systems to post-quantum cryptography and provide performance data. Specifically, we will cover three use cases carried out by two banks and the Dutch tax authority and zoom in on the technical and non-technical challenges that arose during those use cases. Some of the topics that will be discussed are crypto-agility in code, architectural solutions to blocking vendor dependencies and how to involve vendor management. Additionally, we will give an overview of the performance results of some of the migrated systems.
-            speakers:
-              - Michiel Marcus
-            locations:
-              - plenary
-
-          - title: "Post-Quantum Firmware Signing in IoT: Practical PQC-FOTA Implementation"
-            description: |
-              As quantum computing advances, the cryptographic integrity of long-lived IoT devices is increasingly at risk. This presentation demonstrates a practical approach to securing Firmware Over-the-Air (FOTA) updates on ESP32-based IoT devices using Post-Quantum Cryptography (PQC).
-
-              We explore how NIST-standardized digital signature algorithms-ML-DSA (FIPS 204, formerly CRYSTALS-Dilithium) and SLH-DSA (FIPS 205, formerly SPHINCS+)-can be integrated into the ESP32 secure boot process to replace classical RSA/ECDSA schemes. Using the Open Quantum Safe (OQS) library, we implement PQC signing on resource-constrained hardware and evaluate the trade-offs in performance, code size, and interoperability.
-
-              The presentation features real-world deployment on ESP32 hardware, and includes practical guidance on hybrid signing approaches (e.g., ECDSA + ML-DSA) for maintaining backward compatibility. Tools such as ESP-IDF, PlatformIO, and custom signing scripts are used throughout.
-            speakers:
-              - Tan Wai Kaey
-            locations:
-              - breakout
-            
-      - time: "15:00"
         sessions:
           - title: "PQC in Practice: Why This, Not That?"
             description: |
@@ -1302,6 +1750,26 @@ data:
             locations:
               - plenary
 
+          - title: "Post-Quantum Firmware Signing in IoT: Practical PQC-FOTA Implementation"
+            description: |
+              As quantum computing advances, the cryptographic integrity of long-lived IoT devices is increasingly at risk. This presentation demonstrates a practical approach to securing Firmware Over-the-Air (FOTA) updates on ESP32-based IoT devices using Post-Quantum Cryptography (PQC).
+
+              We explore how NIST-standardized digital signature algorithms-ML-DSA (FIPS 204, formerly CRYSTALS-Dilithium) and SLH-DSA (FIPS 205, formerly SPHINCS+)-can be integrated into the ESP32 secure boot process to replace classical RSA/ECDSA schemes. Using the Open Quantum Safe (OQS) library, we implement PQC signing on resource-constrained hardware and evaluate the trade-offs in performance, code size, and interoperability.
+
+              The presentation features real-world deployment on ESP32 hardware, and includes practical guidance on hybrid signing approaches (e.g., ECDSA + ML-DSA) for maintaining backward compatibility. Tools such as ESP-IDF, PlatformIO, and custom signing scripts are used throughout.
+            speakers:
+              - Tan Wai Kaey
+            locations:
+              - breakout
+            
+      - time: "15:00"
+        sessions:
+          - title: "Continuation: PQC in Practice: Why This, Not That?"
+            description: |
+              This session continues the panel discussion on PQC in Practice, focusing on which PQC deployment strategy is right for use in real-world deployment strategies. 
+            locations:
+              - plenary
+
           - title: "Authenticity Guaranteed: Verifying Video Integrity on Consumer Devices with Post-Quantum Signatures"
             description: |
               As AI-generated video content becomes increasingly convincing, ensuring the authenticity of video material is more critical than ever. This session presents a novel method for verifying the integrity of video streams or files using post-quantum digital signatures. Designed for deployment on consumer devices, the approach safeguards against tampering and deepfake manipulation, even in a future where quantum computing threatens classical cryptographic schemes. Join us to explore the architecture, implementation, and real-world applications of this quantum-resistant solution for trusted video authentication.
@@ -1318,12 +1786,13 @@ data:
         sessions:
           - title: "Crypto-Agile PKI: A Strategic Blueprint for Post-Quantum Trust"
             description: |
-              "Quantum computing is reshaping the foundations of digital trust, and PKI must be the first to adapt. While NIST-standard algorithms like ML-KEM and ML-DSA progress toward adoption, organizations face a deeper challenge: evolving legacy PKI into a crypto-agile, automated, and future-ready infrastructure. This session presents a concise 20-minute blueprint for enabling that transition, without starting from scratch.
+              Quantum computing is reshaping the foundations of digital trust, and PKI must be the first to adapt. While NIST-standard algorithms like ML-KEM and ML-DSA progress toward adoption, organizations face a deeper challenge: evolving legacy PKI into a crypto-agile, automated, and future-ready infrastructure. This session presents a blueprint for enabling that transition, without starting from scratch.
       
               We’ll explore three strategic priorities:
-              1) Assess cryptographic exposure across TLS, S/MIME, code signing, and device identity.
-              2) Embed crypto-agility and automation into certificate lifecycles using hybrid certs (draft-ietf-lamps-x509-slhdsa-09), short-lived certificates, and ACME-based issuance models.
-              3) Align PKI governance with emerging standards from NIST(1800-38B), ETSI, CAB Forum, and IETF."
+              
+              1. Assess cryptographic exposure across TLS, S/MIME, code signing, and device identity.
+              2. Embed crypto-agility and automation into certificate lifecycles using hybrid certs (draft-ietf-lamps-x509-slhdsa-09), short-lived certificates, and ACME-based issuance models.
+              3. Align PKI governance with emerging standards from NIST(1800-38B), ETSI, CAB Forum, and IETF.
             track: 
             speakers:
               - Ganesh Mallaya
@@ -1404,25 +1873,20 @@ This premier three-day event begins with hands-on workshops, followed by two day
 
 ## Sponsors
 
-We are immensely grateful to our sponsors:
+We are immensely grateful to our [sponsors](/sponsors/):
 
 {{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" >}}
-
-#### Become a Sponsor
-
-**Interested in sponsoring the Post-Quantum Cryptography Conference?** For detailed information about sponsorship opportunities, please [contact us](/sponsors/sponsor/). You can also [download the sponsorship brochure](pqc-conference-kl-sponsors.pdf) for a comprehensive overview and pricing of our sponsorship packages.
-
-{{< button link="pqc-conference-kl-sponsors.pdf" target="_blank" label="Explore our sponsorship opportunities" type="outline-success" >}}  
 
 ## Agenda
 
 The conference features a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees can look forward to keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers are not permitted to promote products or services during presentations.
 
-> Please note that this is a **preliminary agenda** and is subject to change. Final details, including topics, abstracts, speakers, panels, workshops and time slots, will be updated here in the coming weeks and months, with **more speakers and panels to be announced**.  
-> {{< button link="/call" target="_blank" label="Call for Abstracts - Submit a proposal for a talk, panel discussion, or workshop" type="outline-danger" >}}  
-{.callout-warning}
+**Please note that:**
 
-{{< agenda "agenda" >}}
+* **Workshops** and **Roundtables** on **Tuesday** are designed for those attending in person.
+* The **Conference** on **Wednesday** and **Thursday** is available to join in person, remotely, or on-demand.
+
+{{< agenda default="2025-10-29" >}}
 
 {{< sponsors sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="Leader" height="20" max-width="60" >}}
 

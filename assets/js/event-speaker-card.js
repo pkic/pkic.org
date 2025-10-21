@@ -1,49 +1,32 @@
-let speakers = [];
+import {
+    loadEventData,
+    getHashParams,
+    getSpeakersData,
+    findSpeakerByFlexibleName
+} from './event-common.js';
+
+let speakersData = [];
 let currentSpeakerIndex = 0;
 
-let agendaData = [];
-let speakersData = [];
-let locationsData = [];
-
-function getHashParams() {
-    const params = new URLSearchParams(window.location.hash.substring(1));
-    return {
-        name: params.get('name'),
-        speaker: params.get('speaker'),
-        index: params.get('index')
-    };
-}
-
 function getAllSpeakers() {
-    // Return all speakers from the data
-    return speakersData || [];
-}
-
-function findSpeakerByName(name) {
-    if (!name) return null;
-    
-    return speakersData.find(speaker => 
-        speaker.name.toLowerCase().includes(name.toLowerCase()) ||
-        speaker.name.toLowerCase().replace(/\s+/g, '-') === name.toLowerCase() ||
-        speaker.name.toLowerCase().replace(/\s+/g, '') === name.toLowerCase()
-    );
+    return speakersData;
 }
 
 function showSpeakerCard() {
     const { name, speaker, index } = getHashParams();
-    
+
     let selectedSpeaker = null;
-    
+
     // Ensure we have speakers data
     if (!speakersData || speakersData.length === 0) {
         console.warn('No speakers data available');
         document.body.classList.remove('speaker-card-mode');
         return;
     }
-    
+
     if (name) {
         // Find speaker by name
-        selectedSpeaker = findSpeakerByName(name);
+        selectedSpeaker = findSpeakerByFlexibleName(name);
     } else if (speaker) {
         // Find speaker by 1-based index
         const speakerIndex = parseInt(speaker) - 1;
@@ -57,10 +40,12 @@ function showSpeakerCard() {
             selectedSpeaker = speakersData[speakerIndex];
         }
     }
-    
+
     if (selectedSpeaker) {
         // Show speaker card mode
         document.body.classList.add('speaker-card-mode');
+
+        currentSpeakerIndex = speakersData.indexOf(selectedSpeaker);
         
         // Update speaker information
         const speakerNameEl = document.getElementById('speaker-name');
@@ -90,6 +75,7 @@ function showSpeakerCard() {
         
         console.log('Showing speaker card for:', selectedSpeaker.name);
     } else {
+        currentSpeakerIndex = 0;
         // Show regular session view
         document.body.classList.remove('speaker-card-mode');
         console.log('No speaker found for hash parameters:', { name, speaker, index });
@@ -125,49 +111,46 @@ function updateMetaTags(speaker) {
 }
 
 function navigateSpeakers(event) {
-    const { name, speaker, index } = getHashParams();
-    const currentIndex = name ? speakersData.findIndex(s => s.name.toLowerCase().includes(name.toLowerCase())) :
-                        speaker ? parseInt(speaker) - 1 :
-                        index ? parseInt(index) : 0;
-    
-    let newIndex = currentIndex;
-    
+    if (!speakersData || speakersData.length === 0) {
+        return;
+    }
+
+    let newIndex = currentSpeakerIndex;
+
     if (event.key === 'ArrowLeft') {
-        newIndex = currentIndex > 0 ? currentIndex - 1 : speakersData.length - 1;
+        newIndex = currentSpeakerIndex > 0 ? currentSpeakerIndex - 1 : speakersData.length - 1;
     } else if (event.key === 'ArrowRight') {
-        newIndex = currentIndex < speakersData.length - 1 ? currentIndex + 1 : 0;
+        newIndex = currentSpeakerIndex < speakersData.length - 1 ? currentSpeakerIndex + 1 : 0;
     } else if (/^[0-9]$/.test(event.key)) {
         const num = parseInt(event.key);
         if (num > 0 && num <= speakersData.length) {
             newIndex = num - 1;
         }
     }
-    
-    if (newIndex !== currentIndex && newIndex >= 0 && newIndex < speakersData.length) {
+
+    if (newIndex !== currentSpeakerIndex && newIndex >= 0 && newIndex < speakersData.length) {
         // Update the URL hash to show the new speaker
         window.location.hash = `speaker=${newIndex + 1}`;
     }
 }
 
 // Load event data and initialize
-fetch('event-data.json')
-    .then(response => response.json())
-    .then(data => {
-        agendaData = data.agenda || {};
-        speakersData = data.speakers || [];
-        locationsData = data.locations || [];
-        
+loadEventData()
+    .then(() => {
+        speakersData = getSpeakersData();
+
         // Initial display
         showSpeakerCard();
-        
+
         // Listen for hash changes
         window.addEventListener('hashchange', showSpeakerCard);
-        
+
         // Listen for keyboard navigation
         window.addEventListener('keydown', navigateSpeakers);
     })
     .catch(error => {
         console.error('Error loading event data:', error);
+        speakersData = getSpeakersData();
         // Fallback: still show the card interface even without data
         showSpeakerCard();
     });

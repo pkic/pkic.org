@@ -16,7 +16,7 @@ menu:
 ---
 
 {{< alert >}}
-Don't miss the **free** hybrid **Post-Quantum Cryptography Conference in Kuala Lumpur, Malaysia**, scheduled for October 28 - 30, 2025. Register now at [pkic.org/register](/register)! If you'd like to speak or lead a session, submit a proposal (abstract) for a talk, panel discussion, or workshop at [pkic.org/call](/call).
+Don't miss the **free** hybrid **Post-Quantum Cryptography Conference in Kuala Lumpur, Malaysia**, scheduled for October 28 - 30, 2025. Register now at [pkic.org/register](/register)!
 {{< /alert >}}
 
 

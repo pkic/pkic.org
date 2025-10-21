@@ -1,0 +1,56 @@
+id: cyberark
+name: CyberArk
+slogan:
+website: https://www.cyberark.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Get the most complete Identity Security and Access Management Solutions that enable secure access across any device, anywhere, at just the right time.
+
+# membership
+memberSince: 2025-08-18
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  # Temporarily disabled: RSS feed returns HTML (text/html) instead of XML/RSS
+  # Reference: CI report - feed validation failure
+  # feed: https://www.cyberark.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: George Parsons
+    role: Head of PKI Strategy
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/georgehparsons/
+    description: George is the Head of PKI Strategy at CyberArk and represents the organization at the PKI Consortium.

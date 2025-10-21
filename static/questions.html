@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Selected Question Overlay</title>
+    <style>
+        /* Fullscreen question page styles (white on black) */
+        html,
+        body {
+            height: 100%;
+            margin: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif
+        }
+
+        body {
+            background-color: #fff;
+            color: #fff
+        }
+
+        .question-fullscreen {
+            position: fixed;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            box-sizing: border-box
+        }
+
+        .overlay-inner {
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+
+        .content {
+            background-color: rgba(0, 0, 0, 0.9);
+            padding: 4rem;
+            width: 100%;
+            flex: 1
+        }
+
+        .question-text {
+            font-size: 8vw;
+            line-height: 1.05;
+            font-weight: 700;
+            max-width: 100%;
+            word-break: break-word;
+            text-shadow: 
+                0 0 6px rgba(0, 0, 0, 0.6),
+                0 0 12px rgba(0, 0, 0, 0.5),
+                2px 1px 2px rgba(0, 0, 0, 0.7)
+        }
+
+        .question-asker {
+            font-size: 4vw;
+            opacity: 0.9;
+            margin-top: 4rem;
+            text-shadow: 
+                0 0 5px rgba(0, 0, 0, 0.6),
+                0 0 10px rgba(0, 0, 0, 0.5),
+                2px 2px 2px rgba(0, 0, 0, 0.7)
+        }
+
+        @media(min-width:900px) {
+            .question-text {
+                font-size: 128px
+            }
+
+            .question-asker {
+                font-size: 48px
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="question-fullscreen" id="overlay" role="application" aria-label="Question overlay">
+        <div class="overlay-inner">
+            <div class="content">
+                <div id="question-text" class="question-text">Loading…</div>
+                <div id="question-asker" class="question-asker"></div>
+            </div>
+        </div>
+    </div>
+
+   <script src="/scripts/questions.js"></script>
+
+</body>
+
+</html>
