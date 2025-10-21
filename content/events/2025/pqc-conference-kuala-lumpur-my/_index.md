@@ -701,7 +701,7 @@ data:
       bio: |
         David has worked in mobile networks engineering for nearly 40 years, his experience includes standards, coverage rollout and optimization, networking and security, analytics, and machine learning.
 
-        David began his career at the Mobile Systems Division, British Telecom Research Laboratories in Martlesham Heath, UK, designing hardware and software for cordless systems.
+        His career began at the Mobile Systems Division, British Telecom Research Laboratories in Martlesham Heath, UK, designing hardware and software for cordless systems.
 
         He was seconded to CellularOne in New York, where he was responsible for a range of activities, including planning and optimization, fraud detection, and special coverage projects until 1993.
 
