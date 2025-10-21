@@ -700,15 +700,15 @@ data:
       title: Head of Technology APAC at GSMA
       bio: |
         David has worked in mobile networks engineering for nearly 40 years, his experience includes standards, coverage rollout and optimization, networking and security, analytics, and machine learning.
- 
+
         David began his career at the Mobile Systems Division, British Telecom Research Laboratories in Martlesham Heath, UK, designing hardware and software for cordless systems.
-        
+
         He was seconded to CellularOne in New York, where he was responsible for a range of activities, including planning and optimization, fraud detection, and special coverage projects until 1993.
-        
+
         Since 1993 he has been in Hong Kong, initially with SmarTone, and then working in a wide variety of roles and projects in the region, and beyond, specializing in network engineering for network operators, system integrators, equipment vendors, and an APAC IoT solution provider.
-        
+
         At GSMA he is responsible for coordinating various mobile industry technology initiatives, including 5G, cybersecurity, AI and IoT in the APAC region.
-        
+
         David is a member of the Institute of Engineering and Technology and a Chartered Engineer.
       social:
         linkedin: https://www.linkedin.com/in/davidturkington
