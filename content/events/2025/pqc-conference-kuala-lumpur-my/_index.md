@@ -1317,11 +1317,15 @@ data:
             locations:
               - plenary
 
-          - title: GSMA Post Quantum Telecom Network Task Force background and update
+          - title: PQC in Mobile Networks: Insights from the GSMA Task Force
             description: |
-              GSMA, together with IBM and Vodafone, launched the Post-Quantum Teleco Network Task Force (PQTN-TF) more than three years ago to confront the looming threat that quantum computers pose to the cryptographic foundations of mobile networks. This presentation summarizes the PQTN-TF’s risk assessment, its review of international guidance, and practical recommendations to help network operators and the wider telecom ecosystem plan and execute cryptographic upgrades for a post-quantum future. All PQTN-TF documentation is publicly available, and the group welcomes new contributors to help accelerate preparedness.
+              The GSMA Post Quantum Telco Network Task Force (PQTN-TF), formed in collaboration with IBM and Vodafone, is a global initiative to prepare the telecommunications sector for the cryptographic challenges posed by quantum computing. With over 60 participating organizations (including network operators, technology providers, regulators, and governments) the PQTN-TF serves as a platform for collaboration, testing, and publishing practical guidance for quantum-safe migration.
 
-              We provide a concise technical overview of 5G encryption — highlighting where it departs from 4G in architecture and key management — while stressing that new protocol designs do not eliminate legacy attack vectors: over-the-air downgrade attacks remain feasible on 5G. The talk also demystifies common interception tools such as SMS blasters and IMSI catchers: how they operate, how they harvest IMSIs and other identifiers, and why possession of an IMSI enables broad surveillance and misuse of subscriber identity and services. Attendees will leave with a clear sense of the immediate and long-term risks, pragmatic mitigation steps, and ways to engage with the PQTN-TF to strengthen the industry’s transition to post-quantum secure telecom infrastructure.
+              This presentation provides a technical update on PQTN-TF’s work, focusing on the implications of post-quantum cryptography (PQC) for mobile networks. It examines how 5G’s service-based architecture, distributed cloud infrastructure, and enhanced identity protection mechanisms reshape the threat landscape, while legacy vulnerabilities such as downgrade attacks and IMSI catchers persist.
+
+              We highlight PQTN-TF’s contributions to crypto-agility, including risk assessments, migration strategies, and alignment with global government initiatives and NIST timelines. Special attention is given to PQC integration challenges in telecom environments, such as key management, performance overhead, and interoperability across network functions and devices.
+
+              Attendees will gain insight into how PQTN-TF is helping the industry move from awareness to action, ensuring mobile networks remain secure in the post-quantum era.
             speakers:
               - David Turkington
             locations:
