@@ -127,28 +127,35 @@
         .headshot-wrapper {
             position: relative;
             display: inline-block;
+            overflow: visible;
         }
 
         /* Moderator Badge - positioned at bottom right of headshot */
         .moderator-badge {
             position: absolute;
             bottom: 5px;
-            right: 5px;
+            right: -15px;
             background-color: var(--orange);
             color: white;
-            font-size: 0.5em;
+            font-size: 0.45em;
             font-weight: bold;
-            padding: 3px 6px;
+            padding: 2px 5px;
             border-radius: 3px;
             display: flex;
             align-items: center;
             justify-content: center;
-            border: 1px solid white;
+            border: 2px solid white;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
             z-index: 10;
             text-transform: uppercase;
             letter-spacing: 0.3px;
             white-space: nowrap;
+        }
+        
+        /* Ensure headshot images have consistent sizing and are blocks */
+        .headshot {
+            display: block;
+            position: relative;
         }
 
         /* Default/Grid Layout: 1-3 speakers per row */
@@ -174,8 +181,12 @@
         }
 
         #speakersList.layout-default .speaker .headshot-wrapper {
+            width: 100px;
+            height: 100px;
             margin-right: var(--margin);
             flex-shrink: 0;
+            position: relative;
+            overflow: visible;
         }
 
         #speakersList.layout-default .speaker .headshot {
@@ -183,6 +194,7 @@
             width: 100px;
             height: 100px;
             border-radius: 50%;
+            display: block;
         }
 
         #speakersList.layout-default .speaker .speaker-info {
@@ -214,8 +226,11 @@
         }
 
         #speakersList.layout-panel .headshot-wrapper {
+            width: 120px;
+            height: 120px;
             position: relative;
             margin: 0 0 15px 0;
+            overflow: visible;
         }
 
         #speakersList.layout-panel .headshot {
@@ -224,6 +239,7 @@
             height: 120px;
             border-radius: 50%;
             flex-shrink: 0;
+            display: block;
         }
 
         #speakersList.layout-panel .speaker-info {
@@ -264,13 +280,21 @@
             min-height: 120px;
         }
 
+        #speakersList.layout-vertical .headshot-wrapper {
+            width: 120px;
+            height: 120px;
+            margin-right: 25px;
+            position: relative;
+            overflow: visible;
+        }
+
         #speakersList.layout-vertical .headshot {
             background-color: rgba(255, 255, 255, 0.3);
             width: 120px;
             height: 120px;
             border-radius: 50%;
-            margin-right: 25px;
             flex-shrink: 0;
+            display: block;
         }
 
         #speakersList.layout-vertical .speaker-info {
@@ -308,6 +332,25 @@
             margin-bottom: 5px;
             flex: 1 1 45%;
             box-sizing: border-box;
+            display: flex;
+            align-items: flex-start;
+        }
+
+        #session .speaker .headshot-wrapper {
+            width: 100px;
+            height: 100px;
+            margin-right: var(--margin);
+            flex-shrink: 0;
+            position: relative;
+            overflow: visible;
+        }
+
+        #session .speaker .headshot {
+            background-color: rgba(255, 255, 255, 0.3);
+            width: 100px;
+            height: 100px;
+            border-radius: 50%;
+            display: block;
         }
 
         #session .speaker .name {
@@ -318,15 +361,6 @@
         #session .speaker .title {
             font-weight: lighter;
             font-size: 0.8em;
-        }
-
-        #session .speaker .headshot {
-            background-color: rgba(255, 255, 255, 0.3);
-            width: 100px;
-            height: 100px;
-            border-radius: 50%;
-            margin-right: var(--margin);
-            float: left;
         }
 
         #footer {
@@ -460,8 +494,11 @@
         }
 
         body.clean-mode #speakersList.layout-panel .headshot-wrapper {
+            width: 150px;
+            height: 150px;
             position: relative;
             margin: 0 0 15px 0;
+            overflow: visible;
         }
 
         body.clean-mode #speakersList.layout-panel .headshot {
@@ -469,6 +506,7 @@
             height: 150px;
             background-color: rgba(255, 255, 255, 0.3);
             flex-shrink: 0;
+            display: block;
         }
 
         body.clean-mode #speakersList.layout-panel .moderator-badge {
@@ -513,13 +551,22 @@
         }
 
         body.clean-mode #speakersList.layout-vertical .headshot-wrapper {
+            width: 150px;
+            height: 150px;
             position: relative;
+            overflow: visible;
         }
 
         body.clean-mode #speakersList.layout-vertical .headshot {
             width: 150px;
             height: 150px;
             background-color: rgba(255, 255, 255, 0.3);
+            display: block;
+        }
+
+        body.clean-mode #speakersList.layout-vertical .headshot-wrapper {
+            position: relative;
+            overflow: visible;
         }
 
         body.clean-mode #speakersList.layout-vertical .moderator-badge {
@@ -564,6 +611,12 @@
 
             :root {
                 --margin: 100px;
+            }
+
+            /* Reduce headshot margin on large screens */
+            #speakersList.layout-default .speaker .headshot-wrapper,
+            #session .speaker .headshot-wrapper {
+                margin-right: 25px;
             }
 
             #header {
