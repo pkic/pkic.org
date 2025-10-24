@@ -1,15 +1,15 @@
 ---
-date: 2024-12-19T12:00:00Z
+date: 2025-10-24T08:00:00Z
 draft: false
-title: Live Stream - Post-Quantum Cryptography Conference - Austin
+title: Live Stream - Post-Quantum Cryptography Conference - Kuala Lumpur, Malaysia
 fullwidth: true
 robots: noindex
 
 heroTitle: Welcome to the Post-Quantum Cryptography Conference
-heroDescription: January 15 and 16, 2025 - Austin, Texas, US | Online
+heroDescription: October 28 - 30, 2025 - Kuala Lumpur, Malaysia | Online
 ---
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" height="20" max-width="60" rows=true >}}
+{{< sponsors sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" height="20" max-width="60" rows=true >}}
 
 ## Wednesday Live Streams
 

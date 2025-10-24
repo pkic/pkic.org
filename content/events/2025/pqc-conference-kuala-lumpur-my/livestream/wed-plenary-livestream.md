@@ -1,7 +1,7 @@
 ---
-date: 2024-12-19T12:00:00Z
+date: 2025-10-24T08:00:00Z
 draft: false
-title: Plenary Live Stream (Wednesday) - Post-Quantum Cryptography Conference Austin
+title: Plenary Live Stream (Wednesday) - Post-Quantum Cryptography Conference Kuala Lumpur
 fullwidth: true
 robots: noindex
 
@@ -14,4 +14,4 @@ robots: noindex
 {{< button link="/join/" target="_blank" label="Become a member" type="success" >}} 
 {{< button link="/sponsors/" target="_blank" label="Sponsor our activities" type="light" >}}
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" height="15" max-width="50" fullwidth="true" >}}
+{{< sponsors sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" height="15" max-width="50" fullwidth="true" >}}
