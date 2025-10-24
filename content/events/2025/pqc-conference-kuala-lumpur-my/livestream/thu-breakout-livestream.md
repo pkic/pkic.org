@@ -5,6 +5,9 @@ title: Breakout Live Stream (Thursday) - Post-Quantum Cryptography Conference Ku
 fullwidth: true
 robots: noindex
 
+heroTitle: Breakout Live Stream (Thursday)
+heroDescription: Post-Quantum Cryptography Conference Kuala Lumpur
+
 ---
 
 {{< livestream id="HUGO_LS_THU_BREAKOUT" >}}
@@ -14,4 +17,4 @@ robots: noindex
 {{< button link="/join/" target="_blank" label="Become a member" type="success" >}} 
 {{< button link="/sponsors/" target="_blank" label="Sponsor our activities" type="light" >}}
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" height="15" max-width="50" fullwidth="true" >}}
+{{< sponsors sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" height="8" max-width="35" fullwidth="true" >}}

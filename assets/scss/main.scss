@@ -1,7 +1,6 @@
 // required to get Bootstrap functions and variables
 @import "bootstrap/functions";
 
-
 // --- PKIC Variable Overrides & Custom Colors ---
 
 // Default Bootstrap colors
@@ -124,6 +123,9 @@ $dark: $gray-800;
 // Override Bootstrap link colors
 $link-color: $primary;
 $link-hover-color: $primary;
+
+// Enable negative margins utility classes
+$enable-negative-margins: true;
 
 // Import Bootstrap after all custom variables and overrides
 @import "bootstrap/variables";
