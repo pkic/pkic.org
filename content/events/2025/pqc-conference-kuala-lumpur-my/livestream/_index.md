@@ -21,7 +21,7 @@ heroDescription: October 28 - 30, 2025 - Kuala Lumpur, Malaysia | Online
 {{< button link="thu-plenary-livestream/" target="_blank" label="Thursday Plenary" type="info" >}} 
 {{< button link="thu-breakout-livestream/" target="_blank" label="Thursday Breakout" type="warning" >}} 
 
-## Ask a question
+## Ask a question to the speakers
 
 {{< button link="/ask" target="_blank" label="Ask a question" type="dark" >}} 
 
