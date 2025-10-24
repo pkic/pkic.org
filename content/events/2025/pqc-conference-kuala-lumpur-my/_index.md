@@ -166,7 +166,7 @@ data:
     - name: Sudha Iyer
       title: Chief/Principal Engineer-PKI & Cryptography at Citi
       bio: |
-        Sudha Iyer is Head Cybersecurity Architect at Citi, a founding member of the FS-ISAC PQC group, and an international project leader at ISO for blockchain and smart contract security. She has 23 years of experience in cryptographic architecture and is deeply engaged in cross-sector cybersecurity forums and leads several cryptographic and data security standards efforts. 
+        Sudha Iyer is Chief/Principal Engineer - PKI & Cryptography at Citi, a founding member of the FS-ISAC PQC group, and an international project leader at ISO for blockchain and smart contract security. She has 23 years of experience in cryptographic architecture and is deeply engaged in cross-sector cybersecurity forums and leads several cryptographic and data security standards efforts. 
       social:
         linkedin: https://www.linkedin.com/in/sudhaeiyer
 
