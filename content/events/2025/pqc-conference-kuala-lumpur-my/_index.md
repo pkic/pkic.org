@@ -894,8 +894,6 @@ data:
             description: |
               _This session is held under Chatham House Rules._
 
-              **_Draft Agenda_**
-
               **Welcome (20 min)**
 
               * What problem are we solving? Why PQC policy and regulation matter now
@@ -941,8 +939,6 @@ data:
           - title: "Securing the Healthcare Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
               _This session is held under Chatham House Rules._
-      
-              **_Draft Agenda_**
 
               **Welcome (20 min)**
 
@@ -1186,8 +1182,6 @@ data:
           - title: "Securing the Financial Sector in the Quantum Era: a PQC Readiness Roundtable"
             description: |
               _This session is held under Chatham House Rules._
-
-              **_Draft Agenda_**
 
               **Welcome (20 min)**
 
