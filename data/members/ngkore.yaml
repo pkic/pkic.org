@@ -1,10 +1,10 @@
 id: ngkore
 name: NgKore
-slogan:
+slogan: Driving OPEN SOURCE Innovation for the FUTURE
 website: https://ngkore.org/
 
 # Short description, longer content can be placed in `content/members/`
-description: NgKore is a research community dedicated to pushing the boundaries of 5G and 6G technology through open source innovation and collaboration.
+description: NgKore is an open-source community driving innovation across Quantum Safe Network, Post-Quantum Cryptography (PQC), eBPF, 5G Advanced, 6G, O-RAN, NTN, AI/ML, Blockchain, and Quantum Simulations.
 
 # membership
 memberSince: 2025-08-27
@@ -17,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url: https://docs.ngkore.org/
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url: https://ngkore.org/pages/announcements
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  twitter: https://x.com/kore_ng
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/ngkore/
+  youtube: https://www.youtube.com/@ngkore
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +53,12 @@ representatives:
   - name: Aditya Koranga
     role: Co-Founder
     social:
-      twitter: 
+      twitter:
       linkedin: https://www.linkedin.com/in/aditya-koranga/
-    description: Aditya is the Co-Founder at NgKore and represents the organization at the PKI Consortium.
+    description: Aditya is the Co-Founder of NgKore, Vice Chair of Post Quantum Cryptography Alliance (PQCA)'s TAC under Linux Foundation and represents Small Businesses and Individuals on the Technical Advisory Committee at OpenSSL Corporation and Foundation. With extensive experience as a Chief Security Architect, he has built enterprise-ready quantum-safe solutions and guided organizations through complex cryptographic transitions.
+  - name: Shubham Kumar
+    role: Co-Founder & SW Engineer
+    social:
+      twitter:
+      linkedin: https://www.linkedin.com/in/chmodshubham/
+    description: Shubham is a mentor with the Linux Foundation and the co-founder of NgKore, an open-source community and telecom startup. He has extensive experience working with open-source tools and libraries to build quantum-secure solutions for next-generation networks. He has also co-authored technical reports and patents focused on migrating networks to post-quantum cryptography.
