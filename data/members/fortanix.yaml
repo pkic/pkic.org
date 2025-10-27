@@ -15,6 +15,9 @@ workingGroups:
 # sponsor
 sponsor:
   level: 
+  sponsoring:
+    "Post-Quantum Cryptography Conference Amsterdam 2023":
+      level: Innovator
 
 # Blog posts
 blog: 

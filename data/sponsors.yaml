@@ -17,19 +17,3 @@
         level: Leader
       "Post-Quantum Cryptography Conference Kuala Lumpur 2025":
         level: Innovator
-
-- name: Fortanix 
-  website: https://fortanix.com/
-  logo: fortanix.svg
-  sponsor:
-    sponsoring:
-      "Post-Quantum Cryptography Conference Amsterdam 2023":
-        level: Innovator
-
-- name: DigiCert 
-  website: https://www.digicert.com/
-  logo: digicert.svg
-  sponsor:
-    sponsoring:
-      "Post-Quantum Cryptography Conference Austin 2025":
-        level: Innovator
