@@ -713,6 +713,15 @@ data:
       social:
         linkedin: https://www.linkedin.com/in/davidturkington
 
+    - name: Setiaji ST
+      title: Chief Digital Transformation Office and Senior Advisor of Health Technology to the Minister of Health of The Republic of Indonesia
+      bio: |
+        Mr. Setiaji is an Expert Advisor of Health Technology to The Minister of Health in Indonesia. 
+        
+        Mr. Setiaji, a digital leader and a civil servant with more than 10 years of experience in digital transformation and smart city development and digital transformation in the line ministries and government agencies in Indonesia. His experience leading the West Java Digital Services, Jakarta Smart City grows my expertise in information technology as he was a graduate of information technology engineering. All his expertise and experiences are being applied to serve the public effectively, efficiently, and impactful to the citizens based on data and technology utilization. He is a team builder who is very attentive to the needs of stakeholders and leaders. He is a digital leader with a warm & friendly attitude always! He plays an essential role in providing practical solutions that directly impact and improve public services. He has won various National and International awards in Digital Transformation: Top CIO on Digital Implementation, IT Works 2021 and The World CIO 200 Awards–SEA Edition, Global CIO Forum 2021.
+      social:
+        linkedin: 
+
   # Agenda ----------------------------------------------------------------------
   agenda:
     2025-10-28:
@@ -976,6 +985,7 @@ data:
               - Scott Rea
               - Anestis Bechtsoudis
               - Samuel Tseitkin
+              - Setiaji ST
             locations:
               - room_2
             track: Roundtable
