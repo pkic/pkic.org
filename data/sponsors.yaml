@@ -33,3 +33,11 @@
     sponsoring:
       "Post-Quantum Cryptography Conference Austin 2025":
         level: Innovator
+
+- name: Pos Digicert
+  website: https://www.posdigicert.com.my/
+  logo: posdigicert.svg
+  sponsor:
+    sponsoring:
+      "Post-Quantum Cryptography Conference Kuala Lumpur 2025":
+        level: Inspirator
