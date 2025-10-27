@@ -1893,6 +1893,18 @@ The conference features a balanced program with strategic, informational, and ed
 
 * **Workshops** and **Roundtables** on **Tuesday** are designed for those attending in person.
 * The **Conference** on **Wednesday** and **Thursday** is available to join in person, remotely, or on-demand.
+* **Badge Collection:** Please collect your badge at the **foyer of the auditorium** before joining any sessions.
+
+**Tuesday workshop rooms:**
+
+* **Room 1**: Zenith
+* **Room 2**: Pinnacle 3
+* **Room 3**: Pinnacle 1
+* **Room 4**: Pinnacle 4
+* **Room 5**: Pinnacle 2
+* **Room 6**: Pinnacle 5
+* **Room 7**: Continuum and Reflection
+* **Room 8**: Auditorium
 
 {{< agenda default="2025-10-29" >}}
 
