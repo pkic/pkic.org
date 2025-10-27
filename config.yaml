@@ -4,6 +4,14 @@ title: PKI Consortium
 
 copyright: PKI Consortium, Inc. All Rights Reserved
 
+languages:
+  en:
+    languageName: English
+    weight: 1
+  ms:
+    languageName: Malay
+    weight: 2
+
 permalinks:
   blog: /:year/:month/:day/:title/
 

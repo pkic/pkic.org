@@ -51,10 +51,10 @@
         {{ if and (eq $.Section "blog") (eq $.Kind "page") }}
         <div class="mt-3 small">
           <time datetime="{{ $.PublishDate.Format "2006-01-02" }}">
-            {{ $.PublishDate.Format "Monday, Jan 2, 2006" }}
+            {{ $.PublishDate | time.Format ":date_full" }}
           </time>
-          {{ if not ($.Lastmod.Equal $.PublishDate) }} • Updated {{ $.Lastmod.Format "Monday, Jan 2, 2006" }}{{ end }}
-          • Reading time: <strong>{{ $.ReadingTime }} min</strong>
+          {{ if not ($.Lastmod.Equal $.PublishDate) }} • {{ i18n "updated" }} {{ $.Lastmod | time.Format ":date_full" }}{{ end }}
+          • {{ i18n "readingTime" }} <strong>{{ $.ReadingTime }} {{ i18n "minutes" }}</strong>
         </div>
         {{ end }}
       </div>
@@ -62,7 +62,7 @@
 
     {{ with $.Params.heroImageCredit }}
       <div class="position-absolute bottom-0 end-0 p-1 m-1 text-end text-white bg-dark bg-opacity-50 rounded small">
-        Image:
+        {{ i18n "image" }}:
         {{ if and $.Params.heroImageLicense $.Params.heroImageLicenseURL }}
           <a
             href="{{ $.Params.heroImageLicenseURL }}"
@@ -99,12 +99,12 @@
                 {{ if and (eq $.Section "blog") (eq $.Kind "page") }}
                 <div class="mt-3 small">
                     <time datetime="{{ $.PublishDate.Format "2006-01-02" }}">
-                        {{ $.PublishDate.Format "Monday, Jan 2, 2006" }}
+                        {{ $.PublishDate | time.Format ":date_full" }}
                     </time>
                     {{ if not ($.Lastmod.Equal $.PublishDate) }}
-                        • Updated {{ $.Lastmod.Format "Monday, Jan 2, 2006" }}
+                        • {{ i18n "updated" }} {{ $.Lastmod | time.Format ":date_full" }}
                     {{ end }}
-                    • Reading time: <strong>{{ $.ReadingTime }} min</strong>
+                    • {{ i18n "readingTime" }} <strong>{{ $.ReadingTime }} {{ i18n "minutes" }}</strong>
                 </div>
                 {{ end }}
             </div>

@@ -18,14 +18,25 @@
           </div>
 
           <div class="col-lg-3 order-lg-2 px-lg-5" data-pagefind-ignore>
-            <p>Reading time: <strong>{{.ReadingTime}} minutes</strong></p>
+            <p>{{ i18n "readingTime" }} <strong>{{.ReadingTime}} {{ i18n "minutes" }}</strong></p>
             
-            <h4>Authors</h4>
+            <h4>{{ i18n "authors" }}</h4>
             <p>{{ partial "authors.html" . }}</p>
+
+            {{ if .IsTranslated }}
+            <h4>{{ i18n "translations" }}</h4>
+            <ul>
+              {{ range .Translations }}
+              <li>
+                <strong>{{ .Language.Lang | strings.ToUpper }}:</strong> <a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>
+              </li>
+              {{ end }}
+            </ul>
+            {{ end }}
 
             {{ $related := .Site.RegularPages.Related . | first 5 }}
             {{ with $related }}
-            <h4>Related Articles</h4>
+            <h4>{{ i18n "relatedArticles" }}</h4>
             <ul>
               {{ range . }}
                 <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
@@ -34,14 +45,14 @@
             {{ end }}
         
             {{ with .Params.tags }}
-            <h4>Related Topics</h4>
+            <h4>{{ i18n "relatedTopics" }}</h4>
             <ul></ul>
               {{ partial "tags.html" . }}
             </ul>
             {{ end }}
 
             <div class="sticky-lg-top my-5 pt-4 pb-5 bg-light rounded-3 text-center" style="top: 80px;" data-pagefind-ignore="all">
-              <p class="px-4"><small>We thank our sponsors for their ongoing support of the PKI Consortium</small></p>
+              <p class="px-4"><small>{{ i18n "sponsors" }}</small></p>
 
               {{ .Scratch.Set "class" "img-fluid" }}
               {{ .Scratch.Set "max-height" "80" }}
@@ -77,7 +88,7 @@
 
     <div class="text-center">
       {{ with .PrevInSection }}
-        <a class="btn btn-primary my-2" title="Previous article" href="{{.Permalink}}">
+        <a class="btn btn-primary my-2" title="{{ i18n "previousArticle" }}" href="{{.Permalink}}">
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
             <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
           </svg>
@@ -85,7 +96,7 @@
         </a>
       {{ end }}
       {{ with .NextInSection }}
-        <a class="btn btn-primary my-2" title="Next article" href="{{.Permalink}}">
+        <a class="btn btn-primary my-2" title="{{ i18n "nextArticle" }}" href="{{.Permalink}}">
           {{.Title}}
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
             <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
