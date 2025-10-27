@@ -22,7 +22,9 @@ workingGroups:
 # sponsor
 sponsor:
   level: Silver
-
+  sponsoring:
+    "Post-Quantum Cryptography Conference Austin 2025":
+      level: Innovator
 # Blog posts
 blog: 
   url: 
