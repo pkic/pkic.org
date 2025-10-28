@@ -449,20 +449,21 @@ function updateNameAndTitle() {
         endOffsetSeconds
     });
 
-    // Use getSpeakersForTime which handles best-group selection logic
-    filteredSpeakers = getSpeakersForTime({
-        day,
-        time,
-        location: params.location,
-        startOffsetSeconds,
-        endOffsetSeconds
-    });
-
     // Calculate adjusted time for finding next slot
     // If we have an offset, the "next" slot should be based on the adjusted time, not the current time
     const adjustedTime = (adjustedTimeSeconds !== null && startOffsetSeconds !== 0) 
         ? formatSecondsAsTime(adjustedTimeSeconds).substring(0, 5) // Convert back to HH:MM format
         : time;
+
+    // Use getSpeakersForTime which handles best-group selection logic
+    // Apply the offset to the time for session lookup (the offset is already calculated above)
+    filteredSpeakers = getSpeakersForTime({
+        day,
+        time: adjustedTime,  // Use adjusted time instead of raw time
+        location: params.location,
+        startOffsetSeconds: 0,  // Offset already applied to time
+        endOffsetSeconds     // Still use endOffset if present (for future sessions)
+    });
 
     console.log('[updateNameAndTitle] Finding next slot after', {
         originalTime: time,
@@ -495,10 +496,34 @@ function updateNameAndTitle() {
     allSpeakers = getSpeakersData().slice().sort((a, b) => a.name.localeCompare(b.name));
 
     // Auto-advance: If there's no current session but there's a next one, jump to it
+    // Find the first session that starts after the adjusted time
     if (filteredSpeakers.length === 0 && allSessionSlots.length > 0 && sessionOffset === 0) {
-        console.log('[updateNameAndTitle] No current session, auto-advancing to next session');
-        sessionOffset = 1;
-        navigateToSessionOffset(1);
+        const adjustedSeconds = adjustedTimeSeconds ?? (time ? parseTime(time) : null);
+        let targetIndex = 1; // Default to first session
+        
+        if (adjustedSeconds !== null) {
+            // Find the first session starting after the adjusted time
+            targetIndex = allSessionSlots.findIndex(slot => {
+                const slotSeconds = parseTime(slot.time) ?? 0;
+                return slotSeconds > adjustedSeconds;
+            });
+            
+            // If found, add 1 because sessionOffset is 1-indexed
+            if (targetIndex >= 0) {
+                targetIndex += 1;
+            } else {
+                // All sessions are in the past, use the last one
+                targetIndex = allSessionSlots.length;
+            }
+        }
+        
+        console.log('[updateNameAndTitle] No current session, auto-advancing to next session', {
+            adjustedTime: adjustedSeconds ? formatSecondsAsTime(adjustedSeconds) : 'N/A',
+            targetIndex,
+            targetSlot: allSessionSlots[targetIndex - 1]
+        });
+        sessionOffset = targetIndex;
+        navigateToSessionOffset(targetIndex);
         return; // navigateToSessionOffset will call showNameAndTitle
     }
 

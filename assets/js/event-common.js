@@ -187,8 +187,12 @@ function isWithinTimeWindow(currentSeconds, startSeconds, endSeconds, startOffse
         return true;
     }
 
-    const adjustedStart = startSeconds + startOffsetSeconds;
-    const adjustedEnd = endSeconds + endOffsetSeconds;
+    // Apply offsets to expand the matching window around the session time:
+    // - Negative startOffset moves the window start EARLIER (includes older sessions)
+    // - Positive endOffset moves the window end LATER (includes future sessions)
+    // Example: startOffset=-7200 means sessions starting 2 hours before can still match
+    const adjustedStart = startSeconds + startOffsetSeconds;  // startOffset is negative, so this moves earlier
+    const adjustedEnd = endSeconds + endOffsetSeconds;        // endOffset is positive, so this moves later
     const matches = currentSeconds >= adjustedStart && currentSeconds < adjustedEnd;
     
     if (!matches) {
