@@ -1632,7 +1632,7 @@ data:
 
       - time: "10:30"
         title: Break
-        sponsor: 
+        sponsor: unsungltd
 
       - time: "11:00"
         sessions:
