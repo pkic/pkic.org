@@ -391,13 +391,6 @@ data:
       social:
         linkedin: https://lk.linkedin.com/in/hwupathum
 
-    - name: Reza Azarderakhsh
-      title: CTO at PQSecure and FAU
-      bio: |
-        Dr. Reza Azarderakhsh is a Professor at Florida Atlantic University and the CEO of PQSecure Technologies. He is a leading expert in post-quantum cryptographic engineering, specializing in secure hardware/software co-design, side-channel protections, and formal verification. Dr. Azarderakhsh has published over 140 papers in top-tier conferences and journals related to post-quantum cryptography, contributing significantly to national and international efforts in quantum-safe security for embedded and constrained systems.
-      social:
-        linkedin: https://www.linkedin.com/in/reza-azarderakhsh-39777042/
-
     - name: Stefan van den Berg
       title: Researcher Cryptography and Cyber Security at TNO
       bio: |
@@ -1620,11 +1613,11 @@ data:
             locations:
               - plenary
 
-          - title: "PQC Formal Verification: Challenges and Tools for Formal Verification of Post-Quantum Cryptography"
+          - title: "Implementing the Post-Quantum Survivors: A Retrospective"
             description: |
-              As post-quantum cryptography advances toward deployment, formal verification becomes essential for ensuring trust in both hardware and software implementations. Each PQC algorithm—such as ML-KEM, ML-DSA, and SLH-DSA—presents unique challenges, and while tools like Cryptol, SAW, and Coq offer valuable support, no single framework offers a complete solution. In this talk, we introduce an effort focused on practical formal assurance for PQC. We will demonstrate how Cryptol and SAW can verify key properties of ML-KEM and ML-DSA components. We also highlight the growing role of Rust in cryptographic implementations and discuss the importance of verifying PQC libraries in memory-safe languages. Our goal is to promote scalable, implementation-aware formal methods to ensure secure and verifiable PQC adoption.
+              An often overlooked fact about Bouncy Castle's addition of the Round 3 NIST PQC Finalists in 2021/2022 was that, in addition to receiving funding to get assistance with the effort, we also received funding to have the implementations formally reviewed. At the time the review was a mixture of manual techniques and some automated tooling. Research into automated analysis has since continued and recently the Bouncy Castle team was provided access with a newer, more advanced, version of the tooling leading to identification of some issues previously missed. This talk will provide some background history to the Bouncy Castle PQC project as well how this ongoing journey in using research tools to validate the PQC libraries has progressed and what lessons have been learned to date.
             speakers:
-              - Reza Azarderakhsh
+              - David Hook
             youtube:
             presentation: 
             locations:
