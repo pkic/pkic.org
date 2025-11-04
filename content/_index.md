@@ -16,9 +16,10 @@ menu:
 ---
 
 {{< alert >}}
-Don't miss the **free** hybrid **Post-Quantum Cryptography Conference in Kuala Lumpur, Malaysia**, scheduled for October 28 - 30, 2025. Register now at [pkic.org/register](/register)!
+Slides, photos, and videos of the **Post-Quantum Cryptography Conference** in Kuala Lumpur will be published soon. Follow us on [LinkedIn](https://www.linkedin.com/company/pki-consortium/) and subscribe to our [YouTube channel](https://www.youtube.com/@pkiconsortium) to get notified as soon as they are available!
+  
+**Next stop:** Germany (city and date to be announced) — [request an invite now](/register)!
 {{< /alert >}}
-
 
 {{< cards >}}
 section_id: "working-groups"
@@ -47,17 +48,14 @@ cards:
     text: "Facilitate information exchange, encouraging discussions and sharing insights on various aspects of Post-Quantum Cryptography."
     card_class: "working-group-card"
     links:
-      - text: "Next PQC Conference (Kuala Lumpur)"
+      - text: "Last PQC Conference (Kuala Lumpur)"
         url: "/events/2025/pqc-conference-kuala-lumpur-my/"
-        class: "btn-sm btn-primary"
-      - text: "Call for Abstracts"
-        url: "/call"
         class: "btn-sm fw-bold btn-warning"
       - text: "PQC Capabilities Matrix (PQCCM)"
         url: "/pqccm/"
         class: "btn-sm btn-secondary"
-      - text: "Last PQC Conference (Austin)"
-        url: "/events/2025/pqc-conference-austin-us/"
+      - text: "PQC Maturity Model (PQCMM)"
+        url: "/2025/10/27/defining-quantum-readiness-introducing-the-post-quantum-cryptography-maturity-model/"
         class: "btn-sm btn-outline-primary"
       - text: "Blog Posts about PQC"
         url: "/tags/pqc/"

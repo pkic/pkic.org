@@ -1,5 +1,5 @@
 ---
-title: "Defining Quantum-Readiness: Introducing the Post Quantum Cryptography Maturity Model"
+title: "Defining Quantum-Readiness: Introducing the Post-Quantum Cryptography Maturity Model"
 summary: |
     As the industry moves toward a post-quantum future, terms like "quantum-ready" and "quantum-safe" are everywhere; but what do they actually mean in practice? The PKI Consortium PQC Working Group has developed a draft Post Quantum Cryptography Maturity Model (PQCMM) to provide clarity for organizations and vendors alike. This model defines maturity levels for PQC adoption across all products and solutions that rely on cryptography. We invite feedback to refine this framework before it becomes an industry reference.
 authors:
@@ -11,7 +11,7 @@ tags: [PQC, Post-Quantum Cryptography, PQC Maturity Model]
 
 As the industry moves toward a post-quantum future, terms like *quantum-ready* and *quantum-safe* are everywhere; but what do they actually mean in practice? While the [Post-Quantum Cryptography Capability Matrix (PQCCM)](https://pkic.org/pqccm/) provides a great overview of where vendors stand, it doesn’t always tell the full story. Organizations need clarity on what to expect from products and features, and vendors need a consistent way to communicate their capabilities.
 
-That’s why the PKI Consortium **PQC Working Group** has developed a **draft PQC Maturity Model (PQCMM)**, and we want your feedback.
+That’s why the PKI Consortium **PQC Working Group** has developed a **draft Post-Quantum Cryptography Maturity Model (PQCMM)**, and we want your feedback.
 
 ## Why a Maturity Model?
 
