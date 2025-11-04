@@ -13,6 +13,7 @@ params:
     link: ../#nav-tuesday
 
 robots: noindex
+redirect: ..
 ---
 
 If you are unable to attend the conference in person, please update your main event registration using the link in your confirmation email, or contact us at contact@pkic.org.

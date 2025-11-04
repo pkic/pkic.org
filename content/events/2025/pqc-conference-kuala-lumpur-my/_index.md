@@ -8,19 +8,9 @@ summary: |
 aliases:
  - /pqcc
 
-layout: single
-outputs:
- - html
- - event-data
- - event-overlays
- - event-session
- - event-speakers
- - event-speakers2 
- - event-agenda
-
 params:
   heroButton: 
-    label: Don't be too late, Register Now (free)!
+    label: You can now request an invite for our Next Conference in Germany!
     link: /register
 
   heroTitle: Post-Quantum Cryptography Conference
@@ -1859,64 +1849,47 @@ data:
         title: End of Day Three
 
 ---
-
 ## Conference Details
 
-From **Tuesday, October 28 to Thursday, October 30, 2025**, the PKI Consortium will host its fourth Post-Quantum Cryptography (PQC) Conference at the Connexion Conference & Event Centre in Kuala Lumpur, Malaysia.
+The PKI Consortium successfully hosted its fourth Post-Quantum Cryptography (PQC) Conference from **Tuesday, October 28 to Thursday, October 30, 2025**, at the Connexion Conference & Event Centre in Kuala Lumpur, Malaysia.
 
-This premier three-day event begins with hands-on workshops, followed by two days of expert-led talks, panels, and breakout sessions. It attracts top executives, technical leaders, and practitioners from both the public and private sectors, all focused on shaping the future of cryptography.
+This premier three-day event featured hands-on workshops, followed by two days of expert-led talks, panels, and breakout sessions. It attracted top executives, technical leaders, and practitioners from both the public and private sectors, all focused on shaping the future of cryptography.
 
-> The conference is open to all individuals interested in Post-Quantum Cryptography and is **not limited** to PKI Consortium members. 
+> The conference was open to all individuals interested in Post-Quantum Cryptography and was **not limited** to PKI Consortium members.  
 {.callout-info}
 
-## Date and location
+## Status Update
+
+✅ [The conference has concluded successfully!](/2025/11/04/post-quantum-cryptography-conference-2025-concludes-with-urgent-call-for-global-migration-to-quantum-resistant-encryption-systems/)  
+📄 **Slides and recordings will be added to this page soon.** Please check back for updates, follow us on [LinkedIn](https://www.linkedin.com/company/pki-consortium/) or subscribe to our [YouTube channel](https://www.youtube.com/@pkiconsortium) for notifications.
+
+## Date and Location
 
 **Date:** Tuesday, October 28 to Thursday, October 30, 2025  
-**Location:** [Connexion Conference & Event Centre](https://connexioncec.com/), Kuala Lumpur, Malaysia  
-**Registration:** [Click here](/register)
+**Location:** Connexion Conference & Event Centre, Kuala Lumpur, Malaysia  
 
-* _This event can be attended in-person or remotely, we strongly recommend to attend in person where possible._
-* _Workshops can only be attended in-person._
-* _There are no costs to register or attend the conference._
-* _Travel, accommodation and living expenses are not covered, all attendees are responsible to cover their own expenses._
-
-{{< button link="/register" target="_blank" label="Register for this conference" type="dark" >}}  
+* _This event could be attended in-person or remotely, with workshops available only in-person._  
+* _There were no costs to register or attend the conference._  
+* _Travel, accommodation, and living expenses were not covered; all attendees were responsible for their own expenses._  
 
 ## Sponsors
 
-We are immensely grateful to our [sponsors](/sponsors/):
+We are immensely grateful to our sponsors:
 
 {{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" >}}
 
+Want to sponsor the PKI Consortium and/or our next event? Please visit our [sponsorship page](/sponsors/) or contact us at contact (at) pkic.org.
+
 ## Agenda
 
-The conference features a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees can look forward to keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers are not permitted to promote products or services during presentations.
-
-**Please note that:**
-
-* **Workshops** and **Roundtables** on **Tuesday** are designed for those attending in person.
-* The **Conference** on **Wednesday** and **Thursday** is available to join in person, remotely, or on-demand.
-* **Badge Collection:** Please collect your badge at the **foyer of the auditorium** before joining any sessions.
-
-**Tuesday workshop rooms:**
-
-* **Room 1**: Zenith
-* **Room 2**: Pinnacle 3
-* **Room 3**: Pinnacle 1
-* **Room 4**: Pinnacle 4
-* **Room 5**: Pinnacle 2
-* **Room 6**: Pinnacle 5
-* **Room 7**: Continuum and Reflection
-* **Room 8**: Auditorium
+The conference featured a balanced program with strategic, informational, and educational sessions in the Plenary room, and technical deep dives in the Breakout room. Attendees enjoyed keynote speeches, interactive sessions, and panel discussions led by Post-Quantum Cryptography (PQC) experts. To ensure a focus on education, speakers were not permitted to promote products or services during presentations.
 
 {{< agenda default="2025-10-29" >}}
 
 {{< sponsors sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="Leader" height="20" max-width="60" >}}
 
-Please note that speakers are not permitted to promote products or services during their presentations. While commercials, workshops, and pitches included commercial information, the primary focus of the conference remains on educational content.
-
-This conference is made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
+This conference was made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
 
 {{< figure src="organizational-support.jpg" >}}
 
-For more information about the conference, please contact the PKI Consortium at feedback@pkic.org.
+For more information about the conference, please contact the PKI Consortium at contact (at) pkic.org.
