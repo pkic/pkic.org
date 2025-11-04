@@ -6,14 +6,20 @@ authors:
 - PKI Consortium
 date: 2025-10-27T07:00:00+00:00
 keywords: [PQC, Post-Quantum Cryptography, PQC Conference, Quantum-Safe, Digital Trust, PKI Consortium, Malaysia, NACSA, Ministry of Digital] 
-tags: [PQC, Post-Quantum Cryptography, Conference, Kuala Lumpur]
+tags: [PQC, Post-Quantum Cryptography, Conference, Kuala Lumpur, ASEAN]
 --- 
 
-**Kuala Lumpur — 27 October 2025** — The PKI Consortium announced that the Post-Quantum Cryptography (PQC) Conference will take place from 28 to 30 October 2025, at the Connexion Conference & Event Centre in Kuala Lumpur, Malaysia, bringing together over 2,500 delegates from government, industry, and academia. This event marks the world’s largest dedicated global conference on post-quantum cryptography ever held. The three-day program will feature hands-on workshops, high-level plenaries, and technical tracks focused on the standards, implementation strategies, and policy frameworks required to secure digital infrastructure against emerging quantum threats.
+**Kuala Lumpur — 27 October 2025** — The PKI Consortium announced that the [Post-Quantum Cryptography (PQC) Conference](/events/2025/pqc-conference-kuala-lumpur-my/) will take place from 28 to 30 October 2025, at the Connexion Conference & Event Centre in Kuala Lumpur, Malaysia, bringing together over 2,500 delegates from government, industry, and academia. This event marks the world’s largest dedicated global conference on post-quantum cryptography ever held. The three-day program will feature hands-on workshops, high-level plenaries, and technical tracks focused on the standards, implementation strategies, and policy frameworks required to secure digital infrastructure against emerging quantum threats.
 
 ## Safeguarding The Digital Future   
 
-Quantum computers will soon have the power to break much of the encryption that protects today’s digital communications, financial systems, and government data. Transitioning to quantum-safe cryptography is critical to maintaining privacy, trust, and security in a world where quantum capabilities are advancing quickly. The PKI Consortium’s PQC Conference helps organizations understand the urgency, tools, and global coordination needed to make this transition safely and effectively. “This week, global leaders are moving the transition to Post-Quantum Cryptography from planning to execution,” said Paul van Brouwershaven, Chair of the PKI Consortium. “Malaysia is a wonderful place for leaders to meet and provides a strong foundation for regional and international collaboration as we secure the world for the quantum era.”
+Quantum computers will soon have the power to break much of the encryption that protects today’s digital communications, financial systems, and government data. Transitioning to quantum-safe cryptography is critical to maintaining privacy, trust, and security in a world where quantum capabilities are advancing quickly. The PKI Consortium’s PQC Conference helps organizations understand the urgency, tools, and global coordination needed to make this transition safely and effectively. 
+
+> This week, global leaders are moving the transition to Post-Quantum Cryptography from planning to execution. 
+>
+> Malaysia is a wonderful place for leaders to meet and provides a strong foundation for regional and international collaboration as we secure the world for the quantum era. 
+
+said [Paul van Brouwershaven](https://www.linkedin.com/in/pvanbrouwershaven/), Chair of the PKI Consortium and its Post-Quantum Cryptography Working Group.
 
 ## Event Highlights:  
 
@@ -35,7 +41,8 @@ Additional details for Days 2 and 3 can be found here:
 
 Following the event, the PKI Consortium will publish a Global PQC Summary Report highlighting key recommendations, best practices, and joint initiatives to accelerate post-quantum readiness worldwide. The Kuala Lumpur conference marks a major milestone in Asia-Pacific’s journey toward quantum resilience, fostering partnerships that will shape the future of digital trust. The next PQC Conference will take place in Munich, Germany, in November 2026, continuing the global collaboration.
 
-## About the PKI Consortium  
+## About the PKI Consortium 
+
 The PKI Consortium is a non-profit global association of industry, government, and academic stakeholders dedicated to advancing digital trust through Public Key Infrastructure (PKI) and emerging cryptographic technologies. Headquartered in the United States, the Consortium drives standards, best practices, and global collaboration to ensure secure digital transformation in the quantum era. Learn more at [pkic.org](https://pkic.org/). The PKI Consortium acknowledges the support of the **Government of Malaysia**, the **Ministry of Digital**, **NACSA**, and local partners **Pos Digicert**, **Baker Tilly**, and **MSC Trustgate** in delivering the **PQC Conference Kuala Lumpur 2025**.
 
 ## Media Contact  
