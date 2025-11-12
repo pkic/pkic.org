@@ -1,0 +1,54 @@
+id: solomo
+name: SOLOMO TECHNOLOGIES PTE LTD
+slogan:
+website: https://www.solomo.sg/fkxl59kyz
+
+# Short description, longer content can be placed in `content/members/`
+description: Personally I am ethnical hacker, enterprise architect, blockchain architect, programmer,  and policy creator, help developed html5 standards in W3C, and also my organization is solution developer for ERP, BANKING SOLUTION, Crypto solution provider.  we are into providing solution to public listed to governmental projects. Solution that we provided: AI ERP, AIGC movie Creation, AITV with Security and Privacy and Payment, AI eCommerce and Livestreaming. Developed 7 Topology of for our own solution: infrastructure, bandwidth, security, application layer.
+
+# membership
+memberSince: 2025-11-12
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: francis teo
+    role: Director
+    social:
+      twitter: 
+      linkedin: 
+    description: francis is the Director at SOLOMO TECHNOLOGIES PTE LTD and represents the organization at the PKI Consortium.
