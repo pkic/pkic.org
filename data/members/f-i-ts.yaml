@@ -1,10 +1,10 @@
 id: f-i-ts
 name: Finanz Informatik Technologie Service
-slogan:
+slogan: The Bridge to Digitalization in Financial Industries
 website: https://www.f-i-ts.de/
 
 # Short description, longer content can be placed in `content/members/`
-description: FI-TS ist der größte IT-Dienstleister für Landesbanken und seit 1994 wichtiger Partner von privaten und öffentlichen Banken, Versicherungen und Finanzdienstleistern. Erfahren, effizient, hochverfügbar und compliant.
+description: We are the right partner and are reliably at your side. We have been building tailor-made solutions for our customers for over 30 years. We see opportunities in future challenges.
 
 # membership
 memberSince: 2025-09-18
@@ -19,28 +19,30 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: 
-  language: en_US
+  feed: https://www.f-i-ts.de/blog/
+  language: de_DE
 
 # Press Releases
 press: 
   url: 
-  feed: 
-  language: en_US
+  feed: https://www.f-i-ts.de/newsroom/presse
+  language: de_DE
 
 # Careers
 careers: 
   url: 
-  feed: 
-  language: en_US
+  feed: https://www.f-i-ts.de/arbeiten-bei-fi-ts
+  language: de_DE
 
 # Social media
 social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/company/finanz-informatik-technologie-service
+  youtube: https://www.youtube.com/@FITechnologieService
+  xing: https://www.xing.com/pages/finanzinformatiktechnologieservice
+  kununu: https://www.kununu.com/de/finanz-informatik-technologie-service-deutschland
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +52,10 @@ representatives:
   - name: Mario Schiener
     role: Lead Architect Security Services and Cryptography Officer
     social:
-      twitter: 
       linkedin: https://de.linkedin.com/in/mario-schiener
-    description: Mario is the Lead Architect Security Services and Cryptography Officer at Finanz Informatik Technologie Service and represents the organization at the PKI Consortium.
+    description:
+      Mario Schiener studied mathematics and computer science, specializing in algorithmic number theory and elliptic curves. He holds a bachelor's and master's degree from the University of Bayreuth in Germany.
+
+      Mario has held various cybersecurity positions in the aviation and defense industry, including roles in system engineering, architecture, and team leadership. He served as the Project Lead of the Cryptographic Obsolescence Working Group at the world's largest aircraft manufacturer.
+
+      In 2025, Mario joined the team at Finanz Informatik Technologie Service (FI-TS) as Lead Architect and Cryptography Officer. He is responsible for all cryptography-related company products and initiatives, such as PKI, Post-Quantum Cryptography (PQC), and crypto inventory.
