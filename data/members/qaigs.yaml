@@ -1,0 +1,54 @@
+id: qaigs
+name: QAGs.com
+slogan:
+website: https://www.qaigs.com
+
+# Short description, longer content can be placed in `content/members/`
+description: I'm seasonal product manager with extensive experience in AI, IoT and digital technologies. I recently completed my Graduate certificate in Quantum computing from University of Rhode Island and have a publication https://arxiv.org/pdf/2506.16000 . I'm the founder of QAIGS.com which is going through strategical pivoting towards Quantum computing applications for real world problems and actively exploring secured autonomous vehicle navigation in post quantum era.
+
+# membership
+memberSince: 2025-11-12
+memberType: G
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Hemanth Kannamarlapudi
+    role: Founder and Product Manager
+    social:
+      twitter: 
+      linkedin: 
+    description: Hemanth is the Founder and Product Manager at QAGs.com and represents the organization at the PKI Consortium.
