@@ -1,17 +1,1 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="129.42 107.983 21.76 21.76" height="400px" width="400px" xmlns:bx="https://boxy-svg.com">
-  <defs>
-    <bx:export>
-      <bx:file format="png" dpi="400" path="test.png"></bx:file>
-    </bx:export>
-  </defs>
-  <ellipse style="stroke: rgb(0, 0, 0); fill: rgb(255, 255, 255); stroke-width: 0.3px;" cx="140.3" cy="118.863" rx="10.161" ry="10.161"></ellipse>
-  <g transform="matrix(0.778821, 0, 0, 0.778821, 31.670044, 25.601126)" style="">
-    <text style="fill: rgb(14, 13, 13); font-family: &quot;Courier New&quot;; font-size: 3px; font-weight: 700; white-space: pre;" x="131.02" y="124.029">SYNESTATE</text>
-    <line style="fill: rgb(14, 13, 13); stroke: rgb(0, 0, 0); paint-order: stroke;" x1="130.898" y1="112.803" x2="147.986" y2="112.815"></line>
-    <line style="stroke: rgb(0, 0, 0); fill: rgb(14, 13, 13);" x1="130.9" y1="113.2" x2="130.9" y2="119.3"></line>
-    <line style="fill: rgb(14, 13, 13); stroke: rgb(0, 0, 0);" x1="130.952" y1="119.744" x2="148.038" y2="119.752"></line>
-    <line style="stroke: rgb(0, 0, 0); fill: rgb(14, 13, 13);" x1="148" y1="120.2" x2="148" y2="126.3"></line>
-    <line style="fill: rgb(14, 13, 13); stroke: rgb(0, 0, 0);" x1="130.976" y1="126.681" x2="148.062" y2="126.692"></line>
-    <text style="fill: rgb(14, 13, 13); font-family: &quot;Courier New&quot;; font-size: 5px; white-space: pre;" x="137.151" y="117.414">⛦</text>
-  </g>
-</svg>
+<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400" viewBox="129.42 107.983 21.76 21.76"><circle cx="140.3" cy="118.863" r="10.161" style="stroke:#000;fill:#fff;stroke-width:.3px"/><text x="131.02" y="124.029" style="fill:#0e0d0d;font-family:&quot;Courier New&quot;;font-size:3px;font-weight:700;white-space:pre" transform="translate(31.67 25.601)scale(.77882)">SYNESTATE</text><path d="m130.898 112.803 17.088.012" style="fill:#0e0d0d;stroke:#000;paint-order:stroke" transform="translate(31.67 25.601)scale(.77882)"/><path d="M130.9 113.2v6.1" style="stroke:#000;fill:#0e0d0d" transform="translate(31.67 25.601)scale(.77882)"/><path d="m130.952 119.744 17.086.008" style="fill:#0e0d0d;stroke:#000" transform="translate(31.67 25.601)scale(.77882)"/><path d="M148 120.2v6.1" style="stroke:#000;fill:#0e0d0d" transform="translate(31.67 25.601)scale(.77882)"/><path d="m130.976 126.681 17.086.011" style="fill:#0e0d0d;stroke:#000" transform="translate(31.67 25.601)scale(.77882)"/><text x="137.151" y="117.414" style="fill:#0e0d0d;font-family:&quot;Courier New&quot;;font-size:5px;white-space:pre" transform="translate(31.67 25.601)scale(.77882)">⛦</text></svg>
