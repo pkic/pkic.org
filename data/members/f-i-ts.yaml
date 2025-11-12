@@ -18,20 +18,20 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
-  feed: https://www.f-i-ts.de/blog/
+  url: https://www.f-i-ts.de/blog/
+  feed: https://www.f-i-ts.de/blog/feed/
   language: de_DE
 
 # Press Releases
 press: 
-  url: 
-  feed: https://www.f-i-ts.de/newsroom/presse
+  url: https://www.f-i-ts.de/newsroom/presse
+  feed: https://www.f-i-ts.de/newsroom/presse/feed/
   language: de_DE
 
 # Careers
 careers: 
-  url: 
-  feed: https://www.f-i-ts.de/arbeiten-bei-fi-ts
+  url: https://www.f-i-ts.de/arbeiten-bei-fi-ts
+  feed: 
   language: de_DE
 
 # Social media
@@ -53,7 +53,7 @@ representatives:
     role: Lead Architect Security Services and Cryptography Officer
     social:
       linkedin: https://de.linkedin.com/in/mario-schiener
-    description:
+    description: |
       Mario Schiener studied mathematics and computer science, specializing in algorithmic number theory and elliptic curves. He holds a bachelor's and master's degree from the University of Bayreuth in Germany.
 
       Mario has held various cybersecurity positions in the aviation and defense industry, including roles in system engineering, architecture, and team leadership. He served as the Project Lead of the Cryptographic Obsolescence Working Group at the world's largest aircraft manufacturer.
