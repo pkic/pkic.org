@@ -1,0 +1,56 @@
+id: solomo
+name: SOLOMO TECHNOLOGIES PTE LTD
+slogan:
+website: https://www.solomo.sg/fkxl59kyz
+
+# Short description, longer content can be placed in `content/members/`
+description: SOLOMO TECHNOLOGIES PTE LTD is a solution developer for ERP, banking, and crypto solutions, serving clients from public listed companies to governmental projects.
+
+# membership
+memberSince: 2025-11-12
+memberType: F
+workingGroups:
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Francis Teo
+    role: Director
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/%E2%AD%90francis-teo-solomo/
+    description: Francis is the Director at SOLOMO TECHNOLOGIES PTE LTD and represents the organization at the PKI Consortium.
