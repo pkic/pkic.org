@@ -8,8 +8,11 @@ description: We provide a complete educational experience and a values-based cul
 
 # membership
 memberSince: 2025-11-12
-memberType: null
+memberType: H4
 workingGroups:
+  - CM
+  - PKIMM
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: Assistant Professor Cybersecurity
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/sunkris/
     description: Sundar is the Assistant Professor Cybersecurity at Angelo State University, TX and represents the organization at the PKI Consortium.
