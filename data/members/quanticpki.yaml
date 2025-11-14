@@ -1,0 +1,54 @@
+id: quanticpki
+name: Quantic PKI
+slogan:
+website: https://www.quanticpki.com
+
+# Short description, longer content can be placed in `content/members/`
+description: We specialize in Post Quantum PKI Migration.
+
+# membership
+memberSince: 2025-11-12
+memberType: H2
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Paulo Cunha
+    role: CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/paulocezarcunha/
+    description: Paulo is the CEO at Quantic PKI and represents the organization at the PKI Consortium.
