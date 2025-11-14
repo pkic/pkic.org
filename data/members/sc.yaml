@@ -4,7 +4,7 @@ slogan:
 website: https://www.sc.com/my/
 
 # Short description, longer content can be placed in `content/members/`
-description: Standard Chartered Bank offers personalised banking solutions for your needs. From savings deposits, credit cards, loans, investments & more.
+description: Standard Chartered Bank offers personalized banking solutions for your needs. From savings deposits, credit cards, loans, investments & more.
 
 # membership
 memberSince: 2025-11-06
@@ -39,11 +39,11 @@ careers:
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  twitter: https://twitter.com/StanChartMY
+  facebook: https://www.facebook.com/StandardCharteredMY/
+  instagram: https://www.instagram.com/stanchartmy/
+  linkedin: https://www.linkedin.com/company/standardchartered/
+  youtube: https://www.youtube.com/user/StandardChartered 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,7 +51,7 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Saravanakarthik Marimuthu
-    role: Chapter Lead ,Data Security
+    role: Chapter Lead, Data Security
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/saravanakarthik-marimuthu-095b1a21
