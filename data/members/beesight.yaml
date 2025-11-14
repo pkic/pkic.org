@@ -4,11 +4,11 @@ slogan:
 website: https://www.beesight.nl
 
 # Short description, longer content can be placed in `content/members/`
-description: I work (as a contractor), for the Dutch Ministry of Defense, in relation to PKI and SmartCards
+description: BEESIGHT B.V. provides services for the Dutch Ministry of Defense related to PKI and SmartCards.
 
 # membership
 memberSince: 2025-11-06
-memberType: C
+memberType: H1
 workingGroups:
 
 # sponsor
@@ -35,20 +35,20 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: SIETZE DE JONGE
+  - name: Sietze DE Jonge
     role: Security Architect
     social:
       twitter: 
-      linkedin: 
-    description: SIETZE is the Security Architect at BEESIGHT B.V. and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/sietze-de-jonge/
+    description: Sietze is the Security Architect at BEESIGHT B.V. and represents the organization at the PKI Consortium.
