@@ -35,20 +35,20 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: hubbert smith
+  - name: hubbert Smith
     role: CEO, Founder
     social:
       twitter: 
-      linkedin: 
-    description: hubbert is the CEO, Founder at i4ops and represents the organization at the PKI Consortium.
+      linkedin: https://linkedin.com/in/hubbertsmith
+    description: Hubbert is the CEO, Founder at i4ops and represents the organization at the PKI Consortium.
