@@ -8,8 +8,12 @@ description: At Kyndryl, we design, build, manage and modernize the mission-crit
 
 # membership
 memberSince: 2025-11-06
-memberType: null
+memberType: H2
 workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +39,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
