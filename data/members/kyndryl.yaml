@@ -1,0 +1,58 @@
+id: kyndryl
+name: Kyndryl
+slogan:
+website: https://www.kyndryl.com
+
+# Short description, longer content can be placed in `content/members/`
+description: At Kyndryl, we design, build, manage and modernize the mission-critical technology systems that the world depends on every day.
+
+# membership
+memberSince: 2025-11-06
+memberType: H2
+workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Michael Krehbiel
+    role: Senior Managing Consultant
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/michael-krehbiel-42541326
+    description: Michael is the Senior Managing Consultant at Kyndryl and represents the organization at the PKI Consortium.
