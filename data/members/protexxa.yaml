@@ -1,0 +1,57 @@
+id: protexxa
+name: Protexxa Inc
+slogan:
+website: https://protexxa.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Protexxa is an AI-driven cybersecurity start-up that offers proactive protection against cyber threats by focusing on the human element of security.
+
+# membership
+memberSince: 2025-11-06
+memberType: G
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://protexxa.com/blog/
+  feed: https://protexxa.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://twitter.com/Protexxa
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/protexxa/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Claudette McGowan
+    role: CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/claudette-m-4bb38128
+    description: Claudette is the CEO at Protexxa Inc and represents the organization at the PKI Consortium.
