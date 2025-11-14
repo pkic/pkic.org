@@ -4,12 +4,15 @@ slogan:
 website: https://protexxa.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: I am the founder of two organizations, one that delivers AI-driven human and digital identity protection, and another that is  engineering an agentic AI encryption and quantum risk platform for global security resilience.
+description: Protexxa is an AI-driven cybersecurity start-up that offers proactive protection against cyber threats by focusing on the human element of security.
 
 # membership
 memberSince: 2025-11-06
 memberType: G
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -17,7 +20,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://protexxa.com/blog/
   feed: https://protexxa.com/feed/
   language: en_US
 
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: https://twitter.com/Protexxa
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/protexxa/
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: CEO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/claudette-m-4bb38128
     description: Claudette is the CEO at Protexxa Inc and represents the organization at the PKI Consortium.
