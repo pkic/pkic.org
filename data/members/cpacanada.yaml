@@ -1,0 +1,57 @@
+id: cpacanada
+name: CPA Canada
+slogan:
+website: https://cpacanada.ca
+
+# Short description, longer content can be placed in `content/members/`
+description: Our dedicated efforts help shape public policy, influence regulatory frameworks and establish high professional standards that reflect the evolving needs of the accounting industry.
+
+# membership
+memberSince: 2025-11-21
+memberType: C
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Lilia Dubko
+    role: Senior Manager, Assurance Programs
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/liliiadubko/
+    description: Lilia is the Senior Manager, Assurance Programs at CPA Canada and represents the organization at the PKI Consortium.
