@@ -1,0 +1,54 @@
+id: gov
+name: Dubai Electronic Security Center
+slogan:
+website: HTTPS://www.desc.gov.aw
+
+# Short description, longer content can be placed in `content/members/`
+description: Dubai Electronic Security Center (DESC) was founded in 2014, pursuant to Law No. 11 by His Highness Sheikh Mohammed Bin Rashid Al Maktoum, Vice President and Prime Minister of the UAE, and Ruler of Dubai. The Center was established in line with the visionary objectives to ensure that Dubai becomes a leader in cyber security and the protection of information from external cyber threats. The Center reinforces the technological progress and smart transformation that has been adopted and engrained in the foundations of the emirate, by establishing Dubai as a global leader in innovation, safety and security.  DESC implements the values of reliability, innovation and cooperation to achieve the goals set out by the Dubai Cyber Security Strategy. The strategy involves the implementation of five domains including; maintaining a secure digital environment, preserving the flexibility and the free flow of information within cyberspace, ensuring the continuity of IT systems and promoting research and innovation in the field of cyber security. Other objectives include increasing awareness within the community and urging individuals to be more observant of digital threats.  As technological advancements continue, the Center seeks to protect Dubai digitally, by securing and protecting the emirates’ information, telecommunication networks, and information systems. By developing, modifying, and using the necessary tools within cyber security, the Center aims to support all Dubai government entities to ensure they are in compliance with information security. The Center supports the increasing requirements for a cyber-secure digital landscape during the economic and social growth within the emirate and is dedicated to Dubai to training excellence within cyberspace. Afra Bin Fares  is a Quantum Innovation and Resilience initiative Manager that leads Post-Quantum Cryptography (PQC) Transition Initiative in the Emirate of Dubai. With over seven years of experience in Public Key Infrastructure (PKI) and Certification Authority governance, she played a key role in establishing the UAE’s National Certificate Authority and Digital Identity Program, strengthening the nation’s secure digital ecosystem.
+
+# membership
+memberSince: 2025-11-21
+memberType: C
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Afra Bin Fares
+    role: Policy and Regulations Manager
+    social:
+      twitter: 
+      linkedin: 
+    description: Afra is the Policy and Regulations Manager at Dubai Electronic Security Center and represents the organization at the PKI Consortium.
