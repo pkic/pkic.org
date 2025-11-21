@@ -1,0 +1,58 @@
+id: dtcc
+name: DTCC
+slogan:
+website: https://www.dtcc.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: The Depository Trust and Clearing Corporation (DTCC) advances solutions that help markets grow and protect the security of the global financial system.
+
+# membership
+memberSince: 2025-11-21
+memberType: C
+workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Rohith Ravikumar
+    role: Security Application Security Assurance Associate
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/rohith-ravikumar-03851a86/
+    description: Rohith is the Security Application Security Assurance Associate at DTCC and represents the organization at the PKI Consortium.
