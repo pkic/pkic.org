@@ -1,0 +1,54 @@
+id: du
+name: university of delhi
+slogan:
+website: https://www.du.ac.in/
+
+# Short description, longer content can be placed in `content/members/`
+description: Ramanujan College is a constituent college of the University of Delhi, recognized for its excellence in teaching, research, and innovation. The institution fosters a multidisciplinary learning environment, offering undergraduate and postgraduate programs in science, commerce, and humanities. The college is actively involved in national and international collaborations and promotes research through innovation labs and incubation programs.
+
+# membership
+memberSince: 2025-11-21
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: rahul prasad
+    role: laboratary Assistant
+    social:
+      twitter: 
+      linkedin: 
+    description: rahul is the laboratary Assistant at university of delhi and represents the organization at the PKI Consortium.
