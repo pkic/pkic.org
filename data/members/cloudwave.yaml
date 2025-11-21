@@ -1,0 +1,54 @@
+id: cloudwave
+name: Cloud Wave Technology Co., Ltd.
+slogan:
+website: https://www.cloudwave.com.tw
+
+# Short description, longer content can be placed in `content/members/`
+description: CloudWave 提供豐富多元上雲解決方案，輕鬆部署、規劃雲端資訊架構，為企業帶來最大效益。除了持續深耕亞洲，更加著重全球市場佈局，運營地區現已拓展至歐洲、南美、非洲等地。
+
+# membership
+memberSince: 2025-11-21
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Vivian Ma
+    role: Board Executive
+    social:
+      twitter: 
+      linkedin: 
+    description: Vivian is the Board Executive at Cloud Wave Technology Co., Ltd. and represents the organization at the PKI Consortium.
