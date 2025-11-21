@@ -8,8 +8,9 @@ description: CloudWave 提供豐富多元上雲解決方案，輕鬆部署、規
 
 # membership
 memberSince: 2025-11-21
-memberType: null
+memberType: H2
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
