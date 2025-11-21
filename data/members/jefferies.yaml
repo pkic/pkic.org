@@ -1,0 +1,58 @@
+id: jefferies
+name: Jefferies
+slogan:
+website: https://jefferies.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Jefferies is the leading pure-play investment banking and capital markets firm, purpose-built and driven to deliver for our clients.
+
+# membership
+memberSince: 2025-11-21
+memberType: G
+workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.jefferies.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Kiruthiga Chandrasekaran
+    role: Vice President
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/kiru17
+    description: Kiruthiga is the Vice President at Jefferies and represents the organization at the PKI Consortium.
