@@ -11,6 +11,9 @@ memberSince: 2021-07-20
 memberType: C
   #Regulator
 workingGroups:
+  - CM
+  - PKIMM
+  - PQC
   - TCWG
 
 # sponsor
