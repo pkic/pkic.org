@@ -4,12 +4,15 @@ slogan:
 website: https://cpacanada.ca
 
 # Short description, longer content can be placed in `content/members/`
-description: I manage CPA Canada's WebTrust program and am a co-chair of the WebTrust Task Force. More about CPA Canada: https://www.cpacanada.ca/en/the-cpa-profession/about-cpa-canada More about the WebTrust for Certification Authorities Program: https://www.cpacanada.ca/business-and-accounting-resources/audit-and-assurance/overview-of-webtrust-services
+description: Our dedicated efforts help shape public policy, influence regulatory frameworks and establish high professional standards that reflect the evolving needs of the accounting industry.
 
 # membership
 memberSince: 2025-11-21
 memberType: C
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +53,5 @@ representatives:
     role: Senior Manager, Assurance Programs
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/liliiadubko/
     description: Lilia is the Senior Manager, Assurance Programs at CPA Canada and represents the organization at the PKI Consortium.
