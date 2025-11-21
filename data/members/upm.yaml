@@ -1,0 +1,54 @@
+id: upm
+name: Universiti Putra Malaysia
+slogan:
+website: https://www.fsktm.upm.edu.my
+
+# Short description, longer content can be placed in `content/members/`
+description: I am a Senior Lecturer at Universiti Putra Malaysia (UPM) with 25 years of teaching experience and involving research specialized in e-Learning, elliptic curve cryptography, searchable encryption, authenticated encryption, DNA block cipher, DSA digital signature, Ciphertext-Policy Attribute Based Searchable Encryption (CP-ABSE), and intrusion detection system. Currently, my research is related to Identity Based Digital Signature and AI based smart contract vulnerabilities detection. I have a collaboration with CyberSecurity Malaysia having experience as cryptographic researcher and expert panelist in evaluating and developing cryptographic algorithms for Malaysian standards. Proven track record of contributing to significant projects such as AKBA MySEAL which focusing in Post-Quantum Cryptography, algorithm evaluation, and requirement analysis for a secure cryptographic development.
+
+# membership
+memberSince: 2025-11-21
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: null
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Sharifah Md Yasin
+    role: Senior Lecturer
+    social:
+      twitter: 
+      linkedin: 
+    description: Sharifah is the Senior Lecturer at Universiti Putra Malaysia and represents the organization at the PKI Consortium.
