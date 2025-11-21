@@ -1,0 +1,54 @@
+id: elmittemex
+name: Elmittemex
+slogan:
+website: https://www.elmittemex.hu
+
+# Short description, longer content can be placed in `content/members/`
+description: I am  PKI Crypto specialist, working as a freelancer PKI consultant. In total I have around 25 years experience in PKI Crypto space, I spent 12 years years at Noreg, (who is a PKIC member) as PKI engineer, implementing private and public PKI services in Hungray. Work with technologies like (at that time Balitomre) UniCert, Netscape/iPlanet/SunOne Certificate Manager (now RedHat's Certificate System), EJBCA, Microsoft CA. Implemented various smart card management systems, time stamping solutions, Master Clock time servers. I have worked with the major HSM products - Luna and nShield product line. In 2013 I have joined Citibank to start work in Citi's internal crypto engineering team. I created an awesome crypto engineering team, that was responsible for PKI, certificate management, HSMs and symmetric key management. We In 2025 I decided to change gears and start working independently, as a freelancer consultant.
+
+# membership
+memberSince: 2025-11-21
+memberType: null
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://elmittemex.hu/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Peter Takacs
+    role: PKI / Crypto Specialist
+    social:
+      twitter: 
+      linkedin: 
+    description: Peter is the PKI / Crypto Specialist at Elmittemex and represents the organization at the PKI Consortium.
