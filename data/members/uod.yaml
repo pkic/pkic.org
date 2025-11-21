@@ -1,5 +1,5 @@
-id: du
-name: university of delhi
+id: uod
+name: University of Delhi
 slogan:
 website: https://www.du.ac.in/
 
@@ -46,9 +46,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: rahul prasad
-    role: laboratary Assistant
+  - name: Rahul Prasad
+    role: Laboratory Assistant
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/prasadrahul/
-    description: rahul is the laboratary Assistant at university of delhi and represents the organization at the PKI Consortium.
+      linkedin: 
+    description: Rahul is the Laboratory Assistant at University of Delhi and represents the organization at the PKI Consortium.
