@@ -4,7 +4,7 @@ slogan:
 website: https://www.fsktm.upm.edu.my
 
 # Short description, longer content can be placed in `content/members/`
-description: UPM is recognised by the independent government assessments as one of Malaysia's leading research Universities. Founded in 1931 as the School of Agriculture, the University today combines impressive modern facilities and a dynamic approach to teaching and research with its proud heritage of quality services and achievements.
+description: UPM is recognised by the independent government assessments as one of Malaysia's leading research universities. Founded in 1931 as the School of Agriculture, the University today combines impressive modern facilities and a dynamic approach to teaching and research with its proud heritage of quality services and achievements.
 
 # membership
 memberSince: 2025-11-21
@@ -36,11 +36,11 @@ careers:
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  twitter: https://twitter.com/uniputramalaysia
+  facebook: https://www.facebook.com/UniversityPutraMalaysia
+  instagram: https://www.instagram.com/uniputramalaysia/
+  linkedin: https://www.linkedin.com/school/universiti-putra-malaysia/
+  youtube: https://www.youtube.com/user/bppupm
 
 # Here you can list those who represent or have represented the member.
 #
