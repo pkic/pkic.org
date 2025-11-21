@@ -1,0 +1,54 @@
+id: actalis
+name: ACTALIS S.p.A.
+slogan:
+website: https://www.actalis.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Actalis is an eIDAS-qualified Certification Authority, renowned internationally for providing secure digital trust services and issuing SSL server certificates. Since 2009, Actalis has been part of the Aruba Group, led by Aruba S.p.A. – Italy’s leading provider of data centers, cloud solutions, web hosting, email, and domain registration services. Today, Actalis plays a crucial role in the Italian Central Public Administration and supports businesses of all sizes across industries, both nationally and internationally. Actalis has been a member of CAB Forum since 2011, and the only Italian mamber. I am in charge of guiding the development of Actalis' PKI services, and I also deal with compliance matters.
+
+# membership
+memberSince: 2025-11-21
+memberType: A
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Adriano Santoni
+    role: PKI Services Product Owner
+    social:
+      twitter: 
+      linkedin: 
+    description: Adriano is the PKI Services Product Owner at ACTALIS S.p.A. and represents the organization at the PKI Consortium.
