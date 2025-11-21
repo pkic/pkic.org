@@ -1,7 +1,7 @@
 id: desc
 name: Dubai Electronic Security Center
 slogan:
-website: HTTPS://www.desc.gov.aw
+website: https://www.desc.gov.ae
 
 # Short description, longer content can be placed in `content/members/`
 description: DESC implements the values of reliability, innovation and cooperation to achieve the goals set out by the Dubai Cyber Security Strategy.
