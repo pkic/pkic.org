@@ -8,8 +8,12 @@ description: For nearly two decades, Inetum has been delivering Public Key Infra
 
 # membership
 memberSince: 2025-11-21
-memberType: null
+memberType: H2
 workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -35,11 +39,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +54,5 @@ representatives:
     role: Cybersecurity Director Iberia LATAM
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/albertomartinsantos/
     description: Alberto is the Cybersecurity Director Iberia LATAM at Inetum and represents the organization at the PKI Consortium.
