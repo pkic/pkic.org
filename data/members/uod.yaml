@@ -1,0 +1,54 @@
+id: uod
+name: University of Delhi
+slogan:
+website: https://www.du.ac.in/
+
+# Short description, longer content can be placed in `content/members/`
+description: The University of Delhi is a premier university in India with a venerable legacy and international acclaim for its high academic standards and diverse educational programs. It is recognized as an Institution of Eminence by the Government of India, fostering a rich environment for research and innovation across various disciplines.
+
+# membership
+memberSince: 2025-11-21
+memberType: H4
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Rahul Prasad
+    role: Laboratory Assistant
+    social:
+      twitter: 
+      linkedin: 
+    description: Rahul is the Laboratory Assistant at University of Delhi and represents the organization at the PKI Consortium.
