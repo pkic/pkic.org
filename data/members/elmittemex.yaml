@@ -1,0 +1,57 @@
+id: elmittemex
+name: Elmittemex
+slogan:
+website: https://www.elmittemex.hu
+
+# Short description, longer content can be placed in `content/members/`
+description: PKI consultanting with over 25 years experience in PKI Crypto space implementing private and public PKI services in Hungray.
+
+# membership
+memberSince: 2025-11-21
+memberType: H6
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://elmittemex.hu/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Peter Takacs
+    role: PKI / Crypto Specialist
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/mrpetertakacs
+    description: Peter is the PKI / Crypto Specialist at Elmittemex and represents the organization at the PKI Consortium.
