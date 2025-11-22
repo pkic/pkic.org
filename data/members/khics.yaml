@@ -1,15 +1,19 @@
 id: khics
-name: University of South Africa & KHICS Consulting
+name: KHICS Consulting
 slogan:
 website: https://khics.com
 
 # Short description, longer content can be placed in `content/members/`
-description: I am a professor of Computer Science at the University of South Africa and the CEO for the consulting company KHICS (PTY) LTD. We undertake cybersecurity capability maturity assessment for clients and rely on outcome to give them on the enablement of appropriate security capabilities including PKI Certificate Management capabilities.
+description: KHICS Consulting undertakes cybersecurity capability maturity assessments for clients. It relies on the outcomes to enable appropriate security capabilities for them, including PKI Certificate Management capabilities.
 
 # membership
 memberSince: 2025-11-21
-memberType: null
+memberType: H2
 workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -17,7 +21,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://khics.com/blog/
   feed: https://khics.com/feed/
   language: en_US
 
@@ -35,11 +39,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +54,5 @@ representatives:
     role: CEO
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/prof-dr-ernest-ketcha-ngassam-534048b3
     description: Ernest is the CEO at University of South Africa & KHICS Consulting and represents the organization at the PKI Consortium.
