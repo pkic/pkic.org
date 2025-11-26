@@ -46,4 +46,76 @@
         match.addEventListener('change', categoryChanged);
       })
 
+      // Load existing members and validate organization name
+      let existingMembers = [];
+
+      fetch('/members/members-data.json')
+        .then(response => response.json())
+        .then(data => {
+          existingMembers = data.map(member => member.title.toLowerCase().trim());
+        })
+        .catch(err => {
+          console.warn('Could not load member data for validation:', err);
+        });
+
+      const organizationInput = document.getElementById('organization');
+      const organizationHelp = document.getElementById('organizationHelp');
+
+      if (organizationInput) {
+        // Create a warning element for duplicate organization
+        const warningDiv = document.createElement('div');
+        warningDiv.id = 'organizationWarning';
+        warningDiv.className = 'form-text text-warning fw-bold';
+        warningDiv.style.display = 'none';
+        organizationHelp.parentNode.insertBefore(warningDiv, organizationHelp.nextSibling);
+
+        organizationInput.addEventListener('blur', function() {
+          const orgName = this.value.toLowerCase().trim();
+
+          if (orgName && existingMembers.length > 0) {
+            const isDuplicate = existingMembers.some(member => {
+              // Check for exact match or very close match
+              return member === orgName ||
+                     member.includes(orgName) ||
+                     orgName.includes(member);
+            });
+
+            if (isDuplicate) {
+              warningDiv.textContent = '⚠️ Warning: An organization with a similar name is already a member of the PKI Consortium. If this is your organization, please contact us at members@pkic.org instead of submitting a new application.';
+              warningDiv.style.display = 'block';
+              organizationInput.classList.add('border-warning');
+            } else {
+              warningDiv.style.display = 'none';
+              organizationInput.classList.remove('border-warning');
+            }
+          }
+        });
+
+        // Also check on input for real-time feedback
+        let debounceTimer;
+        organizationInput.addEventListener('input', function() {
+          clearTimeout(debounceTimer);
+          debounceTimer = setTimeout(() => {
+            const orgName = this.value.toLowerCase().trim();
+
+            if (orgName && existingMembers.length > 0) {
+              const isDuplicate = existingMembers.some(member => {
+                return member === orgName ||
+                       member.includes(orgName) ||
+                       orgName.includes(member);
+              });
+
+              if (isDuplicate) {
+                warningDiv.textContent = '⚠️ Warning: An organization with a similar name is already a member of the PKI Consortium. If this is your organization, please contact us at members@pkic.org instead of submitting a new application.';
+                warningDiv.style.display = 'block';
+                organizationInput.classList.add('border-warning');
+              } else {
+                warningDiv.style.display = 'none';
+                organizationInput.classList.remove('border-warning');
+              }
+            }
+          }, 500);
+        });
+      }
+
   })()
