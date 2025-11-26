@@ -4,10 +4,12 @@
 {{ end }}
 
 <!-- separate members into organizational and independent -->
+{{ $allMembers := slice }}
 {{ $organizationalMembers := slice }}
 {{ $independentMembers := slice }}
 {{ range $.Site.Data.members }}
     {{ if $date.After (time .memberSince)  }}
+        {{ $allMembers = $allMembers | append . }}
         {{ if or (eq .memberType "H5") (eq .memberType "H6") (eq .memberType "H7") }}
             {{ $independentMembers = $independentMembers | append . }}
         {{ else }}
@@ -16,44 +18,82 @@
     {{ end }}
 {{ end }}
 
-<!-- Organizational Members Section -->
-{{ if gt (len $organizationalMembers) 0 }}
-<div class="members-section">
-    <h2>Organizational Members</h2>
-    <div class="members-grid">
-        {{ range (shuffle $organizationalMembers) }}
-            {{ $title := (printf "%s, %s - A member of the %s" .name (.slogan | default "") $.Site.Params.name ) }}
-            {{ if not .slogan }}
-                {{ $title = (printf "%s - A member of the %s" .name $.Site.Params.name ) }}
-            {{ end }}
-            <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{ $title }}">
-                {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
-                {{ with $img}}
-                <img class="member-logo" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}" loading="lazy" />
-                {{ end }}
-            </a>
+<!-- All Member Logos Mixed Together -->
+{{ range (shuffle $allMembers) }}
+    {{ $title := (printf "%s, %s - A member of the %s" .name (.slogan | default "") $.Site.Params.name ) }}
+    {{ if not .slogan }}
+        {{ $title = (printf "%s - A member of the %s" .name $.Site.Params.name ) }}
+    {{ end }}
+    <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{ $title }}">
+        {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
+        {{ with $img}}
+        <img class="member-logo" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}" loading="lazy" />
         {{ end }}
-    </div>
+    </a>
+{{ end }}
+
+<!-- Organizational Members Table -->
+{{ if gt (len $organizationalMembers) 0 }}
+<div class="members-table-section mt-5">
+    <h2>Organizational Members</h2>
+    <table class="table table-striped table-bordered">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Member Since</th>
+                <th>Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range $organizationalMembers | sort "name" }}
+            <tr>
+                <td>
+                    {{ if $.Site.GetPage (printf "/members/%s" .id) }}
+                        <a href="{{ ($.Site.GetPage (printf "/members/%s" .id)).Permalink }}">{{ .name }}</a>
+                    {{ else if .website }}
+                        <a href="{{ .website }}" target="_blank">{{ .name }}</a>
+                    {{ else }}
+                        {{ .name }}
+                    {{ end }}
+                </td>
+                <td>{{ dateFormat "January 2, 2006" .memberSince }}</td>
+                <td>{{ .memberType }}</td>
+            </tr>
+            {{ end }}
+        </tbody>
+    </table>
 </div>
 {{ end }}
 
-<!-- Independent Members Section -->
+<!-- Independent Members Table -->
 {{ if gt (len $independentMembers) 0 }}
-<div class="members-section">
+<div class="members-table-section mt-5">
     <h2>Independent Members</h2>
-    <div class="members-grid">
-        {{ range (shuffle $independentMembers) }}
-            {{ $title := (printf "%s, %s - A member of the %s" .name (.slogan | default "") $.Site.Params.name ) }}
-            {{ if not .slogan }}
-                {{ $title = (printf "%s - A member of the %s" .name $.Site.Params.name ) }}
+    <table class="table table-striped table-bordered">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Member Since</th>
+                <th>Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            {{ range $independentMembers | sort "name" }}
+            <tr>
+                <td>
+                    {{ if $.Site.GetPage (printf "/members/%s" .id) }}
+                        <a href="{{ ($.Site.GetPage (printf "/members/%s" .id)).Permalink }}">{{ .name }}</a>
+                    {{ else if .website }}
+                        <a href="{{ .website }}" target="_blank">{{ .name }}</a>
+                    {{ else }}
+                        {{ .name }}
+                    {{ end }}
+                </td>
+                <td>{{ dateFormat "January 2, 2006" .memberSince }}</td>
+                <td>{{ .memberType }}</td>
+            </tr>
             {{ end }}
-            <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{ $title }}">
-                {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
-                {{ with $img}}
-                <img class="member-logo" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}" loading="lazy" />
-                {{ end }}
-            </a>
-        {{ end }}
-    </div>
+        </tbody>
+    </table>
 </div>
 {{ end }}
