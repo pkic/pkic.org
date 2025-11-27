@@ -45,7 +45,7 @@
             </tr>
         </thead>
         <tbody>
-            {{ range $organizationalMembers | sort "name" }}
+            {{ range sort $organizationalMembers "name" }}
             <tr>
                 <td>
                     {{ if $.Site.GetPage (printf "/members/%s" .id) }}
@@ -78,7 +78,7 @@
             </tr>
         </thead>
         <tbody>
-            {{ range $independentMembers | sort "name" }}
+            {{ range sort $independentMembers "name" }}
             <tr>
                 <td>
                     {{ if $.Site.GetPage (printf "/members/%s" .id) }}
