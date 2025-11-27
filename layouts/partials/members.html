@@ -5,14 +5,9 @@
 
 <!-- shuffle members  -->
 {{ $members := slice }}
-{{ $independentMembers := slice }}
 {{ range $.Site.Data.members }}
     {{ if $date.After (time .memberSince)  }}
-        {{ if or (eq .memberType "H5") (eq .memberType "H6") (eq .memberType "H7") }}
-            {{ $independentMembers = $independentMembers | append . }}
-        {{ else }}
-            {{ $members = $members | append . }}
-        {{ end }}
+    {{ $members = $members | append . }}
     {{ end }}
 {{ end }}
 
@@ -27,23 +22,4 @@
         <img class="member-logo" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}" loading="lazy" />
         {{ end }}
     </a>
-{{ end }}
-
-<!-- Independent Members Section -->
-{{ if gt (len $independentMembers) 0 }}
-<div class="independent-members-section mt-5">
-    <h2>Independent Members</h2>
-    {{ range (shuffle $independentMembers) }}
-        {{ $title := (printf "%s, %s - A member of the %s" .name (.slogan | default "") $.Site.Params.name ) }}
-        {{ if not .slogan }}
-            {{ $title = (printf "%s - A member of the %s" .name $.Site.Params.name ) }}
-        {{ end }}
-        <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{ $title }}">
-            {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
-            {{ with $img}}
-            <img class="member-logo" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}" loading="lazy" />
-            {{ end }}
-        </a>
-    {{ end }}
-</div>
 {{ end }}
