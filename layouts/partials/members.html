@@ -3,23 +3,20 @@
     {{ $date = (time .) }}
 {{ end }}
 
-<!-- separate members into organizational and independent -->
-{{ $allMembers := slice }}
-{{ $organizationalMembers := slice }}
+<!-- shuffle members  -->
+{{ $members := slice }}
 {{ $independentMembers := slice }}
 {{ range $.Site.Data.members }}
     {{ if $date.After (time .memberSince)  }}
-        {{ $allMembers = $allMembers | append . }}
         {{ if or (eq .memberType "H5") (eq .memberType "H6") (eq .memberType "H7") }}
             {{ $independentMembers = $independentMembers | append . }}
         {{ else }}
-            {{ $organizationalMembers = $organizationalMembers | append . }}
+            {{ $members = $members | append . }}
         {{ end }}
     {{ end }}
 {{ end }}
 
-<!-- All Member Logos Mixed Together -->
-{{ range (shuffle $allMembers) }}
+{{ range (shuffle $members) }}
     {{ $title := (printf "%s, %s - A member of the %s" .name (.slogan | default "") $.Site.Params.name ) }}
     {{ if not .slogan }}
         {{ $title = (printf "%s - A member of the %s" .name $.Site.Params.name ) }}
@@ -32,68 +29,21 @@
     </a>
 {{ end }}
 
-<!-- Organizational Members Table -->
-{{ if gt (len $organizationalMembers) 0 }}
-<div class="members-table-section mt-5">
-    <h2>Organizational Members</h2>
-    <table class="table table-striped table-bordered">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Member Since</th>
-                <th>Type</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{ range sort $organizationalMembers "name" }}
-            <tr>
-                <td>
-                    {{ if $.Site.GetPage (printf "/members/%s" .id) }}
-                        <a href="{{ ($.Site.GetPage (printf "/members/%s" .id)).Permalink }}">{{ .name }}</a>
-                    {{ else if .website }}
-                        <a href="{{ .website }}" target="_blank">{{ .name }}</a>
-                    {{ else }}
-                        {{ .name }}
-                    {{ end }}
-                </td>
-                <td>{{ dateFormat "January 2, 2006" .memberSince }}</td>
-                <td>{{ .memberType }}</td>
-            </tr>
-            {{ end }}
-        </tbody>
-    </table>
-</div>
-{{ end }}
-
-<!-- Independent Members Table -->
+<!-- Independent Members Section -->
 {{ if gt (len $independentMembers) 0 }}
-<div class="members-table-section mt-5">
+<div class="independent-members-section mt-5">
     <h2>Independent Members</h2>
-    <table class="table table-striped table-bordered">
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Member Since</th>
-                <th>Type</th>
-            </tr>
-        </thead>
-        <tbody>
-            {{ range sort $independentMembers "name" }}
-            <tr>
-                <td>
-                    {{ if $.Site.GetPage (printf "/members/%s" .id) }}
-                        <a href="{{ ($.Site.GetPage (printf "/members/%s" .id)).Permalink }}">{{ .name }}</a>
-                    {{ else if .website }}
-                        <a href="{{ .website }}" target="_blank">{{ .name }}</a>
-                    {{ else }}
-                        {{ .name }}
-                    {{ end }}
-                </td>
-                <td>{{ dateFormat "January 2, 2006" .memberSince }}</td>
-                <td>{{ .memberType }}</td>
-            </tr>
+    {{ range (shuffle $independentMembers) }}
+        {{ $title := (printf "%s, %s - A member of the %s" .name (.slogan | default "") $.Site.Params.name ) }}
+        {{ if not .slogan }}
+            {{ $title = (printf "%s - A member of the %s" .name $.Site.Params.name ) }}
+        {{ end }}
+        <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{ $title }}">
+            {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
+            {{ with $img}}
+            <img class="member-logo" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}" loading="lazy" />
             {{ end }}
-        </tbody>
-    </table>
+        </a>
+    {{ end }}
 </div>
 {{ end }}
