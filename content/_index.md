@@ -16,7 +16,7 @@ menu:
 ---
 
 {{< alert >}}
-Slides, photos, and videos of the **Post-Quantum Cryptography Conference** in Kuala Lumpur will be published soon. Follow us on [LinkedIn](https://www.linkedin.com/company/pki-consortium/) and subscribe to our [YouTube channel](https://www.youtube.com/@pkiconsortium) to get notified as soon as they are available!
+The slides and recordings of the **Post-Quantum Cryptography Conference** in Kuala Lumpur, Malaysia are online! [Check them out now](/events/2025/pqc-conference-kuala-lumpur-my/)!
   
 **Next stop:** Germany (city and date to be announced) — [request an invite now](/register)!
 {{< /alert >}}

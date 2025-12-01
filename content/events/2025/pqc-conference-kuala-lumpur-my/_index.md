@@ -714,6 +714,22 @@ data:
         Mr. Setiaji, a digital leader and a civil servant with more than 10 years of experience in digital transformation and smart city development and digital transformation in the line ministries and government agencies in Indonesia. His experience leading the West Java Digital Services, Jakarta Smart City grows my expertise in information technology as he was a graduate of information technology engineering. All his expertise and experiences are being applied to serve the public effectively, efficiently, and impactful to the citizens based on data and technology utilization. He is a team builder who is very attentive to the needs of stakeholders and leaders. He is a digital leader with a warm & friendly attitude always! He plays an essential role in providing practical solutions that directly impact and improve public services. He has won various National and International awards in Digital Transformation: Top CIO on Digital Implementation, IT Works 2021 and The World CIO 200 Awards–SEA Edition, Global CIO Forum 2021.
       social:
         linkedin: 
+        
+    - id: ma-sivanesan
+      name: Ma. Sivanesan
+      title: Deputy Secretary General (Digital Development) at Ministry of Digital Malaysia
+      bio: |
+        Mr Ma Sivanesan is currently the Deputy Secretary General (Digital Development) at the Ministry of Digital. He has extensive experience in public finance, particularly in tax policies, encompassing both direct and indirect taxes.
+
+        Mr Ma Sivanesan began his career as an Administrative and Diplomatic Officer in 1996 and has since served in various capacities within the Ministry of Finance Malaysia. Throughout his tenure, he has been instrumental in the preparation of numerous annual national budgets, contributing significantly to the development of various tax policies and investment incentives. He led the implementation of the Sales Tax and Service Tax, which replaced the Goods and Services Tax (GST). Prior to this, he played a key role in the implementation of the GST, focusing on policy, publicity, and systems.
+
+        His experience extends to managing postal and telecommunication policy, cybersecurity, and the digital economy, with notable contributions to the 5G rollout, the national fibreisation and connectivity plan, and the Malaysia Digital Economy Blueprint.
+
+        Currently, he is spearheading and providing strategic leadership in establishing GovTech Malaysia and the National AI Office (AI Malaysia).
+
+        Mr Ma Sivanesan holds a Bachelor of Economics (Hons) from the University of Malaya and a Master’s in Economics from Tohoku University, Sendai, Japan. He also holds a Post-Graduate Diploma in Public Administration from the National Institute of Public Administration.
+      social:
+        linkedin: https://www.linkedin.com/in/ma-sivanesan/
 
   # Agenda ----------------------------------------------------------------------
   agenda:
@@ -1250,29 +1266,31 @@ data:
       - time: "9:00"
         sessions:
           - title: Opening
-            description:
+            description: |
+              _Due to a technical issue, the audio quality of the opening session is not great, and the speakers might be hard to follow for the first 18 minutes._
             speakers: 
               - Paul van Brouwershaven
               - Albert de Ruiter
-            youtube: 
-            presentation: 
+            youtube: wCs6xTJJX1k
+            presentation: WED_P_0900_paul-van-brouwershaven_opening_merged.pdf
             locations:
               - plenary
 
-      - time: "9:30"
+      - time: "9:30"    
         sessions:
-          - title: Malaysia’s PQC Vision for the Region
-            description: |
-              Digital trust is the foundation of modern economies and societies, and the arrival of quantum computing will test how ready we are to safeguard it. Post-quantum cryptography (PQC) is more than a technical response, it is a catalyst for rethinking how nations, industries, and communities build resilience and foster innovation in a rapidly changing world. In his opening keynote, Tuan Fabian Bigar, Secretary General of the Ministry of Digital, Malaysia, will welcome participants to the PKI Consortium’s PQC Conference in Kuala Lumpur and share Malaysia’s broader vision for a secure, inclusive, and sustainable digital future. 
+        - title: Malaysia’s PQC Vision for the Region
+          description: |
+            Digital trust is the foundation of modern economies and societies, and the arrival of quantum computing will test how ready we are to safeguard it. Post-quantum cryptography (PQC) is more than a technical response, it is a catalyst for rethinking how nations, industries, and communities build resilience and foster innovation in a rapidly changing world. In his opening keynote, Tuan Fabian Bigar, Secretary General of the Ministry of Digital, Malaysia, will welcome participants to the PKI Consortium’s PQC Conference in Kuala Lumpur and share Malaysia’s broader vision for a secure, inclusive, and sustainable digital future. 
 
-              He will highlight the role of digital trust as a driver of economic growth, the importance of regional leadership within ASEAN to advance quantum readiness, and the need for global cooperation to ensure that no nation is left behind in this transition. By framing PQC as a shared opportunity rather than just a challenge, his address will set the stage for the conference, inviting all participants, governments, industry, academia, and civil society, to engage in shaping a quantum-secure world.
-            track: 
-            speakers:
-              - Tuan Fabian Bigar
-            youtube:
-            presentation: 
-            locations:
-              - plenary
+            He will highlight the role of digital trust as a driver of economic growth, the importance of regional leadership within ASEAN to advance quantum readiness, and the need for global cooperation to ensure that no nation is left behind in this transition. By framing PQC as a shared opportunity rather than just a challenge, his address will set the stage for the conference, inviting all participants, governments, industry, academia, and civil society, to engage in shaping a quantum-secure world.
+          track: 
+          speakers:
+            - Tuan Fabian Bigar
+            - Ma. Sivanesan
+          youtube: 5zeD-sof_Lc
+          presentation: 
+          locations:
+            - plenary
 
       - time: "10:00"
         sessions:
@@ -1291,8 +1309,8 @@ data:
             track: 
             speakers:
               - Megat Zuhairy Bin Megat Tajuddin
-            youtube:
-            presentation: 
+            youtube: kI4DBy6zX2w
+            presentation: WED_P_1000_megat-zuhairy-bin-megat-tajuddin_navigating-national-cyber-resilience-in-the-quantum-era_merged.pdf
             locations:
               - plenary
 
@@ -1313,6 +1331,8 @@ data:
               - Zygmunt Lozinski
             locations:
               - plenary
+            youtube: KoDqNwVOmcA
+            presentation: 
 
           - title: "PQC in Mobile Networks: Insights from the GSMA Task Force"
             description: |
@@ -1327,6 +1347,8 @@ data:
               - David Turkington
             locations:
               - breakout
+            youtube: ZZkaMNo6W2Q
+            presentation: WED_B_1100_david-turkington_pqc-in-mobile-networks-insights-from-the-gsma-task-force_merged.pdf
 
       - time: "11:30"
         sessions:
@@ -1339,6 +1361,8 @@ data:
               - Jaime Gómez García
             locations:
               - plenary
+            youtube: dAtwSU1dyFw
+            presentation: WED_P_1130_jaime-g-mez-garc-a_quantum-safety-timelines-in-the-financial-sector_merged.pdf
 
           - title: The internet is ready for some PQC certificates
             description: |
@@ -1347,6 +1371,8 @@ data:
               - Shane Kelly
             locations:
               - breakout
+            youtube: E0Yog8FQugQ
+            presentation: WED_B_1130_shane-kelly_the-internet-is-ready-for-some-pqc-certificates_merged.pdf
 
       - time: "12:00"
         sessions:
@@ -1359,6 +1385,8 @@ data:
               - Michael Osborne
             locations:
               - plenary
+            youtube: SH4OV0yuxec
+            presentation: WED_P_1200_michael-osborne_pki-agility-and-the-difference-to-cryptographic-agility-lessons-from-the-past-and-present_merged.pdf
 
           - title: A Framework for Cryptographic Agility
             description: |
@@ -1369,6 +1397,8 @@ data:
               - Navaneeth Rameshan
             locations:
               - breakout
+            youtube: F3f0IrlIkMs
+            presentation: WED_B_1200_navaneeth-rameshan_a-framework-for-cryptographic-agility_merged.pdf
 
       - time: "12:30"
         sessions:
@@ -1380,8 +1410,8 @@ data:
               - Chris Hickman
               - Muralidharan Palanisamy
               - George Parsons
-            youtube:
-            presentation:
+            youtube: l1xe6wp5GsM
+            presentation: WED_P_1230_chris-bailey_scaling-trust-clm-roadblocks-on-the-path-to-post-quantum-resilience_merged.pdf
             locations:
               - plenary
 
@@ -1399,6 +1429,8 @@ data:
               - Volker Krummel
             locations:
               - breakout
+            youtube: _zgrvl5Yoeg
+            presentation: WED_B_1230_volker-krummel_stateful-hash-based-signatures-practical-enhancements-and-lessons-learned_merged.pdf
 
       - time: "13:00"
         title: Lunch
@@ -1413,6 +1445,8 @@ data:
               - Efstathia Katsigianni
             locations:
               - plenary
+            youtube: KjYYriwZHJo
+            presentation: WED_P_1400_efstathia-katsigianni_a-structured-approach-to-the-quantum-safe-transformation_merged.pdf
 
           - title: "The PQC Landscape: Protocols and Standards"
             description: |
@@ -1421,6 +1455,8 @@ data:
               - David Hook
             locations:
               - breakout
+            youtube: J2G4TZCHgxI
+            presentation: WED_B_1400_david-hook_the-pqc-landscape-protocols-and-standards_merged.pdf
 
       - time: "14:30"
         sessions:
@@ -1432,6 +1468,8 @@ data:
               - Jonathan Jackson
             locations:
               - plenary
+            youtube: S1NW2YEBgmU
+            presentation: WED_P_1430_jonathan-jackson_asean-s-post-quantum-future-securing-communications-in-an-era-of-disruptive-change_merged.pdf
 
           - title: "Turning Quantum Threats into Opportunities: Modernizing WebPKI with QUIC and Metrics-Driven Insights"
             description: |
@@ -1439,12 +1477,12 @@ data:
               We will present a comprehensive analysis of the performance, latency, and security implications of PQC along with recent and upcoming changes to WebPKI in the context of QUIC and HTTP/3, including:
               Latency Benchmarks: Comparing TLS 1.3 over TCP vs QUIC,  0-RTT and session resumption and security posture shifts.
               Early results from hybrid PQC handshakes (e.g., X25519 + Kyber) over QUIC, with handshake size, CPU & memory footprint,Impact of short-lived certificates and ACME automation on revocation, incident response, and operational risk.
-              Protocol Layer Efficiency: Analysis of QUIC, multi-stream behavior, and WebPKI’s role in seamless multi-origin TLS"
+            protocol Layer Efficiency: Analysis of QUIC, multi-stream behavior, and WebPKI’s role in seamless multi-origin TLS"
             track: 
             speakers:
               - Muralidharan Palanisamy
-            youtube:
-            presentation: 
+            youtube: dxXCJrqqrJs
+            presentation: WED_B_1430_muralidharan-palanisamy_turning-quantum-threats-into-opportunities-modernizing-webpki-with-quic-and-metrics-driven-insights_merged.pdf
             locations:
               - breakout
 
@@ -1455,8 +1493,8 @@ data:
               This session delivers the latest insights into Post Quantum Cryptography (PQC), beginning with an update on current standards, regulatory developments, and emerging technologies. It continues by connecting these advancements to real-world customer projects, illustrating how PQC is being applied across industries. As PQC moves from theory to deployment, attendees will explore how organizations are securing digital communications, implementing hybrid encryption, and enabling secure firmware updates. The session offers practical knowledge and implementation strategies — providing a clear view of the current state of PQC standardization, industry adoption, and the technical challenges of real-world integration.
             speakers:
               - Nils Gerhardt
-            youtube:
-            presentation:
+            youtube: WCU91N8XtGo
+            presentation: WED_P_1500_nils-gerhardt_pqc-in-action-from-global-standards-to-secure-deployments_merged.pdf
             locations:
               - plenary
 
@@ -1467,6 +1505,8 @@ data:
               - Tomas Gustavsson
             locations:
               - breakout
+            youtube: AtarBx3cyJg
+            presentation: WED_B_1500_tomas-gustavsson_real-world-readiness-for-pqc-gaps-gains-and-groundwork_merged.pdf
 
       - time: "15:30"
         title: Break
@@ -1480,8 +1520,8 @@ data:
             track: 
             speakers:
               - Pieter Schneider
-            youtube:
-            presentation: 
+            youtube: n_s-G71LmsA
+            presentation: WED_P_1600_pieter-schneider_get-fit-for-the-qubit-the-dutch-approach-to-a-quantum-secure-society_merged.pdf
             locations:
               - plenary
 
@@ -1492,7 +1532,9 @@ data:
               - Tan Teik Guan
             locations:
               - breakout
-
+            youtube: ivtkSe1Bclo
+            presentation: WED_B_1600_tan-teik-guan_working-on-quantum-safe-encrypted-emails_merged.pdf
+            
       - time: "16:30"
         sessions:
           - title: Navigating the Quantum Era – A Strategic Path to Resilience
@@ -1506,7 +1548,7 @@ data:
               - Pieter Schneider
               - William Gee
               - Osamu Terai
-            youtube:
+            youtube: oCL0vFF87Nw
             presentation: 
             locations:
               - plenary
@@ -1516,20 +1558,28 @@ data:
               New advances in Hardware Security Modules (HSMs) are enabling automation opportunities during certificate issuance. One such advance is the progress on hardware-supported attestation where a CA can ascertain the location and disposition associated with the subject key. This supports enforcing policies such as the ones relating to code signing where subject keys must be generated and held by specialized hardware. The concepts surrounding attestation have been developing quickly within the IETF (RATS working group) and work is underway to bridge the gap to HSMs. Attestation functions within the HSM enable other features such as secure audit, verification of the state of an HSM, origin of keys, and more. It is imperative that this attestation capability be quantum-safe if it is to be relied upon for key management of other quantum-safe assets. Furthermore, as attestation relies on hardware roots of trust, this capability must either be deployed at manufacturing time or with the use of quantum-safe mechanisms. This presentation describes a quantum-safe attestation feature, how it can be employed within a PKI environment, and how it can be securely deployed. It also shows the advances in automation and the improvement in compliance that arises from adopting these techniques.
             speakers:
               - Olivier Couillard
-            youtube:
-            presentation: 
+            youtube: vlh9p0fCh_E
+            presentation: WED_B_1600_tan-teik-guan_working-on-quantum-safe-encrypted-emails_merged.pdf
             locations:
               - breakout
 
       - time: "17:00"
         sessions:
-          - title: Closing remarks for day 2
+          - title: Closing Remarks Day 2 (plenary)
             description: 
             speakers:
               - Paul van Brouwershaven
-              - Albert de Ruiter
+            youtube: -0eli3VFSg8
             locations:
               - plenary
+
+          - title: Closing Remarks Day 2 (breakout)
+            description: 
+            speakers:
+              - Albert de Ruiter
+            youtube: -alNmwb9-fT0
+            locations:
+              - breakout
 
       - time: "17:05"
         sessions:
@@ -1566,7 +1616,7 @@ data:
               - Nils Gerhardt
               - Zsolt Rózsahegyi
               - John Buselli *
-            youtube:
+            youtube: 7ZFpci2hJrs
             presentation: 
             locations:
               - plenary
@@ -1578,6 +1628,8 @@ data:
               - Basil Hess
             locations:
               - breakout
+            youtube: 1K_yk26nkOM
+            presentation: THU_B_0900_basil-hess_advancing-cryptographic-transparency-cbom-standardization-in-cyclonedx_merged.pdf
 
       - time: "9:30"
         sessions:
@@ -1592,8 +1644,8 @@ data:
               The quantum threat demands urgent upgrades to IAM systems, spanning TLS, PKI (encryption and digital signatures), and SSO protocols like SAML and OIDC. This session outlines practical strategies for transitioning to post-quantum cryptography, emphasizing post-quantum TLS (e.g., ML-KEM) and quantum-safe PKI. We highlight hybrid encryption and hybrid digital signatures to enable smooth migration with backward compatibility. Additionally, we provide actionable post-quantum recommendations for organizations to ensure crypto agility and resilience in identity management.
             speakers:
               - Udara Pathum
-            youtube:
-            presentation: 
+            youtube: g7PnSFV8YfY
+            presentation: THU_B_0930_udara-pathum_transitioning-to-post-quantum-cryptography-in-iam_merged.pdf
             locations:
               - breakout
 
@@ -1608,8 +1660,8 @@ data:
               Attendees will leave with actionable steps to uncover, document, and manage cryptographic assets, tackle the 47‑day certificate renewal challenge, and build a scalable, future-ready security posture.
             speakers:
               - Alexander Löw
-            youtube:
-            presentation: 
+            youtube: pvfesM7BPRU
+            presentation: THU_P_1000_alexander-l-w_cryptographic-discovery-and-inventory-the-hidden-foundation-for-enterprise-security_merged.pdf
             locations:
               - plenary
 
@@ -1618,8 +1670,8 @@ data:
               An often overlooked fact about Bouncy Castle's addition of the Round 3 NIST PQC Finalists in 2021/2022 was that, in addition to receiving funding to get assistance with the effort, we also received funding to have the implementations formally reviewed. At the time the review was a mixture of manual techniques and some automated tooling. Research into automated analysis has since continued and recently the Bouncy Castle team was provided access with a newer, more advanced, version of the tooling leading to identification of some issues previously missed. This talk will provide some background history to the Bouncy Castle PQC project as well how this ongoing journey in using research tools to validate the PQC libraries has progressed and what lessons have been learned to date.
             speakers:
               - David Hook
-            youtube:
-            presentation: 
+            youtube: BkKcj1YV2QY
+            presentation: THU_B_1000_david-hook_implementing-the-post-quantum-survivors-a-retrospective_merged.pdf
             locations:
               - breakout
 
@@ -1638,6 +1690,8 @@ data:
               - Sudha Iyer
             locations:
               - plenary
+            youtube: P3q97PaIB9M
+            presentation: THU_P_1100_sudha-iyer_the-abcs-accelerated-better-and-cheaper-to-cryptographic-resilience_merged.pdf
 
           - title: Hybrid Quantum-Safe Cryptography for Electric Vehicle Charging Infrastructure
             description: |
@@ -1645,8 +1699,8 @@ data:
             track: 
             speakers:
               - Alessandro Amadori
-            youtube:
-            presentation: 
+            youtube: qalLtENASL8
+            presentation: THU_B_1100_alessandro-amadori_hybrid-quantum-safe-cryptography-for-electric-vehicle-charging-infrastructure_merged.pdf
             locations:
               - breakout
 
@@ -1658,8 +1712,8 @@ data:
               This presentation explores that very question. We’ll examine the next critical steps in the PQC transition from multiple perspectives—technical, strategic, and operational—and offer actionable guidance including prioritizing frameworks, risk-based approaches, and implementation timelines to help organizations turn insight into meaningful progress.
             speakers:
               - Bruno Couillard
-            youtube:
-            presentation: 
+            youtube: Lefx2KYz-IY
+            presentation: THU_P_1130_bruno-couillard_from-inventory-to-action-navigating-the-next-phase-of-pqc-transition_merged.pdf
             locations:
               - plenary
 
@@ -1669,8 +1723,8 @@ data:
             speakers:
               - Jing Yan Haw
               - Hao Qin
-            youtube:
-            presentation:  
+            youtube: Z-8hIZjKxdU
+            presentation: THU_B_1130_jing-yan-haw_nqsn-singapore-quantum-safe-network-testbed-with-versatile-reference-applications_merged.pdf
             locations:
               - breakout
 
@@ -1683,8 +1737,8 @@ data:
               ETSI is the governing body empowered by the European Union to give us the eIDAS standard for digital certificates.  In this session you will learn ETSI’s plans for PQC, the status PQC in the standards-making process, and expectations for when PQC-enabled eIDAS certificates will be available. 
             speakers:
               - Inigo Barreira
-            youtube:
-            presentation: 
+            youtube: 1XEhyYjd9YQ
+            presentation: THU_P_1200_inigo-barreira_how-etsi-is-preparing-for-pqc_merged.pdf
             locations:
               - plenary
 
@@ -1693,8 +1747,8 @@ data:
               Cryptocurrencies rely on PKI to ensure the authenticity and integrity of transactions through digital signatures. At the heart of this trust model is Public Key Infrastructure (PKI), which underpins the authenticity and integrity of every transaction within a blockchain network. PKI ensures that digital signatures—whether from payers initiating cryptocurrency transfers or validators confirming blocks—are verifiable and tamper-proof. RSA and ECC have long secured this ecosystem, but quantum computing threatens to break these algorithms via Shor’s algorithm, enabling private key recovery. An existing cryptocurrency network has been successfully transitioned to quantum-safety by using NIST finalist post-quantum algorithms, preserving performance, interoperability, and trust. This work demonstrates not only the feasibility but also the urgency of adapting PKI for a secure, post-quantum blockchain future.
             speakers:
               - William Gee
-            youtube:
-            presentation: 
+            youtube: gtxJR4RAR3g
+            presentation: THU_B_1200_william-gee_beyond-the-quantum-threat-demonstrating-real-world-blockchain-resilience_merged.pdf
             locations:
               - breakout
 
@@ -1706,6 +1760,8 @@ data:
             speakers:
               - Samantha Mabey
               - Matt Rose
+            youtube: sugH8zQQMxs
+            presentation: THU_P_1230_samantha-mabey_crypto-agility-how-it-s-both-a-critical-component-and-a-complex-challenge_merged.pdf
             locations:
               - plenary
 
@@ -1718,6 +1774,8 @@ data:
               - Frank Michaud
             locations:
               - breakout
+            youtube: WNWKyjgz2Xo
+            presentation: THU_B_1230_frank-michaud_overcoming-challenges-in-post-quantum-cryptography-adoption_merged.pdf
 
       - time: "13:00"
         title: Lunch
@@ -1732,6 +1790,8 @@ data:
               - Michiel Marcus
             locations:
               - plenary
+            youtube: 0Xo_uwxpKxU
+            presentation: THU_P_1400_michiel-marcus_real-world-post-quantum-migrations-lessons-learned-and-performance-results_merged.pdf
 
           - title: "Crypto Agility by Design: Securing PQC with Updatable HW/FW Co-design"
             description: |
@@ -1740,6 +1800,8 @@ data:
               - Octavian Maciu
             locations:
               - breakout
+            youtube: d75yDlyrfiQ
+            presentation: THU_B_1400_octavian-maciu_crypto-agility-by-design-securing-pqc-with-updatable-hw-fw-co-design_merged.pdf
 
       - time: "14:30"
         sessions:
@@ -1756,7 +1818,7 @@ data:
               - Sudha Iyer
               - Corey Bonnell
               - Tadahiko Ito
-            youtube:
+            youtube: sdOXO-KlK4w
             presentation: 
             locations:
               - plenary
@@ -1772,7 +1834,9 @@ data:
               - Tan Wai Kaey
             locations:
               - breakout
-            
+            youtube: wpKcUK6D7rI
+            presentation: THU_B_1430_tan-wai-kaey_post-quantum-firmware-signing-in-iot-practical-pqc-fota-implementation_merged.pdf
+
       - time: "15:00"
         sessions:
           - title: "Continuation: PQC in Practice: Why This, Not That?"
@@ -1788,6 +1852,8 @@ data:
               - Ronny Döring
             locations:
               - breakout
+            youtube: 1uBfMRuIk-U
+            presentation: THU_B_1500_ronny-d-ring_authenticity-guaranteed-verifying-video-integrity-on-consumer-devices-with-post-quantum-signatures_merged.pdf
 
       - time: "15:30"
         title: Break
@@ -1807,8 +1873,8 @@ data:
             track: 
             speakers:
               - Ganesh Mallaya
-            youtube:
-            presentation: 
+            youtube: aILTU5CfA5A
+            presentation: THU_P_1600_ganesh-mallaya_crypto-agile-pki-a-strategic-blueprint-for-post-quantum-trust_merged.pdf
             locations:
               - plenary
 
@@ -1818,8 +1884,8 @@ data:
             track: 
             speakers:
               - Danny Setyowati
-            youtube:
-            presentation: 
+            youtube: cGonQ7fDJuI
+            presentation: THU_B_1600_danny-setyowati_implementing-hybrid-tls-with-ml-kem-768-for-post-quantum-security-in-mobile-iiot-deployments_merged.pdf
             locations:
               - breakout
 
@@ -1832,8 +1898,8 @@ data:
               This enrichment process automates expert-level analysis to distinguish benign issues (e.g., a weak key in sample code) from critical threats (the same key in production). By intelligently filtering informational noise & presenting assets in a structured, explorable format, the method transforms data overload into actionable intelligence. We demonstrate how this context-aware triaging enables security teams to isolate root causes & shift from reactive alert management to a strategy of precise, proactive remediation. The cryptographic clarity achieved through this method will significantly accelerate an organization's migration to PQC.
             speakers:
               - James Howe
-            youtube:
-            presentation: 
+            youtube: x2wmy9z0bYA
+            presentation: THU_P_1630_james-howe_from-noise-to-clarity-adding-intelligence-to-the-pqc-migration_merged.pdf
             locations:
               - plenary
 
@@ -1842,22 +1908,32 @@ data:
               As quantum computing advances, assessing the potential of current architectures to threaten AES encryption is essential. This study evaluates leading quantum processors, IBM, Google, Zuchongzhi 2, Microsoft, Rigetti, IonQ, and Honeywell, focusing on quantum gate complexity, qubit coherence time, and scalability trade-offs. It demonstrates how these systems, when scaled to thousands of qubits with error correction, could compromise AES security. The findings offer clearer insight into the timeline of quantum threats, aiding in strategic planning for mitigation and PQC migration. Enhancing AES robustness through longer key sizes and hybrid models is also explored to strengthen cryptographic readiness.
             speakers:
               - Somrak Petchartee
+            youtube: pvfesM7BPRU
+            presentation: THU_B_1630_somrak-petchartee_evaluating-the-practical-capabilities-of-contemporary-quantum-processors-in-breaking-aes-encryption_merged.pdf
             locations:
               - breakout
 
       - time: "17:00"
         sessions:
-          - title: Closing remarks
+          - title: Closing Remarks (plenary)
             description: 
             speakers:
               - Paul van Brouwershaven
-              - Albert de Ruiter
             locations:
               - plenary
+            youtube: NzbwVWp7vTw
+            presentation: 
+
+          - title: Closing Remarks (breakout)
+            description: 
+            speakers:
+              - Albert de Ruiter
+            youtube: -89lHayAv90
+            locations:
+              - breakout
 
       - time: "17:00"
         title: End of Day Three
-
 ---
 ## Conference Details
 
@@ -1871,7 +1947,9 @@ This premier three-day event featured hands-on workshops, followed by two days o
 ## Status Update
 
 ✅ [The conference has concluded successfully!](/2025/11/04/post-quantum-cryptography-conference-2025-concludes-with-urgent-call-for-global-migration-to-quantum-resistant-encryption-systems/)  
-📄 **Slides and recordings will be added to this page soon.** Please check back for updates, follow us on [LinkedIn](https://www.linkedin.com/company/pki-consortium/) or subscribe to our [YouTube channel](https://www.youtube.com/@pkiconsortium) for notifications.
+📄 **Slides and recordings have been added to [the agenda](#agenda) below.** 
+
+Follow us for more updates on [LinkedIn](https://www.linkedin.com/company/pki-consortium/) or subscribe to our [YouTube channel](https://www.youtube.com/@pkiconsortium).
 
 ## Date and Location
 

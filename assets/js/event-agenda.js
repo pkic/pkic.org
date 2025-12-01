@@ -17,6 +17,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Initialize overflow navigation
     initializeOverflowNavigation();
 
+    // Unload YouTube videos on modal close
+    unloadYoutubeOnModalClose();
+
     // Break overlays removed; using inline break cards again
 });
 
@@ -71,6 +74,19 @@ document.addEventListener('DOMContentLoaded', function () {
         });
     });
 });
+
+function unloadYoutubeOnModalClose() {
+    // Unload YouTube iframe when modal is closed
+    const sessionModals = document.querySelectorAll('.session-modal');
+    sessionModals.forEach(modal => {
+        modal.addEventListener('hidden.bs.modal', function () {
+            const iframe = modal.querySelector('iframe[src*="youtube"]');
+            if (iframe) {
+                iframe.src = iframe.src;
+            }
+        });
+    });
+}
 
 function initializeLocationFiltering() {
     // Handle individual location buttons
