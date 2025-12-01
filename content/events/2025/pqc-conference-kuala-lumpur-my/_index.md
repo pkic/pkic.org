@@ -8,6 +8,16 @@ summary: |
 aliases:
  - /pqcc
 
+layout: single
+outputs:
+ - html
+ - event-data
+ - event-overlays
+ - event-session
+ - event-speakers
+ - event-speakers2 
+ - event-agenda
+
 params:
   heroButton: 
     label: You can now request an invite for our Next Conference in Germany!
