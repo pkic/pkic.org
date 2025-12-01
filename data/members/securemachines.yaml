@@ -4,13 +4,14 @@ slogan:
 website: https://www.securemachines.in
 
 # Short description, longer content can be placed in `content/members/`
-description: Quantum Security
+description: SecureMachines is a deep-tech security company building India's first Quantum-Safe Hardware Security Module (HSM) platform. Our product, Prastaara, delivers high-performance key management, cryptographic services, and full PQC (Post-Quantum Cryptography) support, helping enterprises transition seamlessly to Quantum-Resilient Security architectures.
 
 # membership
 memberSince: 2025-03-07
 memberType: F
 workingGroups:
-
+  - CM
+  - PQC
 # sponsor
 sponsor:
   level: 
@@ -38,7 +39,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/secure-machines
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -51,4 +52,4 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/shreenivas-hegde
-    description: Shreenivas is the CTO at SecureMachines and represents the organization at the PKI Consortium.
+    description: Shreenivas Hegde is the CTO at SecureMachines and represents the organization at the PKI Consortium.
