@@ -1660,7 +1660,7 @@ data:
               Attendees will leave with actionable steps to uncover, document, and manage cryptographic assets, tackle the 47‑day certificate renewal challenge, and build a scalable, future-ready security posture.
             speakers:
               - Alexander Löw
-            youtube: pvfesM7BPRU
+            youtube: cTOHfCfwVOe8XwGb
             presentation: THU_P_1000_alexander-l-w_cryptographic-discovery-and-inventory-the-hidden-foundation-for-enterprise-security_merged.pdf
             locations:
               - plenary
