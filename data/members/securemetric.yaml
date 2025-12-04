@@ -1,0 +1,54 @@
+id: securemetric
+name: Securemetric Technology Sdn Bhd
+slogan:
+website: https://securemetric.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Securemetric is a company based in Kuala Lumpur, founded in 2007, with regional offices in Indonesia, Singapore, Vietnam, and the Philippines. We specialize in providing PKI consultation and solutions to governments and new Certification Authorities across Southeast Asia. Additionally, we help our clients stay informed about the latest developments and advancements in Post-Quantum Cryptography (PQC).
+
+# membership
+memberSince: 2025-12-04
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://www.securemetric.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: undefined
+  facebook: undefined
+  instagram: undefined
+  linkedin: undefined
+  youtube: undefined
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Tehkesih Windy Suwarno
+    role: Assistant Manager of Software Development
+    social:
+      twitter: 
+      linkedin: 
+    description: Tehkesih Windy is the Assistant Manager of Software Development at Securemetric Technology Sdn Bhd and represents the organization at the PKI Consortium.
