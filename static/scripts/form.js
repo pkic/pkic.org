@@ -74,16 +74,22 @@
         warningDiv.style.display = 'none';
         organizationHelp.parentNode.insertBefore(warningDiv, organizationHelp.nextSibling);
 
-        organizationInput.addEventListener('blur', function() {
-          const orgName = this.value.toLowerCase().trim();
+        const validateOrganization = () => {
+          const orgName = organizationInput.value.toLowerCase().trim();
 
-          if (orgName && existingMembers.length > 0) {
-            const isDuplicate = existingMembers.some(member => {
-              // Check for exact match or very close match
-              return member === orgName ||
-                     member.includes(orgName) ||
-                     orgName.includes(member);
-            });
+          if (!orgName) {
+            // Hide warning and remove class if input is empty
+            warningDiv.style.display = 'none';
+            organizationInput.classList.remove('border-warning');
+            return;
+          }
+
+          if (existingMembers.length > 0) {
+            const isDuplicate = existingMembers.some(member =>
+              member === orgName ||
+              member.includes(orgName) ||
+              orgName.includes(member)
+            );
 
             if (isDuplicate) {
               warningDiv.textContent = '⚠️ Warning: An organization with a similar name is already a member of the PKI Consortium. If this is your organization, please contact us at members@pkic.org instead of submitting a new application.';
@@ -94,32 +100,15 @@
               organizationInput.classList.remove('border-warning');
             }
           }
-        });
+        };
+
+        organizationInput.addEventListener('blur', validateOrganization);
 
         // Also check on input for real-time feedback
         let debounceTimer;
-        organizationInput.addEventListener('input', function() {
+        organizationInput.addEventListener('input', () => {
           clearTimeout(debounceTimer);
-          debounceTimer = setTimeout(() => {
-            const orgName = this.value.toLowerCase().trim();
-
-            if (orgName && existingMembers.length > 0) {
-              const isDuplicate = existingMembers.some(member => {
-                return member === orgName ||
-                       member.includes(orgName) ||
-                       orgName.includes(member);
-              });
-
-              if (isDuplicate) {
-                warningDiv.textContent = '⚠️ Warning: An organization with a similar name is already a member of the PKI Consortium. If this is your organization, please contact us at members@pkic.org instead of submitting a new application.';
-                warningDiv.style.display = 'block';
-                organizationInput.classList.add('border-warning');
-              } else {
-                warningDiv.style.display = 'none';
-                organizationInput.classList.remove('border-warning');
-              }
-            }
-          }, 500);
+          debounceTimer = setTimeout(validateOrganization, 500);
         });
       }
 
