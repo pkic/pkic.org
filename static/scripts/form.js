@@ -46,10 +46,8 @@
         match.addEventListener('change', categoryChanged);
       })
 
-       const organizationInput = document.getElementById('organization');
-      const organizationHelp = document.getElementById('organizationHelp');
-
       if (organizationInput) {
+      if (organizationInput && organizationHelp) {
         // Create a warning element for duplicate organization
         const warningDiv = document.createElement('div');
         warningDiv.id = 'organizationWarning';
