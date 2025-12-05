@@ -11,7 +11,8 @@ memberSince: 2024-12-24
 memberType: H2
 workingGroups:
   - PKIMM
-  - PQC  
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -37,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,6 +52,6 @@ representatives:
   - name: Mauricio Medina
     role: CEO
     social:
-      twitter: 
+      twitter:
       linkedin: https://www.linkedin.com/in/mauricio-medina-72899/
     description: Mauricio is the CEO at Consequor Tecnologia and represents the organization at the PKI Consortium.
