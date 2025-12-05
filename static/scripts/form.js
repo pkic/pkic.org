@@ -46,24 +46,7 @@
         match.addEventListener('change', categoryChanged);
       })
 
-      // Load existing members and validate organization name
-      let existingMembers = [];
-
-      fetch('/members/members-data.json')
-        .then(response => {
-          if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-          }
-          return response.json();
-        })
-        .then(data => {
-          existingMembers = data.map(member => member.title.toLowerCase().trim());
-        })
-        .catch(err => {
-          console.warn('Could not load member data for validation:', err);
-        });
-
-      const organizationInput = document.getElementById('organization');
+       const organizationInput = document.getElementById('organization');
       const organizationHelp = document.getElementById('organizationHelp');
 
       if (organizationInput) {
@@ -73,6 +56,8 @@
         warningDiv.className = 'form-text text-warning fw-bold';
         warningDiv.style.display = 'none';
         organizationHelp.parentNode.insertBefore(warningDiv, organizationHelp.nextSibling);
+
+        let existingMembers = [];
 
         const validateOrganization = () => {
           const orgName = organizationInput.value.toLowerCase().trim();
@@ -110,6 +95,24 @@
           clearTimeout(debounceTimer);
           debounceTimer = setTimeout(validateOrganization, 500);
         });
-      }
 
+        // Load existing members and validate organization name
+        fetch('/members/members-data.json')
+          .then(response => {
+            if (!response.ok) {
+              throw new Error(`HTTP error! status: ${response.status}`);
+            }
+            return response.json();
+          })
+          .then(data => {
+            existingMembers = data.map(member => member.title.toLowerCase().trim());
+            // If user already typed something, validate now
+            if (organizationInput.value) {
+              validateOrganization();
+            }
+          })
+          .catch(err => {
+            console.warn('Could not load member data for validation:', err);
+          });
+      }
   })()

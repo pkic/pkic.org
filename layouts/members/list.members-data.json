@@ -1,7 +1,7 @@
 {{- $members := slice -}}
-{{- range where .Site.Pages "Section" "members" -}}
-  {{- if ne .Title "Members" -}}
-    {{- $members = $members | append (dict "title" .Title "id" .File.BaseFileName) -}}
+{{- range .Site.Data.members -}}
+  {{- if .name -}}
+    {{- $members = $members | append (dict "title" .name "id" .id) -}}
   {{- end -}}
 {{- end -}}
 {{- $members | jsonify -}}
