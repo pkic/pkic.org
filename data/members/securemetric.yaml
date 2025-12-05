@@ -10,6 +10,10 @@ description: Securemetric is a company based in Kuala Lumpur, founded in 2007, w
 memberSince: 2025-12-04
 memberType: F
 workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -23,7 +27,7 @@ blog:
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.securemetric.com/event-announcements/
   feed: 
   language: en_US
 
@@ -35,11 +39,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: https://www.facebook.com/securemetric
+  instagram: https://www.instagram.com/smetric/?hl=en
+  linkedin: https://www.linkedin.com/company/securemetric-technology/
+  youtube: https://www.youtube.com/user/SecureMetric
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,5 +54,5 @@ representatives:
     role: Assistant Manager of Software Development
     social:
       twitter: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/tehkesih/
     description: Tehkesih Windy is the Assistant Manager of Software Development at Securemetric Technology Sdn Bhd and represents the organization at the PKI Consortium.
