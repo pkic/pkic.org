@@ -18,5 +18,4 @@ title: SecureMachines
 - **Crypto-agile APIs** to support hybrid deployments during PQC migration
 - **FIPS-aligned architecture** and strong hardware-rooted trust
 
-
 SecureMachines works with enterprises, government agencies, critical infrastructure, and telecom networks to enable quantum-resilient PKI, secure VPN infrastructures, and long-term digital trust.

@@ -4,7 +4,7 @@ slogan:
 website: https://www.securemachines.in
 
 # Short description, longer content can be placed in `content/members/`
-description: SecureMachines is a deep-tech security company building India's first Quantum-Safe Hardware Security Module (HSM) platform. Our product, Prastaara, delivers high-performance key management, cryptographic services, and full PQC (Post-Quantum Cryptography) support, helping enterprises transition seamlessly to Quantum-Resilient Security architectures.
+description: SecureMachines is a deep-tech security company building India's first Quantum-Safe Hardware Security Module (HSM) platform. 
 
 # membership
 memberSince: 2025-03-07
@@ -12,6 +12,7 @@ memberType: F
 workingGroups:
   - CM
   - PQC
+
 # sponsor
 sponsor:
   level: 
