@@ -2,6 +2,8 @@
 public
 resources/_gen/
 static/pagefind
+.dev.vars
+wrangler.toml
 
 # Ignore hugo itself when located here
 hugo

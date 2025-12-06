@@ -143,6 +143,10 @@ outputFormats:
     mediatype: text/calendar
     baseName: agenda
     isPlainText: true
+  members-data:
+    mediatype: application/json
+    isPlainText: true
+    baseName: members-data
 
 outputs:
   home:
@@ -152,7 +156,8 @@ outputs:
   page:
   - HTML
   section:
-  - HTML 
+  - HTML
+  - members-data 
 
 caches:
   getjson:
