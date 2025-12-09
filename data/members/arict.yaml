@@ -1,10 +1,12 @@
 id: arict
-name: Arict
+name: Ernst Van Nigtevecht
+# Arict
 slogan:
 website: https://arict.eu
 
 # Short description, longer content can be placed in `content/members/`
-description: Arict Consulting provides advice and solutions for ICT system integrations, from A2B, B2B, G2G or in between, with security, privacy and reliability is mind.
+description: 
+# Arict Consulting provides advice and solutions for ICT system integrations, from A2B, B2B, G2G or in between, with security, privacy and reliability is mind.
 
 # membership
 memberSince: 2025-06-14
@@ -39,7 +41,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/in/ejvann/
   youtube: 
 
 # Here you can list those who represent or have represented the member.

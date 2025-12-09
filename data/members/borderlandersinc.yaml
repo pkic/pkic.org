@@ -1,10 +1,11 @@
 id: borderlandersinc
-name: Borderlanders Inc
+name: Oleg Sunko
 slogan:
-website: https://borderlandersinc.com
+website: https://www.borderlandersinc.com
 
 # Short description, longer content can be placed in `content/members/`
-description: Implementing security solutions for telecommunications and logistics
+description: 
+# Implementing security solutions for telecommunications and logistics
 
 # membership
 memberSince: 2025-03-07
@@ -41,7 +42,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/in/olegsunko/
   youtube: 
 
 # Here you can list those who represent or have represented the member.

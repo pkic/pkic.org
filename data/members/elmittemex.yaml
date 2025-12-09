@@ -1,10 +1,12 @@
 id: elmittemex
-name: Elmittemex
+name: Peter Takacs
+# Elmittemex
 slogan:
 website: https://www.elmittemex.hu
 
 # Short description, longer content can be placed in `content/members/`
-description: PKI consultanting with over 25 years experience in PKI Crypto space implementing private and public PKI services in Hungray.
+description: 
+# PKI consultanting with over 25 years experience in PKI Crypto space implementing private and public PKI services in Hungray.
 
 # membership
 memberSince: 2025-11-21
@@ -41,7 +43,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/in/mrpetertakacs
   youtube: 
 
 # Here you can list those who represent or have represented the member.
