@@ -1559,7 +1559,7 @@ data:
             speakers:
               - Olivier Couillard
             youtube: vlh9p0fCh_E
-            presentation: WED_B_1600_tan-teik-guan_working-on-quantum-safe-encrypted-emails_merged.pdf
+            presentation: WED_B_1630_olivier-couillard_hsm-advances-supporting-quantum-safe-pki-automation_merged.pdf
             locations:
               - breakout
 
