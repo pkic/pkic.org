@@ -1,10 +1,12 @@
 id: dal
-name: Dalhousie University
+name: Mahdieh Mellaty
+# Dalhousie University
 slogan:
 website: https://www.dal.ca/
 
 # Short description, longer content can be placed in `content/members/`
-description: With campuses located in Halifax and Truro, NS, Dalhousie is a research-intensive university offering over 200 degrees in 13 diverse faculties.
+description: 
+# With campuses located in Halifax and Truro, NS, Dalhousie is a research-intensive university offering over 200 degrees in 13 diverse faculties.
 
 # membership
 memberSince: 2025-03-07
@@ -38,7 +40,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/in/mahdieh-mellaty-b3331780/
   youtube: 
 
 # Here you can list those who represent or have represented the member.

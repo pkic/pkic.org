@@ -1,10 +1,12 @@
 id: jainuniversity
-name: Jain (Deemed to be University)
+name: Dr Sanjeev Mandal
+# Jain (Deemed to be University)
 slogan:
 website: https://scsit.jainuniversity.ac.in/faculty
 
 # Short description, longer content can be placed in `content/members/`
-description: School of Computer Science & Information Technology
+description: 
+# School of Computer Science & Information Technology
 
 # membership
 memberSince: 2024-11-06
@@ -36,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
