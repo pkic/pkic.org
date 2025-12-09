@@ -28,7 +28,7 @@ cards:
   - title: "PKI Maturity Model (PKIMM)"
     text: |
       To build a PKI maturity model that will be recognized around the globe as a standard for evaluation, planning, and comparison between different PKI implementations.
-    card_class: "working-group-card"
+    card_class: "w-50"
     links:
       - text: "PKI Maturity Model"
         url: "/pkimm/"
@@ -46,7 +46,7 @@ cards:
 
   - title: "Post-Quantum Cryptography (PQC)"
     text: "Facilitate information exchange, encouraging discussions and sharing insights on various aspects of Post-Quantum Cryptography."
-    card_class: "working-group-card"
+    card_class: "w-50"
     links:
       - text: "Last PQC Conference (Kuala Lumpur)"
         url: "/events/2025/pqc-conference-kuala-lumpur-my/"
@@ -67,7 +67,7 @@ cards:
 
   - title: "Cryptographic Module (CM)"
     text: "Addressing cryptographic module (CM) and hardware security module (HSM) related topics."
-    card_class: "working-group-card"
+    card_class: "w-50"
     links:
     footer:
       class: "fw-lighter text-end link-light"
@@ -76,7 +76,7 @@ cards:
     
   - title: "Training and Certification (TC)"
     text: "Developing professional standards and certification programs for PKI professionals."
-    card_class: "working-group-card"
+    card_class: "w-50"
     links:
     footer:
       class: "fw-lighter text-end link-light"
@@ -85,7 +85,7 @@ cards:
 
   - title: "Other Resources"
     text: ""
-    card_class: "working-group-card"
+    card_class: "w-50"
     links:
       - text: "Remote Key Attestation"
         url: "/remote-key-attestation/"
