@@ -10,7 +10,7 @@
         {{ $members := slice }}
         {{ $independentMembers := slice }}
         {{ range $.Site.Data.members }}
-            {{ if or (eq .memberType "H5") (eq .memberType "H6") (eq .memberType "H7") }}
+            {{ if or (eq .memberType "H6") (eq .memberType "H7") }}
                 {{ $independentMembers = $independentMembers | append . }}
             {{ else }}
                 {{ $members = $members | append . }}
