@@ -64,13 +64,16 @@ cards:
       class: "fw-lighter text-end"
       content: |
         [PQC Working Group Charter](/wg/pqc/charter/)
-{{< /cards >}}
 
-
-{{< cards >}}
-section_id: "working-groups"
-section_class: ""
-cards:
+  - title: "Cryptographic Module (CM)"
+    text: "Addressing cryptographic module (CM) and hardware security module (HSM) related topics."
+    card_class: "working-group-card"
+    links:
+    footer:
+      class: "fw-lighter text-end link-light"
+      content: |
+        [CM Working Group Charter](/wg/cm/charter/)
+    
   - title: "Training and Certification (TC)"
     text: "Developing professional standards and certification programs for PKI professionals."
     card_class: "working-group-card"
