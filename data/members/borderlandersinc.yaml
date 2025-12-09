@@ -1,14 +1,14 @@
 id: borderlandersinc
 name: Borderlanders Inc
 slogan:
-website: https://borderlandersinc.com
+website: https://www.borderlandersinc.com
 
 # Short description, longer content can be placed in `content/members/`
-description: Implementing security solutions for telecommunications and logistics
+description: We are committed to providing world-class transportation services that meet your highest standards and ensure your cargo arrives on schedule and straight to the designated destination.
 
 # membership
 memberSince: 2025-03-07
-memberType: H7
+memberType: H3
 workingGroups:
   - PKIMM
   - PQC
@@ -41,7 +41,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/borderlanders/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
