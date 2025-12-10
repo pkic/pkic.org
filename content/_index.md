@@ -69,6 +69,9 @@ cards:
     text: "Addressing cryptographic module (CM) and hardware security module (HSM) related topics."
     width: "col-md-6"
     links:
+      - text: "Remote Key Attestation"
+        url: "/remote-key-attestation/"
+        class: "btn-sm btn-secondary"
     footer:
       class: "fw-lighter text-end link-light"
       content: |
@@ -87,9 +90,6 @@ cards:
     text: ""
     width: "col-md-6"
     links:
-      - text: "Remote Key Attestation"
-        url: "/remote-key-attestation/"
-        class: "btn-sm btn-secondary"
       - text: "List of Trust Lists"
         url: "/ltl/"
         class: "btn-sm btn-secondary"
