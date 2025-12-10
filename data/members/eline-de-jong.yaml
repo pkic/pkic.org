@@ -1,16 +1,15 @@
-id: arict
-name: Ernst Van Nigtevecht
-# Arict
+id: eline-de-jong
+name: Eline de Jong
 slogan:
-website: https://arict.eu
+website: # https://projects.illc.uva.nl/quantumimpact/
 
 # Short description, longer content can be placed in `content/members/`
-description: 
-# Arict Consulting provides advice and solutions for ICT system integrations, from A2B, B2B, G2G or in between, with security, privacy and reliability is mind.
+description: Eline is the PhD Researcher at University of Amsterdam.
+# I am pursuing my PhD at the University of Amsterdam in the Philosophy and Ethics of Quantum-Safe Cryptography
 
 # membership
-memberSince: 2025-06-14
-memberType: H6
+memberSince: 2024-11-06
+memberType: H5
 workingGroups:
   - PQC
 
@@ -41,7 +40,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: https://www.linkedin.com/in/ejvann/
+  linkedin: https://www.linkedin.com/in/eline-de-jong-b03281111/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -49,9 +48,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Ernst Van Nigtevecht
-    role: Architect
+  - name: Eline de Jong
+    role: PhD Researcher
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/ejvann/
-    description: Ernst is the Architect at Arict and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/eline-de-jong-b03281111/
+    description: Eline is the PhD Researcher at University of Amsterdam and represents the organization at the PKI Consortium.

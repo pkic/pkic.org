@@ -1,17 +1,17 @@
-id: dal
-name: Mahdieh Mellaty
-# Dalhousie University
+id: ernst-van-nigtevecht
+name: Ernst Van Nigtevecht
 slogan:
-website: https://www.dal.ca/
+website: # https://arict.eu
 
 # Short description, longer content can be placed in `content/members/`
 description: 
-# With campuses located in Halifax and Truro, NS, Dalhousie is a research-intensive university offering over 200 degrees in 13 diverse faculties.
+# Arict Consulting provides advice and solutions for ICT system integrations, from A2B, B2B, G2G or in between, with security, privacy and reliability is mind.
 
 # membership
-memberSince: 2025-03-07
-memberType: H5
+memberSince: 2025-06-14
+memberType: H6
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -40,7 +40,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: https://www.linkedin.com/in/mahdieh-mellaty-b3331780/
+  linkedin: https://www.linkedin.com/in/ejvann/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -48,9 +48,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Mahdieh Mellaty
-    role: Researcher
+  - name: Ernst Van Nigtevecht
+    role: Architect
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/mahdieh-mellaty-b3331780/
-    description: Mahdieh is the Researcher at Dalhousie University and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/ejvann/
+    description: Ernst is the Architect at Arict and represents the organization at the PKI Consortium.

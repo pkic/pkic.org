@@ -1,20 +1,15 @@
-id: elmittemex
-name: Peter Takacs
-# Elmittemex
+id: goran-melvas
+name: Göran Melvås
 slogan:
-website: https://www.elmittemex.hu
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: 
-# PKI consultanting with over 25 years experience in PKI Crypto space implementing private and public PKI services in Hungray.
+description: Göran is  a consultant working in the IAM and PKI space for more than 25 years.
 
 # membership
-memberSince: 2025-11-21
+memberSince: 2025-03-07
 memberType: H6
 workingGroups:
-  - PKIMM
-  - PQC
-  - TCWG
 
 # sponsor
 sponsor:
@@ -23,7 +18,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: https://elmittemex.hu/feed/
+  feed: 
   language: en_US
 
 # Press Releases
@@ -43,7 +38,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: https://www.linkedin.com/in/mrpetertakacs
+  linkedin: https://www.linkedin.com/in/melvas/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -51,9 +46,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Peter Takacs
-    role: PKI / Crypto Specialist
+  - name: Göran Melvås
+    role: CEO
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/mrpetertakacs
-    description: Peter is the PKI / Crypto Specialist at Elmittemex and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/melvas/
+    description: Göran is the CEO at ID-Fix AB and represents the organization at the PKI Consortium.

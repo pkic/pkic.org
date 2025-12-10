@@ -1,12 +1,10 @@
-id: hpinnovateconsult
+id: jose-hernandez
 name: Jose Hernandez
-# Hernandez Perez Innovation Consulting
 slogan:
-website: https://hpinnovationconsulting.com/
+website: # https://hpinnovationconsulting.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: 
-# HPI Consulting focuses on curriculum development for these emerging technologies, advising on curriculum deployment and how to incorporate these curriculums into the everyday responsibilties of personnel.
+description: Jose is the Educational Consultant that focuses on curriculum development for these emerging technologies, advising on curriculum deployment and how to incorporate these curriculums into the everyday responsibilties of personnel.
 
 # membership
 memberSince: 2025-03-07

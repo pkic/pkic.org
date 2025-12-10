@@ -1,16 +1,18 @@
-id: id-fix
-name: Göran Melvås
+id: oleg-sunko
+name: Oleg Sunko
 slogan:
-website:
+website: # https://www.borderlandersinc.com
 
 # Short description, longer content can be placed in `content/members/`
-description: 
-# I'm  a consultant working in the IAM and PKI space for more than 25 years
+description: Oleg Implements security solutions for telecommunications and logistics.
 
 # membership
 memberSince: 2025-03-07
-memberType: H6
+memberType: H7
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -19,7 +21,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: 
+  feed: null
   language: en_US
 
 # Press Releases
@@ -39,7 +41,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: https://www.linkedin.com/in/melvas/
+  linkedin: https://www.linkedin.com/in/olegsunko/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -47,9 +49,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Göran Melvås
-    role: CEO
+  - name: Oleg Sunko
+    role: CTO
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/melvas/
-    description: Göran is the CEO at ID-Fix AB and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/olegsunko/
+    description: Oleg is the CTO at Borderlanders Inc and represents the organization at the PKI Consortium.

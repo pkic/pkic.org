@@ -1,17 +1,17 @@
-id: gumushane
-name: Samet Tonyali
-# Gümüşhane University
+id: sanjeev-mandal
+name: Dr Sanjeev Mandal
+# Jain (Deemed to be University)
 slogan:
-website: https://www.gumushane.edu.tr
+website: # https://scsit.jainuniversity.ac.in/faculty
 
 # Short description, longer content can be placed in `content/members/`
-description: 
-# Gümüşhane Üniversitesi, Üniversite, Study in Turkey, university, Bilimsel araştırma, bilim, yükseköğretim
+description: Dr. Sanjeev Kumar Mandal is an Assistant Professor at the Department of CS & IT, Jain (Deemed-to-be-University), Bangalore, India.
 
 # membership
 memberSince: 2024-11-06
 memberType: H5
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -40,7 +40,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: https://www.linkedin.com/in/samet-tonyali-911ab922/
+  linkedin: 
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -48,9 +48,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Samet Tonyali
-    role: Assistant Professor
+  - name: Dr Sanjeev Mandal
+    role: Assistant professor
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/samet-tonyali-911ab922/
-    description: Samet is the Assistant Professor at Gümüşhane University and represents the organization at the PKI Consortium.
+      linkedin: 
+    description: Dr Sanjeev is the Assistant professor at Jain (Deemed to be University) and represents the organization at the PKI Consortium.

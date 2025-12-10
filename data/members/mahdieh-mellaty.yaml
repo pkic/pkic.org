@@ -1,19 +1,15 @@
-id: borderlandersinc
-name: Oleg Sunko
+id: mahdieh-mellaty
+name: Mahdieh Mellaty
 slogan:
-website: https://www.borderlandersinc.com
+website: # https://www.dal.ca/
 
 # Short description, longer content can be placed in `content/members/`
-description: 
-# Implementing security solutions for telecommunications and logistics
+description: Mahdieh is the Researcher at Dalhousie University.
 
 # membership
 memberSince: 2025-03-07
-memberType: H7
+memberType: H5
 workingGroups:
-  - PKIMM
-  - PQC
-  - TCWG
 
 # sponsor
 sponsor:
@@ -22,7 +18,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: null
+  feed: 
   language: en_US
 
 # Press Releases
@@ -42,7 +38,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: https://www.linkedin.com/in/olegsunko/
+  linkedin: https://www.linkedin.com/in/mahdieh-mellaty-b3331780/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -50,9 +46,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Oleg Sunko
-    role: CTO
+  - name: Mahdieh Mellaty
+    role: Researcher
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/olegsunko/
-    description: Oleg is the CTO at Borderlanders Inc and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/mahdieh-mellaty-b3331780/
+    description: Mahdieh is the Researcher at Dalhousie University and represents the organization at the PKI Consortium.

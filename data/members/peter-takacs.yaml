@@ -1,18 +1,18 @@
-id: uniofamsterdam
-name: Eline de Jong
-# University of Amsterdam
+id: peter-takacs
+name: Peter Takacs
 slogan:
-website: https://projects.illc.uva.nl/quantumimpact/
+website: # https://www.elmittemex.hu
 
 # Short description, longer content can be placed in `content/members/`
-description: 
-# I am pursuing my PhD at the University of Amsterdam in the Philosophy and Ethics of Quantum-Safe Cryptography
+description: Peter is a PKI consultant with over 25 years experience in PKI Crypto space implementing private and public PKI services in Hungray.
 
 # membership
-memberSince: 2024-11-06
-memberType: H5
+memberSince: 2025-11-21
+memberType: H6
 workingGroups:
+  - PKIMM
   - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -21,7 +21,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: 
+  feed: https://elmittemex.hu/feed/
   language: en_US
 
 # Press Releases
@@ -41,7 +41,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: https://www.linkedin.com/in/eline-de-jong-b03281111/
+  linkedin: https://www.linkedin.com/in/mrpetertakacs
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -49,9 +49,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Eline de Jong
-    role: PhD Researcher
+  - name: Peter Takacs
+    role: PKI / Crypto Specialist
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/eline-de-jong-b03281111/
-    description: Eline is the PhD Researcher at University of Amsterdam and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/mrpetertakacs
+    description: Peter is the PKI / Crypto Specialist at Elmittemex and represents the organization at the PKI Consortium.

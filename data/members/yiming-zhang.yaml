@@ -1,12 +1,11 @@
-id: cypher-z
+id: yiming-zhang
 name: Yiming Zhang
 # Tsinghua Univeristy
 slogan:
-website: https://cypher-z.github.io
+website: #https://cypher-z.github.io
 
 # Short description, longer content can be placed in `content/members/`
-description: 
-# Tsinghua University, a premier research institution in Asia. 
+description: Yiming is the Postdoctoral Researcher at Tsinghua Univeristy.
 
 # membership
 memberSince: 2025-03-07
