@@ -6,7 +6,7 @@ summary: Charter of the Cryptographic Module Working Group
 keywords: ["pki", "crypto", "public key cryptography", "public key infrastructure", "cryptographic module", "hsm"]
 
 heroTitle: Cryptographic Module Working Group Charter
-heroDescription: By bringing together experts and stakeholders from across industries, the CM WG will act as a central forum of the PKI Consortium for addressing cryptographic module (CM) and hardware security module (HSM) related topics.
+heroDescription: By bringing together experts and stakeholders from across industries, the CM WG will act as a central forum of the PKI Consortium for addressing Cryptographic Module (CM) and Hardware Security Module (HSM) related topics.
 
 ---
 
@@ -20,7 +20,7 @@ This Working Group Charter has been created according to the â€œWorking Groupsâ€
 |-|-|
 | **Name** |  Cryptographic Module |
 | **Abbreviation** | CM |
-| **Mission** | To make PKI knowledge more widely available and to provide a mechanism for organizations to attest (potential) employees on their knowledge. |
+| **Mission** | Uniting experts across industries, the CM WG acts as the PKI Consortium's central authority for addressing Cryptographic Module (CM) and Hardware Security Module (HSM) topics. |
 | **Chair** | Zsolt RÃ³zsahegyi (i4p informatics) |
 | **Vice Chair** | Daniel Cervera (Microsoft) |
 | **Communication** | Private mailing list, Virtual meetings, Community discussions |
@@ -33,11 +33,11 @@ This Working Group Charter has been created according to the â€œWorking Groupsâ€
 
 ## Introduction
 
-By bringing together experts and stakeholders from across industries, the CM WG will act as a central forum of the PKI Consortium for addressing cryptographic module (CM) and hardware security module (HSM) related topics. Through our collaborative efforts, we aim to improve interoperability between CMs, HSMs, foster the broader adoption of strong security practices, and ultimately enhance the resilience and trustworthiness of the global digital infrastructure.
+By bringing together experts and stakeholders from across industries, the CM WG will act as a central forum of the PKI Consortium for addressing Cryptographic Module (CM) and Hardware Security Module (HSM) related topics. Through our collaborative efforts, we aim to improve interoperability between CMs, HSMs, foster the broader adoption of strong security practices, and ultimately enhance the resilience and trustworthiness of the global digital infrastructure.
 
 ## Scope
 
-The scope of this working group is to provide a comprehensive platform for discussing cryptographic module (CM) and hardware security module (HSM) related topics, for identifying missing, but desirable and also problematic issues and for developing and modifying standards, solutions, suggestions, workarounds, testing environments and certification means for those issues.
+The scope of this working group is to provide a comprehensive platform for discussing Cryptographic Module (CM) and Hardware Security Module (HSM) related topics, for identifying missing, but desirable and also problematic issues and for developing and modifying standards, solutions, suggestions, workarounds, testing environments and certification means for those issues.
 
 ## Objectives and Goals
 
