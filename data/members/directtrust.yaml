@@ -8,7 +8,7 @@ description: A pioneer in offering technical trust and confidence in the secure 
 
 # membership
 memberSince: 2021-10-22
-memberType: Standards defining organization
+memberType: E
 workingGroups:
   - PKIMM
 
@@ -60,3 +60,5 @@ representatives:
       twitter: 
       linkedin: https://www.linkedin.com/in/kylepneuman/
     description: Kyle Neuman actively develops new and existing technical standards on public-key cryptography, blockchain cryptography, key management, and multi-factor authentication for both government and private sectors. His passion for cryptography lies within the vision of the future and enabling trusted digital identity between geographical regions and political regimes for the benefit of humanity as we transcend into an increasingly digital way of life.
+    till: 2024-04-01
+    hidden: true

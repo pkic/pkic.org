@@ -8,7 +8,7 @@ description: Since 1998, X Technologies has been providing high quality engineer
 
 # membership
 memberSince: 2025-03-14
-memberType: null
+memberType: H2
 workingGroups:
   - PQC
 
@@ -53,3 +53,5 @@ representatives:
       twitter: 
       linkedin: https://www.linkedin.com/in/thomas-clark-13887a202/
     description: Thomas is the Solution Architect at X Technologies, Inc. and represents the organization at the PKI Consortium.
+    hidden: true
+    till: 2025-07-28
