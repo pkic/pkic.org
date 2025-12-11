@@ -2,7 +2,7 @@ id: samet-tonyali
 name: Samet Tonyali
 # Gümüşhane University
 slogan:
-website: https://www.gumushane.edu.tr
+website:
 
 # Short description, longer content can be placed in `content/members/`
 description: Samet is an assistant professor in the Department of Software Engineering at Gümüşhane University in Turkey. His research area focuses on application of cryptographic algorithms on communication protocols.

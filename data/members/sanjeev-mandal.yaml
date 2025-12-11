@@ -2,7 +2,7 @@ id: sanjeev-mandal
 name: Dr Sanjeev Mandal
 # Jain (Deemed to be University)
 slogan:
-website: # https://scsit.jainuniversity.ac.in/faculty
+website:
 
 # Short description, longer content can be placed in `content/members/`
 description: Dr. Sanjeev Kumar Mandal is an Assistant Professor at the Department of CS & IT, Jain (Deemed-to-be-University), Bangalore, India.

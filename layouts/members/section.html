@@ -41,7 +41,7 @@
         <!-- Independent Members Section -->
         {{ if gt (len $independentMembers) 0 }}
         <div class="independent-members-section mt-5">
-            <h2>Independent Members</h2>
+            <h1>Independent Members</h1>
             {{ range (shuffle $independentMembers) }}
             <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{.name}} is a member of the PKI Consortium" class="linkArea">
               <div class="row featurette">
