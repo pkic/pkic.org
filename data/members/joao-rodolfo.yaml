@@ -1,16 +1,17 @@
-id: joaorodolfo
-name: Cyber Security Specialist in Brazil
+id: joao-rodolfo
+name: Joao Rodolfo
 slogan:
-website: https://joaorodolfo.wordpress.com
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: Tecnologia, Segurança da informação e diversão
+description: Joao Rodolfo is the Cyber Security Specialist in Brazil working for the largest Financial Bank group into South America and Tech Lead for Manager the Certificate X509 Subject for the Brazilian Open Finance system.
 
 # membership
 memberSince: 2024-06-22
-memberType: H2
+memberType: H6
 # Consultant
 workingGroups:
+  - TCWG
 
 # sponsor
 sponsor:
@@ -39,7 +40,7 @@ social:
   twitter: https://twitter.com/joaorodolfo
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/in/joaorodolfo/
   youtube: 
 
 # Here you can list those who represent or have represented the member.

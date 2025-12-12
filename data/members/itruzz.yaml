@@ -35,11 +35,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
+  twitter: 
+  facebook: 
+  instagram: 
   linkedin: https://www.linkedin.com/company/itruzz/
-  youtube: undefined
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #

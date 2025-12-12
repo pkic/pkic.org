@@ -4,7 +4,7 @@ slogan:
 website: https://think-secure.nl/
 
 # Short description, longer content can be placed in `content/members/`
-description: I am a sr Security advisor and since the 1990s involved with information / Cyber security. Since 2015 involved in PKI related advisory and operational roles with financial / insurance institutions, governmental agencies and the Dutch Ministry of Justice and Safety (Law Enformcement PKI) and the Dutch DOD (TSP department). As during the last 10 years I have been specializing in the field of trust as well in addition to the whole information security realm.
+description: We provide from expert experience services to your company to secure against a wide range of security threats and Risks.
 
 # membership
 memberSince: 2025-04-10
@@ -40,7 +40,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/think-secure/
   youtube: 
 
 # Here you can list those who represent or have represented the member.

@@ -4,7 +4,7 @@ slogan:
 website: https://www.devisefutures.com
 
 # Short description, longer content can be placed in `content/members/`
-description: Devise Futures is an innovative organization dedicated to advancing secure digital solutions through expertise in cryptography, identity management, and public key infrastructure (PKI). As a consultant for the Portuguese Government, Devise Futures has played a key role in shaping eIDAS QTSP (namely, the the services for issuing qualified certificates, and for remote qualified signatures) and advanced eID solutions (Mobile Digital Key). Additionally, the organization is actively contributing to the European Commission’s efforts in developing the new EUDI Wallet and ARF, aligning with the highest standards for secure and interoperable digital identity systems.
+description: Devise Futures is an innovative organization dedicated to advancing secure digital solutions through expertise in cryptography, identity management, and public key infrastructure (PKI).
 
 # membership
 memberSince: 2024-12-24
@@ -38,11 +38,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
