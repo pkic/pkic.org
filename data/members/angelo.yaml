@@ -13,6 +13,7 @@ workingGroups:
   - CM
   - PKIMM
   - PQC
+  - TCWG
 
 # sponsor
 sponsor:
