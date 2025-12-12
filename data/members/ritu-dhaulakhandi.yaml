@@ -1,0 +1,56 @@
+id: ritu-dhaulakhandi
+name: Ritu Dhaulakhandi
+slogan:
+website:
+
+# Short description, longer content can be placed in `content/members/`
+description: I’m a PhD student at the University of Siegen actively working in the field of quantum cryptography.
+
+# membership
+memberSince: 2025-06-05
+memberType: H5
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://de.linkedin.com/in/ritu-dhaulakhandi-165aa022b
+  youtube:
+  github: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Ritu Dhaulakhandi
+    role: PhD Student
+    social:
+      twitter: 
+      linkedin: https://de.linkedin.com/in/ritu-dhaulakhandi-165aa022b
+    description: Ritu is a PhD student and represents the organization at the PKI Consortium.

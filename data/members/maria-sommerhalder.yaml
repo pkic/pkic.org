@@ -1,0 +1,55 @@
+id: maria-sommerhalder
+name: Maria Sommerhalder
+slogan:
+website:
+
+# Short description, longer content can be placed in `content/members/`
+description: I used to work as an auditor and my consultancy would like to push for remote key attestations, specifically in the field of blockchain key generations.
+
+# membership
+memberSince: 2023-01-31
+memberType: H6
+workingGroups:
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/in/mariasommerhalder/
+  youtube:
+  github: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Maria Sommerhalder
+    role: Managing Consultant
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/mariasommerhalder/
+    description: Maria is a Managing Consultant and represents the organization at the PKI Consortium.

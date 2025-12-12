@@ -1,0 +1,56 @@
+id: rupesh-paterical
+name: Rupesh Paterical
+slogan:
+website:
+
+# Short description, longer content can be placed in `content/members/`
+description: I work as an independent consultant on PKI and Cyber security. At present based in UAE, I was involved in few PKI implementations in Telecom, Banking and others.
+
+# membership
+memberSince: 2024-06-18
+memberType: H6
+workingGroups:
+  - PKIMM
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/in/prupesh
+  youtube:
+  github: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Rupesh Paterical
+    role: Independent Consultant
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/prupesh
+    description: Rupesh is an Independent Consultant and represents the organization at the PKI Consortium.
