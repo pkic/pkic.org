@@ -43,7 +43,9 @@
         <div class="independent-members-section mt-5">
             <h1>Independent Members</h1>
             {{ range (shuffle $independentMembers) }}
-            <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{.name}} is a member of the PKI Consortium" class="linkArea">
+            {{ $memberPage := $.Site.GetPage (printf "/members/%s" .id) }}
+            {{ if or $memberPage .website }}
+            <a {{ with $memberPage }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{.name}} is a member of the PKI Consortium" class="linkArea">
               <div class="row featurette">
                 <div class="col-lg-9 order-lg-2">
                   <h2 class="featurette-heading">{{.name}}</h2>
@@ -60,6 +62,23 @@
                 </div>
               </div>
             </a>
+            {{ else }}
+              <div class="row featurette">
+                <div class="col-lg-9 order-lg-2">
+                  <h2 class="featurette-heading">{{.name}}</h2>
+                  <h3 class="text-muted">{{.slogan}}</h3>
+                  <p class="lead">{{.description}}</p>
+                  <div class="text-end">{{ partial "social.html" .social }}</div>
+                </div>
+                <div class="col-lg-3 order-lg-1 text-center">
+                  {{ $title := (printf "%s is a member of the %s" .name $.Site.Params.name ) }}
+                  {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
+                  {{ with $img}}
+                  <img height="100" style="height:auto; max-width: 80%; max-height: 200px;" class="m-4" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
+                  {{ end }}
+                </div>
+              </div>
+            {{ end }}
             <hr class="featurette-divider">
             {{ end }}
         </div>
