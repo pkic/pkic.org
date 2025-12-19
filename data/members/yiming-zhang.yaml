@@ -1,16 +1,16 @@
-id: kryptos
-name: Cyber Quanta / Kryptos
+id: yiming-zhang
+name: Yiming Zhang
+# Tsinghua Univeristy
 slogan:
-website: https://kryptos.com.tr/
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: KRYPTOS is the perfect solution for anyone who wants to securely store data in the cloud, network or any local disk. You can always share your encrypted data with your other KRYPTOS user friends, colleagues or your groups in safe and can only be decrypted by the intended receiver(s).
+description: Yiming is the Postdoctoral Researcher at Tsinghua Univeristy.
 
 # membership
 memberSince: 2025-03-07
-memberType: F
+memberType: H5
 workingGroups:
-  - PQC
 
 # sponsor
 sponsor:
@@ -21,7 +21,7 @@ blog:
   url: 
   # Temporarily disabled: RSS feed returns HTML (text/html; charset=utf-8) instead of XML/RSS
   # Reference: CI report - feed validation failure
-  # feed: https://kryptos.com.tr/feed/
+  # feed: https://cypher-z.github.io/index.xml
   language: en_US
 
 # Press Releases
@@ -42,16 +42,17 @@ social:
   facebook: 
   instagram: 
   linkedin: 
-  youtube: 
+  youtube:
+  github: https://cypher-z.github.io 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: FARUK SARI
-    role: CEO
+  - name: Yiming Zhang
+    role: Postdoctoral Researcher
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/faruk-sari-phd-753738a/
-    description: FARUK is the CEO at Cyber Quanta / Kryptos and represents the organization at the PKI Consortium.
+      linkedin: 
+    description: Yiming is the Postdoctoral Researcher at Tsinghua Univeristy and represents the organization at the PKI Consortium.

@@ -4,7 +4,7 @@ slogan:
 website: 
 
 # Short description, longer content can be placed in `content/members/`
-description: I have been advising and consulting on public key infrastructure solutions to organisations in the UK for nearly 20 years to a range of government, public and private sector organisations.
+description: Consulting on public key infrastructure solutions to organisations in the UK for nearly 20 years to a range of government, public and private sector organisations.
 
 # membership
 memberSince: 2024-12-24
@@ -37,11 +37,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/antarctic-group/
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #

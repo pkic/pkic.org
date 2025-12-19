@@ -10,6 +10,8 @@ description: Deloitte drives progress, helping clients become leaders. Deloitte 
 memberSince: 2024-08-30
 memberType: H2
 workingGroups:
+  - PKIMM
+  - PQC
 
 # sponsor
 sponsor:
@@ -35,11 +37,11 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #

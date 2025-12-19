@@ -1,16 +1,15 @@
-id: uniofamsterdam
-name: University of Amsterdam
+id: calvert-marshall
+name: Calvert Marshall
 slogan:
-website: https://projects.illc.uva.nl/quantumimpact/
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: I am pursuing my PhD at the University of Amsterdam in the Philosophy and Ethics of Quantum-Safe Cryptography
+description: I am a security consultant and researcher.
 
 # membership
-memberSince: 2024-11-06
-memberType: H5
+memberSince: 2025-05-30
+memberType: H6
 workingGroups:
-  - PQC
 
 # sponsor
 sponsor:
@@ -36,20 +35,21 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/in/calvertmarshall/
+  youtube:
+  github: 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Eline de Jong
-    role: PhD Researcher
+  - name: Calvert Marshall
+    role: CISO
     social:
       twitter: 
-      linkedin: 
-    description: Eline is the PhD Researcher at University of Amsterdam and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/calvertmarshall/
+    description: Calvert is a CISO and represents the organization at the PKI Consortium.

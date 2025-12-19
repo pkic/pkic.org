@@ -1,0 +1,57 @@
+id: muhammad-shahbaz-khan
+name: Muhammad Shahbaz Khan
+slogan:
+website:
+
+# Short description, longer content can be placed in `content/members/`
+description: I'm an experienced researcher and academic with over 10 years of expertise in research and teaching at leading academic institutions. I hold a Master’s degree in Electrical Engineering and currently pursuing a PhD in Computing (Cybersecurity and AI) at Edinburgh Napier University, Scotland, UK.
+
+# membership
+memberSince: 2025-09-26
+memberType: H5
+workingGroups:
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/in/muhammadshahbazkhan/
+  youtube:
+  github: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Muhammad Shahbaz Khan
+    role: PhD student
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/muhammadshahbazkhan/
+    description: Muhammad Shahbaz is a PhD student and represents the organization at the PKI Consortium.

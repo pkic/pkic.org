@@ -1,16 +1,18 @@
-id: arict
-name: Arict
+id: oleg-sunko
+name: Oleg Sunko
 slogan:
-website: https://arict.eu
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: Arict Consulting provides advice and solutions for ICT system integrations, from A2B, B2B, G2G or in between, with security, privacy and reliability is mind.
+description: Oleg Implements security solutions for telecommunications and logistics.
 
 # membership
-memberSince: 2025-06-14
-memberType: H6
+memberSince: 2025-03-07
+memberType: H7
 workingGroups:
+  - PKIMM
   - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -19,7 +21,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: 
+  feed: null
   language: en_US
 
 # Press Releases
@@ -39,7 +41,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/in/olegsunko/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -47,9 +49,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Ernst Van Nigtevecht
-    role: Architect
+  - name: Oleg Sunko
+    role: CTO
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/ejvann/
-    description: Ernst is the Architect at Arict and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/olegsunko/
+    description: Oleg is the CTO at Borderlanders Inc and represents the organization at the PKI Consortium.

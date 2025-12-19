@@ -1,14 +1,14 @@
-id: qnuinc
-name: QNu Inc
+id: togu-turnip
+name: Togu Turnip
 slogan:
-website: https://www.qnuinc.com
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: Get QNu's ✓QShield Quantum Security Platform and ready-to-deploy services for seamless network infrastructure and application upgrades with quantum security.
+description:  I am currently pursuing his PhD degree in the Department of Technology Engineering at Denmark Technical University, Denmark. My research interests are in the areas of information security and cryptography, as well as network security.
 
 # membership
-memberSince: 2024-08-30
-memberType: F
+memberSince: 2025-06-24
+memberType: H5
 workingGroups:
 
 # sponsor
@@ -38,17 +38,18 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/in/togu-novriansyah-turnip/
+  youtube:
+  github: 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Rajesh Patil
-    role: CTO
+  - name: Togu Turnip
+    role: PhD Student
     social:
       twitter: 
-      linkedin: 
-    description: Rajesh is the CTO at QNu Inc and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/togu-novriansyah-turnip/
+    description: Togu is a PhD student and represents the organization at the PKI Consortium.

@@ -1,15 +1,16 @@
-id: qnuinc
-name: QNu Inc
+id: ritu-dhaulakhandi
+name: Ritu Dhaulakhandi
 slogan:
-website: https://www.qnuinc.com
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: Get QNu's ✓QShield Quantum Security Platform and ready-to-deploy services for seamless network infrastructure and application upgrades with quantum security.
+description: I’m a PhD student at the University of Siegen actively working in the field of quantum cryptography.
 
 # membership
-memberSince: 2024-08-30
-memberType: F
+memberSince: 2025-06-05
+memberType: H5
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -38,17 +39,18 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://de.linkedin.com/in/ritu-dhaulakhandi-165aa022b
+  youtube:
+  github: 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Rajesh Patil
-    role: CTO
+  - name: Ritu Dhaulakhandi
+    role: PhD Student
     social:
       twitter: 
-      linkedin: 
-    description: Rajesh is the CTO at QNu Inc and represents the organization at the PKI Consortium.
+      linkedin: https://de.linkedin.com/in/ritu-dhaulakhandi-165aa022b
+    description: Ritu is a PhD student and represents the organization at the PKI Consortium.

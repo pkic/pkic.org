@@ -1,14 +1,14 @@
-id: dal
-name: Dalhousie University
+id: ralph-poore
+name: Ralph Poore
 slogan:
-website: https://www.dal.ca/
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: With campuses located in Halifax and Truro, NS, Dalhousie is a research-intensive university offering over 200 degrees in 13 diverse faculties.
+description: Adjunct Professor, Standards Developer (PCI, ANS X9, ISO TC68), and consultant in applied cryptography.
 
 # membership
-memberSince: 2025-03-07
-memberType: H5
+memberSince: 2023-04-18
+memberType: H6
 workingGroups:
 
 # sponsor
@@ -38,17 +38,18 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/in/ralphspencerpoore/
+  youtube:
+  github: 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Mahdieh Mellaty
-    role: Researcher
+  - name: Ralph Poore
+    role: Applied Cryptographer
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/mahdieh-mellaty-b3331780/
-    description: Mahdieh is the Researcher at Dalhousie University and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/ralphspencerpoore/
+    description: Ralph is a Applied Cryptographer and represents the organization at the PKI Consortium.

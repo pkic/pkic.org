@@ -1,18 +1,15 @@
-id: elmittemex
-name: Elmittemex
+id: maria-sommerhalder
+name: Maria Sommerhalder
 slogan:
-website: https://www.elmittemex.hu
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: PKI consultanting with over 25 years experience in PKI Crypto space implementing private and public PKI services in Hungray.
+description: I used to work as an auditor and my consultancy would like to push for remote key attestations, specifically in the field of blockchain key generations.
 
 # membership
-memberSince: 2025-11-21
+memberSince: 2023-01-31
 memberType: H6
 workingGroups:
-  - PKIMM
-  - PQC
-  - TCWG
 
 # sponsor
 sponsor:
@@ -21,7 +18,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: https://elmittemex.hu/feed/
+  feed: 
   language: en_US
 
 # Press Releases
@@ -41,17 +38,18 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/in/mariasommerhalder/
+  youtube:
+  github: 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Peter Takacs
-    role: PKI / Crypto Specialist
+  - name: Maria Sommerhalder
+    role: Managing Consultant
     social:
       twitter: 
-      linkedin: https://www.linkedin.com/in/mrpetertakacs
-    description: Peter is the PKI / Crypto Specialist at Elmittemex and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/mariasommerhalder/
+    description: Maria is a Managing Consultant and represents the organization at the PKI Consortium.

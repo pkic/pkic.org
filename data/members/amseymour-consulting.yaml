@@ -1,16 +1,18 @@
 id: amseymour-consulting
-name: amseymour consulting
+name: Amseymour Consulting
 slogan: 
-website: #https://www.amseymourconsulting.co.uk
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: amseymour consulting is a private company that provides services in the field of Risk Assurance, Identity Management, PKI Policies and Procedures, PKI Assessment, Smart Cards, Biometrics, Information Security Management (ISM), Secure Authentication.
+description: Amseymour Consulting is a private company that provides services in the field of Risk Assurance, Identity Management, PKI Policies and Procedures, PKI Assessment, Smart Cards, Biometrics, Information Security Management (ISM), Secure Authentication.
 
 # membership
 memberSince: 2022-05-23
 memberType: H2
   #Consultant
 workingGroups:
+  - PKIMM
+  - PQC
 
 # sponsor
 sponsor:

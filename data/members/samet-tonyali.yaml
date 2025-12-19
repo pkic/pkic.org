@@ -1,14 +1,15 @@
-id: qnuinc
-name: QNu Inc
+id: samet-tonyali
+name: Samet Tonyali
+# Gümüşhane University
 slogan:
-website: https://www.qnuinc.com
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: Get QNu's ✓QShield Quantum Security Platform and ready-to-deploy services for seamless network infrastructure and application upgrades with quantum security.
+description: Samet is an assistant professor in the Department of Software Engineering at Gümüşhane University in Turkey. His research area focuses on application of cryptographic algorithms on communication protocols.
 
 # membership
-memberSince: 2024-08-30
-memberType: F
+memberSince: 2024-11-06
+memberType: H5
 workingGroups:
 
 # sponsor
@@ -38,7 +39,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/in/samet-tonyali-911ab922/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -46,9 +47,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Rajesh Patil
-    role: CTO
+  - name: Samet Tonyali
+    role: Assistant Professor
     social:
       twitter: 
-      linkedin: 
-    description: Rajesh is the CTO at QNu Inc and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/samet-tonyali-911ab922/
+    description: Samet is the Assistant Professor at Gümüşhane University and represents the organization at the PKI Consortium.

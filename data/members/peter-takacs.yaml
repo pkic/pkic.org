@@ -1,15 +1,18 @@
-id: qnuinc
-name: QNu Inc
+id: peter-takacs
+name: Peter Takacs
 slogan:
-website: https://www.qnuinc.com
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: Get QNu's ✓QShield Quantum Security Platform and ready-to-deploy services for seamless network infrastructure and application upgrades with quantum security.
+description: Peter is a PKI consultant with over 25 years experience in PKI Crypto space implementing private and public PKI services in Hungray.
 
 # membership
-memberSince: 2024-08-30
-memberType: F
+memberSince: 2025-11-21
+memberType: H6
 workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -18,7 +21,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  feed: 
+  feed: https://elmittemex.hu/feed/
   language: en_US
 
 # Press Releases
@@ -38,7 +41,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/in/mrpetertakacs
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -46,9 +49,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Rajesh Patil
-    role: CTO
+  - name: Peter Takacs
+    role: PKI / Crypto Specialist
     social:
       twitter: 
-      linkedin: 
-    description: Rajesh is the CTO at QNu Inc and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/mrpetertakacs
+    description: Peter is the PKI / Crypto Specialist at Elmittemex and represents the organization at the PKI Consortium.

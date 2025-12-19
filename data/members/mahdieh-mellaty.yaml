@@ -1,16 +1,15 @@
-id: jainuniversity
-name: Jain (Deemed to be University)
+id: mahdieh-mellaty
+name: Mahdieh Mellaty
 slogan:
-website: https://scsit.jainuniversity.ac.in/faculty
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: School of Computer Science & Information Technology
+description: Mahdieh is the Researcher at Dalhousie University.
 
 # membership
-memberSince: 2024-11-06
+memberSince: 2025-03-07
 memberType: H5
 workingGroups:
-  - PQC
 
 # sponsor
 sponsor:
@@ -36,20 +35,20 @@ careers:
 
 # Social media
 social:
-  twitter: undefined
-  facebook: undefined
-  instagram: undefined
-  linkedin: undefined
-  youtube: undefined
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/in/mahdieh-mellaty-b3331780/
+  youtube: 
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Dr Sanjeev Mandal
-    role: Assistant professor
+  - name: Mahdieh Mellaty
+    role: Researcher
     social:
       twitter: 
-      linkedin: 
-    description: Dr Sanjeev is the Assistant professor at Jain (Deemed to be University) and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/mahdieh-mellaty-b3331780/
+    description: Mahdieh is the Researcher at Dalhousie University and represents the organization at the PKI Consortium.

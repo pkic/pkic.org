@@ -1,15 +1,17 @@
-id: cypher-z
-name: Tsinghua Univeristy
+id: ernst-van-nigtevecht
+name: Ernst Van Nigtevecht
 slogan:
-website: https://cypher-z.github.io
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: Tsinghua University, a premier research institution in Asia. 
+description: 
+# Arict Consulting provides advice and solutions for ICT system integrations, from A2B, B2B, G2G or in between, with security, privacy and reliability is mind.
 
 # membership
-memberSince: 2025-03-07
-memberType: H5
+memberSince: 2025-06-14
+memberType: H6
 workingGroups:
+  - PQC
 
 # sponsor
 sponsor:
@@ -18,9 +20,7 @@ sponsor:
 # Blog posts
 blog: 
   url: 
-  # Temporarily disabled: RSS feed returns HTML (text/html; charset=utf-8) instead of XML/RSS
-  # Reference: CI report - feed validation failure
-  # feed: https://cypher-z.github.io/index.xml
+  feed: 
   language: en_US
 
 # Press Releases
@@ -40,7 +40,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/in/ejvann/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -48,9 +48,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Yiming Zhang
-    role: Postdoctoral Researcher
+  - name: Ernst Van Nigtevecht
+    role: Architect
     social:
       twitter: 
-      linkedin: 
-    description: Yiming is the Postdoctoral Researcher at Tsinghua Univeristy and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/ejvann/
+    description: Ernst is the Architect at Arict and represents the organization at the PKI Consortium.
