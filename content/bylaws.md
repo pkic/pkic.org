@@ -56,7 +56,8 @@ Organizations are eligible to join the PKI Consortium as members if they can dem
   - **5.** PhD students actively researching PKI or cryptography;
   - **6.** Independent consultants with PKI or cryptography expertise, evidenced by relevant certifications, publications, or project experience, unaffiliated with any organization;
   - **7.** Independent researchers with PKI or cryptography expertise, evidenced by relevant certifications, publications, or project experience, unaffiliated with any organization.
-
+  - **8.** Organizations that operate a private PKI governed by formal policy and practices.
+ 
 All members will be listed on the PKIC website with name and logo (if any). Individuals will be listed by name and can be linked to a personal website or profile such as on LinkedIn. Profile pages (for organizations) and brief descriptions are optional but recommended and can help to describe the organization and the objective of the membership.
 
 The member page or footer of the site can contain a disclaimer in substantially this form:
