@@ -1,0 +1,56 @@
+id: trustedciso
+name: TrustedCISO
+slogan:
+website: https://trustedciso.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Expert vCISO services, risk assessments, and compliance support for SOC 2, ISO 27001, HIPAA, FedRAMP & more. Build cyber resilience with TrustedCISO.
+
+# membership
+memberSince: 2026-01-06
+memberType: H2
+workingGroups:
+  
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://trustedciso.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Debra Baker
+    role: CEO
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/debrabakernc/
+    description: Debra is the CEO at TrustedCISO and represents the organization at the PKI Consortium.
