@@ -1,10 +1,10 @@
 id: trusthub
-name: Trusthub LLC
-slogan:
+name: TrustHub
+slogan: Your Trust Service Provider
 website: https://www.trusthub.cloud
 
 # Short description, longer content can be placed in `content/members/`
-description: Soluciones para la firma electrónica y digital de documentos electrónicos
+description: Solutions for the electronic and digital signing of electronic documents
 
 # membership
 memberSince: 2025-04-02
@@ -20,7 +20,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://www.trusthub.cloud/category/all/
   feed: 
   language: en_US
 
@@ -40,8 +40,8 @@ careers:
 social:
   twitter: 
   facebook: 
-  instagram: 
-  linkedin: 
+  instagram: https://www.instagram.com/trusthub.cloud/
+  linkedin: https://www.linkedin.com/company/trusthub-llc
   youtube: 
 
 # Here you can list those who represent or have represented the member.
