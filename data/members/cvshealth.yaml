@@ -1,0 +1,56 @@
+id: cvshealth
+name: CVS Health
+slogan:
+website: https://www.cvshealth.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: 
+
+# membership
+memberSince: 2026-01-06
+memberType: H3
+workingGroups:
+  
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Chujiao Ma
+    role: Staff Security Engineer
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/chujiao-ma/
+    description: Chujiao is the Staff Security Engineer at CVS Health and represents the organization at the PKI Consortium.
