@@ -10,7 +10,6 @@ description: QIZ helps organizations gain cryptographic visibility, manage risks
 memberSince: 2026-01-06
 memberType: G
 workingGroups:
-  
   - PQC
 
 # sponsor
@@ -31,7 +30,7 @@ press:
 
 # Careers
 careers: 
-  url: 
+  url: https://qizsecurity.com/careers
   feed: 
   language: en_US
 
@@ -40,7 +39,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/qizsecurity/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -53,4 +52,4 @@ representatives:
     social:
       twitter: 
       linkedin: https://www.linkedin.com/in/benvolkow/
-    description: Ben is the CEO at QIZ Security and represents the organization at the PKI Consortium.
+    description: Ben is the CEO of QIZ Security that focus on PQC migration and Crypto Posture Management, I've been SW Engineer by education and performing CEO roles in the networking and cyber domain for the last 20 years, working with PKI and Cryptography.
