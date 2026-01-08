@@ -4,13 +4,12 @@ slogan:
 website: https://www.ikerlan.es/
 
 # Short description, longer content can be placed in `content/members/`
-description: Centro tecnológico especializado en tecnologías digitales e inteligencia artificial, sistemas electrónicos embebidos, ciberseguridad, energía y mecatrónica.
+description: Technology center specializing in digital technologies and artificial intelligence, embedded electronic systems, cybersecurity, energy and mechatronics.
 
 # membership
 memberSince: 2026-01-06
 memberType: H3
 workingGroups:
-  
   - PKIMM
   - PQC
 
