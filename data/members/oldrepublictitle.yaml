@@ -1,0 +1,57 @@
+id: oldrepublictitle
+name: Old Republic Title Company
+slogan:
+website: https://www.oldrepublictitle.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Old Republic Title provides title insurance and settlement services for Title Agents, Real Estate Professionals, Lenders, Homeowners and Commercial Transactions. Check out our sustainability report.
+
+# membership
+memberSince: 2026-01-06
+memberType: H3
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://www.oldrepublictitle.com/blog
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://www.oldrepublictitle.com/careers
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: https://www.facebook.com/oldrepublictitle/
+  instagram: https://www.instagram.com/oldrepublictitle
+  linkedin: https://www.linkedin.com/company/oldrepublictitle
+  youtube: https://www.youtube.com/OldRepublicTitle
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Kelley Perez
+    role: Security Engineer
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/kelley-p-5718aa161/
+    description: Kelley is the Security Engineer at Old Republic Title Company and represents the organization at the PKI Consortium.
