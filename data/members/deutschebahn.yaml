@@ -1,4 +1,4 @@
-id: deutschebahn
+id: db-fernverkehr
 name: DB Fernverkehr AG
 slogan:
 website: https://www.deutschebahn.com/de/konzern
@@ -24,7 +24,7 @@ blog:
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.deutschebahn.com/en/presse/press_releases
   feed: 
   language: en_US
 
@@ -51,5 +51,5 @@ representatives:
     role: IT Architect
     social:
       twitter: 
-      linkedin: www.linkedin.com/in/peer-eichler-770a1031b
+      linkedin: https://www.linkedin.com/in/peer-eichler-770a1031b
     description: Peer is the IT Architect at DB Fernverkehr AG and represents the organization at the PKI Consortium.
