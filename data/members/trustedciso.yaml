@@ -10,7 +10,6 @@ description: Expert vCISO services, risk assessments, and compliance support for
 memberSince: 2026-01-06
 memberType: H2
 workingGroups:
-  
   - PQC
 
 # sponsor
@@ -19,7 +18,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://trustedciso.com/blog/
   feed: https://trustedciso.com/feed/
   language: en_US
 
@@ -31,17 +30,17 @@ press:
 
 # Careers
 careers: 
-  url: 
+  url: https://trustedciso.com/careers/
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: 
-  facebook: 
+  twitter: https://twitter.com/trustedciso
+  facebook: https://www.facebook.com/TrustedCISO/
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/company/trustedciso/
+  youtube: https://www.youtube.com/@trustedciso 
 
 # Here you can list those who represent or have represented the member.
 #
