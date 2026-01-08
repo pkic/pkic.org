@@ -10,7 +10,6 @@ description: Old Republic Title provides title insurance and settlement services
 memberSince: 2026-01-06
 memberType: H3
 workingGroups:
-  
   - PKIMM
   - PQC
   - TCWG
@@ -21,7 +20,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://www.oldrepublictitle.com/blog
   feed: 
   language: en_US
 
@@ -33,17 +32,17 @@ press:
 
 # Careers
 careers: 
-  url: 
+  url: https://www.oldrepublictitle.com/careers
   feed: 
   language: en_US
 
 # Social media
 social:
   twitter: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  facebook: https://www.facebook.com/oldrepublictitle/
+  instagram: https://www.instagram.com/oldrepublictitle
+  linkedin: https://www.linkedin.com/company/oldrepublictitle
+  youtube: https://www.youtube.com/OldRepublicTitle
 
 # Here you can list those who represent or have represented the member.
 #
