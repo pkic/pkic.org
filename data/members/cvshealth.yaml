@@ -4,13 +4,12 @@ slogan:
 website: https://www.cvshealth.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Helping people on their path to better health.
 
 # membership
 memberSince: 2026-01-06
 memberType: H3
 workingGroups:
-  
   - PQC
 
 # sponsor
@@ -19,29 +18,29 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://www.cvshealth.com/news-and-insights
   feed: 
   language: en_US
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.cvshealth.com/news/press-releases.html
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://jobs.cvshealth.com/
   feed: 
   language: en_US
 
 # Social media
 social:
-  twitter: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  twitter: https://twitter.com/CVSHealth
+  facebook: https://www.facebook.com/CVSHealth/
+  instagram: https://www.instagram.com/cvshealth/
+  linkedin: https://www.linkedin.com/company/cvs-health/
+  youtube: https://www.youtube.com/cvshealth
 
 # Here you can list those who represent or have represented the member.
 #
