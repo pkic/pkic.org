@@ -1,0 +1,56 @@
+id: iris
+name: IRIS Corporation Berhad
+slogan:
+website: https://www.iris.com.my/
+
+# Short description, longer content can be placed in `content/members/`
+description: IRIS innovates, evolves, and digitalises Trusted Identification and Identity Solutions in a dynamic landscape.
+
+# membership
+memberSince: 2026-01-06
+memberType: F
+workingGroups:
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: https://www.iris.com.my/category/blog/
+  feed: https://www.iris.com.my/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: https://x.com/IRISCorpBerhad
+  facebook: https://www.facebook.com/iriscorporationbhd
+  instagram: https://www.instagram.com/iriscorpberhad
+  linkedin: https://www.linkedin.com/company/iriscorporationberhad/
+  youtube: https://www.youtube.com/user/IRISCorporationBhd
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jia Giin Tan
+    role: General Manager, Software Solutions
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/jia-giin-tan-282ab1131/
+    description: Jia Giin is the General Manager, Software Solutions at IRIS Corporation Berhad and represents the organization at the PKI Consortium.
