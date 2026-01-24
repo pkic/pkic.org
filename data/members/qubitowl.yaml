@@ -4,15 +4,13 @@ slogan:
 website: https://www.qubitowl.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: QubitOwl offers enterprise cryptographic visibility, PQC assessment, and 
-migration planning to ensure post-quantum readiness and reduce quantum 
-threat risks.
+description: QubitOwl offers enterprise cryptographic visibility, PQC assessment, and migration planning to ensure post-quantum readiness and reduce quantum threat risks.
 
 # membership
 memberSince: 2026-01-22
 memberType: F
 workingGroups:
-    - PKIMM
+  - PKIMM
   - PQC
 
 # sponsor
@@ -42,7 +40,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: http://linkedin.com/company/qubitowl
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -54,5 +52,5 @@ representatives:
     role: CEO
     social:
       twitter: 
-      linkedin: www.linkedin.com/in/bret-laughlin-5a12168
+      linkedin: https://www.linkedin.com/in/bret-laughlin-5a12168
     description: Bret is the CEO at QubitOwl and represents the organization at the PKI Consortium.
