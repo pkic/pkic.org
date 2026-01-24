@@ -10,7 +10,7 @@ description: We are your trusted advisor for a high performing collaborative and
 memberSince: 2026-01-22
 memberType: F
 workingGroups:
-    - CM
+  - CM
   - PKIMM
   - PQC
   - TCWG
@@ -27,7 +27,7 @@ blog:
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.zetes.com/en/news
   feed: 
   language: en_US
 
@@ -42,7 +42,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/zetes
   youtube: 
 
 # Here you can list those who represent or have represented the member.
