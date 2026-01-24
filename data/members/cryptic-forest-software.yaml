@@ -1,16 +1,16 @@
-id: ounsworth
+id: cryptic-forest-software
 name: Cryptic Forest Software
 slogan:
 website: 
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description:  Cryptic Forest Software is a small business that offers services in and around PKI, crypto libraries, and PQC Migration.
 
 # membership
 memberSince: 2026-01-22
 memberType: H2
 workingGroups:
-    - PKIMM
+  - PKIMM
   - PQC
 
 # sponsor
@@ -52,5 +52,6 @@ representatives:
     role: Senior Consultant
     social:
       twitter: 
-      linkedin: https://datatracker.ietf.org/person/mike@ounsworth.ca
+      linkedin: 
+      ietf: https://datatracker.ietf.org/person/mike@ounsworth.ca
     description: Mike is the Senior Consultant at Cryptic Forest Software and represents the organization at the PKI Consortium.
