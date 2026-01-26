@@ -1,0 +1,59 @@
+id: vistakencana
+name: Vista Kencana Sdn Bhd
+slogan:
+website: https://vistakencana.com.my
+
+# Short description, longer content can be placed in `content/members/`
+description: Vista Kencana | Empowered of Innovation
+
+# membership
+memberSince: 2026-01-26
+memberType: A
+workingGroups:
+  - CA
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Ami Azrul Abdullah
+    role: General Manager
+    social:
+      twitter: 
+      linkedin: https://my.linkedin.com/in/ami-azrul-b5647646
+    description: Ami Azrul is the General Manager at Vista Kencana Sdn Bhd and represents the organization at the PKI Consortium.
