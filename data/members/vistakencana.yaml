@@ -22,7 +22,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://vistakencana.com.my/blog
   feed: 
   language: en_US
 
@@ -34,7 +34,7 @@ press:
 
 # Careers
 careers: 
-  url: 
+  url: https://vistakencana.com.my/career
   feed: 
   language: en_US
 
@@ -43,7 +43,7 @@ social:
   twitter: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/vista-kencana-sdn-bhd/mycompany/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
