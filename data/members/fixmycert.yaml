@@ -1,0 +1,56 @@
+id: fixmycert
+name: FixMyCert
+slogan:
+website: https://fixmycert.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Learn PKI, SSL/TLS, and certificate management through free interactive demos. No paywalls, no signup required.
+
+# membership
+memberSince: 2026-02-05
+memberType: G
+workingGroups:
+  - PKIMM
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Patrick Jenkins
+    role: Owner
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/patrick-m-jenkins/
+    description: Patrick is the Owner at FixMyCert and represents the organization at the PKI Consortium.
