@@ -2,6 +2,7 @@
 date: 2021-01-08T14:49:10Z
 draft: false
 title: About us
+noPages: true
 
 heroTitle: About the PKI Consortium
 heroDescription: Public Key Infrastructure (PKI) 

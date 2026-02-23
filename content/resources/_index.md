@@ -6,7 +6,8 @@ title: Resources
 heroTitle: Resources
 
 menu: 
-    main:
+    footer:
+        name: Resources
 ---
 
 {{< pages >}}

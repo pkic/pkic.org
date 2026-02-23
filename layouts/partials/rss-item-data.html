@@ -1,5 +1,21 @@
 {{- $feedURLStr := . -}}
 {{- $items := slice -}}
+
+{{- /* Skip remote RSS fetches to speed up local development.
+       This is controlled via (in order of precedence):
+       1. Env var:  HUGO_SKIP_REMOTE_FEEDS=true hugo server
+       2. Env var:  HUGO_PARAMS_SKIPREMOTEFEEDS=true hugo server  (auto-maps to params)
+       3. config/development/params.yaml  →  skipRemoteFeeds: true
+          - Applied automatically by `hugo server` (defaults to environment=development)
+          - For hugo build use: hugo build -e development
+       4. config.yaml  →  params.skipRemoteFeeds: true  (affects all builds/envs) */ -}}
+{{- $skip := or (eq (os.Getenv "HUGO_SKIP_REMOTE_FEEDS") "true") (eq (os.Getenv "HUGO_SKIP_REMOTE_FEEDS") "1") -}}
+{{- if site.Params.skipRemoteFeeds -}}
+  {{- $skip = true -}}
+{{- end -}}
+
+{{- if not $skip -}}
+
 {{- $timeout := "5s" -}}
 {{- if hugo.IsServer -}}
   {{- $timeout = "1s" -}}
@@ -58,5 +74,7 @@
       {{- end -}}
     {{- end -}}
   {{- end -}}
+{{- end -}}
+
 {{- end -}}
 {{- return $items -}}

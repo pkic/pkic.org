@@ -234,19 +234,45 @@ main {
 }
 
 .member-logo {
-  margin: 20px;
-  margin-right: 30px;
-  margin-left: 30px;
-  height: 40px;
-  max-width: 175px;
-  filter: grayscale(1) opacity(0.6) contrast(0.5);
+  margin: 5px 8px;
+  height: 18px;
+  max-width: 90px;
+  filter: grayscale(1) opacity(0.55) contrast(0.5);
+  transition: filter 0.2s ease, transform 0.2s ease;
 }
 
-.members a,
-a:hover,
-.member-logo:hover {
+.member-logo-sponsor {
   filter: none;
-  text-decoration: none;
+  opacity: 1;
+  transition: transform 0.2s ease;
+}
+
+/* Size by sponsor tier (level 1–6) — uniform margin, height does the work */
+.sponsor-lvl-1 { height: 22px; max-width: 110px; }
+.sponsor-lvl-2 { height: 26px; max-width: 130px; }
+.sponsor-lvl-3 { height: 32px; max-width: 155px; }
+.sponsor-lvl-4 { height: 38px; max-width: 180px; }
+.sponsor-lvl-5 { height: 44px; max-width: 210px; }
+.sponsor-lvl-6 { height: 52px; max-width: 240px; }
+
+.members a:hover .member-logo {
+  filter: none;
+}
+
+.members a:hover .member-logo-sponsor {
+  transform: scale(1.12);
+}
+
+.members-overview {
+  background: #fff;
+
+  .members {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 4px 0;
+  }
 }
 
 .linkArea {
@@ -441,3 +467,353 @@ self-assessment {
 @import "agenda";
 @import "sponsors";
 @import "session-registration";
+@import "bento";
+
+// ============================================================
+// Homepage
+// ============================================================
+
+.pkic-home-hero {
+  background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 45%, #0a2f40 100%);
+  color: #fff;
+  padding: 5rem 0 4rem;
+
+  @media (min-width: 992px) {
+    padding: 6rem 0 5rem;
+  }
+
+  .pkic-hero-logo {
+    width: 280px;
+    max-width: 60vw;
+    opacity: 0.12;
+  }
+}
+
+// Generic dark-gradient page hero (fallback for pages without a hero image)
+.pkic-page-hero {
+  color: #fff;
+  padding: 3.5rem 0;
+
+  @media (min-width: 992px) {
+    padding: 5rem 0;
+  }
+
+  .pkic-page-hero-kicker {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 0.75rem;
+  }
+}
+
+.pkic-stats-bar {
+  background: $green;
+  color: #fff;
+
+  .pkic-stat {
+    padding: 0.9rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+
+    &:last-child { border-right: none; }
+  }
+
+  .pkic-stat-num {
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .pkic-stat-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.8;
+  }
+}
+
+.pkic-section-label {
+  text-align: center;
+  position: relative;
+  margin: 2.5rem 0 0;
+
+  span {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: $gray-500;
+    background: #fff;
+    padding: 0 1rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  &::before {
+    content: "";
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: 10%;
+    right: 10%;
+    border-top: 1px solid $gray-200;
+  }
+}
+
+.pkic-recent-posts {
+  background: $gray-100;
+}
+
+.pkic-post-card {
+  background: #fff;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  position: relative;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  }
+
+  .pkic-post-card-accent {
+    height: 4px;
+    background: linear-gradient(90deg, $green, $blue);
+  }
+
+  .pkic-post-card-body {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  .pkic-post-meta {
+    font-size: 0.78rem;
+  }
+
+  .pkic-post-title {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.35;
+    margin-bottom: 0.5rem;
+  }
+
+  .pkic-post-summary {
+    flex: 1;
+    line-height: 1.5;
+  }
+}
+
+.pkic-join-cta {
+  background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 100%);
+  color: #fff;
+}
+
+// ============================================================
+// Blog card list
+// ============================================================
+
+.blog-card {
+  background: #fff;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+  }
+
+  .blog-card-accent {
+    height: 4px;
+    background: linear-gradient(90deg, $green, $blue);
+  }
+
+  // Vary accent bar color by position for visual interest
+  &:nth-child(3n+2) .blog-card-accent {
+    background: linear-gradient(90deg, $blue, $purple);
+  }
+
+  &:nth-child(3n) .blog-card-accent {
+    background: linear-gradient(90deg, $teal, $blue-dark);
+  }
+
+  .blog-card-body {
+    padding: 1.25rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  .blog-card-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    font-size: 0.78rem;
+    color: $gray-500;
+    margin-bottom: 0.6rem;
+  }
+
+  .blog-card-title {
+    font-size: 1rem;
+    font-weight: 700;
+    line-height: 1.35;
+    margin-bottom: 0.5rem;
+  }
+
+  .blog-card-summary {
+    font-size: 0.85rem;
+    color: $gray-600;
+    line-height: 1.5;
+    flex: 1;
+    margin-bottom: 0.75rem;
+  }
+
+  .blog-card-author {
+    font-size: 0.8rem;
+    margin-top: auto;
+    padding-top: 0.5rem;
+    border-top: 1px solid $gray-100;
+  }
+
+  .blog-card-tags {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+  }
+}
+
+.blog-tag {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.15em 0.5em;
+  border-radius: 999px;
+  background: $green-pale;
+  color: $green-deep;
+  text-decoration: none;
+
+  &:hover {
+    background: $green;
+    color: #fff;
+  }
+}
+
+// ============================================================
+// WG Leadership card (inside dark gradient hero)
+// ============================================================
+
+.pkic-leadership-card {
+  // background set via inline style (WG color-keyed gradient)
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.pkic-leadership-label {
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.10em;
+}
+
+// ============================================================
+// Alert shortcode — modern gradient variant
+// ============================================================
+
+.pkic-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1.25rem;
+  color: #fff;
+
+  .pkic-alert-icon {
+    font-size: 1rem;
+    line-height: 1.5;
+    flex-shrink: 0;
+    opacity: 0.85;
+  }
+
+  .pkic-alert-body {
+    font-size: 0.925rem;
+    line-height: 1.6;
+    flex: 1;
+
+    p:last-child { margin-bottom: 0; }
+    a { color: rgba(255, 255, 255, 0.9); text-decoration: underline; }
+    a:hover { color: #fff; }
+    code { background: rgba(255, 255, 255, 0.15); border-radius: 0.25rem; padding: 0.1em 0.35em; }
+  }
+}
+
+.pkic-alert-success { border-left-color: $green !important; }
+.pkic-alert-info    { border-left-color: $blue !important; }
+.pkic-alert-warning { border-left-color: #e6a817 !important; }
+.pkic-alert-danger  { border-left-color: #e05252 !important; }
+
+// ============================================================
+// Cards shortcode — accent bar + polish
+// ============================================================
+
+.pkic-card-accent-bar {
+  height: 4px;
+  background: linear-gradient(90deg, $green, $blue);
+}
+
+.pkic-wg-card {
+  border-radius: 0.85rem;
+  overflow: hidden;
+  border: none;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  }
+
+  .card-title { font-weight: 700; }
+  .card-text  { color: $gray-600; font-size: 0.9rem; }
+}
+
+.pkic-card-header {
+  background: linear-gradient(135deg, #0a1f14, #0d3d24);
+  color: #fff;
+  font-weight: 600;
+  border-bottom: none;
+
+  a { color: rgba(255, 255, 255, 0.9); }
+}
+
+.pkic-card-footer {
+  background: $gray-100;
+  font-size: 0.85rem;
+  border-top: 1px solid $gray-200;
+}
+
+// ============================================================
+// WG alternating section background (subtle off-white tint)
+// ============================================================
+
+.wg-alt-section {
+  background-color: #f4f6f8;
+  background-image: radial-gradient(ellipse at 80% 50%, rgba(90, 155, 213, 0.04) 0%, transparent 70%);
+}

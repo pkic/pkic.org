@@ -2,24 +2,96 @@
 {{ with $.Scratch.Get "date" }}
     {{ $date = (time .) }}
 {{ end }}
-
-<!-- shuffle members  -->
-{{ $members := slice }}
-{{ range hugo.Data.members }}
-    {{ if $date.After (time .memberSince)  }}
-    {{ $members = $members | append . }}
-    {{ end }}
+{{ $memberLimit := 60 }}
+{{ with $.Scratch.Get "limit" }}
+    {{ $memberLimit = int . }}
 {{ end }}
 
-{{ range (shuffle $members) }}
+{{ $sponsors := slice }}
+{{ $nonSponsors := slice }}
+
+<!-- Members -->
+{{ range hugo.Data.members }}
+    {{ if $date.After (time .memberSince) }}
     {{ $title := (printf "%s, %s - A member of the %s" .name (.slogan | default "") $.Site.Params.name ) }}
     {{ if not .slogan }}
         {{ $title = (printf "%s - A member of the %s" .name $.Site.Params.name ) }}
     {{ end }}
-    <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{ $title }}">
-        {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
-        {{ with $img}}
-        <img class="member-logo" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}" loading="lazy" />
+
+    {{ $href := .website }}
+    {{ with $.Site.GetPage (printf "/members/%s" .id) }}
+        {{ $href = .Permalink }}
+    {{ end }}
+
+    {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
+    {{ if $img }}
+        {{ $sponsorLevel := 0 }}
+        {{ with .sponsor }}
+            {{ with .level }}
+                {{ $l := index hugo.Data.sponsorlevels . }}
+                {{ if $l }}{{ $sponsorLevel = $l }}{{ end }}
+            {{ end }}
+            {{ with (index .sponsoring $.Site.Params.name) }}
+                {{ $l := index hugo.Data.sponsorlevels .level }}
+                {{ if $l }}{{ if gt $l $sponsorLevel }}{{ $sponsorLevel = $l }}{{ end }}{{ end }}
+            {{ end }}
         {{ end }}
-    </a>
+        {{ $entry := (dict
+            "name" .name
+            "title" $title
+            "href" $href
+            "img" $img.Permalink
+            "sponsorLevel" $sponsorLevel
+        ) }}
+        {{ if gt $sponsorLevel 0 }}
+            {{ $sponsors = $sponsors | append $entry }}
+        {{ else }}
+            {{ $nonSponsors = $nonSponsors | append $entry }}
+        {{ end }}
+    {{ end }}
+    {{ end }}
 {{ end }}
+
+<!-- Non-member sponsors -->
+{{ range hugo.Data.sponsors }}
+    {{ $context := $.Site.Params.name }}
+    {{ $sponsorLevel := 0 }}
+    {{ with .sponsor }}
+        {{ with .level }}
+            {{ $l := index hugo.Data.sponsorlevels . }}
+            {{ if $l }}{{ $sponsorLevel = $l }}{{ end }}
+        {{ end }}
+        {{ with (index .sponsoring $.Site.Params.name) }}
+            {{ $l := index hugo.Data.sponsorlevels .level }}
+            {{ if $l }}{{ if gt $l $sponsorLevel }}{{ $sponsorLevel = $l }}{{ end }}{{ end }}
+        {{ end }}
+    {{ end }}
+    {{ if gt $sponsorLevel 0 }}
+        {{ $title := (printf "%s is a sponsor for the %s" .name $context) }}
+        {{ $img := resources.GetMatch (printf "/images/sponsors/**/%s" .logo) }}
+        {{ with $img }}
+            {{ $sponsors = $sponsors | append (dict
+                "name" $.name
+                "title" $title
+                "href" $.website
+                "img" .Permalink
+                "sponsorLevel" $sponsorLevel
+            ) }}
+        {{ end }}
+    {{ end }}
+{{ end }}
+
+{{/* Always show all sponsors + up to $memberLimit random non-sponsor members, then shuffle the combined list */}}
+{{ $selectedNonSponsors := first $memberLimit (shuffle $nonSponsors) }}
+{{ $entries := $sponsors | append $selectedNonSponsors }}
+{{ $entries = shuffle $entries }}
+
+{{- range $entries -}}
+<a href="{{ .href }}" title="{{ .title }}" target="_blank" rel="noopener"><img
+    class="member-logo{{ if gt .sponsorLevel 0 }} member-logo-sponsor sponsor-lvl-{{ .sponsorLevel }}{{ end }}"
+    alt="{{ .title }}"
+    title="{{ .title }}"
+    src="{{ .img }}"
+    loading="lazy"
+/></a>
+{{- end -}}

@@ -58,7 +58,7 @@ params:
 
   social:
     x: https://x.com/PKIConsortium
-    linkedin: https://www.linkedin.com/groups/4852478/
+    linkedin: https://www.linkedin.com/company/pki-consortium/
     github: https://github.com/pkic
 
 # https://gohugo.io/content-management/related/#default-configuration

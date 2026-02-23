@@ -1,0 +1,583 @@
+// =============================================================================
+// PKIC Bento Grid & Colorful Card System
+// Inspired by bold, block-based layouts (bunq aesthetic)
+// Mobile-first, responsive
+// =============================================================================
+
+// --- Bento Grid Container ---
+
+.bento-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr;
+
+  @media (min-width: 480px) {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1.25rem;
+  }
+
+  @media (min-width: 1200px) {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.5rem;
+  }
+}
+
+// Span variants (collapse to 1 col on mobile)
+.bento-span-2 {
+  @media (min-width: 480px) {
+    grid-column: span 2;
+  }
+}
+
+.bento-span-3 {
+  @media (min-width: 768px) {
+    grid-column: span 3;
+  }
+  @media (max-width: 767px) {
+    grid-column: span 1;
+  }
+}
+
+.bento-span-4 {
+  @media (min-width: 1200px) {
+    grid-column: span 4;
+  }
+  @media (max-width: 1199px) {
+    grid-column: span 3;
+  }
+  @media (max-width: 767px) {
+    grid-column: span 2;
+  }
+  @media (max-width: 479px) {
+    grid-column: span 1;
+  }
+}
+
+.bento-row-2 {
+  @media (min-width: 768px) {
+    grid-row: span 2;
+  }
+}
+
+// --- Bento Card ---
+
+.bento-card {
+  border-radius: 1.25rem;
+  padding: 1.5rem;
+  overflow: hidden;
+  position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  min-height: 140px;
+  display: flex;
+  flex-direction: column;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+  }
+
+  // Default (light)
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+
+  // Icon accent
+  .bento-icon {
+    font-size: 2rem;
+    margin-bottom: 0.75rem;
+    display: block;
+    line-height: 1;
+  }
+
+  .bento-title {
+    font-size: 1.1rem;
+    font-weight: 700;
+    margin-bottom: 0.4rem;
+    line-height: 1.3;
+  }
+
+  .bento-text {
+    font-size: 0.9rem;
+    opacity: 0.85;
+    flex: 1;
+    line-height: 1.5;
+  }
+
+  .bento-badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.25em 0.6em;
+    border-radius: 999px;
+    margin-bottom: 0.5rem;
+    align-self: flex-start;
+  }
+
+  .bento-footer {
+    margin-top: auto;
+    padding-top: 0.75rem;
+    font-size: 0.825rem;
+    font-weight: 600;
+  }
+
+  // Link card behaviour
+  &.bento-card-link {
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+  }
+}
+
+// --- Colour Variants (solid fill — bunq style) ---
+
+@mixin bento-solid($bg, $text: #fff) {
+  background: $bg;
+  color: $text;
+
+  .bento-badge {
+    background: rgba(255, 255, 255, 0.25);
+    color: $text;
+  }
+
+  .bento-text {
+    color: rgba($text, 0.9);
+    opacity: 1;
+  }
+}
+
+.bento-green   { @include bento-solid($green); }
+.bento-blue    { @include bento-solid($blue); }
+.bento-orange  { @include bento-solid($orange); }
+.bento-yellow  { @include bento-solid($yellow, $gray-800); }
+.bento-red     { @include bento-solid($red); }
+.bento-purple  { @include bento-solid($purple); }
+.bento-teal    { @include bento-solid($teal); }
+.bento-indigo  { @include bento-solid($indigo); }
+.bento-coral   { @include bento-solid($coral); }
+.bento-rose    { @include bento-solid($rose); }
+.bento-violet  { @include bento-solid($violet); }
+
+// Pale/pastel variants (good for text-heavy cards)
+.bento-green-pale  { @include bento-solid($green-pale,  $green-deep); }
+.bento-blue-pale   { @include bento-solid($blue-pale,   $blue-deep); }
+.bento-orange-pale { @include bento-solid($orange-pale, $orange-deep); }
+.bento-yellow-pale { @include bento-solid($yellow-pale, $yellow-deep); }
+.bento-red-pale    { @include bento-solid($red-pale,    $red-deep); }
+.bento-purple-pale { @include bento-solid($purple-pale, $purple-deep); }
+
+// Dark variants
+.bento-dark    { @include bento-solid($gray-800); }
+.bento-darker  { @include bento-solid($gray-900); }
+
+// --- Section colour banner ---
+
+.pkic-section-banner {
+  border-radius: 1.25rem;
+  padding: 2.5rem 2rem;
+  margin-bottom: 1.5rem;
+
+  @media (min-width: 768px) {
+    padding: 3rem 3rem;
+  }
+}
+
+// --- Member type pills ---
+
+.member-type-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.3em 0.7em;
+  border-radius: 999px;
+  color: #fff;
+  background: $green;
+
+  &.type-A { background: $green; }
+  &.type-P { background: $blue; }   // Principal / Premium
+  &.type-H { background: $orange; } // Honorary / Individual
+  &.type-S { background: $purple; } // Sponsor
+}
+
+// --- WG colour map (matches logo colours for each WG) ---
+
+$wg-colors: (
+  "pqc":   $blue,
+  "ca":    $green,
+  "cm":    $orange,
+  "pkimm": $purple,
+  "tcwg":  $teal,
+);
+
+@each $wg, $color in $wg-colors {
+  .wg-#{$wg} {
+    --wg-color: #{$color};
+    --wg-color-text: #fff;
+  }
+  .bento-wg-#{$wg} {
+    @include bento-solid($color);
+  }
+}
+
+// --- Members search + pill tabs ---
+
+.members-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.members-search {
+  flex: 0 0 320px;
+  max-width: 100%;
+
+  .input-group-text {
+    border-color: #dee2e6;
+    border-right: none;
+    background: #fff;
+  }
+
+  .form-control {
+    border-color: #dee2e6;
+    border-left: none;
+    font-size: 0.9rem;
+
+    &:focus {
+      box-shadow: none;
+      border-color: #dee2e6;
+    }
+  }
+}
+
+// A–Z quick filter
+.members-az-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
+}
+
+.az-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  padding: 0;
+  font-size: 0.72rem;
+  font-weight: 700;
+  border: 1.5px solid #dee2e6;
+  border-radius: 0.375rem;
+  background: #fff;
+  color: $gray-700;
+  cursor: pointer;
+  line-height: 1;
+  transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease;
+
+  &:hover:not(.az-btn--empty) {
+    background: rgba($green, 0.08);
+    border-color: $green;
+    color: $green;
+  }
+
+  &.active {
+    background: $green;
+    border-color: $green;
+    color: #fff;
+  }
+
+  &--empty {
+    opacity: 0.28;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
+  // "All" button is wider
+  &[data-letter="all"] {
+    width: auto;
+    padding: 0 0.6rem;
+    font-size: 0.75rem;
+  }
+}
+
+.members-nav-pills {
+  .nav-link {
+    color: $gray-700;
+    font-weight: 600;
+    border-radius: 999px;
+    padding: 0.5rem 1.25rem;
+    transition: background 0.15s ease, color 0.15s ease;
+
+    .badge {
+      background: rgba(0, 0, 0, 0.1);
+      color: inherit;
+      font-weight: 600;
+      font-size: 0.7em;
+    }
+
+    &.active {
+      background: $green;
+      color: #fff;
+
+      .badge {
+        background: rgba(255, 255, 255, 0.25);
+        color: #fff;
+      }
+    }
+
+    &:not(.active):hover {
+      background: rgba(0, 0, 0, 0.05);
+    }
+  }
+}
+
+// --- Members card grid ---
+
+.members-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  @media (min-width: 1200px) {
+    grid-template-columns: repeat(4, 1fr);
+  }
+}
+
+.member-card-link {
+  text-decoration: none;
+  color: inherit;
+  display: flex;
+  flex-direction: column;
+
+  .member-card {
+    flex: 1;
+  }
+
+  &:hover,
+  &:focus {
+    text-decoration: none;
+    color: inherit;
+  }
+}
+
+.member-card {
+  border-radius: 1rem;
+  padding: 1.25rem;
+  background: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  text-decoration: none;
+  color: inherit;
+  min-height: 140px; // ensures consistent row heights even without slogan/description
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    text-decoration: none;
+    color: inherit;
+  }
+
+  .member-card-logo-wrap {
+    width: 140px;
+    height: 56px;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 0.75rem;
+  }
+
+  .member-card-logo {
+    // fill the wrapper so small logos don't appear tiny
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    filter: grayscale(0.3) opacity(0.85);
+    transition: filter 0.2s ease;
+  }
+
+  .member-card-logo--placeholder,
+  .member-card-initials {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.75rem;
+    width: 64px;
+    height: 64px;
+    flex-shrink: 0;
+    font-size: 1.25rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+    color: #fff;
+    user-select: none;
+  }
+
+  // Deterministic palette — assigned via mod(len(name), 6) in template
+  .initial-color-0 { background: linear-gradient(135deg, #2a7a4f, #1a5c3a); }
+  .initial-color-1 { background: linear-gradient(135deg, #1d4ed8, #1e40af); }
+  .initial-color-2 { background: linear-gradient(135deg, #d97706, #b45309); }
+  .initial-color-3 { background: linear-gradient(135deg, #7c3aed, #5b21b6); }
+  .initial-color-4 { background: linear-gradient(135deg, #dc2626, #991b1b); }
+  .initial-color-5 { background: linear-gradient(135deg, #0891b2, #0e7490); }
+
+  &:hover .member-card-logo {
+    filter: none;
+  }
+
+  .member-card-name {
+    font-size: 0.88rem;
+    font-weight: 700;
+    margin-bottom: 0.2rem;
+    line-height: 1.3;
+  }
+
+  .member-card-slogan {
+    font-size: 0.8rem;
+    color: $gray-500;
+    margin-bottom: 0.5rem;
+  }
+
+  .member-card-description {
+    font-size: 0.8rem;
+    color: $gray-600;
+    line-height: 1.4;
+    flex: 1;
+  }
+
+  .member-card-wgs {
+    margin-top: 0.75rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem;
+    justify-content: center;
+
+    .wg-tag {
+      font-size: 0.65rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      padding: 0.2em 0.55em;
+      border-radius: 999px;
+      background: $green-pale;
+      color: $green-deep;
+    }
+  }
+
+  .member-card-social {
+    margin-top: 0.6rem;
+    align-self: center;
+    background: rgba(255, 255, 255, 0.92);
+    border-radius: 999px;
+    padding: 0.2rem 0.4rem;
+    opacity: 0;
+    max-height: 0;
+    overflow: hidden;
+    transform: translateY(2px);
+    transition: opacity 0.2s ease, transform 0.2s ease, max-height 0.2s ease;
+    pointer-events: none;
+  }
+
+  &:hover .member-card-social,
+  &:focus-within .member-card-social {
+    opacity: 1;
+    transform: translateY(0);
+    max-height: 48px;
+    pointer-events: auto;
+  }
+}
+
+// --- Color highlight sections ---
+
+.pkic-highlight {
+  border-left: 4px solid var(--pkic-accent, #{$green});
+  padding-left: 1rem;
+}
+
+// --- Section dividers with colour ---
+
+.section-divider {
+  height: 4px;
+  border: none;
+  border-radius: 2px;
+  background: linear-gradient(90deg, $green, $blue, $orange);
+  margin: 2.5rem 0;
+  opacity: 0.7;
+}
+
+// --- CTA blocks ---
+
+.pkic-cta-block {
+  border-radius: 1.25rem;
+  padding: 2.5rem 2rem;
+  text-align: center;
+
+  @media (min-width: 768px) {
+    padding: 3rem;
+  }
+
+  .pkic-cta-title {
+    font-size: 1.75rem;
+    font-weight: 800;
+    margin-bottom: 0.75rem;
+  }
+
+  .pkic-cta-text {
+    font-size: 1.05rem;
+    opacity: 0.9;
+    margin-bottom: 1.5rem;
+    max-width: 540px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+}
+
+// --- Filter bar (for members page) ---
+
+.pkic-filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+
+  .filter-btn {
+    font-size: 0.8rem;
+    font-weight: 600;
+    padding: 0.35em 0.85em;
+    border-radius: 999px;
+    border: 2px solid transparent;
+    background: $gray-200;
+    color: $gray-700;
+    cursor: pointer;
+    transition: all 0.15s ease;
+
+    &:hover, &.active {
+      background: $green;
+      color: #fff;
+      border-color: $green;
+    }
+  }
+}
+
+// --- WG Hero gradient strips ---
+
+.wg-hero-strip {
+  height: 6px;
+  border-radius: 0 0 3px 3px;
+  background: var(--wg-color, #{$green});
+}

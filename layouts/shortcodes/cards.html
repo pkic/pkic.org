@@ -4,18 +4,20 @@
   <div class="row">
     {{ range $yaml.cards }}
       <div class="{{ with .width }}{{ . }}{{ else }}col-md{{ end }} mb-4">
-        <div class="card {{ with .card_class }}{{ . }}{{ end }} h-100">
+        <div class="card pkic-wg-card {{ with .card_class }}{{ . }}{{ end }} h-100">
           {{ with .image }}
           <img src="{{ . }}" class="card-img-top" alt="{{ $.card_title }}">
           {{ end }}
           {{ with .header }}
-          <div class="card-header">
+          <div class="card-header pkic-card-header">
             {{ .content | markdownify }}
           </div>
+          {{ else }}
+          <div class="pkic-card-accent-bar"></div>
           {{ end }}
           <div class="card-body d-flex flex-column">
-            {{ with .title }}<h5 class="card-title">{{ . }}</h5>{{ end }}
-            {{ with .text }}<p class="card-text">{{ . | markdownify }}</p>{{ end }}
+            {{ with .title }}<h5 class="card-title fw-bold">{{ . }}</h5>{{ end }}
+            {{ with .text }}<p class="card-text text-muted">{{ . | markdownify }}</p>{{ end }}
             
             {{ if .links }}
             <div class="d-flex flex-column mt-auto">
@@ -32,7 +34,7 @@
           </div>
           
           {{ with .footer }}
-          <div class="card-footer {{ with .class }}{{ . }}{{ end }}">
+          <div class="card-footer pkic-card-footer {{ with .class }}{{ . }}{{ end }}">
             {{ .content | markdownify }}
           </div>
           {{ end }}

@@ -3,87 +3,140 @@
 {{ partial "hero.html" . }}
 
 <div class="py-5">
-    <div id="content" class="container">
-        {{ .Content }}
+  <div id="content" class="container">
+    {{ .Content }}
 
-        <!-- shuffle members  -->
-        {{ $members := slice }}
-        {{ $independentMembers := slice }}
-        {{ range hugo.Data.members }}
-            {{ if or (eq .memberType "H5") (eq .memberType "H6") (eq .memberType "H7") }}
-                {{ $independentMembers = $independentMembers | append . }}
-            {{ else }}
-                {{ $members = $members | append . }}
-            {{ end }}
-        {{ end }}
+    {{/* Build two buckets: regular members and independent members */}}
+    {{ $members := slice }}
+    {{ $independentMembers := slice }}
+    {{ range sort hugo.Data.members "name" }}
+      {{ if or (eq .memberType "H5") (eq .memberType "H6") (eq .memberType "H7") }}
+        {{ $independentMembers = $independentMembers | append . }}
+      {{ else }}
+        {{ $members = $members | append . }}
+      {{ end }}
+    {{ end }}
 
-        {{ range (shuffle $members) }}
-        <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{.name}} is a member of the PKI Consortium" class="linkArea">
-          <div class="row featurette">
-            <div class="col-lg-9 order-lg-2">
-              <h2 class="featurette-heading">{{.name}}</h2>
-              <h3 class="text-muted">{{.slogan}}</h3>
-              <p class="lead">{{.description}}</p>
-              <div class="text-end">{{ partial "social.html" .social }}</div>
-            </div>
-            <div class="col-lg-3 order-lg-1 text-center">
-              {{ $title := (printf "%s is a member of the %s" .name $.Site.Params.name ) }}
-              {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
-              {{ with $img}}
-              <img height="100" style="height:auto; max-width: 80%; max-height: 200px;" class="m-4" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
-              {{ end }}
-            </div>
-          </div>
-        </a>
-        <hr class="featurette-divider">
-        {{ end }}
-
-        <!-- Independent Members Section -->
-        {{ if gt (len $independentMembers) 0 }}
-        <div class="independent-members-section mt-5">
-            <h1>Independent Members</h1>
-            {{ range (shuffle $independentMembers) }}
-            {{ $memberPage := $.Site.GetPage (printf "/members/%s" .id) }}
-            {{ if or $memberPage .website }}
-            <a {{ with $memberPage }} href="{{ .Permalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{.name}} is a member of the PKI Consortium" class="linkArea">
-              <div class="row featurette">
-                <div class="col-lg-9 order-lg-2">
-                  <h2 class="featurette-heading">{{.name}}</h2>
-                  <h3 class="text-muted">{{.slogan}}</h3>
-                  <p class="lead">{{.description}}</p>
-                  <div class="text-end">{{ partial "social.html" .social }}</div>
-                </div>
-                <div class="col-lg-3 order-lg-1 text-center">
-                  {{ $title := (printf "%s is a member of the %s" .name $.Site.Params.name ) }}
-                  {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
-                  {{ with $img}}
-                  <img height="100" style="height:auto; max-width: 80%; max-height: 200px;" class="m-4" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
-                  {{ end }}
-                </div>
-              </div>
-            </a>
-            {{ else }}
-              <div class="row featurette">
-                <div class="col-lg-9 order-lg-2">
-                  <h2 class="featurette-heading">{{.name}}</h2>
-                  <h3 class="text-muted">{{.slogan}}</h3>
-                  <p class="lead">{{.description}}</p>
-                  <div class="text-end">{{ partial "social.html" .social }}</div>
-                </div>
-                <div class="col-lg-3 order-lg-1 text-center">
-                  {{ $title := (printf "%s is a member of the %s" .name $.Site.Params.name ) }}
-                  {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
-                  {{ with $img}}
-                  <img height="100" style="height:auto; max-width: 80%; max-height: 200px;" class="m-4" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
-                  {{ end }}
-                </div>
-              </div>
-            {{ end }}
-            <hr class="featurette-divider">
-            {{ end }}
+    {{/* Search + A-Z toolbar */}}
+    <div class="members-toolbar mb-3">
+      <div class="members-search">
+        <div class="input-group">
+          <span class="input-group-text bg-white border-end-0 text-muted">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.868-3.834zm-5.242 1.406a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/></svg>
+          </span>
+          <input type="search" id="memberSearch" class="form-control border-start-0" placeholder="Filter {{ add (len $members) (len $independentMembers) }} members…" aria-label="Filter members">
         </div>
-        {{ end }}
-
+      </div>
     </div>
+
+    {{/* A–Z Quick navigation */}}
+    <nav class="members-az-nav mb-4" aria-label="Alphabetical filter">
+      <button class="az-btn active" data-letter="all">All</button>
+      {{ range (seq 48 57) }}<button class="az-btn" data-letter="{{ printf "%c" . }}">{{ printf "%c" . }}</button>{{ end }}
+      {{ range (seq 65 90) }}<button class="az-btn" data-letter="{{ printf "%c" . }}">{{ printf "%c" . }}</button>{{ end }}
+    </nav>
+
+    {{/* Tabs */}}
+    <ul class="nav nav-pills members-nav-pills mb-4" id="membersTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="members-tab" data-bs-toggle="pill" data-bs-target="#members-panel" type="button" role="tab" aria-controls="members-panel" aria-selected="true">
+          Members
+          <span class="badge rounded-pill ms-2">{{ len $members }}</span>
+        </button>
+      </li>
+      {{ if gt (len $independentMembers) 0 }}
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="independent-tab" data-bs-toggle="pill" data-bs-target="#independent-panel" type="button" role="tab" aria-controls="independent-panel" aria-selected="false">
+          Independent Members
+          <span class="badge rounded-pill ms-2">{{ len $independentMembers }}</span>
+        </button>
+      </li>
+      {{ end }}
+    </ul>
+
+    {{/* No-results message */}}
+    <p id="member-no-results" class="text-muted fst-italic d-none">No members found matching your search.</p>
+
+    {{/* Tab content */}}
+    <div class="tab-content" id="membersTabContent">
+      <div class="tab-pane fade show active" id="members-panel" role="tabpanel" aria-labelledby="members-tab">
+        <div class="members-grid">{{- range $members -}}{{- partial "member-card.html" (dict "member" . "site" $.Site "showDescription" true "showWorkingGroups" true "showSocialHover" true) -}}{{- end -}}</div>
+      </div>
+      {{ if gt (len $independentMembers) 0 }}
+      <div class="tab-pane fade" id="independent-panel" role="tabpanel" aria-labelledby="independent-tab">
+        <div class="members-grid">{{- range $independentMembers -}}{{- partial "member-card.html" (dict "member" . "site" $.Site "showDescription" true "showWorkingGroups" true "showSocialHover" true) -}}{{- end -}}</div>
+      </div>
+      {{ end }}
+    </div>
+
+  </div>
 </div>
+
+<script>
+(function () {
+  var input        = document.getElementById('memberSearch');
+  var noResult     = document.getElementById('member-no-results');
+  var azBtns       = Array.from(document.querySelectorAll('.az-btn'));
+  var activeLetter = 'all';
+
+  function getActivePane() {
+    return document.querySelector('#membersTabContent .tab-pane.active');
+  }
+
+  function refreshAvailableLetters() {
+    var pane = getActivePane();
+    if (!pane) return;
+    var letters = new Set();
+    pane.querySelectorAll('.member-card-link').forEach(function (card) {
+      var first = (card.dataset.memberName || '').trim().charAt(0).toUpperCase();
+      if (first) letters.add(first);
+    });
+    azBtns.forEach(function (btn) {
+      var l = btn.dataset.letter;
+      if (l === 'all') { btn.classList.remove('az-btn--empty'); return; }
+      btn.classList.toggle('az-btn--empty', !letters.has(l));
+    });
+  }
+
+  function applyFilters() {
+    var pane = getActivePane();
+    if (!pane) return;
+    var q = input.value.trim().toLowerCase();
+    var visible = 0;
+    pane.querySelectorAll('.member-card-link').forEach(function (card) {
+      var name   = (card.dataset.memberName || '').toLowerCase();
+      var matchQ = !q || name.includes(q);
+      var matchL = activeLetter === 'all' || name.trim().charAt(0).toUpperCase() === activeLetter;
+      var show   = matchQ && matchL;
+      card.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    noResult.classList.toggle('d-none', visible > 0 || (!q && activeLetter === 'all'));
+  }
+
+  input.addEventListener('input', applyFilters);
+
+  azBtns.forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      azBtns.forEach(function (b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      activeLetter = btn.dataset.letter;
+      applyFilters();
+    });
+  });
+
+  document.querySelectorAll('[data-bs-toggle="pill"]').forEach(function (tab) {
+    tab.addEventListener('shown.bs.tab', function () {
+      activeLetter = 'all';
+      azBtns.forEach(function (b) { b.classList.remove('active'); });
+      azBtns[0].classList.add('active');
+      input.value = '';
+      refreshAvailableLetters();
+      applyFilters();
+    });
+  });
+
+  refreshAvailableLetters();
+})();
+</script>
 {{ end }}

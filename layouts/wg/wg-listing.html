@@ -1,0 +1,66 @@
+{{ define "main" }}
+{{ partial "hero.html" . }}
+
+<section class="py-5">
+  <div class="container">
+    <div class="row mb-4">
+      <div class="col-lg-8">
+        {{ .Content }}
+      </div>
+    </div>
+
+    {{/* Working groups bento grid */}}
+    <div class="bento-grid" style="grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));">
+
+      {{ range .Data.Pages }}
+        {{ $wg := . }}
+        {{ $color := .Params.color | default "green" }}
+        {{ $wgID := .Params.wgID | default (.File.BaseFileName | upper) }}
+
+        {{/* Count members */}}
+        {{ $memberCount := 0 }}
+        {{ range hugo.Data.members }}
+          {{ if in .workingGroups $wgID }}
+            {{ $memberCount = add $memberCount 1 }}
+          {{ end }}
+        {{ end }}
+
+        <a href="{{ $wg.Permalink }}" class="bento-card bento-card-link bento-{{ $color }} text-decoration-none" style="min-height: 200px;">
+          <span class="bento-icon">{{ $wg.Params.icon | default "🔐" }}</span>
+          <div class="bento-title fs-5">{{ $wg.Title }}</div>
+          <div class="bento-text">{{ $wg.Params.heroDescription | default $wg.Description | default $wg.Summary }}</div>
+          <div class="bento-footer d-flex justify-content-between align-items-center mt-3">
+            <span class="badge bg-white bg-opacity-25 text-white fw-normal">
+              {{ $memberCount }} member{{ if ne $memberCount 1 }}s{{ end }}
+            </span>
+            <span class="fw-bold">Learn more →</span>
+          </div>
+        </a>
+
+      {{ end }}
+
+      {{/* "Propose a new WG" card */}}
+      <a href="/discussions/" class="bento-card bento-card-link text-decoration-none" style="min-height: 200px; border: 2px dashed #ccc; background: transparent; color: #666;">
+        <span class="bento-icon" style="color:#aaa;">💡</span>
+        <div class="bento-title" style="color:#444;">Propose a New Working Group</div>
+        <div class="bento-text" style="color:#666;">
+          Have an idea for a new area of collaboration? Start a discussion with the community.
+        </div>
+        <div class="bento-footer fw-bold" style="color:#444;">Start a discussion →</div>
+      </a>
+
+    </div>
+  </div>
+</section>
+
+{{/* Sponsors strip */}}
+<section class="py-4 bg-light">
+  <div class="container text-center">
+    <small class="text-muted">We thank our <a href="/sponsors/">sponsors</a> for their ongoing support of the PKI Consortium</small>
+    {{ .Scratch.Set "height" "20" }}
+    {{ .Scratch.Set "max-width" "60" }}
+    {{ partial "sponsors.html" . }}
+  </div>
+</section>
+
+{{ end }}

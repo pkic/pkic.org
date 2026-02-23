@@ -1,3 +1,19 @@
-<div class="alert alert-{{ with .Get `type`}}{{ . }}{{ else }}success{{ end }}" role="alert">
-    {{ .Inner | markdownify }}
+{{ $type := .Get "type" | default "success" }}
+{{- $gradients := dict
+  "success" "135deg, #0a1f14, #0d3d24"
+  "info"    "135deg, #08152e, #0d2452"
+  "warning" "135deg, #1e1205, #3d2608"
+  "danger"  "135deg, #200808, #3d0d0d"
+-}}
+{{- $iconMap := dict
+  "success" "✓"
+  "info"    "ℹ"
+  "warning" "⚠"
+  "danger"  "✗"
+-}}
+{{- $grad := index $gradients $type | default (index $gradients "success") -}}
+{{- $icon := index $iconMap $type | default "✓" -}}
+<div class="pkic-alert pkic-alert-{{ $type }}" role="alert" style="background: linear-gradient({{ $grad }}); border-left: 4px solid currentColor;">
+  <span class="pkic-alert-icon">{{ $icon }}</span>
+  <div class="pkic-alert-body">{{ .Inner | markdownify }}</div>
 </div>

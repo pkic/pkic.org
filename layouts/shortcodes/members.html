@@ -1,6 +1,8 @@
 {{ .Scratch.Set "date" (.Get "date") }}
-<div class="container members {{ .Get "class"}}">
-    <div class="py-5 justify-content-center text-center">
+{{ .Scratch.Set "limit" (or (.Get "limit") "999999") }}
+
+<section class="members-overview {{ .Get "class"}}">
+    <div class="container-fluid px-2 px-md-3 py-4 text-center members">
         {{ partial "members.html" . }}
     </div>
-</div>
+</section>

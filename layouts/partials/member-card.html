@@ -1,0 +1,60 @@
+{{- $member := .member -}}
+{{- $site := .site -}}
+{{- $showDescription := .showDescription | default true -}}
+{{- $showWorkingGroups := .showWorkingGroups | default true -}}
+{{- $showSocialHover := .showSocialHover | default false -}}
+
+{{- $memberPage := $site.GetPage (printf "/members/%s" $member.id) -}}
+{{- if not $memberPage -}}
+  {{- $memberPage = $site.GetPage (printf "/members-data/%s" $member.id) -}}
+{{- end -}}
+
+{{- $href := $member.website -}}
+{{- $external := true -}}
+{{- with $memberPage -}}
+  {{- $href = .Permalink -}}
+  {{- $external = false -}}
+{{- end -}}
+
+<a class="member-card-link" href="{{ $href }}" {{ if $external }}target="_blank" rel="noopener"{{ end }} title="{{ $member.name }}" data-member-name="{{ lower $member.name }}">
+  <div class="member-card bento-card">
+    {{- $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id $member.id) -}}
+    <div class="member-card-logo-wrap">
+    {{- with $img -}}
+      <img class="member-card-logo" src="{{ .Permalink }}" alt="{{ $member.name }} logo" loading="lazy" />
+    {{- else -}}
+      {{- $words := split $member.name " " -}}
+      {{- $initials := "" -}}
+      {{- range $i, $w := first 3 $words -}}
+        {{- $clean := replaceRE "[^a-zA-Z]" "" $w -}}
+        {{- if $clean -}}{{- $initials = printf "%s%s" $initials (strings.ToUpper (substr $clean 0 1)) -}}{{- end -}}
+      {{- end -}}
+      {{- $colorIdx := mod (len $member.name) 6 -}}
+      <div class="member-card-initials initial-color-{{ $colorIdx }}">{{ $initials }}</div>
+    {{- end -}}
+    </div>
+
+    <div class="member-card-name">{{ $member.name }}</div>
+    {{- if $showDescription -}}
+      {{- with $member.slogan -}}<div class="member-card-slogan">{{ . }}</div>{{- end -}}
+      {{- with $member.description -}}<p class="member-card-description">{{ . | plainify | truncate 160 }}</p>{{- end -}}
+    {{- end -}}
+
+    {{- if $showWorkingGroups -}}
+      {{- $wg := $member.workingGroups -}}
+      {{- with $wg -}}
+      <div class="member-card-wgs">
+        {{- if eq (printf "%T" .) "[]interface {}" -}}
+          {{- range . -}}<span class="wg-tag">{{ . }}</span>{{- end -}}
+        {{- else -}}
+          <span class="wg-tag">{{ . }}</span>
+        {{- end -}}
+      </div>
+      {{- end -}}
+    {{- end -}}
+
+    {{- if and $showSocialHover $member.social -}}
+      <div class="member-card-social">{{ partial "social.html" $member.social }}</div>
+    {{- end -}}
+  </div>
+</a>

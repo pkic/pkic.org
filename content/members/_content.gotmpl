@@ -1,0 +1,17 @@
+{{- range $memberID, $member := site.Data.members -}}
+  {{- $filePath := printf "content/members/%s.md" $memberID -}}
+  {{- $bundlePath := printf "content/members/%s/index.md" $memberID -}}
+  {{- if not (or (fileExists $filePath) (fileExists $bundlePath)) -}}
+    {{- $content := dict "mediaType" "text/markdown" "value" ($member.description | default "") -}}
+    {{- $page := dict
+      "path" $memberID
+      "title" ($member.name | default $memberID)
+      "params" (dict
+        "id" $memberID
+        "generatedFromData" true
+      )
+      "content" $content
+    -}}
+    {{- $.AddPage $page -}}
+  {{- end -}}
+{{- end -}}
