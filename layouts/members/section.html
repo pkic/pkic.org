@@ -9,7 +9,7 @@
         <!-- shuffle members  -->
         {{ $members := slice }}
         {{ $independentMembers := slice }}
-        {{ range $.Site.Data.members }}
+        {{ range hugo.Data.members }}
             {{ if or (eq .memberType "H5") (eq .memberType "H6") (eq .memberType "H7") }}
                 {{ $independentMembers = $independentMembers | append . }}
             {{ else }}

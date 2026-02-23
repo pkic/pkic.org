@@ -1,5 +1,5 @@
 {{- $members := slice -}}
-{{- range .Site.Data.members -}}
+{{- range hugo.Data.members -}}
   {{- if .name -}}
     {{- $members = $members | append (dict "title" .name "id" .id) -}}
   {{- end -}}

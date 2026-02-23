@@ -1,4 +1,4 @@
-{{- $items := partial "rss.html" . -}}
+{{- $items := partialCached "rss.html" . "global" -}}
 
 {{- $items = sort $items "pubDate" "desc" -}}
 
@@ -8,9 +8,9 @@
   <title>News by the members of the PKI Consortium</title>
   <link>{{ .Site.BaseURL}}</link>
   <description>Recent news from the members of the PKI Consortium</description>{{ with .Site.LanguageCode }}
-  <language>{{.}}</language>{{end}}{{ with .Site.Author.email }}
-  <managingEditor>{{.}}{{ with $.Site.Author.name }} ({{.}}){{end}}</managingEditor>{{end}}{{ with .Site.Author.email }}
-  <webMaster>{{.}}{{ with $.Site.Author.name }} ({{.}}){{end}}</webMaster>{{end}}{{ with .Site.Copyright }}
+  <language>{{.}}</language>{{end}}{{ with .Site.Params.email }}
+  <managingEditor>{{.}}{{ with $.Site.Params.shortName }} ({{.}}){{end}}</managingEditor>{{end}}{{ with .Site.Params.email }}
+  <webMaster>{{.}}{{ with $.Site.Params.shortName }} ({{.}}){{end}}</webMaster>{{end}}{{ with .Site.Copyright }}
   <copyright>Members of {{.}}</copyright>{{end}}{{ if not .Date.IsZero }}
   {{- with index $items 0 -}}<lastBuildDate>{{ .pubDate.Format "Mon, 02 Jan 2006 15:04:05 -0700" | safeHTML }}</lastBuildDate>{{ end }}
   {{ end }}

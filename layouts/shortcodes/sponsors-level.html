@@ -11,7 +11,7 @@
 {{ $sponsors := slice }}
 
 <!-- member sponsors -->
-{{ range $.Site.Data.members }}
+{{ range hugo.Data.members }}
     {{ if or 
         (and (eq $level "all") (or 
             (gt .sponsor.level "")
@@ -26,7 +26,7 @@
 {{ end }}
 
 <!-- non-member sponsors -->
-{{ range $.Site.Data.sponsors }}
+{{ range hugo.Data.sponsors }}
     {{ if or 
         (and (eq $level "all") (or 
             (gt .sponsor.level "")
@@ -43,7 +43,7 @@
 <div class="sponsors container text-center">
     {{ if gt (len $sponsors) 0 }}
         {{ $levels := slice }}
-        {{ range $name, $weight := .Site.Data.sponsorlevels }}
+        {{ range $name, $weight := hugo.Data.sponsorlevels }}
             {{ $levels = $levels | append (dict "name" $name "weight" $weight) }}
         {{ end }}
         {{ $sorted := sort $levels "weight" "desc" }}

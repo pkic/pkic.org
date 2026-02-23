@@ -1,46 +1,24 @@
 {{- with . -}}
   {{- $feedURL := . -}}
   {{- $t := debug.Timer $feedURL -}}
-  {{- $remote := try (resources.GetRemote $feedURL) -}}
-  {{- if $remote.Err -}}
-    {{- warnf "Error fetching remote feed %q: %s" $feedURL $remote.Err -}}
-  {{- else -}}
-    {{- $content := $remote.Value -}}
-    {{- if not (or (strings.HasSuffix $content.MediaType "rss+xml") (strings.HasSuffix $content.MediaType "atom+xml")) -}}
-      {{- warnf "Invalid media type for feed %q: %s" $feedURL $content.MediaType -}}
-    {{- else -}}
-      {{- $unmarshaled := try (transform.Unmarshal $content.Content) -}}
-      {{- if $unmarshaled.Err -}}
-        {{- warnf "Error unmarshaling feed %q: %s" $feedURL $unmarshaled.Err -}}
-      {{- else -}}
-        {{- with $unmarshaled.Value.channel.item -}}
-          {{- if eq (printf "%T" .) "[]interface {}" -}}
-            {{- range first 3 . -}}
-              <div class="card mb-3">
-                <div class="row g-0">
-                  {{- with .image -}}
-                  <div class="col-lg-3">
-                    <img src="{{ .url }}" title="{{ .title }}">
-                  </div>
-                  {{- end -}}
-                  <div class="col">
-                    <div class="card-body">
-                      <h5 class="card-title"><a href="{{ .link }}" target="_blank" alt="{{ .title | plainify | htmlUnescape }}">{{ .title | plainify | htmlUnescape  }}</a></h5>
-                      <p class="card-text">{{ .description | plainify | htmlUnescape | truncate 120 }}</p>
-                      <p class="card-text"><small class="text-muted">Published on {{ with .pubDate }}{{ dateFormat "Monday January 2, 2006" . }}{{ end }}</small></p>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            {{- end -}}
-          {{- else -}}
-            {{- warnf "channel.item in feed %q is not a slice, skipping items: (Type: %T, Value: %v)" $feedURL . (printf "%T" .) -}}
-          {{- end -}}
-        {{- else -}}
-          {{- warnf "channel.item not found in feed %q" $feedURL -}}
+  {{- $items := partialCached "rss-item-data.html" $feedURL $feedURL -}}
+  {{- range first 3 $items -}}
+    <div class="card mb-3">
+      <div class="row g-0">
+        {{- with .image -}}
+        <div class="col-lg-3">
+          <img src="{{ .url }}" title="{{ .title }}">
+        </div>
         {{- end -}}
-      {{- end -}}
-    {{- end -}}
+        <div class="col">
+          <div class="card-body">
+            <h5 class="card-title"><a href="{{ .link }}" target="_blank" alt="{{ .title | plainify | htmlUnescape }}">{{ .title | plainify | htmlUnescape  }}</a></h5>
+            <p class="card-text">{{ .description | plainify | htmlUnescape | truncate 120 }}</p>
+            <p class="card-text"><small class="text-muted">Published on {{ with .pubDate }}{{ dateFormat "Monday January 2, 2006" . }}{{ end }}</small></p>
+          </div>
+        </div>
+      </div>
+    </div>
   {{- end -}}
   {{- $t.Stop -}}
 {{- else -}}

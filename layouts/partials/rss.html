@@ -1,53 +1,14 @@
 {{- $items := slice -}}
-{{- range $.Site.Data.members -}}
+{{- $timeout := "5s" -}}
+{{- if hugo.IsServer -}}
+  {{- $timeout = "2s" -}}
+{{- end -}}
+{{- range hugo.Data.members -}}
   {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
     {{- with .blog.feed -}}
-      {{- $feedURL := urls.Parse . -}}
-      {{- $remote := try (resources.GetRemote .) -}}
-      {{- if $remote.Err -}}
-        {{- warnf "Error fetching remote feed %q: %s" . $remote.Err -}}
-      {{- else -}}
-        {{- with $remote.Value -}}
-          {{- if strings.HasSuffix .MediaType "rss+xml" -}}
-            {{- $unmarshaled := try (transform.Unmarshal .Content) -}}
-            {{- if $unmarshaled.Err -}}
-              {{- warnf "Error unmarshaling feed %q: %s" . $unmarshaled.Err -}}
-            {{- else -}}
-              {{- with $unmarshaled.Value.channel.item -}}
-                {{- if eq (printf "%T" .) "[]interface {}" -}}
-                  {{- range $i, $item := . -}}
-                    {{- $newItem := dict -}}
-                    {{- range $k, $v := $item -}}
-                      {{- if eq $k "pubDate" -}}
-                        {{- $timeValue := try (time $v) -}}
-                        {{- if $timeValue.Err -}}
-                          {{- warnf "Error parsing pubDate %q in feed %q: %s" $v . $timeValue.Err -}}
-                          {{- $newItem = merge $newItem (dict $k nil) -}}
-                        {{- else -}}
-                          {{- $newItem = merge $newItem (dict $k $timeValue.Value) -}}
-                        {{- end -}}
-                      {{- else if eq $k "link" -}}
-                        {{- if hasPrefix $v "/" -}}
-                          {{- $v = printf "https://%s%s" $feedURL.Host $v -}}
-                        {{- end -}}
-                        {{- $newItem = merge $newItem (dict $k $v) -}}
-                      {{- else -}}
-                        {{- $newItem = merge $newItem (dict $k $v) -}}
-                      {{- end -}}
-                    {{- end -}}
-                    {{- $items = $items | append $newItem -}}
-                  {{- end -}}
-                {{- else -}}
-                  {{- warnf "channel.item in feed %q is not a slice, skipping items: (Type: %T, Value: %v)" . . (printf "%T" .) -}}
-                {{- end -}}
-              {{- else -}}
-                {{- warnf "No items found in feed %q" . -}}
-              {{- end -}}
-            {{- end -}}
-          {{- else -}}
-            {{- warnf "Media type is not RSS for feed %q: %s" . (cond (ne $remote.Value nil) $remote.Value.MediaType "") -}}
-          {{- end -}}
-        {{- end -}}
+      {{- $feedItems := partialCached "rss-item-data.html" . . -}}
+      {{- range $feedItems -}}
+        {{- $items = $items | append . -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}

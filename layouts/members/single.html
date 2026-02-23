@@ -1,5 +1,5 @@
 {{ define "main" }}
-{{$member := index site.Data.members (.Param "id")}}
+{{$member := index hugo.Data.members (.Param "id")}}
 {{ if not $member }}
   {{ errorf "Member: %q not found" (.Param "id") }}
 {{ end }}

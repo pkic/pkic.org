@@ -11,7 +11,7 @@
 {{ $sponsors := slice }}
 
 <!-- member sponsors -->
-{{ range $.Site.Data.members }}
+{{ range hugo.Data.members }}
     {{ if or 
         (and (eq $level "all") (or 
             (gt .sponsor.level "")
@@ -27,7 +27,7 @@
 {{ end }}
 
 <!-- non-member sponsors -->
-{{ range $.Site.Data.sponsors }}
+{{ range hugo.Data.sponsors }}
     {{ if or 
         (and (eq $level "all") (or 
             (gt .sponsor.level "")
@@ -55,7 +55,7 @@
                 {{ $level = .level }}
                 {{ $context = $sponsoring }}
             {{ end }}
-            {{ $levelseq := (index $.Site.Data.sponsorlevels $level) }}
+            {{ $levelseq := (index hugo.Data.sponsorlevels $level) }}
             {{ if ne $levelseq $i }}
                 {{ continue }}
             {{ end }}

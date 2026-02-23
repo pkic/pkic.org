@@ -5,7 +5,7 @@
 
 <!-- shuffle members  -->
 {{ $members := slice }}
-{{ range $.Site.Data.members }}
+{{ range hugo.Data.members }}
     {{ if $date.After (time .memberSince)  }}
     {{ $members = $members | append . }}
     {{ end }}
