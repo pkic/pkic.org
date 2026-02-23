@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter:
+  x:
   facebook:
   instagram:
   linkedin: https://www.linkedin.com/company/pqcee/
@@ -49,6 +49,6 @@ representatives:
   - name: Teik Guan Tan
     role: CEO
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/teikguan
     description: Teik Guan enjoys working in the niche area of cryptographic security design and integration, having implemented numerous successful projects and products such as CAs, smartcards (Javacard), HSMs, Authentication Servers, for banks, government agencies and enterprises. He holds a PhD in Cybersecurity from SUTD, and BSc, MSc from NUS.

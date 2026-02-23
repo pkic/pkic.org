@@ -29,7 +29,7 @@ data:
       title: Chair PKI Consortium and Director of Technology Compliance at Entrust
       bio: Paul van Brouwershaven is Director of Technology Compliance for Entrust’s certification authority, Chair of the PKI Consortium and former Vice Chair of the CA/Browser Forum.
       social:
-        twitter: https://twitter.com/vanbroup
+        x: https://x.com/vanbroup
         linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
         github: https://github.com/vanbroup
         ietf: https://datatracker.ietf.org/person/paul.vanbrouwershaven@digitorus.com
@@ -39,7 +39,7 @@ data:
       bio: |
         Albert de Ruiter operates the Policy Authority at Logius, the digital government service organization of the Netherlands. He is also a member of the QvC (Quantum Secure Cryptography) working group of the Dutch government, a board member of HAPKIDO, and a member of the PKI Consortium. Albert is known for introducing the idea of a Post-Quantum Cryptography Conference to the PKI Consortium in 2022.
       social:
-        twitter: 
+        x: 
         linkedin: 
   
     - name: Bill Newhouse

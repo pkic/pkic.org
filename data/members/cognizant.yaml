@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://x.com/cognizant
+  x: https://x.com/cognizant
   facebook: https://www.facebook.com/Cognizant
   instagram: https://www.instagram.com/cognizant/#
   linkedin: https://www.linkedin.com/company/cognizant/ 
@@ -52,6 +52,6 @@ representatives:
   - name: Rasool Kareem Irfan M
     role: Security architect
     social:
-      twitter: 
+      x: 
       linkedin: https://linkedin.com/in/rasoolirfan
     description: Rasool Kareem Irfan is the Security architect at Cognizant Technology solutions and represents the organization at the PKI Consortium.

@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -49,6 +49,6 @@ representatives:
   - name: James Ryan
     role: CISO
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: James is the CISO at Litmus Logic and represents the organization at the PKI Consortium.

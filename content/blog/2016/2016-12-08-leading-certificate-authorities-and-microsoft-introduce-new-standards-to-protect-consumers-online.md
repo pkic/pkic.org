@@ -62,7 +62,7 @@ Microsoft will require CAs that issue code signing certificates for Windows plat
 
 ## Connect with CASC
 
-  * [Follow CASC on Twitter][4]
+  * [Follow CASC on X][4]
   * [Join the CASC LinkedIn Group][5]
   * [View Presentations on SlideShare][6]
   * [Subscribe to CASC News RSS Feed][7]

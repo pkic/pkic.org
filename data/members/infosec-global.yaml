@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/infosecglobal
+  x: https://x.com/infosecglobal
   facebook:
   instagram: 
   linkedin: https://www.linkedin.com/company/infosec-global/
@@ -49,6 +49,6 @@ representatives:
   - name: Ian Curry
     role: Chief Business Officer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/ian-curry-67084a162/
     description: Ian is the Chief Business Officer at InfoSec Global and represents the organization at the PKI Consortium.

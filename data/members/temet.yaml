@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -51,6 +51,6 @@ representatives:
   - name: Andre Clerc
     role: Managing Security Consultant
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/andr%C3%A9-clerc-561b2a1a0/
     description: Andre is the Managing Security Consultant at TEMET AG and represents the organization at the PKI Consortium.

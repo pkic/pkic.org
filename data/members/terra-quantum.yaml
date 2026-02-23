@@ -31,7 +31,7 @@ careers:
   language: en_US
 
 social:
-  twitter: https://x.com/terraquantum_ag
+  x: https://x.com/terraquantum_ag
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/terra-quantum-ag/
@@ -41,7 +41,7 @@ representatives:
   - name: Florian Neukart
     role: Chief Product Officer
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/florian-neukart-3a729591/
     description:
       Prof. Dr. Florian Neukart is the Chief Product Officer at Terra Quantum and serves on several advisory boards, including the Board of Trustees of the International Foundation of Artificial Intelligence and Quantum Computing, the Quantum Strategy Institute, KI Park, and Quantum.Tech. He also co-authored Germany’s National Roadmap for Quantum Computing.

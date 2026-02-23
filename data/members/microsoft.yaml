@@ -41,7 +41,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/Microsoft
+  x: https://x.com/Microsoft
   facebook: https://www.facebook.com/Microsoft
   instagram: https://www.instagram.com/microsoft
   linkedin: https://www.linkedin.com/company/microsoft
@@ -55,6 +55,6 @@ representatives:
   - name: Daniel Cervera
     role: Senior Security Program Manager
     social:
-      twitter: https://twitter.com/cervera
+      x: https://x.com/cervera
       linkedin: https://www.linkedin.com/in/cryptopki/
     description: Daniel Cervera is the co-chair of Microsoft's PKI Policy Working Group, responsible for maintaining the company's internal PKI security standards. He collaborates with product teams across a range of offerings, from Azure to Xbox, to drive adherence to these standards.

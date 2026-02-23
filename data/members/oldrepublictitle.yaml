@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: https://www.facebook.com/oldrepublictitle/
   instagram: https://www.instagram.com/oldrepublictitle
   linkedin: https://www.linkedin.com/company/oldrepublictitle
@@ -52,6 +52,6 @@ representatives:
   - name: Kelley Perez
     role: Security Engineer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/kelley-p-5718aa161/
     description: Kelley is the Security Engineer at Old Republic Title Company and represents the organization at the PKI Consortium.

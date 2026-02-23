@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter:
+  x:
   facebook:
   instagram:
   linkedin: https://www.linkedin.com/company/acubed-it
@@ -51,7 +51,7 @@ representatives:
   - name: Amit Gupta
     role: CEO & Founder, acubed.it
     social:
-      twitter: https://twitter.com/
+      x: https://x.com/
       linkedin: https://www.linkedin.com/in/amit-gupta-1131b96/
     description: As the Founder and CEO of acubed.it, Amit leads a dynamic team of software developers and architects who are passionate about crafting innovative and secure cross-security domain solutions for the UK government and our valued clients.
 

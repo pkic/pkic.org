@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://www.twitter.com/unsungtodd
+  x: https://x.com/unsungtodd
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/unsung-limited/
@@ -51,6 +51,6 @@ representatives:
   - name: Todd Beldham
     role: Founder & CTO
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Todd is the Founder & CTO at Unsung Limited and represents the organization at the PKI Consortium.

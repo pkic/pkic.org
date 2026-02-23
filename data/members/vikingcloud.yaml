@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/vikingcloudcom
+  x: https://x.com/vikingcloudcom
   facebook: https://www.facebook.com/vikingcloudcom
   instagram: https://www.instagram.com/vikingcloud/
   linkedin: https://www.linkedin.com/company/vikingcloud/
@@ -47,6 +47,6 @@ representatives:
   - name: Andrea Holland
     role: Product Manager
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/andrea-h-58b72931/
     description: Andrea is a Product Manager at VikingCloud and represents the organization at the PKI Consortium.

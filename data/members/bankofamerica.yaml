@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -51,6 +51,6 @@ representatives:
   - name: Chris Davis
     role: VP PKI Governance
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/christopher-davis-2a413551/
     description: Chris is the VP PKI Governance at Bank of America and represents the organization at the PKI Consortium.

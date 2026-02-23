@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -49,6 +49,6 @@ representatives:
   - name: Hubbert Smith
     role: CEO, Founder
     social:
-      twitter: 
+      x: 
       linkedin: https://linkedin.com/in/hubbertsmith
     description: Hubbert is the CEO, Founder at i4ops and represents the organization at the PKI Consortium.

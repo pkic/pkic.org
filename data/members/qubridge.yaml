@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter:
+  x:
   facebook:
   instagram:
   linkedin: https://www.linkedin.com/company/quantum-bridge-technologies/
@@ -50,7 +50,7 @@ representatives:
   - name: Melchior Aelmans
     role: Chief Growth Officer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/melchioraelmans/
     description: Melchior Aelmans is the Chief Growth Officer at Quantum Bridge, leading strategic initiatives to drive the adoption of quantum-safe networking solutions. 
       

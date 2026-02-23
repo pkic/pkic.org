@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: https://www.facebook.com/dohatec
   instagram: 
   linkedin: https://www.linkedin.com/company/dohatec-new-media/
@@ -51,6 +51,6 @@ representatives:
   - name: Nuzhat Atiqua Nafis
     role: Security Architect
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/nuzhat-nafis-42970656/
     description: Nuzhat is the Security Architect and operational head PKI at Dohatec New Media and represents the organization at the PKI Consortium.

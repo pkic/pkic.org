@@ -33,6 +33,6 @@ So, what needs to be done?
 
   * **Browsers** can to continue to check the validity of the certificates and present their trust dialogues.
   * **Mobile operating system vendors** need to check the quality of their applications and only accept those that authenticate certificates properly.
-  * **Application vendors** should take the time to check the validity of the certificates. Also implement [public key pinning][1]. Some of the most popular applications (e.g., Twitter, Facebook and Google) use public key pinning, which rejects connections to site with bogus certificates.
+  * **Application vendors** should take the time to check the validity of the certificates. Also implement [public key pinning][1]. Some of the most popular applications (e.g., X, Facebook and Google) use public key pinning, which rejects connections to site with bogus certificates.
 
  [1]: http://www.entrust.com/public-key-pinning-2/

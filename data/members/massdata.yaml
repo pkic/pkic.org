@@ -40,7 +40,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -54,6 +54,6 @@ representatives:
   - name: Saul Garcia
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/saul-garcia
     description: Saul is the CEO at Mass Data Defense Corporation and represents the organization at the PKI Consortium.

@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/common-crypto-authority/
@@ -52,6 +52,6 @@ representatives:
   - name: Troy Anderson
     role: Technical Architect
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/troyjanderson/
     description: Troy is the Technical Architect at Common Crypto Authority and represents the organization at the PKI Consortium.

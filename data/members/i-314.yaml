@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -49,6 +49,6 @@ representatives:
   - name: Juan Brana
     role: CISO
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Juan is the CISO at I-314 S.A. and represents the organization at the PKI Consortium.

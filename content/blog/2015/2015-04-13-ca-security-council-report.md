@@ -71,7 +71,7 @@ For this report, the CASC commissioned Survata Consumer Research to survey U.S. 
 
 ## Connect with CASC
 
-  * [Follow CASC on Twitter][3]
+  * [Follow CASC on X][3]
   * [Join the CASC LinkedIn Group][4]
   * [View Presentations on SlideShare][5]
   * [Subscribe to CASC News RSS Feed][6]
@@ -91,7 +91,7 @@ Connect Marketing
 
 
 [1]: http://bit.ly/1I0wC0S
-[2]: http://twitter.com/intent/tweet?text=Study+says+consumers+confused+about+security+but+trust+padlock+%26+green+bar+when+shopping+online:+bit.ly/1I0wC0S
+[2]: https://x.com/intent/tweet?text=Study+says+consumers+confused+about+security+but+trust+padlock+%26+green+bar+when+shopping+online:+bit.ly/1I0wC0S
 [3]: http://bit.ly/X3x9XB
 [4]: http://linkd.in/VSTWdR
 [5]: http://slidesha.re/Ye2dFf

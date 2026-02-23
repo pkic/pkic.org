@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -51,6 +51,6 @@ representatives:
   - name: Kevn Ha
     role: VP, Encryption Engineering Lead
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/kevinha
     description: Kevn is the VP, Encryption Engineering Lead at M&T Bank and represents the organization at the PKI Consortium.

@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: http://www.linkedin.com/company/cleverbase
@@ -48,6 +48,6 @@ representatives:
   - name: Niels Schoumans
     role: Security Officer
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/niels-schoumans-50047234/
     description: Niels Schoumans is the Security Officer at Cleverbase and represents the organization at the PKI Consortium.

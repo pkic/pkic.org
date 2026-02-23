@@ -40,7 +40,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -54,6 +54,6 @@ representatives:
   - name: Marc Gray
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Marc is the CEO at Sonic AI and represents the organization at the PKI Consortium.

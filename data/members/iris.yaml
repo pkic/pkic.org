@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://x.com/IRISCorpBerhad
+  x: https://x.com/IRISCorpBerhad
   facebook: https://www.facebook.com/iriscorporationbhd
   instagram: https://www.instagram.com/iriscorpberhad
   linkedin: https://www.linkedin.com/company/iriscorporationberhad/
@@ -51,6 +51,6 @@ representatives:
   - name: Jia Giin Tan
     role: General Manager, Software Solutions
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/jia-giin-tan-282ab1131/
     description: Jia Giin is the General Manager, Software Solutions at IRIS Corporation Berhad and represents the organization at the PKI Consortium.

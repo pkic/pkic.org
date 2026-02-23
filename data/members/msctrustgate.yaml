@@ -39,7 +39,7 @@ careers:
 
 # Social media
 social:
-  twitter:
+  x:
   facebook: https://www.facebook.com/msctrustgate
   instagram: https://www.instagram.com/msctrustgate/
   linkedin: https://www.linkedin.com/company/msctrustgate/
@@ -53,7 +53,7 @@ representatives:
   - name: Hazhar Ismail
     role: Executive Director (Strategy and Technology)
     social:
-      twitter: https://twitter.com/hazharismail
+      x: https://x.com/hazharismail
       linkedin: https://www.linkedin.com/in/hazhar-ismail/
     description: Hazhar Ismail has been with MSC Trustgate since 2001, serving as one of the pioneering members of the team. He began his journey as a System Analyst, developing and deploying PKI and digital signature solutions.
 
@@ -64,7 +64,7 @@ representatives:
   - name: Zurina Zolkaffly 
     role: Senior Manager, CA Operation
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/zz07/
     description: Zurina Zolkaffly has a background in IT Security Governance, risk management, and compliance. With 20 years in the IT security industry, she currently serves as the Governance, Risk & Compliance Manager, and ISMS Lead Auditor at MSC Trustgate.com Sdn. Bhd.
       
@@ -73,7 +73,7 @@ representatives:
   - name: Khairil Nizam Abdul Malek
     role: Senior Manager, ICT Operation
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Khairil Nizam is an experienced Technical Consultant with a proven track record of building lasting client relationships and delivering innovative solutions. Highly skilled in server hardware and component configuration, as well as system failure analysis. 
       

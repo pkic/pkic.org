@@ -39,7 +39,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -53,6 +53,6 @@ representatives:
   - name: Alexander Dr. Loew
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Alexander is the CEO at Data-Warehouse GmbH and represents the organization at the PKI Consortium.

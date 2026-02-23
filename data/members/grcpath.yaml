@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: https://www.facebook.com/grcpathinfosec
   instagram: 
   linkedin: https://www.linkedin.com/company/grcpath
@@ -49,6 +49,6 @@ representatives:
   - name: Ali Alshekhli
     role: Principal
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/amh80/
     description: Ali is the Principal at GRC PATH and represents the organization at the PKI Consortium.

@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: http://www.linkedin.com/company/izenpe
@@ -47,7 +47,7 @@ representatives:
   - name: Toni Sáez
     role: Technical Department Manager (CTO)
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/toni-saez-gonzalez-25355121/
     description:
       Toni Saez is the Izenpe Technical Manager and represents Izenpe at the PKI Consortium.
@@ -55,7 +55,7 @@ representatives:
   - name: Oscar García
     role: Chief Security Officer (CISO)
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/oscar-garc%C3%ADa-42204416/
     description:
       Oscar Garcia is responsible for the Information Security of Izenpe, as for the compliance of industry and standard requirements. He represents Izenpe at the PKI Consortium and at the CABForum.

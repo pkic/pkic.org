@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -51,6 +51,6 @@ representatives:
   - name: Jake Maynard
     role: Director of Engineering
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/maynardjacob/
     description: Jake is the Director of Engineering at SafeLogic and represents the organization at the PKI Consortium.

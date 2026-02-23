@@ -40,7 +40,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/Entrust_Corp
+  x: https://x.com/Entrust_Corp
   facebook: https://www.facebook.com/DiscoverEntrust
   instagram: https://www.instagram.com/discoverentrust/
   linkedin: https://www.linkedin.com/company/Entrust
@@ -54,7 +54,7 @@ representatives:
   - name: Bruce Morton
     role: Director, Certificate Technology & Standards
     social:
-      twitter: https://twitter.com/brucecmorton
+      x: https://x.com/brucecmorton
       linkedin: https://www.linkedin.com/in/brucecmorton/
     description:
       Bruce Morton has a background in project management and systems integration. He currently serves as the CA operations manager at Entrust Certificate Services (ECS), where he promotes security, governance and risk management.
@@ -68,7 +68,7 @@ representatives:
   - name: Paul van Brouwershaven*
     role: Director, Technology Compliance
     social:
-      twitter: https://twitter.com/vanbroup
+      x: https://x.com/vanbroup
       linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
     description: 
       Paul van Brouwershaven is Director of Technology Compliance for Entrust’s certification authority, Chair of the PKI Consortium and Vice Chair of the CA/Browser Forum.
@@ -83,7 +83,7 @@ representatives:
     hidden: true
     till: 2024-06-29
     social:
-      twitter:
+      x:
       linkedin:
     description:
       Chris Bailey is Vice President of Strategy and Business Development at Entrust, a global leader in the identity-based digital information security market for nearly two decades.

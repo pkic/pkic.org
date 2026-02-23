@@ -40,7 +40,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://x.com/appviewx
+  x: https://x.com/appviewx
   facebook: https://www.facebook.com/AppViewX.Official/
   instagram: https://www.instagram.com/appviewx.official/
   linkedin: https://www.linkedin.com/company/appviewx/mycompany/verification/
@@ -54,13 +54,13 @@ representatives:
   - name: Muralidharan Palanisamy
     role: Chief Solutions Officer 
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/muralidharanpalanisamy/
     description: Murali is a veteran enterprise technology influencer, overseeing Innovation, Strategy and Product Direction to enable Customers in achieving value using AppViewX platform.
   - name: Harshana Moorthy 
     role: Lead Principle Solutions architect
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/harshana-moorthy-savvy101/
     description: A seasoned cybersecurity pre-sales leader with deep expertise in PKI implementation, and secure identity solutions.  Drives strategic growth through understanding customer's compliance requirements and delivering Machine Identity Solutions 
   - name: Ganesh Gopalan

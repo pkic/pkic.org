@@ -39,7 +39,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://x.com/navyfederal
+  x: https://x.com/navyfederal
   facebook: https://www.facebook.com/NavyFederal
   instagram: https://instagram.com/navyfederal
   linkedin: https://www.linkedin.com/company/navy-federal-credit-union
@@ -53,7 +53,7 @@ representatives:
   - name: Kyle Russell
     role: PKI Engineer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/kyle-russell-777b281b2/
     description: Kyle is a PKI Engineer at Navy Federal Credit Union and represents the organization at the PKI Consortium.
     

@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/globalsign
+  x: https://x.com/globalsign
   facebook: https://www.facebook.com/GlobalSignSSL
   instagram: https://www.instagram.com/globalsign/
   linkedin: https://www.linkedin.com/company/globalsign/
@@ -52,6 +52,6 @@ representatives:
   - name: Mohit Kumar
     role: VP, Product Management
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/mohit-kumar-76070727
     description: Mohit is the VP, Product Management at GlobalSign and represents the organization at the PKI Consortium.

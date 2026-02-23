@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: http://linkedin.com/company/qubitowl
@@ -51,6 +51,6 @@ representatives:
   - name: Bret Laughlin
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/bret-laughlin-5a12168
     description: Bret is the CEO at QubitOwl and represents the organization at the PKI Consortium.

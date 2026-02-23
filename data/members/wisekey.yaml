@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -51,6 +51,6 @@ representatives:
   - name: Pedro Fuentes
     role: Trust Services Manager
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/fuentespedro/
     description: Pedro is the Trust Services Manager at WISeKey SA and represents the organization at the PKI Consortium.

@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -50,7 +50,7 @@ representatives:
   - name: Thomas Clark
     role: Solution Architect
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/thomas-clark-13887a202/
     description: Thomas is the Solution Architect at X Technologies, Inc. and represents the organization at the PKI Consortium.
     hidden: true

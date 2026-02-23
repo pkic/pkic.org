@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/ITIDA?ref_src=twsrc%5Etfw
+  x: https://x.com/ITIDA?ref_src=twsrc%5Etfw
   facebook: 
   instagram: https://www.instagram.com/itidaegypt/
   linkedin: https://www.linkedin.com/company/itida
@@ -49,6 +49,6 @@ representatives:
   - name: Mahmoud Elsaeed
     role: Egypt RootCA Manager
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Mahmoud is the Egypt RootCA Manager at ITIDA and represents the organization at the PKI Consortium.

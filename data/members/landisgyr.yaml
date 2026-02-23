@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/landisgyr
+  x: https://x.com/landisgyr
   facebook: https://www.facebook.com/LandisGyr
   instagram: 
   linkedin: https://www.linkedin.com/company/6291?trk=tyah
@@ -49,6 +49,6 @@ representatives:
   - name: Mike Del Campo
     role: Global Principal Security Architect
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/mikedelcampo/
     description: Mike is the Global Principal Security Architect at Landis+Gyr, Inc. and represents the organization at the PKI Consortium.

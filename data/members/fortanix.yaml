@@ -39,7 +39,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/fortanix
+  x: https://x.com/fortanix
   facebook: https://www.facebook.com/fortanix/
   instagram: 
   linkedin: https://www.linkedin.com/company/fortanix/
@@ -53,6 +53,6 @@ representatives:
   - name: Rob Stubbs
     role: Director
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Rob is the Director at Fortanix and represents the organization at the PKI Consortium.

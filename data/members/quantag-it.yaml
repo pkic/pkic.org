@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/QuantagITSolut
+  x: https://x.com/QuantagITSolut
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/quantag-it-solutions
@@ -49,6 +49,6 @@ representatives:
   - name: Sergii Salata
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Sergii is the CEO at Quantag IT Solutions GmbH and represents the organization at the PKI Consortium.

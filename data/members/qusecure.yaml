@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -52,6 +52,6 @@ representatives:
   - name: Rebecca Krauthamer
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://linkedin.com/in/rkrauthamer
     description: Rebecca is the CEO at QuSecure and represents the organization at the PKI Consortium.

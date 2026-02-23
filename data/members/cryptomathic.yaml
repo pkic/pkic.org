@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -49,6 +49,6 @@ representatives:
   - name: Emil Hansen
     role: CTO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/davin-cooke/
     description: Emil is the CTO at Cryptomathic Inc and represents the organization at the PKI Consortium.

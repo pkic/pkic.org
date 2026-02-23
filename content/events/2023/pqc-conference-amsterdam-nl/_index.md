@@ -23,7 +23,7 @@ data:
       title: Chair PKI Consortium and Director of Technology Compliance at Entrust
       bio: Paul van Brouwershaven is Director of Technology Compliance for Entrust’s certification authority, Chair of the PKI Consortium and Vice Chair of the CA/Browser Forum.
       social:
-        twitter: https://twitter.com/vanbroup
+        x: https://x.com/vanbroup
         linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
         github: https://github.com/vanbroup
 
@@ -32,7 +32,7 @@ data:
       bio: |
         Albert de Ruiter operates the Policy Authority at Logius, the digital government service organization of the Netherlands. He is also a member of the QvC (Quantum Secure Cryptography) working group of the Dutch government, a board member of HAPKIDO, and a member of the PKI Consortium. Albert is known for introducing the idea of a Post-Quantum Cryptography Conference to the PKI Consortium in 2022.
       social:
-        twitter:
+        x:
         linkedin:
 
     - name: Bas Westerbaan
@@ -40,7 +40,7 @@ data:
       bio: |
         Bas Westerbaan is a mathematician with an interest in quantum computing and cryptography. Currently he is a research engineer at Cloudflare. Previously he worked at PQShield, University College London (UCL) and the digital security group of the Radboud University.
       social:
-        twitter: https://twitter.com/bwesterb
+        x: https://x.com/bwesterb
         linkedin: https://www.linkedin.com/in/baswesterbaan/
         github: https://github.com/bwesterb
 
@@ -53,7 +53,7 @@ data:
 
         His research focuses on computational number theory and high-performance arithmetic as used in (post-quantum) public-key cryptography. Joppe is a co-author of the post-quantum secure CRYSTALS-Kyber key encapsulation mechanism which has been selected by NIST for standardization.
       social:
-        twitter:
+        x:
         linkedin: https://www.linkedin.com/in/joppebos/
 
     - name: Anselme Tueno

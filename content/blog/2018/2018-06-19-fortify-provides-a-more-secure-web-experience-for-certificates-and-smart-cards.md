@@ -41,7 +41,7 @@ Fortify is open source, compatible with Windows 7+ and OSX 10.12+, and works wit
 
 ** ****Connect with CASC**
 
-  * [Follow CASC on Twitter][1]
+  * [Follow CASC on X][1]
   * [Join the CASC LinkedIn Group][2]
   * [View Presentations on SlideShare][3]
   * [Subscribe to CASC News RSS Feed][4]

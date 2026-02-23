@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: https://www.instagram.com/solutidigital/
   linkedin: https://www.linkedin.com/company/solutidigital/
@@ -49,7 +49,7 @@ representatives:
   - name: Alexandre Torres
     role: CIO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/alexandrehtorres/
     description: Alexandre is the CIO at Soluti Negócios Inteligentes Ltda and represents the organization at the PKI Consortium.
     hidden: true

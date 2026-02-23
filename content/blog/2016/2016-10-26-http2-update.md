@@ -40,7 +40,7 @@ HTTP/2 is implemented in the current versions of all the major web servers inclu
 
 ### Website adoption
 
-HTTP/2 is now [supported by 10% of websites][6], up from just 1% a year ago. Adoption is strongest among the most popular websites, including Google, Facebook, and Twitter. It’s interesting to compare the adoption rate of HTTP/2 with IPv6, the newest version of the internet protocol that underpins HTTP. IPv6 became a standard almost 20 years ago and today is only used by 7% of websites.
+HTTP/2 is now [supported by 10% of websites][6], up from just 1% a year ago. Adoption is strongest among the most popular websites, including Google, Facebook, and X. It’s interesting to compare the adoption rate of HTTP/2 with IPv6, the newest version of the internet protocol that underpins HTTP. IPv6 became a standard almost 20 years ago and today is only used by 7% of websites.
 
 HTTP/2 is still a relatively young technology, but the rate of adoption by web servers and browsers strongly suggests that it will become dominant. So what are you waiting for? Now is a great time to start planning HTTP/2 support for your website. Remember that browsers only support HTTP/2 over HTTPS, so you’ll need an SSL/TLS certificate to benefit.
 

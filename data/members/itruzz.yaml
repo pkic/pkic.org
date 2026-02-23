@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/itruzz/
@@ -49,6 +49,6 @@ representatives:
   - name: Budi Abdurahman
     role: Public Key Infrastructure Manager
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Budi is the Public Key Infrastructure Manager at ITRUZZ and represents the organization at the PKI Consortium.

@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -50,6 +50,6 @@ representatives:
   - name: Aditya Koranga
     role: Chief Security Architect
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/aditya-koranga
     description: Aditya is the Chief Security Architect at CORAN LABS and represents the organization at the PKI Consortium.

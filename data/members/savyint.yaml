@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -52,6 +52,6 @@ representatives:
   - name: Steve Huang
     role: CTO
     social:
-      twitter: 
+      x: 
       linkedin: http://linkedin.com/in/steve-huang-4139b8158
     description: Steve is the CTO at Savyint Group and represents the organization at the PKI Consortium.

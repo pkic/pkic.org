@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/in/ralphspencerpoore/
@@ -50,6 +50,6 @@ representatives:
   - name: Ralph Poore
     role: Applied Cryptographer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/ralphspencerpoore/
     description: Ralph is a Applied Cryptographer and represents the organization at the PKI Consortium.

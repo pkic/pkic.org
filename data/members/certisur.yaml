@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/CertiSur
+  x: https://x.com/CertiSur
   facebook: https://www.facebook.com/CertiSur
   instagram: https://www.instagram.com/certisursa/
   linkedin: https://www.linkedin.com/company/certisur
@@ -49,6 +49,6 @@ representatives:
    - name: Armando Carratala
      role: CTO
      social:
-       twitter: 
+       x: 
        linkedin: https://www.linkedin.com/in/acarrata/
      description:

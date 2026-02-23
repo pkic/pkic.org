@@ -39,7 +39,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://x.com/kore_ng
+  x: https://x.com/kore_ng
   facebook:
   instagram:
   linkedin: https://www.linkedin.com/company/ngkore/
@@ -53,12 +53,12 @@ representatives:
   - name: Aditya Koranga
     role: Co-Founder
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/aditya-koranga/
     description: Aditya is the Co-Founder of NgKore, Vice Chair of Post Quantum Cryptography Alliance (PQCA)'s TAC under Linux Foundation and represents Small Businesses and Individuals on the Technical Advisory Committee at OpenSSL Corporation and Foundation. With extensive experience as a Chief Security Architect, he has built enterprise-ready quantum-safe solutions and guided organizations through complex cryptographic transitions.
   - name: Shubham Kumar
     role: Co-Founder & SW Engineer
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/chmodshubham/
     description: Shubham is a mentor with the Linux Foundation and the co-founder of NgKore, an open-source community and telecom startup. He has extensive experience working with open-source tools and libraries to build quantum-secure solutions for next-generation networks. He has also co-authored technical reports and patents focused on migrating networks to post-quantum cryptography.

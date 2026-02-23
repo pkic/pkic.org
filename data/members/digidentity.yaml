@@ -33,7 +33,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/digidentity-bv
@@ -47,7 +47,7 @@ representatives:
   - name: Marcel Wendt
     role: Chief Technology Officer, Founder
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/mwendt/
     description:
       Marcel Wendt, CTO and Founder of Digidentity, is a serial entrepreneur known for his forward-thinking approach. Over the last decades, Marcel has gained recognition for his innovative thinking and his extensive experience in mobile technology. He received degrees in Electrical Engineering and Information Technology from the University of Applied Science in The Hague and founded three successful international companies. 
@@ -57,7 +57,7 @@ representatives:
   - name: Fred Slikker
     role: Chief Executive Officer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/fredslikker/
     description: 
       Fred Slikker, Managing Director at Digidentity since 2020, has a proven track record in leading international companies. With his focus and customer-centric mindset, Fred shapes the strategic direction of the company and is involved in developing Digidentity's portfolio of identity management solutions. He is also one of the driving forces behind building partnerships with (semi-)government organisations and the business sector.
@@ -65,7 +65,7 @@ representatives:
   - name: Sander Remmerswaal
     role: Chief Security Officer
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/sander-r-788b253a/
     description:
       Sander Remmerswaal, Chief Security Officer and Compliance Officer since 2018, has worked in security, compliance and privacy for nearly 30 years. Sander has been working with eID, eSignatures, PKI and cryptography the last 15 years. Previously, Sander worked for BSI The Netherlands as Trust Services and ISO27001 Lead Auditor. 

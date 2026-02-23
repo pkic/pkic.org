@@ -34,7 +34,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: https://www.facebook.com/thisistrustzone
   instagram:
   linkedin: https://www.linkedin.com/company/trustzone
@@ -49,7 +49,7 @@ representatives:
     name: Jacob Højmark Nielsen
     role: Chief Executive Officer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/jnielsen4/
     description: |
       Jacob is the CEO and one of the founders of TRUSTZONE, he represents the organization at the PKI Consortium. He has been in the PKI space since 2002, where he started he’s career with EuroTrust PKI Services A/S, which was later acquired by VeriSign. In 2004 Jacob founded TRUSTZONE A/S with his business partner Henrik Dürr – the duo has been running TRUSTZONE A/S successfully ever since and are still in charge of the company. 
@@ -58,6 +58,6 @@ representatives:
   - name: Svein Tuven
     role: Senior Vetting Officer
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/svein-tuven-a522a815/
     description: Svein Tuven has a background in vetting and support. He currently serves as the Senior Vetting Officer at TRUSTZONE, where he validate certificate information and give support for use. Svein has been working in the certificate industry since 2014. First in GlobalSign, before he moved to TRUSTZONE in 2017. He is responsible for monitoring the CA/Browser Forum to keep updated on rule changes that will affect TRUSTZONE’s Vetting Team. Svein is a graduate of University of Bergen and University of Iceland, where he received an undergraduate degree in Nordic languages.

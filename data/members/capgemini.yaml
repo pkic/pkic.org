@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -50,6 +50,6 @@ representatives:
   - name: Daniel Schoeman
     role: Security Architect
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/daniel-schoeman-66072830/
     description: Daniel is the Security Architect at Capgemini Outsourcing GmbH and represents the organization at the PKI Consortium.

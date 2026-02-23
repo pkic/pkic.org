@@ -31,7 +31,7 @@ title: World’s Leading Certificate Authorities Come Together to Advance Intern
 
 > World's leading Certificate Authorities join together to form the **Certificate Authority Security Council**
 
-[**Click here to share on Twitter**][1]
+[**Click here to share on X**][1]
 
 Amid increasing threats from sophisticated hacker networks, global cybercriminal organizations and state-sponsored espionage, the CASC is coming together to promote advanced security standards, encourage best practices, and ultimately improve the deployment of a continually trustworthy SSL ecosystem. In addition, the CASC supports the efforts of the CA/Browser Forum and other standards-setting bodies in their important work, and will continue to help develop reasonable and practical enhancements that improve trusted Secure Sockets Layer (SSL) and certificate authority (CA) operations.
 
@@ -70,7 +70,7 @@ The backbone of Internet security for nearly two decades, the SSL protocol and c
 
 ### Connect with CASC
 
-  * [Follow CASC on Twitter][14]
+  * [Follow CASC on X][14]
   * [Join the CASC LinkedIn Group][15]
   * [View Presentations on SlideShare][16]
   * [Subscribe to CASC News RSS Feed][17]

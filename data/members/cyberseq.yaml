@@ -39,7 +39,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -53,6 +53,6 @@ representatives:
   - name: Mark Tehrani
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://de.linkedin.com/in/madjid-tehrani
     description: Mark is the CEO at CyberSeQ and represents the organization at the PKI Consortium.

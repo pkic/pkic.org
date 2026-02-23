@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -51,7 +51,7 @@ representatives:
   - name: Mike Ounsworth
     role: Senior Consultant
     social:
-      twitter: 
+      x: 
       linkedin: 
       ietf: https://datatracker.ietf.org/person/mike@ounsworth.ca
     description: Mike is the Senior Consultant at Cryptic Forest Software and represents the organization at the PKI Consortium.

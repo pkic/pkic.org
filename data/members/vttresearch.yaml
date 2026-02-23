@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -51,6 +51,6 @@ representatives:
   - name: Erik Hieta-aho
     role: Senior Scientist
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/erikhietaaho/
     description: Erik is the Senior Scientist at VTT, Research Center of Finland and represents the organization at the PKI Consortium.

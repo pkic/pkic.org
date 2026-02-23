@@ -60,7 +60,7 @@ Some people seem to find it difficult to consume my thoughts about the enforceme
 
 Some people even questioned my motives. It might help to read my bio at the end before reading the article – you will then be less likely to assume I’m biased. 
 
-I have used a lot of data from which to draw my conclusions. If you disagree with my conclusions and decide to take the debate to Twitter as some people have already, please try to reference what you disagree with and why. 
+I have used a lot of data from which to draw my conclusions. If you disagree with my conclusions and decide to take the debate to X as some people have already, please try to reference what you disagree with and why. 
 
 Using the web is like playing a game of Russian roulette these days — both require luck. When a dangerous link slips through security, most users must rely on their intuition when it comes to trusting the website on the other end. And they must rely on luck to get it right.
 
@@ -133,7 +133,7 @@ New threats that are reported to companies such as Google, Microsoft and PhishTa
 
 The latest sophisticated phishing techniques discovered in 2019 can now bypass every security solution on the market, including password managers like 1Password and LastPass, as well as 2 factor authentication (2FA).
 
-Created by [Piotr Duszyński](https://twitter.com/drk1wi), [Modlishka](https://github.com/drk1wi/Modlishka) is a reverse-proxy that sits between a user and a legitimate website — like Sharepoint, Dropbox, Gmail or [Salesforce](https://www.salesforce.com/products/what-is-salesforce/).
+Created by [Piotr Duszyński](https://x.com/drk1wi), [Modlishka](https://github.com/drk1wi/Modlishka) is a reverse-proxy that sits between a user and a legitimate website — like Sharepoint, Dropbox, Gmail or [Salesforce](https://www.salesforce.com/products/what-is-salesforce/).
 
 Typical phishing scams that you probably know about, involve a phishing URL and a counterfeit website. A Modlishka-based phishing scam is different and much worse. Instead of being brought to a fake website, the victim receives **authentic content from the legitimate website**. The reverse-proxy silently redirects all traffic and everything the user types into the legitimate site to the Modlishka server.
 
@@ -316,7 +316,7 @@ We classified as many crypto related websites and social media accounts as we co
 
 With 85,000 active crypto traders and investors as power users, who incidentally, are the most widely targeted people on the internet for phishing scams, not a single person fell for a dangerous link over a 12 month period. Our experiment seemed to work. But we wanted to dive into the numbers to see if the utility was realized and to see if the new concept had achieved product/market fit.
 
-The solution was so well received, that end-users took to Twitter, requesting website owners to seek verification before they would sign into their website. Some website owners sought verification before being prompted by their users. We took great pride from the fact that even companies like [MetaMask](https://metamask.io/), who had their own anti-phishing security built into their browser add-on, sought the verification of their domain names from MetaCert. When MyEtherWallet realized their DNS was compromised we were the first people they contacted — so we could change the classification from “Verified as Safe” to “Phishing”, [preventing users from losing all of their crypto](https://medium.com/metacert/cryptonite-browser-add-on-prevented-dns-spoofer-from-intercepting-60-000-ether-transaction-c47cf1f8a7be).
+The solution was so well received, that end-users took to X, requesting website owners to seek verification before they would sign into their website. Some website owners sought verification before being prompted by their users. We took great pride from the fact that even companies like [MetaMask](https://metamask.io/), who had their own anti-phishing security built into their browser add-on, sought the verification of their domain names from MetaCert. When MyEtherWallet realized their DNS was compromised we were the first people they contacted — so we could change the classification from “Verified as Safe” to “Phishing”, [preventing users from losing all of their crypto](https://medium.com/metacert/cryptonite-browser-add-on-prevented-dns-spoofer-from-intercepting-60-000-ether-transaction-c47cf1f8a7be).
 
 ### Deep dive into the data
 

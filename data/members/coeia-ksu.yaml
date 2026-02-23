@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/COEIA_KSU/
+  x: https://x.com/COEIA_KSU/
   facebook: https://www.facebook.com/coeia.page/
   instagram: https://www.instagram.com/coeia_ksu
   linkedin: 
@@ -51,6 +51,6 @@ representatives:
   - name: Nayef Alharbi
     role: Cryptography Expert
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Nayef is the Cryptography Expert at COEIA and represents the organization at the PKI Consortium.

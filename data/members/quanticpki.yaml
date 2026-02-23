@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -49,6 +49,6 @@ representatives:
   - name: Paulo Cunha
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/paulocezarcunha/
     description: Paulo is the CEO at Quantic PKI and represents the organization at the PKI Consortium.

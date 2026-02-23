@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/actalis
+  x: https://x.com/actalis
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/actalis/
@@ -51,6 +51,6 @@ representatives:
   - name: Adriano Santoni
     role: PKI Services Product Owner
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/adrianosantoni/
     description: Adriano is the PKI Services Product Owner at ACTALIS S.p.A. and represents the organization at the PKI Consortium.

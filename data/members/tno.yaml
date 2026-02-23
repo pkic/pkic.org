@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/TNO_nieuws
+  x: https://x.com/TNO_nieuws
   facebook: https://www.facebook.com/TNOresearch/
   instagram: https://www.instagram.com/tno.innovation/
   linkedin: https://www.linkedin.com/company/tno/
@@ -49,6 +49,6 @@ representatives:
   - name: Mark Buningh
     role: Business development manager
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Mark is the Business development manager at The Netherlands Organisation for applied scientific research and represents the organization at the PKI Consortium.

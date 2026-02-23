@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/tubitakbilgem
+  x: https://x.com/tubitakbilgem
   facebook: https://www.facebook.com/bilgem.tubitak
   instagram: https://www.instagram.com/tubitakbilgem
   linkedin: https://www.linkedin.com/company/tubitakbilgem
@@ -49,7 +49,7 @@ representatives:
   - name: Asil YARDIMCI
     role: Chief Researcher
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/asilyardimci
     description: |
       Asil YARDIMCI is chief research engineer and software developer at National Research Institute of Electronics and Cryptology (UEKAE) which is affiliated to TÜBİTAK BİLGEM.

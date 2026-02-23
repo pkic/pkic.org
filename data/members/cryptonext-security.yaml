@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -50,6 +50,6 @@ representatives:
   - name: Florent Grosmaitre
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/florent-grosmaitre/
     description: Florent is the CEO at CryptoNext Security and represents the organization at the PKI Consortium.

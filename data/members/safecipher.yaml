@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -51,6 +51,6 @@ representatives:
   - name: Stephen Monti
     role: Founder & CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/company/safecipher-ltd
     description: Stephen is the Founder & CEO at Safecipher and represents the organization at the PKI Consortium.

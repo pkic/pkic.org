@@ -40,7 +40,7 @@ Since we last [wrote about SSL/TLS performance][1], there has been a lot of acti
 
 When your browser connects to a website today, it most likely uses the HTTP/1.1 protocol that was defined in 1999 in [RFC 2616][2]. Over the past 15 years, HTTP/1.1 has served us well and many tweaks have been discovered to make the most of it. However, in that time the web has transformed into a platform for interactive content and applications. Today, browsers load much more data from many more sources to build the typical web page.
 
-In 2009 Google announced a research project called SPDY (pronounced “speedy”) in a [blog post][3] titled _A 2x Faster Web_. SPDY requires the use of SSL/TLS. In 2010 Google added SPDY support to Chrome and the next year they added SPDY support to all Google services. Later they announced that [SPDY improves performance of their services by up to 43%][4]. SPDY continued to gain popularity as it was implemented in major web browsers and servers, by CDNs, and by other popular sites including Twitter. With SPDY gaining traction and showing significant performance benefits, the IETF chartered development of HTTP/2 in 2012 and later decided to base it on SPDY.
+In 2009 Google announced a research project called SPDY (pronounced “speedy”) in a [blog post][3] titled _A 2x Faster Web_. SPDY requires the use of SSL/TLS. In 2010 Google added SPDY support to Chrome and the next year they added SPDY support to all Google services. Later they announced that [SPDY improves performance of their services by up to 43%][4]. SPDY continued to gain popularity as it was implemented in major web browsers and servers, by CDNs, and by other popular sites including X. With SPDY gaining traction and showing significant performance benefits, the IETF chartered development of HTTP/2 in 2012 and later decided to base it on SPDY.
 
 The goals set out for HTTP/2 include:
 
@@ -64,7 +64,7 @@ The best news about HTTP/2 from a security perspective is that it specifies the 
 
 ## Coming Soon
 
-As of this writing, we’re still waiting for HTTP/2 to be published as a standard, but support for draft versions is already available in Google Chrome and Mozilla Firefox, as well as Microsoft’s Internet Explorer in the Windows 10 Technical Preview. Twitter has deployed HTTP/2 on their servers, so you might already be benefitting from HTTP/2 without knowing it! Akamai has also published a [demonstration site][6].
+As of this writing, we’re still waiting for HTTP/2 to be published as a standard, but support for draft versions is already available in Google Chrome and Mozilla Firefox, as well as Microsoft’s Internet Explorer in the Windows 10 Technical Preview. X has deployed HTTP/2 on their servers, so you might already be benefitting from HTTP/2 without knowing it! Akamai has also published a [demonstration site][6].
 
 Support for HTTP/2 in web servers is also [progressing][7] nicely. While it’s probably too early for most sites to roll out HTTP/2, you should be aware of it and start making plans to reap the benefits. Your website needs to support SSL/TLS, and now would be a good time to consider implementing [Always-on SSL][8] and [HSTS][9] to ensure that you’re ready for HTTP/2.
 

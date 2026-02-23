@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://x.com/viavisolutions
+  x: https://x.com/viavisolutions
   facebook: https://www.facebook.com/viavisolutions
   instagram: https://www.instagram.com/viavifiber/
   linkedin: https://www.linkedin.com/company/viavi-solutions
@@ -49,6 +49,6 @@ representatives:
   - name: Sam Darwish
     role: 5G & Wireless Sales Director
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Sam is the 5G & Wireless Sales Director at VIAVI Solutions and represents the organization at the PKI Consortium.

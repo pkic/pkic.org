@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/Citi
+  x: https://x.com/Citi
   facebook: https://www.facebook.com/citi
   instagram: https://instagram.com/citi
   linkedin: https://www.linkedin.com/company/citi
@@ -52,13 +52,13 @@ representatives:
   - name: Sudha Iyer
     role: CISO Cryptography
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/sudhaeiyer 
     description: I am the head of cryptographic key and certificate management modernization at Citi. I have been involved in senior level industry and open standards forums.
 
   - name:  Kornél Réti
     role: Senior PKI/Crypto Engineer at Citi
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/kornel-reti/
     description: Kornél is the Senior PKI/Crypto Engineer at Citi and represents the organization at the PKI Consortium.

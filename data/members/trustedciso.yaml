@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/trustedciso
+  x: https://x.com/trustedciso
   facebook: https://www.facebook.com/TrustedCISO/
   instagram: 
   linkedin: https://www.linkedin.com/company/trustedciso/
@@ -50,6 +50,6 @@ representatives:
   - name: Debra Baker
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/debrabakernc/
     description: Debra is the CEO at TrustedCISO and represents the organization at the PKI Consortium.

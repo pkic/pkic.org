@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/digitorus
+  x: https://x.com/digitorus
   facebook: https://www.facebook.com/digitorus
   instagram: 
   linkedin: https://www.linkedin.com/company/digitorus
@@ -49,6 +49,6 @@ representatives:
   - name: Paul van Brouwershaven
     role: Founder and CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
     description: Paul is the Founder and CEO at Digitorus and represents the organization at the PKI Consortium.

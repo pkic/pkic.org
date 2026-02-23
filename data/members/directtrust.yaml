@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/directtrustorg
+  x: https://x.com/directtrustorg
   facebook: https://www.facebook.com/DirectTrustOrg
   instagram: 
   linkedin: https://www.linkedin.com/company/directtrust/
@@ -51,13 +51,13 @@ representatives:
   - name: Scott Stuewe
     role: President and CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/scottstuewe/
     description: Scott Stuewe is a 25+ year veteran of the healthcare information technology industry. As President and CEO of DirectTrust, Scott drives visibility and utilization of the Direct Standard™ to contribute to nationwide interoperability. Under his tenure, the organization achieved the landmark milestone of two billion Direct Secure Messages sent and received over the DirectTrust Network. Previously, Stuewe was Director of Strategy and Interoperability at DataFile Technologies, a health information management company, and served more than 24 years at Cerner, including as Cerner Network’s Director of National Interoperability Strategy, where he drove participation in the CommonWell Health Alliance and the bridge with Carequality.
   - name: Kyle Neuman
     role: Director, Trust Framework Development
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/kylepneuman/
     description: Kyle Neuman actively develops new and existing technical standards on public-key cryptography, blockchain cryptography, key management, and multi-factor authentication for both government and private sectors. His passion for cryptography lies within the vision of the future and enabling trusted digital identity between geographical regions and political regimes for the benefit of humanity as we transcend into an increasingly digital way of life.
     till: 2024-04-01

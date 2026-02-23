@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -50,6 +50,6 @@ representatives:
   - name: Scott Fluhrer
     role: Principal Engineer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/scott-fluhrer-a824a0265
     description: Scott is the Principal Engineer at Cisco Systems and represents the organization at the PKI Consortium.

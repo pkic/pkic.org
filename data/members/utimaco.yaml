@@ -39,7 +39,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/utimaco
+  x: https://x.com/utimaco
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/utimaco/
@@ -53,21 +53,21 @@ representatives:
   - name: Chris Meyer
     role: Product Manager
     social:
-      twitter: 
+      x: 
       linkedin: https://de.linkedin.com/in/christopher-meyer-de
     description: 
       
   - name: Dieter Bong 
     role: Head of Product Management - HSM
     social:
-      twitter:
+      x:
       linkedin: https://de.linkedin.com/in/dieter-bong-37b1151
     description: Dieter Bong has more than 30 years of experience in IT security in the areas of encryption and digital signatures, network security, public key infrastructure and hardware security modules. Dieter currently heads Product Management for General Purpose Hardware Security Modules at Utimaco.
 
   - name: Nicholas Kondamudi
     role: Product Manager
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/nicholas-kondamudi/
     description: In my role as Product Manager I am responsible for identifying market problems that are pervasive, persistent, and need to be solved. I am responsible for assessing exactly where we should focus our efforts to address the needs of our customers and solve the right problems in the right way
 
@@ -75,6 +75,6 @@ representatives:
     name: Alfonso Concellón
     role: Business Development Manager
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/alfonso-concell%C3%B3n-293317133/
     description: He has more than 20 years of experience in IT security in the areas of public key infrastructure, digital signature services, hardware security modules as well as ITMS and IT services. He is responsible for PKI strategic approach and  identifying market problems that are pervasive, persistent, and need to be solved. Assessing exactly where we should focus our efforts to address the needs of our customers and solve the right problems in the right way.

@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -50,7 +50,7 @@ representatives:
   - name: Tim Thompson
     role: Founder & CEO
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Tim Thompson has a career spanning 37+ years in IT & CyberSecurity and has an unswerving passion for Data Protection.
 
@@ -65,7 +65,7 @@ representatives:
   - name: Brian Novack
     role: Chief Technical Officer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/brian-novack-10478b1/
     description: Brian recently retired from AT&T with over 30 years of experience in IT including more than 20 years with the AT&T Chief Security Office and AT&T Chief Compliance Office.
  

@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/i4p-informatics/
@@ -53,7 +53,7 @@ representatives:
     name: Zsolt Rózsahegyi
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/rozsahegyizsolt/
     description: Zsolt Rózsahegyi is the CEO at i4p informatics and represents the organization at the PKI Consortium
 
@@ -61,6 +61,6 @@ representatives:
     name: Ferenc Pető
     role: CTO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/ferenc-pet%C5%91-94667438/
     description: Ferenc Pető is the CTO at i4p informatics and represents the organization at the PKI Consortium

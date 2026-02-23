@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/eid-easy/
@@ -51,6 +51,6 @@ representatives:
   - name: Margus Pala
     role: Board member
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/smartman/
     description: Margus is the Board member at eID Easy and represents the organization at the PKI Consortium.

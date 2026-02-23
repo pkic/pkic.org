@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook:
   instagram:
   linkedin: https://www.linkedin.com/company/keytalk/
@@ -49,13 +49,13 @@ representatives:
   - name: Michael van der Sman
     role: CTO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/ms2441b32/
     description: Michael is the CEO KeyTalk and represents the organization at the PKI Consortium.
 
   - name: Bas von Barnau Sythoff
     role: Sales Director
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/bas-von-barnau-sythoff-302180/
     description: Bas is the Sales Director at KeyTalk and represents the organization at the PKI Consortium.

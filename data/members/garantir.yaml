@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/garantir_io
+  x: https://x.com/garantir_io
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/garantir-cybersecurity/
@@ -52,13 +52,13 @@ representatives:
   - name: Kieran Miller
     role: Chief Architect
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/kieran-miller-0776136/
     description: Kieran Miller is Chief Architect at Garantir. Kieren is specialized in enterprise digital signature and asymmetric cryptography applications
 
   - name: Chris Van Genderen
     role: Senior Security Architect
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/chris-van-genderen-4677678/
     description: Chris Van Genderen is Senior Security Architect at Garantir and represents the organization at the PKI Consortium

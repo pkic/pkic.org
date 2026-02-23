@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter:
+  x:
   facebook:
   linkedin: https://www.linkedin.com/company/codegic
   youtube:
@@ -48,6 +48,6 @@ representatives:
   - name: Muhammad Wahaj Khan
     role: CEO
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/mwahajkhan/
     description: Wahaj has a Bachelors in Computer Science with 20+ years of PKI  experience. He is leading a team of experts in the PKI and Trust space, providing cutting-edge solutions to clients worldwide. His focus is on delivering secure, scalable, and compliant solutions that enable businesses to establish trust, safeguard their digital assets, and protect their identities.

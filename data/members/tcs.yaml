@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/TCS
+  x: https://x.com/TCS
   facebook: https://www.facebook.com/TataConsultancyServices
   instagram: https://www.instagram.com/tcsglobal/
   linkedin: https://www.linkedin.com/company/tata-consultancy-services/
@@ -49,6 +49,6 @@ representatives:
   - name: Yash Jain
     role: Solution Architect
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/yash-jain-849a8417/
     description: Yash is the Solution Architect at TATA CONSULTANCY SERVICES LIMITED and represents the organization at the PKI Consortium.

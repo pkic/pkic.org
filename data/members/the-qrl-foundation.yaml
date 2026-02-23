@@ -40,7 +40,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/qrledger
+  x: https://x.com/qrledger
   facebook: https://www.facebook.com/theqrl/
   discord: https://theqrl.org/discord
   reddit: https://www.reddit.com/r/qrl
@@ -57,7 +57,7 @@ representatives:
   - name: John-Paul Lomas
     role: Vice President
     social:
-      twitter: https://twitter.com/jplomas
+      x: https://x.com/jplomas
       linkedin: https://www.linkedin.com/in/jplomas/
     description: |
       JP has been writing code for open source and commercial projects for over 25 years and is a strong advocate for open-source and emerging technologies. He was a core developer and systems engineer for the QRL project from 2016 - 2022 and still makes open source contributions to the protocol.
@@ -67,7 +67,7 @@ representatives:
   - name: Kaushal Kumar Singh
     role: Lead Blockchain Developer
     social:
-      twitter: https://twitter.com/thecyyber
+      x: https://x.com/thecyyber
       linkedin: https://www.linkedin.com/in/cyyber
     description: |
       Kaushal Kumar Singh is an experienced software developer working with cutting-edge technologies including Blockchain, Big Data & Machine learning. He also has experience in algorithmic trading development including for High Frequency Trading using the FIX Protocol. He has contributed to open source projects including QRL, Google Protobuf & the Data Transfer Project.

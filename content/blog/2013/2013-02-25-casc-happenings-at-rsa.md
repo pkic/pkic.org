@@ -22,7 +22,7 @@ title: CASC Happenings at RSA
 
 
 ---
-We are excited to have members of the CASC attending and speaking at this year’s RSA Conference. The events and panels will cover various topics that revolve around the security of the Internet and CAs as a whole. You can follow the CASC on Twitter for more information and news at [@CertCouncil](http://bit.ly/X3x9XB), as well as see some of the presentations after the events on our [SlideShare](http://slidesha.re/Ye2dFf) page. Please join us for the following CASC member events:
+We are excited to have members of the CASC attending and speaking at this year’s RSA Conference. The events and panels will cover various topics that revolve around the security of the Internet and CAs as a whole. You can follow the CASC on X for more information and news at [@CertCouncil](http://bit.ly/X3x9XB), as well as see some of the presentations after the events on our [SlideShare](http://slidesha.re/Ye2dFf) page. Please join us for the following CASC member events:
 
  
 

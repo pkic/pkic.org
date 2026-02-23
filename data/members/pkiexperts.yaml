@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -50,6 +50,6 @@ representatives:
   - name: Marco Schreiber
     role: Consultant
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/marco-schreiber-93a563b9/
     description: Marco is the Consultant at PKI Experts GmbH and represents the organization at the PKI Consortium.

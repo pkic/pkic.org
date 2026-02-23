@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -49,6 +49,6 @@ representatives:
   - name: Adrian Mueller
     role: Product Manager Certificate Services
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Adrian is the Product Manager Certificate Services at SwissSign AG and represents the organization at the PKI Consortium.

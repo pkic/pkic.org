@@ -20,7 +20,7 @@ data:
       title: Chair PKI Consortium
       bio: Paul van Brouwershaven is Director of Technology Compliance for Entrust’s certification authority, Chair of the PKI Consortium and Vice Chair of the CA/Browser Forum.
       social:
-        twitter: https://twitter.com/vanbroup
+        x: https://x.com/vanbroup
         linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
     - name: Rene Peralta
       title: Scientist with the Computer Security Division at NIST

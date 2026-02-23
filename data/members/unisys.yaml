@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -49,6 +49,6 @@ representatives:
   - name: Raj Kumar
     role: Vice President Technology
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/rajkrpandey/
     description: Raj is the Vice President Technology at Unisys and represents the organization at the PKI Consortium.

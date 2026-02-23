@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/defensie
+  x: https://x.com/defensie
   facebook: https://www.facebook.com/MinvanDefensie
   instagram: http://www.instagram.com/minvandefensie
   linkedin: 
@@ -50,6 +50,6 @@ representatives:
   - name: Fekke Bakker
     role: Operational TSP Manager
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/ing-fekke-bakker-msc-cgeit-cissp-cisa-28024912/
     description: Fekke Bakker is the Operational TSP Manager at the Dutch Ministry of Defence and represents the organization at the PKI Consortium.

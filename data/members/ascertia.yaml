@@ -39,7 +39,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/Ascertia
+  x: https://x.com/Ascertia
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/ascertia
@@ -53,6 +53,6 @@ representatives:
   - name: Mike Hathaway
     role: Chief Technology Officer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/mike-hathaway-7844905/
     description: Mike Hathaway is a seasoned PKI specialist with over 20 years’ experience. Mike spent more than a decade at Entrust and has held positions at EDS working as part of the Atlas consortium and at PriceWaterHouseCoopers beTRUSTed. He brings his extensive expertise and knowledge to the Ascertia team and applies his experience to drive further PKI innovation.

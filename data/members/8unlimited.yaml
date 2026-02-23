@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -51,6 +51,6 @@ representatives:
   - name: Harald Kaiblinger
     role: Project Manager
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/kaiblinger/
     description: Harald is the Project Manager at 8 Unlimited GmbH and represents the organization at the PKI Consortium.

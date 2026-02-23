@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -52,6 +52,6 @@ representatives:
   - name: JOYEZ Philippe
     role: Project Leader Cryptography
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/philippe-joyez-9a6b3323/
     description: JOYEZ is the Project Leader Cryptography at Renault Group and represents the organization at the PKI Consortium.

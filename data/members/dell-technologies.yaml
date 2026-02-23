@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: https://www.facebook.com/DellTechnologies/
   instagram:
   pinterest:
@@ -50,6 +50,6 @@ representatives:
   - name: Anoop Gulati
     role: Public Key Infrastrucutre & Cryptographic Services Product Owner 
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/anoop-gulati/
     description: Anoop Gulati is a security professional with over 14 years of experience in managing all aspects of a large-scale enterprise cryptography/Public Key infrastructures and serving as a Product Owner, Architect, Engineer for Cryptographic Services at Dell Technologies Inc.

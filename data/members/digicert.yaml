@@ -45,7 +45,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -59,6 +59,6 @@ representatives:
   - name: Timothy Hollebeek
     role: VP of Industry Standards
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/timothy-hollebeek-505b814/
     description: Timothy Hollebeek has more than 20 years of computer security experience, including eight years working on innovative security research funded by the Defense Advanced Research Projects Agency. He remains heavily involved as DigiCert’s primary representative in multiple industry standards bodies, including the CA/Browser Forum, striving for improved information security practices that work with real-world implementations. A mathematician by trade, Hollebeek spends a lot of time considering security approaches to quantum computing.

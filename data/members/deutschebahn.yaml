@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -50,6 +50,6 @@ representatives:
   - name: Peer Eichler
     role: IT Architect
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/peer-eichler-770a1031b
     description: Peer is the IT Architect at DB Fernverkehr AG and represents the organization at the PKI Consortium.

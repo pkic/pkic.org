@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -51,6 +51,6 @@ representatives:
   - name: Reza Azarderakhsh
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/reza-azarderakhsh-39777042/
     description: Reza is the CEO at PQSecure and represents the organization at the PKI Consortium.

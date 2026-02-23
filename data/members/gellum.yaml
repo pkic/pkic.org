@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://x.com/gellum_com
+  x: https://x.com/gellum_com
   facebook: https://fb.com/gellumcom
   instagram: 
   linkedin: 
@@ -49,14 +49,14 @@ representatives:
   - name: Venancio Cespedes
     role: CEO - Co-Founder
     social:
-      twitter: https://x.com/venywest
+      x: https://x.com/venywest
       linkedin: https://www.linkedin.com/in/venywest/
     description: Venancio is the Co-Founder at Gellum (Backdoor Global, Inc. / VCTS VAULT LTD) and represents the organization at the PKI Consortium.
 
   - name: Euder Villamizar
     role: Co-Founder
     social:
-      twitter: https://x.com/neugocho
+      x: https://x.com/neugocho
       linkedin: https://www.linkedin.com/in/euder-villamizar-94374231/
     description: |
          Euder Isaac Villamizar Peñaloza is a businessman and systems engineer. He is the co-founder of Backdoor Global, Inc.

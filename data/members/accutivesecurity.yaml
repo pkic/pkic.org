@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/accutivesec
+  x: https://x.com/accutivesec
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/accutive/
@@ -49,7 +49,7 @@ representatives:
   - name: Paul Horn
     role: Chief Technical Officer (CTO)
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/paul-horn-70631111/
     description: |
       Paul Horn is Accutive’s leading quantum cryptography expert and is a regular in the North American cybersecurity circuit, including keynote presentations to hundreds of cybersecurity experts about emerging cybersecurity threats, including the need for post-quantum cryptography in the face of quantum threats.  Paul has been active in the cybersecurity space for decades. He began his cybersecurity career by developing deep expertise in hardware security modules (HSMs), including installation, configuration, and monitoring. From his HSM foundation, Paul expanded his expertise to the full suite of Thales identity protection products.

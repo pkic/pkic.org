@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter:
+  x:
   facebook:
   instagram:
   linkedin: https://www.linkedin.com/company/forkbomb/
@@ -51,7 +51,7 @@ representatives:
     id: andrea-dintino
     role: CEO, co-founder
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/andrea-d-intino/
     description:
         Passionate about cryptography and digital identity, I specialize in post-quantum cryptography (PQC) and EUDI-ARF. My work spans PQC transitions, digital signatures (PaDES/CaDES), and identity frameworks like EUDI-ARF and W3C-VC, currently focusing on EUDIW compliance/interoperability and components for crypto-agility and hybrid cryptography. Member of multiple standardization and alliances (W3C, ISO, IEEE, PKIC, RenAissence), published multiple papers on cryptography and keynote speaker on cryptography and digital identity.

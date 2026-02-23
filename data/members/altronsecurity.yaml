@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: https://www.facebook.com/AltronS/
   instagram: 
   linkedin: https://www.linkedin.com/company/altron-security/
@@ -49,6 +49,6 @@ representatives:
   - name: Cornel Kleynhans
     role: "Senior Manager: Technology Operations"
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Cornel is the Senior Manager Technology Operations at Lawtrust and represents the organization at the PKI Consortium.

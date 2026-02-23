@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/QuantinuumQC
+  x: https://x.com/QuantinuumQC
   facebook: https://www.facebook.com/QuantinuumQC
   instagram: https://www.instagram.com/quantinuumqc/
   linkedin: https://www.linkedin.com/company/quantinuumqc/
@@ -50,6 +50,6 @@ representatives:
   - name: Marion Le Masson
     role: Senior Product Manager
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Marion is the Senior Product Manager at Quantinuum and represents the organization at the PKI Consortium.

@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/chunkworksofficial/
@@ -49,12 +49,12 @@ representatives:
   - name: Dennis Schouten
     role: Founder, Sales & Partner Management
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/schoutendennis/
     description: Dennis is an outgoing and visionary professional dedicated to safeguarding data privacy and security against current and future threats. His expertise in data protection has driven Chunk Works to the forefront of innovation, advancing quantum encryption, hybrid encryption, and true crypto agility to ensure resilient and future-proof data security. 
   - name: Peter Willemsen
     role: Founder, Lead development & Innovation
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/codebuffet/
     description: Peter is a self-taught expert and seasoned software architect specializing in advanced DLT architecture solutions. With deep expertise in Rust, data security, hybrid cryptography, crypto-agility, AI, and deep learning, he develops innovative and resilient systems for the future of secure computing.

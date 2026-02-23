@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: https://www.facebook.com/multicert.pt/
   instagram: 
   linkedin: https://www.linkedin.com/company/multicert
@@ -49,6 +49,6 @@ representatives:
   - name: Nuno Ponte
     role: Head of Advanced Solutions
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/nponte/
     description: Nuno is the Head of Advanced Solutions at Multicert and represents the organization at the PKI Consortium.

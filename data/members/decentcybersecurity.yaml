@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter:
+  x:
   facebook:
   instagram:
   linkedin: https://www.linkedin.com/company/decentcybersecurity
@@ -52,7 +52,7 @@ representatives:
   - name: Matej Michalko
     role: CEO
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/matmichalko/
     description: Matej Michalko is a leader in post-quantum cybersecurity, AI, and blockchain with over 15 years of industry experience. As Founder, CEO, and Chairman of Decent Cybersecurity since 2015, he developed dCore, the world's first blockchain platform dedicated to media, aerospace & defense, and cybersecurity, with a focus on post-quantum cryptography.
 
@@ -64,7 +64,7 @@ representatives:
   - name: Michaela Abel
     role: COO
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/michaelaabel888/
     description:  Michaela Abel is a leader in post-quantum cybersecurity, AI, and blockchain technologies. As a Founder and Board Member of Decent Cybersecurity since 2021, she has contributed to the development of innovative solutions including dCore, the world's first blockchain platform dedicated to media, aerospace & defense, and cybersecurity.
 

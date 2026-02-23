@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/uber
+  x: https://x.com/uber
   facebook: https://www.facebook.com/uber
   instagram: https://instagram.com/uber
   linkedin: https://www.linkedin.com/company/1815218
@@ -52,18 +52,18 @@ representatives:
   - name: Pavel Kruhlei
     role: Engineering Manager
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/pavel-kruhlei/
     description: Pavel is an Engineering Manager at Uber, PKI Officer on the Platform Security team, and represents the organization at the PKI Consortium.
   - name: Artem Myagkov
     role: Senior Software Engineer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/artem-myagkov-b9290930/
     description: Artem is a Senior Software Engineer at Uber, PKI Officer on the Platform Security team, and represents the organization at the PKI Consortium.
   - name: Lucas Carneiro
     role: Software Engineer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/lucasrodcarneiro/
     description: Lucas is a Software Engineer at Uber, PKI Officer on the Platform Security team, and represents the organization at the PKI Consortium.

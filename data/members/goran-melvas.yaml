@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/in/melvas/
@@ -49,6 +49,6 @@ representatives:
   - name: Göran Melvås
     role: CEO
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/melvas/
     description: Göran is the CEO at ID-Fix AB and represents the organization at the PKI Consortium.

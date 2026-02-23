@@ -39,7 +39,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -53,6 +53,6 @@ representatives:
   - name: Rohith Ravikumar
     role: Security Application Security Assurance Associate
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/rohith-ravikumar-03851a86/
     description: Rohith is the Security Application Security Assurance Associate at DTCC and represents the organization at the PKI Consortium.

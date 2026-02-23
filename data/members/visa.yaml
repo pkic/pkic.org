@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/Visa
+  x: https://x.com/Visa
   facebook: https://www.facebook.com/VisaUnitedStates
   instagram: https://instagram.com/visa_us/
   linkedin: https://www.linkedin.com/company/visa
@@ -49,6 +49,6 @@ representatives:
   - name: Adam Clark
     role: Vice President Applied Cryptography
     social:
-      twitter: 
+      x: 
       linkedin: 
     description: Adam is the Vice President Applied Cryptography at Visa and represents the organization at the PKI Consortium.

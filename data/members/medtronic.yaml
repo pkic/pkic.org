@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: 
@@ -49,6 +49,6 @@ representatives:
   - name: Tom Wolf
     role: Senior Distinguished Systems Security Engineer
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/tom-wolf-5ab920/
     description: Tom is the Senior Distinguished Systems Security Engineer at Medtronic and represents the organization at the PKI Consortium.

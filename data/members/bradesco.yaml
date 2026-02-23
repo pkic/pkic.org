@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x: 
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/bradesco/
@@ -52,6 +52,6 @@ representatives:
   - name: Luciano Carolino
     role: IT Security Specialist
     social:
-      twitter: 
+      x: 
       linkedin: https://br.linkedin.com/in/luciano-carolino
     description: Luciano is the IT Security Specialist at Banco Bradesco and represents the organization at the PKI Consortium.

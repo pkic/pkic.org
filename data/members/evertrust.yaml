@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter:
+  x:
   facebook:
   instagram:
   linkedin: https://www.linkedin.com/company/evertrust-sas
@@ -50,12 +50,12 @@ representatives:
   - name: Jean-Julien Alvado
     role: Co-founder & CEO - Evertrust
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/jeanjulienalvado/
     description: Engineer from UTC with a Master's from EPITA, Jean-Julien has built his expertise in cybersecurity since 2003. After eight years implementing security solutions at Total and similar projects for Sanofi and Technimp, he revealed a consistent industry problem certificate management tools that hindered rather than helped security teams. In 2017, he co-founded Evertrust to address this challenge. Under his leadership, the company evolved from security consulting to developing a comprehensive Certificate Lifecycle Management software and a Signing authority engine that serves major organizations worldwide amid increasing security and compliance demands.
   - name: Kamel Ferchouche
     role: Co-Founder & COO - Evertrust
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/kamel-ferchouche-438a741/
     description: With a Master's in Computer Networking from UPMC, Kamel has focused on infrastructure security since his early career. After spending seven years managing access control mechanisms at Total and holding cybersecurity roles at enterprise-scale companies like Thales and ENGIE, he identified the challenges organizations faced with digital certificate infrastructure before co-founding Evertrust in 2017. Today, Kamel leads Evertrust's operations and product implementation strategies, ensuring that the company's digital trust solutions effectively address the complex security and compliance needs of major organizations worldwide.

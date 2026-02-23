@@ -36,7 +36,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/buypass
+  x: https://x.com/buypass
   facebook: https://www.facebook.com/buypassCA
   instagram: 
   linkedin: https://www.linkedin.com/company/buypass-as
@@ -47,7 +47,7 @@ representatives:
   - name: Mads Henriksveen
     role: Trust Service Manager
     social:
-      twitter:
+      x:
       linkedin: https://www.linkedin.com/in/mads-henriksveen-48948941/
     description:
       Mads Henriksveen has a Master in Computer Science and has more than 35 years of working experience with focus on systems development and IT security. Mads has been working with cryptography, eID, eSignature, PKI etc for the last 20 years. Mads represents Buypass in the PKI Consortium and is currently acting as Vice Chair for the S/MIME Certificate Working Group in the CA/Browser Forum.

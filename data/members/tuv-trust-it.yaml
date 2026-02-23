@@ -35,7 +35,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://twitter.com/tuevtrustit
+  x: https://x.com/tuevtrustit
   facebook: https://www.facebook.com/TUEVAUSTRIA
   instagram: https://www.instagram.com/tuevaustria/
   linkedin: https://www.linkedin.com/showcase/t%C3%BCv-trust-it-t%C3%BCv-austria/
@@ -49,6 +49,6 @@ representatives:
   - name: Clemens Wanko
     role: Head Trust Infrastructure Div. TUV TRUST IT / Head Conformity Assessment Body at TUV AUSTRIA CERT
     social:
-      twitter: 
+      x: 
       linkedin: https://www.linkedin.com/in/clemens-wanko-0947a5210/
     description: Clemens is the head of the conformity assessment body (CAB) at TUV AUSTRIA CERT and vice chair of the European accredited eIDAS/ETSI auditors in the ACAB council and is highly interested in harmonized secure interpretatiion and implementation of legal requirements and normative standards.

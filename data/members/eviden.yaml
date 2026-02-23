@@ -37,7 +37,7 @@ careers:
 
 # Social media
 social:
-  twitter: https://x.com/Eviden_Security
+  x: https://x.com/Eviden_Security
   facebook:
   instagram: https://www.instagram.com/evidenlive/
   linkedin: https://www.linkedin.com/showcase/eviden-cybersecurity/
@@ -51,7 +51,7 @@ representatives:
   - name: Vasco Gomes
     role: Global CTO Cybersecurity Products
     social:
-      twitter: https://x.com/Vasco_M_Gomes
+      x: https://x.com/Vasco_M_Gomes
       linkedin: https://www.linkedin.com/in/vasco-gomes-eviden/
     description: |
       Coming from an Information Technology engineering background, with 25 years' of experience in information security, Vasco helped many customers balance operational constraints versus acceptable business risks. In the recent years he expanded this experience to help customers look into what the information security landscape might be in the next 5 years+ and best way to manage it. During innovation workshops, he shares with them some keys to anticipate the future shape of cybersecurity and maximize sovereignty over their most critical data.
