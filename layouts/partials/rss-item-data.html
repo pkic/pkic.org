@@ -1,0 +1,62 @@
+{{- $feedURLStr := . -}}
+{{- $items := slice -}}
+{{- $timeout := "5s" -}}
+{{- if hugo.IsServer -}}
+  {{- $timeout = "1s" -}}
+{{- end -}}
+
+{{- $feedURL := urls.Parse $feedURLStr -}}
+{{- $remote := try (resources.GetRemote $feedURLStr (dict "timeout" $timeout)) -}}
+
+{{- if $remote.Err -}}
+  {{- if not hugo.IsServer -}}
+    {{- warnf "Error fetching remote feed %q: %s" $feedURLStr $remote.Err -}}
+  {{- end -}}
+{{- else -}}
+  {{- with $remote.Value -}}
+    {{- if or (strings.HasSuffix .MediaType "rss+xml") (strings.HasSuffix .MediaType "atom+xml") (strings.HasSuffix .MediaType "xml") -}}
+      {{- $unmarshaled := try (transform.Unmarshal .Content) -}}
+      {{- if $unmarshaled.Err -}}
+        {{- warnf "Error unmarshaling feed %q: %s" $feedURLStr $unmarshaled.Err -}}
+      {{- else -}}
+        {{- $feedItems := slice -}}
+        {{- if index $unmarshaled.Value "channel" -}}
+          {{- $feedItems = $unmarshaled.Value.channel.item -}}
+        {{- else if index $unmarshaled.Value "entry" -}}
+           {{- $feedItems = $unmarshaled.Value.entry -}}
+        {{- end -}}
+        {{- with $feedItems -}}
+          {{- if eq (printf "%T" .) "[]interface {}" -}}
+            {{- range first 10 . -}}
+              {{- $newItem := dict -}}
+              {{- range $k, $v := . -}}
+                {{- if eq $k "pubDate" -}}
+                  {{- $timeValue := try (time $v) -}}
+                  {{- if not $timeValue.Err -}}
+                    {{- $newItem = merge $newItem (dict $k $timeValue.Value) -}}
+                  {{- end -}}
+                {{- else if or (eq $k "published") (eq $k "updated") -}}
+                  {{- $timeValue := try (time $v) -}}
+                  {{- if not $timeValue.Err -}}
+                    {{- $newItem = merge $newItem (dict "pubDate" $timeValue.Value) -}}
+                  {{- end -}}
+                {{- else if eq $k "link" -}}
+                  {{- if hasPrefix $v "/" -}}
+                    {{- $v = printf "https://%s%s" $feedURL.Host $v -}}
+                  {{- end -}}
+                  {{- $newItem = merge $newItem (dict $k $v) -}}
+                {{- else -}}
+                  {{- $newItem = merge $newItem (dict $k $v) -}}
+                {{- end -}}
+              {{- end -}}
+              {{- if index $newItem "pubDate" -}}
+                {{- $items = $items | append $newItem -}}
+              {{- end -}}
+            {{- end -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- return $items -}}
