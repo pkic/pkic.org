@@ -13,39 +13,31 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
-
-# Social media
-social:
-  twitter: 
-  facebook: 
-  instagram:
-  linkedin: 
-  youtube: 
 
 # Social media
 social:
   twitter: https://twitter.com/ViasatInc
   facebook: https://www.facebook.com/Viasat
   instagram: https://www.instagram.com/viasatinc
-  pinterest: 
+  pinterest:
   linkedin: https://www.linkedin.com/company/viasat/mycompany/
   youtube: https://www.youtube.com/user/ViaSatInc

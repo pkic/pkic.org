@@ -32,9 +32,9 @@ data:
       bio: |
         Albert de Ruiter operates the Policy Authority at Logius, the digital government service organization of the Netherlands. He is also a member of the QvC (Quantum Secure Cryptography) working group of the Dutch government, a board member of HAPKIDO, and a member of the PKI Consortium. Albert is known for introducing the idea of a Post-Quantum Cryptography Conference to the PKI Consortium in 2022.
       social:
-        twitter: 
-        linkedin: 
-        
+        twitter:
+        linkedin:
+
     - name: Bas Westerbaan
       title: Research Engineer at Cloudflare
       bio: |
@@ -53,13 +53,13 @@ data:
 
         His research focuses on computational number theory and high-performance arithmetic as used in (post-quantum) public-key cryptography. Joppe is a co-author of the post-quantum secure CRYSTALS-Kyber key encapsulation mechanism which has been selected by NIST for standardization.
       social:
-        twitter: 
+        twitter:
         linkedin: https://www.linkedin.com/in/joppebos/
 
     - name: Anselme Tueno
       title: Cryptography Researcher at SAP
       bio: |
-        Anselme Tueno is a senior cryptography researcher at SAP Security Research in Karlsruhe, Germany. He holds a Ph.D. degree in applied cryptography under the supervision of Prof. Dr. Stefan Katzenbeisser (University of Passau in Germany) and Prof. Dr. Florian Kerschbaum (University of Waterloo in Canada). His research interest is applied cryptography, particularly, post-quantum crypto and computation on encrypted data using tools such as garbled circuits, secret sharing, homomorphic encryption. 
+        Anselme Tueno is a senior cryptography researcher at SAP Security Research in Karlsruhe, Germany. He holds a Ph.D. degree in applied cryptography under the supervision of Prof. Dr. Stefan Katzenbeisser (University of Passau in Germany) and Prof. Dr. Florian Kerschbaum (University of Waterloo in Canada). His research interest is applied cryptography, particularly, post-quantum crypto and computation on encrypted data using tools such as garbled circuits, secret sharing, homomorphic encryption.
       social:
         linkedin: https://www.linkedin.com/in/anselme-tueno-55907b61/
 
@@ -73,7 +73,7 @@ data:
     - name: Jeremy King
       title: Regional VP, EMEA at PCI Security Standards Council
       bio: |
-        Jeremy King leads the Council’s efforts in increasing adoption and awareness of the PCI security standards internationally. In this role, Mr. King works closely with the Council and representatives of its policy-setting executive committee from American Express, Discover, JCB International, MasterCard, UnionPay and Visa, Inc. His chief responsibilities include gathering feedback from the merchant and vendor community, coordinating research and analysis of PCI SSC managed standards through EMEA markets, driving education efforts and Council membership recruitment through active involvement in local and regional events, industry conferences, and meetings with key stakeholders. 
+        Jeremy King leads the Council’s efforts in increasing adoption and awareness of the PCI security standards internationally. In this role, Mr. King works closely with the Council and representatives of its policy-setting executive committee from American Express, Discover, JCB International, MasterCard, UnionPay and Visa, Inc. His chief responsibilities include gathering feedback from the merchant and vendor community, coordinating research and analysis of PCI SSC managed standards through EMEA markets, driving education efforts and Council membership recruitment through active involvement in local and regional events, industry conferences, and meetings with key stakeholders.
       social:
         linkedin: https://linkedin.com/in/jeremy-king-90a75328
 
@@ -143,7 +143,7 @@ data:
         In his current role as Chapter Lead for PQC within the CTO office at Utimaco, Volker Krummel continues to be at the forefront of pioneering efforts to address the evolving challenges posed by quantum computing to cryptographic systems. His leadership and dedication make him a vital asset in the quest for secure and resilient digital infrastructures in the age of quantum computing.
       social:
         linkedin: https://www.linkedin.com/in/volker-k-4ba519174
-      
+
     - name: Itan Barmes
       title: Team lead at Deloitte
       bio: |
@@ -157,7 +157,7 @@ data:
       title: Quantum Safe Industry Lead at IBM
       bio: |
         Driven executive leader with over 20 years senior level global experience in digital transformation and telecommunications with a strong technology, strategy and innovation background (development, architecture, product and solution mgt) in Internet of Things, mobile networks, cloud, security, data analytics/ AI, edge.  Expertise in building, integrating and delivering innovative digital products and solutions to market, across Private and Public sector within Enterprise.
-        
+
         Leading portfolio and industry efforts on application of Quantum Computing and Quantum Safe in Telecommunications in IBM.
       social:
         linkedin: https://www.linkedin.com/in/lory-p-1ab3104/
@@ -201,7 +201,7 @@ data:
     - name: Blair Canavan
       title: Director, Alliances at Thales
       bio: |
-        Blair has 30+ years of IT cybersecurity sales, channel, marketing, and business development experience. Blair continuously expanded his cybersecurity and cryptographic expertise starting with Symantec and several cyber start-ups including Chrysalis-ITS (Thales), InfoSec Global, Crypto4A and since September 2019, back with Thales’ Global Technology Alliances team, including the Quantum cryptography portfolio. Blair recently represented the Canadian Forum for Digital Infrastructure Resilience (CFDIR) to articulate the standards and Government guidance at Mobile World Congress (MWC) in 2023. He is an avid presenter, start-up consultant, and IT industry contributor. Blair holds an Hons.BA from the University of Waterloo, and Wilfrid Laurier University, Ontario, Canada.  
+        Blair has 30+ years of IT cybersecurity sales, channel, marketing, and business development experience. Blair continuously expanded his cybersecurity and cryptographic expertise starting with Symantec and several cyber start-ups including Chrysalis-ITS (Thales), InfoSec Global, Crypto4A and since September 2019, back with Thales’ Global Technology Alliances team, including the Quantum cryptography portfolio. Blair recently represented the Canadian Forum for Digital Infrastructure Resilience (CFDIR) to articulate the standards and Government guidance at Mobile World Congress (MWC) in 2023. He is an avid presenter, start-up consultant, and IT industry contributor. Blair holds an Hons.BA from the University of Waterloo, and Wilfrid Laurier University, Ontario, Canada.
       social:
         linkedin: https://www.linkedin.com/in/blair-canavan-5b708a2/
 
@@ -238,34 +238,34 @@ data:
 
     - name: Gustavo Banegas
       title: Cryptographer at Qualcomm
-      bio: | 
+      bio: |
         Gustavo possesses a distinguished academic background, having earned a Ph.D. in Computer Science and Mathematics with a specialization in post-quantum cryptography from  Eindhoven University of Technology. Over the past decade, he has diligently dedicated himself to the field of cryptography, focusing particularly on its practical implementation. 
 
         In recent years, Gustavo's expertise has extended to isogenies and the development of hardware implementations for algorithms such as Kyber, Dilithium, and Falcon.
 
         Today, Gustavo holds a senior position as a cryptography engineer at Qualcomm, where he continues to leverage his deep knowledge and practical experience to drive innovation and secure the digital landscape
-      social: 
+      social:
         linkedin: https://www.linkedin.com/in/gustavo-banegas-phd-50b12a69/
 
     - name: Lizzy Polman
       title: Inspector, Dutch Authority for Digital Infrastructure
-      bio: | 
+      bio: |
         Lizzy Polman is with the Dutch Authority for Digital Infrastructure (Rijksinspectie Digitale Infrastructuur - RDI) for over 3,5 years, in the function of Inspector for the eIDAS realm. She is also involved with research on Quantum Technology and the possible positive and negative impact on society, the working fields of the RDI, and coherence with existing technology. Her interest lies particularly in the domain of post-quantum cryptography. I have a background in Archaeology, Arabic culture, Crisis management, and IT security.
-      social: 
+      social:
         linkedin: https://www.linkedin.com/in/lizzy-polman-ma-msc-6b883644/
 
     - name: Jérôme Plût
       title: ANSSI
       bio: |
         Jérôme Plût is a cryptographer at the French cybersecurity agency ANSSI. He is involved in the writing of national cryptographic security requirements and in asymmetric and quantum-safe cryptography.
-      social: 
-        linkedin: 
+      social:
+        linkedin:
 
     - name: Sandra Guasch Castello
       title: Staff Privacy Engineer at SandboxAQ
       bio: |
         Sandra Guasch is a privacy engineer at SandboxAQ, where she works on post-quantum privacy-preserving technologies. She got her PhD from the Polytechnic University of Catalonia (UPC) on voter verifiability applied to electronic voting in 2016. She has worked in different areas of applied cryptography and cybersecurity, including designing electronic voting protocols, security lifecycle management, secure systems design and red teaming.
-      social: 
+      social:
         linkedin: https://www.linkedin.com/in/sandraguasch/
 
     - name: Tom Patterson
@@ -276,21 +276,21 @@ data:
         Tom has served on several public company boards, and advised the FBI, Secret Service, and White House on security issues. Tom also has been appointed to the U.S. President’s National Security Telecommunications Advisory Committee’s (NSTAC) Cyber Moonshot Subcommittee co-lead.
 
         Earlier, Tom has run security services for Deloitte in EMEA, and was IBM's Chief eCommerce Strategist. Tom has worked on security for the launch of a nuclear aircraft carrier and space shuttle as well as with the U.S. Government and businesses around the world. The author of Mapping Security, Tom is a frequent guest security expert on TV including CNBC, Fox and CNN, blogs regularly on Twitter @TomTalks, and speaks frequently at TEDx, DoJ, DoD, SIFMA, WEF, Davos, Financial Times, and many other high-level government and industry events around the world.
-      social: 
+      social:
         linkedin: https://www.linkedin.com/in/tomtalks
 
     - name: Pasqualle Verwoerdt
       title: Board of Directors at Compumatica
       bio: |
         Pasqualle Verwoerdt is a member of the Board of Directors of Compumatica and is closely involved with The Quantum Gateway Foundation (an initiative from ABN AMRO, Capgemini, UvA and Compumatica partly funded by Quantum Delta NL) as Steering Group member. Pasqualle has been involved in and interested in encryption and key management since 2014.
-      social: 
+      social:
         linkedin: https://www.linkedin.com/in/pasqualleverwoerdt/
 
     - name: Bor de Kock
       title: Assistant Professor of Cryptology at NTNU Trondheim
       bio: |
-        Bor de Kock is an Assistant Professor of Cryptology at NTNU, The Norwegian University of Science and Technology. He has an MSc degree in Computer Science and Engineering from the Eindhoven University of Technology, where he focused on information security, and a PhD on post-quantum key exchange protocols from NTNU. In his research Bor mostly works on key exchange and password-based protocols, while he teaches courses about cryptology and network security for masters’ students. 
-      social: 
+        Bor de Kock is an Assistant Professor of Cryptology at NTNU, The Norwegian University of Science and Technology. He has an MSc degree in Computer Science and Engineering from the Eindhoven University of Technology, where he focused on information security, and a PhD on post-quantum key exchange protocols from NTNU. In his research Bor mostly works on key exchange and password-based protocols, while he teaches courses about cryptology and network security for masters’ students.
+      social:
         linkedin: https://www.linkedin.com/in/bordekock/
 
     - name: Léo Ducas
@@ -306,7 +306,7 @@ data:
 
         I have also contributed to quantum cryptanalysis of lattice-based schemes, showing that not all lattices problems are equally resistant to quantum computing.
       website: https://homepages.cwi.nl/~ducas/
-      social: 
+      social:
         linkedin: https://www.linkedin.com/in/leo-ducas-28b6a04a/
 
     - name: Simona Samardjiska
@@ -314,7 +314,7 @@ data:
       bio: |
         Simona Samardjiska is an assistant professor in post-quantum cryptography at the Digital Security group, Radboud University. Her expertise and research interests are in the mathematics of post-quantum cryptography (multivariate and code-based cryptography). She has been actively involved in the current NIST Post-Quantum standardization process as a principal submitter of the second-round candidate MQDSS and one of the submitters of MEDS in the new 4th NIST signature round. She has also contributed to the understanding of the security of several finalists and second-round candidates, by analyzing their classical security and resistance to side-channel attacks. She has published on several IACR conferences, journals and IEEE symposiums, has been a program committee member of various cryptography-related conferences and workshops and is currently an associate editor of the EURASIP Journal on Information Security. She is an activist for gender balance and diversity in computer science.
       website: https://www.ru.nl/en/people/samardjiska-s
-      social: 
+      social:
         linkedin: https://www.linkedin.com/in/simona-samardjiska-516b8435/
 
     - name: Jelle Don
@@ -322,14 +322,14 @@ data:
       bio: |
         Jelle Don is a researcher nearing the completion of his PhD-candidacy in the Cryptology Group at Centrum Wiskunde & Informatica (CWI). His expertise is on provable security in the Quantum Random-Oracle Model, but recently he has been diving into the intricacies of post-quantum standardization.
       website: https://www.cwi.nl/en/people/jelle-don/
-      social: 
+      social:
         linkedin: https://www.linkedin.com/in/jelle-don-20b72a253/
 
     - name: Alessandro Amadori
       title: Cryptographer at TNO
       bio: |
         Alessandro Amadori is a cryptographer currently working at TNO, where his main area of expertise lies in the transition to quantum-safe cryptography. Prior to joining TNO, he earned his PhD from Eindhoven University of Technology, with a research focus on applied cryptography, especially secure implementations.
-      social: 
+      social:
         linkedin: https://www.linkedin.com/in/alessandro-amadori-4b2149b8
 
     - name: Francisco José Vial-Prado
@@ -337,16 +337,16 @@ data:
       bio: |
         Francisco José Vial-Prado studied at École Polytechnique in Paris, and holds a Ph.D. in Cryptography from the Université Paris-Saclay obtained under supervision of Prof. Louis Goubin. He currently works at Fortanix, where his work and research focuses in applied cryptography, post-quantum cryptography, and secure implementations.
       website: https://www.vialprado.com
-      social: 
+      social:
         linkedin: https://www.linkedin.com/in/francisco-vial-prado-a744871a6/
 
     - name: Robert Hann
       title: Global Vice President of Sales, Cryptographic Center of Excellence at Entrust
       bio: |
         Robert Hann is the Global Vice President of Sales, Center of Excellence at Entrust. He has specialized in PKI, Identity Management and Trust Services for well over two decades, bringing a practical, innovative and commercially sound perspective to these areas. With a broad business-centered focus, he has helped organizations in all sectors to realize their objectives and cost-effectively secure the services that many of us rely upon in our business and personal lives.
-        
+
         Prior to other roles at Entrust, he was co-owner of Trustis, a UK based Managed Cryptography Services provider that Entrust acquired in 2017.
-      social: 
+      social:
         linkedin: https://www.linkedin.com/in/robert-hann-a79509/
 
     - name: Ronald Cramer
@@ -392,7 +392,7 @@ data:
     - name: Lærke Vinther Christiansen
       title: PhD Researcher at Delft University of Technology
       bio: |
-        Lærke V. Christiansen is PhD Candidate at Delft University of Technology, where she specializes in Technology Governance and Serious Gaming. For her PhD, she is developing a serious game to facilitate the transition from current PKI systems to Quantum-Safe PKI systems. Furthermore, she specializes in collective action within socio-technical systems, which functions as the touchstone for her serious game designs.  
+        Lærke V. Christiansen is PhD Candidate at Delft University of Technology, where she specializes in Technology Governance and Serious Gaming. For her PhD, she is developing a serious game to facilitate the transition from current PKI systems to Quantum-Safe PKI systems. Furthermore, she specializes in collective action within socio-technical systems, which functions as the touchstone for her serious game designs.
       social:
         linkedin: https://www.linkedin.com/in/l%C3%A6rke-vinther-christiansen-884b71178/
 
@@ -407,7 +407,7 @@ data:
         sessions:
           - title: Opening
             description:
-            speakers: 
+            speakers:
               - Paul van Brouwershaven
               - Albert de Ruiter
             youtube: RgkFEX93A-I
@@ -434,7 +434,7 @@ data:
 
       - time: "10:30"
         title: Break
-        sponsor: 
+        sponsor:
 
       - time: "11:00"
         sessions:
@@ -447,7 +447,7 @@ data:
               Mr. Bill Newhouse, will provide valuable insights into how the United States is proactively preparing both its federal government and a spectrum of organizations, with a particular focus on those supporting critical infrastructure, for the era of Post-Quantum Cryptography. This presentation highlights the collaborative efforts of key entities, including the Cybersecurity and Infrastructure Security Agency (CISA), the National Security Agency (NSA), and the National Institute of Standards and Technology (NIST), in shaping the governance and regulatory landscape that will govern Post-Quantum Cryptography within the nation.
             track: Governance
             speakers:
-              - Bill Newhouse 
+              - Bill Newhouse
             presentation: pkic-pqcc_bill-newhouse_nist_preparing-the-united-states-for-pqc.pdf
             youtube: cG09NrgtUxE
             locations:
@@ -497,7 +497,7 @@ data:
 
               In this presentation, the BSI will expound upon its post-quantum cryptography policy and roadmap. We will emphasize the significance of the migration to post-quantum algorithms in safeguarding critical digital infrastructure, data, and communications. The presentation will elucidate the BSI’s approach, outlining the trajectory of post-quantum cryptography adoption as the default cryptographic standard.
             track: Governance
-            speakers: 
+            speakers:
               - Stephan Ehlen
             presentation: pkic-pqcc_stephan-ehlen_bsi_post-quantum-policy-and-roadmap-of-the-bsi.pdf
             youtube: npNTxhb6INU
@@ -563,7 +563,7 @@ data:
               \* _This is a 40 minute session_
             track: Algorithms
             speakers:
-              - Simona Samardjiska 
+              - Simona Samardjiska
             youtube: S_P7j6aWwXc
             presentation: pkic-pqcc_simona-samardjiska_radboud-university_code-based-cryptography.pdf
             locations:
@@ -584,7 +584,7 @@ data:
               - Jérôme Plût
               - Anita Wehmann
               - Ronald Cramer *
-            presentation: 
+            presentation:
             youtube: OfLBDM-n1l4
             locations:
               - plenary
@@ -598,14 +598,14 @@ data:
 
       - time: "13:00"
         title: Lunch
-        sponsor: 
+        sponsor:
 
       - time: "14:00"
         sessions:
           - title: What is it going to take to break cryptography with a quantum computer?
             description: |
               The whole industry is working on standardizing and implementing post-quantum cryptography, in order to mitigate the risk from future quantum computers. One question that is (and will probably remain) unanswered is “when are quantum computers going to be powerful enough to break cryptography?”. At the same time, there are regular press releases about new methods of breaking cryptography in the short term. These publications often cause panic and confusion which is counter-productive to the process of mitigating the quantum risk.
-              
+
               In this presentation we give a high-level description on how quantum algorithms work, and what still needs to happen before such algorithms can be implemented on real hardware. A simple model can be used to make sense of past and future announcements on the nearing moment of the cryptopocalypse (the point at which quantum computing becomes powerful enough to use Shor's algorithm to crack public-key cryptography). We discuss some of the examples from the past year.
             speakers:
               - Itan Barmes
@@ -632,7 +632,7 @@ data:
       - time: "14:30"
         sessions:
           - title: "Crunching the Numbers: Post Quantum Algorithm Performance"
-            description: |  
+            description: |
               Explore the differences between classic and post-quantum algorithms, comparing security levels, sizes and signature speeds. Hardware Security Modules are benchmarked to show real numbers.
             track: Technical
             speakers:
@@ -677,7 +677,7 @@ data:
 
       - time: "15:30"
         title: Break
-        sponsor: 
+        sponsor:
 
       - time: "16:00"
         sessions:
@@ -693,7 +693,7 @@ data:
               - plenary
 
           - title: Update from the GSMA Post Quantum Telco Network Task Force
-            description: |  
+            description: |
               The GSMA Post Quantum Telco Network Task Force has been dedicated to exploring the implications of Post-Quantum Cryptography (PQC) within the telecommunications space. Our mission extends beyond theoretical discussions, focusing on the tangible impacts on Network Operators and the broader telco supply chain.
 
               The task force is a collaborative effort involving more than 50 companies representing operators, government and the wider Telco supply chain, including over 20 major network operators globally.
@@ -736,7 +736,7 @@ data:
       - time: "17:00"
         sessions:
           - title: Closing remarks for day 1
-            description: 
+            description:
             speakers:
               - Paul van Brouwershaven
               - Albert de Ruiter
@@ -758,7 +758,7 @@ data:
             description: |
               Post-quantum crypto standards are coming: it doesn’t matter if you believe in quantum computers or not. What is the impact on the billions of embedded devices as used in automotive or IoT? Using some typical embedded use-cases we outline the challenges and show some recent solutions in this area.
             track: Hardware
-            speakers: 
+            speakers:
               - Joppe Bos
             presentation: pkic-pqcc_joppe-bos_nxp_post-quantum-crypto-challenges-for-embedded-applications.pdf
             youtube: ffBickBkvAk
@@ -809,7 +809,7 @@ data:
               - Giuseppe Damiano
               - Volker Krummel
               - Marc Stevens *
-            presentation: 
+            presentation:
             youtube: ZEWm2lbcd2o
             locations:
               - plenary
@@ -827,7 +827,7 @@ data:
 
       - time: "10:30"
         title: Break
-        sponsor: 
+        sponsor:
 
       - time: "11:00"
         sessions:
@@ -847,7 +847,7 @@ data:
               - plenary
 
           - title: "A Sign of the Times: The Transition to Quantum Secure Authentication"
-            description: | 
+            description: |
               Authentication is one of the most important security goals on the Internet and in the quantum era requires transitioning. Due to the complexity and scale of large systems, post-quantum migration time is often long. We’ll exemplify the challenges and timelines of authentication migrations using FIDO2, enabling the audience to assess the transition time of their own authentication systems.
             speakers:
               - Sandra Guasch Castello
@@ -864,7 +864,7 @@ data:
 
               Currently, this PKI is based on RSA-4096. Hence, its security is threatened by the potential development of cryptographically relevant quantum computers. In order to address this threat, a full migration to a PKI based on quantum-safe cryptographic primitives has to be carried out.
 
-              Due to the variety of use-cases within this PKI, a number of technical requirements concerning performance, security and interoperability have to be taken into account in this migration. The goal of the talk is to discuss these requirements in detail and to present several concepts and possible solutions. In particular, we argue that a parallelized migration approach is essential in order to ensure constant availability of the system. Moreover, we discuss why standardized, stateful hash-based signature schemes such as XMSS or LMS are promising candidates for the root-CA-level in the PKI hierarchy. 
+              Due to the variety of use-cases within this PKI, a number of technical requirements concerning performance, security and interoperability have to be taken into account in this migration. The goal of the talk is to discuss these requirements in detail and to present several concepts and possible solutions. In particular, we argue that a parallelized migration approach is essential in order to ensure constant availability of the system. Moreover, we discuss why standardized, stateful hash-based signature schemes such as XMSS or LMS are promising candidates for the root-CA-level in the PKI hierarchy.
             track: PKI
             speakers:
               - Kaveh Bashiri
@@ -886,19 +886,18 @@ data:
       - time: "12:00"
         sessions:
           - title: PKI and PQC Strategy for Payment Card Industry
-            description: |  
+            description: |
               In this session you will get an overview of the impact of PQC to PCI Standards (such as ANSI X9, and ISO TC68 standards applicable to PKI in the financial services/payment card industry) and the steps taken to prepare them for a world with Post-Quantum Cryptography.
             track: PKI
             speakers:
               - Jeremy King
-            track: PKI
             presentation: pkic-pqcc_jeremy-king_pci-security-standards-council_pki-and-pqc-strategy-for-payment-card-industry.pdf
             youtube: 4RrAmcilkpQ
             locations:
               - plenary
 
           - title: "Symmetric Key Exchange: Lightweight Alternatives for a Post-Quantum IoT"
-            description: |  
+            description: |
               Symmetric cryptographic primitives such as AES are simple, efficient and secure – even in a post-quantum world – which makes them interesting for a variation of purposes where we need secure encryption, but with strong constraints to computing power and storage. Traditionally a downside of these algorithms has been their static, long-term keys, making it hard to achieve security properties such as forward secrecy without negotiating a new key every time.
 
               In this talk we will look at a number of protocols that achieve symmetric authenticated key exchange: we propose new methods of key evolution that guarantee full forward secrecy, while also taking care of key synchronization between the involved parties. This makes them very suitable for IoT devices, or other settings where efficient post-quantum cryptography is required.
@@ -919,7 +918,7 @@ data:
 
               Join us to navigate the crucial intersection of Post-Quantum Cryptography and Trust Services, as we delve into the Dutch perspective and the broader implications for the global trust ecosystem.
             track: PKI
-            speakers: 
+            speakers:
               - Lizzy Polman
             presentation: pkic-pqcc_lizzy-pollman_rdi_post-quantum-cryptography-and-trust-services.pdf
             youtube: GGD7WafUfIA
@@ -931,19 +930,19 @@ data:
               Blockchain technology was created to make the storage of data or transactions more secure.  It has revolutionized the way we process transactions with improved security, efficiency, and transparency.  PKI is the security backbone of blockchain technology to ensure the integrity and trustworthiness of a blockchain network.  In the world of cryptocurrencies, private keys are used by the payer to sign and initiate a transaction.  It is also used by a validator to sign and assure the world that a transaction has been validated.  RSA and ECC are the most commonly used algorithms in the current PKI ecosystem.  It has been proven for over 40 years that the private key cannot be reverse engineered back from its public key even using the most powerful super computer today.  However, the rapid development of quantum computing is posing security threats to PKI because its excessive power can derive the private key back from its public key.  This breaks the backbone of blockchain security because transactions cannot be trusted anymore.  In this session we will cover quantum threats to blockchain.  We will also demonstrate some practical implementations of PQC that have been performed to convert an existing blockchain network to become quantum-safe.
             speakers:
               - Andrew Cheung
-            youtube: eV5zc8hwUFU 
+            youtube: eV5zc8hwUFU
             presentation: pkic-pqcc_andrew-cheung_01-communique-laboratory_vulnerabilities-of-blockchain-security-in-the-world-of-quantum-computing.pdf
             locations:
               - breakout
 
       - time: "13:00"
         title: Lunch
-        sponsor: 
+        sponsor:
 
       - time: "14:00"
         sessions:
           - title: NIST standardization of additional signature schemes
-            description: |  
+            description: |
               In this presentation, Dr. Dustin Moody, a distinguished expert from the U.S. National Institute of Standards and Technology (NIST), will take you on a deep dive into NIST's standardization efforts for additional signature schemes.
 
               With the first round of additional signature scheme candidates announced in July, Dr. Moody will shed light on various approaches, including Code-based, Isogeny, Lattice-based, Multivariate, and others. He will also share insights into the feedback received since their initial announcement.
@@ -974,7 +973,7 @@ data:
       - time: "14:30"
         sessions:
           - title: Moving toward a Quantum Security Maturity Index
-            description: | 
+            description: |
               Recent advances in quantum computing, factoring algorithms, and hybrid compute approaches toward development of cryptographically relevant quantum computers have made the need to proactively defend our enterprises from this threat an immediate requirement.  
 
               Today there are a variety of approaches toward mitigating this risk that are being considered, developed, and deployed around the world.  There are leading sectors and trailing sectors in terms of adoption, and there are different algorithms and architectures being relied on in various parts of the world.  The constant message from government and industry is to 'Start Now' and while that is good, we need to consider what's next.
@@ -983,7 +982,7 @@ data:
 
               These maturity index levels would cover initial risk and strategy, discovery and inventory, crypto ecosystem, architectures, testing, trials, roll outs, and a steady state managed operation. Included in each of these levels would be reference to approaches such as CBOMs, crypto agility, quantum key distribution, algorithm selection, and more.
 
-              This talk will provide an introduction to the maturity index concept for quantum, an update on what else is happening around the world, and provide an invitation to participate in both the definitions, adoptions, and benefits of a globally accepted post quantum maturity index.  
+              This talk will provide an introduction to the maturity index concept for quantum, an update on what else is happening around the world, and provide an invitation to participate in both the definitions, adoptions, and benefits of a globally accepted post quantum maturity index.
             speakers:
               - Tom Patterson
             presentation: pkic-pqcc_tom-patterson_accenture_moving-toward-a-quantum-security-maturity-index.pdf
@@ -1019,7 +1018,7 @@ data:
               While it's clear that a coming CRQC is a threat to encrypted data already now, its threat potential on today's signature applications seems not well understood. We will show PKI based use cases where we believe it's already an issue and needs to be addressed. Also we present hybrid mechanisms that can resolve the issue and discuss their pros and cons.
             track: Technical
             speakers:
-              - Jan Klaussner 
+              - Jan Klaussner
             youtube: Gpk7v6JMUlg
             presentation: pkic-pqcc_jan-klaussner_d-trust_crqc-and-signatures-no-problem.pdf
             locations:
@@ -1027,12 +1026,12 @@ data:
 
       - time: "15:30"
         title: Break
-        sponsor: 
+        sponsor:
 
       - time: "16:00"
         sessions:
           - title: "Final Q&A"
-            description: | 
+            description: |
               As we wrap up this two-day conference, our experts will come together to address your queries, offer further insights, and engage in a meaningful exchange of ideas. Whether you seek to delve deeper into specific topics discussed during the conference or have broader inquiries about the quantum landscape, this session is your opportunity to connect with the experts who have shared their wisdom and expertise over the past two days.
 
               Join us for a collaborative and enlightening Q&A session that tries to provide clarity, foster discussion, and leave you with a comprehensive understanding of the quantum computing and cryptography landscape. Don't miss this final chance to engage with our speakers and conference chairs in a vibrant exchange of knowledge.
@@ -1069,7 +1068,7 @@ data:
       - time: "17:00"
         sessions:
           - title: Closing remarks
-            description: 
+            description:
             speakers:
               - Paul van Brouwershaven
               - Albert de Ruiter
@@ -1079,7 +1078,6 @@ data:
 
       - time: "17:05"
         title: Networking
-
 ---
 
 ## Conference details
@@ -1088,12 +1086,12 @@ On November 7 and 8, 2023 the PKI Consortium hosted their second hybrid Post-Qua
 
 The conference welcomed business leaders, industry experts, and representatives from various public and private sectors interested in PQC, offering a diverse program featuring keynote speeches, breakout sessions, panel discussions, and workshops.
 
-> The conference was open for anyone interested in preparing for Post-Quantum Cryptography and **not limited** to the members of the PKI Consortium. 
-{.callout-info}
+> The conference was open for anyone interested in preparing for Post-Quantum Cryptography and **not limited** to the members of the PKI Consortium.
+> {.callout-info}
 
 ## Sponsors
 
-We are immensely grateful to our sponsors: 
+We are immensely grateful to our sponsors:
 
 {{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Amsterdam 2023" level="all" >}}
 
@@ -1111,4 +1109,4 @@ This conference would not be possible without the organizational support of the 
 
 {{< figure src="/img/organizational-support.jpg" >}}
 
-For more information on this conference, contact the PKI Consortium at feedback@pkic.org 
+For more information on this conference, contact the PKI Consortium at feedback@pkic.org

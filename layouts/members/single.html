@@ -1,87 +1,105 @@
 {{ define "main" }}
-{{$member := index $.Site.Data.members ($.Param "id")}}
+{{$member := index site.Data.members (.Param "id")}}
 {{ if not $member }}
-  {{ errorf "Member: %q not found" ($.Param "id") }}
+  {{ errorf "Member: %q not found" (.Param "id") }}
 {{ end }}
 <div data-pagefind-body>
-<section class="py-4 text-center container">
+  <section class="py-4 text-center container">
     <div class="row py-lg-2">
       <div class="col-10 mx-auto">
-        {{ $title := (printf "%s is a member of the %s" $member.name $.Site.Params.name ) }}
-        {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id $member.id) }}
-        {{ with $img}}
-        <p><img style="height:150px; max-width: 60%;" class="py-3" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}" data-pagefind-meta="image[src]"></p>
+        {{ $title := (printf "%s is a member of the %s" $member.name
+        $.Site.Params.name ) }} {{ $img := resources.GetMatch (printf
+        "/images/members/%s/%s.*" $member.id $member.id) }} {{ with $img}}
+        <p>
+          <img
+            style="height: 150px; max-width: 60%"
+            class="py-3"
+            alt="{{ $title }}"
+            title="{{ $title }}"
+            src="{{ $img.Permalink }}"
+            data-pagefind-meta="image[src]"
+          />
+        </p>
         {{ end }}
-        
-        <h1 class="fw-light"><strong>{{.Title}}</strong> is a member of the {{ $.Site.Params.shortName }}</h1>
+
+        <h1 class="fw-light">
+          <strong>{{.Title}}</strong> is a member of the {{
+          $.Site.Params.shortName }}
+        </h1>
         <p class="lead text-muted">{{ $member.description }}</p>
       </div>
     </div>
   </section>
 
-<div class="py-2 bg-light">
-</div>
+  <div class="py-2 bg-light"></div>
 
-<div class="py-5">
-  <div class="container">
-    <div class="row">
-      <div class="col-lg-8 order-lg-1">
-        <article id="content">
-        {{ .Content }}
-        </article>
-      </div>
+  <div class="py-5">
+    <div class="container">
+      <div class="row">
+        <div class="col-lg-8 order-lg-1">
+          <article id="content">{{ .Content }}</article>
+        </div>
 
-      <div id="sidebar" class="col-lg-4 order-lg-2">
-        <div class="text-end">{{ partial "social.html" $member.social }}</div>
-        <small>
-          {{ with $member.memberSince }}<strong>Member since:</strong> {{ dateFormat "January 2006" $member.memberSince }}<br />{{ end }}
-          {{ with $member.website }}<strong>Website:</strong> <a href="{{ $member.website }}" target="_blank">{{ $member.website }}</a><br />{{ end }}
-          {{ with $member.press.url }}<strong>Press:</strong> <a href="{{ $member.press.url }}" target="_blank">{{ $member.press.url }}</a><br />{{ end }}
-          {{ with $member.careers.url }}<strong>Careers:</strong> <a href="{{ $member.careers.url }}" target="_blank">{{ $member.careers.url }}</a><br />{{ end }}
-          {{ with $member.blog.url }}<strong>Blog:</strong> <a href="{{ $member.blog.url }}" target="_blank">{{ $member.blog.url }}</a><br />{{ end }}
-        </small>
-        <p>
-          {{ with $member.blog.feed }}
-          {{ partial "rssfeed.html" $member.blog.feed }}
-          {{ end }}
-        </p>
+        <div id="sidebar" class="col-lg-4 order-lg-2">
+          <div class="text-end">{{ partial "social.html" $member.social }}</div>
+          <small>
+            {{ with $member.memberSince }}<strong>Member since:</strong> {{
+            dateFormat "January 2006" $member.memberSince }}<br />{{ end }} {{
+            with $member.website }}<strong>Website:</strong>
+            <a href="{{ $member.website }}" target="_blank"
+              >{{ $member.website }}</a
+            ><br />{{ end }} {{ with $member.press.url }}<strong>Press:</strong>
+            <a href="{{ $member.press.url }}" target="_blank"
+              >{{ $member.press.url }}</a
+            ><br />{{ end }} {{ with $member.careers.url }}<strong
+              >Careers:</strong
+            >
+            <a href="{{ $member.careers.url }}" target="_blank"
+              >{{ $member.careers.url }}</a
+            ><br />{{ end }} {{ with $member.blog.url }}<strong>Blog:</strong>
+            <a href="{{ $member.blog.url }}" target="_blank"
+              >{{ $member.blog.url }}</a
+            ><br />{{ end }}
+          </small>
+          <p>
+            {{ with $member.blog.feed }} {{ partial "rssfeed.html"
+            $member.blog.feed }} {{ end }}
+          </p>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
-
-<div class="py-5 bg-light">
-  <div class="container">
-      {{ with $member.representatives }}
-        {{ range where . "hidden" "==" nil}}
-          {{ $date := (time "9999-01-01") }}
-          {{ with .till }}
-            {{ $date = (time .) }}
+  <div class="py-5 bg-light">
+    <div class="container">
+      {{ with $member.representatives }} {{ range where . "hidden" "==" nil}} {{
+      $date := (time "9999-01-01") }} {{ with .till }} {{ $date = (time .) }} {{
+      end }} {{ if time.Now.Before $date }}
+      <div class="row mb-5">
+        <div class="col-lg-9 order-lg-2">
+          <h2 id="{{ .name | urlize | safeURL }}" class="featurette-heading">
+            {{.name}} {{ partial "social.html" .social }} {{ partial
+            "anchor.html" (.name | urlize) }}
+          </h2>
+          <h5>{{.role}}</h5>
+          <p class="lead">{{.description | markdownify }}</p>
+        </div>
+        <div class="col-lg-3 order-lg-1">
+          {{ $title := (printf "%s is %s at %s" .name .role $member.name) }} {{
+          $img := resources.GetMatch (printf "/images/members/%s/%s.*"
+          $member.id (default (.name | urlize | safeURL) .id)) }} {{ with $img
+          }} {{ $img = $img.Resize "x350" }}
+          <img
+            class="img-thumbnail"
+            alt="{{ $title }}"
+            title="{{ $title }}"
+            src="{{ $img.Permalink }}"
+          />
           {{ end }}
-
-          {{ if time.Now.Before $date }}
-            <div class="row mb-5">
-              <div class="col-lg-9 order-lg-2">
-                <h2 id="{{ .name | urlize | safeURL }}" class="featurette-heading">{{.name}} {{ partial "social.html" .social }}
-                  {{ partial "anchor.html" (.name | urlize) }}
-                </h2>
-                <h5>{{.role}}</h5>
-                <p class="lead">{{.description | markdownify }}</p>
-              </div>
-              <div class="col-lg-3 order-lg-1">
-                {{ $title := (printf "%s is %s at %s" .name .role $member.name) }}
-                {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id (default (.name | urlize | safeURL) .id)) }}
-                {{ with $img }}
-                {{ $img = $img.Resize "x350" }}
-                <img class="img-thumbnail" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
-                {{ end }}
-              </div>
-            </div>
-          {{ end }}
-        {{ end }}
-      {{ end }}
+        </div>
+      </div>
+      {{ end }} {{ end }} {{ end }}
+    </div>
   </div>
-</div>
 </div>
 {{ end }}
