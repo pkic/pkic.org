@@ -9,6 +9,16 @@ heroDescription: Public Key Infrastructure (PKI)
 
 menu: 
     main:
+    footer:
+        parent: consortium
+        weight: 11
+
+leadership:
+  - name: Paul van Brouwershaven
+    role: Chair
+    affiliation: digitorus
+  - name: Albert de Ruiter
+    role: Vice Chair
 ---
 
 ## About us
@@ -31,10 +41,9 @@ The Public Key Infrastructure Consortium is comprised of leading organizations t
 
 ## Leadership
 
-### Chair and Vice-chair
+### Chair and Vice Chair
 
-* Chairmain: Paul van Brouwershaven
-* Vice-Chairman: Albert de Ruiter
+{{< consortium-leadership >}}
 
 ### Board of Directors and Executive Council
 

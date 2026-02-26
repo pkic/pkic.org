@@ -1,0 +1,16 @@
+{{/*
+  Sidebar for WG content sections (PKIMM, RKA, etc.)
+  Accepts the normal page context (.).
+*/}}
+
+<button class="wg-sidebar-toggle" id="wg-sidebar-collapse-btn"
+        aria-label="Collapse sidebar" aria-expanded="true">
+  <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"
+       fill="none" stroke="currentColor" stroke-width="2.5"
+       stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+    <polyline points="15 18 9 12 15 6"/>
+  </svg>
+</button>
+<nav class="wg-sidebar" aria-label="Section navigation">
+  {{- partial "wg-sidebar-tree.html" . -}}
+</nav>

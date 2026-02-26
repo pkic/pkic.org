@@ -1,0 +1,12 @@
+<svg class="ICON_CLASS" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <!-- Certificate seal outer ring -->
+  <circle cx="24" cy="22" r="14" stroke="currentColor" stroke-width="2.2" fill="none" opacity="0.85"/>
+  <!-- Inner ring -->
+  <circle cx="24" cy="22" r="9.5" stroke="currentColor" stroke-width="1.5" fill="none" opacity="0.50"/>
+  <!-- Checkmark / trust seal center -->
+  <polyline points="18,22 22,26.5 30,17" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.95"/>
+  <!-- Ribbon left -->
+  <path d="M17 33 L14 40 L19 37.5 L21 41 L24 34" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.65"/>
+  <!-- Ribbon right -->
+  <path d="M31 33 L34 40 L29 37.5 L27 41 L24 34" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" fill="none" opacity="0.65"/>
+</svg>

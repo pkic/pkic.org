@@ -1,0 +1,147 @@
+{{/*
+  blog-author-card.html — renders one author card per author listed in .Params.authors.
+
+  For each author the partial:
+    1. Looks them up in hugo.Data.members (current PKI Consortium members)
+       → Only uses a representative entry whose from/till window covers the post's PublishDate
+    2. Falls back to hugo.Data.authors (past members / third-party organizations)
+    3. Falls back to a name-only card with generated initials
+
+  Each card shows:
+    • Circular headshot (from /assets/images/members/<id>/<slug>.*) or initials avatar
+    • Full name + role/title at the time of posting
+    • Social links (via social.html partial, consistent with the rest of the site)
+    • Organization logo (or name with link if no logo)
+
+  Usage:  {{ partial "blog-author-card.html" . }}   (pass the Page as context)
+*/}}
+
+{{- $page    := . -}}
+{{- $pubDate := $page.PublishDate -}}
+{{- $found   := slice -}}
+
+{{/* ── helper: is this rep active on the post's publish date? ─────────── */}}
+{{/*
+    A rep is active if:
+      • no `from` AND no `till`  → always active
+      • has `from`, no `till`   → active from that date onward
+      • has `till`, no `from`   → active until that date
+      • has both               → must fall within the window
+*/}}
+
+{{/* ── 1. PKI Consortium members ──────────────────────────────────────── */}}
+{{- range hugo.Data.members -}}
+  {{- $member := . -}}
+  {{- range .representatives -}}
+    {{- $rep     := . -}}
+    {{- $repName := $rep.name | strings.TrimRight "*" -}}
+    {{- if not (in $page.Params.authors $repName) -}}{{- continue -}}{{- end -}}
+
+    {{/* Skip if already rendered from another member file */}}
+    {{- if in $found $repName -}}{{- continue -}}{{- end -}}
+
+    {{/* Date window: coerce to time.Time in case YAML stored the date as a string */}}
+    {{- $active := true -}}
+    {{- with $rep.from -}}{{- if $pubDate.Before (time .) -}}{{- $active = false -}}{{- end -}}{{- end -}}
+    {{- with $rep.till -}}{{- if $pubDate.After  (time .) -}}{{- $active = false -}}{{- end -}}{{- end -}}
+    {{- if not $active -}}{{- continue -}}{{- end -}}
+
+    {{- $found    = $found | append $repName -}}
+    {{- $slug     := $repName | urlize -}}
+    {{- $headshot := resources.GetMatch (printf "images/members/%s/%s.*" $member.id $slug) -}}
+    {{- $orgImg   := resources.GetMatch (printf "images/members/%s/%s.*" $member.id $member.id) -}}
+
+    <div class="blog-author-card">
+      {{- if $headshot }}
+      <img class="blog-author-avatar" src="{{ $headshot.Permalink }}" alt="{{ $repName }}" loading="lazy">
+      {{- else }}
+      <div class="blog-author-avatar blog-author-initials">
+        {{- $parts := split $repName " " -}}
+        {{- range first 2 $parts -}}{{- substr . 0 1 | upper -}}{{- end -}}
+      </div>
+      {{- end }}
+
+      <div class="blog-author-info">
+        <div class="blog-author-name-row">
+          <a class="blog-author-name" href="/members/{{ $member.id }}/#{{ $repName | urlize }}" title="View {{ $repName }}'s profile">{{ $repName }}</a>
+          {{- with $rep.social }}
+          <div class="blog-author-social">{{ partial "social.html" . }}</div>
+          {{- end }}
+        </div>
+        {{- with $rep.role }}<div class="blog-author-role">{{ . }} at {{ $member.name }}</div>{{- end }}
+
+        {{/* Org logo - always show if available; fallback text only when no role (role already names the org) */}}
+        {{- if $orgImg -}}
+          {{- $logoSrc := $orgImg.Permalink -}}
+          {{- if ne $orgImg.MediaType.SubType "svg" -}}
+            {{- $sized := $orgImg.Fit "120x32" -}}
+            {{- $logoSrc = $sized.Permalink -}}
+          {{- end -}}
+          <div class="blog-author-org">
+            <a href="{{ $member.website }}" target="_blank" rel="noopener noreferrer" title="{{ $member.name }}">
+              <img src="{{ $logoSrc }}" alt="{{ $member.name }}" class="blog-author-org-logo">
+            </a>
+          </div>
+        {{- else if not $rep.role -}}
+          <div class="blog-author-org">
+            <a href="{{ $member.website }}" target="_blank" rel="noopener noreferrer" class="blog-author-org-name">{{ $member.name }}</a>
+          </div>
+        {{- end }}
+      </div>
+    </div>
+  {{- end -}}
+{{- end -}}
+
+{{/* ── 2. Third-party / former-member authors (hugo.Data.authors) ───── */}}
+{{- range $page.Params.authors -}}
+  {{- if in $found . -}}{{- continue -}}{{- end -}}
+  {{- $authorName := . -}}
+  {{- range hugo.Data.authors -}}
+    {{- $org := . -}}
+    {{- range .representatives -}}
+      {{- $rep := . -}}
+      {{- if not (eq $rep.name $authorName) -}}{{- continue -}}{{- end -}}
+      {{- if in $found $authorName -}}{{- continue -}}{{- end -}}
+
+      {{/* Date window: coerce to time.Time in case YAML stored the date as a string */}}
+      {{- $active := true -}}
+      {{- with $rep.from -}}{{- if $pubDate.Before (time .) -}}{{- $active = false -}}{{- end -}}{{- end -}}
+      {{- with $rep.till -}}{{- if $pubDate.After  (time .) -}}{{- $active = false -}}{{- end -}}{{- end -}}
+      {{- if not $active -}}{{- continue -}}{{- end -}}
+
+      {{- $found = $found | append $authorName -}}
+
+      <div class="blog-author-card">
+        <div class="blog-author-avatar blog-author-initials">
+          {{- $parts := split $authorName " " -}}
+          {{- range first 2 $parts -}}{{- substr . 0 1 | upper -}}{{- end -}}
+        </div>
+        <div class="blog-author-info">
+          <div class="blog-author-name">{{ $authorName }}</div>
+          {{- with $rep.role }}<div class="blog-author-role">{{ . }}</div>{{- end }}
+          {{- with $rep.social }}
+          <div class="blog-author-social">{{ partial "social.html" . }}</div>
+          {{- end }}
+          <div class="blog-author-org">
+            <a href="{{ $org.website }}" target="_blank" rel="noopener noreferrer" class="blog-author-org-name">{{ $org.name }}</a>
+          </div>
+        </div>
+      </div>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ── 3. Fallback: name not matched anywhere — show initials only ──── */}}
+{{- range $page.Params.authors -}}
+  {{- if in $found . -}}{{- continue -}}{{- end -}}
+  {{- $found = $found | append . -}}
+  <div class="blog-author-card">
+    <div class="blog-author-avatar blog-author-initials">
+      {{- $parts := split . " " -}}
+      {{- range first 2 $parts -}}{{- substr . 0 1 | upper -}}{{- end -}}
+    </div>
+    <div class="blog-author-info">
+      <div class="blog-author-name">{{ . }}</div>
+    </div>
+  </div>
+{{- end -}}

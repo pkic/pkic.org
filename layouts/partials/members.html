@@ -13,11 +13,6 @@
 <!-- Members -->
 {{ range hugo.Data.members }}
     {{ if $date.After (time .memberSince) }}
-    {{ $title := (printf "%s, %s - A member of the %s" .name (.slogan | default "") $.Site.Params.name ) }}
-    {{ if not .slogan }}
-        {{ $title = (printf "%s - A member of the %s" .name $.Site.Params.name ) }}
-    {{ end }}
-
     {{ $href := .website }}
     {{ with $.Site.GetPage (printf "/members/%s" .id) }}
         {{ $href = .Permalink }}
@@ -26,22 +21,30 @@
     {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
     {{ if $img }}
         {{ $sponsorLevel := 0 }}
+        {{ $sponsorLevelName := "" }}
         {{ with .sponsor }}
             {{ with .level }}
                 {{ $l := index hugo.Data.sponsorlevels . }}
-                {{ if $l }}{{ $sponsorLevel = $l }}{{ end }}
+                {{ if $l }}
+                    {{ $sponsorLevel = $l }}
+                    {{ $sponsorLevelName = . }}
+                {{ end }}
             {{ end }}
             {{ with (index .sponsoring $.Site.Params.name) }}
                 {{ $l := index hugo.Data.sponsorlevels .level }}
-                {{ if $l }}{{ if gt $l $sponsorLevel }}{{ $sponsorLevel = $l }}{{ end }}{{ end }}
+                {{ if $l }}{{ if gt $l $sponsorLevel }}
+                    {{ $sponsorLevel = $l }}
+                    {{ $sponsorLevelName = .level }}
+                {{ end }}{{ end }}
             {{ end }}
         {{ end }}
         {{ $entry := (dict
             "name" .name
-            "title" $title
+            "slogan" (.slogan | default "")
             "href" $href
             "img" $img.Permalink
             "sponsorLevel" $sponsorLevel
+            "sponsorLevelName" $sponsorLevelName
         ) }}
         {{ if gt $sponsorLevel 0 }}
             {{ $sponsors = $sponsors | append $entry }}
@@ -56,26 +59,33 @@
 {{ range hugo.Data.sponsors }}
     {{ $context := $.Site.Params.name }}
     {{ $sponsorLevel := 0 }}
+    {{ $sponsorLevelName := "" }}
     {{ with .sponsor }}
         {{ with .level }}
             {{ $l := index hugo.Data.sponsorlevels . }}
-            {{ if $l }}{{ $sponsorLevel = $l }}{{ end }}
+            {{ if $l }}
+                {{ $sponsorLevel = $l }}
+                {{ $sponsorLevelName = . }}
+            {{ end }}
         {{ end }}
         {{ with (index .sponsoring $.Site.Params.name) }}
             {{ $l := index hugo.Data.sponsorlevels .level }}
-            {{ if $l }}{{ if gt $l $sponsorLevel }}{{ $sponsorLevel = $l }}{{ end }}{{ end }}
+            {{ if $l }}{{ if gt $l $sponsorLevel }}
+                {{ $sponsorLevel = $l }}
+                {{ $sponsorLevelName = .level }}
+            {{ end }}{{ end }}
         {{ end }}
     {{ end }}
     {{ if gt $sponsorLevel 0 }}
-        {{ $title := (printf "%s is a sponsor for the %s" .name $context) }}
         {{ $img := resources.GetMatch (printf "/images/sponsors/**/%s" .logo) }}
         {{ with $img }}
             {{ $sponsors = $sponsors | append (dict
-                "name" $.name
-                "title" $title
+                "name" .name
+                "slogan" ""
                 "href" $.website
                 "img" .Permalink
                 "sponsorLevel" $sponsorLevel
+                "sponsorLevelName" $sponsorLevelName
             ) }}
         {{ end }}
     {{ end }}
@@ -87,10 +97,16 @@
 {{ $entries = shuffle $entries }}
 
 {{- range $entries -}}
-<a href="{{ .href }}" title="{{ .title }}" target="_blank" rel="noopener"><img
+<a href="{{ .href }}"
+   target="_blank"
+   rel="noopener"
+   data-sponsor-level="{{ .sponsorLevel }}"
+   data-member-name="{{ .name }}"
+   {{ with .slogan }}data-member-slogan="{{ . }}"{{ end }}
+   {{ if gt .sponsorLevel 0 }}data-sponsor-level-name="{{ .sponsorLevelName }}"{{ end }}
+><img
     class="member-logo{{ if gt .sponsorLevel 0 }} member-logo-sponsor sponsor-lvl-{{ .sponsorLevel }}{{ end }}"
-    alt="{{ .title }}"
-    title="{{ .title }}"
+    alt="{{ .name }}"
     src="{{ .img }}"
     loading="lazy"
 /></a>

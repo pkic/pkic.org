@@ -6,6 +6,10 @@ menu:
         parent: working-groups
         name: "Post-Quantum Cryptography (PQC)"
         weight: 10
+
+aliases:
+  - /pqc/
+
 title: Post-Quantum Cryptography Working Group
 description: Preparing the PKI ecosystem for the quantum computing era through collaborative research, education, standards alignment, and practical tooling.
 summary: Preparing the PKI ecosystem for the quantum computing era through collaborative research, education, standards alignment, and practical tooling.
@@ -20,7 +24,25 @@ heroButton:
 
 wgID: PQC
 color: blue
-icon: "⚛️"
+
+card:
+  icon: pqc
+  order: 2
+  gradient: ["#4a1d8e", "#1c0852"]
+  description: "Facilitating information exchange and sharing insights on post-quantum cryptography adoption across the PKI ecosystem."
+  links:
+    - text: "PQC Conference"
+      url: "/events/2025/pqc-conference-kuala-lumpur-my/"
+      chip: warning
+    - text: "Capabilities Matrix"
+      url: "pqccm/"
+      chip: primary
+    - text: "Blog Posts"
+      url: "/tags/pqc/"
+      chip: muted
+    - text: "Charter"
+      url: "charter/"
+      chip: muted
 
 intro: >
   The **Post-Quantum Cryptography (PQC)** Working Group brings together PKI practitioners,
@@ -57,26 +79,6 @@ deliverables:
     description: A living document tracking support for post-quantum cryptography algorithms across vendors and products.
     url: /pqccm/
     status: active
-  - title: PQC Migration Playbook
-    description: Step-by-step guidance for organizations planning their migration from classical to post-quantum cryptography.
-    url: /resources/
-    status: active
-  - title: PQC Terminology Guide
-    description: Common definitions to ensure consistent communication across the industry about post-quantum cryptography.
-    url: /resources/
-    status: active
-  - title: Harvest-Now-Decrypt-Later Threat Analysis
-    description: Analysis and guidance on the "store now, decrypt later" threat model that makes migration time-sensitive.
-    url: /resources/
-    status: active
-  - title: Algorithm Selection Guide
-    description: Practical guidance helping PKI practitioners choose the right NIST-standardized algorithms for their specific use cases.
-    url: /resources/
-    status: planned
-  - title: Hybrid Certificate Profiles
-    description: Draft profiles for dual-algorithm (classical + PQC) X.509 certificates to support gradual migration.
-    url: /resources/
-    status: planned
 
 resources:
   - title: NIST Post-Quantum Cryptography Standards

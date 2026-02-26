@@ -20,7 +20,20 @@ heroButton:
 
 wgID: TCWG
 color: teal
-icon: "🎓"
+
+chair:
+  name: Neal Fuerst
+  viceChair: Sandip Dholakia
+
+card:
+  icon: tc
+  order: 4
+  gradient: ["#1a5a3a", "#0a2d1e"]
+  description: "Developing professional standards, vendor-neutral curricula and certification programmes for PKI practitioners worldwide."
+  links:
+    - text: "Charter"
+      url: "/wg/tcwg/charter/"
+      chip: muted
 
 intro: |
   The **Training and Certification (TC)** Working Group is advancing PKI knowledge and skills through vendor-neutral training curricula, structured certification programs, and freely accessible educational resources.
@@ -47,17 +60,11 @@ focus:
     icon: "🔄"
 
 deliverables:
+  - title: PKI Training Guide
+    description: A structured, modular guide covering all aspects of PKI design, operation, and management.
+    status: active
   - title: PKI Practitioner Certification
     description: A vendor-neutral certification recognizing foundational PKI knowledge and skills.
-    url: /resources/
-    status: planned
-  - title: PKI Training Curriculum
-    description: A structured, modular curriculum covering all aspects of PKI design, operation, and management.
-    url: /resources/
-    status: active
-  - title: Exam Blueprint
-    description: Publicly available exam blueprint defining the domains and objectives covered in the certification exam.
-    url: /resources/
     status: planned
 
 resources:

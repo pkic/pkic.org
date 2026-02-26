@@ -11,6 +11,11 @@ heroButton:
     label: Join the conversation
     link: /discussions/
 
+menu:
+    footer:
+        parent: resources
+        weight: 34
+
 ---
 
 ## Engagement and knowledge sharing

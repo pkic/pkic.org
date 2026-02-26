@@ -3,7 +3,7 @@
 {{ if not $member }}
   {{ errorf "Member: %q not found" (.Param "id") }}
 {{ end }}
-<div data-pagefind-body>
+<div data-pagefind-body data-edit-url="{{ site.Params.siteSource }}/data/members/{{ $member.id }}.yaml">
   <section class="py-4 text-center container">
     <div class="row py-lg-2">
       <div class="col-10 mx-auto">

@@ -308,33 +308,57 @@ $wg-colors: (
   }
 }
 
-.members-nav-pills {
-  .nav-link {
-    color: $gray-700;
+.members-section-nav {
+  background: #0c0820;
+  border-top: 3px solid #6f42c1;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  position: sticky;
+  top: 57px;
+  z-index: 200;
+  overflow-x: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+
+  .container {
+    display: flex;
+    align-items: stretch;
+    white-space: nowrap;
+  }
+
+  .members-nav-link {
+    display: inline-block;
+    padding: 0.65rem 1.1rem;
+    font-size: 0.8rem;
     font-weight: 600;
-    border-radius: 999px;
-    padding: 0.5rem 1.25rem;
-    transition: background 0.15s ease, color 0.15s ease;
+    letter-spacing: 0.04em;
+    color: rgba(255, 255, 255, 0.55);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    white-space: nowrap;
+    cursor: pointer;
+    text-decoration: none;
+    transition: color 0.15s, border-color 0.15s;
 
     .badge {
-      background: rgba(0, 0, 0, 0.1);
-      color: inherit;
-      font-weight: 600;
+      background: rgba(255, 255, 255, 0.12);
+      color: rgba(255, 255, 255, 0.7);
       font-size: 0.7em;
+      font-weight: 600;
     }
 
-    &.active {
-      background: $green;
+    &:hover {
       color: #fff;
+    }
+
+    &.is-active {
+      color: #fff;
+      border-bottom-color: #6f42c1;
 
       .badge {
-        background: rgba(255, 255, 255, 0.25);
+        background: rgba(111, 66, 193, 0.35);
         color: #fff;
       }
-    }
-
-    &:not(.active):hover {
-      background: rgba(0, 0, 0, 0.05);
     }
   }
 }
@@ -355,24 +379,10 @@ $wg-colors: (
   }
 }
 
-.member-card-link {
-  text-decoration: none;
-  color: inherit;
-  display: flex;
-  flex-direction: column;
-
-  .member-card {
-    flex: 1;
-  }
-
-  &:hover,
-  &:focus {
-    text-decoration: none;
-    color: inherit;
-  }
-}
+// .member-card-link is no longer used (cards use stretched-link pattern)
 
 .member-card {
+  position: relative; // required for Bootstrap stretched-link
   border-radius: 1rem;
   padding: 1.25rem;
   background: #fff;
@@ -385,6 +395,7 @@ $wg-colors: (
   text-decoration: none;
   color: inherit;
   min-height: 140px; // ensures consistent row heights even without slogan/description
+  cursor: pointer;
 
   &:hover {
     transform: translateY(-2px);

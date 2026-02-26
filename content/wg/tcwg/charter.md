@@ -22,7 +22,7 @@ This Working Group Charter has been created according to the â€œWorking Groupsâ€
 | **Abbreviation** | TCWG |
 | **Mission** | To make PKI knowledge more widely available and to provide a mechanism for organizations to attest (potential) employees on their knowledge. |
 | **Chair** | Neal Fuerst (Keyfactor) |
-| **Vice Chair** | David Samuel Haloho (DAVID GROUP) |
+| **Vice Chair** | Sandip Dholakia (SAP) |
 | **Communication** | Private mailing list, Virtual meetings, Community discussions |
 | **Meeting schedule** | Virtual meetings: approximately 1 per month |
 | **Type(s) of members eligible to participate** | All Member types of the PKIC that express interest in this Working Group |

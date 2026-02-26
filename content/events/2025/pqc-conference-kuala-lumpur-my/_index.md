@@ -20,7 +20,7 @@ outputs:
 
 params:
   heroButton: 
-    label: You can now request an invite for our Next Conference in Germany!
+    label: You can now request an invite for our Next Conference in Amsterdam (Netherlands)!
     link: /register
 
   heroTitle: Post-Quantum Cryptography Conference

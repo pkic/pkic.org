@@ -3,31 +3,10 @@
 
 <div class="py-5">
   <div class="container">
-    <div class="row g-4">
+    <div class="row g-4 align-items-start">
       {{ range .Paginator.Pages }}
       <div class="col-sm-6 col-lg-4">
-        <article class="blog-card h-100">
-          <div class="blog-card-accent"></div>
-          <div class="blog-card-body">
-            <div class="blog-card-meta">
-              <time datetime="{{ .PublishDate.Format "2006-01-02" }}">{{ .PublishDate | time.Format ":date_long" }}</time>
-              {{ with .Params.tags }}
-              <span class="blog-card-tags">
-                {{ range first 2 . }}<a href="/tags/{{ . | urlize }}/" class="blog-tag">{{ . }}</a>{{ end }}
-              </span>
-              {{ end }}
-            </div>
-            <h2 class="blog-card-title">
-              <a href="{{ .Permalink }}" class="stretched-link text-reset text-decoration-none">{{ .Title }}</a>
-            </h2>
-            <p class="blog-card-summary">{{ .Summary | truncate 140 | plainify }}</p>
-            {{ with .Params.authors }}
-            <div class="blog-card-author">
-              <span class="text-muted small">{{ partial "authors.html" $ }}</span>
-            </div>
-            {{ end }}
-          </div>
-        </article>
+        {{ partial "blog-card.html" . }}
       </div>
       {{ end }}
     </div>

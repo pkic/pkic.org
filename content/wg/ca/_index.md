@@ -4,15 +4,16 @@ draft: false
 menu:
     main:
         parent: working-groups
+        identifier: ca-working-group
         name: "CA Working Group"
         weight: 50
 title: CA Working Group
-description: A working group dedicated to improving the security, trustworthiness, and interoperability of publicly trusted Certificate Authorities.
-summary: A working group dedicated to improving the security, trustworthiness, and interoperability of publicly trusted Certificate Authorities.
+description: A working group for discussions and information sharing among publicly trusted Certificate Authorities.
+summary: A working group for discussions and information sharing among publicly trusted Certificate Authorities.
 keywords: ["ca", "certificate authority", "pkic", "trust","identity","pki","tls","ssl","crypto","iot","devices", "consortium"]
 
 heroTitle: CA Working Group
-heroDescription: Improving the security, trustworthiness, and interoperability of publicly trusted Certificate Authorities.
+heroDescription: Discussions and information sharing for publicly trusted Certificate Authorities.
 
 heroButton:
   label: Join the CA Working Group
@@ -20,41 +21,32 @@ heroButton:
 
 wgID: CA
 color: green
-icon: "🏛️"
 
 intro: |
-  The **CA Working Group** focuses on improving the security, trustworthiness, and interoperability of publicly trusted Certificate Authorities.
-  We engage with the CA/Browser Forum, root-store programs, and the broader PKI community to drive stronger certificate policy, audit frameworks, and issuance practices.
+  The **CA Working Group** is focused on discussions and information sharing among publicly trusted Certificate Authorities.
+  The group enables members to exchange operational insights, policy updates, and implementation experiences across the public trust ecosystem.
+
+  **Membership note:** the CA Working Group is currently limited to publicly trusted CAs only (Category A members).
 
 focus:
-  - title: Certificate Policy
-    description: Establishing and reviewing certificate policy requirements to ensure consistent and trustworthy issuance practices.
-    icon: "📜"
-  - title: Baseline Requirements
-    description: Participating in the development and maintenance of CA/Browser Forum Baseline Requirements for publicly trusted CAs.
-    icon: "📋"
-  - title: Audit & Compliance
-    description: Promoting robust audit frameworks and compliance practices to maintain the integrity of the WebPKI ecosystem.
-    icon: "✅"
-  - title: Browser Communication
-    description: Facilitating dialogue between Certificate Authorities and browser vendors to improve ecosystem health.
-    icon: "🌐"
-  - title: Incident Response
-    description: Developing best practices and playbooks for handling CA incidents, mis-issuance, and revocation events.
-    icon: "🚨"
-  - title: Root Programs
-    description: Supporting alignment across root store programs and helping CAs meet evolving inclusion requirements.
-    icon: "🔑"
+  - title: Information Sharing
+    description: Sharing operational updates, implementation experiences, and lessons learned across publicly trusted CAs.
+    icon: "🔄"
+  - title: Policy Discussions
+    description: Discussing changes in CA and root program policies and their impact on CA operations.
+    icon: "💬"
+  - title: Ecosystem Coordination
+    description: Coordinating perspectives between CAs, relying parties, and ecosystem initiatives that affect public trust.
+    icon: "🤝"
+  - title: Community Knowledge
+    description: Building and maintaining practical references that help publicly trusted CAs navigate evolving requirements.
+    icon: "📚"
 
 deliverables:
-  - title: CA Security Best Practices
-    description: Guidance documents to help CAs improve their internal security practices and infrastructure resilience.
-    url: /resources/
+  - title: List of Trust Lists
+    description: A global list of CA certificates trusted by public, private, industry, or solution-specific PKI.
     status: active
-  - title: Incident Reporting Templates
-    description: Standardized incident reporting templates to improve communication with relying parties and root programs.
-    url: /resources/
-    status: planned
+    url: /wg/ca/ltl/
 
 resources:
   - title: CA/Browser Forum

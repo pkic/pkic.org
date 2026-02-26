@@ -1,0 +1,35 @@
+{{- $sections := slice
+  (dict "key" "focus" "title" "Focus Areas" "navOrder" 10)
+  (dict "key" "deliverables" "title" "Deliverables" "navOrder" 20)
+  (dict "key" "members" "title" "Members" "navOrder" 30)
+  (dict "key" "resources" "title" "Resources" "navOrder" 40)
+-}}
+
+{{- range readDir "content/wg" -}}
+  {{- if .IsDir -}}
+    {{- $wgName := .Name -}}
+    {{- $wgIndexPath := printf "content/wg/%s/_index.md" $wgName -}}
+    {{- if fileExists $wgIndexPath -}}
+      {{- range $section := $sections -}}
+        {{- $key := $section.key -}}
+        {{- $filePath := printf "content/wg/%s/%s.md" $wgName $key -}}
+        {{- $bundlePath := printf "content/wg/%s/%s/_index.md" $wgName $key -}}
+        {{- if not (or (fileExists $filePath) (fileExists $bundlePath)) -}}
+          {{- $content := dict "mediaType" "text/markdown" "value" "" -}}
+          {{- $page := dict
+            "path" (printf "%s/%s" $wgName $key)
+            "title" $section.title
+            "layout" "wg-sub"
+            "params" (dict
+              "wgSection" $key
+              "navOrder" $section.navOrder
+              "generatedFromAdapter" true
+            )
+            "content" $content
+          -}}
+          {{- $.AddPage $page -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}

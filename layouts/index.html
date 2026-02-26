@@ -5,26 +5,40 @@
   <div class="container py-5">
     <div class="row align-items-center gy-4">
       <div class="col-lg-7">
-        <p class="text-uppercase fw-bold small mb-2 opacity-75" style="color:#7cf0be; letter-spacing: 0.12em;">Public Key Infrastructure Consortium</p>
+        <p class="text-uppercase fw-bold small mb-2 opacity-75" style="letter-spacing: 0.16em;">{{ $.Param "heroHeader" }}</p>
         <h1 class="display-4 fw-bold lh-sm mb-3">{{ $.Param "heroTitle" }}</h1>
         <p class="lead mb-4" style="max-width:540px;">{{ $.Param "heroDescription" }}</p>
         <div class="d-flex flex-wrap gap-3">
-          <a href="/about/" class="btn btn-light btn-lg px-4 fw-semibold">Learn more</a>
-          <a href="/join/" class="btn btn-outline-light btn-lg px-4">Join the Consortium</a>
+          <a href="/about/" class="btn btn-pkic btn-lg px-4">Learn more</a>
+          <a href="/join/" class="btn btn-pkic-outline btn-lg px-4">Join the Consortium</a>
         </div>
       </div>
-      <div class="col-lg-5 d-none d-lg-flex justify-content-center">
-        <img src="/img/logo.svg" alt="PKI Consortium" class="pkic-hero-logo" />
+      {{ $featuredPost := first 1 (where .Site.RegularPages "Type" "blog") }}
+      {{ with index $featuredPost 0 }}
+      <div class="col-lg-5 d-none d-lg-block">
+        <a href="{{ .Permalink }}" class="pkic-hero-post-card text-decoration-none d-block">
+          <p class="pkic-hero-post-label">Latest News</p>
+          <h3 class="pkic-hero-post-title">{{ .Title }}</h3>
+          <time class="pkic-hero-post-date" datetime="{{ .PublishDate.Format "2006-01-02" }}">{{ .PublishDate | time.Format ":date_long" }}</time>
+          <p class="pkic-hero-post-summary">{{ .Summary | truncate 140 }}</p>
+          <span class="pkic-hero-post-cta">Read more &rarr;</span>
+        </a>
       </div>
+      {{ end }}
     </div>
   </div>
 </section>
 
 {{/* ─── Stats bar ───────────────────────────────────────────────────── */}}
 {{ $memberCount := len hugo.Data.members }}
-{{ $wgPages := where .Site.Pages "Section" "wg" }}
+{{/* Only count top-level, non-draft working group sections */}}
+{{ $wgSections := where .Site.Pages "Section" "wg" }}
 {{ $wgCount := 0 }}
-{{ range $wgPages }}{{ if and (eq .Kind "section") (ne .RelPermalink "/wg/") }}{{ $wgCount = add $wgCount 1 }}{{ end }}{{ end }}
+{{ range $wgSections }}
+  {{ if and (eq .Kind "section") (eq .Parent.RelPermalink "/wg/") (not .Draft) }}
+    {{ $wgCount = add $wgCount 1 }}
+  {{ end }}
+{{ end }}
 <div class="pkic-stats-bar">
   <div class="container">
     <div class="row g-0 text-center">
@@ -32,10 +46,10 @@
         <div class="pkic-stat"><span class="pkic-stat-num">{{ $memberCount }}</span><span class="pkic-stat-label">Members</span></div>
       </div>
       <div class="col">
-        <div class="pkic-stat"><span class="pkic-stat-num">{{ $wgCount }}</span><span class="pkic-stat-label">Working Groups</span></div>
+        <div class="pkic-stat"><span class="pkic-stat-num">~1K</span><span class="pkic-stat-label">Representatives</span></div>
       </div>
       <div class="col">
-        <div class="pkic-stat"><span class="pkic-stat-num">Est.&thinsp;2013</span><span class="pkic-stat-label">Founded</span></div>
+        <div class="pkic-stat"><span class="pkic-stat-num">{{ $wgCount }}</span><span class="pkic-stat-label">Working Groups</span></div>
       </div>
       <div class="col d-none d-sm-block">
         <div class="pkic-stat"><span class="pkic-stat-num">Free</span><span class="pkic-stat-label">to Join</span></div>
@@ -44,12 +58,12 @@
   </div>
 </div>
 
-{{/* ─── Main content (alert + WG cards from _index.md) ──────────────── */}}
-<div class="py-5">
-  <div class="container" data-pagefind-body>
-    {{ .Content }}
-  </div>
+{{/* ─── Alert banner (from _index.md content) ────────────────────── */}}
+{{ if .Content }}
+<div class="container pt-4 pb-2" data-pagefind-ignore>
+  {{ .Content }}
 </div>
+{{ end }}
 
 {{/* ─── Members logo wall ─────────────────────────────────────────────── */}}
 <div class="pkic-section-label"><span>Our Members &amp; Sponsors</span></div>
@@ -61,28 +75,48 @@
   </div>
 </section>
 
+{{/* ─── Working Groups spotlight ──────────────────────────────────── */}}
+{{/* Collect WG section pages that have .Params.card, sorted by card.order */}}
+{{ $wgSections := where .Site.Pages "Section" "wg" }}
+{{ $wgCards := slice }}
+{{ range $wgSections }}
+  {{ if and (eq .Kind "section") (ne .RelPermalink "/wg/") .Params.card }}
+    {{ $wgCards = $wgCards | append . }}
+  {{ end }}
+{{ end }}
+{{ $wgCards = sort $wgCards "Params.card.order" }}
+
+<section class="pkic-wg-section py-5">
+  <div class="container">
+    <div class="d-flex align-items-end justify-content-between mb-4 pb-1">
+      <div>
+        <h2 class="h3 fw-bold mb-0">Working Groups</h2>
+      </div>
+      <a href="/wg/" class="btn btn-sm btn-outline-secondary flex-shrink-0">All working groups &rarr;</a>
+    </div>
+    <div class="row g-4">
+      {{ range $wgCards }}
+      <div class="col-sm-6 col-xl-3">
+        {{ partial "wg-spotlight-card.html" . }}
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
 {{/* ─── Recent blog posts ─────────────────────────────────────────────── */}}
 {{ $posts := first 3 (where .Site.RegularPages "Type" "blog") }}
 {{ if $posts }}
-<section class="pkic-recent-posts py-5">
+<section class="pkic-recent-posts py-5" style="background:#fff; position:relative; z-index:1;">
   <div class="container">
     <div class="d-flex align-items-baseline justify-content-between mb-4">
       <h2 class="h3 fw-bold mb-0">Latest from the Blog</h2>
       <a href="/blog/" class="btn btn-sm btn-outline-secondary">All posts &rarr;</a>
     </div>
-    <div class="row g-4">
+    <div class="row g-4 align-items-start">
       {{ range $posts }}
       <div class="col-md-4">
-        <article class="pkic-post-card h-100">
-          <div class="pkic-post-card-accent" style="background: linear-gradient(135deg, #1a3a2a, #0d5a3c);"></div>
-          <div class="pkic-post-card-body">
-            <div class="pkic-post-meta mb-2">
-              <time datetime="{{ .PublishDate.Format "2006-01-02" }}" class="text-muted small">{{ .PublishDate | time.Format ":date_long" }}</time>
-            </div>
-            <h3 class="pkic-post-title"><a href="{{ .Permalink }}" class="stretched-link text-reset text-decoration-none">{{ .Title }}</a></h3>
-            <p class="pkic-post-summary small text-muted">{{ .Summary | truncate 120 }}</p>
-          </div>
-        </article>
+        {{ partial "blog-card.html" . }}
       </div>
       {{ end }}
     </div>
@@ -92,10 +126,10 @@
 
 {{/* ─── Join CTA ────────────────────────────────────────────────────── */}}
 <section class="pkic-join-cta">
-  <div class="container text-center py-5">
+  <div class="container text-center">
     <h2 class="fw-bold mb-3">Become a Member</h2>
     <p class="lead mb-4 mx-auto" style="max-width:560px;">The PKI Consortium is open to organizations committed to improving trust in digital assets and communications. Membership is free.</p>
-    <a href="/join/" class="btn btn-success btn-lg px-5">Join today &mdash; it&rsquo;s free</a>
+    <a href="/join/" class="btn btn-light btn-lg rounded-pill px-5 fw-bold">Join today &mdash; it&rsquo;s free</a>
   </div>
 </section>
 

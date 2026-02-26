@@ -9,6 +9,9 @@ heroDescription: Privacy Policy of the PKI Consortium
 
 menu: 
     footer:
+        name: Privacy Policy
+        parent: governance
+        weight: 24
 
 aliases: 
   - /privacy-policy

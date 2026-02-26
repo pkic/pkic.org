@@ -17,65 +17,107 @@
             {{ end }}
           </div>
 
-          <div class="col-lg-3 order-lg-2 px-lg-5" data-pagefind-ignore>
-            <p>{{ i18n "readingTime" }} <strong>{{.ReadingTime}} {{ i18n "minutes" }}</strong></p>
-            
-            <h4>{{ i18n "authors" }}</h4>
-            <p>{{ partial "authors.html" . }}</p>
+          <div class="col-lg-3 order-lg-2" data-pagefind-ignore>
+            <div class="blog-sidebar">
 
-            {{ if .IsTranslated }}
-            <h4>{{ i18n "translations" }}</h4>
-            <ul>
-              {{ range .Translations }}
-              <li>
-                <strong>{{ .Language.Lang | strings.ToUpper }}:</strong> <a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>
-              </li>
-              {{ end }}
-            </ul>
+            {{/* ── Reading time ─────────────────────────────────────── */}}
+            <p class="blog-sidebar-reading-time">
+              {{ i18n "readingTime" }} <strong>{{ .ReadingTime }} {{ i18n "minutes" }}</strong>
+            </p>
+
+            {{/* ── Authors ──────────────────────────────────────────── */}}
+            {{ with .Params.authors }}
+            <div class="blog-sidebar-section">
+              <h4 class="blog-sidebar-heading">{{ i18n "authors" }}</h4>
+              {{ partial "blog-author-card.html" $ }}
+            </div>
             {{ end }}
 
+            {{/* ── Translations ─────────────────────────────────────── */}}
+            {{ if .IsTranslated }}
+            <div class="blog-sidebar-section">
+              <h4 class="blog-sidebar-heading">{{ i18n "translations" }}</h4>
+              <ul class="blog-sidebar-list">
+                {{ range .Translations }}
+                <li>
+                  <strong>{{ .Language.Lang | strings.ToUpper }}:</strong>
+                  <a href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>
+                </li>
+                {{ end }}
+              </ul>
+            </div>
+            {{ end }}
+
+            {{/* ── Related articles ─────────────────────────────────── */}}
             {{ $related := .Site.RegularPages.Related . | first 5 }}
             {{ with $related }}
-            <h4>{{ i18n "relatedArticles" }}</h4>
-            <ul>
-              {{ range . }}
+            <div class="blog-sidebar-section">
+              <h4 class="blog-sidebar-heading">{{ i18n "relatedArticles" }}</h4>
+              <ul class="blog-sidebar-list">
+                {{ range . }}
                 <li><a href="{{ .RelPermalink }}">{{ .Title }}</a></li>
-              {{ end }}
-            </ul>
-            {{ end }}
-        
-            {{ with .Params.tags }}
-            <h4>{{ i18n "relatedTopics" }}</h4>
-            <ul></ul>
-              {{ partial "tags.html" . }}
-            </ul>
-            {{ end }}
-
-            <div class="sticky-lg-top my-5 pt-4 pb-5 bg-light rounded-3 text-center" style="top: 80px;" data-pagefind-ignore="all">
-              <p class="px-4"><small>{{ i18n "sponsors" }}</small></p>
-
-              {{ .Scratch.Set "class" "img-fluid" }}
-              {{ .Scratch.Set "max-height" "80" }}
- 
-              {{ .Scratch.Set "level" "Diamond" }}
-              {{ partial "sponsors.html" . }}
- 
-              {{ .Scratch.Set "level" "Titanium" }}
-              {{ partial "sponsors.html" . }}
- 
-              {{ .Scratch.Set "level" "Platinum" }}
-              {{ partial "sponsors.html" . }}
- 
-              {{ .Scratch.Set "max-height" "60" }}
-              {{ .Scratch.Set "level" "Gold" }}
-              {{ partial "sponsors.html" . }}
- 
-              {{ .Scratch.Set "level" "Silver" }}
-              {{ partial "sponsors.html" . }}
- 
-              {{ .Scratch.Set "level" "Bronze" }}
-              {{ partial "sponsors.html" . }} 
+                {{ end }}
+              </ul>
             </div>
+            {{ end }}
+
+            {{/* ── Tags ────────────────────────────────────────────── */}}
+            {{ with .Params.tags }}
+            <div class="blog-sidebar-section">
+              <h4 class="blog-sidebar-heading">{{ i18n "relatedTopics" }}</h4>
+              {{ partial "tags.html" . }}
+            </div>
+            {{ end }}
+
+            {{/* ── Sponsors ─────────────────────────────────────────── */}}
+            <div class="blog-sidebar-sponsors sticky-lg-top" style="top: 76px;" data-pagefind-ignore="all">
+              <p class="blog-sidebar-sponsors-intro">{{ i18n "sponsors" }}</p>
+
+              {{/* Collect and tier general (non-event-specific) sponsors */}}
+              {{ $tiers := slice "Diamond" "Titanium" "Platinum" "Gold" "Silver" "Bronze" }}
+              {{ range $tiers }}
+                {{ $lvl     := . }}
+                {{ $inLevel := slice }}
+
+                {{ range hugo.Data.members }}
+                  {{ if eq (.sponsor.level | default "") $lvl }}
+                    {{ $inLevel = $inLevel | append . }}
+                  {{ end }}
+                {{ end }}
+                {{ range hugo.Data.sponsors }}
+                  {{ if eq (.sponsor.level | default "") $lvl }}
+                    {{ $inLevel = $inLevel | append . }}
+                  {{ end }}
+                {{ end }}
+
+                {{ if gt (len $inLevel) 0 }}
+                <div class="blog-sidebar-tier blog-sidebar-tier-{{ $lvl | lower }}">
+                  <span class="blog-sidebar-tier-label">{{ $lvl }}</span>
+                  <div class="blog-sidebar-tier-logos">
+                    {{ range shuffle $inLevel }}
+                      {{ $s   := . }}
+                      {{ $img := resources.GetMatch (printf "images/members/%s/%s.*" $s.id $s.id) }}
+                      {{ if $s.logo }}
+                        {{ $img = resources.GetMatch (printf "images/sponsors/%s" $s.logo) }}
+                      {{ end }}
+                      {{ with $img }}
+                      {{ $title := printf "%s — %s sponsor" $s.name $lvl }}
+                      <a href="{{ $s.website }}" target="_blank" rel="noopener noreferrer" title="{{ $title }}" class="blog-sidebar-sponsor-link">
+                        <img src="{{ $img.Permalink }}" alt="{{ $s.name }}" class="blog-sidebar-sponsor-logo blog-sidebar-sponsor-logo-{{ $lvl | lower }}" loading="lazy">
+                      </a>
+                      {{ end }}
+                    {{ end }}
+                  </div>
+                </div>
+                {{ end }}
+              {{ end }}
+
+              <div class="blog-sidebar-sponsors-footer">
+                <a href="/sponsors/" class="blog-sidebar-sponsors-all-link">View all sponsors →</a>
+              </div>
+            </div>
+
+            </div>{{/* .blog-sidebar */}}
           </div>
           
       </div>
@@ -83,28 +125,28 @@
 </div>
 
 
-<div class="py-5 bg-light">
+<div class="blog-post-nav">
   <div class="container">
-
-    <div class="text-center">
+    <div class="blog-post-nav-inner">
       {{ with .PrevInSection }}
-        <a class="btn btn-primary my-2" title="{{ i18n "previousArticle" }}" href="{{.Permalink}}">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-left" viewBox="0 0 16 16">
-            <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
-          </svg>
-          {{.Title}}
-        </a>
-      {{ end }}
+      <a class="blog-post-nav-item blog-post-nav-prev" href="{{ .Permalink }}" title="{{ i18n "previousArticle" }}">
+        <span class="blog-post-nav-label">
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
+          {{ i18n "previousArticle" }}
+        </span>
+        <span class="blog-post-nav-title">{{ .Title }}</span>
+      </a>
+      {{ else }}<div></div>{{ end }}
       {{ with .NextInSection }}
-        <a class="btn btn-primary my-2" title="{{ i18n "nextArticle" }}" href="{{.Permalink}}">
-          {{.Title}}
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-chevron-right" viewBox="0 0 16 16">
-            <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
-          </svg>
-        </a>
+      <a class="blog-post-nav-item blog-post-nav-next" href="{{ .Permalink }}" title="{{ i18n "nextArticle" }}">
+        <span class="blog-post-nav-label">
+          {{ i18n "nextArticle" }}
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>
+        </span>
+        <span class="blog-post-nav-title">{{ .Title }}</span>
+      </a>
       {{ end }}
     </div>
-
   </div>
 </div>
 

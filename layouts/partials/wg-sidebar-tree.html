@@ -1,0 +1,152 @@
+{{/*
+  Shared sidebar navigation tree.
+  Used by wg-sidebar.html (desktop panel) and wg-content.html (nav dropdown).
+  Accepts the current page context (.).
+  Auto-detects the deliverable section root by walking up ancestors to find
+  the closest ancestor with wgID.
+*/}}
+{{- $page := . -}}
+
+{{- $root := $page.CurrentSection -}}
+{{- $wg   := "" -}}
+{{- range $page.Ancestors -}}
+  {{- if and (not $wg) .Params.wgID -}}
+    {{- $wg = . -}}
+  {{- end -}}
+{{- end -}}
+{{- if $wg -}}
+  {{- range $wg.Sections -}}
+    {{- if or ($page.IsDescendant .) (eq $page .) -}}
+      {{- $root = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Root link */}}
+<a class="wg-sidebar-root{{ if eq $page $root }} is-active{{ end }}"
+   href="{{ $root.RelPermalink }}">{{ $root.Title }}</a>
+
+{{/* Promoted children: from level-1 sections marked hideInSidebar */}}
+{{- range $root.Sections -}}
+  {{- if .Params.hideInSidebar -}}
+    {{- $hidden := . -}}
+    {{- $hiddenActive := or ($page.IsDescendant $hidden) (eq $page $hidden) -}}
+    {{- if or $hidden.Sections $hidden.RegularPages -}}
+      <ul class="wg-sidebar-children wg-sidebar-promoted">
+        {{- range $hidden.Sections -}}
+          {{- $childSec    := . -}}
+          {{- $childActive := or ($page.IsDescendant $childSec) (eq $page $childSec) -}}
+          {{- $childHasKids := or $childSec.Sections $childSec.RegularPages -}}
+          <li>
+            {{- if $childHasKids -}}
+              <details class="wg-sidebar-group wg-sidebar-nested"{{ if $childActive }} open{{ end }}>
+                <summary class="wg-sidebar-summary">
+                  <a href="{{ $childSec.RelPermalink }}"
+                     class="wg-sidebar-link{{ if eq $page $childSec }} is-active{{ end }}">{{ $childSec.Title }}</a>
+                  <span class="wg-sidebar-chevron">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                         fill="none" stroke="currentColor" stroke-width="2.5"
+                         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  </span>
+                </summary>
+                <ul class="wg-sidebar-children wg-sidebar-level3">
+                  {{- range $childSec.Sections -}}
+                    <li><a href="{{ .RelPermalink }}"
+                           class="{{ if eq $page . }}is-active{{ end }}">{{ .Title }}</a></li>
+                  {{- end -}}
+                  {{- range $childSec.RegularPages -}}
+                    <li><a href="{{ .RelPermalink }}"
+                           class="{{ if eq $page . }}is-active{{ end }}">{{ .Title }}</a></li>
+                  {{- end -}}
+                </ul>
+              </details>
+            {{- else -}}
+              <a href="{{ $childSec.RelPermalink }}"
+                 class="{{ if eq $page $childSec }}is-active{{ end }}">{{ $childSec.Title }}</a>
+            {{- end -}}
+          </li>
+        {{- end -}}
+        {{- range $hidden.RegularPages -}}
+          <li><a href="{{ .RelPermalink }}"
+                 class="{{ if eq $page . }}is-active{{ end }}">{{ .Title }}</a></li>
+        {{- end -}}
+      </ul>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Level-1 sections */}}
+<ul class="wg-sidebar-list">
+  {{- range $root.Sections -}}
+    {{- $sec      := . -}}
+    {{- if $sec.Params.hideInSidebar -}}{{- continue -}}{{- end -}}
+    {{- $isActive := or ($page.IsDescendant $sec) (eq $page $sec) -}}
+    {{- $hasKids  := or $sec.Sections $sec.Pages -}}
+
+    <li class="wg-sidebar-section">
+      {{- if $hasKids -}}
+        <details class="wg-sidebar-group"{{ if $isActive }} open{{ end }}>
+          <summary class="wg-sidebar-summary">
+            <a href="{{ $sec.RelPermalink }}"
+               class="wg-sidebar-link{{ if eq $page $sec }} is-active{{ end }}">{{ $sec.Title }}</a>
+            <span class="wg-sidebar-chevron">
+              <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                   fill="none" stroke="currentColor" stroke-width="2.5"
+                   stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <polyline points="9 18 15 12 9 6"/>
+              </svg>
+            </span>
+          </summary>
+
+          <ul class="wg-sidebar-children">
+            {{- range $sec.Sections -}}
+              {{- $childSec     := . -}}
+              {{- $childActive  := or ($page.IsDescendant $childSec) (eq $page $childSec) -}}
+              {{- $childHasKids := or $childSec.Sections $childSec.Pages -}}
+              <li>
+                {{- if $childHasKids -}}
+                  <details class="wg-sidebar-group wg-sidebar-nested"{{ if $childActive }} open{{ end }}>
+                    <summary class="wg-sidebar-summary">
+                      <a href="{{ $childSec.RelPermalink }}"
+                         class="wg-sidebar-link{{ if eq $page $childSec }} is-active{{ end }}">{{ $childSec.Title }}</a>
+                      <span class="wg-sidebar-chevron">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+                             fill="none" stroke="currentColor" stroke-width="2.5"
+                             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                      </span>
+                    </summary>
+                    <ul class="wg-sidebar-children wg-sidebar-level3">
+                      {{- range $childSec.Sections -}}
+                        <li><a href="{{ .RelPermalink }}"
+                               class="{{ if eq $page . }}is-active{{ end }}">{{ .Title }}</a></li>
+                      {{- end -}}
+                      {{- range $childSec.RegularPages -}}
+                        <li><a href="{{ .RelPermalink }}"
+                               class="{{ if eq $page . }}is-active{{ end }}">{{ .Title }}</a></li>
+                      {{- end -}}
+                    </ul>
+                  </details>
+                {{- else -}}
+                  <a href="{{ $childSec.RelPermalink }}"
+                     class="{{ if eq $page $childSec }}is-active{{ end }}">{{ $childSec.Title }}</a>
+                {{- end -}}
+              </li>
+            {{- end -}}
+
+            {{- range $sec.RegularPages -}}
+              <li><a href="{{ .RelPermalink }}"
+                     class="{{ if eq $page . }}is-active{{ end }}">{{ .Title }}</a></li>
+            {{- end -}}
+          </ul>
+        </details>
+      {{- else -}}
+        <a href="{{ $sec.RelPermalink }}"
+           class="wg-sidebar-link{{ if eq $page $sec }} is-active{{ end }}">{{ $sec.Title }}</a>
+      {{- end -}}
+    </li>
+  {{- end -}}
+</ul>

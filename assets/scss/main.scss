@@ -222,19 +222,299 @@ main {
   color: currentColor;
 }
 
-#participate {
-  color: #fff;
-  text-align: center;
-  font-size: 1.6em;
-  font-weight: 200 !important;
+// ═══════════════════════════════════════════════════════════════════════════
+// FOOTER  — unified enterprise design
+// ═══════════════════════════════════════════════════════════════════════════
+
+#site-footer {
+  background: #000;
 }
 
-#participate a {
-  color: currentColor;
+// ── CTA participation bar ──────────────────────────────────────────────────
+#participate {
+  background: #000;
+  border-top: 3px solid transparent;
+  border-image: linear-gradient(
+    to right,
+    $green,
+    $teal,
+    $blue,
+    $yellow,
+    $orange,
+    $red
+  ) 1;
+  color: rgba(#fff, 0.65);
+  text-align: center;
+  font-size: 1.1em;
+  font-weight: 300;
+  letter-spacing: 0.01em;
+
+  a {
+    color: #fff;
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-color: rgba(#fff, 0.25);
+    text-underline-offset: 3px;
+    transition: text-decoration-color 0.2s ease;
+
+    &:hover { text-decoration-color: $green; }
+  }
 }
+
+// ── Main footer body ───────────────────────────────────────────────────────
+.footer-body {
+  border-top: 1px solid rgba(#fff, 0.06);
+}
+
+// Brand column
+.footer-brand {
+  padding-right: 2rem;
+
+  @media (min-width: 992px) {
+    border-right: 1px solid rgba(#fff, 0.07);
+  }
+}
+
+.footer-logo-link {
+  display: inline-block;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+
+  &:hover { opacity: 1; }
+}
+
+.footer-logo-img {
+  height: 42px;
+  width: auto;
+  opacity: 0.9;
+}
+
+.footer-tagline {
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: rgba(#fff, 0.4);
+}
+
+.footer-social {
+  a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: rgba(#fff, 0.05);
+    color: rgba(#fff, 0.45);
+    margin-right: 6px;
+    transition: background 0.2s ease, color 0.2s ease;
+
+    &:hover {
+      background: rgba($green, 0.15);
+      color: $green;
+    }
+  }
+
+  svg { display: block; }
+}
+
+// ── Floating "Edit on GitHub" button ──────────────────────────────────────
+// Injected once from baseof.html; fixed to the bottom-right corner.
+// Icon-only at rest → expands with label on hover.
+.edit-on-github {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  overflow: hidden;
+
+  background: rgba(#1a1a1a, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(#fff, 0.45);
+  border: 1px solid rgba(#fff, 0.1);
+  border-radius: 8px;
+  padding: 7px 9px;
+  text-decoration: none;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+
+  // Width transition for label reveal
+  max-width: 36px;
+  transition:
+    max-width 0.25s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  &-label {
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+    transition: opacity 0.2s ease 0.05s, max-width 0.25s ease;
+    margin-left: 0;
+  }
+
+  &:hover {
+    max-width: 180px;
+    color: rgba(#fff, 0.9);
+    border-color: rgba($green, 0.5);
+    background: rgba(#1a1a1a, 0.95);
+
+    .edit-on-github-label {
+      opacity: 1;
+      max-width: 140px;
+      margin-left: 6px;
+    }
+  }
+
+  // Hide on small screens to avoid covering content
+  @media (max-width: 767px) {
+    display: none;
+  }
+}
+
+// ── Text-selection "Edit on GitHub" tooltip ────────────────────────────────
+// Appears above text selections on pages that have the floating edit button.
+.selection-edit-tooltip {
+  position: fixed;
+  z-index: 1100;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  background: rgba(#1a1a1a, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(#fff, 0.9);
+  border: 1px solid rgba($green, 0.5);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  text-decoration: none;
+  pointer-events: auto;
+  user-select: none;
+
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+
+  &.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  svg { flex-shrink: 0; }
+
+  // Small downward-pointing caret
+  &::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: rgba($green, 0.5);
+  }
+
+  &:hover {
+    color: #fff;
+    border-color: rgba($green, 0.8);
+    background: rgba(#1a1a1a, 1);
+  }
+
+  @media (max-width: 767px) {
+    display: none;
+  }
+}
+
+// Nav columns
+.footer-col-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(#fff, 0.35);
+  margin-bottom: 1.1rem;
+}
+
+.footer-col-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  li { margin-bottom: 0.6rem; }
+}
+
+.footer-col-link {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: rgba(#fff, 0.55);
+  text-decoration: none;
+  transition: color 0.2s ease;
+
+  &:hover { color: #fff; }
+}
+
+// ── Bottom bar ─────────────────────────────────────────────────────────────
+.footer-bottom {
+  border-top: 1px solid rgba(#fff, 0.07);
+}
+
+.footer-disclaimer {
+  font-size: 0.73rem;
+  line-height: 1.6;
+  color: rgba(#fff, 0.22);
+
+  a {
+    color: rgba(#fff, 0.3);
+    text-decoration: underline;
+    text-decoration-color: rgba(#fff, 0.15);
+    text-underline-offset: 2px;
+
+    &:hover { color: rgba(#fff, 0.6); }
+  }
+}
+
+.footer-copy {
+  color: rgba(#fff, 0.25);
+  font-size: 0.75rem;
+}
+
+.footer-legal {
+  font-size: 0.75rem;
+  color: rgba(#fff, 0.25);
+
+  a {
+    color: rgba(#fff, 0.25);
+    text-decoration: none;
+    transition: color 0.2s ease;
+
+    &:hover { color: rgba(#fff, 0.8); }
+  }
+}
+
+
+
+
+
 
 .member-logo {
-  margin: 5px 8px;
+  margin: 5px 20px;
   height: 18px;
   max-width: 90px;
   filter: grayscale(1) opacity(0.55) contrast(0.5);
@@ -263,17 +543,182 @@ main {
   transform: scale(1.12);
 }
 
+// ── Member hover card ──────────────────────────────────────────────────────
+// Shared floating card positioned via JS (position:fixed avoids overflow
+// clipping from both the footer scroller and the logo‑wall container).
+
+.member-hovercard {
+  position: fixed;
+  z-index: 9999;
+  width: 210px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.14), 0 1px 5px rgba(0,0,0,.08);
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s ease;
+  white-space: normal;
+  text-align: left;
+
+  &.member-hovercard--visible { opacity: 1; }
+}
+
+.member-hovercard-body {
+  padding: 12px 14px 10px;
+}
+
+.member-hovercard-name {
+  display: block;
+  font-size: .82rem;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.35;
+}
+
+.member-hovercard-slogan {
+  display: block;
+  font-size: .72rem;
+  color: #666;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.member-hovercard-footer {
+  display: block;
+  padding: 5px 14px 6px;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  text-align: center;
+  color: #fff;
+}
+
+// Sponsor tier gradients — mapped to sponsorlevels.yaml integers 1–6
+// Member tiers  : Bronze(1), Silver(2), Gold(3), Platinum(4), Titanium(5), Diamond(6)
+// Event tiers   : Ambassador(1), Innovator(2), Inspirator(3), Leader(4)
+.sponsor-tier-1 { background: linear-gradient(135deg, #b87333, #8b5320); } // Bronze / Ambassador
+.sponsor-tier-2 { background: linear-gradient(135deg, #7a7a7a, #555);    } // Silver / Innovator
+.sponsor-tier-3 { background: linear-gradient(135deg, #c9950c, #9a6f00); } // Gold   / Inspirator
+.sponsor-tier-4 { background: linear-gradient(135deg, #3d7a8a, #25515e); } // Platinum / Leader
+.sponsor-tier-5 { background: linear-gradient(135deg, #455a64, #1c313a); } // Titanium
+.sponsor-tier-6 { background: linear-gradient(135deg, #0097b2, #006b82); } // Diamond
+
+// ── Zoom overlay (Titanium / Diamond sponsors) ─────────────────────────────
+// Sits inside .members (position:relative; overflow:hidden).  The parent's
+// mask-image is suppressed via .members--zooming so the overlay fills the
+// full height cleanly.
+.member-zoom-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, .97);
+  opacity: 0;
+  pointer-events: none;
+  // Fast fade-in, slower ease-out handled by :not() below
+  transition: opacity .3s ease;
+
+  &.member-zoom-overlay--visible {
+    opacity: 1;
+    transition: opacity .3s ease;
+  }
+
+  // Slow fade-out so the logo wall reappears gently
+  &:not(.member-zoom-overlay--visible) {
+    transition: opacity .65s ease-out;
+  }
+}
+
+.member-zoom-logo {
+  max-height: 72px;
+  max-width: 55%;
+  width: auto;
+  object-fit: contain;
+}
+
+.member-zoom-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  padding: 0 28px;
+}
+
+.member-zoom-name {
+  font-size: .9rem;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.3;
+}
+
+.member-zoom-slogan {
+  font-size: .75rem;
+  color: #555;
+  line-height: 1.4;
+}
+
+.member-zoom-badge {
+  display: inline-block;
+  padding: 4px 16px 5px;
+  border-radius: 20px;
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
 .members-overview {
   background: #fff;
 
+  // Viewport: clips the scrolling track to a fixed visible height
   .members {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
-    justify-content: center;
-    gap: 4px 0;
+    height: 280px;
+    overflow: hidden;
+    position: relative;
+    // mask top/bottom edges so logos fade in/out softly
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%);
+    // Suppress the mask while the zoom overlay is showing so it fills cleanly
+    &.members--zooming {
+      -webkit-mask-image: none;
+              mask-image: none;
+    }
   }
 }
+
+// Two copies stacked vertically — animating translateY(-50%) scrolls exactly
+// one copy before looping back to the start.
+.logo-wall-track {
+  display: flex;
+  flex-direction: column;
+  animation: logo-wall-scroll 120s linear infinite; // duration overridden by JS
+  will-change: transform;
+}
+
+// Each copy is a wrapping row of logos
+.logo-wall-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 0;
+  flex-shrink: 0;
+}
+
+@keyframes logo-wall-scroll {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-50%); }
+}
+
+
 
 .linkArea {
   color: currentColor;
@@ -288,9 +733,29 @@ main {
   user-select: none;
 }
 
+// ── Hero SVG logo overlay ────────────────────────────────────────────────
+.hero-logo-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(4px);
+  border-radius: 1rem;
+  padding: 1rem 1.75rem;
+  max-width: 280px;
+}
+
+.hero-logo-img {
+  max-width: 200px;
+  max-height: 60px;
+  object-fit: contain;
+  display: block;
+}
+// ─────────────────────────────────────────────────────────────────────────
+
 figure,
 #content > p > img {
-  margin: 2rem;
+  margin: 1.5rem auto;
   text-align: center;
 }
 
@@ -305,96 +770,290 @@ figcaption h4 {
   text-align: center !important;
 }
 
+// --- Blockquotes & Callouts ---
+
+// Dark pull-quote card — uses the same navy as the site's hero section
 blockquote {
-  font-size: 1.3em;
-  margin-left: -1.2em;
-  font-weight: 400 !important;
-  font-style: italic;
-  color: #555555;
-  padding: 1.2em 30px 1.2em 75px;
-  border-left: 8px solid rgb(33, 37, 41);
-  line-height: 1.6;
   position: relative;
-  background: #efefef;
+  margin: 2.5rem 0;
+  padding: 2rem 2.25rem 2.75rem 5rem; // extra bottom for the gradient stripe
+  background: $gray-900;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 16px 48px rgba(0, 0, 0, 0.1);
+  font-size: 1.25em;
+  font-style: italic;
+  font-weight: 400;
+  color: #ffffff;
+  line-height: 1.8;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2), 0 24px 64px rgba(0, 0, 0, 0.15);
+  }
+
+  p { color: inherit; }
+  p:last-child { margin-bottom: 0; }
+
+  h4 {
+    color: $green;
+    font-style: normal;
+    font-weight: 500;
+    font-size: 0.75em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-top: 1rem;
+  }
 }
 
+// Large vivid green " mark — structural accent
 blockquote::before {
-  font-family: Arial;
-  content: "\201C";
-  color: rgb(33, 37, 41);
-  font-size: 4em;
+  content: '\201C';
   position: absolute;
-  left: 10px;
-  top: -10px;
+  top: 1rem;
+  left: 1.5rem;
+  font-size: 5rem;
+  line-height: 1;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: normal;
+  font-weight: 900;
+  color: $green;
+  pointer-events: none;
+  user-select: none;
+  display: block;
 }
 
+// Brand-color gradient stripe along the bottom
 blockquote::after {
   content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    $green,
+    $teal,
+    $blue,
+    $yellow,
+    $orange,
+    $red
+  );
+  border-radius: 0 0 1.25rem 1.25rem;
 }
 
-blockquote h4 {
-  display: block;
-  color: #333333;
-  font-style: normal;
-  font-weight: bold;
-  margin-top: 1em;
-}
-
+// Callout warning — functional alert box
 .callout-warning {
-  font-size: 1em;
-  color: rgb(200, 0, 0);
-  margin-left: 0em;
-  border-left: 8px solid rgb(200, 0, 0);
-  background: rgba(200, 0, 0, 0.2);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  // Reset all the dark-card blockquote styles
+  background: $red-pale;
+  color: $red-deep;
+  font-size: 0.95rem;
+  font-style: normal;
+  font-weight: 400;
+  padding: 1rem 1.25rem;
+  border-radius: 0.625rem;
+  border: 1px solid rgba($red-dark, 0.3);
+  box-shadow: none;
+  overflow: visible;
+  transition: none;
+  transform: none !important;
+
+  &:hover {
+    transform: none !important;
+    box-shadow: none;
+  }
+
+  // Reset the decorative " from blockquote::before
+  &::before {
+    content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='%23b02a37' viewBox='0 0 16 16'%3E%3Cpath d='M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.146.146 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.163.163 0 0 1-.054.06.116.116 0 0 1-.066.017H1.146a.115.115 0 0 1-.066-.017.163.163 0 0 1-.054-.06.176.176 0 0 1 .002-.183L7.884 2.073a.147.147 0 0 1 .054-.057zm1.044-.45a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566z'/%3E%3Cpath d='M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995z'/%3E%3C/svg%3E") !important;
+    position: static !important;
+    top: unset !important;
+    left: unset !important;
+    font-size: 1rem !important;
+    color: inherit !important;
+    opacity: 1 !important;
+    font-family: inherit;
+    background: none;
+    display: block;
+    flex-shrink: 0;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  &::after { content: none; }
+
+  p:last-child { margin-bottom: 0; }
 }
 
-.callout-warning::before {
-  margin-left: 10px;
-  line-height: 1em;
-  content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' fill='rgb(200, 0, 0)' class='bi bi-exclamation-triangle' viewBox='0 0 16 16'%3E%3Cpath d='M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.146.146 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.163.163 0 0 1-.054.06.116.116 0 0 1-.066.017H1.146a.115.115 0 0 1-.066-.017.163.163 0 0 1-.054-.06.176.176 0 0 1 .002-.183L7.884 2.073a.147.147 0 0 1 .054-.057zm1.044-.45a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566z'/%3E%3Cpath d='M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995z'/%3E%3C/svg%3E");
-}
-
+// Info: dark pull-quote card with yellow icon accent — same style as blockquote
 .callout-info {
-  font-size: 1em;
-  color: rgb(160, 140, 0);
-  margin-left: 0em;
-  border-left: 8px solid rgb(255, 225, 0);
-  background: rgba(255, 225, 0, 0.2);
-}
+  background: $gray-900;
+  color: #ffffff;
+  font-size: 1.35em;
+  font-style: normal;
+  font-weight: 400;
+  display: block;
+  margin: 1.5rem 0;
+  padding: 1.1rem 2.25rem 1.75rem 6.5rem;
+  border-radius: 1.25rem;
+  border: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 16px 48px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
 
-.callout-info::before {
-  margin-left: 10px;
-  line-height: 1em;
-  content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32' fill='rgb(160, 140, 0)' class='bi bi-info-circle' viewBox='0 0 16 16'%3E%3Cpath d='M8 15A7 7 0 1 1 8 1a7 7 0 0 1 0 14zm0 1A8 8 0 1 0 8 0a8 8 0 0 0 0 16z'/%3E%3Cpath d='m8.93 6.588-2.29.287-.082.38.45.083c.294.07.352.176.288.469l-.738 3.468c-.194.897.105 1.319.808 1.319.545 0 1.178-.252 1.465-.598l.088-.416c-.2.176-.492.246-.686.246-.275 0-.375-.193-.304-.533L8.93 6.588zM9 4.5a1 1 0 1 1-2 0 1 1 0 0 1 2 0z'/%3E%3C/svg%3E");
+  &:hover {
+    transform: none !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 16px 48px rgba(0, 0, 0, 0.1);
+  }
+
+  p { color: inherit; }
+  p:last-child { margin-bottom: 0; }
+
+  // Large filled yellow info circle — absolute positioned like the " mark
+  &::before {
+    content: '' !important;
+    position: absolute !important;
+    top: 1.25rem !important;
+    left: 1.5rem !important;
+    width: 3rem;
+    height: 3rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' fill='%23ffc000' viewBox='0 0 16 16'%3E%3Cpath d='M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z'/%3E%3C/svg%3E") !important;
+    background-size: contain;
+    background-repeat: no-repeat;
+    font-size: 0 !important;
+    line-height: 0 !important;
+    display: block;
+    font-family: inherit;
+    color: inherit !important;
+    opacity: 1 !important;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  // Yellow gradient stripe at the bottom
+  &::after {
+    content: '' !important;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(to right, $yellow-dark, $yellow, $orange);
+    border-radius: 0 0 1.25rem 1.25rem;
+    display: block;
+  }
 }
 
 .highlight > pre {
   padding: 1.5rem;
 }
 
+// H2: gradient text from accent → accent-2, creating visual interest without a solid color wall
 main h2 {
-  text-align: left;
-  font-size: 1.6em;
-  padding-top: 1em;
-  font-weight: 500 !important;
+  font-size: 1.5em;
+  font-weight: 700 !important;
+  background: linear-gradient(120deg, var(--page-accent), var(--page-accent-2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-top: 2em;
+  margin-bottom: 0.35em;
+  padding-top: 0;
+
+  // Fallback for browsers that don't support background-clip: text
+  @supports not (-webkit-background-clip: text) {
+    color: var(--page-accent, #{$green});
+    background: none;
+  }
 }
 
+// H3: solid companion color — muted, never alarming
 main h3 {
-  text-align: left;
-  font-size: 1.2em;
-  padding-top: 1em;
-  font-weight: 500 !important;
+  font-size: 1.15em;
+  font-weight: 600 !important;
+  color: var(--page-accent-2, #{$blue-dark});
+  margin-top: 1.5em;
+  margin-bottom: 0.25em;
+  padding-top: 0;
 }
 
 main h4 {
-  text-align: left;
-  font-size: 1.1em;
-  padding-top: 1em;
-  font-weight: 500 !important;
+  font-size: 1em;
+  font-weight: 600 !important;
+  color: $gray-600;
+  margin-top: 1.25em;
+  margin-bottom: 0.2em;
+  padding-top: 0;
 }
 
+main h5 {
+  font-size: 0.9em;
+  font-weight: 600 !important;
+  color: $gray-500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 1em;
+}
+
+main h6 {
+  font-size: 0.85em;
+  font-weight: 600 !important;
+  color: $gray-500;
+  margin-top: 0.75em;
+}
+
+// Anchor link icon on headings
+main .header-link {
+  opacity: 0;
+  margin-left: 0.3em;
+  color: var(--page-accent, #{$green});
+  transition: opacity 0.15s;
+  vertical-align: middle;
+  text-decoration: none !important;
+}
+main :is(h2,h3,h4):hover .header-link {
+  opacity: 0.6;
+}
+
+// Body-copy links: always dark regardless of accent — color-mix blends accent with a near-black
+// so orange/red accents produce warm dark browns, never alarming reds or neons.
+main a:not(.btn):not([class]) {
+  color: color-mix(in srgb, var(--page-accent) 42%, #1a2332);
+  text-decoration-color: transparent;
+  text-underline-offset: 2px;
+  transition: color 0.15s, text-decoration-color 0.15s;
+  &:hover {
+    color: var(--page-accent);
+    text-decoration-color: var(--page-accent);
+  }
+}
+
+// Marquee outer wrapper — overflow is already clipped by the parent .members
 .banner {
-  animation: scroller 60s linear 0.01s infinite;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+// Infinite-scroll track — created + populated by JS on each page-load
+.banner-track {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  // Duration is overridden by JS to match actual content width (~80 px/s)
+  animation: member-marquee 80s linear infinite;
+  will-change: transform;
+}
+
+// Each of the two identical copies that make the loop seamless
+.banner-copy {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
 }
 
 @include media-breakpoint-up(xs) {
@@ -433,25 +1092,9 @@ main h4 {
   font-weight: bold;
 }
 
-@keyframes scroller {
-  0% {
-    opacity: 0;
-    transform: translate(0, 0);
-  }
-
-  5% {
-    opacity: 1;
-    transform: translate(0, 0);
-  }
-
-  95% {
-    opacity: 1;
-    transform: translate(-225%, 0);
-  }
-
-  100% {
-    opacity: 0;
-  }
+@keyframes member-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
 }
 
 @media (min-width: 768px) {
@@ -461,13 +1104,18 @@ main h4 {
 }
 
 self-assessment {
-  --pkimm-sticky-top-offset: 56px;
+  --pkimm-sticky-top-offset: calc(56px + 44px + 1.5rem);; // navbar (57px) + wg-section-nav (44px)
+
+  .pkimm-tabs {
+    z-index: 150 !important; // below wg-section-nav (200) so its dropdowns render on top
+  }
 }
 
 @import "agenda";
 @import "sponsors";
 @import "session-registration";
 @import "bento";
+@import "blog";
 
 // ============================================================
 // Homepage
@@ -487,15 +1135,85 @@ self-assessment {
     max-width: 60vw;
     opacity: 0.12;
   }
+
+  .pkic-hero-post-card {
+    display: block;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 1rem;
+    padding: 2rem 2rem 1.75rem;
+    color: #fff;
+    transition: background 0.2s, border-color 0.2s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.10);
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+  }
+
+  .pkic-hero-post-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 0.4rem;
+  }
+
+  .pkic-hero-post-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.35;
+    margin-bottom: 0.4rem;
+    color: #cde8d8;
+  }
+
+  .pkic-hero-post-date {
+    display: block;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.45);
+    margin-bottom: 0.75rem;
+  }
+
+  .pkic-hero-post-summary {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.55;
+    margin-bottom: 1.1rem;
+  }
+
+  .pkic-hero-post-cta {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
+  }
 }
 
 // Generic dark-gradient page hero (fallback for pages without a hero image)
 .pkic-page-hero {
+  position: relative;
+  overflow: hidden;
   color: #fff;
   padding: 3.5rem 0;
 
   @media (min-width: 992px) {
     padding: 5rem 0;
+  }
+
+  // Lead paragraph uses rgba color instead of opacity so child links can override
+  .pkic-hero-lead {
+    color: rgba(255, 255, 255, 0.75);
+
+    a:not(.btn) {
+      color: #fff;
+      text-decoration: underline wavy;
+      text-decoration-color: rgba(255, 255, 255, 0.2);
+      text-underline-offset: 4px;
+      transition: text-decoration-color 0.2s ease;
+      &:hover {
+        text-decoration-color: rgba(255, 255, 255, 0.75);
+      }
+    }
   }
 
   .pkic-page-hero-kicker {
@@ -570,149 +1288,189 @@ self-assessment {
   background: $gray-100;
 }
 
-.pkic-post-card {
-  background: #fff;
-  border-radius: 1rem;
-  overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
-  display: flex;
-  flex-direction: column;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  position: relative;
-
-  &:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
-  }
-
-  .pkic-post-card-accent {
-    height: 4px;
-    background: linear-gradient(90deg, $green, $blue);
-  }
-
-  .pkic-post-card-body {
-    padding: 1.25rem;
-    display: flex;
-    flex-direction: column;
-    flex: 1;
-  }
-
-  .pkic-post-meta {
-    font-size: 0.78rem;
-  }
-
-  .pkic-post-title {
-    font-size: 1rem;
-    font-weight: 700;
-    line-height: 1.35;
-    margin-bottom: 0.5rem;
-  }
-
-  .pkic-post-summary {
-    flex: 1;
-    line-height: 1.5;
-  }
-}
+// Blog post cards on the homepage reuse the .blog-card styles from _blog.scss
 
 .pkic-join-cta {
   background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 100%);
   color: #fff;
+  padding-top: 5rem;
+  padding-bottom: 5rem;
+
+  // Override the gradient-text rule applied to all main h2 elements
+  h2 {
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    background-clip: unset !important;
+    -webkit-text-fill-color: #fff !important;
+    color: #fff !important;
+    font-size: 2.25rem;
+    margin-top: 0;
+  }
+
+  .lead {
+    opacity: 0.88;
+    font-size: 1.2rem;
+  }
 }
 
 // ============================================================
-// Blog card list
+// Home page — Working Group spotlight cards
 // ============================================================
 
-.blog-card {
+.pkic-section-eyebrow {
+  color: #1a7a4a;
+  letter-spacing: 0.1em;
+}
+
+// WG spotlight card container
+.pkic-wg-spotlight {
   background: #fff;
-  border-radius: 1rem;
+  border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.07);
   display: flex;
   flex-direction: column;
-  position: relative;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
 
   &:hover {
-    transform: translateY(-3px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08), 0 16px 48px rgba(0, 0, 0, 0.14);
   }
 
-  .blog-card-accent {
-    height: 4px;
-    background: linear-gradient(90deg, $green, $blue);
+  // Gradient header with decorative circles
+  &-header-link {
+    display: block;
+    text-decoration: none;
   }
 
-  // Vary accent bar color by position for visual interest
-  &:nth-child(3n+2) .blog-card-accent {
-    background: linear-gradient(90deg, $blue, $purple);
-  }
-
-  &:nth-child(3n) .blog-card-accent {
-    background: linear-gradient(90deg, $teal, $blue-dark);
-  }
-
-  .blog-card-body {
-    padding: 1.25rem;
+  &-header {
+    padding: 1.75rem 1.5rem 1.5rem;
+    background: linear-gradient(135deg, var(--wg-a), var(--wg-b));
+    position: relative;
+    overflow: hidden;
+    min-height: 140px;
     display: flex;
     flex-direction: column;
-    flex: 1;
+    justify-content: space-between;
+
+    // Decorative circles
+    &::before {
+      content: '';
+      position: absolute;
+      right: -24px;
+      top: -24px;
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.07);
+      pointer-events: none;
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      right: 30px;
+      bottom: -38px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.05);
+      pointer-events: none;
+    }
   }
 
-  .blog-card-meta {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    flex-wrap: wrap;
-    font-size: 0.78rem;
-    color: $gray-500;
-    margin-bottom: 0.6rem;
-  }
-
-  .blog-card-title {
-    font-size: 1rem;
+  // WG abbreviation label (top of header)
+  &-abbr {
+    font-size: 0.65rem;
     font-weight: 700;
-    line-height: 1.35;
-    margin-bottom: 0.5rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    position: relative;
+    z-index: 1;
   }
 
-  .blog-card-summary {
-    font-size: 0.85rem;
-    color: $gray-600;
-    line-height: 1.5;
+  // Icon (bottom of header)
+  &-icon {
+    width: 2.6rem;
+    height: 2.6rem;
+    color: rgba(255, 255, 255, 0.88);
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+
+  // Card body — title and description
+  &-body {
+    padding: 1.25rem 1.5rem 0.5rem;
     flex: 1;
-    margin-bottom: 0.75rem;
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: #1a1a1a;
+
+      a {
+        color: inherit;
+        text-decoration: none;
+
+        &:hover { text-decoration: underline; }
+      }
+    }
+
+    p {
+      font-size: 0.83rem;
+      color: #6c757d;
+      line-height: 1.6;
+      margin: 0;
+    }
   }
 
-  .blog-card-author {
-    font-size: 0.8rem;
-    margin-top: auto;
-    padding-top: 0.5rem;
-    border-top: 1px solid $gray-100;
-  }
-
-  .blog-card-tags {
+  // Chip/pill links at the bottom
+  &-links {
+    padding: 0.85rem 1.5rem 1.25rem;
     display: flex;
-    gap: 0.25rem;
     flex-wrap: wrap;
+    gap: 0.35rem;
   }
 }
 
-.blog-tag {
+// Chip link variants
+.pkic-wg-chip {
   display: inline-block;
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  padding: 0.15em 0.5em;
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 0.22rem 0.65rem;
   border-radius: 999px;
-  background: $green-pale;
-  color: $green-deep;
   text-decoration: none;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  line-height: 1.5;
 
-  &:hover {
-    background: $green;
-    color: #fff;
+  &-primary {
+    background: #1a7a4a;
+    color: #fff !important;
+    &:hover { background: #155e3a; }
+  }
+
+  &-secondary {
+    background: rgba(26, 122, 74, 0.12);
+    color: #1a7a4a !important;
+    &:hover { background: rgba(26, 122, 74, 0.22); }
+  }
+
+  &-warning {
+    background: #ffc107;
+    color: #1a1a1a !important;
+    font-weight: 600;
+    &:hover { background: #e5ac00; }
+  }
+
+  &-muted {
+    background: rgba(0, 0, 0, 0.055);
+    color: #495057 !important;
+    &:hover { background: rgba(0, 0, 0, 0.11); color: #1a1a1a !important; }
   }
 }
 
@@ -758,8 +1516,8 @@ self-assessment {
     flex: 1;
 
     p:last-child { margin-bottom: 0; }
-    a { color: rgba(255, 255, 255, 0.9); text-decoration: underline; }
-    a:hover { color: #fff; }
+    a { color: #fff !important; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+    a:hover { color: rgba(255, 255, 255, 0.85) !important; }
     code { background: rgba(255, 255, 255, 0.15); border-radius: 0.25rem; padding: 0.1em 0.35em; }
   }
 }
@@ -816,4 +1574,1777 @@ self-assessment {
 .wg-alt-section {
   background-color: #f4f6f8;
   background-image: radial-gradient(ellipse at 80% 50%, rgba(90, 155, 213, 0.04) 0%, transparent 70%);
+}
+
+// ====================================================================
+// PKIC Navbar — true black + mega-menu + search overlay
+// ====================================================================
+
+.pkic-navbar {
+  background: #000 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+  .nav-link {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.72) !important;
+    padding: 0.45rem 0.85rem;
+    border-radius: 0.45rem;
+    transition: color 0.15s ease, background 0.15s ease;
+
+    &:hover { color: #fff !important; background: rgba(255,255,255,0.08); }
+    &.active, &.is-active { color: #fff !important; background: rgba(255,255,255,0.05); }
+  }
+
+  .navbar-toggler {
+    border-color: rgba(255,255,255,0.25);
+    color: rgba(255,255,255,0.75);
+  }
+
+  .dropdown-menu {
+    background: #111;
+    border: 1px solid rgba(255,255,255,0.12);
+
+    .dropdown-item {
+      color: rgba(255,255,255,0.8);
+      &:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    }
+  }
+}
+
+.pkic-search-btn {
+  background: none;
+  border: none;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.45rem;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+  display: flex;
+  align-items: center;
+
+  &:hover { color: #fff; background: rgba(255,255,255,0.08); }
+}
+
+// ─── WG Mega-menu panel ──────────────────────────────────────────────
+
+// Split trigger: text link navigates, chevron button opens the panel
+.pkic-mega-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0;
+
+  > .nav-link { pointer-events: all; }
+}
+
+.pkic-mega-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s, transform 0.2s;
+  flex-shrink: 0;
+
+  svg { transition: transform 0.2s ease; }
+
+  &:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  &.is-open svg { transform: rotate(180deg); }
+}
+
+.pkic-mega-panel {
+  position: fixed;
+  top: 57px;
+  left: 0;
+  right: 0;
+  z-index: 1040;
+  background: #fff;
+  border-bottom: 3px solid transparent;
+  border-image: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red) 1;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
+  transform: translateY(-10px);
+  opacity: 0;
+  visibility: hidden;
+  transition: transform 0.22s ease, opacity 0.22s ease, visibility 0.22s ease;
+
+  &.is-open {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.pkic-mega-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #aaa;
+}
+
+.pkic-mega-backdrop {
+  position: fixed;
+  inset: 0;
+  top: 57px;
+  z-index: 1030;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.22s ease, visibility 0.22s ease;
+
+  &.is-open { opacity: 1; visibility: visible; }
+}
+
+.pkic-mega-wg-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.85rem;
+  text-decoration: none !important;
+  color: #1a1a1a;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fff;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    background: #f5f7fa;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.09);
+    text-decoration: none !important;
+    color: #000;
+  }
+
+  .pkic-mega-icon {
+    font-size: 1.3rem;
+    line-height: 1;
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.6rem;
+  }
+
+  .pkic-mega-card-body { flex: 1; min-width: 0; }
+
+  .pkic-mega-wg-id {
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #aaa;
+    margin-bottom: 0.1rem;
+  }
+
+  .pkic-mega-wg-name {
+    font-size: 0.87rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 0.2rem;
+    color: #111;
+  }
+
+  .pkic-mega-wg-desc {
+    font-size: 0.76rem;
+    color: $gray-600;
+    line-height: 1.45;
+    margin: 0;
+  }
+
+  .pkic-mega-arrow {
+    flex-shrink: 0;
+    font-size: 1rem;
+    color: $green;
+    opacity: 0;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    align-self: center;
+  }
+
+  &:hover .pkic-mega-arrow { opacity: 1; transform: translateX(3px); }
+}
+
+.pkic-mega-wg-card--green  { .pkic-mega-icon { background: rgba(25, 135, 84,  0.1); } }
+.pkic-mega-wg-card--blue   { .pkic-mega-icon { background: rgba(90, 155, 213, 0.1); } }
+.pkic-mega-wg-card--orange { .pkic-mega-icon { background: rgba(237, 125, 49, 0.1); } }
+.pkic-mega-wg-card--purple { .pkic-mega-icon { background: rgba(111, 66, 193,  0.1); } }
+.pkic-mega-wg-card--teal   { .pkic-mega-icon { background: rgba(32, 201, 151,  0.1); } }
+
+.pkic-mega-footer-link {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: $green;
+  text-decoration: none;
+  &:hover { color: $green-dark; text-decoration: underline; }
+}
+
+// ─── Members Mega-menu panel ───────────────────────────────────────────
+
+.pkic-members-mega-panel {
+  // Inherits .pkic-mega-panel base styles
+}
+
+.pkic-members-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(25, 135, 84, 0.2);
+  background: rgba(25, 135, 84, 0.05);
+  text-decoration: none;
+  color: inherit;
+  min-width: 90px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    background: rgba(25, 135, 84, 0.1);
+    border-color: rgba(25, 135, 84, 0.4);
+    transform: translateY(-1px);
+    text-decoration: none;
+    color: inherit;
+  }
+
+  &.pkic-members-stat-card--indep {
+    border-color: rgba(90, 155, 213, 0.25);
+    background: rgba(90, 155, 213, 0.05);
+    &:hover {
+      background: rgba(90, 155, 213, 0.1);
+      border-color: rgba(90, 155, 213, 0.4);
+    }
+  }
+}
+
+.pkic-members-stat-num {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: $green;
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+
+.pkic-members-stat-card--indep .pkic-members-stat-num { color: #5a9bd5; }
+
+.pkic-members-stat-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #888;
+}
+
+.pkic-members-action-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  text-decoration: none !important;
+  color: #1a1a1a;
+  background: #fff;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    background: #f5f7fa;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.07);
+    color: #000;
+    text-decoration: none !important;
+
+    .pkic-mega-arrow { opacity: 1; transform: translateX(3px); }
+  }
+}
+
+.pkic-members-action-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.55rem;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.pkic-members-action-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 0.1rem;
+}
+
+.pkic-members-action-desc {
+  font-size: 0.73rem;
+  color: $gray-600;
+  line-height: 1.3;
+}
+
+
+
+// ─── Search overlay ───────────────────────────────────────────────────
+
+.pkic-search-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(10px);
+  z-index: 1060;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 5rem 1rem 2rem;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+
+  &.is-open { opacity: 1; visibility: visible; }
+}
+
+.pkic-search-box { width: 100%; max-width: 700px; }
+
+.pkic-search-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 1rem;
+  padding: 0.9rem 1.25rem;
+
+  .pkic-search-input-field {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 1.15rem;
+    &::placeholder { color: rgba(255, 255, 255, 0.35); }
+  }
+}
+
+.pkic-search-esc {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  background: none;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  &:hover { color: #fff; border-color: rgba(255,255,255,0.55); }
+}
+
+.pkic-search-results-list {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.pkic-search-result-item {
+  display: block;
+  padding: 0.875rem 1.25rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+  color: #fff;
+  transition: background 0.15s ease;
+
+  &:hover { background: rgba(255,255,255,0.14); color: #fff; text-decoration: none; }
+
+  .pkic-sr-title   { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.2rem; }
+  .pkic-sr-url     { font-size: 0.7rem; color: #7cf0be; opacity: 0.85; margin-bottom: 0.3rem; }
+  .pkic-sr-excerpt {
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.5;
+    mark { background: none; color: #7cf0be; font-weight: 600; }
+  }
+}
+
+.pkic-search-hint {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.9rem;
+  text-align: center;
+  margin-top: 2rem;
+}
+
+// ─── Premium button variants ─────────────────────────────────────────
+
+.btn-pkic {
+  background: linear-gradient(135deg, $green-dark 0%, $green 100%);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 14px rgba(25, 135, 84, 0.38);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover, &:focus { transform: translateY(-1px); box-shadow: 0 4px 22px rgba(25, 135, 84, 0.5); color: #fff; }
+  &:active { transform: translateY(0); }
+}
+
+.btn-pkic-outline {
+  background: transparent;
+  color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+
+  &:hover, &:focus {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.85);
+    color: #fff;
+    transform: translateY(-1px);
+  }
+}
+
+// ─── Members A-Z sidebar layout ───────────────────────────────────────
+
+.members-search-bar { max-width: 560px; margin-left: auto; margin-right: auto; }
+
+.members-layout {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+// Sidebar shape
+@mixin az-sidebar-shape {
+  flex-shrink: 0;
+  width: 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: calc(100vh - 88px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+
+  .az-sidebar-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 26px;
+    border-radius: 5px;
+    font-size: 0.67rem;
+    font-weight: 700;
+    color: #bbb;
+    text-decoration: none;
+    transition: background 0.12s ease, color 0.12s ease;
+
+    &:hover                         { background: $green; color: #fff; }
+    &.is-active                     { background: $green; color: #fff; }
+    &.is-empty, &.is-empty-search   { color: #ddd; pointer-events: none; }
+  }
+}
+
+// Inline sticky sidebar (visible lg+)
+.members-az-sidebar {
+  @include az-sidebar-shape;
+  position: sticky;
+  top: 68px;
+}
+
+.members-content { flex: 1; min-width: 0; }
+
+.member-letter-group {
+  margin-bottom: 2.5rem;
+  &.is-hidden { display: none; }
+}
+
+.member-letter-heading {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #bbb;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  scroll-margin-top: 80px;
+}
+
+// ─── WG in-page section nav ───────────────────────────────────────────
+
+// Offset WG sections for sticky navbar (57px) + section nav (~41px)
+[id^="wg-"] { scroll-margin-top: 105px; }
+
+// ─── WG section nav ──────────────────────────────────────────────────
+//
+// The nav gets a .wg-{id} class which provides --wg-color via _bento.scss.
+// On sub-pages the nav sticks; on the landing page it also has a top accent
+// border that persists on scroll (replacing the hero strip below the fold).
+
+.wg-section-nav {
+  position: sticky;
+  top: 57px;   // just below the navbar
+  z-index: 200;
+  background: #000;
+  border-top: 3px solid var(--wg-color, #{$green});  // color bar always visible
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 0;
+
+  .container {
+    overflow-x: auto;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  .wg-nav-link {
+    display: inline-block;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.55);
+    text-decoration: none;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+
+    &:hover  { color: #fff; }
+    &.is-active {
+      color: #fff;
+      border-bottom-color: var(--wg-color, #{$green});  // matches WG color
+    }
+  }
+}
+
+// ─── WG sub-pages explore cards ───────────────────────────────────────
+
+.wg-explore-card {
+  padding: 1.25rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: #fff;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.1);
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+.wg-explore-icon {
+  font-size: 1.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.wg-explore-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 0.25rem;
+}
+
+.wg-explore-desc {
+  font-size: 0.8rem;
+  color: $gray-600;
+  line-height: 1.45;
+}
+
+.wg-explore-arrow {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: $green;
+  padding-top: 0.5rem;
+}
+
+// Color-accented border on left
+.wg-explore-card--blue   { border-left: 3px solid #5a9bd5; }
+.wg-explore-card--purple { border-left: 3px solid #7c4dbd; }
+.wg-explore-card--orange { border-left: 3px solid #e97d3a; }
+.wg-explore-card--teal   { border-left: 3px solid #20c997; }
+.wg-explore-card--green  { border-left: 3px solid $green; }
+
+// ─── WG Key Deliverables — featured section ───────────────────────────
+
+.wg-key-deliverables {
+  background: linear-gradient(160deg, #0e0a1c 0%, #0a1120 100%);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+
+  h2 { color: #fff !important; }
+}
+
+.wg-key-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 0.4rem;
+}
+
+.wg-key-card {
+  border-radius: 1.5rem;
+  padding: 2rem 1.75rem 1.75rem;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.16);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red);
+    border-radius: 1.5rem 1.5rem 0 0;
+  }
+
+  &:hover {
+    transform: translateY(-5px);
+    background: rgba(255,255,255,0.12);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.22);
+    border-color: rgba(255,255,255,0.28);
+  }
+}
+
+// Top accent bar — shared rainbow gradient across all color variants
+
+.wg-key-badge {
+  align-self: flex-start;
+  background: rgba(255,255,255,0.15) !important;
+  color: rgba(255,255,255,0.9) !important;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 1rem;
+}
+
+.wg-key-icon {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  background: rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+
+// Tint icon background to WG color
+.wg-key-card--purple .wg-key-icon { background: rgba(159,108,241,0.2); box-shadow: 0 0 24px rgba(159,108,241,0.25); }
+.wg-key-card--blue   .wg-key-icon { background: rgba(90,155,213,0.2);  box-shadow: 0 0 24px rgba(90,155,213,0.25);  }
+.wg-key-card--orange .wg-key-icon { background: rgba(233,125,58,0.2);  box-shadow: 0 0 24px rgba(233,125,58,0.25);  }
+.wg-key-card--teal   .wg-key-icon { background: rgba(32,201,151,0.2);  box-shadow: 0 0 24px rgba(32,201,151,0.25);  }
+.wg-key-card--green  .wg-key-icon { background: rgba(25,135,84,0.2);   box-shadow: 0 0 24px rgba(25,135,84,0.25);   }
+.wg-key-card--red    .wg-key-icon { background: rgba(220,53,69,0.2);   box-shadow: 0 0 24px rgba(220,53,69,0.25);   }
+
+.wg-key-svg {
+  width: 2.75rem;
+  height: 2.75rem;
+  color: #fff;
+}
+
+.wg-key-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.75rem;
+  line-height: 1.25;
+}
+
+.wg-key-desc {
+  color: rgba(255,255,255,0.65);
+  font-size: 0.94rem;
+  line-height: 1.65;
+  flex-grow: 1;
+  margin-bottom: 1.5rem;
+}
+
+.wg-key-cta {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 0.65rem 1.5rem;
+  border-radius: 2rem;
+  background: rgba(255,255,255,0.1);
+  color: #fff !important;
+  font-weight: 600;
+  font-size: 0.88rem;
+  text-decoration: none !important;
+  transition: background 0.18s ease, transform 0.18s ease;
+
+  &:hover {
+    background: rgba(255,255,255,0.2);
+    transform: translateX(3px);
+  }
+}
+
+// CTA button tinted to WG color
+.wg-key-card--purple .wg-key-cta { background: rgba(111,66,193,0.45); &:hover { background: rgba(111,66,193,0.7); } }
+.wg-key-card--blue   .wg-key-cta { background: rgba(13,110,253,0.35); &:hover { background: rgba(13,110,253,0.6); } }
+.wg-key-card--orange .wg-key-cta { background: rgba(233,125,58,0.35); &:hover { background: rgba(233,125,58,0.6); } }
+.wg-key-card--teal   .wg-key-cta { background: rgba(32,201,151,0.3);  &:hover { background: rgba(32,201,151,0.55); } }
+.wg-key-card--green  .wg-key-cta { background: rgba(25,135,84,0.35);  &:hover { background: rgba(25,135,84,0.6); } }
+.wg-key-card--red    .wg-key-cta { background: rgba(220,53,69,0.35);  &:hover { background: rgba(220,53,69,0.6); } }
+
+// ─── PQC Conference cards ─────────────────────────────────────────────
+
+.pqc-conf-featured-card {
+  background: linear-gradient(135deg, #0d1e36 0%, #1a1050 100%);
+  color: #fff;
+  border-radius: 1.25rem;
+  padding: 2.5rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+}
+
+.pqc-conf-featured-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.pqc-conf-flag {
+  font-size: 3rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.pqc-conf-featured-label {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: $green;
+  margin-bottom: 0.35rem;
+}
+
+.pqc-conf-featured-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 0.6rem;
+}
+
+.pqc-conf-featured-meta {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.pqc-conf-meta-item {
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.75);
+}
+
+.pqc-conf-featured-desc {
+  font-size: 0.92rem;
+  color: rgba(255,255,255,0.7);
+  line-height: 1.65;
+  margin-bottom: 1.5rem;
+}
+
+.pqc-conf-past-card {
+  padding: 1.25rem 1.25rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: #fff;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.09);
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+.pqc-conf-past-flag {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.pqc-conf-past-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 0.25rem;
+  line-height: 1.35;
+}
+
+.pqc-conf-past-meta {
+  font-size: 0.78rem;
+  color: $gray-600;
+  margin-bottom: 0.6rem;
+}
+
+.pqc-conf-past-arrow {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: $green;
+}
+
+// ─── WG sub-page compact header ─────────────────────────────────────────────
+//
+// Replaces the full hero on Focus/Deliverables/Members/Resources/Conferences
+// sub-pages. Gets the same --wg-color from the .wg-{id} class.
+
+.wg-sub-header {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 0% 50%, color-mix(in srgb, var(--wg-color, #{$green}) 22%, transparent) 0%, transparent 65%),
+    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--wg-color, #{$green}) 10%, transparent) 0%, transparent 50%),
+    linear-gradient(120deg, color-mix(in srgb, var(--wg-color, #{$green}) 50%, #000) 0%, #0d0d0d 60%);
+  border-top: 3px solid var(--wg-color, #{$green});
+  padding: 2rem 0 1.75rem;
+
+  .wg-sub-eyebrow {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(#fff, 0.55);
+    margin-bottom: 0.5rem;
+
+    a {
+      color: rgba(255, 255, 255, 0.7) !important;
+      text-decoration: none;
+      &:hover { color: #fff !important; }
+    }
+
+    span { margin: 0 0.3em; opacity: 0.5; }
+  }
+
+  .wg-sub-title {
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 0.4rem;
+    line-height: 1.2;
+  }
+
+  .wg-sub-desc {
+    color: rgba(255,255,255,0.6);
+    font-size: 0.95rem;
+    margin-bottom: 0;
+    max-width: 55ch;
+  }
+}
+
+.wg-sub-header-watermark,
+.pkic-page-hero-watermark {
+  position: absolute;
+  right: -3rem;
+  bottom: -3rem;
+  color: var(--wg-color, #{$green});
+  opacity: 0.22;
+  pointer-events: none;
+  user-select: none;
+  transform: rotate(18deg);
+  transform-origin: bottom right;
+  mask-image: radial-gradient(ellipse 75% 80% at 45% 55%, #000 25%, transparent 75%);
+  filter: blur(0.4px);
+}
+
+.wg-sub-header-watermark {
+  width: clamp(220px, 32vw, 380px);
+  height: auto;
+}
+
+.pkic-page-hero-watermark {
+  width: clamp(260px, 38vw, 480px);
+  height: auto;
+  bottom: -4rem;
+  right: -4rem;
+}
+
+// ─── WG leadership panel ────────────────────────────────────────────────────
+//
+// Generic panel usable on any WG landing page or "About" sub-page.
+// Compose with the leader-card.html partial.
+
+.wg-leadership-panel {
+  background: rgba(0,0,0,0.03);
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 1rem;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.wg-leadership-label {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: $gray-500;
+  margin-bottom: 1rem;
+}
+
+.wg-leadership-persons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1.25rem;
+
+  // When containing large (horizontal) cards, stack them in a column
+  &--large {
+    flex-direction: column;
+    gap: 1rem;
+  }
+}
+
+// ─── Leader card (generic) ──────────────────────────────────────────────────
+//
+// Used by layouts/partials/leader-card.html.
+// Can be embedded in any context: WG pages, blog author panels, event speakers.
+
+.wg-leader-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.35rem;
+  min-width: 100px;
+  flex: 1;
+}
+
+.wg-leader-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(0,0,0,0.08);
+  margin-bottom: 0.15rem;
+
+  &--large {
+    width: 110px;
+    height: 110px;
+    margin-bottom: 0;
+    flex-shrink: 0;
+    border-width: 2px;
+  }
+}
+
+.wg-leader-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.3rem;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: -0.02em;
+  // Use page accent first, fall back to wg-color, then default green
+  background: var(--page-accent, var(--wg-color, #{$green}));
+
+  &.wg-leader-avatar--large {
+    font-size: 2rem;
+  }
+}
+
+.wg-leader-name {
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.3;
+}
+
+.wg-leader-role {
+  font-size: 0.72rem;
+  font-weight: 500;
+  color: $gray-500;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.wg-leader-jobtitle {
+  font-size: 0.78rem;
+  color: $gray-600;
+  line-height: 1.4;
+  margin-top: 0.1rem;
+}
+
+.wg-leader-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  flex-wrap: nowrap;
+}
+
+.wg-leader-info {
+  flex: 1;
+  min-width: 0;
+}
+
+// Large card — horizontal layout like blog-author-card
+.wg-leader-card--large {
+  flex-direction: row;
+  align-items: flex-start;
+  text-align: left;
+  gap: 1rem;
+  min-width: 240px;
+
+  .wg-leader-name {
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .wg-leader-role {
+    font-size: 0.75rem;
+    margin-top: 0.15rem;
+  }
+}
+
+.wg-leader-org {
+  margin-top: 0.25rem;
+}
+
+.wg-leader-org-logo {
+  max-width: 80px;
+  max-height: 28px;
+  object-fit: contain;
+  filter: grayscale(1) contrast(0.7);
+  transition: filter 0.15s;
+
+  .wg-leader-card:hover & { filter: none; }
+
+  &--large {
+    max-width: 120px;
+    max-height: 36px;
+  }
+}
+
+.wg-leader-org-name {
+  font-size: 0.72rem;
+  color: $gray-500;
+  text-decoration: none;
+  &:hover { color: $green; }
+}
+
+.wg-leader-linkedin {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3em;
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #0077b5;
+  text-decoration: none;
+  margin-top: 0.2rem;
+  transition: opacity 0.15s;
+
+  &:hover { opacity: 0.8; }
+
+  // Icon-only variant used in the name row of large cards
+  &--icon {
+    margin-top: 0;
+    font-size: 1rem;
+    color: #0077b5;
+  }
+}
+
+// ── Consortium leadership grid (used by {{< consortium-leadership >}} shortcode) ─
+.consortium-leaders {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+  margin: 1.5rem 0 2rem;
+}
+
+.consortium-leader-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.4rem;
+  flex: 0 0 auto;
+  min-width: 180px;
+  max-width: 220px;
+}
+
+.consortium-leader-avatar {
+  width: 140px;
+  height: 140px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 3px solid rgba(0,0,0,0.08);
+  margin-bottom: 0.5rem;
+  flex-shrink: 0;
+}
+
+.consortium-leader-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $green;
+  color: #fff;
+  font-size: 2.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.consortium-leader-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.3em;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.3;
+}
+
+.consortium-leader-linkedin {
+  display: inline-flex;
+  align-items: center;
+  color: #0077b5;
+  text-decoration: none;
+  flex-shrink: 0;
+  transition: opacity 0.15s;
+  &:hover { opacity: 0.75; }
+}
+
+.consortium-leader-role {
+  display: inline-block;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: $green;
+  border-radius: 99px;
+  padding: 0.15em 0.7em;
+}
+
+.consortium-leader-jobtitle {
+  font-size: 0.8rem;
+  color: $gray-600;
+  line-height: 1.4;
+}
+
+.consortium-leader-org {
+  margin-top: 0.25rem;
+}
+
+.consortium-leader-org-logo {
+  max-width: 140px;
+  max-height: 44px;
+  object-fit: contain;
+  filter: grayscale(1) contrast(0.65) brightness(0.95);
+  transition: filter 0.18s;
+  .consortium-leader-card:hover & { filter: none; }
+}
+
+.consortium-leader-org-name {
+  font-size: 0.8rem;
+  color: $gray-500;
+  text-decoration: none;
+  &:hover { color: $green; }
+}
+
+// ── Theme-colored CTA button (uses --page-accent) ─────────────────────────────
+.btn-page-accent {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--page-accent, #{$green});
+  --bs-btn-border-color: var(--page-accent, #{$green});
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: color-mix(in srgb, var(--page-accent, #{$green}) 85%, #000);
+  --bs-btn-hover-border-color: color-mix(in srgb, var(--page-accent, #{$green}) 85%, #000);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: color-mix(in srgb, var(--page-accent, #{$green}) 75%, #000);
+  --bs-btn-active-border-color: color-mix(in srgb, var(--page-accent, #{$green}) 75%, #000);
+  --bs-btn-disabled-color: #fff;
+  --bs-btn-disabled-bg: var(--page-accent, #{$green});
+  --bs-btn-disabled-border-color: var(--page-accent, #{$green});
+}
+
+// ── WG Sidebar layout (flexbox, no Bootstrap grid) ───────────────────────────
+
+$sidebar-width: 260px;
+$toggle-width:  1.4rem;
+
+.wg-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+
+  @media (max-width: 991px) {
+    display: block;
+  }
+}
+
+// Sidebar wrapper — sticky, self-contained; width transitions open↔collapsed
+// The toggle is position:absolute inside, so the wrapper's width IS the flex dimension,
+// no negative margin tricks needed.
+.wg-sidebar-wrap {
+  position: sticky;
+  top: calc(56px + 44px + 1.5rem);
+  align-self: flex-start;
+  flex-shrink: 0;
+  width: $sidebar-width;
+  max-height: calc(100vh - 180px);
+  overflow-x: hidden;              // clips .wg-sidebar during collapse
+  overflow-y: auto;                // allows sidebar content to scroll
+  transition: width 0.25s ease;
+
+  // Collapsed: shrink to just the toggle button width (not 0)
+  &.is-collapsed {
+    width: $toggle-width;
+  }
+
+  @media (max-width: 991px) { display: none; }
+}
+
+// Toggle — absolutely pinned to top-right of the wrapper
+// Always visible; overlaps the sidebar's right edge like a tab
+.wg-sidebar-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: $toggle-width;
+  height: 2.8rem;
+  padding: 0;
+  border: none;
+  border-radius: 0 0.4rem 0.4rem 0;
+  background: #1e1e2e;
+  color: rgba(255,255,255,0.35);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+
+  svg { transition: transform 0.25s ease; }
+  &:hover { color: #fff; background: #2a2a3e; }
+
+  @media (max-width: 991px) { display: none; }
+}
+
+// Collapsed state — arrow flips, border-radius becomes fully rounded (standalone pill)
+.wg-sidebar-wrap.is-collapsed .wg-sidebar-toggle {
+  border-radius: 0.4rem;
+  background: #fff;
+  color: rgba(0,0,0,0.35);
+  border: 1px solid rgba(0,0,0,0.15);
+  svg { transform: rotate(180deg); }
+  &:hover { color: rgba(0,0,0,0.75); background: #f0f0f0; }
+}
+
+// Hide nav content when collapsed — only the toggle button remains visible
+.wg-sidebar-wrap.is-collapsed .wg-sidebar {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.15s ease, visibility 0s 0.15s;
+}
+
+.wg-sidebar-wrap:not(.is-collapsed) .wg-sidebar {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.2s ease 0.1s, visibility 0s;
+}
+
+// Content fills remaining space; left padding = comfortable gap from sidebar
+.wg-main-content {
+  flex: 1;
+  min-width: 0;
+  padding-left: 1.5rem;
+
+  @media (max-width: 991px) { padding-left: 0; }
+}
+
+// ── Nav tree panel (fixed-position, escapes overflow:auto) ────────────────────
+
+.wg-nav-link-wrap {
+  display: flex;
+  align-items: stretch;
+}
+
+.wg-nav-more-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s;
+
+  &[aria-expanded="true"] {
+    color: #fff;
+    svg { transform: rotate(180deg); }
+  }
+
+  svg { transition: transform 0.2s ease; }
+  &:hover { color: #fff; }
+}
+
+// Panel positioned by JS via getBoundingClientRect
+.wg-nav-tree-panel {
+  position: fixed;
+  z-index: 500;
+  min-width: 260px;
+  max-width: 320px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #16161e;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+
+  &[hidden] { display: none; }
+}
+
+.wg-sidebar {
+  width: $sidebar-width;
+  background: #16161e;
+  border-radius: 0.5rem;
+  padding: 1rem $toggle-width 1.25rem 0.75rem; // right padding clears the absolute toggle
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+.wg-sidebar-root {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: rgba(255,255,255,0.45);
+  padding: 0 0.25rem 0.75rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  text-decoration: none;
+  transition: color 0.15s;
+
+  &:hover { color: rgba(255,255,255,0.75); }
+  &.is-active { color: var(--wg-color, #7c3aed); }
+}
+
+.wg-sidebar-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.wg-sidebar-section {
+  margin-bottom: 0.15rem;
+}
+
+// Remove default <details>/<summary> marker
+.wg-sidebar-group {
+  summary {
+    list-style: none;
+    &::-webkit-details-marker { display: none; }
+  }
+}
+
+.wg-sidebar-summary {
+  display: flex;
+  align-items: center;
+  border-radius: 0.375rem;
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+  transition: background 0.12s;
+  user-select: none;
+
+  &:hover { background: rgba(255,255,255,0.06); }
+}
+
+.wg-sidebar-link {
+  flex: 1;
+  color: rgba(255,255,255,0.7);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.35;
+  transition: color 0.12s;
+
+  &:hover { color: #fff; }
+  &.is-active {
+    color: var(--wg-color, #7c3aed);
+    font-weight: 650;
+  }
+}
+
+// Standalone section links (sections with no children)
+.wg-sidebar-section > .wg-sidebar-link {
+  display: block;
+  border-radius: 0.375rem;
+  padding: 0.3rem 0.5rem;
+  &:hover { background: rgba(255,255,255,0.06); }
+}
+
+.wg-sidebar-chevron {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.3);
+  transition: color 0.12s;
+  pointer-events: none; // chevron is decorative; clicking summary area toggles
+
+  svg {
+    transition: transform 0.2s ease;
+  }
+}
+
+details[open] > .wg-sidebar-summary .wg-sidebar-chevron svg {
+  transform: rotate(90deg);
+}
+
+// Level-2 children
+.wg-sidebar-children {
+  list-style: none;
+  padding: 0.25rem 0 0.25rem 0.75rem;
+  margin: 0;
+  border-left: 1px solid rgba(255,255,255,0.08);
+
+  li {
+    margin-bottom: 0.05rem;
+
+    > a {
+      display: block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.3rem;
+      color: rgba(255,255,255,0.55);
+      font-size: 0.8125rem;
+      text-decoration: none;
+      transition: color 0.12s, background 0.12s;
+
+      &:hover {
+        color: rgba(255,255,255,0.85);
+        background: rgba(255,255,255,0.05);
+      }
+
+      &.is-active {
+        color: var(--wg-color, #7c3aed);
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+// Level-3 (nested groups)
+.wg-sidebar-nested .wg-sidebar-summary {
+  padding: 0.2rem 0.5rem;
+
+  .wg-sidebar-link {
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+}
+
+.wg-sidebar-level3 {
+  padding-left: 0.75rem;
+  border-left: 1px solid rgba(255,255,255,0.05);
+}
+
+// ── Mermaid Diagrams ──────────────────────────────────────────────────────────
+.mermaid-wrap {
+  background: transparent;
+  border: 1px solid rgba(0,0,0,0.08);
+  border-radius: 0.75rem;
+  padding: 2rem 1.5rem;
+  margin: 2rem 0;
+  overflow-x: auto;
+  position: relative;
+
+  // Subtle gradient top accent line
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg, var(--wg-color, #2f5fc7), transparent 80%);
+    border-radius: 0.75rem 0.75rem 0 0;
+  }
+
+  pre.mermaid {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    text-align: center;
+    font-size: 1rem;
+  }
+
+  .node.default .nodeLabel {
+    color: #000 !important;
+    font-weight: 500;
+    
+    p { color: #000 !important; }
+  }
+
+  // nodeLabel is an HTML <span><p> rendered in a foreignObject — use color, not SVG fill
+  .nodeLabel {
+    color: #ffffff !important;
+    font-weight: 500;
+
+    p { color: #ffffff !important; }
+  }
+
+  svg {
+    max-width: 100%;
+    height: auto;
+
+    // Node background shapes: add a subtle lighter stroke so hexagons have a visible border
+    .node-bkg {
+      stroke: rgba(255, 255, 255, 0.35) !important;
+      stroke-width: 1.5px !important;
+      fill-opacity: 1 !important;
+    }
+
+    // The horizontal divider line under the root node label
+    // Use a gradient from the section color to transparent
+    .node-line- {
+      stroke: rgba(255, 255, 255, 0.25) !important;
+      stroke-width: 1px !important;
+    }
+
+    // SVG text (edge labels, etc.)
+    text, tspan { fill: #1a1a2e; }
+
+    // Connecting lines between nodes
+    .edge { stroke: rgba(80, 100, 140, 0.5) !important; }
+  }
+}
+
+// Fallback for pages outside the WG color system
+[data-pagefind-body] .mermaid-wrap {
+  --wg-color: #{$blue};
+}
+
+// ── WG Content Body Typography ────────────────────────────────────────────────
+// Applied to the main content column in wg-content.html and wg/single.html
+[data-pagefind-body] {
+
+  // Headings
+  h1, h2, h3, h4, h5, h6 {
+    font-weight: 700;
+    line-height: 1.25;
+    scroll-margin-top: 5rem; // clear sticky nav
+  }
+
+  h1 { font-size: 2rem;    margin-top: 0;    margin-bottom: 1rem; }
+  h2 { font-size: 1.5rem;  margin-top: 2.5rem; margin-bottom: 0.75rem;
+       padding-bottom: 0.4rem;
+       border-bottom: 1px solid color-mix(in srgb, var(--page-accent) 20%, transparent);
+       background: linear-gradient(120deg, var(--page-accent), var(--page-accent-2));
+       -webkit-background-clip: text;
+       -webkit-text-fill-color: transparent;
+       background-clip: text;
+       @supports not (-webkit-background-clip: text) {
+         color: var(--page-accent, #{$green});
+         background: none;
+       } }
+  h3 { font-size: 1.2rem;  margin-top: 2rem;   margin-bottom: 0.5rem;
+       color: var(--page-accent-2, #{$blue-dark}); }
+  h4 { font-size: 1rem;    margin-top: 1.5rem; margin-bottom: 0.4rem; color: $gray-700; }
+
+  // Paragraphs & links
+  p {
+    margin-bottom: 1rem;
+    line-height: 1.75;
+    color: #374151;
+  }
+
+  // Restore white text inside dark blockquote cards
+  blockquote p { color: inherit; }
+
+  // Links: dark mix keeps readability on any accent — vivid accent revealed only on hover
+  a:not(.btn):not([class]) {
+    color: color-mix(in srgb, var(--page-accent) 42%, #1a2332);
+    text-decoration: underline;
+    text-underline-offset: 2px;
+    text-decoration-color: transparent;
+    transition: color 0.15s, text-decoration-color 0.15s;
+
+    &:hover {
+      color: var(--page-accent);
+      text-decoration-color: var(--page-accent);
+    }
+  }
+
+  // Inline code
+  code:not(pre code) {
+    background: #f0f4f8;
+    border: 1px solid #d0d7de;
+    border-radius: 0.3em;
+    font-size: 0.85em;
+    padding: 0.15em 0.45em;
+    color: #1f2937;
+  }
+
+  // Code blocks
+  pre {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 0.5rem;
+    padding: 1.25rem 1.5rem;
+    overflow-x: auto;
+    margin: 1.5rem 0;
+
+    code {
+      background: transparent;
+      border: none;
+      padding: 0;
+      color: #c9d1d9;
+      font-size: 0.875rem;
+      line-height: 1.65;
+    }
+  }
+
+  // Block quotes handled by the global blockquote styles (dark card)
+
+  // Lists
+  ul, ol {
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+
+    li {
+      line-height: 1.75;
+      margin-bottom: 0.35rem;
+    }
+
+    ul, ol { margin-bottom: 0; margin-top: 0.35rem; }
+  }
+
+  // Tables — modern card style
+  table {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 0;
+    margin: 2rem 0;
+    font-size: 0.875rem;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 0 0 1px #e2e8f0;
+
+    thead {
+      background: #1e293b;
+      color: #e2e8f0;
+
+      th {
+        padding: 0.75rem 1rem;
+        font-weight: 600;
+        font-size: 0.78rem;
+        text-transform: uppercase;
+        letter-spacing: 0.05em;
+        text-align: left;
+        border: none;
+        white-space: nowrap;
+
+        &:first-child { border-radius: 0.5rem 0 0 0; }
+        &:last-child  { border-radius: 0 0.5rem 0 0; }
+      }
+    }
+
+    tbody {
+      tr {
+        transition: background 0.12s;
+        border-bottom: 1px solid #e2e8f0;
+
+        &:last-child { border-bottom: none; }
+        &:hover { background: #f8fafc; }
+
+        &:nth-child(even) { background: #f8fafc; &:hover { background: #eff6ff; } }
+      }
+
+      td {
+        padding: 0.7rem 1rem;
+        vertical-align: top;
+        border: none;
+        color: #374151;
+        line-height: 1.55;
+      }
+    }
+  }
+
+  // Highlight first-column of tables (label column)
+  table th:first-child + th + th,
+  table td:first-child {
+    font-weight: 500;
+  }
+
+  // Horizontal rules
+  hr {
+    border: none;
+    border-top: 1px solid $gray-200;
+    margin: 2rem 0;
+  }
+
+  // Images
+  // img:not(.wg-leader-avatar):not(.wg-leader-org-logo):not(.pkimm-logo):not(.sponsor-logo):not(.blog-author-avatar):not(.blog-author-org-logo):not(.blog-card-avatar-img):not(.consortium-leader-avatar):not(.consortium-leader-org-logo) {
+  //   max-width: 100%;
+  //   height: auto;
+  //   border-radius: 0.375rem;
+  //   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+  // }
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+}
+
+// ── WG SVG icon (used in listing & mega menu) ─────────────────────────────────
+.wg-svg-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
+}
+
+.pkic-mega-wg-svg {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex-shrink: 0;
+  color: currentColor;
+  opacity: 0.85;
+}
+
+.bento-svg-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  margin-bottom: 0.75rem;
+
+  svg {
+    width: 100%;
+    height: 100%;
+  }
 }

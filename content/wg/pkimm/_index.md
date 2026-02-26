@@ -20,11 +20,50 @@ heroButton:
 
 wgID: PKIMM
 color: purple
-icon: "📈"
+
+chair:
+  name: Roman Cinkais
+
+keyDeliverables:
+  - title: PKI Maturity Model
+    description: A complete five-level framework for evaluating and benchmarking PKI implementations across all critical domains — from governance and risk management to cryptographic controls and certificate lifecycle.
+    url: /wg/pkimm/model/
+    icon: pkimm-model
+    cta: Explore the Model
+    badge: Active
+  - title: Online Quick Assessment
+    description: Assess your organization's PKI maturity in minutes. The interactive self-assessment scores your PKI across all domains and provides an instant gap analysis with actionable recommendations — no login required.
+    url: /wg/pkimm/model/tools/self-assessment/
+    icon: pkimm-assessment
+    cta: Start Free Assessment
+    badge: Free · No login required
+
+card:
+  icon: pkimm
+  order: 1
+  gradient: ["#1e3a5f", "#0d2040"]
+  description: "A globally recognized standard for evaluating, planning and comparing PKI implementations across every sector."
+  links:
+    - text: "Maturity Model"
+      url: "/wg/pkimm/model/"
+      chip: primary
+    - text: "Assessment Tools"
+      url: "/wg/pkimm/model/tools/"
+      chip: secondary
+    - text: "Blog Posts"
+      url: "/tags/pkimm/"
+      chip: muted
+    - text: "Charter"
+      url: "/wg/pkimm/charter/"
+      chip: muted
 
 intro: |
   The **PKI Maturity Model (PKIMM)** Working Group develops and maintains a globally recognized framework for evaluating, planning, and improving PKI implementations.
   Organizations worldwide use the model to benchmark their current posture, identify gaps, and chart a structured path toward operational excellence.
+
+  The model is intended for all entities that operate public key infrastructure, regardless of size, industry, or use-case. Adoption is voluntary — it does not impose mandatory requirements.
+
+  Our goal is to build a PKI maturity model recognized around the globe as a standard for evaluation, planning, and comparison between different PKI implementations, serving as a basis for assessment services and action plans for PKI environments.
 
 focus:
   - title: Maturity Framework
@@ -47,22 +86,18 @@ focus:
     icon: "🏆"
 
 deliverables:
-  - title: PKI Maturity Model v1.0
+  - title: PKI Maturity Model
+    menuTitle: Model
     description: The foundational maturity model framework with defined levels, domains, and criteria.
-    url: /pkimm/
-    status: active
-  - title: Self-Assessment Application
-    description: An interactive web application for evaluating PKI maturity against the PKIMM framework.
-    url: /pkimm/
+    url: /wg/pkimm/model/
     status: active
   - title: PKIMM Certification Program
     description: A formal assessment and certification program for organizations seeking recognized PKIMM validation.
-    url: /pkimm/
     status: planned
 
 resources:
   - title: PKIMM Self-Assessment Tool
-    url: /pkimm/
+    url: /wg/pkimm/model/tools/
     description: Use the interactive tool to assess your organization's PKI maturity level.
   - title: NIST Cybersecurity Framework
     url: https://www.nist.gov/cyberframework

@@ -1,0 +1,42 @@
+{{/*
+  Partial: wg-spotlight-card.html
+  Usage: {{ partial "wg-spotlight-card.html" . }}
+  Context: a WG page object with .Params.card, .Params.wgID, .Title, .RelPermalink, .Params.description
+
+  card:
+    icon: pkimm | pqc | cm | tc
+    gradient: ["#from", "#to"]
+    description: "Short description shown on the card"
+    links:
+      - text: "Label"
+        url: "/path/"
+        chip: primary | secondary | warning | muted
+*/}}
+{{ $card := .Params.card }}
+{{ $wgID := .Params.wgID | default "" }}
+{{ $gradFrom := index ($card.gradient | default (slice "#1a3a2a" "#0a1f14")) 0 }}
+{{ $gradTo   := index ($card.gradient | default (slice "#1a3a2a" "#0a1f14")) 1 }}
+{{ $desc := $card.description | default .Params.description | default .Summary }}
+
+<article class="pkic-wg-spotlight h-100">
+  <a href="{{ .RelPermalink }}" class="pkic-wg-spotlight-header-link" tabindex="-1" aria-hidden="true">
+    <div class="pkic-wg-spotlight-header" style="--wg-a:{{ $gradFrom }};--wg-b:{{ $gradTo }};">
+      <span class="pkic-wg-spotlight-abbr">{{ $wgID }}</span>
+      {{ partial "wg-icon.html" (dict "id" (lower ($card.icon | default $wgID)) "class" "pkic-wg-spotlight-icon") }}
+    </div>
+  </a>
+  <div class="pkic-wg-spotlight-body">
+    <h3><a href="{{ .RelPermalink }}" class="pkic-wg-spotlight-title-link">{{ .Title | strings.TrimSuffix " Working Group" }}</a></h3>
+    <p>{{ $desc }}</p>
+  </div>
+  {{ with $card.links }}
+  <div class="pkic-wg-spotlight-links">
+    {{ range . }}
+    {{- $u := urls.Parse .url -}}
+    <a href="{{ .url }}"
+       class="pkic-wg-chip pkic-wg-chip-{{ .chip | default "muted" }}"
+       {{- if $u.IsAbs }} target="_blank" rel="external"{{ end -}}>{{ .text }}</a>
+    {{ end }}
+  </div>
+  {{ end }}
+</article>

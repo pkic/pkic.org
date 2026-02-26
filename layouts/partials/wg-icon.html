@@ -1,0 +1,12 @@
+{{/*
+  Partial: wg-icon.html
+  Usage: {{ partial "wg-icon.html" (dict "id" "pqc" "class" "my-class") }}
+  Inlines the SVG from assets/icons/wg/<id>.svg, replacing the ICON_CLASS
+  placeholder with the given class attribute value.
+*/}}
+{{ $id    := lower (.id    | default "") }}
+{{ $class := .class | default "wg-icon" }}
+{{ $res   := resources.Get (printf "icons/wg/%s.svg" $id) }}
+{{ with $res }}
+  {{ .Content | replaceRE `class="ICON_CLASS"` (printf `class="%s"` $class) | safeHTML }}
+{{ end }}

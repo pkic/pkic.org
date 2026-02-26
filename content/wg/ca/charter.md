@@ -18,11 +18,11 @@ This Working Group Charter has been created according to the [â€œWorking Groupsâ
 |-|-|
 | **Name** |  Certificate Authority |
 | **Abbreviation** | CA |
-| **Mission** | - |
+| **Mission** | Discussions and information sharing among publicly trusted Certificate Authorities |
 | **Chair(s)** | - |
 | **Communication** | Private mailing list, Virtual meetings |
 | **Meeting schedule** | Ad hoc |
-| **Membership eligibility** | Members of category A of the Bylaws |
+| **Membership eligibility** | Publicly trusted CAs only (Category A members, as defined in the Bylaws) |
 | **Voting structure** | According to the PKIC Bylaws |
 | **Expiration** | This Working Group is chartered indefinitely until it is dissolved |
 | **Members** | {{< wgmembers CA >}} |

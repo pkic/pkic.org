@@ -1,0 +1,174 @@
+{{/*
+  Renders nested WG content (deliverables, models, etc. under a WG parent).
+  
+  Called by: layouts/wg/section.html when a page is under a WG parent section.
+  Receives: . (the current page context)
+*/}}
+{{- $wg    := "" -}}
+{{- range $.Ancestors -}}
+  {{- if and (not $wg) .Params.wgID -}}
+    {{- $wg = . -}}
+  {{- end -}}
+{{- end -}}
+{{- $color := "green" -}}
+{{- $base  := "/" -}}
+{{- if $wg -}}
+  {{- $color = $wg.Params.color | default "green" -}}
+  {{- $base  = $wg.RelPermalink -}}
+{{- end -}}
+{{- $confPage    := cond (ne $wg nil) ($wg.GetPage "conferences") nil -}}
+{{- $charterPage := cond (ne $wg nil) ($wg.GetPage "charter") nil -}}
+
+{{/* ── Compact sub-page header ──────────────────────────────────────── */}}
+<div class="wg-sub-header wg-{{ $wg.Params.wgID | lower }}">
+  {{ partial "wg-icon.html" (dict "id" ($wg.Params.card.icon | default ($wg.Params.wgID | lower)) "class" "wg-sub-header-watermark") }}
+  <div class="container">
+    <p class="wg-sub-eyebrow">
+      <a href="/wg/">Working Groups</a>
+      <span aria-hidden="true">›</span>
+      {{ with $wg }}<a href="{{ .RelPermalink }}">{{ .Params.wgID | upper }}</a>{{ end }}
+    </p>
+    <h1 class="wg-sub-title">{{ .Title }}</h1>
+    {{ with .Description }}<p class="wg-sub-desc">{{ . }}</p>{{ end }}
+  </div>
+</div>
+
+{{/* ── Sticky section nav ──────────────────────────────────────────── */}}
+{{ if $wg }}
+{{/* Compute the submodule section root: the direct WG child section containing this page */}}
+{{- $subRoot := $.Page.CurrentSection -}}
+{{- range $wg.Sections -}}
+  {{- if or ($.Page.IsDescendant .) (eq $.Page .) -}}
+    {{- $subRoot = . -}}
+  {{- end -}}
+{{- end -}}
+{{/* Effective sideMenu: true if current page or any ancestor has sideMenu set */}}
+{{- $effectiveSideMenu := $.Page.Params.sideMenu -}}
+{{- if not $effectiveSideMenu -}}
+  {{- range $.Page.Ancestors -}}
+    {{- if and (not $effectiveSideMenu) .Params.sideMenu -}}
+      {{- $effectiveSideMenu = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+<nav class="wg-section-nav wg-{{ $wg.Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
+  <div class="container d-flex gap-1">
+    <a class="wg-nav-link" href="{{ $base }}">About</a>
+
+    {{ if $charterPage }}
+    <a class="wg-nav-link" href="{{ $charterPage.RelPermalink }}">Charter</a>
+    {{ end }}
+
+    {{ if $wg.Params.focus }}
+    <a class="wg-nav-link" href="{{ $base }}focus/">Focus Areas</a>
+    {{ end }}
+
+    {{/* Deliverables that live within this WG get individual nav links */}}
+    {{- $hasDelivLink := false -}}
+    {{- range $wg.Params.deliverables -}}
+      {{- $delURL := .url | default "" -}}
+      {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
+        {{- $hasDelivLink = true -}}
+        {{- $label := .menuTitle | default (.title | truncate 22 "…") -}}
+        {{- $isActive := strings.HasPrefix $.Page.RelPermalink $delURL -}}
+        {{- $delSection := $.Site.GetPage $delURL -}}
+        {{- $delHasChildren := and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
+        {{- $slug := $delURL | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+        {{- if $delHasChildren -}}
+        <div class="wg-nav-link-wrap" data-panel="wg-nav-tree-{{ $slug }}">
+          <a class="wg-nav-link{{ if $isActive }} is-active{{ end }}" href="{{ $delURL }}">{{ $label }}</a>
+          <button class="wg-nav-more-btn" type="button"
+                  data-wg-tree-btn aria-expanded="false" aria-label="Show contents">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </div>
+        {{- else -}}
+        <a class="wg-nav-link{{ if $isActive }} is-active{{ end }}" href="{{ $delURL }}">{{ $label }}</a>
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+
+    {{/* Fallback: if no deliverable URL matched, show the submodule root */}}
+    {{- if not $hasDelivLink -}}
+    {{- $rootActive := strings.HasPrefix $.Page.RelPermalink $subRoot.RelPermalink -}}
+    {{- $subRootHasChildren := or $subRoot.Sections $subRoot.RegularPages -}}
+    {{- $subSlug := $subRoot.RelPermalink | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+    {{- if $subRootHasChildren -}}
+    <div class="wg-nav-link-wrap" data-panel="wg-nav-tree-{{ $subSlug }}">
+      <a class="wg-nav-link{{ if $rootActive }} is-active{{ end }}" href="{{ $subRoot.RelPermalink }}">{{ $subRoot.Params.menuTitle | default ($subRoot.Title | truncate 22 "…") }}</a>
+      <button class="wg-nav-more-btn" type="button"
+              data-wg-tree-btn aria-expanded="false" aria-label="Show contents">
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+    </div>
+    {{- else -}}
+    <a class="wg-nav-link{{ if $rootActive }} is-active{{ end }}" href="{{ $subRoot.RelPermalink }}">{{ $subRoot.Params.menuTitle | default ($subRoot.Title | truncate 22 "…") }}</a>
+    {{- end -}}
+    {{- end -}}
+
+    {{ if $wg.Params.wgID }}
+    <a class="wg-nav-link" href="{{ $base }}members/">Members</a>
+    {{ end }}
+
+    {{ if $wg.Params.resources }}
+    <a class="wg-nav-link" href="{{ $base }}resources/">Resources</a>
+    {{ end }}
+
+    {{ if $confPage }}
+    <a class="wg-nav-link" href="{{ $confPage.RelPermalink }}">Conferences</a>
+    {{ end }}
+
+    <a class="wg-nav-link" href="/blog/?wg={{ $wg.Params.wgID | lower }}">Blog</a>
+  </div>
+</nav>
+{{/* Tree panels — one per deliverable section with child pages */}}
+{{- range $wg.Params.deliverables -}}
+  {{- $delURL := .url | default "" -}}
+  {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
+    {{- $delSection := $.Site.GetPage $delURL -}}
+    {{- if and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
+      {{- $slug := $delURL | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+      {{- $isActive := strings.HasPrefix $.Page.RelPermalink $delURL -}}
+      {{- $treePage := cond $isActive $.Page $delSection -}}
+<div class="wg-nav-tree-panel wg-{{ $wg.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
+  {{ partial "wg-sidebar-tree.html" $treePage }}
+</div>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{/* Fallback subRoot panel (when no deliverable URL matched this section) */}}
+{{- if not $hasDelivLink -}}
+  {{- if or $subRoot.Sections $subRoot.RegularPages -}}
+    {{- $subSlugPanel := $subRoot.RelPermalink | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+<div class="wg-nav-tree-panel wg-{{ $wg.Params.wgID | lower }}" id="wg-nav-tree-{{ $subSlugPanel }}" hidden>
+  {{ partial "wg-sidebar-tree.html" $.Page }}
+</div>
+  {{- end -}}
+{{- end -}}
+
+{{/* ── Content ──────────────────────────────────────────────────────── */}}
+<div class="container py-5">
+  {{- if $effectiveSideMenu }}
+  <div class="wg-layout">
+    <aside class="wg-sidebar-wrap wg-{{ $wg.Params.wgID | lower }}" id="wg-sidebar-wrap">
+      {{ partial "wg-sidebar.html" $.Page }}
+    </aside>
+    <div class="wg-main-content" data-pagefind-body>
+      {{ .Content }}
+    </div>
+  </div>
+  {{- else }}
+  <div data-pagefind-body>
+    {{ .Content }}
+  </div>
+  {{- end }}
+</div>
+{{ end }}{{/* end if $wg */}}

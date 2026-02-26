@@ -17,6 +17,8 @@ menu:
         name: Working Groups
         weight: 300
     footer:
+        parent: consortium
+        weight: 13
 
 ---
 

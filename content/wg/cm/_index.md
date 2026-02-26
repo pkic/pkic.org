@@ -20,7 +20,23 @@ heroButton:
 
 wgID: CM
 color: orange
-icon: "🔩"
+
+chair:
+  name: Zsolt Rózsahegyi
+  viceChair: Daniel Cervera
+
+card:
+  icon: cm
+  order: 3
+  gradient: ["#8b3200", "#4a1a00"]
+  description: "Addressing cryptographic module, hardware security module (HSM), and TPM topics to strengthen the PKI ecosystem."
+  links:
+    - text: "Remote Key Attestation"
+      url: "/wg/cm/remote-key-attestation/"
+      chip: primary
+    - text: "Charter"
+      url: "/wg/cm/charter/"
+      chip: muted
 
 intro: |
   The **Cryptographic Module (CM)** Working Group is a central forum for addressing topics related to cryptographic modules, hardware security modules (HSMs), and trusted platform modules (TPMs) within the PKI ecosystem.
@@ -30,31 +46,19 @@ focus:
   - title: HSM Interoperability
     description: Improving interoperability between hardware security modules, cryptographic modules, and the broader PKI ecosystem.
     icon: "🔗"
-  - title: PKCS#11 & Standards
-    description: Promoting adoption and alignment around PKCS#11 and other cryptographic module interface standards.
-    icon: "📋"
   - title: Key Management
     description: Best practices for secure key lifecycle management in HSMs, TPMs, and key management systems.
     icon: "🗝️"
-  - title: PQC in Hardware
-    description: Tracking post-quantum algorithm support in cryptographic hardware and planning hardware refresh cycles.
-    icon: "⚛️"
-  - title: Compliance & Certification
-    description: Aligning with FIPS 140-3, Common Criteria, and other certification schemes relevant to cryptographic modules.
-    icon: "✅"
-  - title: Cloud HSM
-    description: Addressing challenges specific to cloud-based HSM solutions, key as a service, and hybrid deployments.
-    icon: "☁️"
 
 deliverables:
-  - title: Cryptographic Module Interoperability Guide
-    description: A practical guide to achieving interoperability between different cryptographic module vendors and implementations.
-    url: /resources/
-    status: planned
-  - title: HSM Vendor Comparison Matrix
-    description: A community-maintained matrix comparing features, certifications, and capabilities across HSM vendors.
-    url: /resources/
-    status: planned
+  - title: Remote Key Attestation
+    menuTitle: Key Attestation
+    description: A curated list of cryptographic devices and their support for remote key attestation, enabling organizations to verify key hardware security remotely.
+    url: /wg/cm/remote-key-attestation/
+    status: active
+  - title: Vendor Independent Key Backup
+    description: A practical guide for securely backing up cryptographic keys in a vendor-agnostic manner, ensuring resilience and continuity in PKI operations.
+    status: development
 
 resources:
   - title: NIST FIPS 140-3

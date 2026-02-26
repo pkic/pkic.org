@@ -1,0 +1,284 @@
+{{ define "main" }}
+{{- $wg     := "" -}}
+{{- range $.Ancestors -}}
+  {{- if and (not $wg) .Params.wgID -}}
+    {{- $wg = . -}}
+  {{- end -}}
+{{- end -}}
+{{- $wgID   := $wg.Params.wgID | upper -}}
+{{- $color  := $wg.Params.color | default "green" -}}
+{{- $base   := $wg.RelPermalink -}}
+{{- $sec    := .Params.wgSection -}}
+{{- $confPage := $wg.GetPage "conferences" -}}
+
+{{/* ── Compact sub-page header ──────────────────────────────────── */}}
+<div class="wg-sub-header wg-{{ $wg.Params.wgID | lower }}">
+  {{ partial "wg-icon.html" (dict "id" ($wg.Params.card.icon | default ($wg.Params.wgID | lower)) "class" "wg-sub-header-watermark") }}
+  <div class="container">
+    <p class="wg-sub-eyebrow">
+      <a href="/wg/">Working Groups</a>
+      <span aria-hidden="true">›</span>
+      <a href="{{ $base }}">{{ $wg.Params.wgID | upper }}</a>
+    </p>
+    <h1 class="wg-sub-title">{{ .Title }}</h1>
+    {{ with .Description }}<p class="wg-sub-desc">{{ . }}</p>{{ end }}
+  </div>
+</div>
+
+{{/* ── Sticky section nav ──────────────────────────────────────────── */}}
+<nav class="wg-section-nav wg-{{ $wg.Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
+  <div class="container d-flex gap-1">
+    {{/* About → always links to WG landing */}}
+    <a class="wg-nav-link{{ if eq $sec "about" }} is-active{{ end }}" href="{{ $base }}">About</a>
+
+    {{- $charterPage := $wg.GetPage "charter" -}}
+    {{ if $charterPage }}
+    <a class="wg-nav-link{{ if eq $sec "charter" }} is-active{{ end }}" href="{{ $charterPage.RelPermalink }}">Charter</a>
+    {{ end }}
+
+    {{ if $wg.Params.focus }}
+    <a class="wg-nav-link{{ if eq $sec "focus" }} is-active{{ end }}" href="{{ $base }}focus/">Focus Areas</a>
+    {{ end }}
+
+    {{- if $wg.Params.deliverables -}}
+    {{- $hasDelivLink := false -}}
+    {{- range $wg.Params.deliverables -}}
+      {{- $delURL := .url | default "" -}}
+      {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
+        {{- $hasDelivLink = true -}}
+        {{- $label := .menuTitle | default (.title | truncate 22 "…") -}}
+        {{- $isActive := strings.HasPrefix $.Page.RelPermalink $delURL -}}
+        {{- $delSection := $.Site.GetPage $delURL -}}
+        {{- $delHasChildren := and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
+        {{- $slug := $delURL | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+        {{- if $delHasChildren -}}
+        <div class="wg-nav-link-wrap" data-panel="wg-nav-tree-{{ $slug }}">
+          <a class="wg-nav-link{{ if $isActive }} is-active{{ end }}" href="{{ $delURL }}">{{ $label }}</a>
+          <button class="wg-nav-more-btn" type="button"
+                  data-wg-tree-btn aria-expanded="false" aria-label="Show contents">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </div>
+        {{- else -}}
+        <a class="wg-nav-link{{ if $isActive }} is-active{{ end }}" href="{{ $delURL }}">{{ $label }}</a>
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if not $hasDelivLink -}}
+    <a class="wg-nav-link{{ if eq $sec "deliverables" }} is-active{{ end }}" href="{{ $base }}deliverables/">Deliverables</a>
+    {{- end -}}
+    {{- end -}}
+
+    {{ if $wgID }}
+    <a class="wg-nav-link{{ if eq $sec "members" }} is-active{{ end }}" href="{{ $base }}members/">Members</a>
+    {{ end }}
+
+    {{ if $wg.Params.resources }}
+    <a class="wg-nav-link{{ if eq $sec "resources" }} is-active{{ end }}" href="{{ $base }}resources/">Resources</a>
+    {{ end }}
+
+    {{ if $confPage }}
+    <a class="wg-nav-link{{ if eq $sec "conferences" }} is-active{{ end }}" href="{{ $confPage.RelPermalink }}">Conferences</a>
+    {{ end }}
+
+    <a class="wg-nav-link{{ if eq $sec "blog" }} is-active{{ end }}" href="/blog/?wg={{ $wgID | lower }}">Blog</a>
+  </div>
+</nav>
+
+{{/* Tree panels — one per deliverable section with child pages */}}
+{{- range $wg.Params.deliverables -}}
+  {{- $delURL := .url | default "" -}}
+  {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
+    {{- $delSection := $.Site.GetPage $delURL -}}
+    {{- if and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
+      {{- $slug := $delURL | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+      {{- $isActive := strings.HasPrefix $.Page.RelPermalink $delURL -}}
+      {{- $treePage := cond $isActive $.Page $delSection -}}
+<div class="wg-nav-tree-panel wg-{{ $wg.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
+  {{ partial "wg-sidebar-tree.html" $treePage }}
+</div>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ── Section: Focus Areas ────────────────────────────────────────── */}}
+{{ if eq $sec "focus" }}
+{{ with $wg.Params.focus }}
+<section class="py-5" id="wg-focus">
+  <div class="container">
+    <h2 class="fw-bold mb-1">Focus Areas</h2>
+    <p class="text-muted mb-4">What the {{ $wg.Title }} focuses on</p>
+    <div class="bento-grid">
+      {{ range . }}
+      <div class="bento-card bento-{{ $color }}-pale">
+        {{ with .icon }}<span class="bento-icon">{{ . }}</span>{{ end }}
+        <div class="bento-title">{{ .title }}</div>
+        <div class="bento-text">{{ .description }}</div>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}
+{{ end }}
+
+{{/* ── Section: Deliverables ───────────────────────────────────────── */}}
+{{ if eq $sec "deliverables" }}
+{{ with $wg.Params.deliverables }}
+<section class="py-5" id="wg-deliverables">
+  <div class="container">
+    <h2 class="fw-bold mb-1">What We're Working On</h2>
+    <p class="text-muted mb-4">Current and planned deliverables of the {{ $wg.Title }}</p>
+    <div class="bento-grid">
+      {{ range . }}
+      {{ $statusColor := "green-pale" }}
+      {{ if eq .status "planned" }}{{ $statusColor = "yellow-pale" }}{{ end }}
+      {{ if eq .status "completed" }}{{ $statusColor = "blue-pale" }}{{ end }}
+      <div class="bento-card">
+        <span class="bento-badge bg-{{ if eq .status "active" }}success{{ else if eq .status "planned" }}warning text-dark{{ else }}info{{ end }}">
+          {{ .status | default "active" }}
+        </span>
+        <div class="bento-title">{{ .title }}</div>
+        <div class="bento-text">{{ .description }}</div>
+        {{ with .url }}
+        <div class="bento-footer">
+          <a href="{{ . }}" class="stretched-link text-decoration-none text-success fw-semibold">Explore →</a>
+        </div>
+        {{ end }}
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}
+{{ end }}
+
+{{/* ── Section: Members ────────────────────────────────────────────── */}}
+{{ if eq $sec "members" }}
+{{ with $wgID }}
+<section class="py-5" id="wg-members">
+  <div class="container">
+    <h2 class="fw-bold mb-1">Working Group Members</h2>
+    <p class="text-muted mb-4">
+      Organizations actively participating in the {{ $wg.Title }}
+    </p>
+    <div class="members-grid">
+      {{- $wgMembers := slice -}}
+      {{- range hugo.Data.members -}}
+        {{- if in .workingGroups $wgID -}}
+          {{- $wgMembers = $wgMembers | append . -}}
+        {{- end -}}
+      {{- end -}}
+      {{- range (sort $wgMembers "name") -}}
+        {{- partial "member-card.html" (dict "member" . "site" $.Site "showDescription" true "showWorkingGroups" false "showSocialHover" true) -}}
+      {{- end -}}
+    </div>
+    <div class="text-center mt-4">
+      <a href="/members/" class="btn btn-outline-success rounded-pill">View All Members</a>
+    </div>
+  </div>
+</section>
+{{ end }}
+{{ end }}
+
+{{/* ── Section: Resources ──────────────────────────────────────────── */}}
+{{ if eq $sec "resources" }}
+{{ with $wg.Params.resources }}
+<section class="py-5" id="wg-resources">
+  <div class="container">
+    <h2 class="fw-bold mb-1">Industry Resources</h2>
+    <p class="text-muted mb-4">Useful references and external resources from the {{ $wg.Title }}</p>
+    <div class="bento-grid">
+      {{ range . }}
+      <a class="bento-card bento-card-link text-decoration-none" href="{{ .url }}" target="_blank" rel="noopener noreferrer">
+        <div class="bento-title">{{ .title }}</div>
+        <div class="bento-text">{{ .description }}</div>
+        <div class="bento-footer text-success">Visit ↗</div>
+      </a>
+      {{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}
+{{ end }}
+
+{{/* ── Section: Conferences ────────────────────────────────────────── */}}
+{{ if eq $sec "conferences" }}
+{{/* Upcoming */}}
+{{ with .Params.upcoming }}
+<section class="py-5" id="wg-conferences-upcoming">
+  <div class="container">
+    <p class="pkic-section-eyebrow mb-2">Upcoming</p>
+    <h2 class="fw-bold mb-4">Next PQC Conference</h2>
+    {{ range . }}
+    <div class="pqc-conf-featured-card">
+      <div class="pqc-conf-featured-header">
+        <div class="pqc-conf-flag">{{ .flag }}</div>
+        <div>
+          <div class="pqc-conf-featured-label">UPCOMING CONFERENCE</div>
+          <h3 class="pqc-conf-featured-title">{{ .title }}</h3>
+          <div class="pqc-conf-featured-meta">
+            <span class="pqc-conf-meta-item"><strong>📅</strong> {{ .dates }}</span>
+            <span class="pqc-conf-meta-item"><strong>📍</strong> {{ .location }}</span>
+          </div>
+        </div>
+      </div>
+      <p class="pqc-conf-featured-desc">{{ .description | markdownify }}</p>
+      <div class="d-flex gap-3 flex-wrap">
+        {{ with .registerURL }}
+        <a href="{{ . }}" class="btn btn-page-accent btn-lg rounded-pill px-4">Register Interest</a>
+        {{ end }}
+        {{ with .url }}
+        <a href="{{ . }}" class="btn btn-outline-secondary btn-lg rounded-pill px-4">More information</a>
+        {{ end }}
+      </div>
+    </div>
+    {{ end }}
+  </div>
+</section>
+{{ end }}
+
+{{/* Past conferences */}}
+{{ with .Params.past }}
+<section class="py-5 wg-alt-section" id="wg-conferences-past">
+  <div class="container">
+    <p class="pkic-section-eyebrow mb-2">Archive</p>
+    <h2 class="fw-bold mb-4">Past Conferences</h2>
+    <div class="row g-3">
+      {{ range . }}
+      <div class="col-md-6 col-xl-4">
+        <a href="{{ .url }}" class="pqc-conf-past-card text-decoration-none d-block">
+          <div class="pqc-conf-past-flag">{{ .flag }}</div>
+          <div class="pqc-conf-past-title">{{ .title }}</div>
+          <div class="pqc-conf-past-meta">{{ .dates }} · {{ .location }}</div>
+          <div class="pqc-conf-past-arrow">View recordings &amp; slides →</div>
+        </a>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}
+{{ end }}
+
+{{/* ── Join CTA ─────────────────────────────────────────────────────── */}}
+<section class="py-4 wg-alt-section">
+  <div class="container text-center">
+    {{ with $wg.Params.heroButton }}
+    <a href="{{ $wg.Params.heroButton.link }}" class="btn btn-page-accent btn-lg rounded-pill px-5">
+      {{ $wg.Params.heroButton.label }}
+    </a>
+    {{ else }}
+    <a href="/join/" class="btn btn-page-accent btn-lg rounded-pill px-5">Join this Working Group</a>
+    {{ end }}
+    <div class="mt-2">
+      <a href="{{ $base }}." class="btn btn-outline-secondary btn-sm rounded-pill">← Back to {{ $wg.Title }}</a>
+    </div>
+  </div>
+</section>
+
+{{ end }}

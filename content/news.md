@@ -8,7 +8,9 @@ heroDescription: An aggregated list of news published by our members
 
 menu: 
     footer:
-        name: News from our members
+        name: News
+        parent: resources
+        weight: 32
 ---
 
 {{< news >}}

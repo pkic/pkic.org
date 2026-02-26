@@ -1,0 +1,31 @@
+{{/*
+  members-nav.html — sticky section nav for /members/ and /members/independent/
+  Mirrors the WG section nav pattern (dark bar, underline active).
+  Params: none (reads from page context)
+*/}}
+{{- $currentPath := .RelPermalink -}}
+{{- $isIndep     := hasPrefix $currentPath "/members/independent" -}}
+
+{{/* Count members for badge labels */}}
+{{- $memberCount := 0 -}}
+{{- $indepCount  := 0 -}}
+{{- range hugo.Data.members -}}
+  {{- if or (eq .memberType "H5") (eq .memberType "H6") (eq .memberType "H7") -}}
+    {{- $indepCount = add $indepCount 1 -}}
+  {{- else -}}
+    {{- $memberCount = add $memberCount 1 -}}
+  {{- end -}}
+{{- end -}}
+
+<div class="members-section-nav">
+  <div class="container">
+    <a class="members-nav-link{{ if not $isIndep }} is-active{{ end }}" href="/members/">
+      Members <span class="badge ms-1 rounded-pill">{{ $memberCount }}</span>
+    </a>
+    {{ if gt $indepCount 0 }}
+    <a class="members-nav-link{{ if $isIndep }} is-active{{ end }}" href="/members/independent/">
+      Independent Members <span class="badge ms-1 rounded-pill">{{ $indepCount }}</span>
+    </a>
+    {{ end }}
+  </div>
+</div>

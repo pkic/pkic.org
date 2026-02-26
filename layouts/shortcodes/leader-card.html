@@ -1,0 +1,23 @@
+{{/*
+  Renders a single leader card inside a leadership-panel shortcode.
+
+  Named parameters:
+    name        string  — Full name of the person (required)
+    role        string  — Display role label, e.g. "Chair", "Vice Chair",
+                          "Board Member", "Executive Council Member" (required)
+    affiliation string  — Member ID to pin the org display to, e.g. "entrust"
+                          (optional; use when a person appears under multiple
+                          members or has a name variant with trailing * in YAML)
+    color       string  — Accent colour slug for the initials fallback (optional,
+                          default "green")
+
+  Example:
+    {{< leader-card name="Jane Doe" role="Chair" affiliation="acme" color="blue" >}}
+*/}}
+{{ partial "leader-card.html" (dict
+  "name"        (.Get "name")
+  "role"        (.Get "role")
+  "color"       ((.Get "color") | default "green")
+  "affiliation" (.Get "affiliation")
+  "size"        (.Get "size")
+) }}

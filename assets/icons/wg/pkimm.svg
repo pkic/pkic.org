@@ -1,0 +1,12 @@
+<svg class="ICON_CLASS" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <!-- Rising bars representing maturity levels -->
+  <rect x="4"  y="34" width="7" height="10" rx="1.5" fill="currentColor" opacity="0.40"/>
+  <rect x="14" y="26" width="7" height="18" rx="1.5" fill="currentColor" opacity="0.58"/>
+  <rect x="24" y="18" width="7" height="26" rx="1.5" fill="currentColor" opacity="0.75"/>
+  <rect x="34" y="10" width="7" height="34" rx="1.5" fill="currentColor"/>
+  <!-- Trend arrow -->
+  <polyline points="7,32 18,22 27,16 37,8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5" fill="none"/>
+  <polyline points="31,6 38,8 36,15"        stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" opacity="0.5" fill="none"/>
+  <!-- Baseline -->
+  <line x1="2" y1="44" x2="46" y2="44" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.25"/>
+</svg>

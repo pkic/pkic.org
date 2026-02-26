@@ -1,16 +1,77 @@
 <!DOCTYPE html>
+{{/* ── Page accent colour ────────────────────────────────────────────────── */}}
+{{/* Primary accent: the main brand colour for this page/section */}}
+{{- $colorHex := dict
+  "green"  "#198754"
+  "blue"   "#5a9bd5"
+  "orange" "#ed7d31"
+  "purple" "#6f42c1"
+  "teal"   "#20c997"
+  "red"    "#dc3545"
+-}}
+{{/*
+  Secondary accent: safe, muted companion for H3 headings.
+  Chosen so NO combination produces an alarming tone (no reds next to orange, no neons).
+*/}}
+{{- $colorHex2 := dict
+  "green"  "#487caa"
+  "blue"   "#198754"
+  "orange" "#7a5c3e"
+  "purple" "#487caa"
+  "teal"   "#6f42c1"
+  "red"    "#7a4f3a"
+-}}
+{{/* Section-level fallbacks (pages with no explicit color param) */}}
+{{- $sectionHex := dict
+  "blog"       "#5a9bd5"
+  "members"    "#6f42c1"
+  "about"      "#198754"
+  "events"     "#ed7d31"
+  "resources"  "#20c997"
+  "pqcc"       "#5a9bd5"
+  "pqccm"      "#5a9bd5"
+  "activities" "#20c997"
+  "wg"         "#198754"
+-}}
+{{- $sectionHex2 := dict
+  "blog"       "#198754"
+  "members"    "#487caa"
+  "about"      "#487caa"
+  "events"     "#7a5c3e"
+  "resources"  "#487caa"
+  "pqcc"       "#198754"
+  "pqccm"      "#198754"
+  "activities" "#487caa"
+  "wg"         "#487caa"
+-}}
+{{- $accent  := index $sectionHex  .Section | default "#198754" -}}
+{{- $accent2 := index $sectionHex2 .Section | default "#487caa" -}}
+{{- $cp := .Params.color -}}
+{{- if not $cp -}}
+  {{- range .Ancestors -}}
+    {{- if and (not $cp) .Params.color -}}
+      {{- $cp = .Params.color -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- if not $cp }}{{- $cp = .FirstSection.Params.color -}}{{ end }}
+{{- with $cp -}}
+  {{- $accent  = index $colorHex  . | default $accent  -}}
+  {{- $accent2 = index $colorHex2 . | default $accent2 -}}
+{{- end -}}
 <html lang="en">
   <head>
     {{ partial "header.html" . }}
 
     {{ $sass := resources.Get "scss/main.scss" }}
     {{ $style := $sass | css.Sass | resources.Fingerprint }}
-    <link rel="stylesheet" href="{{ $style.Permalink }}" integrity="{{ $style.Data.Integrity }}">
+    <link rel="stylesheet" href="{{ $style.RelPermalink }}" {{ if hugo.IsProduction }}integrity="{{ $style.Data.Integrity }}"{{ end }}>
     
   </head>
-  <body>
+  <body style="--page-accent: {{ $accent }}; --page-accent-2: {{ $accent2 }};">
     {{ partial "navbar.html" . }}
     
+    {{ partial "edit-on-github.html" . }}
     <main>
     {{ block "main" . }}
     <div class="py-5 bg-light">
@@ -24,6 +85,7 @@
     <div data-pagefind-ignore="all">
     {{- if .Page.Store.Get "hasMermaid" -}}
       <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+      <script src="/scripts/mermaid-init.js"></script>
     {{- end -}}
 
     {{ block "footer" . }}

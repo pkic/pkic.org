@@ -13,8 +13,12 @@ heroButton:
 
 menu:
   main:
+    identifier: members
+    weight: 400
   footer:
-    name: List of members
+    name: Members
+    parent: consortium
+    weight: 14
 
 # The membership list is automatically created from the membership data,
 # please check the folder `data/members`.

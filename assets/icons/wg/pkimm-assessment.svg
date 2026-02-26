@@ -1,0 +1,15 @@
+<svg class="ICON_CLASS" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <!-- Clipboard body -->
+  <rect x="7" y="11" width="34" height="34" rx="3" stroke="currentColor" stroke-width="2.5" fill="currentColor" opacity="0.08"/>
+  <!-- Clipboard top clip -->
+  <rect x="17" y="6" width="14" height="9" rx="2.5" stroke="currentColor" stroke-width="2.2" fill="currentColor" opacity="0.18"/>
+  <!-- Row 1: check + bar -->
+  <polyline points="14,23 18,27 24,19" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="28" y1="23" x2="37" y2="23" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity="0.60"/>
+  <!-- Row 2: check + bar -->
+  <polyline points="14,33 18,37 24,29" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+  <line x1="28" y1="33" x2="37" y2="33" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity="0.60"/>
+  <!-- Row 3: open circle (pending) + short bar -->
+  <circle cx="18" cy="42" r="3" stroke="currentColor" stroke-width="2.2" opacity="0.45"/>
+  <line x1="28" y1="42" x2="34" y2="42" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" opacity="0.35"/>
+</svg>

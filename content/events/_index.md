@@ -7,4 +7,9 @@ summary:
 heroTitle: Events organized by the PKI Consortium
 heroDescription: 
 
+menu:
+    footer:
+        parent: consortium
+        weight: 15
+
 ---

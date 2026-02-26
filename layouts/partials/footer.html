@@ -4,44 +4,71 @@
         </div>
     </div>
 
-    <div id="participate" class="py-3 bg-success">
-        <div class="container">
-            Participate in our <a href="https://github.com/orgs/pkic/discussions" target="_blank">community</a> discussions and/or <a href="/join/">join</a> the consortium
+    <footer id="site-footer">
+
+        {{/* ── CTA bar ───────────────────────────────────────────── */}}
+        <div id="participate" class="py-4">
+            <div class="container">
+                Participate in our <a href="https://github.com/orgs/pkic/discussions" target="_blank">community</a> discussions and/or <a href="/join/">join</a> the consortium
+            </div>
         </div>
-    </div>
 
-    <footer class="bg-dark">
-        <div class="container fw-light text-light opacity-50">
-            {{ with .File }}
-                <a href="{{$.Site.Params.siteSource}}/content/{{ .Path }}" class="btn btn-sm btn-outline-light align-top float-end m-3">Improve this page</a>
-            {{ end }}
-            <div class="pt-3 pb-5">
-                {{ partial "social.html" .Site.Params.social }}
+        {{/* ── Main footer body ─────────────────────────────────── */}}
+        <div class="footer-body">
+            <div class="container">
+                <div class="row g-5 py-5">
+
+                    {{/* — Brand column ——————————————————————————— */}}
+                    <div class="col-lg-3 footer-brand">
+                        <a href="/" class="footer-logo-link">
+                            <img src="/img/logo.svg" alt="{{ .Site.Params.shortName }}" class="footer-logo-img">
+                        </a>
+                        {{ with .Site.Params.footer.tagline }}
+                        <p class="footer-tagline">{{ . }}</p>
+                        {{ end }}
+                        <div class="footer-social mt-4">
+                            {{ partial "social.html" $.Site.Params.social }}
+                        </div>
+                    </div>
+
+                    {{/* — Nav columns (Hugo menu: site.Menus.footer, parent entries = column titles) */}}
+                    {{ range $i, $col := site.Menus.footer }}
+                    {{ if .HasChildren }}
+                    <div class="col-6 col-lg-2{{ if eq $i 0 }} ms-lg-auto{{ end }}">
+                        <h6 class="footer-col-title">{{ .Name }}</h6>
+                        <ul class="footer-col-list">
+                            {{ range .Children }}
+                            <li>
+                                <a href="{{ .URL }}"
+                                   class="footer-col-link"
+                                   {{ if .Params.external }}target="_blank" rel="noopener"{{ end }}>
+                                    {{ .Name }}
+                                </a>
+                            </li>
+                            {{ end }}
+                        </ul>
+                    </div>
+                    {{ end }}
+                    {{ end }}
+
+                </div>
             </div>
-
-            <div class="py-2">
-                {{ range $id, $menu := .Site.Menus.footer }}
-                <a title="{{ $menu.Title }}" href="{{ $menu.URL }}" class="link-light">{{ $menu.Name }}</a> 
-                {{ if lt (add $id 1) (len $.Site.Menus.footer) }} | {{end}}
-                {{ end }}
-            </div>
-
-            <div class="py-2">
-                <small>Decisions within the PKI Consortium are taken by substantial consensus of the members <a href="/bylaws/#10-voting" class="link-light">as specified in our bylaws</a>. Substantial consensus among members does not necessarily mean that all members share the same view or opinion. </small>
-            </div>
-
-            <div class="py-2">
-                <p class="float-end">
-                    <a href="#" title="Back to top" class="m-3">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="#fff" class="bi bi-chevron-up" viewBox="0 0 16 16">
-                            <path fill-rule="evenodd" d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6z"/>
-                        </svg>
-                    </a>
-                </p>
-                <p>© {{ now.Format "2006" }} {{ .Site.Copyright }}</p>
-            </div>
-
         </div>
+
+        {{/* ── Bottom bar ───────────────────────────────────────── */}}
+        <div class="footer-bottom">
+            <div class="container py-4">
+                <div class="footer-disclaimer">
+                    Decisions within the {{ .Site.Params.shortName }} are taken by substantial consensus of the members
+                    <a href="/bylaws/#10-voting">as specified in our bylaws</a>.
+                    Substantial consensus among members does not necessarily mean that all members share the same view or opinion.
+                </div>
+                <div class="mt-2">
+                    <small class="footer-copy">© {{ now.Format "2006" }} {{ .Site.Copyright }} &middot; 501(c)(6) non-profit business league registered in Utah (#10462204-0140)</small>
+                </div>
+            </div>
+        </div>
+
     </footer>
 
     {{ $js := resources.Get "js/main.js" }}

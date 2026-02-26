@@ -1,4 +1,4 @@
-baseURL: https://pkic.org
+baseURL: /
 languageCode: en-us
 title: PKI Consortium
 
@@ -56,10 +56,44 @@ params:
   vision: Trusted digital assets and communication for everyone and everything
   siteSource: https://github.com/pkic/pkic.org/edit/main
 
+  # Maps content path prefixes (from .File.Path) to their GitHub edit base URL.
+  # Used by the footer to generate correct "edit this page" links for
+  # git submodule content that lives in separate repositories.
+  submoduleSources:
+    - prefix: wg/pkimm/model/
+      source: https://github.com/pkic/pkimm/edit/main
+    - prefix: wg/cm/remote-key-attestation/
+      source: https://github.com/pkic/remote-key-attestation/edit/main
+    - prefix: pqccm/
+      source: https://github.com/pkic/pqccm/edit/main
+
   social:
     x: https://x.com/PKIConsortium
     linkedin: https://www.linkedin.com/company/pki-consortium/
     github: https://github.com/pkic
+
+  footer:
+    tagline: Trusted digital assets and communication for everyone and everything
+
+menu:
+  footer:
+    # Column headers — children register themselves via each page's frontmatter
+    - identifier: consortium
+      name: Consortium
+      weight: 10
+    - identifier: governance
+      name: Governance
+      weight: 20
+    - identifier: resources
+      name: Resources
+      weight: 30
+    # External link with no content page
+    - name: Discussions
+      url: https://github.com/orgs/pkic/discussions
+      parent: resources
+      weight: 35
+      params:
+        external: true
 
 # https://gohugo.io/content-management/related/#default-configuration
 related:
@@ -101,6 +135,8 @@ privacy:
 
 markup:
   goldmark:
+    renderer:
+      unsafe: true
     parser:
       attribute:
         block: true
@@ -157,7 +193,6 @@ outputs:
     - HTML
   section:
     - HTML
-    - members-data
 
 caches:
   getresource:

@@ -1,0 +1,93 @@
+{{/*
+  blog-author-avatars.html — compact avatar strip + author names for blog list cards and hero.
+
+  Renders overlapping circular avatars (headshot or initials) followed by author name(s).
+  Shows up to 3 avatars, then "+N" bubble for the remainder.
+
+  Usage:  {{ partial "blog-author-avatars.html" . }}  (pass the Page as context)
+*/}}
+
+{{- $page    := . -}}
+{{- $pubDate := $page.PublishDate -}}
+{{- $found   := slice -}}      {{/* names already processed */}}
+{{- $items   := slice -}}      {{/* slice of dicts: {name, headshot, url} */}}
+
+{{/* ── 1. PKI Consortium members ─────────────────────────────────────── */}}
+{{- range hugo.Data.members -}}
+  {{- $member := . -}}
+  {{- range .representatives -}}
+    {{- $repName := .name | strings.TrimRight "*" -}}
+    {{- if not (in $page.Params.authors $repName) -}}{{- continue -}}{{- end -}}
+    {{- if in $found $repName -}}{{- continue -}}{{- end -}}
+
+    {{/* Date window: coerce to time.Time in case YAML stored the date as a string */}}
+    {{- $active := true -}}
+    {{- with .from -}}{{- if $pubDate.Before (time .) -}}{{- $active = false -}}{{- end -}}{{- end -}}
+    {{- with .till -}}{{- if $pubDate.After  (time .) -}}{{- $active = false -}}{{- end -}}{{- end -}}
+    {{- if not $active -}}{{- continue -}}{{- end -}}
+
+    {{- $found = $found | append $repName -}}
+    {{- $slug := $repName | urlize -}}
+    {{- $hs   := resources.GetMatch (printf "images/members/%s/%s.*" $member.id $slug) -}}
+    {{- $items = $items | append (dict "name" $repName "headshot" $hs "url" (printf "/members/%s/#%s" $member.id ($repName | urlize))) -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ── 2. Third-party / former-member authors ─────────────────────────── */}}
+{{- range $page.Params.authors -}}
+  {{- if not (in $found .) -}}
+    {{- $authorName := . -}}
+    {{- range hugo.Data.authors -}}
+      {{- range .representatives -}}
+        {{- if not (eq .name $authorName) -}}{{- continue -}}{{- end -}}
+        {{- if in $found $authorName -}}{{- continue -}}{{- end -}}
+
+        {{- $active := true -}}
+        {{- with .from -}}{{- if $pubDate.Before (time .) -}}{{- $active = false -}}{{- end -}}{{- end -}}
+        {{- with .till -}}{{- if $pubDate.After  (time .) -}}{{- $active = false -}}{{- end -}}{{- end -}}
+        {{- if not $active -}}{{- continue -}}{{- end -}}
+
+        {{- $found = $found | append $authorName -}}
+        {{- $items = $items | append (dict "name" $authorName "headshot" false "url" "") -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ── 3. Fallback: name not matched ──────────────────────────────────── */}}
+{{- range $page.Params.authors -}}
+  {{- if not (in $found .) -}}
+    {{- $found = $found | append . -}}
+    {{- $items = $items | append (dict "name" . "headshot" false "url" "") -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $total := len $items -}}
+{{- if gt $total 0 -}}
+<div class="blog-author-avatars-strip">
+  <div class="blog-author-avatars-bubbles">
+    {{- range first 3 $items -}}
+      {{- if .headshot }}
+      <img class="blog-card-avatar-img" src="{{ .headshot.Permalink }}" alt="{{ .name }}" title="{{ .name }}" loading="lazy">
+      {{- else }}
+      <div class="blog-card-avatar-initials" title="{{ .name }}" aria-label="{{ .name }}">
+        {{- $parts := split .name " " -}}
+        {{- range first 2 $parts -}}{{- substr . 0 1 | upper -}}{{- end -}}
+      </div>
+      {{- end -}}
+    {{- end -}}
+    {{- if gt $total 3 }}
+    <div class="blog-card-avatar-more" title="{{ sub $total 3 }} more authors">+{{ sub $total 3 }}</div>
+    {{- end }}
+  </div>
+  <span class="blog-author-avatars-names">
+    {{- range $i, $item := first 3 $items -}}
+      {{- if $i }}, {{ end -}}
+      {{- if $item.url -}}<a href="{{ $item.url }}" class="text-reset">{{ $item.name }}</a>
+      {{- else -}}{{ $item.name }}
+      {{- end -}}
+    {{- end -}}
+    {{- if gt $total 3 }} <span class="text-muted">+{{ sub $total 3 }} more</span>{{- end -}}
+  </span>
+</div>
+{{- end -}}

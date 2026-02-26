@@ -1,0 +1,80 @@
+{{ define "main" }}
+{{- $wg    := "" -}}
+{{- range $.Ancestors -}}
+  {{- if and (not $wg) .Params.wgID -}}
+    {{- $wg = . -}}
+  {{- end -}}
+{{- end -}}
+{{- $color := $wg.Params.color | default "green" -}}
+{{- $base  := $wg.RelPermalink -}}
+{{- $confPage    := $wg.GetPage "conferences" -}}
+{{- $charterPage := $wg.GetPage "charter" -}}
+
+{{/* ── Compact sub-page header ──────────────────────────────────────── */}}
+<div class="wg-sub-header wg-{{ $wg.Params.wgID | lower }}">
+  {{ partial "wg-icon.html" (dict "id" ($wg.Params.card.icon | default ($wg.Params.wgID | lower)) "class" "wg-sub-header-watermark") }}
+  <div class="container">
+    <p class="wg-sub-eyebrow">
+      <a href="/wg/">Working Groups</a>
+      <span aria-hidden="true">›</span>
+      <a href="{{ $base }}">{{ $wg.Params.wgID | upper }}</a>
+    </p>
+    <h1 class="wg-sub-title">{{ .Title }}</h1>
+    {{ with .Description }}<p class="wg-sub-desc">{{ . }}</p>{{ end }}
+  </div>
+</div>
+
+{{/* ── Sticky section nav ──────────────────────────────────────────── */}}
+<nav class="wg-section-nav wg-{{ $wg.Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
+  <div class="container d-flex gap-1">
+    <a class="wg-nav-link" href="{{ $base }}">About</a>
+
+    {{ if $charterPage }}
+    <a class="wg-nav-link is-active" href="{{ $charterPage.RelPermalink }}">Charter</a>
+    {{ end }}
+
+    {{ if $wg.Params.focus }}
+    <a class="wg-nav-link" href="{{ $base }}focus/">Focus Areas</a>
+    {{ end }}
+
+    {{- if $wg.Params.deliverables -}}
+    {{- $hasDelivLink := false -}}
+    {{- range $wg.Params.deliverables -}}
+      {{- $delURL := .url | default "" -}}
+      {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
+        {{- $hasDelivLink = true -}}
+        {{- $label := .menuTitle | default (.title | truncate 22 "…") -}}
+        <a class="wg-nav-link" href="{{ $delURL }}">{{ $label }}</a>
+      {{- end -}}
+    {{- end -}}
+    {{- if not $hasDelivLink -}}
+    <a class="wg-nav-link" href="{{ $base }}deliverables/">Deliverables</a>
+    {{- end -}}
+    {{- end -}}
+
+    {{ if $wg.Params.wgID }}
+    <a class="wg-nav-link" href="{{ $base }}members/">Members</a>
+    {{ end }}
+
+    {{ if $wg.Params.resources }}
+    <a class="wg-nav-link" href="{{ $base }}resources/">Resources</a>
+    {{ end }}
+
+    {{ if $confPage }}
+    <a class="wg-nav-link" href="{{ $confPage.RelPermalink }}">Conferences</a>
+    {{ end }}
+
+    <a class="wg-nav-link" href="/blog/?wg={{ $wg.Params.wgID | lower }}">Blog</a>
+  </div>
+</nav>
+
+{{/* ── Charter content ─────────────────────────────────────────────── */}}
+<div class="container py-5">
+  <div class="row">
+    <div class="col-lg-9" data-pagefind-body>
+      {{ .Content }}
+    </div>
+  </div>
+</div>
+
+{{ end }}

@@ -1,0 +1,115 @@
+{{/*
+  members-listing.html — shared A-Z member grid with sidebar + search bar.
+
+  Params (passed via dict):
+    members  — slice of member data objects
+    prefix   — string prefix for anchor IDs ("m" for /members, "i" for /independent)
+    site     — $.Site
+*/}}
+{{- $members  := .members -}}
+{{- $prefix   := .prefix  | default "m" -}}
+{{- $site     := .site -}}
+{{- $label    := .label   | default "members" -}}
+
+{{- $digits    := slice "0" "1" "2" "3" "4" "5" "6" "7" "8" "9" -}}
+{{- $alphaList := slice "A" "B" "C" "D" "E" "F" "G" "H" "I" "J" "K" "L" "M"
+                        "N" "O" "P" "Q" "R" "S" "T" "U" "V" "W" "X" "Y" "Z" -}}
+{{- $alphabet  := seq 65 90 -}}
+
+{{/* Compute which letters / buckets are present */}}
+{{- $letters := slice -}}
+{{- $hasNum  := false -}}
+{{- $hasOth  := false -}}
+{{- range $members -}}
+  {{- $c := strings.ToUpper (substr .name 0 1) -}}
+  {{- if in $digits $c -}}
+    {{- $hasNum = true -}}
+  {{- else if in $alphaList $c -}}
+    {{- if not (in $letters $c) -}}{{- $letters = $letters | append $c -}}{{- end -}}
+  {{- else -}}
+    {{- $hasOth = true -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ── Search bar (centered, narrow) ────────────────────────────── */}}
+<div class="py-3">
+  <div class="container">
+    <div class="members-search-bar mx-auto">
+      <div class="input-group input-group-lg">
+        <span class="input-group-text bg-white border-end-0 text-muted">
+          <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.868-3.834zm-5.242 1.406a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/>
+          </svg>
+        </span>
+        <input type="search" id="memberSearch" class="form-control border-start-0 ps-0"
+          placeholder="Filter {{ len $members }} {{ $label }}…"
+          aria-label="Filter {{ $label }}" autocomplete="off">
+      </div>
+    </div>
+    <p id="member-no-results" class="text-muted fst-italic d-none text-center mt-3">No {{ $label }} found matching your search.</p>
+  </div>
+</div>
+
+{{/* ── A-Z grid with sidebar — full viewport width ───────────────── */}}
+<div class="container-fluid px-2 px-md-4 pb-5">
+<div class="members-layout">
+
+  <nav class="members-az-sidebar d-none d-lg-flex flex-column" aria-label="Jump to letter">
+    {{ if $hasNum }}<a class="az-sidebar-link" href="#{{ $prefix }}-NUM" data-letter="#">#</a>{{ end }}
+    {{ range $alphabet }}
+      {{ $l := printf "%c" . }}
+      <a class="az-sidebar-link{{ if not (in $letters $l) }} is-empty{{ end }}"
+         href="#{{ $prefix }}-{{ $l }}" data-letter="{{ $l }}">{{ $l }}</a>
+    {{ end }}
+    {{ if $hasOth }}<a class="az-sidebar-link" href="#{{ $prefix }}-OTHER" data-letter="Other">…</a>{{ end }}
+  </nav>
+
+  <div class="members-content">
+
+    {{ if $hasNum }}
+    <section class="member-letter-group" id="{{ $prefix }}-NUM" data-letter="#">
+      <h3 class="member-letter-heading">0 – 9</h3>
+      <div class="members-grid">
+        {{- range $members -}}
+          {{- if in $digits (strings.ToUpper (substr .name 0 1)) -}}
+            {{- partial "member-card.html" (dict "member" . "site" $site "showDescription" true "showWorkingGroups" true "showSocialHover" true) -}}
+          {{- end -}}
+        {{- end -}}
+      </div>
+    </section>
+    {{ end }}
+
+    {{ range $letters }}
+      {{ $l := . }}
+      <section class="member-letter-group" id="{{ $prefix }}-{{ $l }}" data-letter="{{ $l }}">
+        <h3 class="member-letter-heading">{{ $l }}</h3>
+        <div class="members-grid">
+          {{- range $members -}}
+            {{- if eq (strings.ToUpper (substr .name 0 1)) $l -}}
+              {{- partial "member-card.html" (dict "member" . "site" $site "showDescription" true "showWorkingGroups" true "showSocialHover" true) -}}
+            {{- end -}}
+          {{- end -}}
+        </div>
+      </section>
+    {{ end }}
+
+    {{ if $hasOth }}
+    <section class="member-letter-group" id="{{ $prefix }}-OTHER" data-letter="Other">
+      <h3 class="member-letter-heading">Other</h3>
+      <div class="members-grid">
+        {{- range $members -}}
+          {{- $c := strings.ToUpper (substr .name 0 1) -}}
+          {{- if and (not (in $digits $c)) (not (in $alphaList $c)) -}}
+            {{- partial "member-card.html" (dict "member" . "site" $site "showDescription" true "showWorkingGroups" true "showSocialHover" true) -}}
+          {{- end -}}
+        {{- end -}}
+      </div>
+    </section>
+    {{ end }}
+
+  </div>{{/* /members-content */}}
+</div>{{/* /members-layout */}}
+</div>{{/* /container-fluid */}}
+
+{{ $membersJS := resources.Get "js/members.js" | minify | fingerprint }}
+<script src="{{ $membersJS.RelPermalink }}" defer></script>

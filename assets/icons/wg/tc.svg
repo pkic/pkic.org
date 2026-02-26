@@ -1,0 +1,22 @@
+<svg class="ICON_CLASS" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+  <!-- Book spine -->
+  <rect x="22" y="8" width="4" height="30" rx="1" fill="currentColor" opacity="0.45"/>
+  <!-- Left page -->
+  <path d="M22 10 C16 10 8 12 6 16 L6 38 C8 35 16 34 22 34 Z" fill="currentColor" opacity="0.28"/>
+  <!-- Right page -->
+  <path d="M26 10 C32 10 40 12 42 16 L42 38 C40 35 32 34 26 34 Z" fill="currentColor" opacity="0.50"/>
+  <!-- Text lines on right page -->
+  <line x1="29" y1="18" x2="39" y2="19.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.60"/>
+  <line x1="29" y1="23" x2="39" y2="24.5" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.60"/>
+  <line x1="29" y1="28" x2="36" y2="29.2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" opacity="0.60"/>
+  <!-- Certification rosette -->
+  <circle cx="14" cy="40" r="6"   fill="currentColor" opacity="0.18" stroke="currentColor" stroke-width="1.8"/>
+  <circle cx="14" cy="40" r="3.2" fill="currentColor" opacity="0.75"/>
+  <!-- 6 spokes at 60° increments (hardcoded) -->
+  <line x1="14"   y1="34.2" x2="14"   y2="32.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/>
+  <line x1="18.2" y1="37.5" x2="19.7" y2="36.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/>
+  <line x1="18.2" y1="42.5" x2="19.7" y2="43.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/>
+  <line x1="14"   y1="45.8" x2="14"   y2="47.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/>
+  <line x1="9.8"  y1="42.5" x2="8.3"  y2="43.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/>
+  <line x1="9.8"  y1="37.5" x2="8.3"  y2="36.6" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" opacity="0.55"/>
+</svg>

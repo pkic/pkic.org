@@ -1,0 +1,21 @@
+{{/*
+  Paired shortcode — wraps one or more leader-card shortcodes in a leadership panel.
+
+  Named parameters:
+    label  string  — Panel heading text (optional, default "Leadership")
+
+  Usage:
+    {{< leadership-panel label="Consortium Leadership" >}}
+      {{< leader-card name="Jane Doe"  role="Chair"      affiliation="acme" >}}
+      {{< leader-card name="John Smith" role="Vice Chair" >}}
+    {{< /leadership-panel >}}
+*/}}
+{{- $label := .Get "label" | default "Leadership" -}}
+{{- $size  := .Get "size"  | default "" -}}
+
+<div class="wg-leadership-panel{{ if eq $size "large" }} wg-leadership-panel--large{{ end }}">
+  <div class="wg-leadership-label">{{ $label }}</div>
+  <div class="wg-leadership-persons{{ if eq $size "large" }} wg-leadership-persons--large{{ end }}">
+    {{ .Inner }}
+  </div>
+</div>

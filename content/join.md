@@ -6,6 +6,8 @@ title: Join the PKI Consortium
 menu: 
     footer:
         name: Become a member
+        parent: consortium
+        weight: 12
 ---
 
 # Join the PKI Consortium

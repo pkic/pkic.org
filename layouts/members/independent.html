@@ -1,0 +1,15 @@
+
+{{ define "main" }}
+{{ partial "hero.html" . }}
+{{ partial "members-nav.html" . }}
+
+{{- $members := slice -}}
+{{- range sort hugo.Data.members "name" -}}
+  {{- if or (eq .memberType "H5") (eq .memberType "H6") (eq .memberType "H7") -}}
+    {{- $members = $members | append . -}}
+  {{- end -}}
+{{- end -}}
+
+{{ with .Content }}<div class="py-4"><div id="content" class="container">{{ . }}</div></div>{{ end }}
+{{ partial "members-listing.html" (dict "members" $members "prefix" "i" "site" .Site "label" "independent members") }}
+{{ end }}

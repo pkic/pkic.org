@@ -8,7 +8,10 @@ heroDescription: IPR Agreement of the Public Key Infrastructure Consortium
 
 menu: 
     footer:
-    
+        name: IPR Agreement
+        parent: governance
+        weight: 23
+
 ---
 
 I recognize that my participation in PKIC activities and projects may involve the contribution of intellectual property that may be incorporated into the PKIC activities, projects, standards, products, or services, including copyrights, patents, and other intellectual property belonging to my Organization (if applicable) or to me (together, “ Intellectual Property”).

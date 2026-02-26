@@ -6,8 +6,12 @@ description: Trusted digital assets and communication for everyone and everythin
 summary: The PKI Consortium is comprised of leading organizations that are committed to improve, create and collaborate on generic, industry or use-case specific policies, procedures, best practices, standards and tools that advance trust in assets and communication for everyone and everything using Public Key Infrastructure (PKI) as well as the security of the internet in general. By engaging with users, regulators, supervisory bodies and other interested or relying parties the consortium can address actual issues.
 keywords: ["pkic", "trust","identity","pki","tls","ssl","crypto","iot","devices", "consortium"]
 
-heroTitle: Public Key Infrastructure Consortium (PKI Consortium)
+heroHeader: PKI Consortium | PKIC
+heroTitle: Public Key Infrastructure Consortium
 heroDescription: Trusted digital assets and communication for everyone and everything
+
+aliases:
+  - /resources/
 
 menu:
   main:
@@ -18,94 +22,5 @@ menu:
 {{< alert >}}
 The slides and recordings of the **Post-Quantum Cryptography Conference** in Kuala Lumpur, Malaysia are online! [Check them out now](/events/2025/pqc-conference-kuala-lumpur-my/)!
   
-**Next stop:** Germany (city and date to be announced) — [request an invite now](/register)!
+**Next stop:** Amsterdam, Netherlands from 1-3 December 2026 — [request an invite now](/register)!
 {{< /alert >}}
-
-{{< cards >}}
-section_id: "working-groups"
-section_class: ""
-cards:
-  - title: "PKI Maturity Model (PKIMM)"
-    text: |
-      To build a PKI maturity model that will be recognized around the globe as a standard for evaluation, planning, and comparison between different PKI implementations.
-    width: "col-md-6"
-    links:
-      - text: "PKI Maturity Model"
-        url: "/pkimm/"
-        class: "btn-sm btn-primary"
-      - text: "Assessment Tools"
-        url: "/pkimm/tools/"
-        class: "btn-sm btn-secondary"
-      - text: "Blog Posts about the model"
-        url: "/tags/pkimm/"
-        class: "btn-sm btn-outline-secondary"
-    footer:
-      class: "fw-lighter text-end"
-      content: |
-        [PKIMM Working Group Charter](/wg/pkimm/charter/)
-
-  - title: "Post-Quantum Cryptography (PQC)"
-    text: "Facilitate information exchange, encouraging discussions and sharing insights on various aspects of Post-Quantum Cryptography."
-    width: "col-md-6"
-    links:
-      - text: "Last PQC Conference (Kuala Lumpur)"
-        url: "/events/2025/pqc-conference-kuala-lumpur-my/"
-        class: "btn-sm fw-bold btn-warning"
-      - text: "PQC Capabilities Matrix (PQCCM)"
-        url: "/pqccm/"
-        class: "btn-sm btn-secondary"
-      - text: "PQC Maturity Model (PQCMM)"
-        url: "/2025/10/27/defining-quantum-readiness-introducing-the-post-quantum-cryptography-maturity-model/"
-        class: "btn-sm btn-outline-primary"
-      - text: "Blog Posts about PQC"
-        url: "/tags/pqc/"
-        class: "btn-sm btn-outline-secondary"
-    footer:
-      class: "fw-lighter text-end"
-      content: |
-        [PQC Working Group Charter](/wg/pqc/charter/)
-
-  - title: "Cryptographic Module (CM)"
-    text: "Addressing cryptographic module (CM) and hardware security module (HSM) related topics."
-    width: "col-md-6"
-    links:
-      - text: "Remote Key Attestation"
-        url: "/remote-key-attestation/"
-        class: "btn-sm btn-secondary"
-    footer:
-      class: "fw-lighter text-end link-light"
-      content: |
-        [CM Working Group Charter](/wg/cm/charter/)
-    
-  - title: "Training and Certification (TC)"
-    text: "Developing professional standards and certification programs for PKI professionals."
-    width: "col-md-6"
-    links:
-    footer:
-      class: "fw-lighter text-end link-light"
-      content: |
-        [TC Working Group Charter](/wg/tcwg/charter/)
-
-  - title: "Other Resources"
-    text: ""
-    width: "col-md-6"
-    links:
-      - text: "List of Trust Lists"
-        url: "/ltl/"
-        class: "btn-sm btn-secondary"
-      - text: "Our work on GitHub"
-        url: "https://github.com/pkic/"
-        class: "btn-sm btn-outline-secondary"
-      - text: "Join the PKI Consortium (free)"
-        url: "/join/"
-        class: "btn-sm fw-bold btn-warning"
-
-{{< /cards >}}
-
-## PKI Consortium
-
-The PKI Consortium is comprised of leading organizations that are committed to improve, create and collaborate on generic, industry or use-case specific policies, procedures, best practices, standards and tools that advance trust in assets and communication for everyone and everything using Public Key Infrastructure (PKI) as well as the security of the internet in general. By engaging with users, regulators, supervisory bodies and other interested or relying parties the consortium can address actual issues. [learn more...](/about/)
-    
-## Public Key Infrastructure
-
-Public Key Infrastructure (PKI) defines the foundation for most modern security systems and provides **Confidentiality**, **Integrity**, **Authenticity** and **Non-repudiation**. It relies on public key cryptography, a universally accepted asymmetric technology that enables entities to securely communicate using an insecure transport or media, reliably link the data to the signatory and protects the integrity of the data while proving guarantees about the existence of the data at the time of signature creation.

@@ -1,0 +1,40 @@
+{{- $p := . -}}
+
+{{/* ── Hero image ─────────────────────────────────────────────────────── */}}
+{{- $cardImg := false -}}
+{{- with .Params.heroImage -}}
+  {{- $img := $p.Resources.GetMatch (printf "*%s" .) -}}
+  {{- if and $img (not (strings.HasSuffix (. | lower) ".svg")) -}}
+    {{- $cardImg = $img -}}
+  {{- end -}}
+{{- end -}}
+
+<article class="blog-card">
+  <div class="blog-card-header{{ if $cardImg }} blog-card-header--photo{{ else }} blog-card-header--gradient{{ end }}">
+    {{ if $cardImg }}
+      {{ $thumb := $cardImg.Resize "600x260 Center" }}
+      <img src="{{ $thumb.RelPermalink }}" alt="{{ $p.Title }}" loading="lazy" width="600" height="260">
+    {{ end }}
+    <div class="blog-card-header-overlay"></div>
+    {{ with $p.Params.tags }}
+    <span class="blog-card-tag">{{ index . 0 }}</span>
+    {{ end }}
+    <div class="blog-card-header-content">
+      <h2 class="blog-card-title">
+        <a href="{{ $p.Permalink }}" class="stretched-link">{{ $p.Title }}</a>
+      </h2>
+      <p class="blog-card-date">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        <time datetime="{{ $p.PublishDate.Format "2006-01-02" }}">{{ $p.PublishDate | time.Format ":date_long" }}</time>
+      </p>
+    </div>
+  </div>
+  <div class="blog-card-body">
+    <p class="blog-card-summary">{{ $p.Summary | truncate 180 | plainify }}</p>
+    {{ with $p.Params.authors }}
+    <div class="blog-card-author">
+      {{ partial "blog-author-avatars.html" $p }}
+    </div>
+    {{ end }}
+  </div>
+</article>

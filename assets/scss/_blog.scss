@@ -1,0 +1,665 @@
+// ============================================================
+// Blog card
+// ============================================================
+
+.blog-card {
+  background: #fff;
+  border-radius: 1rem;
+  overflow: hidden;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
+  display: flex;
+  flex-direction: column;
+  position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.13);
+  }
+
+  // ── Header ────────────────────────────────────────────────
+  .blog-card-header {
+    position: relative;
+    width: 100%;
+    height: 200px;
+    flex-shrink: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: 1.25rem;
+
+    // Photo: actual <img> behind overlay
+    img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.4s ease;
+    }
+  }
+
+  &:hover .blog-card-header img {
+    transform: scale(1.05);
+  }
+
+  // Dark gradient overlay so title is always legible
+  .blog-card-header-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top,
+      rgba(0,0,0,0.72) 0%,
+      rgba(0,0,0,0.30) 50%,
+      rgba(0,0,0,0.10) 100%
+    );
+  }
+
+  // Gradient-only (no photo) palettes — 6 theme-colour combinations, cycling by grid position
+  // Base shimmer pseudo-element shared by all gradient variants
+  .blog-card-header--gradient {
+    background: linear-gradient(135deg, $green-deep 0%, $blue-deep 100%);
+    &::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at 110% -10%, rgba(32,201,151,0.25) 0%, transparent 55%);
+    }
+  }
+  // 2 — blue-deep → purple-deep
+  &:nth-child(6n+2) .blog-card-header--gradient {
+    background: linear-gradient(135deg, $blue-deep 0%, $purple-deep 100%);
+    &::before { background: radial-gradient(ellipse at 110% -10%, rgba(90,155,213,0.25) 0%, transparent 55%); }
+  }
+  // 3 — purple-deep → green-deep
+  &:nth-child(6n+3) .blog-card-header--gradient {
+    background: linear-gradient(135deg, $purple-deep 0%, $green-deep 100%);
+    &::before { background: radial-gradient(ellipse at 110% -10%, rgba(111,66,193,0.25) 0%, transparent 55%); }
+  }
+  // 4 — orange-dark → red-dark
+  &:nth-child(6n+4) .blog-card-header--gradient {
+    background: linear-gradient(135deg, $orange-dark 0%, $red-dark 100%);
+    &::before { background: radial-gradient(ellipse at 110% -10%, rgba(237,125,49,0.30) 0%, transparent 55%); }
+  }
+  // 5 — red-deep → purple-deep
+  &:nth-child(6n+5) .blog-card-header--gradient {
+    background: linear-gradient(135deg, $red-deep 0%, $purple-deep 100%);
+    &::before { background: radial-gradient(ellipse at 110% -10%, rgba(220,53,69,0.25) 0%, transparent 55%); }
+  }
+  // 6 — green-dark → orange-dark
+  &:nth-child(6n) .blog-card-header--gradient {
+    background: linear-gradient(135deg, $green-dark 0%, $orange-dark 100%);
+    &::before { background: radial-gradient(ellipse at 110% -10%, rgba(25,135,84,0.30) 0%, transparent 55%); }
+  }
+
+  // Logo overlay — for SVG/logo heroImages centred on gradient header
+  .blog-card-logo {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, calc(-50% - 14px)); // nudge up to leave room for title
+    z-index: 1;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(4px);
+    border-radius: 0.75rem;
+    padding: 0.9rem 1.4rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    img {
+      max-width: 120px;
+      max-height: 48px;
+      object-fit: contain;
+      display: block;
+    }
+  }
+
+  // Tag pill — top right
+  .blog-card-tag {
+    position: absolute;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1;
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    padding: 0.3em 0.8em;
+    border-radius: 6px;
+    background: rgba(255,255,255,0.18);
+    color: #fff;
+    border: 1px solid rgba(255,255,255,0.28);
+    backdrop-filter: blur(6px);
+    white-space: nowrap;
+  }
+
+  // Title + date — bottom of header
+  .blog-card-header-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .blog-card-title {
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.35;
+    margin: 0 0 0.35rem;
+    // Reset the global `main h2` gradient-text treatment
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    background-clip: unset !important;
+    -webkit-text-fill-color: #fff !important;
+    color: #fff !important;
+
+    a {
+      color: inherit;
+      text-decoration: none;
+
+      &::after {
+        // stretched-link: cover the whole card
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+      }
+    }
+  }
+
+  .blog-card-date {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.76rem;
+    color: rgba(255,255,255,0.75);
+    margin: 0;
+
+    svg { flex-shrink: 0; }
+  }
+
+  // ── Body ──────────────────────────────────────────────────
+  .blog-card-body {
+    padding: 1.1rem 1.25rem 1.25rem;
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+  }
+
+  .blog-card-summary {
+    font-size: 0.875rem;
+    color: $gray-600;
+    line-height: 1.6;
+    flex: 1;
+    margin-bottom: 0.75rem;
+  }
+
+  .blog-card-author {
+    margin-top: auto;
+    padding-top: 0.75rem;
+    border-top: 1px solid $gray-100;
+    font-size: 0.8rem;
+  }
+
+  // Keep tags available in SCSS but tags are no longer rendered in the body
+  .blog-card-tags {
+    display: flex;
+    gap: 0.25rem;
+    flex-wrap: wrap;
+  }
+}
+
+
+.blog-tag {
+  display: inline-block;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.15em 0.5em;
+  border-radius: 999px;
+  background: $green-pale;
+  color: $green-deep;
+  text-decoration: none;
+
+  &:hover {
+    background: $green;
+    color: #fff;
+  }
+}
+
+// ============================================================
+// Blog sidebar
+// ============================================================
+
+.blog-sidebar {
+  padding-left: 1.5rem;
+
+  @media (max-width: 991px) {
+    padding-left: 0;
+    margin-top: 2rem;
+    border-top: 1px solid $gray-200;
+    padding-top: 2rem;
+  }
+}
+
+.blog-sidebar-reading-time {
+  font-size: 0.82rem;
+  color: $gray-500;
+  margin-bottom: 1.25rem;
+}
+
+.blog-sidebar-section {
+  margin-bottom: 1.75rem;
+}
+
+.blog-sidebar-heading {
+  font-size: 0.72rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: $gray-400;
+  padding-top: 0 !important;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.4rem;
+  border-bottom: 1px solid $gray-100;
+}
+
+.blog-sidebar-list {
+  font-size: 0.85rem;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  li {
+    padding: 0.4rem 0;
+    border-bottom: 1px solid $gray-200;
+    line-height: 1.35;
+
+    &:first-child { padding-top: 0; }
+    &:last-child { border-bottom: none; padding-bottom: 0; }
+  }
+
+  a {
+    color: $gray-700;
+    text-decoration: none;
+    &:hover { color: $green; }
+  }
+}
+
+// Tags rendered as Bootstrap badges in sidebar context get green pill styling
+.blog-sidebar-section .badge.bg-secondary {
+  display: inline-block;
+  font-size: 0.65rem !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  padding: 0.2em 0.55em !important;
+  border-radius: 999px !important;
+  background: $green-pale !important;
+  color: $green-deep !important;
+  text-decoration: none;
+  margin: 0.15rem 0.1rem;
+
+  &:hover {
+    background: $green !important;
+    color: #fff !important;
+  }
+}
+
+// ── Blog author card (sidebar) ─────────────────────────────────────────────────
+
+.blog-author-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid $gray-100;
+
+  &:last-child { border-bottom: none; }
+}
+
+.blog-author-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(0, 0, 0, 0.07);
+  flex-shrink: 0;
+}
+
+.blog-author-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, $green 0%, $blue 100%);
+  color: #fff;
+  font-size: 0.85rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.blog-author-info {
+  flex: 1;
+  min-width: 0;  // allow text truncation if needed
+}
+
+.blog-author-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  flex-wrap: nowrap;
+}
+
+.blog-author-name {
+  font-size: 0.87rem;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.3;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+
+  &:hover { color: $green; }
+}
+
+.blog-author-role {
+  font-size: 0.72rem;
+  color: $gray-500;
+  line-height: 1.4;
+  margin-top: 0.1rem;
+}
+
+.blog-author-org {
+  margin-top: 0.4rem;
+}
+
+.blog-author-org-logo {
+  max-width: 100px;
+  max-height: 26px;
+  object-fit: contain;
+  filter: grayscale(1) contrast(0.65) brightness(0.95);
+  transition: filter 0.18s;
+
+  .blog-author-card:hover & { filter: grayscale(0); }
+}
+
+.blog-author-org-name {
+  font-size: 0.75rem;
+  color: $gray-500;
+  text-decoration: none;
+  &:hover { color: $green; }
+}
+
+.blog-author-social {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  // social.html renders .linkArea anchors with px-1 Bootstrap padding;
+  // nudge them left so icons sit snug against the name
+  margin-left: -0.1rem;
+
+  a.linkArea {
+    color: $gray-400;
+    transition: color 0.15s;
+
+    &:hover { color: $gray-800; }
+  }
+}
+
+// ============================================================
+// Blog post prev/next navigation
+// ============================================================
+
+.blog-post-nav {
+  border-top: 1px solid $gray-200;
+  padding: 2rem 0;
+  background: #fff;
+}
+
+.blog-post-nav-inner {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+
+  @media (max-width: 575px) {
+    grid-template-columns: 1fr;
+  }
+}
+
+.blog-post-nav-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1rem 1.25rem;
+  border: 1px solid $gray-200;
+  border-radius: 0.75rem;
+  text-decoration: none;
+  color: inherit;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  background: $gray-100;
+
+  &:hover {
+    border-color: $green;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    color: inherit;
+  }
+}
+
+.blog-post-nav-next {
+  text-align: right;
+}
+
+.blog-post-nav-label {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: $green;
+
+  .blog-post-nav-next & {
+    justify-content: flex-end;
+  }
+}
+
+.blog-post-nav-title {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: $gray-800;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+// ============================================================
+// Blog article content headings
+// ============================================================
+
+// Container for both list card and hero use
+.blog-author-avatars-strip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+.blog-author-avatars-bubbles {
+  display: flex;
+  align-items: center;
+
+  // Overlapping stacked bubbles
+  > * {
+    margin-left: -6px;
+    &:first-child { margin-left: 0; }
+  }
+}
+
+// Shared avatar bubble base
+.blog-card-avatar-img,
+.blog-card-avatar-initials,
+.blog-card-avatar-more {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  flex-shrink: 0;
+  font-size: 0.6rem;
+  font-weight: 800;
+}
+
+.blog-card-avatar-img {
+  object-fit: cover;
+}
+
+.blog-card-avatar-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, $green 0%, $blue 100%);
+  color: #fff;
+  text-transform: uppercase;
+}
+
+.blog-card-avatar-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: $gray-200;
+  color: $gray-600;
+  font-size: 0.58rem;
+}
+
+.blog-author-avatars-names {
+  font-size: 0.78rem;
+  color: $gray-600;
+  line-height: 1.3;
+
+  a {
+    color: $gray-600;
+    text-decoration: none;
+    &:hover { color: $green; }
+  }
+}
+
+// Hero variant — light text on dark background
+.blog-hero-authors {
+  display: flex;
+  justify-content: center;
+
+  .blog-author-avatars-strip {
+    justify-content: center;
+  }
+
+  .blog-card-avatar-img,
+  .blog-card-avatar-initials,
+  .blog-card-avatar-more {
+    border-color: rgba(255, 255, 255, 0.5);
+  }
+
+  .blog-author-avatars-names {
+    color: rgba(255, 255, 255, 0.85);
+
+    a {
+      color: rgba(255, 255, 255, 0.85);
+      &:hover { color: #fff; }
+    }
+  }
+}
+
+// ── Blog sidebar sponsors (tiered, compact) ────────────────────────────────────
+
+.blog-sidebar-sponsors {
+  margin-top: 2rem;
+  padding: 1.25rem 1.1rem 1rem;
+  background: $gray-100;
+  border-radius: 1rem;
+  border: 1px solid $gray-200;
+  z-index: 100; // stay well below the navbar (1040)
+}
+
+.blog-sidebar-sponsors-intro {
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: $gray-400;
+  text-align: center;
+  margin-bottom: 1.1rem;
+}
+
+.blog-sidebar-tier {
+  margin-bottom: 1.25rem;
+}
+
+.blog-sidebar-tier-label {
+  display: block;
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  text-align: center;
+  color: $gray-400;
+  margin-bottom: 0.5rem;
+}
+
+// Per-tier logo grid: larger tiers get more space per item
+.blog-sidebar-tier-logos {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.85rem 1.25rem;
+}
+
+.blog-sidebar-sponsor-link {
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
+  transition: opacity 0.15s, transform 0.15s;
+
+  &:hover {
+    opacity: 0.8;
+    transform: scale(1.05);
+  }
+}
+
+// Logo images — tier-specific max-dimensions so Diamond trumps Bronze
+.blog-sidebar-sponsor-logo {
+  display: block;
+  width: auto;
+  object-fit: contain;
+  filter: grayscale(0.15);
+  transition: filter 0.15s;
+
+  .blog-sidebar-sponsor-link:hover & { filter: grayscale(0); }
+}
+
+.blog-sidebar-sponsor-logo-diamond  { height: 44px; max-width: 140px; }
+.blog-sidebar-sponsor-logo-titanium { height: 36px; max-width: 120px; }
+.blog-sidebar-sponsor-logo-platinum { height: 30px; max-width: 110px; }
+.blog-sidebar-sponsor-logo-gold     { height: 24px; max-width:  90px; }
+.blog-sidebar-sponsor-logo-silver   { height: 20px; max-width:  80px; }
+.blog-sidebar-sponsor-logo-bronze   { height: 18px; max-width:  70px; }
+
+.blog-sidebar-sponsors-footer {
+  text-align: center;
+  padding-top: 0.5rem;
+  margin-top: 0.5rem;
+  border-top: 1px solid $gray-200;
+}
+
+.blog-sidebar-sponsors-all-link {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: $gray-400;
+  text-decoration: none;
+
+  &:hover { color: $green; }
+}

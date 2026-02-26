@@ -1,4 +1,30 @@
 {{ define "main" }}
+{{/*
+  WG Section layout with auto-detection of nested content.
+  - If this section has wgID param: render full WG root page
+  - If parent section has wgID param: auto-detect as wg-content and render accordingly
+*/}}
+{{- $isWGRoot := .Params.wgID -}}
+{{- $parentWG := "" -}}
+{{- if not $isWGRoot -}}
+  {{- range .Ancestors -}}
+    {{- if and (not $parentWG) .Params.wgID -}}
+      {{- $parentWG = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $isNestedContent := and (not $isWGRoot) $parentWG -}}
+
+{{/* ──────────────────────────────────────────────────────────────────
+     AUTO-DETECTED WG-CONTENT RENDERING (nested deliverable sections)
+     ────────────────────────────────────────────────────────────────── */}}
+{{ if $isNestedContent }}
+  {{ partial "wg-sub-navigation.html" . }}
+
+{{ else }}
+{{/* ──────────────────────────────────────────────────────────────────
+     REGULAR WG ROOT RENDERING (wgID detected)
+     ────────────────────────────────────────────────────────────────── */}}
 {{- $wgID := .Params.wgID | upper -}}
 {{- $color := .Params.color | default "green" -}}
 {{- $cardGrads := dict
@@ -17,9 +43,106 @@
 {{/* WG colour accent strip */}}
 <div class="wg-hero-strip wg-{{ .Params.wgID | lower }}"></div>
 
+{{/* ── Sticky in-page section nav ──────────────────────────────────── */}}
+{{- $focusPage       := .GetPage "focus" -}}
+{{- $delivPage       := .GetPage "deliverables" -}}
+{{- $membersSubPage  := .GetPage "members" -}}
+{{- $resourcesPage   := .GetPage "resources" -}}
+{{- $confPage        := .GetPage "conferences" -}}
+{{- $charterPage     := .GetPage "charter" -}}
+<nav class="wg-section-nav wg-{{ .Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
+  <div class="container d-flex gap-1">
+    {{ if or .Params.intro .Content .Params.chair }}
+    <a class="wg-nav-link is-active" href="{{ .RelPermalink }}">About</a>
+    {{ end }}
+    {{ if .Params.keyDeliverables }}
+    <a class="wg-nav-link" data-target="wg-key-deliverables" href="#wg-key-deliverables">Deliverables</a>
+    {{ end }}
+    {{ if $charterPage }}
+    <a class="wg-nav-link" href="{{ $charterPage.RelPermalink }}">Charter</a>
+    {{ end }}
+    {{ if .Params.focus }}
+    {{ if $focusPage }}
+    <a class="wg-nav-link" href="{{ $focusPage.RelPermalink }}">Focus Areas</a>
+    {{ else }}
+    <a class="wg-nav-link" data-target="wg-focus" href="#wg-focus">Focus Areas</a>
+    {{ end }}
+    {{ end }}
+    {{- if .Params.deliverables -}}
+    {{- $base := .RelPermalink -}}
+    {{- $hasDelivLink := false -}}
+    {{- range .Params.deliverables -}}
+      {{- $delURL := .url | default "" -}}
+      {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
+        {{- $hasDelivLink = true -}}
+        {{- $label := .menuTitle | default (.title | truncate 22 "…") -}}
+        {{- $delSection := $.Site.GetPage $delURL -}}
+        {{- $delHasChildren := and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
+        {{- $slug := $delURL | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+        {{- if $delHasChildren -}}
+        <div class="wg-nav-link-wrap" data-panel="wg-nav-tree-{{ $slug }}">
+          <a class="wg-nav-link" href="{{ $delURL }}">{{ $label }}</a>
+          <button class="wg-nav-more-btn" type="button"
+                  data-wg-tree-btn aria-expanded="false" aria-label="Show contents">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+                 fill="none" stroke="currentColor" stroke-width="2.5"
+                 stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+        </div>
+        {{- else -}}
+        <a class="wg-nav-link" href="{{ $delURL }}">{{ $label }}</a>
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if not $hasDelivLink -}}
+      {{ if $delivPage }}
+      <a class="wg-nav-link" href="{{ $delivPage.RelPermalink }}">Deliverables</a>
+      {{ else }}
+      <a class="wg-nav-link" data-target="wg-deliverables" href="#wg-deliverables">Deliverables</a>
+      {{ end }}
+    {{- end -}}
+    {{- end -}}
+    {{ if $wgID }}
+    {{ if $membersSubPage }}
+    <a class="wg-nav-link" href="{{ $membersSubPage.RelPermalink }}">Members</a>
+    {{ else }}
+    <a class="wg-nav-link" data-target="wg-members" href="#wg-members">Members</a>
+    {{ end }}
+    {{ end }}
+    {{ if .Params.resources }}
+    {{ if $resourcesPage }}
+    <a class="wg-nav-link" href="{{ $resourcesPage.RelPermalink }}">Resources</a>
+    {{ else }}
+    <a class="wg-nav-link" data-target="wg-resources" href="#wg-resources">Resources</a>
+    {{ end }}
+    {{ end }}
+    {{ if $confPage }}
+    <a class="wg-nav-link" href="{{ $confPage.RelPermalink }}">Conferences</a>
+    {{ end }}
+    <a class="wg-nav-link" href="/blog/?wg={{ .Params.wgID | lower }}">Blog</a>
+  </div>
+</nav>
+
+{{/* Tree panels — one per deliverable section with child pages */}}
+{{- $wgBase := .RelPermalink -}}
+{{- range .Params.deliverables -}}
+  {{- $delURL := .url | default "" -}}
+  {{- if and $delURL (strings.HasPrefix $delURL $wgBase) -}}
+    {{- $delSection := $.Site.GetPage $delURL -}}
+    {{- if and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
+      {{- $slug := $delURL | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+<div class="wg-nav-tree-panel wg-{{ $.Page.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
+  {{ partial "wg-sidebar-tree.html" $delSection }}
+</div>
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
 {{/* Intro + CTA — only when there's something meaningful to show */}}
 {{ if or .Params.intro .Content .Params.chair }}
-<section class="py-5">
+<section class="py-5" id="wg-about">
   <div class="container">
     <div class="row align-items-start g-4">
       <div class="col-lg-8">
@@ -28,28 +151,36 @@
         {{ end }}
         {{ .Content }}
       </div>
-      <div class="col-lg-4 text-center text-lg-end">
+      <div class="col-lg-4">
         {{ with .Params.chair }}
-        <div class="mb-3 p-3 rounded-3 pkic-leadership-card" style="background: linear-gradient({{ $cardGrad }});">
-          <div class="small text-uppercase fw-bold mb-1 pkic-leadership-label">Leadership</div>
-          <div class="fw-semibold">{{ .name }}</div>
-          <div class="small opacity-75">Chair</div>
-          {{ with .viceChair }}
-          <hr class="my-2 opacity-25">
-          <div class="fw-semibold">{{ . }}</div>
-          <div class="small opacity-75">Vice-Chair</div>
-          {{ end }}
+        <div class="wg-leadership-panel">
+          <div class="wg-leadership-label">Working Group Leadership</div>
+          <div class="wg-leadership-persons">
+            {{ partial "leader-card.html" (dict "name" .name "role" "Chair" "color" $color "affiliation" .affiliation) }}
+            {{ with .viceChair }}
+            {{ partial "leader-card.html" (dict "name" . "role" "Vice Chair" "color" $color) }}
+            {{ end }}
+          </div>
         </div>
         {{ end }}
+        {{ with .Params.chairs }}
+        <div class="wg-leadership-panel">
+          <div class="wg-leadership-label">Working Group Leadership</div>
+          <div class="wg-leadership-persons">
+            {{ range . }}
+            {{ partial "leader-card.html" (dict "name" .name "role" (.role | default "Chair") "color" $color "affiliation" .affiliation) }}
+            {{ end }}
+          </div>
+        </div>
+        {{ end }}
+        <div class="mt-3 text-center">
         {{ with $.Param "heroButton" }}
-        <a href="{{ $.Param "heroButton.link" }}" class="btn btn-success btn-lg rounded-pill px-4">
+        <a href="{{ $.Param "heroButton.link" }}" class="btn btn-page-accent btn-lg rounded-pill px-4">
           {{ $.Param "heroButton.label" }}
         </a>
         {{ else }}
-        <a href="/join/" class="btn btn-success btn-lg rounded-pill px-4">Join this Working Group</a>
+        <a href="/join/" class="btn btn-page-accent btn-lg rounded-pill px-4">Join this Working Group</a>
         {{ end }}
-        <div class="mt-2">
-          <a href="./charter/" class="btn btn-outline-secondary btn-sm rounded-pill">View Charter</a>
         </div>
       </div>
     </div>
@@ -57,9 +188,94 @@
 </section>
 {{ end }}
 
+{{/* ── Key Deliverables — prominently featured primary WG outputs ──── */}}
+{{ with .Params.keyDeliverables }}
+<section class="wg-key-deliverables py-5" id="wg-key-deliverables">
+  <div class="container">
+    <div class="text-center mb-5">
+      <p class="wg-key-eyebrow">Key Deliverables</p>
+    </div>
+    <div class="row g-4 justify-content-center">
+      {{ range . }}
+      <div class="col-md-6 col-lg-5">
+        <div class="wg-key-card wg-key-card--{{ $color }}">
+          {{ with .badge }}<span class="badge wg-key-badge">{{ . }}</span>{{ end }}
+          <div class="wg-key-icon">
+            {{ partial "wg-icon.html" (dict "id" .icon "class" "wg-key-svg") }}
+          </div>
+          <h3 class="wg-key-title">{{ .title }}</h3>
+          <p class="wg-key-desc">{{ .description }}</p>
+          <a href="{{ .url }}" class="wg-key-cta">{{ .cta | default "Learn More" }} →</a>
+        </div>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}
+
+{{/* ── Explore sub-pages grid OR inline fallback ──────────────────── */}}
+{{ if or $focusPage $delivPage $membersSubPage $resourcesPage }}
+
+{{/* Sub-page preview grid */}}
+<section class="py-5 wg-alt-section" id="wg-explore">
+  <div class="container">
+    <h2 class="fw-bold mb-1">Explore this Working Group</h2>
+    <p class="text-muted mb-4">Select a section to dive deeper</p>
+    <div class="row g-3">
+      {{ if and $focusPage .Params.focus }}
+      <div class="col-sm-6 col-lg-3">
+        <a href="{{ $focusPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }} h-100 d-flex flex-column text-decoration-none">
+          <div class="wg-explore-icon">🎯</div>
+          <div class="wg-explore-title">Focus Areas</div>
+          <div class="wg-explore-desc">{{ len .Params.focus }} active focus areas</div>
+          <div class="wg-explore-arrow mt-auto">Explore →</div>
+        </a>
+      </div>
+      {{ end }}
+      {{ if and $delivPage .Params.deliverables }}
+      <div class="col-sm-6 col-lg-3">
+        <a href="{{ $delivPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }} h-100 d-flex flex-column text-decoration-none">
+          <div class="wg-explore-icon">📦</div>
+          <div class="wg-explore-title">Deliverables</div>
+          <div class="wg-explore-desc">{{ len .Params.deliverables }} deliverables and work items</div>
+          <div class="wg-explore-arrow mt-auto">Explore →</div>
+        </a>
+      </div>
+      {{ end }}
+      {{ if $membersSubPage }}
+      {{- $wgMemberCount := 0 -}}
+      {{- range hugo.Data.members -}}{{- if in .workingGroups $wgID -}}{{- $wgMemberCount = add $wgMemberCount 1 -}}{{- end -}}{{- end -}}
+      <div class="col-sm-6 col-lg-3">
+        <a href="{{ $membersSubPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }} h-100 d-flex flex-column text-decoration-none">
+          <div class="wg-explore-icon">🏢</div>
+          <div class="wg-explore-title">Members</div>
+          <div class="wg-explore-desc">{{ $wgMemberCount }} participating organizations</div>
+          <div class="wg-explore-arrow mt-auto">Explore →</div>
+        </a>
+      </div>
+      {{ end }}
+      {{ if and $resourcesPage .Params.resources }}
+      <div class="col-sm-6 col-lg-3">
+        <a href="{{ $resourcesPage.RelPermalink }}" class="wg-explore-card wg-explore-card--{{ $color }} h-100 d-flex flex-column text-decoration-none">
+          <div class="wg-explore-icon">📚</div>
+          <div class="wg-explore-title">Resources</div>
+          <div class="wg-explore-desc">{{ len .Params.resources }} curated resources</div>
+          <div class="wg-explore-arrow mt-auto">Explore →</div>
+        </a>
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+{{ else }}
+
+{{/* ── Inline fallback sections (for WGs without sub-pages) ────────── */}}
+
 {{/* Focus Areas */}}
 {{ with .Params.focus }}
-<section class="py-5 wg-alt-section">
+<section class="py-5 wg-alt-section" id="wg-focus">
   <div class="container">
     <h2 class="fw-bold mb-1">Focus Areas</h2>
     <p class="text-muted mb-4">What this working group focuses on</p>
@@ -78,15 +294,12 @@
 
 {{/* Current Deliverables / Work items */}}
 {{ with .Params.deliverables }}
-<section class="py-5">
+<section class="py-5" id="wg-deliverables">
   <div class="container">
     <h2 class="fw-bold mb-1">What We're Working On</h2>
     <p class="text-muted mb-4">Current and planned deliverables of this working group</p>
     <div class="bento-grid">
       {{ range . }}
-      {{ $statusColor := "green-pale" }}
-      {{ if eq .status "planned" }}{{ $statusColor = "yellow-pale" }}{{ end }}
-      {{ if eq .status "completed" }}{{ $statusColor = "blue-pale" }}{{ end }}
       <div class="bento-card">
         <span class="bento-badge bg-{{ if eq .status "active" }}success{{ else if eq .status "planned" }}warning text-dark{{ else }}info{{ end }}">
           {{ .status | default "active" }}
@@ -107,14 +320,11 @@
 
 {{/* Members in this WG */}}
 {{ with $wgID }}
-<section class="py-5">
+<section class="py-5" id="wg-members">
   <div class="container">
     <h2 class="fw-bold mb-1">Working Group Members</h2>
-    <p class="text-muted mb-4">
-      Organizations actively participating in the {{ $.Title }}
-    </p>
+    <p class="text-muted mb-4">Organizations actively participating in the {{ $.Title }}</p>
     <div class="members-grid">
-      {{/* Build a slice of members in this WG first */}}
       {{- $wgMembers := slice -}}
       {{- range hugo.Data.members -}}
         {{- if in .workingGroups $wgID -}}
@@ -134,7 +344,7 @@
 
 {{/* Resources */}}
 {{ with .Params.resources }}
-<section class="py-5">
+<section class="py-5" id="wg-resources">
   <div class="container">
     <h2 class="fw-bold mb-1">Industry Resources</h2>
     <p class="text-muted mb-4">Useful references and external resources</p>
@@ -151,18 +361,20 @@
 </section>
 {{ end }}
 
-{{/* Related blog posts */}}
+{{ end }}{{/* end if sub-pages / fallback */}}
+
+{{/* ── Recent blog posts ───────────────────────────────────────────── */}}
 {{ $blogPages := where .Site.RegularPages "Type" "blog" }}
 {{ $wgTag := .Params.wgID | lower }}
 {{ $relatedPosts := slice }}
 {{ range $blogPages }}
   {{ $tags := .Params.tags | default slice }}
-  {{ if or (in $tags $wgTag) (in $tags "pqc") (in $tags "post-quantum") (in $tags "quantum") }}
+  {{ if in $tags $wgTag }}
     {{ $relatedPosts = $relatedPosts | append . }}
   {{ end }}
 {{ end }}
 {{ if gt (len $relatedPosts) 0 }}
-<section class="py-5 wg-alt-section">
+<section class="py-5 wg-alt-section" id="wg-blog">
   <div class="container">
     <h2 class="fw-bold mb-4">From the Blog</h2>
     <div class="row g-3">
@@ -179,14 +391,19 @@
 </section>
 {{ end }}
 
-{{/* Sub-pages (charter, etc.) */}}
-{{ $subPages := where .Data.Pages "Params.robots" "eq" nil }}
-{{ if $subPages }}
+{{/* Sub-pages (charter, etc.) — excluding section sub-pages */}}
+{{ $otherSubPages := slice }}
+{{ range .Data.Pages }}
+  {{ if not .Params.wgSection }}
+    {{ $otherSubPages = $otherSubPages | append . }}
+  {{ end }}
+{{ end }}
+{{ if $otherSubPages }}
 <section class="py-4">
   <div class="container">
     <h3 class="fw-bold mb-3">More from this Working Group</h3>
     <div class="row g-3">
-      {{ range $subPages }}
+      {{ range $otherSubPages }}
       <div class="col-sm-6 col-md-4">
         <a href="{{ .Permalink }}" class="bento-card bento-card-link d-block text-decoration-none" style="min-height:120px;">
           <div class="bento-title">{{ .Title }}</div>
@@ -197,15 +414,17 @@
     </div>
   </div>
 </section>
-{{ end }}
-
-{{/* Join CTA */}}
+{{ end }}{{/* Join CTA */}}
 <section class="py-5">
   <div class="container">
     <div class="pkic-cta-block bento-{{ $color }} text-white">
       <div class="pkic-cta-title">Join the {{ .Title }}</div>
       <p class="pkic-cta-text">
+        {{- if eq .Params.wgID "CA" -}}
+        Membership in the CA Working Group is currently limited to publicly trusted CAs only (Category A members).
+        {{- else -}}
         Membership in the PKI Consortium working groups is open to all member types.
+        {{- end -}}
         Collaborate with industry leaders, shape standards, and drive meaningful change.
       </p>
       <a href="/join/" class="btn btn-light btn-lg rounded-pill px-5 fw-bold">Become a Member</a>
@@ -214,4 +433,9 @@
   </div>
 </section>
 
-{{ end }}
+{{ $wgNavJS := resources.Get "js/wg-nav.js" | minify | fingerprint }}
+<script src="{{ $wgNavJS.RelPermalink }}" defer></script>
+
+{{ end }}{{/* end if $isNestedContent / else regular WG root */}}
+
+{{ end }}{{/* end define "main" */}}

@@ -1,60 +1,314 @@
 
-  <div class="sticky-top navbar navbar-expand-lg navbar-dark bg-dark shadow-sm">
-    <div class="container">
-      <a href="/" class="navbar-brand d-flex align-items-center">
-        <img src="/img/logo.svg" height="30" alt="Logo">
-      </a>
-      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
-        <span class="navbar-toggler-icon"></span>
-      </button>
-      <div class="collapse navbar-collapse" id="navbarContent">
-        <div class="navbar-nav me-auto"></div>
+<nav class="sticky-top navbar navbar-expand-lg pkic-navbar" id="pkicMainNav">
+  <div class="container">
+    <a href="/" class="navbar-brand d-flex align-items-center">
+      <img src="/img/logo.svg" height="30" alt="PKI Consortium">
+    </a>
+    <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navbarContent">
 
-        {{- if $.Page.FirstSection.Param "sideMenu" -}}
-        <div class="navbar-nav mb-2 d-block d-sm-none">
-          {{- partial "menu.html" . -}}
-        </div>
-        <hr class="bg-light border-1 border-top border-light">
-        {{- end -}}
-        
-        <div class="navbar-nav mb-2 mb-lg-0">
-          {{ $currentPage := . }}
-          {{ range .Site.Menus.main }}
-          {{ if .HasChildren }}
-          <div class="nav-item dropdown">
-            <a class="nav-link dropdown-toggle{{ if $currentPage.IsMenuCurrent "main" . }} active{{ end }}" href="{{ .URL }}" role="button" data-bs-toggle="dropdown" aria-expanded="false" title="{{ .Title }}">{{ .Name }}</a>
-            <ul class="dropdown-menu">
-              {{ range .Children }}
-              <li><a class="dropdown-item" href="{{ .URL }}">{{ .Name }}</a></li>
-              {{ end }}
-            </ul>
-          </div>
-          {{ else }}
-          <a class="nav-link{{ if $currentPage.IsMenuCurrent "main" . }} active{{ end }}" title="{{ .Title }}" href="{{ .URL }}">{{ .Name }}</a>
-          {{ end }}
-          {{ end }}
-        </div>
+      {{- if $.Page.FirstSection.Param "sideMenu" -}}
+      <div class="navbar-nav mb-2 d-block d-sm-none">
+        {{- partial "menu.html" . -}}
+      </div>
+      <hr class="border-secondary">
+      {{- end -}}
 
-        <span data-bs-toggle="modal" data-bs-target="#searchModal">>
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="white" fill-opacity="0.55" class="bi bi-search" viewBox="0 0 16 16">
+      <div class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-lg-center">
+        {{ $currentPage := . }}
+        {{ range .Site.Menus.main }}
+        {{ if .HasChildren }}
+        <div class="nav-item pkic-mega-trigger">
+          <a class="nav-link{{ if $currentPage.IsMenuCurrent "main" . }} active{{ end }}" href="{{ .URL }}" title="{{ .Title }}">{{ .Name }}</a>
+          <button class="pkic-mega-chevron" data-mega-target="pkic-wg-mega" aria-label="Open Working Groups menu" aria-expanded="false">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708"/></svg>
+          </button>
+        </div>
+        {{ else if eq .Identifier "members" }}
+        <div class="nav-item pkic-mega-trigger pkic-members-trigger">
+          <a class="nav-link{{ if $currentPage.IsMenuCurrent "main" . }} active{{ end }}" href="{{ .URL }}" title="{{ .Title }}">{{ .Name }}</a>
+          <button class="pkic-mega-chevron" data-mega-target="pkic-members-mega" aria-label="Open Members menu" aria-expanded="false">
+            <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708"/></svg>
+          </button>
+        </div>
+        {{ else }}
+        <a class="nav-link{{ if $currentPage.IsMenuCurrent "main" . }} active{{ end }}" title="{{ .Title }}" href="{{ .URL }}">{{ .Name }}</a>
+        {{ end }}
+        {{ end }}
+
+        <button class="pkic-search-btn ms-1" id="searchOpenBtn" aria-label="Search (Ctrl+K)">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
             <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
           </svg>
-        </span>
-
+        </button>
       </div>
     </div>
   </div>
+</nav>
 
-  <div class="modal modal-xl fade" id="searchModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true">
-    <div class="modal-dialog">
-      <div class="modal-content">
-        <div class="modal-body">
-          <div id="search"></div>
+{{/* ── WG Mega-menu panel ────────────────────────────────────────────── */}}
+<div class="pkic-mega-panel" id="pkic-wg-mega" aria-label="Working Groups navigation">
+  <div class="container py-4">
+    <p class="pkic-mega-label mb-3">Working Groups</p>
+    <div class="row g-3">
+      {{ range .Site.Menus.main }}
+        {{ if .HasChildren }}
+          {{ range .Children }}
+            {{ with .Page }}
+            {{ $color := .Params.color | default "green" }}
+            {{ $wgIconID := .Params.card.icon | default (.Params.wgID | lower) }}
+            <div class="col-xl-4 col-md-6">
+              <a class="pkic-mega-wg-card pkic-mega-wg-card--{{ $color }}" href="{{ .Permalink }}">
+                <span class="pkic-mega-icon">
+                  {{ partial "wg-icon.html" (dict "id" $wgIconID "class" "pkic-mega-wg-svg") }}
+                </span>
+                <div class="pkic-mega-card-body">
+                  <div class="pkic-mega-wg-id">{{ .Params.wgID }}</div>
+                  <div class="pkic-mega-wg-name">{{ .Title }}</div>
+                  <p class="pkic-mega-wg-desc">{{ .Params.description | truncate 90 }}</p>
+                </div>
+                <span class="pkic-mega-arrow">→</span>
+              </a>
+            </div>
+            {{ end }}
+          {{ end }}
+        {{ end }}
+      {{ end }}
+    </div>
+    <div class="mt-3 pt-3 border-top">
+      <a href="/wg/" class="pkic-mega-footer-link">View all Working Groups →</a>
+    </div>
+  </div>
+</div>
 
-          <link href="/pagefind/pagefind-ui.css" rel="stylesheet">
-          <script src="/pagefind/pagefind-ui.js" type="text/javascript"></script>         
-          <script src="/scripts/search.js" type="text/javascript"></script>
+<div class="pkic-mega-backdrop" id="pkicMegaBackdrop"></div>
+
+{{/* ── Members Mega-menu panel ──────────────────────────────────────── */}}
+{{ $allMemberData := hugo.Data.members }}
+{{ $independentTypes := slice "H5" "H6" "H7" }}
+{{ $totalMembers := 0 }}
+{{ $indepCount := 0 }}
+{{ range $allMemberData }}
+  {{ $totalMembers = add $totalMembers 1 }}
+  {{ if in $independentTypes .memberType }}
+    {{ $indepCount = add $indepCount 1 }}
+  {{ end }}
+{{ end }}
+{{ $regularCount := sub $totalMembers $indepCount }}
+<div class="pkic-mega-panel pkic-members-mega-panel" id="pkic-members-mega" aria-label="Members navigation">
+  <div class="container py-4">
+    <div class="row g-4 align-items-start">
+
+      {{/* Left: overview */}}
+      <div class="col-lg-4">
+        <p class="pkic-mega-label mb-2">Members</p>
+        <p class="mb-3" style="font-size:0.84rem;color:#444;line-height:1.5;">
+          The PKI Consortium brings together leading organizations committed to trustworthy digital identities and secure communication.
+        </p>
+        <div class="d-flex gap-3 mb-3">
+          <a href="/members/" class="pkic-members-stat-card">
+            <span class="pkic-members-stat-num">{{ $regularCount }}</span>
+            <span class="pkic-members-stat-label">Members</span>
+          </a>
+          <a href="/members/#independent-tab" class="pkic-members-stat-card pkic-members-stat-card--indep">
+            <span class="pkic-members-stat-num">{{ $indepCount }}</span>
+            <span class="pkic-members-stat-label">Independent</span>
+          </a>
+        </div>
+        <a href="/members/" class="pkic-mega-footer-link">Browse all members →</a>
+      </div>
+
+      {{/* Right: actions */}}
+      <div class="col-lg-4 offset-lg-1">
+        <p class="pkic-mega-label mb-3">Quick links</p>
+        <div class="d-flex flex-column gap-2">
+          <a href="/join/" class="pkic-members-action-link">
+            <span class="pkic-members-action-icon">🤝</span>
+            <div>
+              <div class="pkic-members-action-title">Join the PKI Consortium</div>
+              <div class="pkic-members-action-desc">Become part of our global network</div>
+            </div>
+            <span class="pkic-mega-arrow ms-auto">→</span>
+          </a>
+          <a href="/application-process/" class="pkic-members-action-link">
+            <span class="pkic-members-action-icon">📋</span>
+            <div>
+              <div class="pkic-members-action-title">Application Process</div>
+              <div class="pkic-members-action-desc">Learn how membership works</div>
+            </div>
+            <span class="pkic-mega-arrow ms-auto">→</span>
+          </a>
+          <a href="/bylaws/" class="pkic-members-action-link">
+            <span class="pkic-members-action-icon">📄</span>
+            <div>
+              <div class="pkic-members-action-title">Bylaws &amp; Governance</div>
+              <div class="pkic-members-action-desc">How decisions are made</div>
+            </div>
+            <span class="pkic-mega-arrow ms-auto">→</span>
+          </a>
         </div>
       </div>
+
     </div>
   </div>
+</div>
+
+{{/* ── Search overlay ───────────────────────────────────────────────── */}}
+<div class="pkic-search-overlay" id="pkicSearchOverlay" role="dialog" aria-modal="true" aria-label="Site search">
+  <div class="pkic-search-box">
+    <div class="pkic-search-input-wrap">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" opacity="0.45" viewBox="0 0 16 16">
+        <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
+      </svg>
+      <input type="search" id="pkicSearchInput" class="pkic-search-input-field" placeholder="Search PKIC…" autocomplete="off" spellcheck="false" aria-label="Search">
+      <button class="pkic-search-esc" id="pkicSearchClose" aria-label="Close search">ESC</button>
+    </div>
+    <div class="pkic-search-results-list" id="pkicSearchResults">
+      <p class="pkic-search-hint">Start typing to search across all content…</p>
+    </div>
+  </div>
+</div>
+
+{{ $navbarJS := resources.Get "js/navbar.js" | minify | fingerprint }}
+<script src="{{ $navbarJS.RelPermalink }}" defer></script>
+
+{{/* ── Remove this comment and the block below if ever moving back to inline ── */}}
+{{/*
+(function () {
+  'use strict';
+
+  var mega       = document.getElementById('pkic-wg-mega');
+  var backdrop   = document.getElementById('pkicMegaBackdrop');
+  var overlay    = document.getElementById('pkicSearchOverlay');
+  var sInput     = document.getElementById('pkicSearchInput');
+  var sResults   = document.getElementById('pkicSearchResults');
+  var openBtn    = document.getElementById('searchOpenBtn');
+  var closeBtn   = document.getElementById('pkicSearchClose');
+
+  // ── Mega menu ────────────────────────────────────────────────────────
+
+  function openMega() {
+    mega.classList.add('is-open');
+    backdrop.classList.add('is-open');
+    document.querySelectorAll('.pkic-mega-trigger .nav-link').forEach(function (l) { l.classList.add('is-active'); });
+  }
+
+  function closeMega() {
+    mega.classList.remove('is-open');
+    backdrop.classList.remove('is-open');
+    document.querySelectorAll('.pkic-mega-trigger .nav-link').forEach(function (l) { l.classList.remove('is-active'); });
+  }
+
+  // ── Mega hover + click ──────────────────────────────────────────────
+  var megaHoverTimer = null;
+
+  function megaClearTimer() {
+    if (megaHoverTimer) { clearTimeout(megaHoverTimer); megaHoverTimer = null; }
+  }
+
+  function megaScheduleClose() {
+    megaHoverTimer = setTimeout(closeMega, 150);
+  }
+
+  // Hover on the nav trigger
+  var megaTriggerEl = document.querySelector('.pkic-mega-trigger');
+  if (megaTriggerEl) {
+    megaTriggerEl.addEventListener('mouseenter', function () { megaClearTimer(); openMega(); });
+    megaTriggerEl.addEventListener('mouseleave', megaScheduleClose);
+  }
+
+  // Keep open while hovering over the panel itself
+  mega.addEventListener('mouseenter', megaClearTimer);
+  mega.addEventListener('mouseleave', megaScheduleClose);
+
+  // Click also toggles (useful for keyboard / touch)
+  document.querySelectorAll('[data-mega-target]').forEach(function (btn) {
+    btn.addEventListener('click', function (e) {
+      e.preventDefault();
+      mega.classList.contains('is-open') ? closeMega() : openMega();
+    });
+  });
+
+  backdrop.addEventListener('click', closeMega);
+
+  // ── Search overlay ───────────────────────────────────────────────────
+
+  var pf = null;
+
+  function openSearch() {
+    closeMega();
+    overlay.classList.add('is-open');
+    document.body.style.overflow = 'hidden';
+    setTimeout(function () { sInput.focus(); }, 80);
+    if (!pf) {
+      import('/pagefind/pagefind.js').then(function (m) {
+        pf = m;
+        if (pf.init) pf.init();
+      }).catch(function () {});
+    }
+  }
+
+  function closeSearch() {
+    overlay.classList.remove('is-open');
+    document.body.style.overflow = '';
+    sInput.value = '';
+    sResults.innerHTML = '<p class="pkic-search-hint">Start typing to search across all content…</p>';
+  }
+
+  if (openBtn)  openBtn.addEventListener('click', openSearch);
+  if (closeBtn) closeBtn.addEventListener('click', closeSearch);
+
+  overlay.addEventListener('click', function (e) { if (e.target === overlay) closeSearch(); });
+
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape') { closeMega(); closeSearch(); }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
+  });
+
+  // ── Search handler ───────────────────────────────────────────────────
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+    });
+  }
+
+  var debounce;
+  sInput.addEventListener('input', function () {
+    clearTimeout(debounce);
+    var q = this.value.trim();
+    if (!q) { sResults.innerHTML = '<p class="pkic-search-hint">Start typing to search across all content…</p>'; return; }
+    debounce = setTimeout(function () { runSearch(q); }, 220);
+  });
+
+  async function runSearch(q) {
+    if (!pf) {
+      sResults.innerHTML = '<p class="pkic-search-hint">Search index not available — run <code>hugo build</code> first.</p>';
+      return;
+    }
+    sResults.innerHTML = '<p class="pkic-search-hint">Searching…</p>';
+    try {
+      var res = await pf.search(q);
+      if (!res.results.length) {
+        sResults.innerHTML = '<p class="pkic-search-hint">No results for <strong>' + esc(q) + '</strong></p>';
+        return;
+      }
+      var top  = await Promise.all(res.results.slice(0, 8).map(function (r) { return r.data(); }));
+      sResults.innerHTML = top.map(function (d) {
+        var title   = esc(d.meta && d.meta.title ? d.meta.title : 'Untitled');
+        var excerpt = d.excerpt || '';
+        return '<a class="pkic-search-result-item" href="' + esc(d.url) + '">' +
+          '<div class="pkic-sr-title">'   + title   + '</div>' +
+          '<div class="pkic-sr-url">'     + esc(d.url) + '</div>' +
+          (excerpt ? '<div class="pkic-sr-excerpt">' + excerpt + '</div>' : '') +
+          '</a>';
+      }).join('');
+    } catch (err) {
+      sResults.innerHTML = '<p class="pkic-search-hint">Search unavailable. <a href="/blog/" style="color:#7cf0be">Browse the blog →</a></p>';
+    }
+  }
+
+})();
+*/}}

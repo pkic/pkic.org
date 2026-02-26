@@ -1,6 +1,6 @@
 id: ibm
 name: IBM
-slogan:
+slogan: THINK
 website: https://www.ibm.com
 
 # Short description, longer content can be placed in `content/members/`
@@ -11,9 +11,9 @@ memberSince: 2024-01-09
 memberType: H2
 workingGroups:
 
-# sponsor
+# sponsor since 2025-02-26
 sponsor:
-  level: 
+  level: Diamond
 
 # Blog posts
 blog: 

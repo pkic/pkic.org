@@ -8,7 +8,9 @@ heroDescription: All members of the PKI Consortium are required to accept and to
 
 menu: 
     footer:
-    
+        parent: governance
+        weight: 22
+
 ---
 
 To report an issue or concern under the Code of Conduct, contact `feedback (at) pkic.org`.
