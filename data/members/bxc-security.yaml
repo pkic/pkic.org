@@ -1,0 +1,55 @@
+id: bxc-security
+name: BxC Security
+slogan:
+website: https://www.bxc-security.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Stop cyber threats before they reach production. BxC Security provides expert OT security consulting and solutions for manufacturing environments.
+
+# membership
+memberSince: 2026-02-23
+memberType: F
+workingGroups:
+
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Letitia Combes
+    role: Co-founder and managing director
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/letitia-combes/
+    description: Letitia is the Co-founder and managing director at BxC Security and represents the organization at the PKI Consortium.
