@@ -663,3 +663,138 @@
 
   &:hover { color: $green; }
 }
+
+
+// ============================================================
+// News cards  (same .blog-card base, member logo in footer)
+// ============================================================
+
+// ── Sponsor highlight ─────────────────────────────────────────
+// A subtle gold left-border to mark sponsor cards without changing colours.
+.news-card--sponsor {
+  border-left: 3px solid rgba($amber, 0.75);
+
+  // Amber sponsor badge (reuses .blog-card-tag)
+  .news-card-sponsor-badge {
+    background: rgba($amber, 0.95);
+    color: $gray-900;
+    border-color: rgba($amber, 0.60);
+    font-weight: 700;
+  }
+}
+
+// ── Gradient cycling ──────────────────────────────────────────
+// Each .blog-card is the sole child of its col, so :nth-child on the card
+// always resolves to 1. Target the wrapping column instead.
+.row [class*="col-"]:nth-child(6n+2) .news-card .blog-card-header--gradient {
+  background: linear-gradient(135deg, $blue-deep 0%, $purple-deep 100%);
+  &::before { background: radial-gradient(ellipse at 110% -10%, rgba(90,155,213,0.25) 0%, transparent 55%); }
+}
+.row [class*="col-"]:nth-child(6n+3) .news-card .blog-card-header--gradient {
+  background: linear-gradient(135deg, $purple-deep 0%, $green-deep 100%);
+  &::before { background: radial-gradient(ellipse at 110% -10%, rgba(111,66,193,0.25) 0%, transparent 55%); }
+}
+.row [class*="col-"]:nth-child(6n+4) .news-card .blog-card-header--gradient {
+  background: linear-gradient(135deg, $orange-dark 0%, $red-dark 100%);
+  &::before { background: radial-gradient(ellipse at 110% -10%, rgba(237,125,49,0.30) 0%, transparent 55%); }
+}
+.row [class*="col-"]:nth-child(6n+5) .news-card .blog-card-header--gradient {
+  background: linear-gradient(135deg, $red-deep 0%, $purple-deep 100%);
+  &::before { background: radial-gradient(ellipse at 110% -10%, rgba(220,53,69,0.25) 0%, transparent 55%); }
+}
+.row [class*="col-"]:nth-child(6n) .news-card .blog-card-header--gradient {
+  background: linear-gradient(135deg, $green-dark 0%, $orange-dark 100%);
+  &::before { background: radial-gradient(ellipse at 110% -10%, rgba(25,135,84,0.30) 0%, transparent 55%); }
+}
+
+// ── Card footer: logo (left) + domain link (right) ────────────
+.news-card-footer {
+  margin-top: auto;
+  padding-top: 0.875rem;
+  border-top: 1px solid $gray-100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  position: relative;
+  z-index: 2; // above stretched-link so links are clickable
+}
+
+// Logo container — no background box, just breathing room
+.news-card-logo {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  min-height: 28px; // reserve space even when no logo
+}
+
+// The actual logo image — SVGs need explicit dimensions to render correctly
+.news-card-logo-img {
+  display: block;
+  height: 28px;      // explicit height so SVGs with no intrinsic size are constrained
+  width: auto;
+  max-width: 110px;
+  object-fit: contain;
+  object-position: left center;
+}
+
+// Fallback when there's no logo: show the member name as small text
+.news-card-member-name {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: $gray-700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+.news-card-domain {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.72rem;
+  color: $gray-400;
+  text-decoration: none;
+  transition: color 0.15s;
+  white-space: nowrap;
+
+  &:hover { color: $green; }
+  svg { flex-shrink: 0; }
+}
+
+// ── Section headings (Sponsor Highlights / Latest Member News) ─
+.news-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 1rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: $gray-700;
+  margin-bottom: 1.25rem;
+  // Reset gradient text treatment from global h2 rule
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: $gray-700 !important;
+
+  svg {
+    color: $amber;
+    flex-shrink: 0;
+  }
+
+  &--plain {
+    color: $gray-500;
+    font-weight: 600;
+    -webkit-text-fill-color: $gray-500 !important;
+    svg { display: none; }
+  }
+}
+
+.news-spotlight {
+  padding-bottom: 1rem;
+  border-bottom: 1px solid $gray-200;
+}

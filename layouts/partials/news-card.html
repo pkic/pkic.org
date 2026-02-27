@@ -1,0 +1,87 @@
+{{- $post           := . -}}
+{{- $memberId       := default "" $post.memberId -}}
+{{- $memberName     := default "" $post.memberName -}}
+{{- $sponsorLevel   := default "" $post.memberSponsorLevel -}}
+{{- $isSponsor      := and (ne $sponsorLevel "") (ne $sponsorLevel " ") -}}
+{{- $url            := urls.Parse $post.link -}}
+
+{{- /* ── Member logo ───────────────────────────────────────────── */}}
+{{- $logo := false -}}
+{{- if $memberId -}}
+  {{- $svgPath := printf "images/members/%s/%s.svg" $memberId $memberId -}}
+  {{- with resources.Get $svgPath -}}
+    {{- $logo = . -}}
+  {{- end -}}
+  {{- if not $logo -}}
+    {{- $pngPath := printf "images/members/%s/%s.png" $memberId $memberId -}}
+    {{- with resources.Get $pngPath -}}
+      {{- $logo = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+<article class="blog-card news-card{{ if $isSponsor }} news-card--sponsor{{ end }}">
+
+  {{/* ── Card header: gradient background + title + date ───────── */}}
+  <div class="blog-card-header blog-card-header--gradient">
+    <div class="blog-card-header-overlay"></div>
+
+    {{/* Sponsor level badge – top-left pill */}}
+    {{ if $isSponsor }}
+    <span class="blog-card-tag news-card-sponsor-badge" aria-label="{{ $sponsorLevel }} Sponsor">
+      ★ {{ $sponsorLevel }}
+    </span>
+    {{ end }}
+
+    {{/* Title + date – pinned to bottom of header */}}
+    <div class="blog-card-header-content">
+      <h2 class="blog-card-title">
+        <a href="{{ $post.link }}" target="_blank" rel="noopener noreferrer"
+           class="stretched-link">{{ $post.title | plainify | htmlUnescape }}</a>
+      </h2>
+      <p class="blog-card-date">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+          <line x1="16" y1="2" x2="16" y2="6"/>
+          <line x1="8"  y1="2" x2="8"  y2="6"/>
+          <line x1="3"  y1="10" x2="21" y2="10"/>
+        </svg>
+        <time datetime="{{ $post.pubDate.Format "2006-01-02" }}">
+          {{- dateFormat "January 2, 2006" $post.pubDate -}}
+        </time>
+      </p>
+    </div>
+  </div>
+
+  {{/* ── Card body ───────────────────────────────────────────── */}}
+  <div class="blog-card-body">
+    <p class="blog-card-summary">
+      {{- $post.description | plainify | htmlUnescape | truncate 160 -}}
+    </p>
+
+    {{/* Footer: logo (left) + domain link (right) */}}
+    <div class="news-card-footer">
+      <div class="news-card-logo">
+        {{ if $logo }}
+        <img src="{{ $logo.RelPermalink }}" alt="{{ $memberName }}"
+             width="110" height="28" class="news-card-logo-img">
+        {{ else if $memberName }}
+        <span class="news-card-member-name">{{ $memberName }}</span>
+        {{ end }}
+      </div>
+      <a href="https://{{ $url.Host }}/" target="_blank" rel="noopener noreferrer"
+         class="news-card-domain" style="position:relative;z-index:2;">
+        {{ $url.Host }}
+        <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+          <polyline points="15 3 21 3 21 9"/>
+          <line x1="10" y1="14" x2="21" y2="3"/>
+        </svg>
+      </a>
+    </div>
+  </div>
+</article>

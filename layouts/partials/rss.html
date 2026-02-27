@@ -4,11 +4,21 @@
   {{- $timeout = "2s" -}}
 {{- end -}}
 {{- range hugo.Data.members -}}
+  {{- $member := . -}}
   {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
     {{- with .blog.feed -}}
       {{- $feedItems := partialCached "rss-item-data.html" . . -}}
       {{- range $feedItems -}}
-        {{- $items = $items | append . -}}
+        {{- $enriched := merge . (dict
+          "memberId"          $member.id
+          "memberName"        $member.name
+          "memberSponsorLevel" (default "" $member.sponsor.level)
+        ) -}}
+        {{- /* Skip items with no meaningful description (link-only feeds) */}}
+        {{- $desc := $enriched.description | default "" | plainify | htmlUnescape | strings.TrimSpace -}}
+        {{- if ge (len $desc) 30 -}}
+          {{- $items = $items | append $enriched -}}
+        {{- end -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}

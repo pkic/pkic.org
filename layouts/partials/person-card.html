@@ -1,0 +1,267 @@
+{{/*
+  person-card.html — generic, date-aware person card.
+
+  Use this partial wherever you need to render a person (leadership, speakers,
+  authors, etc.) with their photo, consortium/event role, job title and
+  organisation logo all resolved from the site's member data.
+
+  Parameters (pass as a dict via `partial "person-card.html" (dict ...)`):
+    name        string  — Full name of the person (required)
+    role        string  — The POSITIONAL role to display: "Chair", "Board Member", etc. (required)
+    affiliation string  — Explicit member ID to pull org info from (optional)
+                          If omitted the partial auto-looks up all member files and
+                          prefers an active entry (no till, or till in the future).
+    from        string  — ISO date string: when this role started (optional, for display)
+    till        string  — ISO date string: when this role ended (optional, marks past)
+    pubDate     time    — Contextual date for date-window narrowing inside a member file
+                          (optional, defaults to now — useful for blog author cards)
+    color       string  — Accent color slug for the initials fallback bg (optional,
+                          default "green"). Matches the wg-{color} SCSS classes.
+    mode        string  — "timeline" renders a compact horizontal row for the past
+                          positions list instead of the full card (optional)
+    size        string  — "sm" (72px avatar) | "md" (80px, default) | "lg" (96px)
+
+  HTML rendered:
+    Full card  → .person-card   (horizontal flex, border, avatar ring + role arc)
+    Timeline   → .person-tl-item (compact row with smaller avatar, no ring arc)
+*/}}
+
+{{- $name        := .name -}}
+{{- $role        := .role -}}
+{{- $color       := .color       | default "green" -}}
+{{- $affiliation := .affiliation -}}
+{{- $from        := .from -}}
+{{- $till        := .till -}}
+{{- $pubDate     := .pubDate     | default now -}}
+{{- $mode        := .mode        | default "" -}}
+{{- $size        := .size        | default "md" -}}
+
+{{/* ── Member + representative lookup ─────────────────────────────────── */}}
+{{/*
+    Priority:
+      1. Explicit affiliation ID → find that member, then find the rep inside it.
+      2. Auto-lookup → scan all member files, prefer a rep with no till date (active).
+    In both cases we coerce pubDate comparisons to time.Time.
+*/}}
+{{- $member := false -}}
+{{- $rep    := false -}}
+
+{{- if $affiliation -}}
+  {{- range hugo.Data.members -}}
+    {{- if eq .id $affiliation -}}
+      {{- $member = . -}}
+      {{- range .representatives -}}
+        {{- $rname := .name | strings.TrimRight "*" -}}
+        {{- if eq $rname $name -}}
+          {{- $rep = . -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- else -}}
+  {{/* Auto-lookup: prefer active (no till or till > pubDate), otherwise take any */}}
+  {{- $anyMember := false -}}
+  {{- $anyRep    := false -}}
+  {{- range hugo.Data.members -}}
+    {{- $m := . -}}
+    {{- range .representatives -}}
+      {{- $rname := .name | strings.TrimRight "*" -}}
+      {{- if ne $rname $name -}}{{- continue -}}{{- end -}}
+      {{/* Save as fallback regardless of dates */}}
+      {{- if not $anyMember -}}
+        {{- $anyMember = $m -}}
+        {{- $anyRep    = . -}}
+      {{- end -}}
+      {{/* Prefer entry whose date window is open */}}
+      {{- $active := true -}}
+      {{- with .till -}}{{- if $pubDate.After (time .) -}}{{- $active = false -}}{{- end -}}{{- end -}}
+      {{- if and $active (not $member) -}}
+        {{- $member = $m -}}
+        {{- $rep    = . -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{/* Fall back to whichever entry we found first */}}
+  {{- if and (not $member) $anyMember -}}
+    {{- $member = $anyMember -}}
+    {{- $rep    = $anyRep -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ── Asset lookups ───────────────────────────────────────────────────── */}}
+{{- $slug     := $name | urlize -}}
+{{- $headshot := false -}}
+{{- $orgImg   := false -}}
+{{- if $member -}}
+  {{- $headshot = resources.GetMatch (printf "images/members/%s/%s.*" $member.id $slug) -}}
+  {{- $orgImg   = resources.GetMatch (printf "images/members/%s/%s.*" $member.id $member.id) -}}
+{{- end -}}
+
+{{/* ── Avatar sizes ─────────────────────────────────────────────────────── */}}
+{{- $avatarPx := 80 -}}
+{{- if eq $size "sm" -}}{{- $avatarPx = 72 -}}{{- end -}}
+{{- if eq $size "lg" -}}{{- $avatarPx = 96 -}}{{- end -}}
+{{- if eq $size "compact" -}}{{- $avatarPx = 48 -}}{{- end -}}
+
+{{/* ── Render: Compact mode (sidebar / narrow context) ────────────────── */}}
+{{- if eq $size "compact" -}}
+<div class="person-card-compact"{{- if $member }} data-edit-url="{{ site.Params.siteSource }}/data/members/{{ $member.id }}.yaml"{{- end }}>
+  <div class="person-card-compact-avatar-wrap">
+    {{- if $headshot -}}
+      {{- $h := $headshot.Fill (printf "%dx%d Center" $avatarPx $avatarPx) -}}
+      <img class="person-card-compact-avatar" src="{{ $h.Permalink }}" alt="{{ $name }}" loading="lazy">
+    {{- else -}}
+      <div class="person-card-compact-avatar person-card-compact-avatar--initials wg-{{ $color }}">
+        {{- $parts := split $name " " -}}
+        {{- range first 2 $parts -}}{{- substr . 0 1 | upper -}}{{- end -}}
+      </div>
+    {{- end -}}
+  </div>
+  <div class="person-card-compact-body">
+    <div class="person-card-compact-name-row">
+      {{- if $member -}}
+        <a class="person-card-compact-name" href="/members/{{ $member.id }}/#{{ $name | urlize }}">{{ $name }}</a>
+      {{- else -}}
+        <span class="person-card-compact-name">{{ $name }}</span>
+      {{- end -}}
+      {{- if and $rep $rep.social $rep.social.linkedin -}}
+      <a href="{{ $rep.social.linkedin }}" class="person-card-linkedin" target="_blank" rel="noopener noreferrer" title="{{ $name }} on LinkedIn" aria-label="LinkedIn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16"><path d="M0 1.146C0 .513.526 0 1.175 0h13.65C15.474 0 16 .513 16 1.146v13.708c0 .633-.526 1.146-1.175 1.146H1.175C.526 16 0 15.487 0 14.854zm4.943 12.248V6.169H2.542v7.225zm-1.2-8.212c.837 0 1.358-.554 1.358-1.248-.015-.709-.52-1.248-1.342-1.248S2.4 3.226 2.4 3.934c0 .694.521 1.248 1.327 1.248zm4.908 8.212V9.359c0-.216.016-.432.08-.586.173-.431.568-.878 1.232-.878.869 0 1.216.662 1.216 1.634v3.865h2.401V9.25c0-2.22-1.184-3.252-2.764-3.252-1.274 0-1.845.7-2.165 1.193v.025h-.016l.016-.025V6.169h-2.4c.03.678 0 7.225 0 7.225z"/></svg>
+      </a>
+      {{- end -}}
+    </div>
+    <div class="person-card-compact-role">{{ $role }}</div>
+    {{- if and $rep $rep.role -}}
+      <div class="person-card-compact-jobtitle">{{ $rep.role }}</div>
+    {{- end -}}
+    {{- if $member -}}
+    <div class="person-card-compact-org">
+      {{- if $orgImg -}}
+        {{- $logoSrc := $orgImg.Permalink -}}
+        {{- if ne $orgImg.MediaType.SubType "svg" -}}
+          {{- $logoSrc = ($orgImg.Fit "80x22").Permalink -}}
+        {{- end -}}
+        <a href="{{ $member.website }}" target="_blank" rel="noopener noreferrer" title="{{ $member.name }}" class="person-card-compact-org-logo-wrap">
+          <img src="{{ $logoSrc }}" alt="{{ $member.name }}" class="person-card-compact-org-logo">
+        </a>
+      {{- else -}}
+        <a href="{{ $member.website }}" target="_blank" rel="noopener noreferrer" class="person-card-org-name">{{ $member.name }}</a>
+      {{- end -}}
+    </div>
+    {{- end -}}
+  </div>
+</div>
+
+{{- else -}}{{/* not compact — timeline or full card */}}
+
+{{/* ── Render: Timeline mode (compact row) ────────────────────────────── */}}
+{{- if eq $mode "timeline" -}}
+<div class="person-tl-item">
+  <div class="person-tl-avatar-wrap">
+    {{- if $headshot -}}
+      {{- $h := $headshot.Fill (printf "%dx%d Center" $avatarPx $avatarPx) -}}
+      <img class="person-tl-avatar" src="{{ $h.Permalink }}" alt="{{ $name }}" loading="lazy">
+    {{- else -}}
+      <div class="person-tl-avatar person-tl-avatar--initials wg-{{ $color }}">
+        {{- $parts := split $name " " -}}
+        {{- range first 2 $parts -}}{{- substr . 0 1 | upper -}}{{- end -}}
+      </div>
+    {{- end -}}
+  </div>
+  <div class="person-tl-info">
+    <span class="person-tl-name">{{ $name }}</span>
+    <span class="person-tl-role">{{ $role }}</span>
+    {{- if or $from $till -}}
+    <span class="person-tl-dates">
+      {{- if $from -}}{{- (time $from).Format "Jan 2006" -}}{{- end -}}
+      {{- if $till -}} – {{ (time $till).Format "Jan 2006" }}{{- end -}}
+    </span>
+    {{- end -}}
+    {{- if $member -}}
+    <span class="person-tl-org">
+      {{- with $member.website -}}<a href="{{ . }}" target="_blank" rel="noopener noreferrer" class="person-tl-org-link">{{ $member.name }}</a>{{- else -}}{{ $member.name }}{{- end -}}
+    </span>
+    {{- end -}}
+  </div>
+</div>
+
+{{/* ── Render: Full card ─────────────────────────────────────────────── */}}
+{{- else -}}
+<div class="person-card{{ if $till }} person-card--past{{ end }}"{{- if $member }} data-edit-url="{{ site.Params.siteSource }}/data/members/{{ $member.id }}.yaml"{{- end }}>
+
+  <div class="person-card-main">
+  {{/* Avatar with role-arc ring */}}
+  <div class="person-card-avatar-frame{{ if $till }} person-card-avatar-frame--past{{ end }}"
+       style="--avatar-px: {{ $avatarPx }}px">
+    {{- if $headshot -}}
+      {{- $h := $headshot.Fill (printf "%dx%d Center" $avatarPx $avatarPx) -}}
+      <img class="person-card-avatar" src="{{ $h.Permalink }}" alt="{{ $name }}" loading="lazy">
+    {{- else -}}
+      <div class="person-card-avatar person-card-avatar--initials wg-{{ $color }}">
+        {{- $parts := split $name " " -}}
+        {{- range first 2 $parts -}}{{- substr . 0 1 | upper -}}{{- end -}}
+      </div>
+    {{- end -}}
+    {{/* Role arc — grey for past roles, green for current */}}
+    <span class="person-card-role-arc{{ if $till }} person-card-role-arc--past{{ end }}">{{ $role }}</span>
+  </div>
+
+  <div class="person-card-body">
+    {{/* Name row + LinkedIn */}}
+    <div class="person-card-name-row">
+      {{- if $member -}}
+        <a class="person-card-name" href="/members/{{ $member.id }}/#{{ $name | urlize }}" title="{{ $name }}'s profile">{{ $name }}</a>
+      {{- else -}}
+        <span class="person-card-name">{{ $name }}</span>
+      {{- end -}}
+      {{- if and $rep $rep.social $rep.social.linkedin -}}
+      <a href="{{ $rep.social.linkedin }}" class="person-card-linkedin" target="_blank" rel="noopener noreferrer" title="{{ $name }} on LinkedIn" aria-label="LinkedIn">
+        <svg xmlns="http://www.w3.org/2000/svg" width="15" height="15" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M0 1.146C0 .513.526 0 1.175 0h13.65C15.474 0 16 .513 16 1.146v13.708c0 .633-.526 1.146-1.175 1.146H1.175C.526 16 0 15.487 0 14.854zm4.943 12.248V6.169H2.542v7.225zm-1.2-8.212c.837 0 1.358-.554 1.358-1.248-.015-.709-.52-1.248-1.342-1.248S2.4 3.226 2.4 3.934c0 .694.521 1.248 1.327 1.248zm4.908 8.212V9.359c0-.216.016-.432.08-.586.173-.431.568-.878 1.232-.878.869 0 1.216.662 1.216 1.634v3.865h2.401V9.25c0-2.22-1.184-3.252-2.764-3.252-1.274 0-1.845.7-2.165 1.193v.025h-.016l.016-.025V6.169h-2.4c.03.678 0 7.225 0 7.225z"/>
+        </svg>
+      </a>
+      {{- end -}}
+    </div>
+
+    {{/* Job title at org from member YAML */}}
+    {{- if and $rep $rep.role -}}
+      <div class="person-card-jobtitle">{{ $rep.role }}{{- with $member }} at {{ .name }}{{- end }}</div>
+    {{- end -}}
+
+    {{/* Org logo or name */}}
+    {{- if $member -}}
+    <div class="person-card-org">
+      {{- if $orgImg -}}
+        {{- $logoSrc := $orgImg.Permalink -}}
+        {{- if ne $orgImg.MediaType.SubType "svg" -}}
+          {{- $sized := $orgImg.Fit "120x28" -}}
+          {{- $logoSrc = $sized.Permalink -}}
+        {{- end -}}
+        <a href="{{ $member.website }}" target="_blank" rel="noopener noreferrer" title="{{ $member.name }}" class="person-card-org-logo-wrap">
+          <img src="{{ $logoSrc }}" alt="{{ $member.name }}" class="person-card-org-logo">
+        </a>
+      {{- else -}}
+        <a href="{{ $member.website }}" target="_blank" rel="noopener noreferrer" class="person-card-org-name">{{ $member.name }}</a>
+      {{- end -}}
+    </div>
+    {{- end -}}
+
+  </div>
+  </div>{{/* end .person-card-main */}}
+
+  {{/* Card footer — date range */}}
+  {{- if or $from $till -}}
+  <div class="person-card-footer">
+    <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M11 6.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5zm-3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5zm-5 3a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5zm3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5z"/><path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5M1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z"/></svg>
+    <span class="person-card-footer-label">{{- if and $from (not $till) -}}In role since{{- else -}}In role{{- end -}}</span>
+    <span class="person-card-footer-dates">
+      {{- if and $from (not $till) -}}{{ (time $from).Format "Jan 2006" }}
+      {{- else if $from -}}{{ (time $from).Format "Jan 2006" }} – {{ (time $till).Format "Jan 2006" }}
+      {{- else if $till -}}Until {{ (time $till).Format "Jan 2006" }}
+      {{- end -}}
+    </span>
+  </div>
+  {{- end -}}
+</div>
+{{- end -}}{{/* end timeline/full-card */}}
+{{- end -}}{{/* end compact/else */}}

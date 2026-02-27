@@ -511,6 +511,20 @@ $wg-colors: (
     max-height: 48px;
     pointer-events: auto;
   }
+
+  .member-card-sponsor-footer {
+    align-self: stretch;
+    // Break out of the card's padding to sit flush with the card edges
+    margin: auto -1.25rem -1.25rem;
+    padding: 5px 14px 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    text-align: center;
+    color: #fff;
+    border-radius: 0 0 1rem 1rem;
+  }
 }
 
 // --- Color highlight sections ---

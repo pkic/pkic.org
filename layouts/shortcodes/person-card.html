@@ -1,0 +1,34 @@
+{{/*
+  person-card shortcode — renders a single person card inline in markdown.
+  Data lives here in the content, not in front-matter.
+
+  Usage:
+    {{< person-card
+        name="Paul van Brouwershaven"
+        role="Chair"
+        affiliation="digitorus"
+        from="2021-01-01"
+    >}}
+
+    {{< person-card
+        name="Kirk Hall"
+        role="Board Chair"
+        affiliation="entrust"
+        from="2022-06-01"
+        till="2025-02-01"
+    >}}
+
+  Parameters:
+    name        Full name (required)
+    role        Positional role label shown on the ring arc (required)
+    affiliation Member ID for org lookup (optional — auto-detected if omitted)
+    from        ISO date: when this role started (optional)
+    till        ISO date: when this role ended — marks card as past (optional)
+*/}}
+{{- partial "person-card.html" (dict
+    "name"        (.Get "name")
+    "role"        (.Get "role")
+    "affiliation" (.Get "affiliation")
+    "from"        (.Get "from")
+    "till"        (.Get "till")
+) -}}

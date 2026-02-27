@@ -153,24 +153,20 @@
       </div>
       <div class="col-lg-4">
         {{ with .Params.chair }}
-        <div class="wg-leadership-panel">
-          <div class="wg-leadership-label">Working Group Leadership</div>
-          <div class="wg-leadership-persons">
-            {{ partial "leader-card.html" (dict "name" .name "role" "Chair" "color" $color "affiliation" .affiliation) }}
-            {{ with .viceChair }}
-            {{ partial "leader-card.html" (dict "name" . "role" "Vice Chair" "color" $color) }}
-            {{ end }}
-          </div>
+        <div class="wg-leadership-label">Working Group Leadership</div>
+        <div class="consortium-leaders">
+          {{ partial "leader-card.html" (dict "name" .name "role" (printf "%s Chair" $wgID) "color" $color "affiliation" .affiliation) }}
+          {{ with .viceChair }}
+          {{ partial "leader-card.html" (dict "name" . "role" (printf "%s Vice Chair" $wgID) "color" $color) }}
+          {{ end }}
         </div>
         {{ end }}
         {{ with .Params.chairs }}
-        <div class="wg-leadership-panel">
-          <div class="wg-leadership-label">Working Group Leadership</div>
-          <div class="wg-leadership-persons">
-            {{ range . }}
-            {{ partial "leader-card.html" (dict "name" .name "role" (.role | default "Chair") "color" $color "affiliation" .affiliation) }}
-            {{ end }}
-          </div>
+        <div class="wg-leadership-label">Working Group Leadership</div>
+        <div class="consortium-leaders">
+          {{ range . }}
+          {{ partial "leader-card.html" (dict "name" .name "role" (printf "%s %s" $wgID (.role | default "Chair")) "color" $color "affiliation" .affiliation) }}
+          {{ end }}
         </div>
         {{ end }}
         <div class="mt-3 text-center">

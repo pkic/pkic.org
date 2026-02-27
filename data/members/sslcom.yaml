@@ -50,3 +50,11 @@ social:
   youtube: https://www.youtube.com/channel/UC2S1NiPt3QTMGyiH4auvlMQ
 
 # Here you can list those who represent the member
+
+representatives:
+  - name: Leo Grove
+    role: CEO
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/leogrove/
+    description: Leo is the CEO of SSL.com and represents the organization at the PKI Consortium.

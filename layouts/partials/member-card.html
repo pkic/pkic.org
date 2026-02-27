@@ -4,6 +4,22 @@
 {{- $showWorkingGroups := .showWorkingGroups | default true -}}
 {{- $showSocialHover := .showSocialHover | default false -}}
 
+{{- /* ── Sponsor level lookup ───────────────────────────────────────── */ -}}
+{{- $sponsorLevel := 0 -}}
+{{- $sponsorLevelName := "" -}}
+{{- with $member.sponsor -}}
+  {{- with .level -}}
+    {{- $l := index hugo.Data.sponsorlevels . -}}
+    {{- if $l -}}{{- $sponsorLevel = $l -}}{{- $sponsorLevelName = . -}}{{- end -}}
+  {{- end -}}
+  {{- with (index .sponsoring $site.Params.name) -}}
+    {{- $l := index hugo.Data.sponsorlevels .level -}}
+    {{- if $l -}}{{- if gt $l $sponsorLevel -}}
+      {{- $sponsorLevel = $l -}}{{- $sponsorLevelName = .level -}}
+    {{- end -}}{{- end -}}
+  {{- end -}}
+{{- end -}}
+
 {{- $memberPage := $site.GetPage (printf "/members/%s" $member.id) -}}
 {{- if not $memberPage -}}
   {{- $memberPage = $site.GetPage (printf "/members-data/%s" $member.id) -}}
@@ -56,5 +72,9 @@
 
   {{- if and $showSocialHover $member.social -}}
     <div class="member-card-social" style="position:relative;z-index:2;">{{ partial "social.html" $member.social }}</div>
+  {{- end -}}
+
+  {{- if gt $sponsorLevel 0 -}}
+    <div class="member-card-sponsor-footer sponsor-tier-{{ $sponsorLevel }}" style="position:relative;z-index:2;">{{ $sponsorLevelName }} Sponsor</div>
   {{- end -}}
 </div>

@@ -1,25 +1,58 @@
-{{- $items := partialCached "rss.html" . "global" -}}
+{{- $allItems := partialCached "rss.html" . "global" -}}
+{{- $allItems  = sort $allItems "pubDate" "desc" -}}
 
-{{- $items = sort $items "pubDate" "desc" -}}
-
-{{- range $i, $post := first 25 $items -}}
-{{- $url := urls.Parse $post.link -}}
-    <!-- {{ $authors := slice }}
-    {{ $authors = $authors | append $post.author }} -->
-    <div class="card mb-3">
-        <div class="row g-0">
-          {{ with $post.image }}
-          <div class="col-lg-3">
-            <img src="{{ $post.image.url }}" title="{{ $post.image.title }}">
-          </div>
-          {{ end }}
-          <div class="col">
-            <div class="card-body">
-              <h5 class="card-title"><a href="{{ $post.link }}" target="_blank" alt="{{ $post.title | plainify | htmlUnescape }}">{{ $post.title | plainify | htmlUnescape  }}</a></h5>
-              <p class="card-text">{{ $post.description | plainify | htmlUnescape | truncate 120 }}</p>
-              <small class="py-2 text-muted">Published on {{ dateFormat "Monday January 2, 2006" $post.pubDate }} at <a href="https://{{ $url.Host }}/" target="_blank">{{ $url.Host }}</a></small>
-            </div>
-          </div>
-        </div>
-      </div>
+{{- /* ── Sponsor spotlight ──────────────────────────────────────────
+      One card per sponsor, only if their latest post is within 3 months.
+      $allItems is already date-desc so the first hit per member is their newest. */}}
+{{- $cutoff        := now.AddDate 0 -3 0 -}}
+{{- $seenSponsors  := slice -}}
+{{- $spotlight     := slice -}}
+{{- range $allItems -}}
+  {{- $level := default "" .memberSponsorLevel | strings.TrimSpace -}}
+  {{- if and (ne $level "") (.pubDate.After $cutoff) -}}
+    {{- if not (in $seenSponsors .memberId) -}}
+      {{- $spotlight    = $spotlight    | append . -}}
+      {{- $seenSponsors = $seenSponsors | append .memberId -}}
+    {{- end -}}
+  {{- end -}}
 {{- end -}}
+
+{{- /* ── Main chronological feed (all members, newest first) */}}
+{{- $mainItems := first 48 $allItems -}}
+
+{{- /* ── Render ───────────────────────────────────────────────────── */}}
+
+{{ if $spotlight }}
+<section class="news-spotlight mb-5">
+  <h2 class="news-section-heading">
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+         fill="currentColor" aria-hidden="true"><path d="M12 2l2.09 6.26L21 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
+    Sponsor Highlights
+  </h2>
+  <div class="row g-4 align-items-start">
+    {{- range $spotlight -}}
+    <div class="col-sm-6 col-lg-4">
+      {{ partial "news-card.html" . }}
+    </div>
+    {{- end -}}
+  </div>
+</section>
+{{ end }}
+
+<section class="news-main">
+  {{ if $spotlight }}
+  <h2 class="news-section-heading news-section-heading--plain">
+    Latest Member News
+  </h2>
+  {{ end }}
+  <div class="row g-4 align-items-start">
+    {{- range $mainItems -}}
+    <div class="col-sm-6 col-lg-4">
+      {{ partial "news-card.html" . }}
+    </div>
+    {{- end -}}
+  </div>
+  {{ if not $mainItems }}
+  <p class="text-center text-muted py-5">No news items available at this time.</p>
+  {{ end }}
+</section>

@@ -4,19 +4,22 @@ title: Board of Directors
 
 heroTitle: Board of Directors
 heroDescription: Board of Directors of the PKI Consortium
-
 ---
 
-The PKIC Board of Directors provides strategic leadership and governance for the organization, guiding its mission and vision. 
+The PKIC Board of Directors provides strategic leadership and governance for the organization, guiding its mission and vision.
 
-## Current Members of the Board of Directors
+## Current Board of Directors
 
-* **Chris Bailey** (Chairman of the Board) - Since March 2025
-* **Mads Henriksveen** - Since June 2022
-* **Dimitris Zacharopoulos** - Since June 2022
-* **Leo Grove** - Since June 2022
-* **Tim Callan** - Since June 2022
+{{< leadership-grid >}}
+{{< person-card name="Chris Bailey" role="Board Chair" affiliation="appviewx" from="2025-03-01" >}}
+{{< person-card name="Mads Henriksveen" role="Board Member" affiliation="buypass" from="2022-06-01" >}}
+{{< person-card name="Dimitris Zacharopoulos" role="Board Member" affiliation="harica" from="2022-06-01" >}}
+{{< person-card name="Leo Grove" role="Board Member" from="2022-06-01" >}}
+{{< person-card name="Tim Callan" role="Board Member" affiliation="sectigo" from="2022-06-01" >}}
+{{< /leadership-grid >}}
 
-## Former Members of the Board of Directors
+## Past Board Positions
 
-* **Kirk Hall** - Chairman of the Board from June 2022 - February 2025
+{{< leadership-grid >}}
+{{< person-card name="Kirk Hall" role="Board Chair" affiliation="entrust" from="2022-06-01" till="2025-02-01" >}}
+{{< /leadership-grid >}}

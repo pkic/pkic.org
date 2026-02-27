@@ -1,11 +1,12 @@
 {{/*
-  Paired shortcode — wraps one or more leader-card shortcodes in a leadership panel.
+  Paired shortcode — wraps one or more leader-card shortcodes in a labeled panel.
 
   Named parameters:
     label  string  — Panel heading text (optional, default "Leadership")
+    size   string  — "large" for the wide card variant (optional)
 
   Usage:
-    {{< leadership-panel label="Consortium Leadership" >}}
+    {{< leadership-panel label="Working Group Leadership" >}}
       {{< leader-card name="Jane Doe"  role="Chair"      affiliation="acme" >}}
       {{< leader-card name="John Smith" role="Vice Chair" >}}
     {{< /leadership-panel >}}
@@ -19,3 +20,4 @@
     {{ .Inner }}
   </div>
 </div>
+

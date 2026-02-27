@@ -1,0 +1,11 @@
+{{/*
+  leadership-grid shortcode — wraps person-card shortcodes in a flex grid.
+  Use as a paired shortcode around one or more {{< person-card ... >}} calls.
+
+  Usage:
+    {{< leadership-grid >}}
+    {{< person-card name="Paul van Brouwershaven" role="Chair" affiliation="digitorus" from="2021-01-01" >}}
+    {{< person-card name="Albert de Ruiter" role="Vice Chair" affiliation="logius" from="2022-06-01" >}}
+    {{< /leadership-grid >}}
+*/}}
+<div class="consortium-leaders">{{ .Inner }}</div>
