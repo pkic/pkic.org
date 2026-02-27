@@ -1,0 +1,58 @@
+id: techexcel
+name: TechExcel Inc.
+slogan:
+website: http://www.techexcel.com/
+
+# Short description, longer content can be placed in `content/members/`
+description: Techexcel bridges the gap between product development and service/support with a unified platform for ALM, ITSM and customer support.
+
+# membership
+memberSince: 2026-02-23
+memberType: H3
+workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: https://techexcel.com/feed/
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: {{ twitter }}
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Amy Cowan
+    role: Account Manager
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/amy-cowan-b55591152/
+    description: Amy is the Account Manager at TechExcel Inc. and represents the organization at the PKI Consortium.
