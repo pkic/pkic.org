@@ -4,9 +4,7 @@
 <section class="py-5">
   <div class="container">
     <div class="row mb-4">
-      <div class="col-lg-8">
-        {{ .Content }}
-      </div>
+      {{ .Content }}
     </div>
 
     {{/* Working groups cards — same style as homepage spotlight */}}
@@ -23,16 +21,6 @@
       </div>
       {{ end }}
     </div>
-  </div>
-</section>
-
-{{/* Sponsors strip */}}
-<section class="py-4 bg-light">
-  <div class="container text-center">
-    <small class="text-muted">We thank our <a href="/sponsors/">sponsors</a> for their ongoing support of the PKI Consortium</small>
-    {{ .Scratch.Set "height" "20" }}
-    {{ .Scratch.Set "max-width" "60" }}
-    {{ partial "sponsors.html" . }}
   </div>
 </section>
 
