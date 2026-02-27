@@ -9,6 +9,7 @@
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   display: flex;
   flex-direction: column;
+  height: 100%;
   position: relative;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
 
@@ -190,9 +191,15 @@
   .blog-card-summary {
     font-size: 0.875rem;
     color: $gray-600;
-    line-height: 1.6;
-    flex: 1;
+    line-height: 1.5;
     margin-bottom: 0.75rem;
+    // Lock in exactly 3 lines — min-height reserves space when text is short,
+    // line-clamp + overflow:hidden truncates when text is long
+    min-height: calc(1.5em * 3);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
   }
 
   .blog-card-author {
@@ -720,22 +727,30 @@
   z-index: 2; // above stretched-link so links are clickable
 }
 
-// Logo container — no background box, just breathing room
+// Logo container — plain when fallback text, pill when real logo image
 .news-card-logo {
   flex-shrink: 0;
   display: flex;
   align-items: center;
-  min-height: 28px; // reserve space even when no logo
+  min-height: 32px;
+
+  &--img {
+    border-radius: 4px;
+    padding: 0.2rem 0.4rem;
+  }
 }
 
-// The actual logo image — SVGs need explicit dimensions to render correctly
-.news-card-logo-img {
-  display: block;
-  height: 28px;      // explicit height so SVGs with no intrinsic size are constrained
-  width: auto;
-  max-width: 110px;
+// The actual logo image — scoped inside .news-card to beat global [data-pagefind-body] img rules
+.news-card .news-card-logo-img {
+  display: block !important;
+  width: 80px !important;
+  height: 24px !important;
+  max-width: 80px !important;
+  max-height: 24px !important;
   object-fit: contain;
   object-position: left center;
+  // Make white/light logos readable on any background without a coloured pill
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.35));
 }
 
 // Fallback when there's no logo: show the member name as small text

@@ -18,7 +18,7 @@
 
 {{- $timeout := "5s" -}}
 {{- if hugo.IsServer -}}
-  {{- $timeout = "1s" -}}
+  {{- $timeout = "3s" -}}
 {{- end -}}
 
 {{- $feedURL := urls.Parse $feedURLStr -}}

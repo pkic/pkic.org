@@ -1,0 +1,24 @@
+{{- $path := .path -}}
+{{- $defer := true -}}
+{{- if isset . "defer" -}}
+  {{- $defer = .defer -}}
+{{- end -}}
+{{- $build := true -}}
+{{- if isset . "build" -}}
+  {{- $build = .build -}}
+{{- end -}}
+
+{{- $js := resources.Get $path -}}
+{{- if $build -}}
+  {{- $params := dict -}}
+  {{- $sourceMap := cond hugo.IsProduction "" "inline" -}}
+  {{- $opts := dict "sourceMap" $sourceMap "minify" hugo.IsProduction "target" "es2018" "params" $params -}}
+  {{- $js = $js | js.Build $opts -}}
+{{- else -}}
+  {{- $js = $js | minify -}}
+{{- end -}}
+
+{{- if hugo.IsProduction -}}
+  {{- $js = $js | fingerprint -}}
+{{- end -}}
+<script src="{{ $js.RelPermalink }}" {{ if hugo.IsProduction }}integrity="{{ $js.Data.Integrity }}"{{ end }}{{ if $defer }} defer{{ end }}></script>

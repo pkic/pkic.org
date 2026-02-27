@@ -913,6 +913,8 @@ blockquote::after {
 
   p { color: inherit; }
   p:last-child { margin-bottom: 0; }
+  a { color: #ffffff !important; text-decoration: underline; text-underline-offset: 2px; }
+  a:hover { color: rgba(255, 255, 255, 0.85) !important; }
 
   // Large filled yellow info circle — absolute positioned like the " mark
   &::before {
@@ -1021,26 +1023,27 @@ main :is(h2,h3,h4):hover .header-link {
 }
 
 // Body-copy links: brush-stroke underline with shimmer on hover.
-// At rest: a 2px strip at the baseline, fading accent→transparent (brush stroke look).
-// padding-bottom creates a gap so the line sits further from the letters.
-// On hover: the stroke sweeps to full width, then a bright spot races along it.
-main a:not(.btn):not([class]):not(:has(img)) {
+// Scoped to #content so it never affects navbars, sidebars, related-topic panels, etc.
+// At rest: a very faint 1px hint — just enough to read as a link, not enough to crowd a list.
+// On hover: the stroke sweeps to full width and brightens, then a light glint races across it.
+#content a:not(.btn):not([class]):not(:has(img)) {
   position: relative;
   color: color-mix(in srgb, var(--page-accent) 55%, #1a2332);
   text-decoration: none;
-  padding-bottom: 4px;           // push line away from the text
+  padding-bottom: 4px;
   background-image: linear-gradient(
     103deg,
-    color-mix(in srgb, var(--page-accent) 50%, transparent) 0%,
-    color-mix(in srgb, var(--page-accent) 15%, transparent) 65%,
+    color-mix(in srgb, var(--page-accent) 18%, transparent) 0%,
+    color-mix(in srgb, var(--page-accent) 5%, transparent) 60%,
     transparent 100%
   );
   background-repeat: no-repeat;
-  background-size: 70% 2px;     // partial brush stroke at rest, stays below letters
+  background-size: 60% 1px;     // barely-there hint at rest
   background-position: 0 100%;
-  transition: background-size 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94), color 0.2s ease;
+  transition: background-size 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              background-image 0.2s ease,
+              color 0.2s ease;
 
-  // Shimmer: a bright spot that slides across the underline after the sweep lands
   &::after {
     content: '';
     position: absolute;
@@ -1061,7 +1064,13 @@ main a:not(.btn):not([class]):not(:has(img)) {
 
   &:hover {
     color: color-mix(in srgb, var(--page-accent) 80%, #1a2332);
-    background-size: 108% 2px;  // sweep past the end for a natural overshoot
+    background-image: linear-gradient(
+      103deg,
+      color-mix(in srgb, var(--page-accent) 55%, transparent) 0%,
+      color-mix(in srgb, var(--page-accent) 20%, transparent) 65%,
+      transparent 100%
+    );
+    background-size: 108% 2px;
 
     &::after {
       animation: link-shimmer 0.55s 0.35s ease-in-out forwards;
@@ -1550,14 +1559,16 @@ self-assessment {
     font-size: 1rem;
     line-height: 1.5;
     flex-shrink: 0;
-    opacity: 0.85;
+    opacity: 1;
   }
 
   .pkic-alert-body {
     font-size: 0.925rem;
     line-height: 1.6;
     flex: 1;
+    color: #fff;
 
+    p, li, ul, ol, strong, em, b, i { color: #fff; }
     p:last-child { margin-bottom: 0; }
     a { color: #fff !important; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
     a:hover { color: rgba(255, 255, 255, 0.85) !important; }

@@ -429,8 +429,7 @@
   </div>
 </section>
 
-{{ $wgNavJS := resources.Get "js/wg-nav.js" | minify | fingerprint }}
-<script src="{{ $wgNavJS.RelPermalink }}" defer></script>
+{{ partial "script.html" (dict "path" "js/wg-nav.js" "build" false) }}
 
 {{ end }}{{/* end if $isNestedContent / else regular WG root */}}
 

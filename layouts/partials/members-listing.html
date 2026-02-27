@@ -111,5 +111,4 @@
 </div>{{/* /members-layout */}}
 </div>{{/* /container-fluid */}}
 
-{{ $membersJS := resources.Get "js/members.js" | minify | fingerprint }}
-<script src="{{ $membersJS.RelPermalink }}" defer></script>
+{{ partial "script.html" (dict "path" "js/members.js" "build" false) }}

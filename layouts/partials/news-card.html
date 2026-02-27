@@ -1,8 +1,8 @@
 {{- $post           := . -}}
 {{- $memberId       := default "" $post.memberId -}}
 {{- $memberName     := default "" $post.memberName -}}
-{{- $sponsorLevel   := default "" $post.memberSponsorLevel -}}
-{{- $isSponsor      := and (ne $sponsorLevel "") (ne $sponsorLevel " ") -}}
+{{- $sponsorLevel   := .memberSponsorLevel | default "" | strings.TrimSpace -}}
+{{- $isSponsor      := and (ne $sponsorLevel "") (ne $sponsorLevel "none") -}}
 {{- $url            := urls.Parse $post.link -}}
 
 {{- /* ── Member logo ───────────────────────────────────────────── */}}
@@ -58,15 +58,16 @@
   {{/* ── Card body ───────────────────────────────────────────── */}}
   <div class="blog-card-body">
     <p class="blog-card-summary">
-      {{- $post.description | plainify | htmlUnescape | truncate 160 -}}
+      {{- $text := $post.description | default $post.summary | default (index $post "content:encoded") | default "" -}}
+      {{- $text | plainify | htmlUnescape | truncate 160 -}}
     </p>
 
     {{/* Footer: logo (left) + domain link (right) */}}
     <div class="news-card-footer">
-      <div class="news-card-logo">
+      <div class="news-card-logo{{ if $logo }} news-card-logo--img{{ end }}">
         {{ if $logo }}
         <img src="{{ $logo.RelPermalink }}" alt="{{ $memberName }}"
-             width="110" height="28" class="news-card-logo-img">
+             width="80" height="24" class="news-card-logo-img">
         {{ else if $memberName }}
         <span class="news-card-member-name">{{ $memberName }}</span>
         {{ end }}

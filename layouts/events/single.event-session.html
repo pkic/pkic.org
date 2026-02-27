@@ -719,16 +719,7 @@
         }
     </style>
 
-    {{ $js := resources.Get "js/event-session.js" }}
-    {{ $params := dict }}
-    {{ $sourceMap := cond hugo.IsProduction "" "inline" }}
-    {{ $opts := dict "sourceMap" $sourceMap "minify" hugo.IsProduction "target" "es2018" "params" $params }}
-    {{ $js = $js | js.Build $opts }}
-    {{ if hugo.IsProduction }}
-    {{ $js = $js | fingerprint }}
-    {{ end }}
-    <script src="{{ $js.RelPermalink }}" {{ if hugo.IsProduction }}integrity="{{ $js.Data.Integrity }}" {{ end }}
-        defer></script>
+    {{ partial "script.html" (dict "path" "js/event-session.js") }}
 </head>
 
 <body>

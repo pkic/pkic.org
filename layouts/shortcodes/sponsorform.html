@@ -60,4 +60,4 @@
     Sorry, something went wrong, please try again or contact feedback (at) pkic.org.
 </div>
 
-<script src="/scripts/form.js"></script>
+{{ partial "script.html" (dict "path" "js/form.js" "build" false "defer" false) }}

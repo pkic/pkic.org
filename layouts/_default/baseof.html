@@ -85,7 +85,7 @@
     <div data-pagefind-ignore="all">
     {{- if .Page.Store.Get "hasMermaid" -}}
       <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-      <script src="/scripts/mermaid-init.js"></script>
+      {{ partial "script.html" (dict "path" "js/mermaid-init.js" "build" false "defer" false) }}
     {{- end -}}
 
     {{ block "footer" . }}

@@ -2,14 +2,15 @@
 {{- $allItems  = sort $allItems "pubDate" "desc" -}}
 
 {{- /* ── Sponsor spotlight ──────────────────────────────────────────
-      One card per sponsor, only if their latest post is within 3 months.
+      One card per sponsor, newest post only, if published within the last year.
       $allItems is already date-desc so the first hit per member is their newest. */}}
-{{- $cutoff        := now.AddDate 0 -3 0 -}}
+{{- $cutoff        := now.AddDate -1 0 0 -}}{{/* 12 months — sponsors posting at least yearly */}}
 {{- $seenSponsors  := slice -}}
 {{- $spotlight     := slice -}}
 {{- range $allItems -}}
-  {{- $level := default "" .memberSponsorLevel | strings.TrimSpace -}}
-  {{- if and (ne $level "") (.pubDate.After $cutoff) -}}
+  {{- $level := .memberSponsorLevel | default "" | strings.TrimSpace -}}
+  {{- $isRealSponsor := and (ne $level "") (ne $level "none") -}}
+  {{- if and $isRealSponsor (.pubDate.After $cutoff) -}}
     {{- if not (in $seenSponsors .memberId) -}}
       {{- $spotlight    = $spotlight    | append . -}}
       {{- $seenSponsors = $seenSponsors | append .memberId -}}
@@ -29,7 +30,7 @@
          fill="currentColor" aria-hidden="true"><path d="M12 2l2.09 6.26L21 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01z"/></svg>
     Sponsor Highlights
   </h2>
-  <div class="row g-4 align-items-start">
+  <div class="row g-4">
     {{- range $spotlight -}}
     <div class="col-sm-6 col-lg-4">
       {{ partial "news-card.html" . }}

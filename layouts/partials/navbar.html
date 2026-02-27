@@ -171,8 +171,7 @@
   </div>
 </div>
 
-{{ $navbarJS := resources.Get "js/navbar.js" | minify | fingerprint }}
-<script src="{{ $navbarJS.RelPermalink }}" defer></script>
+{{ partial "script.html" (dict "path" "js/navbar.js" "build" false) }}
 
 {{/* ── Remove this comment and the block below if ever moving back to inline ── */}}
 {{/*

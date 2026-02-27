@@ -1,8 +1,4 @@
 {{- $items := slice -}}
-{{- $timeout := "5s" -}}
-{{- if hugo.IsServer -}}
-  {{- $timeout = "2s" -}}
-{{- end -}}
 {{- range hugo.Data.members -}}
   {{- $member := . -}}
   {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
@@ -14,9 +10,9 @@
           "memberName"        $member.name
           "memberSponsorLevel" (default "" $member.sponsor.level)
         ) -}}
-        {{- /* Skip items with no meaningful description (link-only feeds) */}}
-        {{- $desc := $enriched.description | default "" | plainify | htmlUnescape | strings.TrimSpace -}}
-        {{- if ge (len $desc) 30 -}}
+        {{- /* Drop items with no usable text — check all three common feed fields */}}
+        {{- $desc := $enriched.description | default $enriched.summary | default (index $enriched "content:encoded") | default "" | plainify | htmlUnescape | strings.TrimSpace -}}
+        {{- if ge (len $desc) 10 -}}
           {{- $items = $items | append $enriched -}}
         {{- end -}}
       {{- end -}}
