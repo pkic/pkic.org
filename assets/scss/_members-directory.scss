@@ -1,0 +1,97 @@
+// ─── Premium button variants ─────────────────────────────────────────
+
+.btn-pkic {
+  background: linear-gradient(135deg, $green-dark 0%, $green 100%);
+  color: #fff;
+  border: none;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 2px 14px rgba(25, 135, 84, 0.38);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover, &:focus { transform: translateY(-1px); box-shadow: 0 4px 22px rgba(25, 135, 84, 0.5); color: #fff; }
+  &:active { transform: translateY(0); }
+}
+
+.btn-pkic-outline {
+  background: transparent;
+  color: #fff;
+  border: 1.5px solid rgba(255, 255, 255, 0.5);
+  font-weight: 500;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+
+  &:hover, &:focus {
+    background: rgba(255, 255, 255, 0.12);
+    border-color: rgba(255, 255, 255, 0.85);
+    color: #fff;
+    transform: translateY(-1px);
+  }
+}
+
+// ─── Members A-Z sidebar layout ───────────────────────────────────────
+
+.members-search-bar { max-width: 560px; margin-left: auto; margin-right: auto; }
+
+.members-layout {
+  display: flex;
+  gap: 2rem;
+  align-items: flex-start;
+}
+
+// Sidebar shape
+@mixin az-sidebar-shape {
+  flex-shrink: 0;
+  width: 34px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: calc(100vh - 88px);
+  overflow-y: auto;
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+
+  .az-sidebar-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 26px;
+    border-radius: 5px;
+    font-size: 0.67rem;
+    font-weight: 700;
+    color: #bbb;
+    text-decoration: none;
+    transition: background 0.12s ease, color 0.12s ease;
+
+    &:hover                         { background: $green; color: #fff; }
+    &.is-active                     { background: $green; color: #fff; }
+    &.is-empty, &.is-empty-search   { color: #ddd; pointer-events: none; }
+  }
+}
+
+// Inline sticky sidebar (visible lg+)
+.members-az-sidebar {
+  @include az-sidebar-shape;
+  position: sticky;
+  top: 68px;
+}
+
+.members-content { flex: 1; min-width: 0; }
+
+.member-letter-group {
+  margin-bottom: 2.5rem;
+  &.is-hidden { display: none; }
+}
+
+.member-letter-heading {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: #bbb;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 0.5rem;
+  margin-bottom: 1rem;
+  scroll-margin-top: 80px;
+}
+

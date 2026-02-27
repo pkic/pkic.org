@@ -1,0 +1,412 @@
+// ====================================================================
+// PKIC Navbar — true black + mega-menu + search overlay
+// ====================================================================
+
+.pkic-navbar {
+  background: #000 !important;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+
+  .nav-link {
+    font-weight: 500;
+    font-size: 0.9rem;
+    color: rgba(255, 255, 255, 0.72) !important;
+    padding: 0.45rem 0.85rem;
+    border-radius: 0.45rem;
+    transition: color 0.15s ease, background 0.15s ease;
+
+    &:hover { color: #fff !important; background: rgba(255,255,255,0.08); }
+    &.active, &.is-active { color: #fff !important; background: rgba(255,255,255,0.05); }
+  }
+
+  .navbar-toggler {
+    border-color: rgba(255,255,255,0.25);
+    color: rgba(255,255,255,0.75);
+  }
+
+  .dropdown-menu {
+    background: #111;
+    border: 1px solid rgba(255,255,255,0.12);
+
+    .dropdown-item {
+      color: rgba(255,255,255,0.8);
+      &:hover { background: rgba(255,255,255,0.08); color: #fff; }
+    }
+  }
+}
+
+.pkic-search-btn {
+  background: none;
+  border: none;
+  padding: 0.4rem 0.6rem;
+  border-radius: 0.45rem;
+  color: rgba(255, 255, 255, 0.55);
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+  display: flex;
+  align-items: center;
+
+  &:hover { color: #fff; background: rgba(255,255,255,0.08); }
+}
+
+// ─── WG Mega-menu panel ──────────────────────────────────────────────
+
+// Split trigger: text link navigates, chevron button opens the panel
+.pkic-mega-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0;
+
+  > .nav-link { pointer-events: all; }
+}
+
+.pkic-mega-chevron {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.7);
+  cursor: pointer;
+  border-radius: 4px;
+  transition: color 0.15s, background 0.15s, transform 0.2s;
+  flex-shrink: 0;
+
+  svg { transition: transform 0.2s ease; }
+
+  &:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  &.is-open svg { transform: rotate(180deg); }
+}
+
+.pkic-mega-panel {
+  position: fixed;
+  top: 57px;
+  left: 0;
+  right: 0;
+  z-index: 1040;
+  background: #fff;
+  border-bottom: 3px solid transparent;
+  border-image: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red) 1;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
+  transform: translateY(-10px);
+  opacity: 0;
+  visibility: hidden;
+  transition: transform 0.22s ease, opacity 0.22s ease, visibility 0.22s ease;
+
+  &.is-open {
+    transform: translateY(0);
+    opacity: 1;
+    visibility: visible;
+  }
+}
+
+.pkic-mega-label {
+  font-size: 0.65rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #aaa;
+}
+
+.pkic-mega-backdrop {
+  position: fixed;
+  inset: 0;
+  top: 57px;
+  z-index: 1030;
+  background: rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.22s ease, visibility 0.22s ease;
+
+  &.is-open { opacity: 1; visibility: visible; }
+}
+
+.pkic-mega-wg-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  padding: 0.9rem 1rem;
+  border-radius: 0.85rem;
+  text-decoration: none !important;
+  color: #1a1a1a;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  background: #fff;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    background: #f5f7fa;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.09);
+    text-decoration: none !important;
+    color: #000;
+  }
+
+  .pkic-mega-icon {
+    font-size: 1.3rem;
+    line-height: 1;
+    flex-shrink: 0;
+    width: 42px;
+    height: 42px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 0.6rem;
+  }
+
+  .pkic-mega-card-body { flex: 1; min-width: 0; }
+
+  .pkic-mega-wg-id {
+    font-size: 0.62rem;
+    font-weight: 800;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: #aaa;
+    margin-bottom: 0.1rem;
+  }
+
+  .pkic-mega-wg-name {
+    font-size: 0.87rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 0.2rem;
+    color: #111;
+  }
+
+  .pkic-mega-wg-desc {
+    font-size: 0.76rem;
+    color: $gray-600;
+    line-height: 1.45;
+    margin: 0;
+  }
+
+  .pkic-mega-arrow {
+    flex-shrink: 0;
+    font-size: 1rem;
+    color: $green;
+    opacity: 0;
+    transition: opacity 0.15s ease, transform 0.15s ease;
+    align-self: center;
+  }
+
+  &:hover .pkic-mega-arrow { opacity: 1; transform: translateX(3px); }
+}
+
+.pkic-mega-wg-card--green  { .pkic-mega-icon { background: rgba(25, 135, 84,  0.1); } }
+.pkic-mega-wg-card--blue   { .pkic-mega-icon { background: rgba(90, 155, 213, 0.1); } }
+.pkic-mega-wg-card--orange { .pkic-mega-icon { background: rgba(237, 125, 49, 0.1); } }
+.pkic-mega-wg-card--purple { .pkic-mega-icon { background: rgba(111, 66, 193,  0.1); } }
+.pkic-mega-wg-card--teal   { .pkic-mega-icon { background: rgba(32, 201, 151,  0.1); } }
+
+.pkic-mega-footer-link {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: $green;
+  text-decoration: none;
+  &:hover { color: $green-dark; text-decoration: underline; }
+}
+
+// ─── Members Mega-menu panel ───────────────────────────────────────────
+
+.pkic-members-mega-panel {
+  // Inherits .pkic-mega-panel base styles
+}
+
+.pkic-members-stat-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.25rem;
+  border-radius: 0.75rem;
+  border: 1px solid rgba(25, 135, 84, 0.2);
+  background: rgba(25, 135, 84, 0.05);
+  text-decoration: none;
+  color: inherit;
+  min-width: 90px;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+
+  &:hover {
+    background: rgba(25, 135, 84, 0.1);
+    border-color: rgba(25, 135, 84, 0.4);
+    transform: translateY(-1px);
+    text-decoration: none;
+    color: inherit;
+  }
+
+  &.pkic-members-stat-card--indep {
+    border-color: rgba(90, 155, 213, 0.25);
+    background: rgba(90, 155, 213, 0.05);
+    &:hover {
+      background: rgba(90, 155, 213, 0.1);
+      border-color: rgba(90, 155, 213, 0.4);
+    }
+  }
+}
+
+.pkic-members-stat-num {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: $green;
+  line-height: 1;
+  margin-bottom: 0.2rem;
+}
+
+.pkic-members-stat-card--indep .pkic-members-stat-num { color: #5a9bd5; }
+
+.pkic-members-stat-label {
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #888;
+}
+
+.pkic-members-action-link {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.7rem 0.9rem;
+  border-radius: 0.65rem;
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  text-decoration: none !important;
+  color: #1a1a1a;
+  background: #fff;
+  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    background: #f5f7fa;
+    transform: translateY(-1px);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, 0.07);
+    color: #000;
+    text-decoration: none !important;
+
+    .pkic-mega-arrow { opacity: 1; transform: translateX(3px); }
+  }
+}
+
+.pkic-members-action-icon {
+  font-size: 1.3rem;
+  flex-shrink: 0;
+  width: 38px;
+  height: 38px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.55rem;
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.pkic-members-action-title {
+  font-size: 0.84rem;
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 0.1rem;
+}
+
+.pkic-members-action-desc {
+  font-size: 0.73rem;
+  color: $gray-600;
+  line-height: 1.3;
+}
+
+
+
+// ─── Search overlay ───────────────────────────────────────────────────
+
+.pkic-search-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  backdrop-filter: blur(10px);
+  z-index: 1060;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 5rem 1rem 2rem;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+
+  &.is-open { opacity: 1; visibility: visible; }
+}
+
+.pkic-search-box { width: 100%; max-width: 700px; }
+
+.pkic-search-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: 1rem;
+  padding: 0.9rem 1.25rem;
+
+  .pkic-search-input-field {
+    flex: 1;
+    background: none;
+    border: none;
+    outline: none;
+    color: #fff;
+    font-size: 1.15rem;
+    &::placeholder { color: rgba(255, 255, 255, 0.35); }
+  }
+}
+
+.pkic-search-esc {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.35rem;
+  padding: 0.15rem 0.5rem;
+  cursor: pointer;
+  background: none;
+  transition: color 0.15s ease, border-color 0.15s ease;
+  &:hover { color: #fff; border-color: rgba(255,255,255,0.55); }
+}
+
+.pkic-search-results-list {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-height: calc(100vh - 260px);
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.pkic-search-result-item {
+  display: block;
+  padding: 0.875rem 1.25rem;
+  border-radius: 0.75rem;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  text-decoration: none;
+  color: #fff;
+  transition: background 0.15s ease;
+
+  &:hover { background: rgba(255,255,255,0.14); color: #fff; text-decoration: none; }
+
+  .pkic-sr-title   { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.2rem; }
+  .pkic-sr-url     { font-size: 0.7rem; color: #7cf0be; opacity: 0.85; margin-bottom: 0.3rem; }
+  .pkic-sr-excerpt {
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.5;
+    mark { background: none; color: #7cf0be; font-weight: 600; }
+  }
+}
+
+.pkic-search-hint {
+  color: rgba(255, 255, 255, 0.4);
+  font-size: 0.9rem;
+  text-align: center;
+  margin-top: 2rem;
+}
+

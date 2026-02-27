@@ -1,0 +1,190 @@
+// ── Member hover card ──────────────────────────────────────────────────────
+// Shared floating card positioned via JS (position:fixed avoids overflow
+// clipping from both the footer scroller and the logo‑wall container).
+
+.member-hovercard {
+  position: fixed;
+  z-index: 9999;
+  width: 210px;
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 6px 24px rgba(0,0,0,.14), 0 1px 5px rgba(0,0,0,.08);
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity .15s ease;
+  white-space: normal;
+  text-align: left;
+
+  &.member-hovercard--visible { opacity: 1; }
+}
+
+.member-hovercard-body {
+  padding: 12px 14px 10px;
+}
+
+.member-hovercard-name {
+  display: block;
+  font-size: .82rem;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.35;
+}
+
+.member-hovercard-slogan {
+  display: block;
+  font-size: .72rem;
+  color: #666;
+  margin-top: 4px;
+  line-height: 1.4;
+}
+
+.member-hovercard-footer {
+  display: block;
+  padding: 5px 14px 6px;
+  font-size: .68rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  text-align: center;
+  color: #fff;
+}
+
+// Sponsor tier gradients — mapped to sponsorlevels.yaml integers 1–6
+// Member tiers  : Bronze(1), Silver(2), Gold(3), Platinum(4), Titanium(5), Diamond(6)
+// Event tiers   : Ambassador(1), Innovator(2), Inspirator(3), Leader(4)
+.sponsor-tier-1 { background: linear-gradient(135deg, #b87333, #8b5320); } // Bronze / Ambassador
+.sponsor-tier-2 { background: linear-gradient(135deg, #7a7a7a, #555);    } // Silver / Innovator
+.sponsor-tier-3 { background: linear-gradient(135deg, #c9950c, #9a6f00); } // Gold   / Inspirator
+.sponsor-tier-4 { background: linear-gradient(135deg, #3d7a8a, #25515e); } // Platinum / Leader
+.sponsor-tier-5 { background: linear-gradient(135deg, #455a64, #1c313a); } // Titanium
+.sponsor-tier-6 { background: linear-gradient(135deg, #0097b2, #006b82); } // Diamond
+
+// ── Zoom overlay (Titanium / Diamond sponsors) ─────────────────────────────
+// Sits inside .members (position:relative; overflow:hidden).  The parent's
+// mask-image is suppressed via .members--zooming so the overlay fills the
+// full height cleanly.
+.member-zoom-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background: rgba(255, 255, 255, .97);
+  opacity: 0;
+  pointer-events: none;
+  // Fast fade-in, slower ease-out handled by :not() below
+  transition: opacity .3s ease;
+
+  &.member-zoom-overlay--visible {
+    opacity: 1;
+    transition: opacity .3s ease;
+  }
+
+  // Slow fade-out so the logo wall reappears gently
+  &:not(.member-zoom-overlay--visible) {
+    transition: opacity .65s ease-out;
+  }
+}
+
+.member-zoom-logo {
+  max-height: 72px;
+  max-width: 55%;
+  width: auto;
+  object-fit: contain;
+}
+
+.member-zoom-info {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+  padding: 0 28px;
+}
+
+.member-zoom-name {
+  font-size: .9rem;
+  font-weight: 700;
+  color: #111;
+  line-height: 1.3;
+}
+
+.member-zoom-slogan {
+  font-size: .75rem;
+  color: #555;
+  line-height: 1.4;
+}
+
+.member-zoom-badge {
+  display: inline-block;
+  padding: 4px 16px 5px;
+  border-radius: 20px;
+  font-size: .66rem;
+  font-weight: 700;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: #fff;
+}
+
+.members-overview {
+  background: #fff;
+
+  // Viewport: clips the scrolling track to a fixed visible height
+  .members {
+    height: 280px;
+    overflow: hidden;
+    position: relative;
+    // mask top/bottom edges so logos fade in/out softly
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%);
+    // Suppress the mask while the zoom overlay is showing so it fills cleanly
+    &.members--zooming {
+      -webkit-mask-image: none;
+              mask-image: none;
+    }
+  }
+}
+
+// Two copies stacked vertically — animating translateY(-50%) scrolls exactly
+// one copy before looping back to the start.
+.logo-wall-track {
+  display: flex;
+  flex-direction: column;
+  animation: logo-wall-scroll 120s linear infinite; // duration overridden by JS
+  will-change: transform;
+}
+
+// Each copy is a wrapping row of logos
+.logo-wall-copy {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 10px 0;
+  flex-shrink: 0;
+}
+
+@keyframes logo-wall-scroll {
+  from { transform: translateY(0); }
+  to   { transform: translateY(-50%); }
+}
+
+
+
+.linkArea {
+  color: currentColor;
+  text-decoration: none;
+}
+
+.bd-placeholder-img {
+  font-size: 1.125rem;
+  text-anchor: middle;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  user-select: none;
+}
+

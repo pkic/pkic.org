@@ -1,0 +1,399 @@
+// ─── WG in-page section nav ───────────────────────────────────────────
+
+// Offset WG sections for sticky navbar (57px) + section nav (~41px)
+[id^="wg-"] { scroll-margin-top: 105px; }
+
+// ─── WG section nav ──────────────────────────────────────────────────
+//
+// The nav gets a .wg-{id} class which provides --wg-color via _bento.scss.
+// On sub-pages the nav sticks; on the landing page it also has a top accent
+// border that persists on scroll (replacing the hero strip below the fold).
+
+.wg-section-nav {
+  position: sticky;
+  top: 57px;   // just below the navbar
+  z-index: 200;
+  background: #000;
+  border-top: 3px solid var(--wg-color, #{$green});  // color bar always visible
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  padding: 0;
+
+  .container {
+    overflow-x: auto;
+    scrollbar-width: none;
+    &::-webkit-scrollbar { display: none; }
+  }
+
+  .wg-nav-link {
+    display: inline-block;
+    padding: 0.6rem 0.9rem;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    color: rgba(255,255,255,0.55);
+    text-decoration: none;
+    white-space: nowrap;
+    border-bottom: 2px solid transparent;
+    transition: color 0.15s, border-color 0.15s;
+
+    &:hover  { color: #fff; }
+    &.is-active {
+      color: #fff;
+      border-bottom-color: var(--wg-color, #{$green});  // matches WG color
+    }
+  }
+}
+
+// ─── WG sub-pages explore cards ───────────────────────────────────────
+
+.wg-explore-card {
+  padding: 1.25rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: #fff;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 24px rgba(0,0,0,0.1);
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+.wg-explore-icon {
+  font-size: 1.5rem;
+  margin-bottom: 0.6rem;
+}
+
+.wg-explore-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 0.25rem;
+}
+
+.wg-explore-desc {
+  font-size: 0.8rem;
+  color: $gray-600;
+  line-height: 1.45;
+}
+
+.wg-explore-arrow {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: $green;
+  padding-top: 0.5rem;
+}
+
+// Color-accented border on left
+.wg-explore-card--blue   { border-left: 3px solid #5a9bd5; }
+.wg-explore-card--purple { border-left: 3px solid #7c4dbd; }
+.wg-explore-card--orange { border-left: 3px solid #e97d3a; }
+.wg-explore-card--teal   { border-left: 3px solid #20c997; }
+.wg-explore-card--green  { border-left: 3px solid $green; }
+
+// ─── WG Key Deliverables — featured section ───────────────────────────
+
+.wg-key-deliverables {
+  background: linear-gradient(160deg, #0e0a1c 0%, #0a1120 100%);
+  border-top: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+
+  h2 { color: #fff !important; }
+}
+
+.wg-key-eyebrow {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.4);
+  margin-bottom: 0.4rem;
+}
+
+.wg-key-card {
+  border-radius: 1.5rem;
+  padding: 2rem 1.75rem 1.75rem;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.16);
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.22s ease, box-shadow 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 4px;
+    background: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red);
+    border-radius: 1.5rem 1.5rem 0 0;
+  }
+
+  &:hover {
+    transform: translateY(-5px);
+    background: rgba(255,255,255,0.12);
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.22);
+    border-color: rgba(255,255,255,0.28);
+  }
+}
+
+// Top accent bar — shared rainbow gradient across all color variants
+
+.wg-key-badge {
+  align-self: flex-start;
+  background: rgba(255,255,255,0.15) !important;
+  color: rgba(255,255,255,0.9) !important;
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  margin-bottom: 1rem;
+}
+
+.wg-key-icon {
+  width: 5rem;
+  height: 5rem;
+  border-radius: 1.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 1.5rem;
+  background: rgba(255,255,255,0.08);
+  flex-shrink: 0;
+}
+
+// Tint icon background to WG color
+.wg-key-card--purple .wg-key-icon { background: rgba(159,108,241,0.2); box-shadow: 0 0 24px rgba(159,108,241,0.25); }
+.wg-key-card--blue   .wg-key-icon { background: rgba(90,155,213,0.2);  box-shadow: 0 0 24px rgba(90,155,213,0.25);  }
+.wg-key-card--orange .wg-key-icon { background: rgba(233,125,58,0.2);  box-shadow: 0 0 24px rgba(233,125,58,0.25);  }
+.wg-key-card--teal   .wg-key-icon { background: rgba(32,201,151,0.2);  box-shadow: 0 0 24px rgba(32,201,151,0.25);  }
+.wg-key-card--green  .wg-key-icon { background: rgba(25,135,84,0.2);   box-shadow: 0 0 24px rgba(25,135,84,0.25);   }
+.wg-key-card--red    .wg-key-icon { background: rgba(220,53,69,0.2);   box-shadow: 0 0 24px rgba(220,53,69,0.25);   }
+
+.wg-key-svg {
+  width: 2.75rem;
+  height: 2.75rem;
+  color: #fff;
+}
+
+.wg-key-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
+  margin-bottom: 0.75rem;
+  line-height: 1.25;
+}
+
+.wg-key-desc {
+  color: rgba(255,255,255,0.65);
+  font-size: 0.94rem;
+  line-height: 1.65;
+  flex-grow: 1;
+  margin-bottom: 1.5rem;
+}
+
+.wg-key-cta {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 0.65rem 1.5rem;
+  border-radius: 2rem;
+  background: rgba(255,255,255,0.1);
+  color: #fff !important;
+  font-weight: 600;
+  font-size: 0.88rem;
+  text-decoration: none !important;
+  transition: background 0.18s ease, transform 0.18s ease;
+
+  &:hover {
+    background: rgba(255,255,255,0.2);
+    transform: translateX(3px);
+  }
+}
+
+// CTA button tinted to WG color
+.wg-key-card--purple .wg-key-cta { background: rgba(111,66,193,0.45); &:hover { background: rgba(111,66,193,0.7); } }
+.wg-key-card--blue   .wg-key-cta { background: rgba(13,110,253,0.35); &:hover { background: rgba(13,110,253,0.6); } }
+.wg-key-card--orange .wg-key-cta { background: rgba(233,125,58,0.35); &:hover { background: rgba(233,125,58,0.6); } }
+.wg-key-card--teal   .wg-key-cta { background: rgba(32,201,151,0.3);  &:hover { background: rgba(32,201,151,0.55); } }
+.wg-key-card--green  .wg-key-cta { background: rgba(25,135,84,0.35);  &:hover { background: rgba(25,135,84,0.6); } }
+.wg-key-card--red    .wg-key-cta { background: rgba(220,53,69,0.35);  &:hover { background: rgba(220,53,69,0.6); } }
+
+// ─── PQC Conference cards ─────────────────────────────────────────────
+
+.pqc-conf-featured-card {
+  background: linear-gradient(135deg, #0d1e36 0%, #1a1050 100%);
+  color: #fff;
+  border-radius: 1.25rem;
+  padding: 2.5rem;
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 8px 40px rgba(0,0,0,0.2);
+}
+
+.pqc-conf-featured-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  margin-bottom: 1.25rem;
+}
+
+.pqc-conf-flag {
+  font-size: 3rem;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.pqc-conf-featured-label {
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: $green;
+  margin-bottom: 0.35rem;
+}
+
+.pqc-conf-featured-title {
+  font-size: 1.4rem;
+  font-weight: 800;
+  color: #fff;
+  margin: 0 0 0.6rem;
+}
+
+.pqc-conf-featured-meta {
+  display: flex;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.pqc-conf-meta-item {
+  font-size: 0.9rem;
+  color: rgba(255,255,255,0.75);
+}
+
+.pqc-conf-featured-desc {
+  font-size: 0.92rem;
+  color: rgba(255,255,255,0.7);
+  line-height: 1.65;
+  margin-bottom: 1.5rem;
+}
+
+.pqc-conf-past-card {
+  padding: 1.25rem 1.25rem 1rem;
+  border-radius: 0.85rem;
+  border: 1px solid rgba(0,0,0,0.08);
+  background: #fff;
+  color: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 18px rgba(0,0,0,0.09);
+    color: inherit;
+    text-decoration: none;
+  }
+}
+
+.pqc-conf-past-flag {
+  font-size: 1.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.pqc-conf-past-title {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: #111;
+  margin-bottom: 0.25rem;
+  line-height: 1.35;
+}
+
+.pqc-conf-past-meta {
+  font-size: 0.78rem;
+  color: $gray-600;
+  margin-bottom: 0.6rem;
+}
+
+.pqc-conf-past-arrow {
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: $green;
+}
+
+// ─── WG sub-page compact header ─────────────────────────────────────────────
+//
+// Replaces the full hero on Focus/Deliverables/Members/Resources/Conferences
+// sub-pages. Gets the same --wg-color from the .wg-{id} class.
+
+.wg-sub-header {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(ellipse at 0% 50%, color-mix(in srgb, var(--wg-color, #{$green}) 22%, transparent) 0%, transparent 65%),
+    radial-gradient(ellipse at 100% 0%, color-mix(in srgb, var(--wg-color, #{$green}) 10%, transparent) 0%, transparent 50%),
+    linear-gradient(120deg, color-mix(in srgb, var(--wg-color, #{$green}) 50%, #000) 0%, #0d0d0d 60%);
+  border-top: 3px solid var(--wg-color, #{$green});
+  padding: 2rem 0 1.75rem;
+
+  .wg-sub-eyebrow {
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgba(#fff, 0.55);
+    margin-bottom: 0.5rem;
+
+    a {
+      color: rgba(255, 255, 255, 0.7) !important;
+      text-decoration: none;
+      &:hover { color: #fff !important; }
+    }
+
+    span { margin: 0 0.3em; opacity: 0.5; }
+  }
+
+  .wg-sub-title {
+    font-size: clamp(1.4rem, 3vw, 2rem);
+    font-weight: 800;
+    color: #fff;
+    margin-bottom: 0.4rem;
+    line-height: 1.2;
+  }
+
+  .wg-sub-desc {
+    color: rgba(255,255,255,0.6);
+    font-size: 0.95rem;
+    margin-bottom: 0;
+    max-width: 55ch;
+  }
+}
+
+.wg-sub-header-watermark,
+.pkic-page-hero-watermark {
+  position: absolute;
+  right: -3rem;
+  bottom: -3rem;
+  color: var(--wg-color, #{$green});
+  opacity: 0.22;
+  pointer-events: none;
+  user-select: none;
+  transform: rotate(18deg);
+  transform-origin: bottom right;
+  mask-image: radial-gradient(ellipse 75% 80% at 45% 55%, #000 25%, transparent 75%);
+  filter: blur(0.4px);
+}
+
+.wg-sub-header-watermark {
+  width: clamp(220px, 32vw, 380px);
+  height: auto;
+}
+
+.pkic-page-hero-watermark {
+  width: clamp(260px, 38vw, 480px);
+  height: auto;
+  bottom: -4rem;
+  right: -4rem;
+}
+
+// ─── WG leadership panel ────────────────────────────────────────────────────

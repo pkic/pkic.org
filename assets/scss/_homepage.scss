@@ -1,0 +1,461 @@
+// ============================================================
+// Homepage
+// ============================================================
+
+.pkic-home-hero {
+  background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 45%, #0a2f40 100%);
+  color: #fff;
+  padding: 5rem 0 4rem;
+
+  @media (min-width: 992px) {
+    padding: 6rem 0 5rem;
+  }
+
+  .pkic-hero-logo {
+    width: 280px;
+    max-width: 60vw;
+    opacity: 0.12;
+  }
+
+  .pkic-hero-post-card {
+    display: block;
+    background: rgba(255, 255, 255, 0.06);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 1rem;
+    padding: 2rem 2rem 1.75rem;
+    color: #fff;
+    transition: background 0.2s, border-color 0.2s;
+
+    &:hover {
+      background: rgba(255, 255, 255, 0.10);
+      border-color: rgba(255, 255, 255, 0.22);
+    }
+  }
+
+  .pkic-hero-post-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.5);
+    margin-bottom: 0.4rem;
+  }
+
+  .pkic-hero-post-title {
+    font-size: 1.15rem;
+    font-weight: 700;
+    line-height: 1.35;
+    margin-bottom: 0.4rem;
+    color: #cde8d8;
+  }
+
+  .pkic-hero-post-date {
+    display: block;
+    font-size: 0.8rem;
+    color: rgba(255, 255, 255, 0.45);
+    margin-bottom: 0.75rem;
+  }
+
+  .pkic-hero-post-summary {
+    font-size: 0.875rem;
+    color: rgba(255, 255, 255, 0.6);
+    line-height: 1.55;
+    margin-bottom: 1.1rem;
+  }
+
+  .pkic-hero-post-cta {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.75);
+  }
+}
+
+// Generic dark-gradient page hero (fallback for pages without a hero image)
+.pkic-page-hero {
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  padding: 3.5rem 0;
+
+  @media (min-width: 992px) {
+    padding: 5rem 0;
+  }
+
+  // Lead paragraph uses rgba color instead of opacity so child links can override
+  .pkic-hero-lead {
+    color: rgba(255, 255, 255, 0.75);
+
+    a:not(.btn) {
+      color: #fff;
+      text-decoration: underline wavy;
+      text-decoration-color: rgba(255, 255, 255, 0.2);
+      text-underline-offset: 4px;
+      transition: text-decoration-color 0.2s ease;
+      &:hover {
+        text-decoration-color: rgba(255, 255, 255, 0.75);
+      }
+    }
+  }
+
+  .pkic-page-hero-kicker {
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 0.75rem;
+  }
+}
+
+.pkic-stats-bar {
+  background: $green;
+  color: #fff;
+
+  .pkic-stat {
+    padding: 0.9rem 0.5rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.15rem;
+    border-right: 1px solid rgba(255, 255, 255, 0.2);
+
+    &:last-child { border-right: none; }
+  }
+
+  .pkic-stat-num {
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1;
+  }
+
+  .pkic-stat-label {
+    font-size: 0.72rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    opacity: 0.8;
+  }
+}
+
+.pkic-section-label {
+  text-align: center;
+  position: relative;
+  margin: 2.5rem 0 0;
+
+  span {
+    display: inline-block;
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: $gray-500;
+    background: #fff;
+    padding: 0 1rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  &::before {
+    content: "";
+    display: block;
+    position: absolute;
+    top: 50%;
+    left: 10%;
+    right: 10%;
+    border-top: 1px solid $gray-200;
+  }
+}
+
+.pkic-recent-posts {
+  background: $gray-100;
+}
+
+// Blog post cards on the homepage reuse the .blog-card styles from _blog.scss
+
+.pkic-join-cta {
+  background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 100%);
+  color: #fff;
+  padding-top: 5rem;
+  padding-bottom: 5rem;
+
+  // Override the gradient-text rule applied to all main h2 elements
+  h2 {
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    background-clip: unset !important;
+    -webkit-text-fill-color: #fff !important;
+    color: #fff !important;
+    font-size: 2.25rem;
+    margin-top: 0;
+  }
+
+  .lead {
+    opacity: 0.88;
+    font-size: 1.2rem;
+  }
+}
+
+// ============================================================
+// Home page — Working Group spotlight cards
+// ============================================================
+
+.pkic-section-eyebrow {
+  color: #1a7a4a;
+  letter-spacing: 0.1em;
+}
+
+// WG spotlight card container
+.pkic-wg-spotlight {
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.07);
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.22s ease, box-shadow 0.22s ease;
+
+  &:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08), 0 16px 48px rgba(0, 0, 0, 0.14);
+  }
+
+  // Gradient header with decorative circles
+  &-header-link {
+    display: block;
+    text-decoration: none;
+  }
+
+  &-header {
+    padding: 1.75rem 1.5rem 1.5rem;
+    background: linear-gradient(135deg, var(--wg-a), var(--wg-b));
+    position: relative;
+    overflow: hidden;
+    min-height: 140px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+
+    // Decorative circles
+    &::before {
+      content: '';
+      position: absolute;
+      right: -24px;
+      top: -24px;
+      width: 110px;
+      height: 110px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.07);
+      pointer-events: none;
+    }
+
+    &::after {
+      content: '';
+      position: absolute;
+      right: 30px;
+      bottom: -38px;
+      width: 80px;
+      height: 80px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.05);
+      pointer-events: none;
+    }
+  }
+
+  // WG abbreviation label (top of header)
+  &-abbr {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    position: relative;
+    z-index: 1;
+  }
+
+  // Icon (bottom of header)
+  &-icon {
+    width: 2.6rem;
+    height: 2.6rem;
+    color: rgba(255, 255, 255, 0.88);
+    position: relative;
+    z-index: 1;
+    flex-shrink: 0;
+  }
+
+  // Card body — title and description
+  &-body {
+    padding: 1.25rem 1.5rem 0.5rem;
+    flex: 1;
+
+    h3 {
+      font-size: 1.1rem;
+      font-weight: 700;
+      margin-bottom: 0.5rem;
+      color: #1a1a1a;
+
+      a {
+        color: inherit;
+        text-decoration: none;
+
+        &:hover { text-decoration: underline; }
+      }
+    }
+
+    p {
+      font-size: 0.83rem;
+      color: #6c757d;
+      line-height: 1.6;
+      margin: 0;
+    }
+  }
+
+  // Chip/pill links at the bottom
+  &-links {
+    padding: 0.85rem 1.5rem 1.25rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+  }
+}
+
+// Chip link variants
+.pkic-wg-chip {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 500;
+  padding: 0.22rem 0.65rem;
+  border-radius: 999px;
+  text-decoration: none;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+  line-height: 1.5;
+
+  &-primary {
+    background: #1a7a4a;
+    color: #fff !important;
+    &:hover { background: #155e3a; }
+  }
+
+  &-secondary {
+    background: rgba(26, 122, 74, 0.12);
+    color: #1a7a4a !important;
+    &:hover { background: rgba(26, 122, 74, 0.22); }
+  }
+
+  &-warning {
+    background: #ffc107;
+    color: #1a1a1a !important;
+    font-weight: 600;
+    &:hover { background: #e5ac00; }
+  }
+
+  &-muted {
+    background: rgba(0, 0, 0, 0.055);
+    color: #495057 !important;
+    &:hover { background: rgba(0, 0, 0, 0.11); color: #1a1a1a !important; }
+  }
+}
+
+// ============================================================
+// WG Leadership card (inside dark gradient hero)
+// ============================================================
+
+.pkic-leadership-card {
+  // background set via inline style (WG color-keyed gradient)
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+.pkic-leadership-label {
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.10em;
+}
+
+// ============================================================
+// Alert shortcode — modern gradient variant
+// ============================================================
+
+.pkic-alert {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-radius: 0.75rem;
+  margin-bottom: 1.25rem;
+  color: #fff;
+
+  .pkic-alert-icon {
+    font-size: 1rem;
+    line-height: 1.5;
+    flex-shrink: 0;
+    opacity: 1;
+  }
+
+  .pkic-alert-body {
+    font-size: 0.925rem;
+    line-height: 1.6;
+    flex: 1;
+    color: #fff;
+
+    p, li, ul, ol, strong, em, b, i { color: #fff; }
+    p:last-child { margin-bottom: 0; }
+    a { color: #fff !important; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
+    a:hover { color: rgba(255, 255, 255, 0.85) !important; }
+    code { background: rgba(255, 255, 255, 0.15); border-radius: 0.25rem; padding: 0.1em 0.35em; }
+  }
+}
+
+.pkic-alert-success { border-left-color: $green !important; }
+.pkic-alert-info    { border-left-color: $blue !important; }
+.pkic-alert-warning { border-left-color: #e6a817 !important; }
+.pkic-alert-danger  { border-left-color: #e05252 !important; }
+
+// ============================================================
+// Cards shortcode — accent bar + polish
+// ============================================================
+
+.pkic-card-accent-bar {
+  height: 4px;
+  background: linear-gradient(90deg, $green, $blue);
+}
+
+.pkic-wg-card {
+  border-radius: 0.85rem;
+  overflow: hidden;
+  border: none;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
+  }
+
+  .card-title { font-weight: 700; }
+  .card-text  { color: $gray-600; font-size: 0.9rem; }
+}
+
+.pkic-card-header {
+  background: linear-gradient(135deg, #0a1f14, #0d3d24);
+  color: #fff;
+  font-weight: 600;
+  border-bottom: none;
+
+  a { color: rgba(255, 255, 255, 0.9); }
+}
+
+.pkic-card-footer {
+  background: $gray-100;
+  font-size: 0.85rem;
+  border-top: 1px solid $gray-200;
+}
+
+// ============================================================
+// WG alternating section background (subtle off-white tint)
+// ============================================================
+
+.wg-alt-section {
+  background-color: #f4f6f8;
+  background-image: radial-gradient(ellipse at 80% 50%, rgba(90, 155, 213, 0.04) 0%, transparent 70%);
+}
+

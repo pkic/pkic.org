@@ -1,0 +1,313 @@
+// ── CTA participation bar ──────────────────────────────────────────────────
+#participate {
+  background: #000;
+  border-top: 3px solid transparent;
+  border-image: linear-gradient(
+    to right,
+    $green,
+    $teal,
+    $blue,
+    $yellow,
+    $orange,
+    $red
+  ) 1;
+  color: rgba(#fff, 0.65);
+  text-align: center;
+  font-size: 1.1em;
+  font-weight: 300;
+  letter-spacing: 0.01em;
+
+  a {
+    color: #fff;
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-color: rgba(#fff, 0.25);
+    text-underline-offset: 3px;
+    transition: text-decoration-color 0.2s ease;
+
+    &:hover { text-decoration-color: $green; }
+  }
+}
+
+// ── Main footer body ───────────────────────────────────────────────────────
+.footer-body {
+  border-top: 1px solid rgba(#fff, 0.06);
+}
+
+// Brand column
+.footer-brand {
+  padding-right: 2rem;
+
+  @media (min-width: 992px) {
+    border-right: 1px solid rgba(#fff, 0.07);
+  }
+}
+
+.footer-logo-link {
+  display: inline-block;
+  opacity: 0.85;
+  transition: opacity 0.2s ease;
+
+  &:hover { opacity: 1; }
+}
+
+.footer-logo-img {
+  height: 42px;
+  width: auto;
+  opacity: 0.9;
+}
+
+.footer-tagline {
+  margin-top: 0.75rem;
+  font-size: 0.82rem;
+  font-weight: 300;
+  line-height: 1.6;
+  color: rgba(#fff, 0.4);
+}
+
+.footer-social {
+  a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: rgba(#fff, 0.05);
+    color: rgba(#fff, 0.45);
+    margin-right: 6px;
+    transition: background 0.2s ease, color 0.2s ease;
+
+    &:hover {
+      background: rgba($green, 0.15);
+      color: $green;
+    }
+  }
+
+  svg { display: block; }
+}
+
+// ── Floating "Edit on GitHub" button ──────────────────────────────────────
+// Injected once from baseof.html; fixed to the bottom-right corner.
+// Icon-only at rest → expands with label on hover.
+.edit-on-github {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 1000;
+
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  overflow: hidden;
+
+  background: rgba(#1a1a1a, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(#fff, 0.45);
+  border: 1px solid rgba(#fff, 0.1);
+  border-radius: 8px;
+  padding: 7px 9px;
+  text-decoration: none;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+
+  // Width transition for label reveal
+  max-width: 36px;
+  transition:
+    max-width 0.25s ease,
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease;
+
+  svg {
+    flex-shrink: 0;
+  }
+
+  &-label {
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+    transition: opacity 0.2s ease 0.05s, max-width 0.25s ease;
+    margin-left: 0;
+  }
+
+  &:hover {
+    max-width: 180px;
+    color: rgba(#fff, 0.9);
+    border-color: rgba($green, 0.5);
+    background: rgba(#1a1a1a, 0.95);
+
+    .edit-on-github-label {
+      opacity: 1;
+      max-width: 140px;
+      margin-left: 6px;
+    }
+  }
+
+  // Hide on small screens to avoid covering content
+  @media (max-width: 767px) {
+    display: none;
+  }
+}
+
+// ── Text-selection "Edit on GitHub" tooltip ────────────────────────────────
+// Appears above text selections on pages that have the floating edit button.
+.selection-edit-tooltip {
+  position: fixed;
+  z-index: 1100;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+
+  background: rgba(#1a1a1a, 0.92);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: rgba(#fff, 0.9);
+  border: 1px solid rgba($green, 0.5);
+  border-radius: 6px;
+  padding: 5px 10px;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  text-decoration: none;
+  pointer-events: auto;
+  user-select: none;
+
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+
+  &.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+
+  svg { flex-shrink: 0; }
+
+  // Small downward-pointing caret
+  &::after {
+    content: '';
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: rgba($green, 0.5);
+  }
+
+  &:hover {
+    color: #fff;
+    border-color: rgba($green, 0.8);
+    background: rgba(#1a1a1a, 1);
+  }
+
+  @media (max-width: 767px) {
+    display: none;
+  }
+}
+
+// Nav columns
+.footer-col-title {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: rgba(#fff, 0.35);
+  margin-bottom: 1.1rem;
+}
+
+.footer-col-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+
+  li { margin-bottom: 0.6rem; }
+}
+
+.footer-col-link {
+  font-size: 0.875rem;
+  font-weight: 400;
+  color: rgba(#fff, 0.55);
+  text-decoration: none;
+  transition: color 0.2s ease;
+
+  &:hover { color: #fff; }
+}
+
+// ── Bottom bar ─────────────────────────────────────────────────────────────
+.footer-bottom {
+  border-top: 1px solid rgba(#fff, 0.07);
+}
+
+.footer-disclaimer {
+  font-size: 0.73rem;
+  line-height: 1.6;
+  color: rgba(#fff, 0.22);
+
+  a {
+    color: rgba(#fff, 0.3);
+    text-decoration: underline;
+    text-decoration-color: rgba(#fff, 0.15);
+    text-underline-offset: 2px;
+
+    &:hover { color: rgba(#fff, 0.6); }
+  }
+}
+
+.footer-copy {
+  color: rgba(#fff, 0.25);
+  font-size: 0.75rem;
+}
+
+.footer-legal {
+  font-size: 0.75rem;
+  color: rgba(#fff, 0.25);
+
+  a {
+    color: rgba(#fff, 0.25);
+    text-decoration: none;
+    transition: color 0.2s ease;
+
+    &:hover { color: rgba(#fff, 0.8); }
+  }
+}
+
+
+
+
+
+
+.member-logo {
+  margin: 5px 20px;
+  height: 18px;
+  max-width: 90px;
+  filter: grayscale(1) opacity(0.55) contrast(0.5);
+  transition: filter 0.2s ease, transform 0.2s ease;
+}
+
+.member-logo-sponsor {
+  filter: none;
+  opacity: 1;
+  transition: transform 0.2s ease;
+}
+
+/* Size by sponsor tier (level 1–6) — uniform margin, height does the work */
+.sponsor-lvl-1 { height: 22px; max-width: 110px; }
+.sponsor-lvl-2 { height: 26px; max-width: 130px; }
+.sponsor-lvl-3 { height: 32px; max-width: 155px; }
+.sponsor-lvl-4 { height: 38px; max-width: 180px; }
+.sponsor-lvl-5 { height: 44px; max-width: 210px; }
+.sponsor-lvl-6 { height: 52px; max-width: 240px; }
+
+.members a:hover .member-logo {
+  filter: none;
+}
+
+.members a:hover .member-logo-sponsor {
+  transform: scale(1.12);
+}
+

@@ -1,0 +1,232 @@
+// required to get Bootstrap functions and variables
+@import "bootstrap/functions";
+
+// --- PKIC Variable Overrides & Custom Colors ---
+
+// Default Bootstrap colors
+$green: rgb(25, 135, 84);
+$orange: rgb(237, 125, 49);
+$blue: rgb(90, 155, 213);
+$yellow: rgb(255, 192, 0);
+$red: rgb(220, 53, 69);
+$purple: rgb(111, 66, 193);
+
+// Extended Palette - Light & Dark Variants
+$green-light: rgb(40, 167, 69);
+$green-dark: rgb(20, 108, 67);
+$green-pale: rgb(212, 237, 218);
+$green-deep: rgb(15, 81, 50);
+
+$orange-light: rgb(253, 159, 83);
+$orange-dark: rgb(189, 100, 39);
+$orange-pale: rgb(255, 230, 204);
+$orange-deep: rgb(150, 75, 29);
+
+$blue-light: rgb(129, 181, 224);
+$blue-dark: rgb(72, 124, 170);
+$blue-pale: rgb(214, 234, 248);
+$blue-deep: rgb(54, 93, 128);
+
+$yellow-light: rgb(255, 220, 77);
+$yellow-dark: rgb(204, 153, 0);
+$yellow-pale: rgb(255, 248, 204);
+$yellow-deep: rgb(153, 115, 0);
+
+$red-light: rgb(248, 115, 131);
+$red-dark: rgb(176, 42, 55);
+$red-pale: rgb(248, 215, 218);
+$red-deep: rgb(132, 32, 41);
+
+$purple-light: rgb(147, 112, 219);
+$purple-dark: rgb(89, 53, 154);
+$purple-pale: rgb(230, 221, 243);
+$purple-deep: rgb(67, 40, 116);
+
+// Additional Complementary Colors
+$teal: rgb(32, 201, 151);
+$coral: rgb(255, 127, 80);
+$indigo: rgb(102, 126, 234);
+$amber: rgb(255, 193, 7);
+$rose: rgb(233, 30, 99);
+$violet: rgb(156, 39, 176);
+
+// Neutral Supporting Colors
+$gray-100: rgb(248, 249, 250);
+$gray-200: rgb(233, 236, 239);
+$gray-300: rgb(206, 212, 218);
+$gray-400: rgb(173, 181, 189);
+$gray-500: rgb(108, 117, 125);
+$gray-600: rgb(73, 80, 87);
+$gray-700: rgb(52, 58, 64);
+$gray-800: rgb(33, 37, 41);
+$gray-900: rgb(13, 27, 42);
+
+// Map of all colors for easy use
+$pkic-colors-map: (
+  "green": $green,
+  "orange": $orange,
+  "blue": $blue,
+  "yellow": $yellow,
+  "red": $red,
+  "purple": $purple,
+  "green-light": $green-light,
+  "green-dark": $green-dark,
+  "green-pale": $green-pale,
+  "green-deep": $green-deep,
+  "orange-light": $orange-light,
+  "orange-dark": $orange-dark,
+  "orange-pale": $orange-pale,
+  "orange-deep": $orange-deep,
+  "blue-light": $blue-light,
+  "blue-dark": $blue-dark,
+  "blue-pale": $blue-pale,
+  "blue-deep": $blue-deep,
+  "yellow-light": $yellow-light,
+  "yellow-dark": $yellow-dark,
+  "yellow-pale": $yellow-pale,
+  "yellow-deep": $yellow-deep,
+  "red-light": $red-light,
+  "red-dark": $red-dark,
+  "red-pale": $red-pale,
+  "red-deep": $red-deep,
+  "purple-light": $purple-light,
+  "purple-dark": $purple-dark,
+  "purple-pale": $purple-pale,
+  "purple-deep": $purple-deep,
+  "teal": $teal,
+  "coral": $coral,
+  "indigo": $indigo,
+  "amber": $amber,
+  "rose": $rose,
+  "violet": $violet,
+  "gray-100": $gray-100,
+  "gray-200": $gray-200,
+  "gray-300": $gray-300,
+  "gray-400": $gray-400,
+  "gray-500": $gray-500,
+  "gray-600": $gray-600,
+  "gray-700": $gray-700,
+  "gray-800": $gray-800,
+  "gray-900": $gray-900,
+);
+
+// Map Bootstrap's theme colors to your custom colors
+$primary: $green;
+$secondary: $gray-600;
+$success: $green;
+$info: $blue;
+$warning: $yellow;
+$danger: $red;
+$light: $gray-100;
+$dark: $gray-800;
+
+// Override Bootstrap link colors
+$link-color: $primary;
+$link-hover-color: $primary;
+
+// Enable negative margins utility classes
+$enable-negative-margins: true;
+
+// Import Bootstrap after all custom variables and overrides
+@import "bootstrap/variables";
+@import "bootstrap/bootstrap";
+
+// CSS Custom Properties for easy use
+:root {
+  // Use Sass variables to define CSS custom properties
+  @each $name, $value in $pkic-colors-map {
+    --#{$name}: #{$value};
+  }
+}
+
+// --- Custom PKIC Colors for up to 16 Locations ---
+// This map holds all base colors (single colors and former gradient base colors)
+// All locations will now be treated as having a single base color for styling purposes.
+$all-pkic-locations-colors: (
+  "location-0": $green,
+  "location-1": $blue,
+  "location-2": $orange,
+  "location-3": $red,
+  "location-4": $purple,
+  "location-5": $teal,
+  "location-6": $indigo,
+  "location-7": $coral,
+  "location-8": $amber,
+  "location-9": $violet,
+  "location-10": $green-light,
+  "location-11": $blue-light,
+  "location-12": $orange-light,
+  "location-13": $red-light,
+  "location-14": $purple-light,
+  "location-15": $rose,
+);
+
+// Function to get the base color for any location
+@function pkic-color($key) {
+  @if map-has-key($all-pkic-locations-colors, $key) {
+    @return map-get($all-pkic-locations-colors, $key);
+  } @else {
+    @return null;
+  }
+}
+
+// --- General Styles ---
+
+// import font(s)
+@import url(https://fonts.googleapis.com/css?family=Roboto:400,300,700);
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  scroll-margin-top: 60px;
+}
+div {
+  scroll-margin-top: 150px;
+}
+
+html,
+body {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  font-family: 'Roboto', sans-serif !important;
+}
+
+table {
+  @extend .table;
+  @extend .table-bordered;
+  @extend .table-striped;
+  @extend .table-hover;
+
+  text-align: left;
+  width: 100%;
+  margin-top: 1.6em;
+}
+
+thead {
+  @extend .table-dark;
+}
+
+main {
+  flex: 1;
+}
+
+#sidebar {
+  color: rgba(107, 107, 107, 0.849);
+}
+
+#sidebar a {
+  color: currentColor;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FOOTER  — unified enterprise design
+// ═══════════════════════════════════════════════════════════════════════════
+
+#site-footer {
+  background: #000;
+}
+

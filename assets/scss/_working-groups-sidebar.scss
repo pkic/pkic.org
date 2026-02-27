@@ -1,0 +1,450 @@
+// ─── Card footer — date range ─────────────────────────────────────────────
+.person-card-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  margin-top: auto;
+  padding: 0.5rem 0 0.65rem;
+  border-top: 1px solid $gray-100;
+  font-size: 0.7rem;
+  color: $gray-400;
+
+  svg { flex-shrink: 0; opacity: 0.6; }
+}
+
+.person-card-footer-label {
+  font-weight: 600;
+  color: $gray-500;
+}
+
+.person-card-footer-dates {
+  color: $gray-400;
+}
+
+// ── Person card: compact mode (sidebar / WG leadership) ──────────────────────
+// Used by leader-card.html partial and WG section sidebar.
+// Horizontal layout, 48px avatar, no ring, fills its container width.
+
+.person-card-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: #fff;
+  border: 1px solid $gray-200;
+  border-radius: 0.65rem;
+  width: 100%;
+  transition: box-shadow 0.15s, border-color 0.15s;
+
+  &:hover {
+    box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    border-color: $gray-300;
+  }
+}
+
+.person-card-compact-avatar-wrap {
+  flex-shrink: 0;
+}
+
+.person-card-compact-avatar {
+  display: block;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(0,0,0,0.07);
+
+  &--initials {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: #fff;
+    letter-spacing: -0.02em;
+    border: none;
+    background: var(--page-accent, var(--wg-color, #{$green}));
+  }
+}
+
+.person-card-compact-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.person-card-compact-name-row {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.person-card-compact-name {
+  font-size: 0.88rem;
+  font-weight: 700;
+  color: #111;
+  text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  &:hover { color: $green; }
+}
+
+.person-card-compact-role {
+  display: inline-block;
+  font-size: 0.58rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: #fff;
+  background: $green;
+  border-radius: 99px;
+  padding: 0.1em 0.5em;
+  margin-top: 0.2rem;
+  line-height: 1.5;
+}
+
+.person-card-compact-jobtitle {
+  font-size: 0.72rem;
+  color: $gray-500;
+  line-height: 1.3;
+  margin-top: 0.15rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.person-card-compact-org {
+  margin-top: 0.3rem;
+}
+
+.person-card-compact-org-logo-wrap {
+  display: flex;
+  align-items: center;
+  height: 20px;
+  max-width: 80px;
+  overflow: hidden;
+}
+
+.person-card-compact-org-logo {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: grayscale(1) contrast(0.65) brightness(0.95);
+  transition: filter 0.15s;
+  .person-card-compact:hover & { filter: none; }
+}
+
+// ── Past position cards ───────────────────────────────────────────────────────
+// Past positions use the same {{< leadership-grid >}} + {{< person-card >}} as
+// current positions. Visual differentiation is via .person-card--past (muted bg)
+// and .person-card-avatar-frame--past (grey ring). No separate timeline needed.
+
+
+// ── Theme-colored CTA button (uses --page-accent) ─────────────────────────────
+.btn-page-accent {
+  --bs-btn-color: #fff;
+  --bs-btn-bg: var(--page-accent, #{$green});
+  --bs-btn-border-color: var(--page-accent, #{$green});
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: color-mix(in srgb, var(--page-accent, #{$green}) 85%, #000);
+  --bs-btn-hover-border-color: color-mix(in srgb, var(--page-accent, #{$green}) 85%, #000);
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: color-mix(in srgb, var(--page-accent, #{$green}) 75%, #000);
+  --bs-btn-active-border-color: color-mix(in srgb, var(--page-accent, #{$green}) 75%, #000);
+  --bs-btn-disabled-color: #fff;
+  --bs-btn-disabled-bg: var(--page-accent, #{$green});
+  --bs-btn-disabled-border-color: var(--page-accent, #{$green});
+}
+
+// ── WG Sidebar layout (flexbox, no Bootstrap grid) ───────────────────────────
+
+$sidebar-width: 260px;
+$toggle-width:  1.4rem;
+
+.wg-layout {
+  display: flex;
+  align-items: flex-start;
+  gap: 0;
+
+  @media (max-width: 991px) {
+    display: block;
+  }
+}
+
+// Sidebar wrapper — sticky, self-contained; width transitions open↔collapsed
+// The toggle is position:absolute inside, so the wrapper's width IS the flex dimension,
+// no negative margin tricks needed.
+.wg-sidebar-wrap {
+  position: sticky;
+  top: calc(56px + 44px + 1.5rem);
+  align-self: flex-start;
+  flex-shrink: 0;
+  width: $sidebar-width;
+  max-height: calc(100vh - 180px);
+  overflow-x: hidden;              // clips .wg-sidebar during collapse
+  overflow-y: auto;                // allows sidebar content to scroll
+  transition: width 0.25s ease;
+
+  // Collapsed: shrink to just the toggle button width (not 0)
+  &.is-collapsed {
+    width: $toggle-width;
+  }
+
+  @media (max-width: 991px) { display: none; }
+}
+
+// Toggle — absolutely pinned to top-right of the wrapper
+// Always visible; overlaps the sidebar's right edge like a tab
+.wg-sidebar-toggle {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: $toggle-width;
+  height: 2.8rem;
+  padding: 0;
+  border: none;
+  border-radius: 0 0.4rem 0.4rem 0;
+  background: #1e1e2e;
+  color: rgba(255,255,255,0.35);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+
+  svg { transition: transform 0.25s ease; }
+  &:hover { color: #fff; background: #2a2a3e; }
+
+  @media (max-width: 991px) { display: none; }
+}
+
+// Collapsed state — arrow flips, border-radius becomes fully rounded (standalone pill)
+.wg-sidebar-wrap.is-collapsed .wg-sidebar-toggle {
+  border-radius: 0.4rem;
+  background: #fff;
+  color: rgba(0,0,0,0.35);
+  border: 1px solid rgba(0,0,0,0.15);
+  svg { transform: rotate(180deg); }
+  &:hover { color: rgba(0,0,0,0.75); background: #f0f0f0; }
+}
+
+// Hide nav content when collapsed — only the toggle button remains visible
+.wg-sidebar-wrap.is-collapsed .wg-sidebar {
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.15s ease, visibility 0s 0.15s;
+}
+
+.wg-sidebar-wrap:not(.is-collapsed) .wg-sidebar {
+  visibility: visible;
+  opacity: 1;
+  transition: opacity 0.2s ease 0.1s, visibility 0s;
+}
+
+// Content fills remaining space; left padding = comfortable gap from sidebar
+.wg-main-content {
+  flex: 1;
+  min-width: 0;
+  padding-left: 1.5rem;
+
+  @media (max-width: 991px) { padding-left: 0; }
+}
+
+// ── Nav tree panel (fixed-position, escapes overflow:auto) ────────────────────
+
+.wg-nav-link-wrap {
+  display: flex;
+  align-items: stretch;
+}
+
+.wg-nav-more-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.4rem;
+  border: none;
+  background: transparent;
+  color: rgba(255,255,255,0.5);
+  cursor: pointer;
+  padding: 0;
+  transition: color 0.15s;
+
+  &[aria-expanded="true"] {
+    color: #fff;
+    svg { transform: rotate(180deg); }
+  }
+
+  svg { transition: transform 0.2s ease; }
+  &:hover { color: #fff; }
+}
+
+// Panel positioned by JS via getBoundingClientRect
+.wg-nav-tree-panel {
+  position: fixed;
+  z-index: 500;
+  min-width: 260px;
+  max-width: 320px;
+  max-height: 70vh;
+  overflow-y: auto;
+  background: #16161e;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 0.5rem;
+  padding: 0.75rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+
+  &[hidden] { display: none; }
+}
+
+.wg-sidebar {
+  width: $sidebar-width;
+  background: #16161e;
+  border-radius: 0.5rem;
+  padding: 1rem $toggle-width 1.25rem 0.75rem; // right padding clears the absolute toggle
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+.wg-sidebar-root {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  color: rgba(255,255,255,0.45);
+  padding: 0 0.25rem 0.75rem;
+  margin-bottom: 0.5rem;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  text-decoration: none;
+  transition: color 0.15s;
+
+  &:hover { color: rgba(255,255,255,0.75); }
+  &.is-active { color: var(--wg-color, #7c3aed); }
+}
+
+.wg-sidebar-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.wg-sidebar-section {
+  margin-bottom: 0.15rem;
+}
+
+// Remove default <details>/<summary> marker
+.wg-sidebar-group {
+  summary {
+    list-style: none;
+    &::-webkit-details-marker { display: none; }
+  }
+}
+
+.wg-sidebar-summary {
+  display: flex;
+  align-items: center;
+  border-radius: 0.375rem;
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+  transition: background 0.12s;
+  user-select: none;
+
+  &:hover { background: rgba(255,255,255,0.06); }
+}
+
+.wg-sidebar-link {
+  flex: 1;
+  color: rgba(255,255,255,0.7);
+  text-decoration: none;
+  font-size: 0.875rem;
+  font-weight: 500;
+  line-height: 1.35;
+  transition: color 0.12s;
+
+  &:hover { color: #fff; }
+  &.is-active {
+    color: var(--wg-color, #7c3aed);
+    font-weight: 650;
+  }
+}
+
+// Standalone section links (sections with no children)
+.wg-sidebar-section > .wg-sidebar-link {
+  display: block;
+  border-radius: 0.375rem;
+  padding: 0.3rem 0.5rem;
+  &:hover { background: rgba(255,255,255,0.06); }
+}
+
+.wg-sidebar-chevron {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255,255,255,0.3);
+  transition: color 0.12s;
+  pointer-events: none; // chevron is decorative; clicking summary area toggles
+
+  svg {
+    transition: transform 0.2s ease;
+  }
+}
+
+details[open] > .wg-sidebar-summary .wg-sidebar-chevron svg {
+  transform: rotate(90deg);
+}
+
+// Level-2 children
+.wg-sidebar-children {
+  list-style: none;
+  padding: 0.25rem 0 0.25rem 0.75rem;
+  margin: 0;
+  border-left: 1px solid rgba(255,255,255,0.08);
+
+  li {
+    margin-bottom: 0.05rem;
+
+    > a {
+      display: block;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.3rem;
+      color: rgba(255,255,255,0.55);
+      font-size: 0.8125rem;
+      text-decoration: none;
+      transition: color 0.12s, background 0.12s;
+
+      &:hover {
+        color: rgba(255,255,255,0.85);
+        background: rgba(255,255,255,0.05);
+      }
+
+      &.is-active {
+        color: var(--wg-color, #7c3aed);
+        font-weight: 600;
+      }
+    }
+  }
+}
+
+// Level-3 (nested groups)
+.wg-sidebar-nested .wg-sidebar-summary {
+  padding: 0.2rem 0.5rem;
+
+  .wg-sidebar-link {
+    font-size: 0.8125rem;
+    font-weight: 500;
+  }
+}
+
+.wg-sidebar-level3 {
+  padding-left: 0.75rem;
+  border-left: 1px solid rgba(255,255,255,0.05);
+}
+

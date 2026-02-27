@@ -1,0 +1,436 @@
+// ── Hero SVG logo overlay ────────────────────────────────────────────────
+.hero-logo-wrap {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.92);
+  backdrop-filter: blur(4px);
+  border-radius: 1rem;
+  padding: 1rem 1.75rem;
+  max-width: 280px;
+}
+
+.hero-logo-img {
+  max-width: 200px;
+  max-height: 60px;
+  object-fit: contain;
+  display: block;
+}
+// ─────────────────────────────────────────────────────────────────────────
+
+figure,
+#content > p > img {
+  margin: 1.5rem auto;
+  text-align: center;
+}
+
+figure > img,
+#content > p > img {
+  max-width: 80%;
+}
+
+figcaption,
+figcaption h4 {
+  font-size: 70%;
+  text-align: center !important;
+}
+
+// --- Blockquotes & Callouts ---
+
+// Dark pull-quote card — uses the same navy as the site's hero section
+blockquote {
+  position: relative;
+  margin: 2.5rem 0;
+  padding: 2rem 2.25rem 2.75rem 5rem; // extra bottom for the gradient stripe
+  background: $gray-900;
+  border-radius: 1.25rem;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 16px 48px rgba(0, 0, 0, 0.1);
+  font-size: 1.25em;
+  font-style: italic;
+  font-weight: 400;
+  color: #ffffff;
+  line-height: 1.8;
+  overflow: hidden;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2), 0 24px 64px rgba(0, 0, 0, 0.15);
+  }
+
+  p { color: inherit; }
+  p:last-child { margin-bottom: 0; }
+
+  h4 {
+    color: $green;
+    font-style: normal;
+    font-weight: 500;
+    font-size: 0.75em;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    margin-top: 1rem;
+  }
+}
+
+// Large vivid green " mark — structural accent
+blockquote::before {
+  content: '\201C';
+  position: absolute;
+  top: 1rem;
+  left: 1.5rem;
+  font-size: 5rem;
+  line-height: 1;
+  font-family: Georgia, 'Times New Roman', serif;
+  font-style: normal;
+  font-weight: 900;
+  color: $green;
+  pointer-events: none;
+  user-select: none;
+  display: block;
+}
+
+// Brand-color gradient stripe along the bottom
+blockquote::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(
+    to right,
+    $green,
+    $teal,
+    $blue,
+    $yellow,
+    $orange,
+    $red
+  );
+  border-radius: 0 0 1.25rem 1.25rem;
+}
+
+// Callout warning — functional alert box
+.callout-warning {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.875rem;
+  // Reset all the dark-card blockquote styles
+  background: $red-pale;
+  color: $red-deep;
+  font-size: 0.95rem;
+  font-style: normal;
+  font-weight: 400;
+  padding: 1rem 1.25rem;
+  border-radius: 0.625rem;
+  border: 1px solid rgba($red-dark, 0.3);
+  box-shadow: none;
+  overflow: visible;
+  transition: none;
+  transform: none !important;
+
+  &:hover {
+    transform: none !important;
+    box-shadow: none;
+  }
+
+  // Reset the decorative " from blockquote::before
+  &::before {
+    content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='%23b02a37' viewBox='0 0 16 16'%3E%3Cpath d='M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.146.146 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.163.163 0 0 1-.054.06.116.116 0 0 1-.066.017H1.146a.115.115 0 0 1-.066-.017.163.163 0 0 1-.054-.06.176.176 0 0 1 .002-.183L7.884 2.073a.147.147 0 0 1 .054-.057zm1.044-.45a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566z'/%3E%3Cpath d='M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995z'/%3E%3C/svg%3E") !important;
+    position: static !important;
+    top: unset !important;
+    left: unset !important;
+    font-size: 1rem !important;
+    color: inherit !important;
+    opacity: 1 !important;
+    font-family: inherit;
+    background: none;
+    display: block;
+    flex-shrink: 0;
+    line-height: 1;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  &::after { content: none; }
+
+  p:last-child { margin-bottom: 0; }
+}
+
+// Info: dark pull-quote card with yellow icon accent — same style as blockquote
+.callout-info {
+  background: $gray-900;
+  color: #ffffff;
+  font-size: 1.35em;
+  font-style: normal;
+  font-weight: 400;
+  display: block;
+  margin: 1.5rem 0;
+  padding: 1.1rem 2.25rem 1.75rem 6.5rem;
+  border-radius: 1.25rem;
+  border: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 16px 48px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+
+  &:hover {
+    transform: none !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 16px 48px rgba(0, 0, 0, 0.1);
+  }
+
+  p { color: inherit; }
+  p:last-child { margin-bottom: 0; }
+  a { color: #ffffff !important; text-decoration: underline; text-underline-offset: 2px; }
+  a:hover { color: rgba(255, 255, 255, 0.85) !important; }
+
+  // Large filled yellow info circle — absolute positioned like the " mark
+  &::before {
+    content: '' !important;
+    position: absolute !important;
+    top: 1.25rem !important;
+    left: 1.5rem !important;
+    width: 3rem;
+    height: 3rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48' fill='%23ffc000' viewBox='0 0 16 16'%3E%3Cpath d='M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16zm.93-9.412-1 4.705c-.07.34.029.533.304.533.194 0 .487-.07.686-.246l-.088.416c-.287.346-.92.598-1.465.598-.703 0-1.002-.422-.808-1.319l.738-3.468c.064-.293.006-.399-.287-.47l-.451-.081.082-.381 2.29-.287zM8 5.5a1 1 0 1 1 0-2 1 1 0 0 1 0 2z'/%3E%3C/svg%3E") !important;
+    background-size: contain;
+    background-repeat: no-repeat;
+    font-size: 0 !important;
+    line-height: 0 !important;
+    display: block;
+    font-family: inherit;
+    color: inherit !important;
+    opacity: 1 !important;
+    pointer-events: none;
+    user-select: none;
+  }
+
+  // Yellow gradient stripe at the bottom
+  &::after {
+    content: '' !important;
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(to right, $yellow-dark, $yellow, $orange);
+    border-radius: 0 0 1.25rem 1.25rem;
+    display: block;
+  }
+}
+
+.highlight > pre {
+  padding: 1.5rem;
+}
+
+// H2: gradient text from accent → accent-2, creating visual interest without a solid color wall
+main h2 {
+  font-size: 1.5em;
+  font-weight: 700 !important;
+  background: linear-gradient(120deg, var(--page-accent), var(--page-accent-2));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  margin-top: 2em;
+  margin-bottom: 0.35em;
+  padding-top: 0;
+
+  // Fallback for browsers that don't support background-clip: text
+  @supports not (-webkit-background-clip: text) {
+    color: var(--page-accent, #{$green});
+    background: none;
+  }
+}
+
+// H3: solid companion color — muted, never alarming
+main h3 {
+  font-size: 1.15em;
+  font-weight: 600 !important;
+  color: var(--page-accent-2, #{$blue-dark});
+  margin-top: 1.5em;
+  margin-bottom: 0.25em;
+  padding-top: 0;
+}
+
+main h4 {
+  font-size: 1em;
+  font-weight: 600 !important;
+  color: $gray-600;
+  margin-top: 1.25em;
+  margin-bottom: 0.2em;
+  padding-top: 0;
+}
+
+main h5 {
+  font-size: 0.9em;
+  font-weight: 600 !important;
+  color: $gray-500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-top: 1em;
+}
+
+main h6 {
+  font-size: 0.85em;
+  font-weight: 600 !important;
+  color: $gray-500;
+  margin-top: 0.75em;
+}
+
+// Anchor link icon on headings
+main .header-link {
+  opacity: 0;
+  margin-left: 0.3em;
+  color: var(--page-accent, #{$green});
+  transition: opacity 0.15s;
+  vertical-align: middle;
+  text-decoration: none !important;
+}
+main :is(h2,h3,h4):hover .header-link {
+  opacity: 0.6;
+}
+
+// Body-copy links: brush-stroke underline with shimmer on hover.
+// Scoped to #content so it never affects navbars, sidebars, related-topic panels, etc.
+// At rest: a very faint 1px hint — just enough to read as a link, not enough to crowd a list.
+// On hover: the stroke sweeps to full width and brightens, then a light glint races across it.
+#content a:not(.btn):not([class]):not(:has(img)) {
+  position: relative;
+  color: color-mix(in srgb, var(--page-accent) 55%, #1a2332);
+  text-decoration: none;
+  padding-bottom: 4px;
+  background-image: linear-gradient(
+    103deg,
+    color-mix(in srgb, var(--page-accent) 18%, transparent) 0%,
+    color-mix(in srgb, var(--page-accent) 5%, transparent) 60%,
+    transparent 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 60% 1px;     // barely-there hint at rest
+  background-position: 0 100%;
+  transition: background-size 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+              background-image 0.2s ease,
+              color 0.2s ease;
+
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: -20%;
+    width: 25%;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      color-mix(in srgb, var(--page-accent) 90%, white) 40%,
+      white 60%,
+      transparent
+    );
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &:hover {
+    color: color-mix(in srgb, var(--page-accent) 80%, #1a2332);
+    background-image: linear-gradient(
+      103deg,
+      color-mix(in srgb, var(--page-accent) 55%, transparent) 0%,
+      color-mix(in srgb, var(--page-accent) 20%, transparent) 65%,
+      transparent 100%
+    );
+    background-size: 108% 2px;
+
+    &::after {
+      animation: link-shimmer 0.55s 0.35s ease-in-out forwards;
+    }
+  }
+}
+
+@keyframes link-shimmer {
+  0%   { left: -20%; opacity: 0; }
+  10%  { opacity: 1; }
+  90%  { opacity: 1; }
+  100% { left: 110%; opacity: 0; }
+}
+
+// Marquee outer wrapper — overflow is already clipped by the parent .members
+.banner {
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+// Infinite-scroll track — created + populated by JS on each page-load
+.banner-track {
+  display: inline-flex;
+  align-items: center;
+  white-space: nowrap;
+  // Duration is overridden by JS to match actual content width (~80 px/s)
+  animation: member-marquee 80s linear infinite;
+  will-change: transform;
+}
+
+// Each of the two identical copies that make the loop seamless
+.banner-copy {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+@include media-breakpoint-up(xs) {
+  .agenda-time {
+    width: 90px;
+    min-width: 90px;
+    max-width: 90px;
+  }
+
+  .agenda-content {
+    width: auto;
+    min-width: 260px;
+    flex: 1;
+  }
+}
+
+@include media-breakpoint-up(lg) {
+  .agenda-time {
+    width: 100px;
+    min-width: 100px;
+    max-width: 100px;
+  }
+
+  .agenda-content {
+    width: auto;
+    min-width: 280px;
+    flex: 1;
+  }
+}
+
+#agenda-tabs .nav-link {
+  background: var(--bs-success-bg-subtle);
+}
+#agenda-tabs .active {
+  background: var(--bs-light);
+  font-weight: bold;
+}
+
+@keyframes member-marquee {
+  from { transform: translateX(0); }
+  to   { transform: translateX(-50%); }
+}
+
+@media (min-width: 768px) {
+  .bd-placeholder-img-lg {
+    font-size: 3.5rem;
+  }
+}
+
+self-assessment {
+  --pkimm-sticky-top-offset: calc(56px + 44px + 1.5rem);; // navbar (57px) + wg-section-nav (44px)
+
+  .pkimm-tabs {
+    z-index: 150 !important; // below wg-section-nav (200) so its dropdowns render on top
+  }
+}
+
+@import "agenda";
+@import "sponsors";
+@import "session-registration";
+@import "bento";
+@import "blog";
+
