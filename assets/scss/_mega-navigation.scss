@@ -21,6 +21,12 @@
   .navbar-toggler {
     border-color: rgba(255,255,255,0.25);
     color: rgba(255,255,255,0.75);
+    // Force the hamburger icon to use white strokes (Bootstrap defaults to a dark SVG)
+    --bs-navbar-toggler-icon-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255%2C 255%2C 255%2C 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
+  }
+
+  .navbar-toggler-icon {
+    background-image: var(--bs-navbar-toggler-icon-bg);
   }
 
   .dropdown-menu {
@@ -408,5 +414,39 @@
   font-size: 0.9rem;
   text-align: center;
   margin-top: 2rem;
+}
+
+
+// ─── Mobile: disable mega panels below the lg navbar breakpoint ───────────
+// Below lg (991.98px) the navbar collapses to the hamburger menu.
+// The fixed mega panels don't work on mobile, so we hide them entirely
+// and remove the chevron triggers — the plain nav links in the
+// collapsed menu are sufficient.
+@media (max-width: 991.98px) {
+  // Hide the disclosure chevrons — they only open the desktop mega panel
+  .pkic-mega-chevron { display: none !important; }
+
+  // Keep the panels and backdrop entirely out of the flow / paint
+  .pkic-mega-panel,
+  .pkic-mega-backdrop { display: none !important; }
+
+  // Ensure the mobile navbar has comfortable padding and the container
+  // doesn't exceed the viewport, eliminating the white strip on the right
+  .pkic-navbar {
+    .container {
+      padding-left: 1rem;
+      padding-right: 1rem;
+    }
+  }
+
+  // Collapsed nav: give items a little breathing room
+  #navbarContent {
+    padding: 0.5rem 0 0.75rem;
+
+    .nav-link {
+      padding: 0.55rem 0.5rem;
+      border-radius: 0.35rem;
+    }
+  }
 }
 

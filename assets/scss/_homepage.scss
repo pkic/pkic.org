@@ -5,7 +5,7 @@
 .pkic-home-hero {
   background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 45%, #0a2f40 100%);
   color: #fff;
-  padding: 5rem 0 4rem;
+  padding: 3rem 0 2.5rem;
 
   @media (min-width: 992px) {
     padding: 6rem 0 5rem;
@@ -174,8 +174,13 @@
 .pkic-join-cta {
   background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 100%);
   color: #fff;
-  padding-top: 5rem;
-  padding-bottom: 5rem;
+  padding-top: 3rem;
+  padding-bottom: 3rem;
+
+  @media (min-width: 992px) {
+    padding-top: 5rem;
+    padding-bottom: 5rem;
+  }
 
   // Override the gradient-text rule applied to all main h2 elements
   h2 {
