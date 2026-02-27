@@ -1,0 +1,58 @@
+id: telia
+name: Telia Company AB
+slogan:
+website: https://cps.trust.telia.com
+
+# Short description, longer content can be placed in `content/members/`
+description: 
+
+# membership
+memberSince: 2026-02-05
+memberType: A
+workingGroups:
+  - CA
+  - CM
+  - PKIMM
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Antti Backman
+    role: Security and Compliance Manager, Telia Certificate Authority
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/antti-backman-aab9332/
+    description: Antti is the Security and Compliance Manager, Telia Certificate Authority at Telia Company AB and represents the organization at the PKI Consortium.
