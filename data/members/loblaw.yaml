@@ -1,0 +1,57 @@
+id: loblaw
+name: Loblaw Companies Limited
+slogan:
+website: https://loblaw.ca
+
+# Short description, longer content can be placed in `content/members/`
+description: At Loblaw, we’ve innovated the grocery retail experience to better serve Canadians. We make good food affordable. Health, beauty and wellness accessible. Saving for the future possible. And essential style achievable. 
+
+# membership
+memberSince: 2026-02-05
+memberType: H3
+workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press: 
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  twitter: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Sonam Devgan Kaul
+    role: Lead, Cryptographic Governance
+    social:
+      twitter: 
+      linkedin: https://www.linkedin.com/in/sonam-devgan-kaul-a1167953
+    description: Sonam Devgan is the Lead, Cryptographic Governance at Loblaw Companies Limited and represents the organization at the PKI Consortium.
