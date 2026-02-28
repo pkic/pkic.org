@@ -4,7 +4,7 @@ summary: |
     The PKI Consortium is proud to announce that IBM — a valued member since January 2024 — has become our first Diamond Sponsor. This milestone reflects IBM's deep commitment to advancing Public Key Infrastructure and accelerating the global transition to Post-Quantum Cryptography. IBM's support helps sustain the Consortium's working groups, research initiatives, global education programs, and the world's largest dedicated Post-Quantum Cryptography Conference.
 authors:
 - PKI Consortium
-date: 2026-03-01T08:00:00+00:00
+date: 2026-03-03T08:00:00+00:00
 keywords: [IBM, Diamond Sponsor, Sponsorship, PKI Consortium, Post-Quantum Cryptography, PQC, Quantum-Safe, Crypto-Agility, Digital Trust]
 tags: [IBM, Sponsorship, PQC, Post-Quantum Cryptography, PKI]
 ---
