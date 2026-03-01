@@ -4,7 +4,7 @@ slogan: Securing Tomorrow, Today
 website: https://www.qtrinolabs.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: QTrino labs is dedicated to ensure that your critical and valuable assets remain protected today as well as tomorrow in the quantum era.
+description: Built for regulated environment and long-lived confidentiality requirements.
 
 # membership
 memberSince: 2025-03-07
@@ -50,12 +50,12 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name : Mr. Atul Sharma
-    role : Chief Executive Officer (CEO)
+  - name : Atul Sharma
+    role : Chief Executive Officer
     social :
       linkedin : https://www.linkedin.com/in/atul-sharma-00b8331/
     description : Atul brings 20+ years of leadership across cybersecurity, risk management, and digital trust. With deep roots in cryptography and PKI from his early work at VeriSign, he has built and scaled security platforms as CEO of Custodela (acquired by Checkmarx). At QTrino, he bridges cryptography, cloud security, and business outcomes for regulated enterprises.
-  - name: Prof. (Dr.) Jawar Singh
+  - name: Prof Jawar Singh
     role: Director 
     social:
       x: 
@@ -64,21 +64,20 @@ representatives:
   - name: Abhishek Sriwastav
     role: Chief Technology Officer - Software Products
     social:
-      linkedin: linkedin:https://www.linkedin.com/in/abhishek-sriwastav/
-    description: Abhishek Sriwastav is the Chief Technology Officer at QTrino Labs Pvt. Ltd., and is dedicated to building secure, quantum-resilient solutions that empower organizations to stay future-ready. Backed by Startup India and StartUp Bihar, QTrino is at the forefront of innovation in post-quantum cryptography, driving advancements in secure communication and data management. QTrino is recognized by the National Quantum Mission, Government of India, and the National Working Group on Quantum Technology, Telecommunication Engineering Centre - Government of India, for its innovative contributions in creating the quantum-proof ecosystem.
-      
-      Abhishek is passionate about blending his expertise in Quantum Resilient Cryptography, Cybersecurity, Artificial Intelligence, and Machine Learning, to solve complex, real-world problems. He thrives on transforming technical challenges into scalable and reliable solutions, ensuring organizations stay protected from emerging security threats of the future.
+      x:
+      linkedin: https://www.linkedin.com/in/abhishek-sriwastav/
+    description: Abhishek builds secure, quantum-resilient solutions to help organizations stay future-ready. At QTrino Labs, he combines expertise in post-quantum cryptography, cybersecurity, AI, and ML to deliver scalable, reliable protection against emerging threats. Abhishek is passionate about blending his expertise in Quantum Resilient Cryptography, Cybersecurity, Artificial Intelligence, and Machine Learning, to solve complex, real-world problems. He thrives on transforming technical challenges into scalable and reliable solutions, ensuring organizations stay protected from emerging security threats of the future.
   - name: Abhraneel Saha
     role: Chief Product Officer
     social:
-      linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
-    description: Abhraneel Saha is the Chief Product Officer at QTrino Labs Pvt. Ltd., He is passionate about the intersection of AI and chip design, with experience in machine learning and FPGA design. 
+      linkedin: https://www.linkedin.com/in/abhraneel-saha-724512230/
+    description: Abhraneel Saha is a product leader focused on building quantum-resilient technologies that address real-world security challenges. As Chief Product Officer at QTrino Labs, he bridges deep technical innovation in post-quantum cryptography with market needs, delivering scalable, future-ready security products that drive enterprise trust and long-term growth. 
       
       He is involved in quantum-safe cryptographic solutions and actively researching the integration of AI and hardware to develop innovative solutions in this domain. Beyond my academic pursuits, I enjoy reading and sharing insights on science, philosophy, and music. 
   - name: Partha Sarathi Dutta
     role: Chief Technology Officer - Hardware Products
     social:
-      linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
-    description: Partha S. Dutta serves as Chief Technology Office at QTrino Labs Pvt. Ltd., He is passionate and driven VLSI Design Engineer with experience in Analog and Digital domains. 
+      linkedin: https://www.linkedin.com/in/ps-dutta1092/
+    description: Partha is passionate and driven VLSI Design Engineer with experience in Analog and Digital domains. 
      
      Adept at translating complex algorithms into optimized hardware architectures. Strong foundation in digital design principles and hands-on experience in FPGA and ASIC development.
