@@ -4,7 +4,7 @@ slogan:
 website: 
 
 # Short description, longer content can be placed in `content/members/`
-description: I lead the PQC at Allianz, and am currently PhD student at KU Leuven studying PQC.
+description: Leila Taghizadeh is a PhD student at KU Leuven studying Post-Quantum Cryptography (PQC) and leads PQC at Allianz.
 
 # membership
 memberSince: 2026-02-05
@@ -54,4 +54,4 @@ representatives:
     social:
       x:
       linkedin: https://www.linkedin.com/in/leilanova/
-    description: Leila is the PhD candidate at KU Leuven university and represents the organization at the PKI Consortium.
+    description: As a PhD candidate at KU Leuven university, Leila contributes to the PKI Consortium with her expertise in Post-Quantum Cryptography.
