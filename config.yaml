@@ -35,7 +35,7 @@ taxonomies:
   author: authors
 
 ignoreFiles:
-  - data/members/AGENTS\.md$
+  - AGENTS\.md$
 
 # disableKinds:
 #   - RSS
