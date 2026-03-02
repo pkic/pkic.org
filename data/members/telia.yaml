@@ -4,7 +4,7 @@ slogan:
 website: https://cps.trust.telia.com
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Telia Company AB is a leading Nordic and Baltic digital communications provider headquartered in Sweden.
 
 # membership
 memberSince: 2026-02-05
@@ -42,8 +42,8 @@ social:
   x: 
   facebook: 
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/company/teliacompany/
+  youtube: https://www.youtube.com/@TeliaCompany
 
 # Here you can list those who represent or have represented the member.
 #
