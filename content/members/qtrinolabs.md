@@ -9,8 +9,6 @@ title: QTrino Labs
 
 QTrino Labs combines applied cryptography research with enterprise security execution to help organizations transition to quantum-safe operations with measurable risk reduction and audit-ready governance.
 
-**Built for regulated environment and long-lived confidentiality requirements.**
-
 ## Post-quantum readiness is not an algorithm swap. It is a governance and sequencing challenge.
 
 Regulated enterprises face a three-layer cryptographic governance problem — and most are dealing with all three at once.
