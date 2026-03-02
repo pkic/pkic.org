@@ -1,10 +1,10 @@
-id: kuleuven
-name: KU Leuven **Website**:
+id: leila-taghizadeh
+name: Leila Taghizadeh
 slogan:
 website: 
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: I lead the PQC at Allianz, and am currently PhD student at KU Leuven studying PQC.
 
 # membership
 memberSince: 2026-02-05
@@ -38,7 +38,7 @@ careers:
 
 # Social media
 social:
-  twitter: 
+  x:
   facebook: 
   instagram: 
   linkedin: 
@@ -52,6 +52,6 @@ representatives:
   - name: Leila Taghizadeh
     role: PhD candidate at LU Leuven
     social:
-      twitter: 
+      x:
       linkedin: https://www.linkedin.com/in/leilanova/
-    description: Leila is the PhD candidate at LU Leuven at KU Leuven **Website**: and represents the organization at the PKI Consortium.
+    description: Leila is the PhD candidate at KU Leuven at KU Leuven and represents the organization at the PKI Consortium.
