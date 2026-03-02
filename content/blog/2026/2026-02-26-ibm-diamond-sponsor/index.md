@@ -1,17 +1,17 @@
 ---
-title: "IBM Becomes the PKI Consortium's First Diamond Sponsor"
+title: "IBM Becomes a Diamond Sponsor of the  PKI Consortium"
 summary: |
-    The PKI Consortium is proud to announce that IBM — a valued member since January 2024 — has become our first Diamond Sponsor. This milestone reflects IBM's deep commitment to advancing Public Key Infrastructure and accelerating the global transition to Post-Quantum Cryptography. IBM's support helps sustain the Consortium's working groups, research initiatives, global education programs, and the world's largest dedicated Post-Quantum Cryptography Conference.
+    The PKI Consortium is proud to announce that IBM — a valued member since January 2024 — has become a Diamond Sponsor. This milestone reflects IBM's deep commitment to advancing Public Key Infrastructure and accelerating the global transition to Post-Quantum Cryptography. IBM's support helps sustain the Consortium's working groups, research initiatives, global education programs, and the world's largest dedicated Post-Quantum Cryptography Conference.
 authors:
 - PKI Consortium
-date: 2026-03-03T08:00:00+00:00
+date: 2026-03-01T12:00:00+00:00
 keywords: [IBM, Diamond Sponsor, Sponsorship, PKI Consortium, Post-Quantum Cryptography, PQC, Quantum-Safe, Crypto-Agility, Digital Trust]
 tags: [IBM, Sponsorship, PQC, Post-Quantum Cryptography, PKI]
 ---
 
 {{< figure src="/images/members/ibm/ibm.svg" alt="IBM" width="200" >}}
 
-The PKI Consortium is proud to announce that **IBM** has become our first **Diamond Sponsor**, marking a significant milestone in the continued growth and global impact of our community.
+The PKI Consortium is proud to announce that **IBM** has become a **Diamond Sponsor**, marking a significant milestone in the continued growth and global impact of our community.
 
 IBM has been an active member of the PKI Consortium since **January 2024**, contributing to our working groups and supporting Consortium initiatives over the past two years. Becoming our Diamond Sponsor reflects a deepened commitment to the mission of advancing Public Key Infrastructure and accelerating the global transition to Post-Quantum Cryptography (PQC).
 
