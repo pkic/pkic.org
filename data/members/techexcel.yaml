@@ -1,7 +1,7 @@
 id: techexcel
 name: TechExcel Inc.
 slogan:
-website: http://www.techexcel.com/
+website: https://www.techexcel.com/
 
 # Short description, longer content can be placed in `content/members/`
 description: TechExcel bridges the gap between product development and service/support with a unified platform for ALM, ITSM and customer support.
@@ -21,7 +21,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://techexcel.com/news-events/
   feed: https://techexcel.com/feed/
   language: en_US
 
@@ -39,11 +39,11 @@ careers:
 
 # Social media
 social:
-  x:
-  facebook: 
+  x: https://x.com/techexcel
+  facebook: https://www.facebook.com/TechExcel/
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/company/techexcel/
+  youtube: https://www.youtube.com/user/TechExcelTV
 
 # Here you can list those who represent or have represented the member.
 #
