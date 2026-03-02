@@ -4,7 +4,7 @@ slogan:
 website: https://loblaw.ca
 
 # Short description, longer content can be placed in `content/members/`
-description: At Loblaw, we’ve innovated the grocery retail experience to better serve Canadians. We make good food affordable. Health, beauty and wellness accessible. Saving for the future possible. And essential style achievable. 
+description: Loblaw Companies Limited is a Canadian retailer with corporate and franchised supermarkets under various banners, as well as pharmacies, banking, and apparel services.
 
 # membership
 memberSince: 2026-02-05
@@ -38,11 +38,11 @@ careers:
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x: https://x.com/loblawco
+  facebook: https://www.facebook.com/LoblawCompaniesLimited
+  instagram: https://www.instagram.com/loblawco/
+  linkedin: https://www.linkedin.com/company/loblaw-companies-limited
+  youtube: https://www.youtube.com/LoblawCompaniesLtd
 
 # Here you can list those who represent or have represented the member.
 #
@@ -54,4 +54,4 @@ representatives:
     social:
       x: 
       linkedin: https://www.linkedin.com/in/sonam-devgan-kaul-a1167953
-    description: Sonam Devgan is the Lead, Cryptographic Governance at Loblaw Companies Limited and represents the organization at the PKI Consortium.
+    description: Sonam Devgan Kaul is the Lead, Cryptographic Governance at Loblaw Companies Limited and represents the organization at the PKI Consortium.
