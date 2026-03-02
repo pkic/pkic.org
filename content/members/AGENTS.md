@@ -1,0 +1,2 @@
+- **Neutrality:** All company and member descriptions must be objective.
+- **Tone:** Factual only. Reduce promotional "hype" (e.g., "market-leading").
