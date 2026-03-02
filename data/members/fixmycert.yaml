@@ -4,8 +4,7 @@ slogan:
 website: https://fixmycert.com
 
 # Short description, longer content can be placed in `content/members/`
-description: Learn PKI, SSL/TLS, and certificate management through free interactive demos. No paywalls, no signup required.
-
+description: Interactive PKI education and compliance resources for practitioners. Learn PKI, SSL/TLS, and certificate management through free interactive demos, guides, and troubleshooting tools — no paywalls, no signup required.
 # membership
 memberSince: 2026-02-05
 memberType: G
@@ -19,7 +18,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://trustthechain.com
   feed: 
   language: en_US
 
