@@ -34,6 +34,9 @@ taxonomies:
   series: series
   author: authors
 
+ignoreFiles:
+  - AGENTS\.md$
+
 # disableKinds:
 #   - RSS
 #   - taxonomyTerm
