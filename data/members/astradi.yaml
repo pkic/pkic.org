@@ -1,10 +1,10 @@
 id: astradi
 name: Astradi GmbH
-slogan:
+slogan: PQC. Done Right.
 website: https://astradi.com
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Astradi is a provider of post-quantum cryptography (PQC) solutions, dedicated to securing digital communication and data against the threat of quantum computers.
 
 # membership
 memberSince: 2026-02-23
@@ -21,7 +21,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://astradi.com/news/
   feed: https://astradi.com/en/feed/
   language: en_US
 
@@ -42,7 +42,7 @@ social:
   x: 
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/astradi-gmbh/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
