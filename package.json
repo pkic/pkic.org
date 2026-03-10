@@ -18,17 +18,9 @@
     "check:max-lines": "node scripts/check-max-lines.mjs",
     "check": "npm run typecheck && npm run test && npm run check:max-lines",
     "wrangler:types": "npx wrangler types",
-    "seed:local": "npx wrangler d1 migrations apply pkic-db --local && npm run seed:admin:local && npm run seed:event:local && npm run seed:templates:local",
-    "seed:remote": "npx wrangler d1 migrations apply pkic-db --remote && npm run seed:admin:remote && npm run seed:event:remote && npm run seed:templates:remote",
-    "seed:admin": "node scripts/seed-initial-admin.mjs",
-    "seed:admin:local": "node scripts/seed-initial-admin.mjs --local",
-    "seed:admin:remote": "node scripts/seed-initial-admin.mjs --remote",
-    "seed:templates": "node scripts/seed-email-templates.mjs",
-    "seed:templates:local": "node scripts/seed-email-templates.mjs --local",
-    "seed:templates:remote": "node scripts/seed-email-templates.mjs --remote",
-    "seed:event": "node scripts/seed-event.mjs",
-    "seed:event:local": "node scripts/seed-event.mjs --local",
-    "seed:event:remote": "node scripts/seed-event.mjs --remote"
+    "seed:local": "node scripts/seed.mjs --local",
+    "seed:preview": "node scripts/seed.mjs --preview",
+    "seed:production": "node scripts/seed.mjs --production"
   },
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",
