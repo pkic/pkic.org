@@ -26,7 +26,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
   });
 
   if (magic.token && magic.admin) {
-    const magicLinkUrl = `${appBaseUrl}/admin/auth/verify?token=${encodeURIComponent(magic.token)}`;
+    const magicLinkUrl = `${appBaseUrl}/admin/?token=${encodeURIComponent(magic.token)}`;
     const outboxId = await queueEmail(context.env.DB, {
       templateKey: "admin_magic_link",
       recipientEmail: magic.admin.email,
