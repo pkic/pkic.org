@@ -73,6 +73,8 @@ representatives:
       linkedin: https://www.linkedin.com/in/neal-fuerst-a40411/
     description: Neal Fuerst is a well-seasoned cyber-security consultant and business strategist with over 30 years of experience working in both the public and private sectors. He is frequently called on to lead discussions and seminars on topics including FedRAMP, CMMC, PKI Audit procedures, basic cryptography, and PKI technology. Neal has been a key contributor to many federal policies and procedures and has many years of experience teaching students about the technology and policy compliance. Neal serves as the Chairman of the PKIC Training and Certification Working Group.
 
+# Long-form content (markdown)
+title: Keyfactor
 content: |
   ## The machine and IoT identity platform for modern enterprises
 
