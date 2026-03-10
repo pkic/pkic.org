@@ -60,7 +60,9 @@
         "MAGIC_LINK_TTL_MINUTES": "15",
         "MANAGE_TOKEN_TTL_HOURS": "48",
         "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
-        "SPEAKER_UPLOAD_DEADLINE_DAYS": "21"
+        "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
+        "FROM_EMAIL": "noreply@pkic.org",
+        "FROM_NAME": "PKI Consortium (Preview)"
       }
     }
   },
@@ -72,12 +74,12 @@
     "MAGIC_LINK_TTL_MINUTES": "15",
     "MANAGE_TOKEN_TTL_HOURS": "48",
     "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
-    "SPEAKER_UPLOAD_DEADLINE_DAYS": "21"
+    "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
+    "FROM_EMAIL": "noreply@pkic.org",
+    "FROM_NAME": "PKI Consortium"
   }
   // ── Secrets (set via: wrangler secret put <NAME>) ──────────────────────────
   // SENDGRID_API_KEY        — SendGrid API key for sending emails
-  // FROM_EMAIL              — Sender email address
-  // FROM_NAME               — Sender display name
   // INTERNAL_SIGNING_SECRET — Secret used for hashing IP / user-agent
   // ADMIN_API_KEY           — Long-lived API key for headless admin access & stats
   //                           (used by the admin UI and automated reporting)
