@@ -431,6 +431,7 @@ function parseArgs(argv) {
   const parsed = {
     mode: "local",
     database: process.env.D1_DATABASE_NAME ?? "pkic-db",
+    wranglerEnv: null,
     configPath: DEFAULT_CONFIG_PATH,
     bucket: DEFAULT_BUCKET,
     adminEmail: DEFAULT_ADMIN_EMAIL,
@@ -452,6 +453,12 @@ function parseArgs(argv) {
 
     if (arg === "--db" && next) {
       parsed.database = next;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--env" && next) {
+      parsed.wranglerEnv = next;
       index += 1;
       continue;
     }
@@ -545,6 +552,7 @@ function ensureAdminExists(cli) {
     "d1",
     "execute",
     cli.database,
+    ...(cli.wranglerEnv ? ["--env", cli.wranglerEnv] : []),
     cli.mode === "remote" ? "--remote" : "--local",
     "--command",
     `SELECT id FROM users WHERE normalized_email = ${sqlString(cli.adminEmail.trim().toLowerCase())} LIMIT 1;`,
@@ -568,6 +576,7 @@ function putR2Object(cli, bucket, key, content, contentType) {
     "object",
     "put",
     `${bucket}/${key}`,
+    ...(cli.wranglerEnv ? ["--env", cli.wranglerEnv] : []),
     cli.mode === "remote" ? "--remote" : "--local",
     "--content-type",
     contentType,
@@ -630,6 +639,7 @@ function main() {
     "d1",
     "execute",
     cli.database,
+    ...(cli.wranglerEnv ? ["--env", cli.wranglerEnv] : []),
     cli.mode === "remote" ? "--remote" : "--local",
     "--command",
     sql,
