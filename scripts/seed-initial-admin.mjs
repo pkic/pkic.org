@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 function parseArgs(argv) {
   let mode = "local";
   let database = process.env.D1_DATABASE_NAME ?? "pkic-db";
+  let wranglerEnv = null;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -20,13 +21,19 @@ function parseArgs(argv) {
     if (arg === "--db" && argv[index + 1]) {
       database = argv[index + 1];
       index += 1;
+      continue;
+    }
+
+    if (arg === "--env" && argv[index + 1]) {
+      wranglerEnv = argv[index + 1];
+      index += 1;
     }
   }
 
-  return { mode, database };
+  return { mode, database, wranglerEnv };
 }
 
-function runSeed(mode, database) {
+function runSeed(mode, database, wranglerEnv) {
   const userId = randomUUID();
   const sql =
     "INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at) " +
@@ -38,6 +45,7 @@ function runSeed(mode, database) {
     "d1",
     "execute",
     database,
+    ...(wranglerEnv ? ["--env", wranglerEnv] : []),
     mode === "remote" ? "--remote" : "--local",
     "--command",
     sql,
@@ -49,5 +57,5 @@ function runSeed(mode, database) {
   });
 }
 
-const { mode, database } = parseArgs(process.argv.slice(2));
-runSeed(mode, database);
+const { mode, database, wranglerEnv } = parseArgs(process.argv.slice(2));
+runSeed(mode, database, wranglerEnv);
