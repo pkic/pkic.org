@@ -7,10 +7,6 @@
   "dev": {
     "port": 8788
   },
-  "observability": {
-    "enabled": true,
-    "head_sampling_rate": 1
-  },
   "d1_databases": [
     {
       "binding": "DB",
@@ -35,6 +31,9 @@
   // ── Preview environment (all non-production branches) ────────────────────
   "env": {
     "preview": {
+      "images": {
+        "binding": "IMAGES"
+      },
       "d1_databases": [
         {
           "binding": "DB",
@@ -42,7 +41,27 @@
           "database_id": "0647ba62-4bf0-40e5-b547-62f992acbbf0",
           "migrations_dir": "migrations"
         }
-      ]
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ASSETS_BUCKET",
+          "bucket_name": "pkic-assets-preview"
+        },
+        {
+          "binding": "SPEAKER_UPLOADS_BUCKET",
+          "bucket_name": "pkic-speaker-uploads-preview"
+        }
+      ],
+      "vars": {
+        "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
+        "DEFAULT_REFERRAL_CODE_LENGTH": "7",
+        "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
+        "WAITLIST_CLAIM_WINDOW_HOURS": "24",
+        "MAGIC_LINK_TTL_MINUTES": "15",
+        "MANAGE_TOKEN_TTL_HOURS": "48",
+        "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
+        "SPEAKER_UPLOAD_DEADLINE_DAYS": "21"
+      }
     }
   },
   "vars": {
