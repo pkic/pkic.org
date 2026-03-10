@@ -1,0 +1,44 @@
+{{- $eventSlug := partial "event-flow-slug.html" . -}}
+{{- $eventPagePath := partial "event-flow-page-path.html" . -}}
+<div class="event-flow" data-event-proposal-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
+  <p class="form-text mb-3">Open this page from your proposal management link.</p>
+  <form class="row g-3 my-2 needs-validation" novalidate>
+    <div class="col-12">
+      <label for="manage-proposal-type" class="form-label">Session type</label>
+      <select id="manage-proposal-type" name="proposalType" class="form-select" required>
+        <option value="talk">Talk</option>
+        <option value="workshop">Workshop</option>
+        <option value="panel">Panel</option>
+        <option value="tutorial">Tutorial</option>
+        <option value="lightning_talk">Lightning talk</option>
+        <option value="roundtable">Roundtable</option>
+        <option value="keynote">Keynote</option>
+        <option value="birds_of_a_feather">Birds of a feather</option>
+        <option value="fireside_chat">Fireside chat</option>
+        <option value="demo">Demo</option>
+      </select>
+    </div>
+
+    <div class="col-12">
+      <label for="manage-proposal-title" class="form-label">Title</label>
+      <input id="manage-proposal-title" name="title" type="text" class="form-control" required>
+      <div data-field-error="title" class="invalid-feedback d-block"></div>
+    </div>
+
+    <div class="col-12">
+      <label for="manage-proposal-abstract" class="form-label">Abstract</label>
+      <textarea id="manage-proposal-abstract" name="abstract" rows="8" class="form-control" required></textarea>
+      <div data-field-error="abstract" class="invalid-feedback d-block"></div>
+    </div>
+
+    <div class="col-12 d-flex gap-2">
+      <button type="submit" class="btn btn-success">Save changes</button>
+      <button type="button" data-action="withdraw" class="btn btn-outline-danger">Withdraw proposal</button>
+    </div>
+
+    <div class="col-12">
+      <p data-flow-status class="alert visually-hidden mb-0" role="status" aria-live="polite"></p>
+    </div>
+  </form>
+</div>
+{{ partial "script.html" (dict "path" "ts/event-flows/proposal-manage-page.ts") }}

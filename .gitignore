@@ -4,6 +4,7 @@ resources/_gen/
 static/pagefind
 .dev.vars
 wrangler.toml
+.env*
 
 # Ignore hugo itself when located here
 hugo
@@ -19,3 +20,4 @@ __pycache__/
 # Cloudflare
 .wrangler/
 .cache/
+node_modules/

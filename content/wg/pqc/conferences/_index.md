@@ -5,17 +5,17 @@ wgSection: conferences
 navOrder: 5
 
 upcoming:
-  # - title: "PQC Conference Amsterdam 2026"
-  #   dates: "December 1–3, 2026"
-  #   location: Amsterdam, Netherlands
-  #   flag: "🇳🇱"
-  #   description: >
-  #     The annual Post-Quantum Cryptography Conference returns to Amsterdam for three days of
-  #     expert presentations, workshops, and networking. Join leading researchers, practitioners,
-  #     and policy makers as we accelerate the global transition to quantum-safe cryptography.
-  #   url: /events/2026/pqc-conference-amsterdam-nl/
-  #   registerURL: /register/
-  #   status: upcoming
+  - title: "PQC Conference Amsterdam 2026"
+    dates: "December 1–3, 2026"
+    location: Amsterdam, Netherlands
+    flag: "🇳🇱"
+    description: >
+      The annual Post-Quantum Cryptography Conference returns to Amsterdam for three days of
+      expert presentations, workshops, and networking. Join leading researchers, practitioners,
+      and policy makers as we accelerate the global transition to quantum-safe cryptography.
+    url: /events/2026/pqc-conference-amsterdam-nl/
+    registerURL: /register/
+    status: upcoming
 
 past:
   - title: "PQC Conference Kuala Lumpur 2025"

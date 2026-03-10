@@ -1,0 +1,49 @@
+{
+  "name": "pkic-org-events-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "sh -c 'hugo serve -e development --port 1313 & HUGO_PID=$!; trap \"kill $HUGO_PID\" EXIT INT TERM; npx wrangler pages dev --ip 0.0.0.0 --proxy 1313'",
+    "dev:hugo": "hugo serve -e development",
+    "dev:wrangler": "npx wrangler pages dev --ip 0.0.0.0 --proxy 1313",
+    "typecheck": "npm run typecheck:backend && npm run typecheck:frontend",
+    "typecheck:backend": "tsc --noEmit -p tsconfig.json",
+    "typecheck:frontend": "tsc --noEmit -p tsconfig.frontend.json",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "vitest run tests --exclude='tests/frontend/**' --exclude='**/tests/frontend/**'",
+    "test:frontend": "vitest run tests/frontend",
+    "test:workflows": "vitest run tests/full-workflow.test.ts",
+    "test:watch": "vitest",
+    "check:max-lines": "node scripts/check-max-lines.mjs",
+    "check": "npm run typecheck && npm run test && npm run check:max-lines",
+    "wrangler:types": "npx wrangler types",
+    "seed:local": "npx wrangler d1 migrations apply pkic-db --local && npm run seed:admin:local && npm run seed:event:local && npm run seed:templates:local",
+    "seed:remote": "npx wrangler d1 migrations apply pkic-db --remote && npm run seed:admin:remote && npm run seed:event:remote && npm run seed:templates:remote",
+    "seed:admin": "node scripts/seed-initial-admin.mjs",
+    "seed:admin:local": "node scripts/seed-initial-admin.mjs --local",
+    "seed:admin:remote": "node scripts/seed-initial-admin.mjs --remote",
+    "seed:templates": "node scripts/seed-email-templates.mjs",
+    "seed:templates:local": "node scripts/seed-email-templates.mjs --local",
+    "seed:templates:remote": "node scripts/seed-email-templates.mjs --remote",
+    "seed:event": "node scripts/seed-event.mjs",
+    "seed:event:local": "node scripts/seed-event.mjs --local",
+    "seed:event:remote": "node scripts/seed-event.mjs --remote"
+  },
+  "dependencies": {
+    "@resvg/resvg-wasm": "^2.6.2",
+    "handlebars": "^4.7.8",
+    "ics": "^3.8.1",
+    "marked": "^17.0.3",
+    "yaml": "^2.8.1",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "@types/node": "^24.6.1",
+    "better-sqlite3": "^12.4.1",
+    "jsdom": "^27.0.0",
+    "typescript": "^5.9.3",
+    "vitest": "^3.2.4"
+  }
+}

@@ -1,0 +1,1271 @@
+// ── Event flow container ────────────────────────────────────────────────────
+// Hosts registration, proposal, confirm, and manage forms. No visual card —
+// forms render as plain page content, consistent with other site forms.
+
+.event-flow {
+  .form-label {
+    font-weight: 600;
+  }
+
+  .invalid-feedback.d-block {
+    margin-top: 0.35rem;
+  }
+
+  // When a personal/consumer email domain is detected we show an advisory
+  // warning but don't block the form. Override Bootstrap's :valid green ring
+  // and replace the green checkmark with the amber warning triangle icon.
+  // SVG colour matches Bootstrap's --bs-warning (#ffc107).
+  .was-validated .form-control[data-personal-email]:valid,
+  .form-control[data-personal-email].is-valid {
+    border-color: var(--bs-warning-border-subtle);
+    // Amber exclamation-triangle-fill — matches Bootstrap icon positioning
+    // stylelint-disable-next-line function-disallowed-list
+    background-image: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3e%3cpath fill='%23ffc107' d='M8.982 1.566a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767zM8 5c.535 0 .954.462.9.995l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995A.905.905 0 0 1 8 5m.002 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2'/%3e%3c/svg%3e");
+    background-repeat: no-repeat;
+    background-position: right calc(0.375em + 0.1875rem) center;
+    background-size: calc(0.75em + 0.375rem) calc(0.75em + 0.375rem);
+    padding-right: calc(1.5em + 0.75rem);
+    box-shadow: none;
+
+    &:focus {
+      border-color: var(--bs-warning);
+      box-shadow: 0 0 0 0.25rem rgba(var(--bs-warning-rgb), 0.25);
+    }
+  }
+}
+
+// ── Multi-step wizard ────────────────────────────────────────────────────────
+
+// ── Step progress indicator ──────────────────────────────────────────────────
+
+.event-flow-stepper {
+  position: relative;
+  margin-bottom: 2rem;
+  padding-top: 0.25rem;
+}
+
+// The track + fill are now drawn per-item via ::before so they always connect
+// exactly at each bubble centre, regardless of container width or step count.
+// The .event-flow-stepper-track / -fill elements are kept in the HTML for the
+// JS fill animation but are hidden; the visual line comes from CSS only.
+.event-flow-stepper-track { display: none; }
+.event-flow-stepper-fill  { display: none; }
+
+.event-flow-stepper-list {
+  display: flex;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  justify-content: space-between;
+  position: relative;
+}
+
+.event-flow-stepper-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+  flex: 1;
+  position: relative;
+
+  // Left half of the connector (from item left-edge to bubble centre).
+  // Hidden on the first item so the line starts at the first bubble.
+  &::before {
+    content: '';
+    position: absolute;
+    top: 1rem; // vertically centred on the 2rem bubble
+    left: 0;
+    width: 50%;
+    height: 2px;
+    background: var(--bs-border-color);
+    transition: background-color 0.35s ease;
+  }
+
+  // Right half of the connector (from bubble centre to item right-edge).
+  // Hidden on the last item so the line ends at the last bubble.
+  &::after {
+    content: '';
+    position: absolute;
+    top: 1rem;
+    left: 50%;
+    width: 50%;
+    height: 2px;
+    background: var(--bs-border-color);
+    transition: background-color 0.35s ease;
+  }
+
+  &:first-child::before { display: none; }
+  &:last-child::after   { display: none; }
+
+  // Colour the incoming connector for done steps and the active step.
+  &.is-done::before,
+  &.is-done::after,
+  &.is-active::before {
+    background: var(--page-accent, var(--bs-primary));
+  }
+}
+
+// The numbered circle
+.event-flow-stepper-bubble {
+  position: relative;
+  z-index: 1; // sit above the ::before/::after connector lines
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--bs-secondary-bg);
+  border: 2px solid var(--bs-border-color);
+  color: var(--bs-secondary-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.72rem;
+  font-weight: 700;
+  transition:
+    background-color 0.25s ease,
+    border-color 0.25s ease,
+    color 0.25s ease,
+    box-shadow 0.25s ease;
+}
+
+.event-flow-stepper-check {
+  display: none; // shown only on .is-done
+}
+
+.event-flow-stepper-item.is-done .event-flow-stepper-bubble {
+  background: var(--page-accent, var(--bs-primary));
+  border-color: var(--page-accent, var(--bs-primary));
+  color: #fff;
+
+  .event-flow-stepper-num { display: none; }
+  .event-flow-stepper-check { display: inline; }
+}
+
+.event-flow-stepper-item.is-active .event-flow-stepper-bubble {
+  background: var(--page-accent, var(--bs-primary));
+  border-color: var(--page-accent, var(--bs-primary));
+  color: #fff;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--page-accent, var(--bs-primary)) 20%, transparent);
+}
+
+.event-flow-stepper-label {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+  text-align: center;
+  line-height: 1.2;
+  white-space: nowrap;
+
+  .is-active & {
+    color: var(--bs-body-color);
+    font-weight: 600;
+  }
+}
+
+// ── Individual step panels ───────────────────────────────────────────────────
+
+.event-flow-step {
+  // Fade in when a step is revealed. `hidden` attribute handles display:none;
+  // the animation fires when hidden is removed.
+  animation: step-fade-in 0.2s ease both;
+}
+
+@keyframes step-fade-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+// One-line context/intro text at the top of each step.
+.event-flow-step-intro {
+  color: var(--bs-secondary-color);
+  font-size: 0.9rem;
+  margin-bottom: 1.25rem;
+}
+
+// ── Step navigation row ──────────────────────────────────────────────────────
+
+.event-flow-step-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--bs-border-color);
+}
+
+.event-flow-step-forward {
+  margin-left: auto;
+}
+
+.event-flow-step-back {
+  color: var(--bs-secondary-color);
+  text-decoration: none;
+  padding-left: 0;
+
+  &:hover {
+    color: var(--bs-body-color);
+  }
+}
+
+
+
+.event-flow-fields {
+  margin-bottom: 1.5rem;
+}
+
+// A self-contained form section with a titled separator above its content.
+.event-flow-section {
+  margin-bottom: 1.5rem;
+}
+
+// Small uppercase separator heading with a horizontal rule extending right.
+// Kept visually light — secondary color only, no weight.
+.event-flow-section-head {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+
+  span {
+    white-space: nowrap;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--bs-secondary-color);
+  }
+
+  &::after {
+    content: "";
+    flex: 1 1 0;
+    height: 1px;
+    background: var(--bs-border-color);
+  }
+}
+
+// ── Estimated time badge on the section head ─────────────────────────────────
+// Shown as a muted "~2 min" pill to reduce anxiety about form length.
+
+.event-flow-time-estimate {
+  font-size: 0.68rem;
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+  opacity: 0.7;
+  white-space: nowrap;
+  margin-left: auto;
+
+  svg {
+    margin-top: -1px;
+    vertical-align: middle;
+    margin-right: 0.2rem;
+  }
+}
+
+// Footer row: submit button + status message.
+.event-flow-footer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding-top: 0.5rem;
+}
+
+// ── Consent items ────────────────────────────────────────────────────────────
+
+// ── Consent items ────────────────────────────────────────────────────────────
+// Each consent is rendered as an interactive card. Clicking/tapping anywhere
+// on the card (except the external "Read" link) toggles the hidden checkbox.
+// Cards transition from neutral → green when the user agrees.
+
+.event-flow-consents {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+}
+
+// Hidden native checkbox — the card appearance reflects its state.
+.event-flow-consent-native-check {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+// ── Base card ────────────────────────────────────────────────────────────────
+
+.event-flow-consent-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border: 1.5px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
+  background: var(--bs-body-bg);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    border-color 0.18s ease,
+    background 0.18s ease,
+    box-shadow 0.18s ease;
+
+  &:hover {
+    border-color: var(--bs-success-border-subtle);
+    box-shadow: 0 0 0 3px rgba(var(--bs-success-rgb), 0.08);
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bs-success);
+    outline-offset: 2px;
+  }
+
+  // ── Agreed / checked state ────────────────────────────────────────────────
+  &.is-checked {
+    border-color: var(--bs-success);
+    background: var(--bs-success-bg-subtle);
+
+    .event-flow-consent-indicator {
+      background: var(--bs-success);
+      border-color: var(--bs-success);
+      color: #fff;
+
+      .event-flow-consent-indicator-check {
+        opacity: 1;
+        transform: scale(1);
+      }
+    }
+  }
+}
+
+// Custom visual checkbox indicator (square → animated checkmark)
+// Uses a mid-gray fill so it is clearly visible against the card background
+// before the user interacts, then transitions to solid green on selection.
+.event-flow-consent-indicator {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: 0.3rem;
+  border: 2px solid #adb5bd;
+  background: #f8f9fa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+
+  .event-flow-consent-indicator-check {
+    opacity: 0;
+    transform: scale(0.5);
+    transition: opacity 0.12s ease, transform 0.12s ease;
+    display: block;
+  }
+}
+
+// Label — fills remaining space, text size matches body
+.event-flow-consent-card-label {
+  flex: 1;
+  font-size: 0.9375rem;
+  line-height: 1.45;
+  cursor: pointer;
+  margin: 0;
+}
+
+// External "Read" link — sits at the trailing edge, never triggers the card
+.event-flow-consent-read-link {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+  text-decoration: none;
+  white-space: nowrap;
+  padding: 0.2rem 0.45rem;
+  border-radius: var(--bs-border-radius);
+  transition: color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    color: var(--bs-body-color);
+    background: var(--bs-secondary-bg);
+    text-decoration: none;
+  }
+
+  svg {
+    flex-shrink: 0;
+  }
+}
+
+// ── Featured card (has contextual note) ───────────────────────────────────
+// Layout: top zone shows *why* this matters; bottom zone is the agreement action.
+// The card starts with an amber accent and transitions to green on agreement.
+
+.event-flow-consent-card--featured {
+  flex-direction: column;
+  align-items: stretch;
+  padding: 0;
+  border-color: var(--bs-warning-border-subtle);
+  overflow: hidden;
+
+  &:hover {
+    border-color: var(--bs-warning);
+    box-shadow: 0 0 0 3px rgba(var(--bs-warning-rgb), 0.12);
+  }
+
+  &.is-checked {
+    border-color: var(--bs-success);
+    box-shadow: none;
+
+    &:hover {
+      border-color: var(--bs-success);
+      box-shadow: 0 0 0 3px rgba(var(--bs-success-rgb), 0.08);
+    }
+
+    .event-flow-consent-card-context {
+      background: var(--bs-success);
+      border-bottom-color: var(--bs-success);
+
+      .event-flow-consent-card-icon {
+        color: rgba(255, 255, 255, 0.85);
+      }
+
+      .event-flow-consent-card-context-text {
+        color: #fff;
+      }
+    }
+
+    .event-flow-consent-card-action {
+      background: var(--bs-success-bg-subtle);
+    }
+  }
+
+  // Top zone: context / explanation
+  .event-flow-consent-card-context {
+    display: flex;
+    gap: 0.625rem;
+    align-items: flex-start;
+    padding: 0.75rem 0.9rem;
+    background: var(--bs-warning-bg-subtle);
+    border-bottom: 1px solid var(--bs-warning-border-subtle);
+    transition: background 0.2s ease, border-bottom-color 0.2s ease;
+  }
+
+  .event-flow-consent-card-icon {
+    flex-shrink: 0;
+    margin-top: 0.1em;
+    color: color-mix(in srgb, var(--bs-warning) 70%, #000);
+    transition: color 0.2s ease;
+  }
+
+  .event-flow-consent-card-context-text {
+    margin: 0;
+    font-size: 0.8375rem;
+    line-height: 1.55;
+    color: var(--bs-body-color);
+    transition: color 0.2s ease;
+  }
+
+  // Bottom zone: the explicit agreement action
+  .event-flow-consent-card-action {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.7rem 0.9rem;
+    background: var(--bs-body-bg);
+    transition: background 0.18s ease;
+  }
+
+  .event-flow-consent-card-label {
+    font-weight: 500;
+    font-size: 0.9375rem;
+  }
+}
+
+// ── Per-day attendance picker ────────────────────────────────────────────────
+// Side-by-side cards, one per option. Each card: icon pill on top, centred
+// title + description, radio indicator pinned to top-right corner.
+// Per-type colour driven by --option-color CSS var set inline by JS.
+
+.event-flow-day {
+  .event-flow-day-label {
+    font-weight: 700;
+    margin-bottom: 0.7rem;
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--bs-secondary-color);
+  }
+}
+
+// Row of equal-width cards.
+.event-flow-attendance-options {
+  display: flex;
+  flex-direction: row;
+  gap: 0.75rem;
+}
+
+// Visually hidden — stays in DOM so :checked + sibling selector works.
+.event-flow-attendance-input {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+}
+
+.event-flow-attendance-card {
+  --option-color: var(--page-accent);
+
+  position: relative;        // anchor for the radio dot
+  flex: 1 1 0;               // equal-width columns
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 0.6rem;
+  padding: 1.2rem 1rem 1rem;
+  border: 1.5px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
+  cursor: pointer;
+  user-select: none;
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+
+  &:hover {
+    border-color: color-mix(in srgb, var(--option-color) 55%, transparent);
+    background-color: color-mix(in srgb, var(--option-color) 4%, var(--bs-body-bg));
+    box-shadow: 0 4px 14px color-mix(in srgb, var(--option-color) 14%, transparent);
+  }
+}
+
+// Coloured rounded-square icon pill.
+.event-flow-attendance-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 0.8rem;
+  background-color: var(--option-color);
+  color: #fff;
+  transition: transform 0.2s ease;
+}
+
+// Title + description centred beneath the icon.
+.event-flow-attendance-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2rem;
+}
+
+.event-flow-attendance-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--bs-body-color);
+  line-height: 1.3;
+  transition: color 0.18s ease;
+}
+
+.event-flow-attendance-desc {
+  font-size: 0.75rem;
+  color: var(--bs-secondary-color);
+  line-height: 1.3;
+}
+
+// Low-capacity badge.
+.event-flow-attendance-badge {
+  display: inline-block;
+  margin-top: 0.2rem;
+  font-size: 0.65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--bs-warning-text-emphasis);
+  background-color: var(--bs-warning-bg-subtle);
+  border: 1px solid var(--bs-warning-border-subtle);
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.4rem;
+}
+
+// Radio dot — absolute top-right corner of the card.
+.event-flow-attendance-radio {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.7rem;
+  width: 1.05rem;
+  height: 1.05rem;
+  border-radius: 50%;
+  border: 2px solid var(--bs-border-color);
+  background-color: var(--bs-body-bg);
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+// Checked state.
+.event-flow-attendance-input:checked + .event-flow-attendance-card {
+  border-color: var(--option-color);
+  background-color: color-mix(in srgb, var(--option-color) 7%, var(--bs-body-bg));
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--option-color) 15%, transparent);
+
+  .event-flow-attendance-icon {
+    transform: scale(1.1);
+  }
+
+  .event-flow-attendance-title {
+    color: color-mix(in srgb, var(--option-color) 80%, var(--bs-body-color));
+  }
+
+  .event-flow-attendance-radio {
+    border-color: var(--option-color);
+    // White ring + colour fill via nested inset shadows.
+    box-shadow:
+      inset 0 0 0 3px var(--bs-body-bg),
+      inset 0 0 0 10px var(--option-color);
+  }
+}
+
+// Keyboard focus ring uses the per-option colour.
+.event-flow-attendance-input:focus-visible + .event-flow-attendance-card {
+  outline: 2.5px solid var(--option-color);
+  outline-offset: 2px;
+}
+
+.event-flow-day-waitlist {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+
+  .badge {
+    border: 1px solid var(--bs-border-color);
+    font-size: 0.76rem;
+    font-weight: 500;
+  }
+}
+
+// ── Proposal / manage tags and ratings ──────────────────────────────────────
+
+// ── Tag picker — selected pills ─────────────────────────────────────────────
+
+.event-flow-tags-controls {
+  display: flex;
+  gap: 0.5rem;
+
+  .form-control {
+    flex: 1 1 0;
+  }
+}
+
+.event-flow-tags-selected {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  min-height: 0;
+  margin-bottom: 0.5rem;
+
+  &:empty {
+    display: none;
+  }
+}
+
+// A selected tag pill with a remove ×
+.event-flow-tag-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.2rem 0.5rem 0.2rem 0.65rem;
+  background: color-mix(in srgb, var(--page-accent, #0d6efd) 12%, var(--bs-body-bg));
+  border: 1px solid color-mix(in srgb, var(--page-accent, #0d6efd) 30%, transparent);
+  border-radius: 99px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--bs-body-color);
+  line-height: 1.4;
+  animation: tag-pop 0.18s ease;
+}
+
+@keyframes tag-pop {
+  from { transform: scale(0.8); opacity: 0; }
+  to   { transform: scale(1);   opacity: 1; }
+}
+
+.event-flow-tag-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  color: var(--bs-secondary-color);
+  cursor: pointer;
+  line-height: 1;
+  transition: color 0.12s;
+
+  &:hover {
+    color: var(--bs-danger);
+  }
+}
+
+// ── Suggestion chips row (quick-add) ────────────────────────────────────────
+
+.event-flow-tags-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.55rem;
+}
+
+// Each chip is a lightweight toggle pill
+.event-flow-tag-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.22rem 0.65rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 99px;
+  background: var(--bs-tertiary-bg);
+  font-size: 0.78rem;
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+  cursor: pointer;
+  transition:
+    background-color 0.14s,
+    border-color 0.14s,
+    color 0.14s;
+  line-height: 1.4;
+
+  &:hover:not(.is-selected) {
+    background: color-mix(in srgb, var(--page-accent, #0d6efd) 10%, var(--bs-body-bg));
+    border-color: color-mix(in srgb, var(--page-accent, #0d6efd) 40%, transparent);
+    color: var(--bs-body-color);
+  }
+
+  &.is-selected {
+    background: color-mix(in srgb, var(--page-accent, #0d6efd) 12%, var(--bs-body-bg));
+    border-color: color-mix(in srgb, var(--page-accent, #0d6efd) 50%, transparent);
+    color: var(--bs-body-color);
+    opacity: 0.5;
+    cursor: default;
+  }
+}
+
+// ── Country widget ───────────────────────────────────────────────────────────
+
+.event-flow-country-hint {
+  font-size: 0.78rem;
+  color: var(--bs-info-text-emphasis);
+  margin-top: 0.3rem;
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+// ── Legacy tag/rating wrappers (backwards compat) ────────────────────────────
+
+.event-flow-tags {
+  .badge {
+    font-weight: 500;
+  }
+}
+
+.event-flow-rating {
+  .btn {
+    min-width: 2.3rem;
+  }
+}
+
+// ── Post-submission success panel ────────────────────────────────────────────
+// Replaces the form on a successful submission. Uses the brand green to signal
+// success clearly and create a memorable peak moment (Peak-End Rule).
+
+.event-flow-success {
+  padding: 0.5rem 0 0.25rem;
+  text-align: center;
+}
+
+.event-flow-success-icon {
+  font-size: 2.8rem;
+  line-height: 1;
+  margin-bottom: 0.6rem;
+}
+
+.event-flow-success-title {
+  font-size: 1.45rem;
+  font-weight: 700;
+  color: var(--bs-success);
+  margin-bottom: 0.5rem;
+}
+
+.event-flow-success-body {
+  color: var(--bs-secondary-color);
+  margin-bottom: 1.2rem;
+
+  a {
+    color: var(--bs-primary);
+    font-weight: 500;
+  }
+}
+
+// ── Sharing / referral panel ─────────────────────────────────────────────────
+// Presented as the final moment of the registration and confirmation flows.
+// The purpose: turn every registrant into a channel by making sharing feel
+// natural, valuable, and easy (Reciprocity + Social Proof + Low Friction).
+
+.event-flow-share {
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
+  background: var(--bs-tertiary-bg);
+  // OG badge bleeds edge-to-edge; inner elements get their own padding
+  padding: 0;
+  margin-top: 1.25rem;
+  text-align: left;
+  overflow: hidden;
+}
+
+.event-flow-share-heading {
+  font-size: 1rem;
+  font-weight: 700;
+  margin: 1rem 1.1rem 0.25rem;
+  color: var(--bs-body-color);
+}
+
+.event-flow-share-copy {
+  font-size: 0.875rem;
+  color: var(--bs-secondary-color);
+  margin: 0 1.1rem 0.85rem;
+}
+
+// ── Primary CTA row: LinkedIn + Invite by email ──────────────────────────────
+// Two equal-height buttons side by side; stack on narrow viewports.
+// LinkedIn is filled (accent), Invite is outlined — same visual weight, clear
+// hierarchy.
+
+.event-flow-share-ctas {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin: 0 1.1rem 0.85rem;
+}
+
+.event-flow-share-primary-btn {
+  flex: 1 1 0;
+  min-width: 140px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.9rem;
+  font-weight: 600;
+  padding: 0.55rem 1rem;
+  white-space: nowrap;
+}
+
+// ── URL copy row ────────────────────────────────────────────────────────────────
+
+.event-flow-share-link-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: stretch;
+  margin: 0 1.1rem 0.5rem;
+
+  .event-flow-share-link-input {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 0.78rem;
+    font-family: var(--bs-font-monospace);
+    color: var(--bs-secondary-color);
+    background: var(--bs-body-bg);
+  }
+
+  .event-flow-share-copy-btn {
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+}
+
+// ── Social sharing row ──────────────────────────────────────────────────────────
+// Labelled "Share on:" row with X, Bluesky, Reddit icon+text buttons.
+
+.event-flow-share-socials {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+  margin: 0 1.1rem 0.75rem;
+}
+
+.event-flow-share-socials-label {
+  font-size: 0.75rem;
+  color: var(--bs-secondary-color);
+  white-space: nowrap;
+  margin-right: 0.15rem;
+}
+
+.event-flow-share-social-btn {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.8rem;
+  padding: 0.2rem 0.55rem;
+  line-height: 1.6;
+}
+
+// ── OG badge preview ─────────────────────────────────────────────────────────
+// Leads the panel — registrants see their name before reading the ask.
+// (Endowment Effect: owning the image makes sharing feel natural.)
+
+.event-flow-share-og-preview {
+  // No padding — image fills the card top; overflow:hidden on parent clips corners.
+  line-height: 0;
+}
+
+.event-flow-share-og-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.event-flow-share-og-hint {
+  margin: 0 1.1rem 0.85rem;
+  font-size: 0.75rem;
+  color: var(--bs-secondary-color);
+}
+
+// ── Invite colleagues by email ───────────────────────────────────────────────
+// The invite form is collapsed by default and toggled by the primary CTA
+// button — it sits inside the invite panel section below the social row.
+
+.event-flow-invite {
+  margin-top: 0;
+  padding: 0.85rem 1.1rem 0.1rem;
+  border-top: 1px solid var(--bs-border-color);
+}
+
+.event-flow-invite-fields {
+  padding-bottom: 0.5rem;
+
+  // Add breathing room between the copy text and the paste area / form rows
+  > .event-flow-invite-paste-zone,
+  > .event-flow-invite-thead {
+    margin-top: 0.75rem;
+  }
+
+  // Space before the action buttons
+  > .event-flow-invite-actions {
+    margin-top: 1rem;
+  }
+}
+
+.event-flow-invite-copy {
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color);
+  margin-bottom: 0.5rem;
+}
+
+// ── Paste zone ───────────────────────────────────────────────────────────────
+
+.event-flow-invite-paste-zone {
+  margin-bottom: 0.6rem;
+}
+
+.event-flow-invite-paste-hint {
+  font-size: 0.72rem;
+  color: var(--bs-secondary-color);
+  margin-top: 0.25rem;
+  margin-bottom: 0;
+}
+
+// ── Table header ─────────────────────────────────────────────────────────────
+
+.event-flow-invite-thead {
+  display: grid;
+  // firstName | lastName | email | remove-btn width
+  grid-template-columns: 1fr 1fr 1.3fr 1.6rem;
+  gap: 0.35rem;
+  padding: 0 0.1rem 0.2rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--bs-secondary-color);
+  border-bottom: 1px solid var(--bs-border-color);
+  margin-bottom: 0.2rem;
+}
+
+// ── Invite rows ───────────────────────────────────────────────────────────────
+
+.event-flow-invite-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.event-flow-invite-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1.3fr 1.6rem;
+  gap: 0.35rem;
+  align-items: center;
+
+  .form-control {
+    min-width: 0;
+  }
+}
+
+.event-flow-invite-remove-btn {
+  justify-self: center;
+  background: none;
+  border: none;
+  color: var(--bs-secondary-color);
+  font-size: 1.1rem;
+  line-height: 1;
+  padding: 0 0.25rem;
+  cursor: pointer;
+  border-radius: var(--bs-border-radius-sm);
+  transition: color 0.12s, background-color 0.12s;
+
+  &:hover {
+    color: var(--bs-danger);
+    background-color: var(--bs-danger-bg-subtle);
+  }
+
+  &[hidden] {
+    display: none;
+  }
+}
+
+.event-flow-invite-status {
+  min-height: 1.2em;
+}
+
+// On very small screens collapse first/last name columns to save space
+@media (max-width: 480px) {
+  .event-flow-invite-thead {
+    grid-template-columns: 1fr 1.6rem;
+    > span:nth-child(1),
+    > span:nth-child(2) { display: none; }
+    > span:nth-child(3) { display: block; }
+  }
+
+  .event-flow-invite-row {
+    grid-template-columns: 1fr 1fr 1fr 1.6rem;
+    grid-template-rows: auto auto;
+
+    // First and last name inputs on row 1 (cols 1-2), spans 2 cols each
+    [data-invite-first] { grid-column: 1; grid-row: 1; }
+    [data-invite-last]  { grid-column: 2; grid-row: 1; }
+    // Email full-width on row 2
+    [data-invite-email] { grid-column: 1 / 3; grid-row: 2; }
+    // Remove button top-right
+    [data-invite-remove] { grid-column: 3; grid-row: 1 / 3; align-self: center; }
+  }
+}
+
+
+// ── Proposal form — "Are you presenting?" checkbox ──────────────────────────
+
+.event-flow-presenting-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.85rem 1rem;
+  border: 1.5px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
+  background: var(--bs-tertiary-bg);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color 0.18s ease, background 0.18s ease;
+
+  &:has(input:checked) {
+    border-color: var(--bs-primary);
+    background: color-mix(in srgb, var(--bs-primary) 6%, var(--bs-body-bg));
+  }
+
+  .form-check-input {
+    margin-top: 0.2em;
+    flex-shrink: 0;
+    cursor: pointer;
+  }
+
+  .form-check-label {
+    cursor: pointer;
+    font-size: 0.9375rem;
+    line-height: 1.45;
+  }
+}
+
+// ── Proposal form — session-type radio button group ──────────────────────────
+
+.event-flow-session-types {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+// ── Proposal form — speaker role radio button group ──────────────────────────
+
+.event-flow-role-options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+// ── Proposal form — speaker card ─────────────────────────────────────────────
+
+.proposal-speaker-card {
+  padding: 1.25rem;
+  border: 1.5px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
+  background: var(--bs-tertiary-bg);
+  margin-bottom: 1rem;
+  transition: border-color 0.18s ease;
+
+  &:first-of-type {
+    border-color: var(--page-accent, var(--bs-primary));
+    background: color-mix(in srgb, var(--page-accent, var(--bs-primary)) 4%, var(--bs-body-bg));
+  }
+}
+
+.proposal-speaker-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 1rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid var(--bs-border-color);
+}
+
+.proposal-speaker-card-title {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--bs-secondary-color);
+}
+
+// ── Profile link widget ───────────────────────────────────────────────────────
+
+.profile-links-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-bottom: 0.5rem;
+  min-height: 0;
+
+  &:empty {
+    margin-bottom: 0;
+  }
+}
+
+.profile-links-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--bs-secondary-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 999px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--bs-body-color);
+  max-width: 220px;
+}
+
+.profile-links-pill-icon {
+  flex-shrink: 0;
+  color: var(--bs-secondary-color);
+  display: flex;
+  align-items: center;
+}
+
+.profile-links-pill-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-links-pill-remove {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: none;
+  border: none;
+  color: var(--bs-secondary-color);
+  cursor: pointer;
+  border-radius: 50%;
+  line-height: 1;
+  transition: color 0.15s ease, background 0.15s ease;
+
+  &:hover {
+    color: var(--bs-danger);
+    background: var(--bs-danger-bg-subtle);
+  }
+}
+
+.profile-links-add-row {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.profile-links-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.profile-links-add-btn {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.profile-links-error {
+  min-height: 1rem;
+}
+
+// ── Responsive adjustments ───────────────────────────────────────────────────
+
+@media (max-width: 767px) {
+  .event-flow {
+    padding: 0.95rem;
+  }
+
+  .event-flow-success-title {
+    font-size: 1.25rem;
+  }
+
+  .event-flow-share-link-row {
+    flex-direction: column;
+
+    .event-flow-share-copy-btn {
+      align-self: flex-start;
+    }
+  }
+
+  // Stack attendance cards vertically on small screens.
+  .event-flow-attendance-options {
+    flex-direction: column;
+  }
+
+  .event-flow-attendance-card {
+    flex-direction: row;
+    text-align: left;
+    align-items: center;
+    padding: 0.75rem 1rem 0.75rem 0.85rem;
+    gap: 1rem;
+
+    .event-flow-attendance-text {
+      align-items: flex-start;
+    }
+  }
+
+  .event-flow-attendance-radio {
+    position: static;
+    flex-shrink: 0;
+    margin-left: auto;
+  }
+}
+
