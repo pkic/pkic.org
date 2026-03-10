@@ -1,0 +1,185 @@
+{{- $eventSlug := partial "event-flow-slug.html" . -}}
+{{- $eventPagePath := partial "event-flow-page-path.html" . -}}
+<div class="event-flow" data-event-proposal data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
+
+  {{/* ── Step progress indicator ─────────────────────────────────────────── */}}
+  <nav class="event-flow-stepper" aria-label="Proposal progress">
+    <div class="event-flow-stepper-track" aria-hidden="true">
+      <div class="event-flow-stepper-fill" data-step-fill></div>
+    </div>
+    <ol class="event-flow-stepper-list">
+      <li class="event-flow-stepper-item is-active" data-step-item="1" aria-current="step">
+        <span class="event-flow-stepper-bubble">
+          <span class="event-flow-stepper-num" aria-hidden="true">1</span>
+          <svg class="event-flow-stepper-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/></svg>
+        </span>
+        <span class="event-flow-stepper-label">Terms</span>
+      </li>
+      <li class="event-flow-stepper-item" data-step-item="2">
+        <span class="event-flow-stepper-bubble">
+          <span class="event-flow-stepper-num" aria-hidden="true">2</span>
+          <svg class="event-flow-stepper-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/></svg>
+        </span>
+        <span class="event-flow-stepper-label">Contact</span>
+      </li>
+      <li class="event-flow-stepper-item" data-step-item="3">
+        <span class="event-flow-stepper-bubble">
+          <span class="event-flow-stepper-num" aria-hidden="true">3</span>
+          <svg class="event-flow-stepper-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/></svg>
+        </span>
+        <span class="event-flow-stepper-label">Proposal</span>
+      </li>
+      <li class="event-flow-stepper-item" data-step-item="4">
+        <span class="event-flow-stepper-bubble">
+          <span class="event-flow-stepper-num" aria-hidden="true">4</span>
+          <svg class="event-flow-stepper-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/></svg>
+        </span>
+        <span class="event-flow-stepper-label">Speakers</span>
+      </li>
+    </ol>
+  </nav>
+
+  <form class="needs-validation" novalidate>
+
+    {{/* ── Step 1: Terms ────────────────────────────────────────────────── */}}
+    <div data-step="1" class="event-flow-step is-active">
+      <p class="event-flow-step-intro">
+        Before you begin, please review and accept the terms below. Knowing these upfront means
+        no surprises at the end — and you can fill in your proposal with full confidence.
+      </p>
+      <div data-consents>
+        <p class="form-text">Loading…</p>
+      </div>
+      <div data-field-error="consents" class="invalid-feedback d-block"></div>
+    </div>
+
+    {{/* ── Step 2: Contact ──────────────────────────────────────────────── */}}
+    <div data-step="2" class="event-flow-step" hidden>
+      <p class="event-flow-step-intro">
+        Who should we contact about this proposal? Your details are used only for organiser
+        communication and are kept confidential from the public.
+      </p>
+      <div class="row g-3">
+        <div class="col-sm-6">
+          <label for="proposal-first-name" class="form-label">First name</label>
+          <input id="proposal-first-name" name="firstName" type="text" class="form-control" required autocomplete="given-name">
+          <div data-field-error="proposer.firstName" class="invalid-feedback d-block"></div>
+        </div>
+        <div class="col-sm-6">
+          <label for="proposal-last-name" class="form-label">Last name</label>
+          <input id="proposal-last-name" name="lastName" type="text" class="form-control" required autocomplete="family-name">
+          <div data-field-error="proposer.lastName" class="invalid-feedback d-block"></div>
+        </div>
+        <div class="col-12">
+          <label for="proposal-email" class="form-label">Work email</label>
+          <input id="proposal-email" name="email" type="email" class="form-control" required autocomplete="email">
+          <div class="form-text">
+            We'll send your proposal management link here — use it to track status, edit details,
+            and add speakers after submission.
+          </div>
+          <div data-email-warning class="form-text text-warning d-none">
+            This looks like a personal email address. Consider using your professional email so
+            we can verify your affiliation.
+          </div>
+          <div data-field-error="proposer.email" class="invalid-feedback d-block"></div>
+        </div>
+        <div class="col-sm-6">
+          <label for="proposal-organization" class="form-label">
+            Organization <span class="text-muted fw-normal small">(optional)</span>
+          </label>
+          <input id="proposal-organization" name="organizationName" type="text" class="form-control" autocomplete="organization">
+        </div>
+        <div class="col-sm-6">
+          <label for="proposal-job-title" class="form-label">
+            Job title <span class="text-muted fw-normal small">(optional)</span>
+          </label>
+          <input id="proposal-job-title" name="jobTitle" type="text" class="form-control" autocomplete="organization-title">
+        </div>
+        <div class="col-12">
+          <label class="event-flow-presenting-check" for="proposal-is-presenting">
+            <input class="form-check-input" type="checkbox" id="proposal-is-presenting" name="isPresenting">
+            <span class="form-check-label">
+              I will also be presenting — add me as one of the speakers
+            </span>
+          </label>
+        </div>
+      </div>
+    </div>
+
+    {{/* ── Step 3: Proposal details ──────────────────────────────────────── */}}
+    <div data-step="3" class="event-flow-step" hidden>
+      <p class="event-flow-step-intro">
+        Describe your session clearly so the review committee can assess its fit and impact.
+      </p>
+      <div class="row g-3">
+        <div class="col-12">
+          <label class="form-label">Session type</label>
+          <div data-session-types class="event-flow-session-types" role="group" aria-label="Session type">
+            {{/* Session type buttons are injected here by JS based on event config */}}
+          </div>
+          <p class="form-text mt-1">
+            This is your preferred format. The programme committee may accept your session in a
+            different form if it better fits the schedule or audience.
+          </p>
+          <div data-field-error="proposal.type" class="invalid-feedback d-block"></div>
+        </div>
+
+        <div class="col-12">
+          <label for="proposal-title" class="form-label">Title</label>
+          <input id="proposal-title" name="title" type="text" class="form-control" required minlength="8" maxlength="180">
+          <div data-field-error="proposal.title" class="invalid-feedback d-block"></div>
+        </div>
+
+        <div class="col-12">
+          <label for="proposal-abstract" class="form-label">Abstract</label>
+          <textarea id="proposal-abstract" name="abstract" rows="8" class="form-control" required minlength="80" maxlength="8000"></textarea>
+          <div class="form-text">
+            Aim for 150–500 words. The committee values clarity, novelty, and practical
+            applicability. Avoid promotional language and product names.
+          </div>
+          <div data-field-error="proposal.abstract" class="invalid-feedback d-block"></div>
+        </div>
+
+        <div data-custom-fields class="col-12">
+          {{/* Additional event-specific questions are injected here by JS */}}
+        </div>
+      </div>
+    </div>
+
+    {{/* ── Step 4: Speakers ──────────────────────────────────────────────── */}}
+    <div data-step="4" class="event-flow-step" hidden>
+      <p class="event-flow-step-intro">
+        Each speaker receives a personal link by email to confirm their participation, complete
+        their profile, and upload a headshot once the proposal is accepted.
+      </p>
+      <div data-proposal-speakers></div>
+      <button type="button" data-add-speaker class="btn btn-outline-secondary btn-sm mt-1">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M8 4a.5.5 0 0 1 .5.5v3h3a.5.5 0 0 1 0 1h-3v3a.5.5 0 0 1-1 0v-3h-3a.5.5 0 0 1 0-1h3v-3A.5.5 0 0 1 8 4"/></svg>
+        Add speaker
+      </button>
+      <div data-field-error="speakers" class="invalid-feedback d-block mt-2"></div>
+    </div>
+
+
+
+    {{/* ── Step navigation ──────────────────────────────────────────────── */}}
+    <div class="event-flow-step-nav">
+      <button type="button" class="btn btn-link event-flow-step-back" data-step-back hidden>
+        &larr; Back
+      </button>
+      <div class="event-flow-step-forward">
+        <button type="button" class="btn btn-primary btn-lg" data-step-next>
+          Continue &rarr;
+        </button>
+        <button type="submit" class="btn btn-success btn-lg" hidden>
+          Submit proposal &rarr;
+        </button>
+      </div>
+    </div>
+
+    <p data-flow-status class="alert visually-hidden mb-0 mt-3" role="status" aria-live="polite"></p>
+
+  </form>
+</div>
+{{ partial "script.html" (dict "path" "ts/event-flows/proposal-page.ts") }}
+

@@ -1,6 +1,13 @@
+import { json } from "../_lib/http";
 
-export async function onRequest({ request, env }) {
-    return new Response("Hello from the API", {
-        headers: { "Content-Type": "text/plain" },
-    });
+const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
+
+export async function onRequest(): Promise<Response> {
+  const response = json({
+    name: "PKI Consortium API",
+    version: "v1",
+    status: "ok",
+  });
+  response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
+  return response;
 }

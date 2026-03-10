@@ -1,0 +1,236 @@
+event:
+  year: 2026
+  slug: pqc-conference-amsterdam-nl
+  name: Post-Quantum Cryptography Conference
+  timezone: Europe/Amsterdam
+  # sessionTypes: restrict which session formats are offered for this event.
+  # Remove a type to hide it from the proposal form. Falls back to [talk, keynote, panel] if omitted.
+  sessionTypes:
+    - talk
+    - keynote
+    - panel
+    - tutorial
+    - demo
+    - lightning_talk
+  startsAt: "2026-12-01T08:00:00.000Z"
+  endsAt: "2026-12-03T18:00:00.000Z"
+  registrationMode: invite_or_open
+  inviteLimitAttendee: 5
+  capacityInPerson: 800
+  # location: Short location label displayed on OG badges and in UI.
+  location: "Amsterdam, The Netherlands"
+  # heroImageUrl: Full URL to the event hero/banner image.
+  # Used in emails and OG social badges. Must be an absolute URL.
+  heroImageUrl: "/events/2026/pqc-conference-amsterdam-nl/amsterdam-nl.png"
+  # venue: Physical address shown in calendar invites for in-person attendees.
+  venue: "Meervaart, Meer en Vaart 300, 1068 LE, Amsterdam, Netherlands"
+  # virtualUrl: Override the URL shown to virtual/live attendees in their calendar invite.
+  # Defaults to {eventPage}/virtual/ when not set.
+  # virtualUrl: "https://pkic.org/events/2026/pqc-conference-amsterdam-nl/virtual/"
+  days:
+    - date: "2026-12-01"
+      label: Tuesday 1 December 2026
+      sortOrder: 10
+      attendanceOptions:
+        - value: in_person
+          label: In-person
+          capacity: 800
+        - value: virtual
+          label: Virtual
+        - value: on_demand
+          label: On-demand
+    - date: "2026-12-02"
+      label: Wednesday 2 December 2026
+      sortOrder: 20
+      attendanceOptions:
+        - value: in_person
+          label: In-person
+          capacity: 800
+        - value: virtual
+          label: Virtual
+        - value: on_demand
+          label: On-demand
+    - date: "2026-12-03"
+      label: Thursday 3 December 2026
+      sortOrder: 30
+      attendanceOptions:
+        - value: in_person
+          label: In-person
+          capacity: 800
+        - value: virtual
+          label: Virtual
+        - value: on_demand
+          label: On-demand
+
+terms:
+  attendee:
+    - termKey: privacy-policy
+      version: v1
+      required: true
+      contentRef: /privacy-policy/
+      displayText: I have read and accept the privacy policy.
+    - termKey: code-of-conduct
+      version: v1
+      required: true
+      contentRef: /code-of-conduct/
+      displayText: I have read and agree to follow the code of conduct.
+    - termKey: photo-policy
+      version: v1
+      required: true
+      displayText: I acknowledge that photos and videos will be taken during the event, and I consent to being photographed or recorded if attending in person.
+    - termKey: sponsor-data-sharing
+      version: v1
+      required: false
+      helpText: "This event is offered free of charge thanks to our sponsors, who cover between $100 and $300 per attendee per day in venue, catering, and production costs. In return, our sponsors would like to know who is attending. By agreeing, you allow us to share your professional profile (name, organization, job title, email address, etc.) with the sponsors of this specific event."
+      displayText: "Yes — I am happy for the PKI Consortium to share my professional profile with the sponsors of this event."
+  speaker:
+    - termKey: speaker-terms
+      version: v1
+      required: true
+      contentRef: /speaker-terms/
+      displayText: I accept the speaker terms and session submission conditions.
+    - termKey: code-of-conduct
+      version: v1
+      required: true
+      contentRef: /code-of-conduct/
+      displayText: I have read and agree to follow the code of conduct.
+    - termKey: photo-policy
+      version: v1
+      required: true
+      displayText: I acknowledge that photos and videos will be taken during the event, and I consent to being photographed or recorded if attending in person.
+
+
+organizers:
+  - email: admin@pkic.org
+    firstName: PKIC
+    lastName: Admin
+    organizationName: PKI Consortium
+    jobTitle: Event Organizer
+  - email: paul.vanbrouwershaven@pkic.org
+    firstName: Paul
+    lastName: van Brouwershaven
+    organizationName: PKI Consortium
+    jobTitle: Chair
+
+forms:
+  - key: pqc-2026-registration
+    purpose: event_registration
+    title: PQC Conference 2026 Registration
+    description: Event registration additional questions.
+    fields:
+      # ── Profile fields ─────────────────────────────────────────────────────
+      # Keys organization_name and job_title are automatically promoted to the
+      # user profile by the registration service. Country / state_region are
+      # stored in custom answers for sponsor and logistics purposes.
+      - key: organization_name
+        label: Organization
+        type: text
+        required: true
+        sortOrder: 1
+        validation:
+          maxLength: 120
+          placeholder: Your company or institution
+          helpText: Helps us tailor session recommendations and connects you with relevant sponsors.
+      - key: job_title
+        label: Job title
+        type: text
+        required: true
+        sortOrder: 2
+        validation:
+          maxLength: 120
+          placeholder: e.g. CISO, Software Engineer, Policy Advisor
+      - key: country
+        label: Country
+        type: text
+        required: true
+        sortOrder: 3
+        validation:
+          format: iso_country
+          helpText: Country of residence or work, used for demographic insights.
+      - key: state_region
+        label: State / Province
+        type: text
+        required: false
+        sortOrder: 4
+        validation:
+          maxLength: 80
+          placeholder: e.g. California, Ontario
+          helpText: State or province of residence or work, used for demographic insights.
+      # ── Event-specific questions ────────────────────────────────────────────
+      - key: dietary_restrictions
+        label: Dietary restrictions
+        type: multi_select
+        required: false
+        sortOrder: 10
+        options: [Vegetarian, Vegan, Halal, Kosher, Gluten_free, Lactose_free, Nut_allergy, Other]
+        validation:
+          uiWidget: checkboxes
+          showWhen:
+            dayAttendanceIn: [in_person]
+          helpText: "Note: We will share this information with the venue to help accommodate your needs. However, please be aware that we cannot guarantee that all dietary requirements will be met. We accept no responsibility for any issues arising from unmet dietary needs."
+      - key: interests
+        label: Interests (topics)
+        type: multi_select
+        required: false
+        sortOrder: 20
+        options:
+          - PKI
+          - Post-Quantum Cryptography
+          - Migration
+          - Governance
+          - Compliance
+          - Implementation
+          - Research
+          - Policy
+          - Algorithms
+          - Certificate Management
+          - Code Signing
+          - TLS/SSL
+          - Hardware Security
+          - Zero Trust
+          - Identity
+          - FIPS / NIST standards
+          - Automation
+          - Open Source
+        validation:
+          uiWidget: tags
+          allowCustom: true
+          maxItems: 10
+          placeholder: Type a topic…
+          helpText: Pick from the suggestions or type your own.
+
+
+  - key: pqc-2026-proposals
+    purpose: proposal_submission
+    title: PQC Conference 2026 Proposal Details
+    description: Additional proposal metadata for reviewers and organizers.
+    fields:
+      - key: session_track
+        label: Preferred track
+        type: select
+        required: true
+        sortOrder: 10
+        options: [Strategy, Technical, Case_Study, Policy]
+      - key: target_audience
+        label: Target audience level
+        type: select
+        required: true
+        sortOrder: 20
+        options: [Beginner, Intermediate, Advanced]
+      - key: demo_required
+        label: Includes live demo
+        type: boolean
+        required: false
+        sortOrder: 30
+      - key: prior_talk_link
+        label: Sample talk or video
+        type: url
+        required: false
+        sortOrder: 40
+        validation:
+          placeholder: https://www.youtube.com/watch?v=...
+          helpText: "Optional: share a recording of a previous talk that shows your speaking style and expertise. This should be a reference sample — the session you are proposing must be new and not a repeat of an existing talk."
+
+emailTemplates:
+  # Optional overrides; when omitted, defaults for all required keys are seeded.
+  templates: []

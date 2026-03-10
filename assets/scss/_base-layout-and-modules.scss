@@ -16,6 +16,30 @@
   object-fit: contain;
   display: block;
 }
+
+// ── Fluid hero title — scales with both viewport width and title length ───
+//   Classes are assigned in hero.html based on character count.
+.hero-title {
+  // default (short ≤ 38 chars): preserve the Bootstrap display-* size but
+  // clamp it so it never overflows on narrow viewports.
+  font-size: clamp(1.6rem, 5.5vw, 3.5rem) !important;
+  line-height: 1.15;
+
+  &.hero-title-medium {
+    // 39–65 chars
+    font-size: clamp(1.35rem, 4.5vw, 2.75rem) !important;
+  }
+
+  &.hero-title-long {
+    // 66–100 chars
+    font-size: clamp(1.15rem, 3.5vw, 2.25rem) !important;
+  }
+
+  &.hero-title-xl {
+    // 101+ chars
+    font-size: clamp(1rem, 2.75vw, 1.8rem) !important;
+  }
+}
 // ─────────────────────────────────────────────────────────────────────────
 
 figure,
