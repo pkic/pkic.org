@@ -1,0 +1,29 @@
+{{- $eventSlug := partial "event-flow-slug.html" . -}}
+{{- $eventPagePath := partial "event-flow-page-path.html" . -}}
+<div class="event-flow" data-event-registration-confirm data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
+
+  {{/* Skeleton shown while the personalisation fetch is in-flight */}}
+  <div data-confirm-loading class="my-3" aria-hidden="true">
+    <p class="placeholder-glow mb-2"><span class="placeholder col-8 fs-5"></span></p>
+    <p class="placeholder-glow mb-4"><span class="placeholder col-10"></span></p>
+    <p class="placeholder-glow"><span class="placeholder col-4 placeholder-lg btn btn-success"></span></p>
+  </div>
+
+  {{/* Personalised intro + form — hidden until the API fetch completes */}}
+  <div data-confirm-content class="d-none">
+    <p class="lead mb-4">
+      Hi <span data-placeholder="firstName">there</span>, you&rsquo;re one click away!
+      Click the button below to verify your email address and lock in your spot at
+      the <strong><span data-placeholder="eventName">event</span></strong>.
+    </p>
+    <form class="row g-3 needs-validation" novalidate>
+      <div class="col-12">
+        <button type="submit" class="btn btn-success px-4">Confirm my spot &rarr;</button>
+      </div>
+    </form>
+  </div>
+
+  <p data-flow-status class="alert visually-hidden mt-3 mb-0" role="status" aria-live="polite"></p>
+</div>
+{{ partial "script.html" (dict "path" "ts/event-flows/registration-confirm-page.ts") }}
+

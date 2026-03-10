@@ -1,0 +1,216 @@
+<div class="row justify-content-center py-4">
+  <div class="col-12 col-md-9 col-lg-7 col-xl-6">
+    <div data-invite-decline data-api-base="/api/v1">
+
+      {{/* ── Loading skeleton ───────────────────────────────────── */}}
+      <div data-decline-loading>
+        <p class="placeholder-glow mb-3"><span class="placeholder col-8 fs-5"></span></p>
+        <p class="placeholder-glow mb-2"><span class="placeholder col-12"></span></p>
+        <p class="placeholder-glow mb-4"><span class="placeholder col-10"></span></p>
+        <p class="placeholder-glow"><span class="placeholder col-5 placeholder-lg btn btn-danger"></span></p>
+      </div>
+
+      {{/* ── Status states (invalid / expired / already processed) ─ */}}
+      <div data-decline-status class="d-none">
+        <div class="alert" data-status-alert role="alert">
+          <h2 class="h5 alert-heading fw-bold mb-2" data-status-title></h2>
+          <p class="mb-0" data-status-body></p>
+        </div>
+        <p class="mt-3"><a href="/">Return to PKI Consortium</a></p>
+      </div>
+
+      {{/* ── Main form (shown for a valid invite) ───────────────── */}}
+      <div data-decline-form class="d-none">
+        <div class="text-center mb-4">
+          <div class="fs-1 mb-2" aria-hidden="true">🫱</div>
+          <h1 class="h3 fw-bold mb-1">Not able to make it?</h1>
+          <p class="text-muted">
+            Hi <strong data-placeholder="firstName">there</strong> — please let us know why. It helps us
+            improve future events and make them more relevant to people like you.
+          </p>
+        </div>
+
+        <div data-error-banner class="alert alert-danger d-none mb-3" role="alert"></div>
+
+        {{/* ── Virtual / hybrid pivot (travel barrier) ───────────── */}}
+        <div data-virtual-pivot class="alert alert-info border-0 d-none mb-3" role="region" aria-label="Virtual attendance option">
+          <strong>Can&rsquo;t make it in person?</strong> The event also has a virtual live-stream option.
+          You can attend from anywhere in the world at no extra cost.<br>
+          <a data-registration-link href="#" class="btn btn-sm btn-primary mt-2">Register for the Virtual Stream &rarr;</a>
+        </div>
+
+        {{/* ── On-demand pivot (schedule conflict) ────────────────── */}}
+        <div data-on-demand-pivot class="alert alert-info border-0 d-none mb-3" role="region" aria-label="On-demand access option">
+          <strong>Can&rsquo;t make this date?</strong> A live stream won&rsquo;t help if the timing doesn&rsquo;t work either.
+          Register for on-demand access and you&rsquo;ll get all the session recordings on your own schedule after the event.<br>
+          <a data-registration-link href="#" class="btn btn-sm btn-primary mt-2">Register for On-Demand Access &rarr;</a>
+        </div>
+
+        {{/* ── Convince-my-boss section ─────────────────────────── */}}
+        <div data-convince-boss class="alert alert-light border d-none mb-3" role="region">
+          <strong>Need to convince your organisation?</strong> Attendees consistently cite
+          peer-to-peer networking and access to pre-release standards as the top reasons
+          their organisations approve attendance. Virtual attendance is also available —
+          <a data-registration-link-boss href="#">register for the virtual stream</a> if
+          in-person approval is difficult to obtain.
+        </div>
+
+        <form data-decline-form-el novalidate>
+          {{/* ── Reason for declining ──────────────────────────── */}}
+          <fieldset class="mb-3">
+            <legend class="fw-semibold mb-2" style="font-size:.95rem;">Reason for declining</legend>
+            <div class="list-group list-group-flush" data-reason-options>
+              <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
+                <input class="form-check-input me-2" type="radio" name="reasonCode" value="schedule_conflict">
+                Schedule conflict &mdash; I have another commitment
+              </label>
+              <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
+                <input class="form-check-input me-2" type="radio" name="reasonCode" value="travel_not_possible">
+                Travel is not possible for me
+              </label>
+              <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
+                <input class="form-check-input me-2" type="radio" name="reasonCode" value="content_not_relevant">
+                Content is not relevant to my role
+              </label>
+              <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
+                <input class="form-check-input me-2" type="radio" name="reasonCode" value="organization_policy">
+                Organisation policy prevents me from attending
+              </label>
+              <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
+                <input class="form-check-input me-2" type="radio" name="reasonCode" value="not_interested">
+                This event doesn&rsquo;t match my current focus
+              </label>
+              <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
+                <input class="form-check-input me-2" type="radio" name="reasonCode" value="already_registered">
+                I&rsquo;m already registered through another link
+              </label>
+              <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
+                <input class="form-check-input me-2" type="radio" name="reasonCode" value="other">
+                Other reason
+              </label>
+            </div>
+            <div data-reason-error class="invalid-feedback d-none mt-1">Please select a reason before submitting.</div>
+          </fieldset>
+
+          {{/* ── Topic gap analysis (shown when content_not_relevant) */}}
+          <div data-topic-suggestion class="mb-3 d-none">
+            <label class="form-label fw-semibold small" for="topicSuggestion">
+              What topic would make this event a must-attend for you?
+              <span class="text-muted fw-normal">(helps us shape the agenda)</span>
+            </label>
+            <input type="text" id="topicSuggestion" data-topic-input class="form-control form-control-sm"
+              maxlength="200" placeholder="e.g. Post-quantum migration for enterprise CAs">
+          </div>
+
+          {{/* ── Additional comments ───────────────────────────── */}}
+          <div class="mb-3">
+            <label class="form-label small" for="reasonNote">
+              Additional comments
+              <span data-note-optional class="text-muted">(optional)</span>
+            </label>
+            <textarea id="reasonNote" data-reason-note class="form-control form-control-sm"
+              rows="3" maxlength="2000" placeholder="Any details that might help us improve…"></textarea>
+            <div data-note-error class="invalid-feedback d-none mt-1">
+              Please add a brief explanation for &ldquo;Other reason&rdquo;.
+            </div>
+          </div>
+
+          {{/* ── NPS score ─────────────────────────────────────── */}}
+          <div class="mb-3" data-nps-section>
+            <p class="small fw-semibold mb-2">
+              On a scale of 1&ndash;10, how likely are you to attend our next PKI Consortium event?
+            </p>
+            <div class="d-flex flex-wrap gap-1 align-items-center" data-nps-buttons role="group" aria-label="Likelihood score 1 to 10">
+              <span class="text-muted small me-1">Very unlikely</span>
+              {{range seq 1 10}}
+              <button type="button" class="btn btn-outline-secondary btn-sm nps-btn" data-nps="{{ . }}">{{ . }}</button>
+              {{end}}
+              <span class="text-muted small ms-1">Very likely</span>
+            </div>
+            <input type="hidden" data-nps-value>
+          </div>
+
+          {{/* ── Unsubscribe ───────────────────────────────────── */}}
+          <div class="mb-3">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" id="unsubscribeFuture" data-unsubscribe-future>
+              <label class="form-check-label small" for="unsubscribeFuture">
+                Don&rsquo;t send me invitations to future events
+              </label>
+            </div>
+          </div>
+
+          <hr class="my-3">
+
+          {{/* ── Forward section ───────────────────────────────── */}}
+          <div class="mb-3">
+            <button type="button" class="btn btn-link p-0 text-decoration-none fw-semibold small"
+              data-forward-toggle aria-expanded="false" aria-controls="forwardEntries">
+              <span data-forward-arrow class="me-1" aria-hidden="true">▶</span>
+              Know someone who should attend? Make sure they get an invitation
+            </button>
+            <div id="forwardEntries" data-forward-entries class="mt-3 d-none">
+              <div class="event-flow-invite">
+                <p class="event-flow-invite-copy mb-2">
+                  They&rsquo;ll receive a personal invitation by email.
+                </p>
+                <div class="event-flow-invite-paste-zone">
+                  <textarea data-decline-forward-paste
+                    class="form-control form-control-sm"
+                    rows="3"
+                    placeholder="Paste names and email addresses — one per line&#10;e.g. Jane Smith &lt;jane@example.com&gt;"
+                    aria-label="Paste contacts to invite"></textarea>
+                  <p class="event-flow-invite-paste-hint">
+                    Accepts: <code>First Last &lt;email&gt;</code> &middot; <code>first,last,email</code> &middot; plain email addresses
+                  </p>
+                </div>
+                <div class="event-flow-invite-thead" aria-hidden="true">
+                  <span>First name</span>
+                  <span>Last name</span>
+                  <span>Email</span>
+                  <span></span>
+                </div>
+                <div class="event-flow-invite-list" data-forward-list></div>
+                <button type="button"
+                  class="btn btn-outline-secondary btn-sm w-100 mt-2"
+                  data-add-forward>+ Add a contact</button>
+              </div>
+            </div>
+          </div>
+
+          <hr class="my-3">
+
+          <button type="submit" class="btn btn-danger w-100" data-submit-btn>
+            Decline this invitation
+          </button>
+        </form>
+      </div>
+
+      {{/* ── Success state ──────────────────────────────────────── */}}
+      <div data-decline-success class="d-none text-center py-3">
+        <div class="fs-1 mb-3" aria-hidden="true">✅</div>
+        <h2 class="h4 fw-bold mb-2">Thank you for letting us know</h2>
+        <p class="text-muted" data-success-forwarded></p>
+        <p class="text-muted mb-4">We hope to see you at a future event!</p>
+
+        {{/* Parting gift: content hook */}}
+        <div class="card border-0 bg-light p-3 text-start mb-4">
+          <p class="fw-semibold mb-1 small">In the meantime, stay up to date:</p>
+          <ul class="mb-0 small">
+            <li><a href="/resources/" target="_blank" rel="noopener">Browse our PKI resources library</a></li>
+            <li><a href="/blog/" target="_blank" rel="noopener">Read the latest news from the PKI Consortium</a></li>
+          </ul>
+        </div>
+
+        {{/* Calendar placeholder */}}
+        <p class="small text-muted">
+          <a href="/events/" target="_blank" rel="noopener">View upcoming PKI Consortium events</a>
+          so you can plan ahead for next time.
+        </p>
+      </div>
+
+    </div><!-- /data-invite-decline -->
+  </div>
+</div>
+
+{{ partial "script.html" (dict "path" "ts/invite-decline.ts") }}
