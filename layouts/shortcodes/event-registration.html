@@ -1,0 +1,116 @@
+{{- $eventSlug := partial "event-flow-slug.html" . -}}
+{{- $eventPagePath := partial "event-flow-page-path.html" . -}}
+<div class="event-flow" data-event-registration data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
+
+  {{/* ── Step progress indicator ─────────────────────────────────────────── */}}
+  <nav class="event-flow-stepper" aria-label="Registration progress">
+    <div class="event-flow-stepper-track" aria-hidden="true">
+      <div class="event-flow-stepper-fill" data-step-fill></div>
+    </div>
+    <ol class="event-flow-stepper-list">
+      <li class="event-flow-stepper-item is-active" data-step-item="1" aria-current="step">
+        <span class="event-flow-stepper-bubble">
+          <span class="event-flow-stepper-num" aria-hidden="true">1</span>
+          <svg class="event-flow-stepper-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/></svg>
+        </span>
+        <span class="event-flow-stepper-label">You</span>
+      </li>
+      <li class="event-flow-stepper-item" data-step-item="2">
+        <span class="event-flow-stepper-bubble">
+          <span class="event-flow-stepper-num" aria-hidden="true">2</span>
+          <svg class="event-flow-stepper-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/></svg>
+        </span>
+        <span class="event-flow-stepper-label">Attendance</span>
+      </li>
+      <li class="event-flow-stepper-item" data-step-item="3">
+        <span class="event-flow-stepper-bubble">
+          <span class="event-flow-stepper-num" aria-hidden="true">3</span>
+          <svg class="event-flow-stepper-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/></svg>
+        </span>
+        <span class="event-flow-stepper-label">Profile</span>
+      </li>
+      <li class="event-flow-stepper-item" data-step-item="4">
+        <span class="event-flow-stepper-bubble">
+          <span class="event-flow-stepper-num" aria-hidden="true">4</span>
+          <svg class="event-flow-stepper-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/></svg>
+        </span>
+        <span class="event-flow-stepper-label">Confirm</span>
+      </li>
+    </ol>
+  </nav>
+
+  <form class="needs-validation" novalidate>
+    <input name="referralCode" type="hidden">
+
+    {{/* ── Step 1: Who are you? ─────────────────────────────────────────── */}}
+    <div data-step="1" class="event-flow-step is-active">
+      <div class="row g-3">
+        <div class="col-sm-6">
+          <label for="registration-first-name" class="form-label">First name</label>
+          <input id="registration-first-name" name="firstName" type="text" class="form-control" required autocomplete="given-name">
+          <div data-field-error="firstName" class="invalid-feedback d-block"></div>
+        </div>
+        <div class="col-sm-6">
+          <label for="registration-last-name" class="form-label">Last name</label>
+          <input id="registration-last-name" name="lastName" type="text" class="form-control" required autocomplete="family-name">
+          <div data-field-error="lastName" class="invalid-feedback d-block"></div>
+        </div>
+        <div class="col-12">
+          <label for="registration-email" class="form-label">Work email</label>
+          <input id="registration-email" name="email" type="email" class="form-control" required autocomplete="email">
+          <div class="form-text">We'll send your confirmation, calendar invite, and event updates here.</div>
+          <div data-email-warning class="form-text text-warning d-none">
+            This looks like a personal email address. Please use your professional email so we can verify your affiliation.
+          </div>
+          <div data-field-error="email" class="invalid-feedback d-block"></div>
+        </div>
+      </div>
+    </div>
+
+    {{/* ── Step 2: Attendance ───────────────────────────────────────────── */}}
+    <div data-step="2" class="event-flow-step" hidden>
+      <p class="event-flow-step-intro">Choose how you'll follow each day — you can update this later.</p>
+      <div data-day-attendance>
+        <p class="form-text">Loading event days…</p>
+      </div>
+      <div data-field-error="dayAttendance" class="invalid-feedback d-block"></div>
+    </div>
+
+    {{/* ── Step 3: Profile ──────────────────────────────────────────────── */}}
+    <div data-step="3" class="event-flow-step" hidden>
+      <p class="event-flow-step-intro">Help us tailor the programme and connect you with relevant people.</p>
+      <div data-custom-fields>
+        <p class="form-text">Loading…</p>
+      </div>
+    </div>
+
+    {{/* ── Step 4: Confirm ──────────────────────────────────────────────── */}}
+    <div data-step="4" class="event-flow-step" hidden>
+      <p class="event-flow-step-intro">Almost there — a couple of quick agreements and you're in.</p>
+      <div data-consents>
+        <p class="form-text">Loading…</p>
+      </div>
+      <div data-field-error="consents" class="invalid-feedback d-block"></div>
+    </div>
+
+    {{/* ── Step navigation ──────────────────────────────────────────────── */}}
+    <div class="event-flow-step-nav">
+      <button type="button" class="btn btn-link event-flow-step-back" data-step-back hidden>
+        &larr; Back
+      </button>
+      <div class="event-flow-step-forward">
+        <button type="button" class="btn btn-primary btn-lg" data-step-next>
+          Continue &rarr;
+        </button>
+        <button type="submit" class="btn btn-success btn-lg" hidden>
+          Secure my spot &rarr;
+        </button>
+      </div>
+    </div>
+
+    <p data-flow-status class="alert visually-hidden mb-0 mt-3" role="status" aria-live="polite"></p>
+
+  </form>
+</div>
+{{ partial "script.html" (dict "path" "ts/event-flows/registration-page.ts") }}
+

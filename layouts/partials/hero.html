@@ -4,6 +4,17 @@
   {{- $src := . -}}
   {{/* 1. Page-bundle resource */}}
   {{- $bundleImg := $.Resources.GetMatch (printf "*%s" $src) -}}
+  {{- if not $bundleImg -}}
+    {{/* 1b. Walk up the section tree — handles cascade from ancestor _index.md pages */}}
+    {{- $s := $.Page.CurrentSection -}}
+    {{- range seq 6 -}}
+      {{- if and (not $bundleImg) $s -}}
+        {{- $found := $s.Resources.GetMatch (printf "*%s" $src) -}}
+        {{- if $found -}}{{- $bundleImg = $found -}}{{- end -}}
+        {{- $s = $s.Parent -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
   {{- if $bundleImg -}}
     {{- if strings.HasSuffix ($src | lower) ".svg" -}}
       {{- $heroLogoSVG = $bundleImg -}}
@@ -33,6 +44,14 @@
       {{- $heroImgResource = . -}}
     {{- end -}}
   {{- end -}}
+{{- end -}}
+{{/* ── Fluid title class based on character count ─────────────────────── */}}
+{{- $heroTitleText := default $.Title $.Params.heroTitle -}}
+{{- $heroTitleLen  := len $heroTitleText -}}
+{{- $heroTitleClass := "hero-title" -}}
+{{- if gt $heroTitleLen 100 -}}{{- $heroTitleClass = "hero-title hero-title-xl" -}}
+{{- else if gt $heroTitleLen 65 -}}{{- $heroTitleClass = "hero-title hero-title-long" -}}
+{{- else if gt $heroTitleLen 38 -}}{{- $heroTitleClass = "hero-title hero-title-medium" -}}
 {{- end -}}
 {{ with $heroImgResource }}
   {{ $img := . }}
@@ -75,7 +94,7 @@
 
     <div class="position-absolute top-0 start-0 w-100 h-100 d-flex flex-column justify-content-center align-items-center bg-dark bg-opacity-50 text-center text-white">
       <div class="container px-3 px-md-0">
-        <h1 class="display-4 fw-bold">{{ default $.Title $.Params.heroTitle }}</h1>
+        <h1 class="display-4 fw-bold {{ $heroTitleClass }}">{{ $heroTitleText }}</h1>
         {{ with $.Params.heroDescription }}
           <p class="lead fs-3">{{ . | markdownify }}</p>
         {{ end }}
@@ -157,7 +176,7 @@
           <img src="{{ $heroLogoSVG.RelPermalink }}" alt="{{ default $.Title $.Params.heroTitle }}" class="hero-logo-img" loading="eager">
         </div>
         {{ end }}
-        <h1 class="display-5 fw-bold text-white mb-3">{{ default $.Title $.Params.heroTitle }}</h1>
+        <h1 class="display-5 fw-bold text-white mb-3 {{ $heroTitleClass }}">{{ $heroTitleText }}</h1>
         {{ with $.Params.heroDescription }}
           <p class="lead pkic-hero-lead mb-4">{{ . | markdownify }}</p>
         {{ end }}

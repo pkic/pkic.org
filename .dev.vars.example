@@ -1,0 +1,13 @@
+# Copy this file to `.dev.vars` for local `wrangler pages dev`.
+# `.dev.vars` is gitignored.
+
+# Required for HMAC signing of internal tokens and hashed identifiers.
+INTERNAL_SIGNING_SECRET=replace-with-strong-random-value
+
+# Optional now, used for future hashed-email external feedback source.
+FEEDBACK_IDENTITY_SECRET_V1=replace-with-strong-random-value
+
+# Optional for local email sending via SendGrid.
+# SENDGRID_API_KEY=replace-with-sendgrid-api-key
+# FROM_EMAIL=noreply@pkic.org
+# FROM_NAME=PKI Consortium

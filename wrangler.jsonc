@@ -1,0 +1,66 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pkic-org",
+  "compatibility_date": "2026-02-28",
+  "compatibility_flags": ["nodejs_compat"],
+  "pages_build_output_dir": "public",
+  "dev": {
+    "port": 8788
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "pkic-db",
+      "database_id": "705d4a53-c607-4b4f-bf90-74fc1c079d37",
+      "migrations_dir": "migrations"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "ASSETS_BUCKET",
+      "bucket_name": "pkic-assets"
+    },
+    {
+      "binding": "SPEAKER_UPLOADS_BUCKET",
+      "bucket_name": "pkic-speaker-uploads"
+    }
+  ],
+  "images": {
+    "binding": "IMAGES"
+  },
+  // ── Preview environment (all non-production branches) ────────────────────
+  "env": {
+    "preview": {
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "pkic-db-preview",
+          "database_id": "0647ba62-4bf0-40e5-b547-62f992acbbf0",
+          "migrations_dir": "migrations"
+        }
+      ]
+    }
+  },
+  "vars": {
+    "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
+    "DEFAULT_REFERRAL_CODE_LENGTH": "7",
+    "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
+    "WAITLIST_CLAIM_WINDOW_HOURS": "24",
+    "MAGIC_LINK_TTL_MINUTES": "15",
+    "MANAGE_TOKEN_TTL_HOURS": "48",
+    "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
+    "SPEAKER_UPLOAD_DEADLINE_DAYS": "21"
+  }
+  // ── Secrets (set via: wrangler secret put <NAME>) ──────────────────────────
+  // SENDGRID_API_KEY        — SendGrid API key for sending emails
+  // FROM_EMAIL              — Sender email address
+  // FROM_NAME               — Sender display name
+  // INTERNAL_SIGNING_SECRET — Secret used for hashing IP / user-agent
+  // ADMIN_API_KEY           — Long-lived API key for headless admin access & stats
+  //                           (used by the admin UI and automated reporting)
+  //                           Generate with: openssl rand -hex 32
+}

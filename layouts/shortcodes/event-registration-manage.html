@@ -1,0 +1,119 @@
+{{- $eventSlug := partial "event-flow-slug.html" . -}}
+{{- $eventPagePath := partial "event-flow-page-path.html" . -}}
+<div class="event-flow" data-event-registration-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
+
+  {{/* ── Greeting / status banner ──────────────────────────────────────── */}}
+  <div data-manage-greeting class="mb-3 d-none">
+    <p class="lead mb-1" data-manage-greeting-text></p>
+    <span data-manage-status-badge class="badge"></span>
+  </div>
+
+  {{/* ── Loading placeholder ─────────────────────────────────────────── */}}
+  <p data-manage-loading class="form-text">Loading your registration…</p>
+
+  {{/* ── Share panel (rendered by JS after data loads) ───────────────── */}}
+  <div data-manage-share class="mb-4"></div>
+
+  {{/* ── Main form (shown after data loads) ──────────────────────────── */}}
+  <div data-manage-form class="d-none">
+    <form class="row g-3 my-2 needs-validation" novalidate>
+
+      {{/* ── Your photo ─────────────────────────────────────────────── */}}
+      <div class="col-12" data-headshot-section>
+        <h3 class="h5">Your photo</h3>
+        <div data-headshot-preview class="mb-2"></div>
+        <p data-headshot-status class="form-text mb-2"></p>
+        <div class="d-flex gap-2 align-items-center flex-wrap">
+          <label class="btn btn-sm btn-outline-secondary mb-0" for="manage-headshot-file">Upload photo</label>
+          <input type="file" id="manage-headshot-file" accept="image/jpeg,image/png,image/webp" class="visually-hidden" data-headshot-file>
+          <button type="button" class="btn btn-sm btn-outline-danger" data-headshot-delete style="display:none">Remove photo</button>
+        </div>
+      </div>
+
+      {{/* ── Your details ─────────────────────────────────────────────── */}}
+      <div class="col-12">
+        <h3 class="h5">Your details</h3>
+        {{- partial "event-flow-personal-fields.html" (dict "prefix" "manage") -}}
+      </div>
+
+      {{/* ── Event-specific questions (same pipeline as registration) ──── */}}
+      <div class="col-12" data-custom-fields-section>
+        <h3 class="h5">Event questions</h3>
+        <div data-custom-fields>
+          <p class="form-text">Loading…</p>
+        </div>
+      </div>
+
+      {{/* ── Attendance per day ────────────────────────────────────────── */}}
+      <div class="col-12">
+        <h3 class="h5">Attendance per day</h3>
+        <p class="form-text">Change attendance mode for each day. For multi-day events you cannot cancel individual days — switch a day to <em>On demand</em> to watch the recording instead.</p>
+        <div data-day-attendance>
+          <p class="form-text">Loading event days…</p>
+        </div>
+        <div data-field-error="dayAttendance" class="invalid-feedback d-block"></div>
+      </div>
+
+      {{/* ── Day waitlist (hidden when no active entries) ─────────────── */}}
+      <div class="col-12 d-none" data-day-waitlist-section>
+        <h3 class="h5">Waitlist status</h3>
+        <div data-day-waitlist></div>
+      </div>
+
+      {{/* ── Action buttons ───────────────────────────────────────────── */}}
+      <div class="col-12 d-flex gap-2 flex-wrap align-items-center" data-action-buttons>
+        <button type="submit" class="btn btn-success">Save changes</button>
+        <button type="button" data-action="cancel" class="btn btn-outline-danger">Cancel registration</button>
+        <button type="button" data-action="report-unauthorized" class="btn btn-link text-danger small p-0 ms-auto">
+          I did not request this registration
+        </button>
+      </div>
+
+      <div class="col-12">
+        <p data-flow-status class="alert visually-hidden mb-0" role="status" aria-live="polite"></p>
+      </div>
+
+    </form>
+  </div>
+
+  {{/* ── Cancel confirmation panel ────────────────────────────────────── */}}
+  <div class="d-none" data-confirm-cancel>
+    <div class="alert alert-warning">
+      <h4 class="alert-heading h6 fw-bold">Cancel your registration?</h4>
+      <p>Are you sure you want to cancel your registration for <strong data-confirm-event-name></strong>?</p>
+      <p class="form-text mb-3">You can re-register later if you change your mind. Waitlisted spots may be released immediately.</p>
+      <div class="d-flex gap-2">
+        <button type="button" data-confirm-cancel-yes class="btn btn-danger btn-sm">Yes, cancel my registration</button>
+        <button type="button" data-confirm-cancel-no class="btn btn-outline-secondary btn-sm">No, keep my registration</button>
+      </div>
+    </div>
+  </div>
+
+  {{/* ── Unauthorized report panel ────────────────────────────────────── */}}
+  <div class="d-none" data-confirm-unauthorized>
+    <div class="alert alert-danger">
+      <h4 class="alert-heading h6 fw-bold">Report unauthorized registration</h4>
+      <p>You are reporting that you did not request this registration. We will:</p>
+      <ul class="mb-3">
+        <li>Cancel and flag this registration as unauthorized</li>
+        <li>Remove the personal data stored with this registration</li>
+        <li>Notify the event organizer, who may investigate potential misuse</li>
+      </ul>
+      <p class="form-text mb-3">Your account and email address will not be deleted — only this event's registration record will be anonymized.</p>
+      <div class="d-flex gap-2">
+        <button type="button" data-unauthorized-yes class="btn btn-danger btn-sm">Confirm — I did not request this</button>
+        <button type="button" data-unauthorized-no class="btn btn-outline-secondary btn-sm">Go back</button>
+      </div>
+    </div>
+  </div>
+
+  {{/* ── Post-action confirmation ──────────────────────────────────────── */}}
+  <div class="d-none" data-post-action>
+    <div class="alert" data-post-action-alert>
+      <h4 class="alert-heading h6 fw-bold" data-post-action-title></h4>
+      <p class="mb-0" data-post-action-message></p>
+    </div>
+  </div>
+
+</div>
+{{ partial "script.html" (dict "path" "ts/event-flows/registration-manage-page.ts") }}
