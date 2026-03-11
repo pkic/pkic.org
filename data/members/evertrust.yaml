@@ -59,3 +59,17 @@ representatives:
       x:
       linkedin: https://www.linkedin.com/in/kamel-ferchouche-438a741/
     description: With a Master's in Computer Networking from UPMC, Kamel has focused on infrastructure security since his early career. After spending seven years managing access control mechanisms at Total and holding cybersecurity roles at enterprise-scale companies like Thales and ENGIE, he identified the challenges organizations faced with digital certificate infrastructure before co-founding Evertrust in 2017. Today, Kamel leads Evertrust's operations and product implementation strategies, ensuring that the company's digital trust solutions effectively address the complex security and compliance needs of major organizations worldwide.
+
+# Long-form content (markdown)
+content: |
+  European digital trust infrastructure provider
+
+  Evertrust delivers advanced machine identity management systems for enterprises seeking digital sovereignty and automated certificate lifecycle control. The company enables security teams to establish trustworthy digital infrastructures by unifying PKI and CLM capabilities, automating certificate operations, and ensuring crypto-readiness for emerging threats.
+
+  Organizations across banking, defense, healthcare, and government sectors trust Evertrust to secure their digital keys and certificates across multi-cloud environments, Kubernetes clusters, MDM ecosystems, and IoT deployments.
+
+  Founded in 2017 and headquartered in France, Evertrust develops 100% European code for PKI and certificate management, providing institutions greater control over their digital identities and data sovereignty.
+
+  Products include Horizon (certificate lifecycle management) and Stream (certificate authority, validation authority, and timestamping authority). Deploy your way: on-premises, containerized, or SaaS—with seamless integration for Microsoft ADCS, AWS, Google Cloud, Azure, Entrust, Digicert, and other leading providers.
+
+  With over 20 years of combined security expertise, Evertrust addresses challenges in post-quantum cryptography and AI-driven threats while maintaining the highest standards of identity verification and certificate management.

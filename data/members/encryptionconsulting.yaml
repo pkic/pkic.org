@@ -47,3 +47,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
+
+# Long-form content (markdown)
+content: |
+  Our areas of expertise include Public Key Infrastructure, enterprise key management, cloud key management, code-signing, hardware security modules, transparent data encryption, element level format preserving encryption, homomorphic encryption, and tokenization.
+
+  {{< youtube ohESl-8KDDA >}}

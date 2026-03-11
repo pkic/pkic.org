@@ -51,3 +51,12 @@ representatives:
       linkedin: https://www.linkedin.com/in/mads-henriksveen-48948941/
     description:
       Mads Henriksveen has a Master in Computer Science and has more than 35 years of working experience with focus on systems development and IT security. Mads has been working with cryptography, eID, eSignature, PKI etc for the last 20 years. Mads represents Buypass in the PKI Consortium and is currently acting as Vice Chair for the S/MIME Certificate Working Group in the CA/Browser Forum.
+
+# Long-form content (markdown)
+content: |
+
+  ## Working for a safer digital life
+
+  Buypass was established in 2001, and has built up a unique environment of competence in the development of secure and user-friendly ID and payment solutions. Our solutions satisfy the strictest security requirements of private enterprise and government.
+
+  We provide a complete portfolio of services for identifying and encrypting information throughout the digital value chain. Buypass is also Norway's only issuer of internationally approved SSL certificates and certificates according to eIDAS and PSD2.

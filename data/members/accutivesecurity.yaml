@@ -55,3 +55,11 @@ representatives:
       Paul Horn is Accutive’s leading quantum cryptography expert and is a regular in the North American cybersecurity circuit, including keynote presentations to hundreds of cybersecurity experts about emerging cybersecurity threats, including the need for post-quantum cryptography in the face of quantum threats.  Paul has been active in the cybersecurity space for decades. He began his cybersecurity career by developing deep expertise in hardware security modules (HSMs), including installation, configuration, and monitoring. From his HSM foundation, Paul expanded his expertise to the full suite of Thales identity protection products.
 
       Paul’s belief in the importance of cybersecurity education led him to achieve a CISSP certification and begin instructing cybersecurity professionals on best practices for cryptography and key management, including HSMs. In the years since, Paul has led the development and architecture for Accutive’s proprietary data protection platform – Accutive Data Discovery + Masking (ADM) and overseen many successful customer projects. In addition to his continued involvement in ADM, Paul leads Accutive Security’s PKI practice, guiding our engineers in the design and implementation of highly secure and available PKI infrastructure.
+
+# Long-form content (markdown)
+content: |
+  ## Data Protection, Cryptography + IAM Center of Excellence
+
+  Founded in 2009, Accutive Security is a data protection, cryptography and IAM center of excellence focused on developing and delivering robust, innovative PKI solutions for some of North America’s most impactful organizations. We partner with leading PKI vendors such as Thales, Keyfactor, HID, Entrust and Venafi to design, develop and implement robust cryptographic frameworks for our mutual clients. Additionally, we have our own data security platform, Accutive Data Discovery + Masking (ADM), which is a cutting-edge solution for data masking, discovery, subsetting, automation and tokenization.
+
+  As a leading provider of PKI services, Accutive Security is focused on contributing to innovation and best practices in the public key infrastructure space. We strive to stay on the leading edge of emerging trends in cryptography, such as post-quantum cryptography (PQC). 
