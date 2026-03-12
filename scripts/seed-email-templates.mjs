@@ -171,8 +171,12 @@ This is a friendly reminder that your registration for **{{eventName}}** is not 
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "attendee_invite",
-    subjectTemplate: "You're invited to {{eventName}}",
+    subjectTemplate: `{{#if isReminder}}{{#if lte daysUntilExpiry "2"}}Last chance to join peers at {{eventName}}{{else}}Still considering {{eventName}}?{{/if}}{{else}}You're invited to {{eventName}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Colleague,{{/if}}
+
+{{#if isReminder}}
+<div class="notice notice-warning">A quick follow-up on your personal invitation to <strong>{{eventName}}</strong>.{{#if daysUntilExpiry}}{{#if lte daysUntilExpiry "2"}} Access closes in {{daysUntilExpiry}} day(s).{{else}} We'd love to have you in the room for this one.{{/if}}{{/if}}</div>
+{{/if}}
 
 You have been personally invited to attend **{{eventName}}**, an event organized by the [PKI Consortium](https://pkic.org).
 
@@ -182,7 +186,7 @@ Join security experts, researchers, and industry leaders to explore the latest d
 
 {{#if declineUrl}}<div class="cta-secondary"><a href="{{declineUrl}}">No thanks, decline this invitation</a></div>{{/if}}
 
-Seats are limited — please register at your earliest convenience.
+{{#if isReminder}}If this is relevant to your work, this is a good moment to secure your place before capacity tightens.{{else}}Seats are limited — please register at your earliest convenience.{{/if}}
 
 ---
 
@@ -200,12 +204,18 @@ Seats are limited — please register at your earliest convenience.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "speaker_invite",
-    subjectTemplate: "Invitation to speak at {{eventName}}",
+    subjectTemplate: `{{#if isReminder}}{{#if lte daysUntilExpiry "2"}}Last call to speak at {{eventName}}{{else}}Opportunity to speak at {{eventName}}{{/if}}{{else}}Invitation to speak at {{eventName}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+
+{{#if isReminder}}
+<div class="notice notice-warning">A quick follow-up on your speaker invitation for <strong>{{eventName}}</strong>.{{#if daysUntilExpiry}}{{#if lte daysUntilExpiry "2"}} This opportunity closes in {{daysUntilExpiry}} day(s).{{else}} We'd be excited to feature your perspective in this programme.{{/if}}{{/if}}</div>
+{{/if}}
 
 We would be honoured to have you present at **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).
 
 We believe your expertise would be a valuable contribution to the programme. We invite you to submit a proposal for a session, workshop, or roundtable.
+
+{{#if isReminder}}If this topic matters to you, we'd hate for you to miss the chance to help shape the conversation on stage.{{/if}}
 
 <div class="cta"><a href="{{proposalUrl}}">Submit a proposal &rarr;</a></div>
 
@@ -356,8 +366,12 @@ Your profile can be updated at any time up until the event.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "presentation_upload_request",
-    subjectTemplate: "Please upload your presentation — {{eventName}}",
+    subjectTemplate: `{{#if isReminder}}{{#if lte daysUntilDeadline "1"}}Final call: upload your presentation today — {{eventName}}{{else}}{{#if lte daysUntilDeadline "3"}}Urgent: upload your presentation — {{eventName}}{{else}}Reminder: upload your presentation — {{eventName}}{{/if}}{{/if}}{{else}}Please upload your presentation — {{eventName}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+
+{{#if isReminder}}
+<div class="notice notice-warning">This is reminder #{{reminderCount}} that we still need your slides for <strong>{{proposalTitle}}</strong>.{{#if daysUntilDeadline}} {{#if lte daysUntilDeadline "3"}}Only {{daysUntilDeadline}} day(s) left.{{/if}}{{/if}}</div>
+{{/if}}
 
 We are looking forward to your session **{{proposalTitle}}** at **{{eventName}}**!
 

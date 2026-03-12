@@ -620,6 +620,11 @@ export async function renderEmail(
 }
 
 export function renderSubject(template: string | null, fallback: string, data: Record<string, unknown>): string {
+  const override = data.__subjectOverride;
+  if (typeof override === "string" && override.trim().length > 0) {
+    return override.replace(/[\r\n]+/g, " ").trim();
+  }
+
   if (!template) {
     return fallback.replace(/[\r\n]+/g, " ").trim();
   }

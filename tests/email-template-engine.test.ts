@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compileSimpleTemplate } from "../functions/_lib/email/render";
+import { compileSimpleTemplate, renderSubject } from "../functions/_lib/email/render";
 
 describe("email template engine (compileSimpleTemplate)", () => {
   describe("variable substitution", () => {
@@ -485,6 +485,31 @@ Line 2
       expect(result).toContain("{name}");
       expect(result).toContain("{{ name }}");
       expect(result).toContain("{{name");
+    });
+  });
+
+  describe("subject rendering (renderSubject)", () => {
+    it("renders conditional subject templates", () => {
+      const subject = renderSubject(
+        "{{#if isReminder}}{{#if lte daysUntilExpiry \"2\"}}Last chance{{else}}Friendly reminder{{/if}}{{else}}Welcome{{/if}}",
+        "Fallback Subject",
+        { isReminder: true, daysUntilExpiry: "1" },
+      );
+      expect(subject).toBe("Last chance");
+    });
+
+    it("falls back when template is null", () => {
+      const subject = renderSubject(null, "Default Subject", { isReminder: true });
+      expect(subject).toBe("Default Subject");
+    });
+
+    it("honors explicit subject override", () => {
+      const subject = renderSubject(
+        "{{#if isReminder}}Reminder{{else}}Welcome{{/if}}",
+        "Fallback",
+        { isReminder: true, __subjectOverride: "Custom subject variant" },
+      );
+      expect(subject).toBe("Custom subject variant");
     });
   });
 });

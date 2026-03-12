@@ -2,7 +2,7 @@ import { parseJsonBody } from "../../../../_lib/validation";
 import { json, markSensitive } from "../../../../_lib/http";
 import { AppError } from "../../../../_lib/errors";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
-import { getEventBySlug, getRequiredTerms, resolveEventVenue, resolveHeroImageUrl, resolveSponsorsImageUrl, updateEventBasePath } from "../../../../_lib/services/events";
+import { buildEventEmailVariables, getEventBySlug, getRequiredTerms, updateEventBasePath } from "../../../../_lib/services/events";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
 import { findOrCreateUser } from "../../../../_lib/services/users";
 import { acceptInvite, findInviteByToken } from "../../../../_lib/services/invites";
@@ -140,12 +140,7 @@ export async function onRequestPost(
       messageType: "transactional",
       subject: `Confirm your registration for ${event.name}`,
       data: {
-        // Event
-        eventName: event.name,
-        eventSlug: event.slug,
-        eventTimezone: event.timezone,
-        eventStartsAt: event.starts_at ?? "",
-        eventEndsAt: event.ends_at ?? "",
+        ...buildEventEmailVariables(event, appBaseUrl),
         // User
         firstName: user.first_name ?? "",
         lastName: user.last_name ?? "",
@@ -168,9 +163,6 @@ export async function onRequestPost(
         blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${event.name} — join me!\n${shareUrl}`)}`,
         redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
         badgeImageUrl: `${appBaseUrl}/api/v1/og/${referralCode}`,
-        // Media
-        sponsorsImageUrl: resolveSponsorsImageUrl(event),
-        heroImageUrl: resolveHeroImageUrl(event),
       },
     });
 
@@ -187,14 +179,7 @@ export async function onRequestPost(
       // Delay 90 s so the OG badge has time to render before we try to attach it.
       sendAfterSeconds: 90,
       data: {
-        // Event
-        eventName: event.name,
-        eventSlug: event.slug,
-        eventTimezone: event.timezone,
-        eventStartsAt: event.starts_at ?? "",
-        eventEndsAt: event.ends_at ?? "",
-        eventUrl: event.base_path ? `${appBaseUrl}${event.base_path}` : null,
-        venue: resolveEventVenue(event),
+        ...buildEventEmailVariables(event, appBaseUrl),
         // User
         firstName: user.first_name ?? "",
         lastName: user.last_name ?? "",
@@ -218,9 +203,6 @@ export async function onRequestPost(
         redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
         badgeImageUrl: `${appBaseUrl}/api/v1/og/${referralCode}`,
         __badgeCode: referralCode,
-        // Media
-        sponsorsImageUrl: resolveSponsorsImageUrl(event),
-        heroImageUrl: resolveHeroImageUrl(event),
       },
       calendar: {
         registrationId: created.registration.id,

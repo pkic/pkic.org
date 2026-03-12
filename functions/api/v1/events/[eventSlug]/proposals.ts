@@ -1,6 +1,6 @@
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json, markSensitive } from "../../../../_lib/http";
-import { getEventBySlug, getRequiredTerms, resolveHeroImageUrl, resolveSponsorsImageUrl, updateEventBasePath } from "../../../../_lib/services/events";
+import { buildEventEmailVariables, getEventBySlug, getRequiredTerms, updateEventBasePath } from "../../../../_lib/services/events";
 import { createProposal, addProposalSpeaker } from "../../../../_lib/services/proposals";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
 import { createReferralCode } from "../../../../_lib/services/referrals";
@@ -107,14 +107,12 @@ export async function onRequestPost(
         messageType: "transactional",
         subject: `You have been added as a speaker — ${event.name}`,
         data: {
-          eventName: event.name,
+          ...buildEventEmailVariables(event, appBaseUrl),
           firstName: speakerUser.first_name ?? "",
           lastName: speakerUser.last_name ?? "",
           proposerFirstName: proposer.first_name ?? "",
           proposalTitle: created.proposal.title,
           manageUrl: speakerManageUrl,
-          sponsorsImageUrl: resolveSponsorsImageUrl(event),
-          heroImageUrl: resolveHeroImageUrl(event),
         },
       });
       outboxIds.push(id);
@@ -156,7 +154,7 @@ export async function onRequestPost(
     messageType: "transactional",
     subject: `Proposal submitted: ${created.proposal.title}`,
     data: {
-      eventName: event.name,
+      ...buildEventEmailVariables(event, appBaseUrl),
       firstName: proposer.first_name ?? "",
       lastName: proposer.last_name ?? "",
       proposalTitle: created.proposal.title,

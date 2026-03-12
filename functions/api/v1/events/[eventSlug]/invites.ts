@@ -1,6 +1,6 @@
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json, markSensitive } from "../../../../_lib/http";
-import { getEventBySlug, resolveHeroImageUrl, resolveSponsorsImageUrl } from "../../../../_lib/services/events";
+import { buildEventEmailVariables, getEventBySlug } from "../../../../_lib/services/events";
 import { getRegistrationByManageToken } from "../../../../_lib/services/registrations";
 import { countInvitesByInviter, createInvite } from "../../../../_lib/services/invites";
 import { createReferralCode } from "../../../../_lib/services/referrals";
@@ -93,13 +93,11 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
       messageType: "transactional",
       subject: `Invitation: ${event.name}`,
       data: {
-        eventName: event.name,
+        ...buildEventEmailVariables(event, appBaseUrl),
         firstName: invite.invitee_first_name ?? "",
         lastName: invite.invitee_last_name ?? "",
         registrationUrl,
         declineUrl,
-        sponsorsImageUrl: resolveSponsorsImageUrl(event),
-        heroImageUrl: resolveHeroImageUrl(event),
       },
     });
 
