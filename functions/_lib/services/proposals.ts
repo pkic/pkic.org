@@ -37,6 +37,19 @@ export interface ProposalReviewRecord {
   applicant_note: string | null;
   created_at: string;
   updated_at: string;
+  reviewer_email?: string;
+  reviewer_first_name?: string | null;
+  reviewer_last_name?: string | null;
+}
+
+export interface ProposalListRecord extends ProposalRecord {
+  proposer_email: string;
+  proposer_first_name: string | null;
+  proposer_last_name: string | null;
+  review_count: number;
+  decision_status: "accepted" | "rejected" | "needs_work" | null;
+  decision_note: string | null;
+  decision_decided_at: string | null;
 }
 
 function participantRoleForProposalRole(role: string): { role: string; subrole: string | null } {
@@ -703,7 +716,15 @@ export async function upsertProposalReview(
 export async function listProposalReviews(db: DatabaseLike, proposalId: string): Promise<ProposalReviewRecord[]> {
   return all<ProposalReviewRecord>(
     db,
-    "SELECT * FROM proposal_reviews WHERE proposal_id = ? ORDER BY created_at ASC",
+    `SELECT
+       pr.*,
+       u.email      AS reviewer_email,
+       u.first_name AS reviewer_first_name,
+       u.last_name  AS reviewer_last_name
+     FROM proposal_reviews pr
+     JOIN users u ON u.id = pr.reviewer_user_id
+     WHERE pr.proposal_id = ?
+     ORDER BY pr.updated_at DESC`,
     [proposalId],
   );
 }
@@ -819,10 +840,28 @@ export async function finalizeProposalDecision(
   return { reviewCount };
 }
 
-export async function listProposalsForEvent(db: DatabaseLike, eventId: string): Promise<ProposalRecord[]> {
-  return all<ProposalRecord>(
+export async function listProposalsForEvent(db: DatabaseLike, eventId: string): Promise<ProposalListRecord[]> {
+  return all<ProposalListRecord>(
     db,
-    "SELECT * FROM session_proposals WHERE event_id = ? ORDER BY submitted_at DESC",
+    `SELECT
+       sp.*,
+       u.email      AS proposer_email,
+       u.first_name AS proposer_first_name,
+       u.last_name  AS proposer_last_name,
+       COALESCE(rv.review_count, 0) AS review_count,
+       pd.final_status AS decision_status,
+       pd.decision_note AS decision_note,
+       pd.decided_at AS decision_decided_at
+     FROM session_proposals sp
+     JOIN users u ON u.id = sp.proposer_user_id
+     LEFT JOIN (
+       SELECT proposal_id, COUNT(*) AS review_count
+       FROM proposal_reviews
+       GROUP BY proposal_id
+     ) rv ON rv.proposal_id = sp.id
+     LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
+     WHERE sp.event_id = ?
+     ORDER BY sp.submitted_at DESC`,
     [eventId],
   );
 }

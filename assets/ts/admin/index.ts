@@ -66,6 +66,56 @@ interface Registration {
   referral_code?: string | null;
 }
 
+interface ProposalSummary {
+  id: string;
+  event_id: string;
+  proposer_user_id: string;
+  status: string;
+  proposal_type: string;
+  title: string;
+  abstract: string;
+  submitted_at: string;
+  updated_at: string;
+  proposer_email: string;
+  proposer_first_name: string | null;
+  proposer_last_name: string | null;
+  review_count: number;
+  decision_status: string | null;
+  decision_note: string | null;
+  decision_decided_at: string | null;
+}
+
+interface ProposalReview {
+  id: string;
+  reviewer_user_id: string;
+  recommendation: "accept" | "reject" | "needs-work";
+  score: number | null;
+  reviewer_comment: string | null;
+  applicant_note: string | null;
+  updated_at: string;
+  reviewer_email?: string;
+  reviewer_first_name?: string | null;
+  reviewer_last_name?: string | null;
+}
+
+interface ProposalSpeaker {
+  userId: string;
+  role: string;
+  status: string;
+  email: string;
+  firstName: string | null;
+  lastName: string | null;
+  organizationName: string | null;
+  hasHeadshot: boolean;
+  hasBio: boolean;
+}
+
+interface ProposalAccess {
+  eventPermissions: string[];
+  canReview: boolean;
+  canFinalize: boolean;
+}
+
 interface BadgeRoleInfo {
   admin_override: string | null;
   auto_detected: string;
@@ -160,12 +210,39 @@ interface EmailTemplateVersion {
   created_at: string;
 }
 
+interface TemplateHelperItem {
+  category: "Variables" | "Conditions" | "CTAs";
+  label: string;
+  snippet: string;
+  target?: "subject" | "body";
+}
+
 // ── State ──────────────────────────────────────────────────────────────────────
 
 let _token: string | null = null;
 let _email: string | null = null;
 let _evList: EventSummary[] = [];
 let _currentEventDetail: EventDetail | null = null;
+let _proposalAccessByEventSlug: Record<string, ProposalAccess> = {};
+let _templateEditorFocus: "subject" | "body" = "body";
+
+const TEMPLATE_HELPERS: TemplateHelperItem[] = [
+  { category: "Variables", label: "eventName", snippet: "{{eventName}}", target: "subject" },
+  { category: "Variables", label: "firstName", snippet: "{{firstName}}" },
+  { category: "Variables", label: "proposalTitle", snippet: "{{proposalTitle}}" },
+  { category: "Variables", label: "deadline", snippet: "{{deadline}}" },
+  { category: "Variables", label: "daysUntilExpiry", snippet: "{{daysUntilExpiry}}" },
+  { category: "Variables", label: "daysUntilDeadline", snippet: "{{daysUntilDeadline}}" },
+  { category: "Conditions", label: "isReminder", snippet: "{{#if isReminder}}\n\n{{/if}}" },
+  { category: "Conditions", label: "if eq", snippet: "{{#if eq status \"accepted\"}}\n\n{{/if}}" },
+  { category: "Conditions", label: "if lte", snippet: "{{#if lte daysUntilExpiry \"2\"}}\n\n{{/if}}" },
+  { category: "Conditions", label: "else block", snippet: "{{#if isReminder}}\n\n{{else}}\n\n{{/if}}" },
+  { category: "Conditions", label: "unless", snippet: "{{#unless hasHeadshot}}\n\n{{/unless}}" },
+  { category: "Conditions", label: "each", snippet: "{{#each attendees}}\n- {{this}}\n{{/each}}" },
+  { category: "CTAs", label: "CTA register", snippet: "<div class=\"cta\"><a href=\"{{registrationUrl}}\">Register now &rarr;</a></div>" },
+  { category: "CTAs", label: "CTA proposal", snippet: "<div class=\"cta\"><a href=\"{{proposalUrl}}\">Submit a proposal &rarr;</a></div>" },
+  { category: "CTAs", label: "CTA upload", snippet: "<div class=\"cta\"><a href=\"{{uploadUrl}}\">Upload my presentation &rarr;</a></div>" },
+];
 
 function loadAuth(): void {
   _token = localStorage.getItem("pkic_at");
@@ -253,6 +330,10 @@ function badge(status: string): string {
     active: "success", draft: "warning",
     // Event/registration mode
     invite_only: "warning", invite_or_open: "primary", open: "success",
+    // Proposal statuses / outcomes
+    submitted: "primary", under_review: "info", rejected: "danger", needs_work: "warning", withdrawn: "secondary",
+    // Review recommendation
+    accept: "success", reject: "danger", "needs-work": "warning",
   };
   return `<span class="badge text-bg-${map[status] ?? "secondary"}">${esc(status || "—")}</span>`;
 }
@@ -446,6 +527,7 @@ async function openEvent(slug: string): Promise<void> {
           `<li class="nav-item"><button class="nav-link active" data-tab="regs">Registrations (${regs.length})</button></li>` +
           '<li class="nav-item"><button class="nav-link" data-tab="invite">Send Invites</button></li>' +
           `<li class="nav-item"><button class="nav-link" data-tab="invlist">Invite List <span class="badge text-bg-secondary" style="font-size:.65rem">${ev.pending_invites ?? 0} pending</span></button></li>` +
+          '<li class="nav-item"><button class="nav-link" data-tab="proposals">Proposals</button></li>' +
           '<li class="nav-item"><button class="nav-link" data-tab="promoters">Promoters &#127881;</button></li>' +
           '<li class="nav-item"><button class="nav-link" data-tab="details">Details</button></li>' +
           '<li class="nav-item"><button class="nav-link" data-tab="team">Team</button></li>' +
@@ -454,6 +536,7 @@ async function openEvent(slug: string): Promise<void> {
         `<div id="et-invite" class="d-none">${inviteFormHtml(slug)}</div>` +
         // wireRegsTable called below after innerHTML is set
         `<div id="et-invlist" class="d-none">${inviteListHtml(slug)}</div>` +
+        `<div id="et-proposals" class="d-none">${proposalsTabHtml()}</div>` +
         `<div id="et-promoters" class="d-none">${promotersTabHtml()}</div>` +
         `<div id="et-details" class="d-none">${detailsFormHtml(_currentEventDetail)}</div>` +
         `<div id="et-team" class="d-none">${teamTabHtml()}</div>` +
@@ -464,11 +547,12 @@ async function openEvent(slug: string): Promise<void> {
     det.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((btn) => {
       btn.addEventListener("click", () => {
         det.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((b) => b.classList.remove("active"));
-        ["regs", "invite", "invlist", "promoters", "details", "team"].forEach((id) => hide(q(`#et-${id}`)));
+        ["regs", "invite", "invlist", "proposals", "promoters", "details", "team"].forEach((id) => hide(q(`#et-${id}`)));
         btn.classList.add("active");
         const tab = btn.dataset.tab!;
         show(q(`#et-${tab}`));
         if (tab === "invlist")   void loadEventInvites(slug);
+        if (tab === "proposals") void loadEventProposals(slug);
         if (tab === "promoters") void loadEventPromoters(slug);
         if (tab === "team")      void loadEventPermissions(slug);
       });
@@ -961,6 +1045,399 @@ async function loadEventPromoters(slug: string): Promise<void> {
   }
 
   await doLoad();
+}
+
+// ── Proposals tab ───────────────────────────────────────────────────────────
+
+function proposalsTabHtml(): string {
+  return (
+    '<div class="d-flex gap-2 align-items-center mb-3 flex-wrap">' +
+      '<label class="form-label mb-0 small fw-semibold" for="proposal-filter">Status</label>' +
+      '<select class="form-select form-select-sm" id="proposal-filter" style="width:auto">' +
+        '<option value="">All</option>' +
+        '<option value="submitted">Submitted</option>' +
+        '<option value="under_review">Under Review</option>' +
+        '<option value="accepted">Accepted</option>' +
+        '<option value="rejected">Rejected</option>' +
+        '<option value="needs_work">Needs Work</option>' +
+        '<option value="withdrawn">Withdrawn</option>' +
+      '</select>' +
+      '<input class="form-control form-control-sm" id="proposal-search" type="search" placeholder="Search title or proposer" style="max-width:300px">' +
+      '<button class="btn btn-sm btn-outline-secondary" id="proposal-refresh">&circlearrowright; Refresh</button>' +
+    '</div>' +
+    '<div id="proposal-list-body">' + spinner() + '</div>' +
+    '<div id="proposal-detail" class="mt-3"></div>'
+  );
+}
+
+async function loadEventProposals(slug: string): Promise<void> {
+  const body = q("#proposal-list-body");
+  if (!body) return;
+
+  const fetchAndRender = async (): Promise<void> => {
+    body.innerHTML = spinner();
+    try {
+      const response = await api<{ proposals: ProposalSummary[]; permissions?: ProposalAccess }>(`/api/v1/admin/events/${slug}/proposals`);
+      const access: ProposalAccess = response.permissions ?? { eventPermissions: [], canReview: true, canFinalize: true };
+      _proposalAccessByEventSlug[slug] = access;
+      const filter = q<HTMLSelectElement>("#proposal-filter")?.value ?? "";
+      const search = (q<HTMLInputElement>("#proposal-search")?.value ?? "").trim().toLowerCase();
+      const proposals = (response.proposals ?? []).filter((proposal) => {
+        if (filter && proposal.status !== filter) return false;
+        if (!search) return true;
+        const proposer = [proposal.proposer_first_name, proposal.proposer_last_name, proposal.proposer_email]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return proposal.title.toLowerCase().includes(search) || proposer.includes(search);
+      });
+
+      const rows = proposals.map((proposal) => {
+        const proposerName = [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ");
+        const proposerLabel = proposerName
+          ? `${esc(proposerName)}<br><span class="mono text-muted" style="font-size:.72rem">${esc(proposal.proposer_email)}</span>`
+          : `<span class="mono">${esc(proposal.proposer_email)}</span>`;
+        const decisionLabel = proposal.decision_status
+          ? `${badge(proposal.decision_status)}<div class="small text-muted">${fmt(proposal.decision_decided_at)}</div>`
+          : '<span class="text-muted small">Not finalized</span>';
+        return (
+          `<tr>` +
+          `<td><div class="fw-semibold">${esc(proposal.title)}</div><div class="small text-muted">${esc(proposal.proposal_type)}</div></td>` +
+          `<td>${proposerLabel}</td>` +
+          `<td>${badge(proposal.status)}</td>` +
+          `<td class="mono text-center">${Number(proposal.review_count ?? 0)}</td>` +
+          `<td>${decisionLabel}</td>` +
+          `<td class="mono">${fmt(proposal.submitted_at)}</td>` +
+          `<td><button class="btn btn-sm btn-outline-primary" data-open-proposal="${esc(proposal.id)}">${access.canReview ? "Review" : "View"}</button></td>` +
+          `</tr>`
+        );
+      });
+
+      body.innerHTML = tbl(
+        ["Proposal", "Proposer", "Status", "Reviews", "Decision", "Submitted", ""],
+        rows,
+        "No proposals match the current filters",
+      );
+
+      body.querySelectorAll<HTMLButtonElement>("[data-open-proposal]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const proposal = (response.proposals ?? []).find((p) => p.id === btn.dataset.openProposal);
+          if (!proposal) return;
+          void loadProposalDetail(slug, proposal, access);
+        });
+      });
+    } catch (err) {
+      body.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+    }
+  };
+
+  const bodyEl = body as HTMLElement;
+  if (!bodyEl.dataset.proposalWired) {
+    bodyEl.dataset.proposalWired = "1";
+    q("#proposal-refresh")?.addEventListener("click", () => void fetchAndRender());
+    q("#proposal-filter")?.addEventListener("change", () => void fetchAndRender());
+    q("#proposal-search")?.addEventListener("keydown", (event) => {
+      if ((event as KeyboardEvent).key === "Enter") {
+        event.preventDefault();
+        void fetchAndRender();
+      }
+    });
+  }
+
+  await fetchAndRender();
+}
+
+async function loadProposalDetail(slug: string, proposal: ProposalSummary, access: ProposalAccess): Promise<void> {
+  const detail = q("#proposal-detail");
+  if (!detail) return;
+  detail.innerHTML = spinner();
+
+  try {
+    const [reviewsResp, speakersResp] = await Promise.all([
+      api<{ reviews: ProposalReview[] }>(`/api/v1/admin/proposals/${proposal.id}/reviews`),
+      api<{ speakers: ProposalSpeaker[]; summary: { confirmed: number; total: number; profileComplete: number } }>(
+        `/api/v1/admin/proposals/${proposal.id}/speakers`,
+      ),
+    ]);
+
+    const reviews = reviewsResp.reviews ?? [];
+    const speakers = speakersResp.speakers ?? [];
+    const ownReview = reviews.find((r) => r.reviewer_email?.toLowerCase() === (_email ?? "").toLowerCase()) ?? null;
+
+    const speakerRows = speakers.map((speaker) => {
+      const displayName = [speaker.firstName, speaker.lastName].filter(Boolean).join(" ");
+      const roleLabel = speaker.role === "proposer" && speaker.hasBio ? "proposer / speaker" : speaker.role;
+      return (
+        `<tr>` +
+        `<td>${displayName ? esc(displayName) : '<span class="text-muted">—</span>'}<br><span class="mono text-muted small">${esc(speaker.email)}</span></td>` +
+        `<td>${badge(roleLabel)}</td>` +
+        `<td>${badge(speaker.status)}</td>` +
+        `<td>${speaker.hasBio ? '<span class="text-success">Yes</span>' : '<span class="text-muted">No</span>'}</td>` +
+        `<td>${speaker.hasHeadshot ? '<span class="text-success">Yes</span>' : '<span class="text-muted">No</span>'}</td>` +
+        `</tr>`
+      );
+    });
+
+    const reviewRows = reviews.map((review) => {
+      const reviewerName = [review.reviewer_first_name, review.reviewer_last_name].filter(Boolean).join(" ");
+      const who = reviewerName || review.reviewer_email || review.reviewer_user_id;
+      return (
+        `<tr>` +
+        `<td>${esc(who)}</td>` +
+        `<td>${badge(review.recommendation)}</td>` +
+        `<td class="mono">${review.score ?? "—"}</td>` +
+        `<td class="small">${esc(review.reviewer_comment ?? "—")}</td>` +
+        `<td class="mono">${fmt(review.updated_at)}</td>` +
+        `</tr>`
+      );
+    });
+
+    detail.innerHTML =
+      '<div class="card border-0 shadow-sm">' +
+      '<div class="card-header bg-white d-flex align-items-center justify-content-between">' +
+        `<div><div class="fw-semibold">${esc(proposal.title)}</div>` +
+        `<div class="small text-muted">${esc(proposal.proposal_type)} · ${badge(proposal.status)}</div></div>` +
+        '<button class="btn btn-sm btn-outline-secondary" id="btn-close-proposal-detail">Close</button>' +
+      '</div>' +
+      '<div class="card-body">' +
+        `<p class="small mb-2"><strong>Abstract:</strong><br>${esc(proposal.abstract)}</p>` +
+        '<div class="row g-3 mb-3">' +
+          '<div class="col-md-6">' +
+            '<h6 class="text-uppercase small fw-bold text-muted mb-2">Speakers</h6>' +
+            `<div class="small text-muted mb-2">Confirmed ${speakersResp.summary?.confirmed ?? 0}/${speakersResp.summary?.total ?? speakers.length}, Profiles complete ${speakersResp.summary?.profileComplete ?? 0}</div>` +
+            tbl(["Speaker", "Role", "Status", "Bio", "Headshot"], speakerRows, "No speakers linked") +
+          '</div>' +
+          '<div class="col-md-6">' +
+            '<h6 class="text-uppercase small fw-bold text-muted mb-2">Committee Reviews</h6>' +
+            tbl(["Reviewer", "Recommendation", "Score", "Comment", "Updated"], reviewRows, "No reviews submitted") +
+          '</div>' +
+        '</div>' +
+
+        '<div class="row g-3">' +
+          '<div class="col-md-6">' +
+            '<h6 class="text-uppercase small fw-bold text-muted mb-2">My Review</h6>' +
+            (access.canReview
+              ? '<div class="card border"><div class="card-body">' +
+                  `<div class="small text-muted mb-2">${ownReview ? `Review last updated ${esc(fmt(ownReview.updated_at))}.` : "No review submitted yet."}</div>` +
+                  '<div class="d-flex align-items-center gap-2 mb-2">' +
+                    `<button class="btn btn-sm btn-outline-primary" id="btn-proposal-toggle-review-form">${ownReview ? "Edit My Review" : "Add My Review"}</button>` +
+                    '<span class="small" id="proposal-review-status"></span>' +
+                  '</div>' +
+                  '<div class="d-none" id="proposal-review-form-wrap">' +
+                    '<div class="mb-2"><label class="form-label small fw-semibold mb-1">Recommendation</label>' +
+                      `<select class="form-select form-select-sm" id="proposal-review-recommendation">` +
+                        `<option value="accept"${ownReview?.recommendation === "accept" ? " selected" : ""}>Accept</option>` +
+                        `<option value="needs-work"${ownReview?.recommendation === "needs-work" ? " selected" : ""}>Needs Work</option>` +
+                        `<option value="reject"${ownReview?.recommendation === "reject" ? " selected" : ""}>Reject</option>` +
+                      '</select></div>' +
+                    '<div class="mb-2"><label class="form-label small fw-semibold mb-1" for="proposal-review-score">Score <span class="text-muted" id="proposal-review-score-value">' +
+                      `${esc(ownReview?.score ?? 5)}/10` +
+                    '</span></label>' +
+                      `<input class="form-range" id="proposal-review-score" type="range" min="1" max="10" step="1" value="${esc(ownReview?.score ?? 5)}" aria-describedby="proposal-review-score-value"></div>` +
+                    '<div class="mb-2"><label class="form-label small fw-semibold mb-1">Committee Comment</label>' +
+                      `<textarea class="form-control form-control-sm" id="proposal-review-comment" rows="4">${esc(ownReview?.reviewer_comment ?? "")}</textarea></div>` +
+                    '<div class="mb-2"><label class="form-label small fw-semibold mb-1">Applicant Note (optional)</label>' +
+                      `<textarea class="form-control form-control-sm" id="proposal-review-applicant-note" rows="3">${esc(ownReview?.applicant_note ?? "")}</textarea></div>` +
+                    '<div class="d-flex align-items-center gap-2">' +
+                      '<button class="btn btn-sm btn-primary" id="btn-proposal-save-review">Save Review</button>' +
+                      '<button class="btn btn-sm btn-outline-secondary" id="btn-proposal-cancel-review-form">Cancel</button>' +
+                    '</div>' +
+                  '</div>' +
+                '</div></div>'
+              : '<div class="card border"><div class="card-body small text-muted">You do not have permission to submit committee reviews for this event.</div></div>') +
+          '</div>' +
+
+          '<div class="col-md-6">' +
+            '<h6 class="text-uppercase small fw-bold text-muted mb-2">Finalize Decision</h6>' +
+            (access.canFinalize
+              ? '<div class="card border"><div class="card-body">' +
+                  '<div class="small text-muted mb-2">Use this when the committee reached final consensus. Policy review threshold is enforced automatically.</div>' +
+                  '<div class="d-flex align-items-center gap-2 mb-2">' +
+                    '<button class="btn btn-sm btn-outline-success" id="btn-proposal-toggle-finalize-form">Open Finalize Form</button>' +
+                    '<span class="small" id="proposal-finalize-status"></span>' +
+                  '</div>' +
+                  '<div class="d-none" id="proposal-finalize-form-wrap">' +
+                    '<div class="mb-2"><label class="form-label small fw-semibold mb-1">Final status</label>' +
+                      '<select class="form-select form-select-sm" id="proposal-final-status">' +
+                        '<option value="accepted">Accepted</option>' +
+                        '<option value="needs_work">Needs Work</option>' +
+                        '<option value="rejected">Rejected</option>' +
+                      '</select></div>' +
+                    '<div class="mb-2"><label class="form-label small fw-semibold mb-1">Decision note</label>' +
+                      '<textarea class="form-control form-control-sm" id="proposal-final-note" rows="3" placeholder="Optional summary for proposer"></textarea></div>' +
+                    '<div class="row g-2 mb-1">' +
+                      '<div class="col-md-6 d-none" id="proposal-presentation-deadline-wrap"><label class="form-label small fw-semibold mb-1">Presentation deadline (accepted only)</label>' +
+                        '<input class="form-control form-control-sm" id="proposal-presentation-deadline" type="datetime-local"></div>' +
+                    '</div>' +
+                    '<div class="small text-muted mb-2">Presentation deadline is optional and only used when status is Accepted.</div>' +
+                    '<div class="form-check mb-2">' +
+                      '<input class="form-check-input" type="checkbox" id="proposal-final-confirm">' +
+                      '<label class="form-check-label small" for="proposal-final-confirm">I confirm this is the final committee decision for this proposal.</label>' +
+                    '</div>' +
+                    '<div class="d-flex align-items-center gap-2 flex-wrap">' +
+                      '<button class="btn btn-sm btn-outline-secondary" id="btn-proposal-preview-finalize">Preview</button>' +
+                      '<button class="btn btn-sm btn-success" id="btn-proposal-finalize" disabled>Finalize Decision</button>' +
+                      '<button class="btn btn-sm btn-outline-secondary" id="btn-proposal-cancel-finalize-form">Cancel</button>' +
+                    '</div>' +
+                  '</div>' +
+                '</div></div>'
+              : '<div class="card border"><div class="card-body small text-muted">Only organizers can finalize proposal decisions for this event.</div></div>') +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '</div>';
+
+    q("#btn-close-proposal-detail")?.addEventListener("click", () => {
+      const el = q("#proposal-detail");
+      if (el) el.innerHTML = "";
+    });
+
+    const reviewFormWrap = q("#proposal-review-form-wrap");
+    const toggleReviewFormBtn = q<HTMLButtonElement>("#btn-proposal-toggle-review-form");
+    q("#btn-proposal-toggle-review-form")?.addEventListener("click", () => {
+      const hidden = reviewFormWrap?.classList.contains("d-none") ?? true;
+      if (hidden) {
+        show(reviewFormWrap);
+        if (toggleReviewFormBtn) toggleReviewFormBtn.textContent = "Hide Review Form";
+      } else {
+        hide(reviewFormWrap);
+        if (toggleReviewFormBtn) toggleReviewFormBtn.textContent = ownReview ? "Edit My Review" : "Add My Review";
+      }
+    });
+
+    q("#btn-proposal-cancel-review-form")?.addEventListener("click", () => {
+      hide(reviewFormWrap);
+      if (toggleReviewFormBtn) toggleReviewFormBtn.textContent = ownReview ? "Edit My Review" : "Add My Review";
+    });
+
+    q("#btn-proposal-save-review")?.addEventListener("click", async () => {
+      const statusEl = q("#proposal-review-status");
+      const recommendation = q<HTMLSelectElement>("#proposal-review-recommendation")?.value ?? "accept";
+      const scoreRaw = q<HTMLInputElement>("#proposal-review-score")?.value.trim() ?? "";
+      const reviewerComment = q<HTMLTextAreaElement>("#proposal-review-comment")?.value.trim() ?? "";
+      const applicantNote = q<HTMLTextAreaElement>("#proposal-review-applicant-note")?.value.trim() ?? "";
+      try {
+        if (statusEl) { statusEl.textContent = "Saving…"; statusEl.className = "small text-muted"; }
+        await api(`/api/v1/admin/proposals/${proposal.id}/reviews`, {
+          method: "POST",
+          body: JSON.stringify({
+            recommendation,
+            score: scoreRaw ? Number(scoreRaw) : undefined,
+            reviewerComment: reviewerComment || undefined,
+            applicantNote: applicantNote || undefined,
+          }),
+        });
+        if (statusEl) { statusEl.textContent = "Saved"; statusEl.className = "small text-success"; }
+        toast("Proposal review saved", "success");
+        await loadProposalDetail(slug, proposal, access);
+        await loadEventProposals(slug);
+      } catch (err) {
+        if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "small text-danger"; }
+        toast((err as Error).message, "error");
+      }
+    });
+
+    const reviewScoreEl = q<HTMLInputElement>("#proposal-review-score");
+    const reviewScoreValueEl = q("#proposal-review-score-value");
+    const syncReviewScoreValue = (): void => {
+      const value = reviewScoreEl?.value ?? "5";
+      if (reviewScoreValueEl) reviewScoreValueEl.textContent = `${value}/10`;
+    };
+    reviewScoreEl?.addEventListener("input", syncReviewScoreValue);
+    syncReviewScoreValue();
+
+    const finalStatusSelect = q<HTMLSelectElement>("#proposal-final-status");
+    const finalizeFormWrap = q("#proposal-finalize-form-wrap");
+    const toggleFinalizeFormBtn = q<HTMLButtonElement>("#btn-proposal-toggle-finalize-form");
+    const deadlineWrap = q("#proposal-presentation-deadline-wrap");
+    const finalConfirm = q<HTMLInputElement>("#proposal-final-confirm");
+    const finalizeBtn = q<HTMLButtonElement>("#btn-proposal-finalize");
+    const previewFinalizeBtn = q<HTMLButtonElement>("#btn-proposal-preview-finalize");
+    const finalizeStatusEl = q("#proposal-finalize-status");
+
+    q("#btn-proposal-toggle-finalize-form")?.addEventListener("click", () => {
+      const hidden = finalizeFormWrap?.classList.contains("d-none") ?? true;
+      if (hidden) {
+        show(finalizeFormWrap);
+        if (toggleFinalizeFormBtn) toggleFinalizeFormBtn.textContent = "Hide Finalize Form";
+      } else {
+        hide(finalizeFormWrap);
+        if (toggleFinalizeFormBtn) toggleFinalizeFormBtn.textContent = "Open Finalize Form";
+      }
+    });
+
+    q("#btn-proposal-cancel-finalize-form")?.addEventListener("click", () => {
+      hide(finalizeFormWrap);
+      if (toggleFinalizeFormBtn) toggleFinalizeFormBtn.textContent = "Open Finalize Form";
+    });
+
+    const syncFinalizeVisibility = (): void => {
+      const isAccepted = finalStatusSelect?.value === "accepted";
+      if (isAccepted) show(deadlineWrap); else hide(deadlineWrap);
+    };
+
+    const syncFinalizeEnabled = (): void => {
+      if (finalizeBtn) finalizeBtn.disabled = !(finalConfirm?.checked);
+    };
+
+    finalStatusSelect?.addEventListener("change", syncFinalizeVisibility);
+    finalConfirm?.addEventListener("change", syncFinalizeEnabled);
+    syncFinalizeVisibility();
+    syncFinalizeEnabled();
+
+    previewFinalizeBtn?.addEventListener("click", () => {
+      const finalStatus = finalStatusSelect?.value ?? "accepted";
+      const deadlineRaw = q<HTMLInputElement>("#proposal-presentation-deadline")?.value.trim() ?? "";
+      const deadlineLabel = finalStatus === "accepted"
+        ? (deadlineRaw ? new Date(deadlineRaw).toLocaleString("en-GB") : "event default / none")
+        : "not applicable";
+      if (finalizeStatusEl) {
+        finalizeStatusEl.textContent = `Preview: status ${finalStatus}, policy reviews enforced, deadline ${deadlineLabel}.`;
+        finalizeStatusEl.className = "small text-muted";
+      }
+    });
+
+    q("#btn-proposal-finalize")?.addEventListener("click", async () => {
+      const statusEl = q("#proposal-finalize-status");
+      const finalStatus = q<HTMLSelectElement>("#proposal-final-status")?.value ?? "accepted";
+      const decisionNote = q<HTMLTextAreaElement>("#proposal-final-note")?.value.trim() ?? "";
+      const deadlineRaw = q<HTMLInputElement>("#proposal-presentation-deadline")?.value.trim() ?? "";
+      try {
+        if (!finalConfirm?.checked) {
+          if (statusEl) {
+            statusEl.textContent = "Please confirm the final decision checkbox first.";
+            statusEl.className = "small text-danger";
+          }
+          return;
+        }
+
+        const ok = window.confirm(
+          `Finalize proposal as "${finalStatus}"? This action records a final committee decision and sends decision emails.`,
+        );
+        if (!ok) return;
+
+        if (statusEl) { statusEl.textContent = "Finalizing…"; statusEl.className = "small text-muted"; }
+        await api(`/api/v1/admin/proposals/${proposal.id}/finalize`, {
+          method: "POST",
+          body: JSON.stringify({
+            finalStatus,
+            decisionNote: decisionNote || undefined,
+            presentationDeadline: finalStatus === "accepted" && deadlineRaw
+              ? new Date(deadlineRaw).toISOString()
+              : undefined,
+          }),
+        });
+        if (statusEl) { statusEl.textContent = "Finalized"; statusEl.className = "small text-success"; }
+        toast("Proposal decision finalized", "success");
+        await loadEventProposals(slug);
+      } catch (err) {
+        if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "small text-danger"; }
+        toast((err as Error).message, "error");
+      }
+    });
+  } catch (err) {
+    detail.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+  }
 }
 
 // ── Admin invite parser (mirrors user-facing logic) ─────────────────────────
@@ -2258,22 +2735,64 @@ function openTemplate(key: string, versions: EmailTemplateVersion[]): void {
         '<button class="btn btn-sm btn-secondary" id="btn-close-template">&larr; Back to list</button>' +
       '</div>' +
       '<div class="card-body">' +
-        '<div class="mb-3">' +
-          '<label class="form-label small fw-semibold mb-1" for="t-subject">' +
-            'Subject template <span class="text-muted fw-normal">(optional — supports {{variables}})</span>' +
-          '</label>' +
-          `<input type="text" class="form-control form-control-sm font-monospace" id="t-subject" ` +
-            `value="${esc(current?.subject_template ?? "")}" placeholder="e.g. Your invitation to {{eventName}}">` +
-        '</div>' +
-        '<div class="mb-3">' +
-          '<label class="form-label small fw-semibold mb-1" for="t-content">' +
-            'Body <span class="text-muted fw-normal">(Markdown — {{variable}}, {{#if cond}}…{{/if}}, {{#each list}}…{{/each}})</span>' +
-          '</label>' +
-          `<textarea class="form-control font-monospace" id="t-content" rows="20" style="font-size:.8rem;resize:vertical">${esc(current?.body ?? "")}</textarea>` +
-        '</div>' +
-        '<div class="d-flex gap-2 align-items-center">' +
-          '<button class="btn btn-success" id="btn-t-save">Save as Draft</button>' +
-          '<span class="text-muted small">Saving creates a new draft version. Activate it below to put it in use.</span>' +
+        '<div class="row g-3">' +
+          '<div class="col-lg-7">' +
+            '<div class="mb-2">' +
+              '<label class="form-label small fw-semibold mb-1" for="t-content-type">Content type</label>' +
+              '<select class="form-select form-select-sm" id="t-content-type" style="max-width:180px">' +
+                `<option value="markdown"${(current?.content_type ?? "markdown") === "markdown" ? " selected" : ""}>Markdown</option>` +
+                `<option value="html"${(current?.content_type ?? "markdown") === "html" ? " selected" : ""}>HTML</option>` +
+                `<option value="text"${(current?.content_type ?? "markdown") === "text" ? " selected" : ""}>Plain text</option>` +
+              '</select>' +
+            '</div>' +
+            '<div class="mb-3">' +
+              '<label class="form-label small fw-semibold mb-1" for="t-subject">' +
+                'Subject template <span class="text-muted fw-normal">(supports conditions and variables)</span>' +
+              '</label>' +
+              '<div style="position:relative">' +
+                '<pre id="t-subject-src" aria-hidden="true" style="position:absolute;inset:0;margin:0;padding:.25rem .5rem;font-size:.875rem;font-family:SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace;line-height:1.5;white-space:pre;overflow:hidden;border:none;border-radius:.375rem;background:#fff;pointer-events:none;color:#212529"></pre>' +
+                `<input type="text" class="form-control form-control-sm font-monospace" id="t-subject" ` +
+                  `value="${esc(current?.subject_template ?? "")}" placeholder="e.g. Your invitation to {{eventName}}" style="position:relative;z-index:1;background:transparent;caret-color:#212529">` +
+              '</div>' +
+            '</div>' +
+            '<div class="mb-3">' +
+              '<label class="form-label small fw-semibold mb-1" for="t-content">' +
+                'Body <span class="text-muted fw-normal">(supports {{variables}}, {{#if}}\u2026{{/if}}, {{#each}}\u2026{{/each}})</span>' +
+              '</label>' +
+              '<div style="position:relative">' +
+                '<pre id="t-content-src" aria-hidden="true" style="position:absolute;inset:0;margin:0;padding:.375rem .75rem;font-size:.8rem;font-family:SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace;line-height:1.5;white-space:pre-wrap;word-break:break-all;overflow:hidden;border:none;border-radius:.375rem;background:#fff;pointer-events:none;color:#212529"></pre>' +
+                `<textarea class="form-control font-monospace" id="t-content" rows="16" style="position:relative;z-index:1;background:transparent;color:transparent;caret-color:#212529;font-size:.8rem;resize:vertical">${esc(current?.body ?? "")}</textarea>` +
+              '</div>' +
+            '</div>' +
+            '<div class="mb-3">' +
+              '<label class="form-label small fw-semibold mb-1">Template helpers</label>' +
+              '<div class="small text-muted mb-2">Click to insert into the active field. If nothing is focused, helpers go into the body editor.</div>' +
+              `<div id="t-helper-panel" class="d-flex gap-2 flex-wrap">${templateHelpersHtml()}</div>` +
+            '</div>' +
+            '<div class="mb-3">' +
+              '<label class="form-label small fw-semibold mb-1" for="t-preview-data">Preview data (JSON)</label>' +
+              '<textarea class="form-control font-monospace" id="t-preview-data" rows="6" style="font-size:.78rem;resize:vertical" placeholder="Optional: provide sample variables as JSON"></textarea>' +
+            '</div>' +
+            '<div class="d-flex gap-2 align-items-center flex-wrap">' +
+              '<button class="btn btn-outline-primary" id="btn-t-preview">Render Preview</button>' +
+              '<button class="btn btn-success" id="btn-t-save">Save as Draft</button>' +
+              '<span class="text-muted small">Saving creates a new draft version. Activate it below to put it in use.</span>' +
+            '</div>' +
+          '</div>' +
+          '<div class="col-lg-5">' +
+            '<div class="card border"><div class="card-header bg-light small fw-semibold">Rendered Preview</div>' +
+              '<div class="card-body">' +
+                '<div class="mb-2"><div class="small text-muted">Subject</div><div id="t-preview-subject" class="fw-semibold"></div></div>' +
+                '<ul class="nav nav-tabs mb-2" role="tablist">' +
+                  '<li class="nav-item"><button class="nav-link active" id="t-prev-tab-html" type="button">HTML</button></li>' +
+                  '<li class="nav-item"><button class="nav-link" id="t-prev-tab-text" type="button">Text</button></li>' +
+                '</ul>' +
+                '<div id="t-prev-html-wrap"><iframe id="t-preview-html" style="width:100%;height:360px;border:1px solid #dee2e6;border-radius:.375rem;background:#fff"></iframe></div>' +
+                '<pre id="t-preview-text" class="json-out d-none" style="height:360px"></pre>' +
+                '<div id="t-preview-status" class="small text-muted mt-2">Preview not rendered yet.</div>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
         '</div>' +
       '</div>' +
     '</div>' +
@@ -2309,6 +2828,29 @@ function openTemplate(key: string, versions: EmailTemplateVersion[]): void {
   });
 
   q("#btn-t-save")?.addEventListener("click", () => void doSaveTemplateVersion(key));
+  q("#btn-t-preview")?.addEventListener("click", () => void doRenderTemplatePreview());
+
+  q("#t-subject")?.addEventListener("input", syncTemplateSourcePreview);
+  q("#t-content")?.addEventListener("input", syncTemplateSourcePreview);
+  q("#t-subject")?.addEventListener("focus", () => { _templateEditorFocus = "subject"; });
+  q("#t-content")?.addEventListener("focus", () => { _templateEditorFocus = "body"; });
+  editorEl.querySelectorAll<HTMLButtonElement>("[data-template-helper]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const snippet = btn.dataset.templateHelper ?? "";
+      const preferredTarget = btn.dataset.templateTarget === "subject" ? "subject" : btn.dataset.templateTarget === "body" ? "body" : null;
+      insertTemplateSnippet(snippet, preferredTarget);
+    });
+  });
+  syncTemplateSourcePreview();
+
+  q("#t-content")?.addEventListener("scroll", () => {
+    const pre = q<HTMLElement>("#t-content-src");
+    const ta = q<HTMLTextAreaElement>("#t-content");
+    if (pre && ta) { pre.scrollTop = ta.scrollTop; pre.scrollLeft = ta.scrollLeft; }
+  });
+
+  q("#t-prev-tab-html")?.addEventListener("click", () => setTemplatePreviewTab("html"));
+  q("#t-prev-tab-text")?.addEventListener("click", () => setTemplatePreviewTab("text"));
 
   editorEl.querySelectorAll<HTMLButtonElement>("[data-activate-version]").forEach((btn) => {
     btn.addEventListener("click", () =>
@@ -2331,16 +2873,227 @@ function openTemplate(key: string, versions: EmailTemplateVersion[]): void {
   });
 }
 
+function templateHelpersHtml(): string {
+  const categories: Array<TemplateHelperItem["category"]> = ["Variables", "Conditions", "CTAs"];
+  return categories.map((category) => {
+    const items = TEMPLATE_HELPERS.filter((item) => item.category === category);
+    return (
+      '<div class="w-100">' +
+        `<div class="small text-muted fw-semibold mb-1">${esc(category)}</div>` +
+        '<div class="d-flex gap-2 flex-wrap">' +
+          items.map((item) => {
+            const targetAttr = item.target ? ` data-template-target="${item.target}"` : "";
+            return `<button type="button" class="btn btn-sm btn-outline-secondary" data-template-helper="${esc(item.snippet)}"${targetAttr}>${esc(item.label)}</button>`;
+          }).join("") +
+        '</div>' +
+      '</div>'
+    );
+  }).join("");
+}
+
+function insertTemplateSnippet(snippet: string, preferredTarget?: "subject" | "body" | null): void {
+  const target = preferredTarget ?? _templateEditorFocus;
+  const subjectEl = q<HTMLInputElement>("#t-subject");
+  const bodyEl = q<HTMLTextAreaElement>("#t-content");
+  const field = target === "subject" ? subjectEl : bodyEl;
+  if (!field) return;
+
+  const start = field.selectionStart ?? field.value.length;
+  const end = field.selectionEnd ?? field.value.length;
+  field.value = `${field.value.slice(0, start)}${snippet}${field.value.slice(end)}`;
+  const nextPos = start + snippet.length;
+  field.focus();
+  if (typeof field.setSelectionRange === "function") {
+    field.setSelectionRange(nextPos, nextPos);
+  }
+  if (field === subjectEl) {
+    _templateEditorFocus = "subject";
+  } else {
+    _templateEditorFocus = "body";
+  }
+  syncTemplateSourcePreview();
+}
+
+// ── Template syntax highlighting ─────────────────────────────────────────────
+// Purely iterative, stack-based scanner — guaranteed termination.
+// A depth stack tracks which color each open block was assigned so that the
+// matching {{else}} and {{/if}} always share the same color as their opener.
+
+const _HL_COLORS = [
+  "#0d6efd", // blue
+  "#198754", // green
+  "#fd7e14", // orange
+  "#6f42c1", // purple
+  "#d63384", // pink
+  "#20c997", // teal
+  "#dc3545", // red
+  "#0dcaf0", // cyan
+];
+const _HL_BG = [
+  "rgba(13,110,253,0.12)", "rgba(25,135,84,0.12)",
+  "rgba(253,126,20,0.12)", "rgba(111,66,193,0.12)",
+  "rgba(214,51,132,0.12)", "rgba(32,201,151,0.12)",
+  "rgba(220,53,69,0.12)",  "rgba(13,202,240,0.12)",
+];
+const _HL_VAR_COLOR = "#0891b2";
+
+function highlightTemplateSyntax(source: string): string {
+  const out: string[] = [];
+  // Stack of depth-indices for currently open blocks.
+  const stack: number[] = [];
+  let pos = 0;
+
+  while (pos < source.length) {
+    const start = source.indexOf("{{", pos);
+    if (start === -1) { out.push(esc(source.slice(pos))); break; }
+    if (start > pos) out.push(esc(source.slice(pos, start)));
+
+    const end = source.indexOf("}}", start + 2);
+    if (end === -1) { out.push(esc(source.slice(start))); break; }
+
+    const token = source.slice(start, end + 2);
+    const inner = source.slice(start + 2, end).trim();
+
+    let color: string;
+    let bg: string | null = null;
+
+    if (inner.startsWith("#")) {
+      // Opening block — color at current depth, then push.
+      const d = stack.length % _HL_COLORS.length;
+      color = _HL_COLORS[d];
+      bg    = _HL_BG[d];
+      stack.push(d);
+    } else if (inner.startsWith("/")) {
+      // Closing block — pop and use the same slot as the opener.
+      const d = stack.length > 0 ? stack.pop()! : 0;
+      color = _HL_COLORS[d % _HL_COLORS.length];
+      bg    = _HL_BG[d % _HL_BG.length];
+    } else if (inner === "else") {
+      // {{else}} — belongs to the innermost open block.
+      const d = stack.length > 0 ? stack[stack.length - 1] : 0;
+      color = _HL_COLORS[d % _HL_COLORS.length];
+      bg    = _HL_BG[d % _HL_BG.length];
+    } else {
+      color = _HL_VAR_COLOR;
+    }
+
+    const style = bg
+      ? `color:${color};font-weight:600;background:${bg};border-radius:3px;padding:0 2px`
+      : `color:${color};font-weight:600`;
+    out.push(`<span style="${style}">${esc(token)}</span>`);
+    pos = end + 2;
+  }
+
+  return out.join("");
+}
+
+
+function syncTemplateSourcePreview(): void {
+  const subjectEl = q<HTMLInputElement>("#t-subject");
+  const contentEl = q<HTMLTextAreaElement>("#t-content");
+  const subject = subjectEl?.value ?? "";
+  const content = contentEl?.value ?? "";
+  const subjOut = q<HTMLElement>("#t-subject-src");
+  const contentOut = q<HTMLElement>("#t-content-src");
+  // Keep the native placeholder visible when the subject field is empty.
+  if (subjectEl) subjectEl.style.color = subject ? "transparent" : "";
+  if (subjOut) subjOut.innerHTML = subject ? highlightTemplateSyntax(subject) + "&nbsp;" : "";
+  if (contentOut) contentOut.innerHTML = highlightTemplateSyntax(content) + "\n";
+  // Mirror textarea scroll position into the backdrop pre.
+  if (contentEl && contentOut) {
+    contentOut.scrollTop = contentEl.scrollTop;
+    contentOut.scrollLeft = contentEl.scrollLeft;
+  }
+}
+
+function setTemplatePreviewTab(tab: "html" | "text"): void {
+  const htmlBtn = q<HTMLButtonElement>("#t-prev-tab-html");
+  const textBtn = q<HTMLButtonElement>("#t-prev-tab-text");
+  const htmlWrap = q("#t-prev-html-wrap");
+  const textWrap = q("#t-preview-text");
+  if (tab === "html") {
+    htmlBtn?.classList.add("active");
+    textBtn?.classList.remove("active");
+    show(htmlWrap);
+    hide(textWrap);
+  } else {
+    textBtn?.classList.add("active");
+    htmlBtn?.classList.remove("active");
+    hide(htmlWrap);
+    show(textWrap);
+  }
+}
+
+async function doRenderTemplatePreview(): Promise<void> {
+  const subjectTemplate = q<HTMLInputElement>("#t-subject")?.value.trim() ?? "";
+  const content = q<HTMLTextAreaElement>("#t-content")?.value ?? "";
+  const contentType = (q<HTMLSelectElement>("#t-content-type")?.value ?? "markdown") as "markdown" | "html" | "text";
+  const dataRaw = q<HTMLTextAreaElement>("#t-preview-data")?.value.trim() ?? "";
+  const statusEl = q("#t-preview-status");
+
+  if (!content.trim()) {
+    toast("Body cannot be empty", "error");
+    return;
+  }
+
+  let data: Record<string, unknown> | undefined;
+  if (dataRaw) {
+    try {
+      const parsed = JSON.parse(dataRaw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        throw new Error("Preview data must be a JSON object");
+      }
+      data = parsed as Record<string, unknown>;
+    } catch (err) {
+      const msg = `Invalid preview data JSON: ${(err as Error).message}`;
+      toast(msg, "error");
+      if (statusEl) statusEl.textContent = msg;
+      return;
+    }
+  }
+
+  if (statusEl) statusEl.textContent = "Rendering preview...";
+
+  try {
+    const result = await api<{ subject: string; html: string; text: string }>(
+      "/api/v1/admin/email-templates/preview",
+      {
+        method: "POST",
+        body: JSON.stringify({
+          subjectTemplate: subjectTemplate || undefined,
+          content,
+          contentType,
+          data,
+        }),
+      },
+    );
+
+    const subjectEl = q("#t-preview-subject");
+    const iframe = q<HTMLIFrameElement>("#t-preview-html");
+    const textEl = q<HTMLElement>("#t-preview-text");
+
+    if (subjectEl) subjectEl.textContent = result.subject;
+    if (iframe) iframe.srcdoc = result.html;
+    if (textEl) textEl.textContent = result.text;
+    if (statusEl) statusEl.textContent = "Preview rendered.";
+  } catch (err) {
+    const msg = (err as Error).message;
+    toast(msg, "error");
+    if (statusEl) statusEl.textContent = msg;
+  }
+}
+
 async function doSaveTemplateVersion(key: string): Promise<void> {
   const subject = q<HTMLInputElement>("#t-subject")?.value.trim() ?? "";
   const content = q<HTMLTextAreaElement>("#t-content")?.value ?? "";
+  const contentType = (q<HTMLSelectElement>("#t-content-type")?.value ?? "markdown") as "markdown" | "html" | "text";
   const btn = q<HTMLButtonElement>("#btn-t-save");
   if (!content.trim()) { toast("Body cannot be empty", "error"); return; }
   if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }
   try {
     const r = await api<{ success: boolean; version: number }>(
       `/api/v1/admin/email-templates/${encodeURIComponent(key)}/versions`,
-      { method: "POST", body: JSON.stringify({ content, subjectTemplate: subject || undefined }) },
+      { method: "POST", body: JSON.stringify({ content, subjectTemplate: subject || undefined, contentType }) },
     );
     toast(`Saved as draft v${r.version}`, "success");
     const d = await api<{ templates: EmailTemplateVersion[] }>("/api/v1/admin/email-templates");
@@ -2411,11 +3164,87 @@ async function loadEmail(): Promise<void> {
           "<p>Reset all <code>failed</code> records back to <code>retrying</code> so they are re-sent on the next cycle.</p>" +
           '<button class="btn btn-sm btn-danger" id="btn-do-reset-failed">Reset All Failed</button>' +
         "</div></div>" +
+        '<div class="col-12"><div class="action-card">' +
+          "<strong>Process Due Work Now</strong>" +
+          "<p>Processes everything currently due or pending: reminder candidates and queued emails. Use this when you want the system to catch up now.</p>" +
+          '<div class="row g-2 align-items-end">' +
+            '<div class="col-auto"><label class="form-label small fw-semibold mb-1">Reminder limit</label>' +
+            '<input type="number" class="form-control form-control-sm" id="jobs-reminder-limit" value="120" min="1" max="500" style="width:110px">' +
+            '<div class="small text-muted mt-1" style="max-width:220px">Maximum reminder records to process in this run.</div></div>' +
+            '<div class="col-auto"><label class="form-label small fw-semibold mb-1">Outbox limit</label>' +
+            '<input type="number" class="form-control form-control-sm" id="jobs-outbox-limit" value="120" min="1" max="500" style="width:110px">' +
+            '<div class="small text-muted mt-1" style="max-width:220px">Maximum queued emails to send now.</div></div>' +
+          '</div>' +
+          '<div class="d-flex gap-3 mt-2 flex-wrap">' +
+            '<label class="form-check-label small" title="Retention redacts old personal data after event-specific retention periods. It does not send reminders or process queued emails."><input class="form-check-input me-1" type="checkbox" id="jobs-include-retention">Also run cleanup (retention)</label>' +
+            '<label class="form-check-label small"><input class="form-check-input me-1" type="checkbox" id="jobs-dry-run">Dry run</label>' +
+          '</div>' +
+          '<div class="small text-muted mt-1">Dry run previews what would be processed without writing data or sending emails.</div>' +
+          '<div class="d-flex gap-2 align-items-center mt-2">' +
+            '<button class="btn btn-sm btn-primary" id="btn-run-jobs">Process Now</button>' +
+            '<span class="small text-muted" id="jobs-run-status"></span>' +
+          '</div>' +
+        "</div></div>" +
       "</div>";
     q("#btn-do-retry")?.addEventListener("click", doRetry);
     q("#btn-do-reset-failed")?.addEventListener("click", doResetFailed);
+    q("#btn-run-jobs")?.addEventListener("click", () => void doRunJobs());
   } catch (err) {
     el.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+  }
+}
+
+async function doRunJobs(): Promise<void> {
+  const btn = q<HTMLButtonElement>("#btn-run-jobs");
+  const statusEl = q("#jobs-run-status");
+
+  const reminderLimit = parseInt(q<HTMLInputElement>("#jobs-reminder-limit")?.value ?? "120", 10) || 120;
+  const outboxLimit = parseInt(q<HTMLInputElement>("#jobs-outbox-limit")?.value ?? "120", 10) || 120;
+  const runReminders = true;
+  const runOutbox = true;
+  const runRetention = Boolean(q<HTMLInputElement>("#jobs-include-retention")?.checked);
+  const dryRun = Boolean(q<HTMLInputElement>("#jobs-dry-run")?.checked);
+
+  if (btn) { btn.disabled = true; btn.textContent = "Processing…"; }
+  if (statusEl) statusEl.textContent = "Processing due reminders and outbox...";
+
+  try {
+    const result = await api<{
+      reminders: { processed: number; inviteRemindersQueued: number; presentationRemindersQueued: number };
+      shouldRunRetention: boolean;
+      retention: { anonymizedUsers: number; deletedRegistrations: number; deletedInvites: number; deletedClicks: number; deletedAuditLogs: number };
+      outbox: { processed: number; failed: number };
+    }>("/api/v1/internal/jobs/run", {
+      method: "POST",
+      body: JSON.stringify({
+        reminderLimit,
+        outboxLimit,
+        runReminders,
+        runRetention,
+        runOutbox,
+        runRetentionMode: "always",
+        retentionHourUtc: 0,
+        dryRun,
+      }),
+    });
+
+    const retentionState = runRetention
+      ? (result.shouldRunRetention ? "ran" : "skipped")
+      : "not requested";
+    const msg =
+      `Reminders: ${result.reminders.processed}, ` +
+      `Outbox processed: ${result.outbox.processed}, ` +
+      `Outbox failed: ${result.outbox.failed}, ` +
+      `Cleanup: ${retentionState}`;
+    toast(msg, "success");
+    if (statusEl) statusEl.textContent = msg;
+    await loadEmail();
+  } catch (err) {
+    const msg = (err as Error).message;
+    toast(msg, "error");
+    if (statusEl) statusEl.textContent = msg;
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Process Now"; }
   }
 }
 

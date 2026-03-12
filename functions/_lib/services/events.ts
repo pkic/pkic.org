@@ -77,6 +77,19 @@ export interface EventFrontendRoutes {
   fallbackKeys: string[];
 }
 
+type EventEmailSource =
+  Pick<EventRecord, "name" | "slug" | "base_path" | "starts_at" | "settings_json">
+  & Partial<Pick<EventRecord, "timezone" | "ends_at">>;
+
+export interface EventEmailVariables {
+  eventName: string;
+  eventSlug: string;
+  eventTimezone: string;
+  eventStartsAt: string;
+  eventEndsAt: string;
+  eventUrl: string;
+}
+
 /**
  * Returns the canonical frontend base path for an event.
  *
@@ -189,7 +202,7 @@ export function resolveEventFrontendRoutes(event: Pick<EventRecord, "slug" | "ba
  */
 export function resolveSponsorsImageUrl(
   event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json">,
-  siteBaseUrl = "https://pkic.org",
+  siteBaseUrl: string,
 ): string | null {
   const settings = parseJsonSafe<{ sponsorsImageUrl?: string | null }>(event.settings_json, {});
 
@@ -249,7 +262,7 @@ export function resolveEventVenue(
  */
 export function resolveEventVirtualUrl(
   event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json">,
-  siteBaseUrl = "https://pkic.org",
+  siteBaseUrl: string,
 ): string | null {
   const settings = parseJsonSafe<EventSettings>(event.settings_json, {});
   if (settings.virtualUrl?.trim()) {
@@ -257,6 +270,39 @@ export function resolveEventVirtualUrl(
   }
   const base = getEventBasePath(event);
   return `${siteBaseUrl}${base}virtual/`;
+}
+
+/**
+ * Resolves the canonical frontend URL for an event.
+ *
+ * Always returns a URL by deriving from base_path/starts_at/slug in the same
+ * way as frontend route generation.
+ */
+export function resolveEventUrl(
+  event: Pick<EventRecord, "slug" | "base_path" | "starts_at">,
+  siteBaseUrl: string,
+): string {
+  return `${siteBaseUrl}${getEventBasePath(event)}`;
+}
+
+/**
+ * Returns a comprehensive baseline variable set for event-related emails.
+ *
+ * Templates can rely on these keys being present across all event email flows,
+ * even when a specific template does not currently use each field.
+ */
+export function buildEventEmailVariables(
+  event: EventEmailSource,
+  siteBaseUrl: string,
+): EventEmailVariables {
+  return {
+    eventName: event.name,
+    eventSlug: event.slug,
+    eventTimezone: event.timezone ?? "",
+    eventStartsAt: event.starts_at ?? "",
+    eventEndsAt: event.ends_at ?? "",
+    eventUrl: resolveEventUrl(event, siteBaseUrl),
+  };
 }
 
 export async function getEventBySlug(db: DatabaseLike, slug: string): Promise<EventRecord> {

@@ -1,7 +1,7 @@
 import { parseJsonBody } from "../../../../../../../_lib/validation";
 import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
-import { getEventBySlug, resolveHeroImageUrl, resolveSponsorsImageUrl } from "../../../../../../../_lib/services/events";
+import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
 import { createInvite } from "../../../../../../../_lib/services/invites";
 import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
@@ -42,11 +42,9 @@ export async function onRequestPost(
       messageType: "transactional",
       subject: `Invitation: ${event.name}`,
       data: {
-        eventName: event.name,
+        ...buildEventEmailVariables(event, appBaseUrl),
         registrationUrl,
         declineUrl,
-        sponsorsImageUrl: resolveSponsorsImageUrl(event),
-        heroImageUrl: resolveHeroImageUrl(event),
       },
     });
 

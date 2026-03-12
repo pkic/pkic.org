@@ -13,6 +13,7 @@ export async function onRequestPost(context: PagesContext<{ key: string }>): Pro
     templateKey: context.params.key,
     content: body.content,
     subjectTemplate: body.subjectTemplate,
+    contentType: body.contentType,
     createdByUserId: admin.id,
   });
 

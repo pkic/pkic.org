@@ -11,6 +11,7 @@
  */
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
+import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
 import {
   listProposalSpeakersWithStatus,
 } from "../../../../../_lib/services/proposals";
@@ -20,7 +21,7 @@ import type { PagesContext } from "../../../../../_lib/types";
 export async function onRequestGet(
   context: PagesContext<{ proposalId: string }>,
 ): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request);
+  const admin = await requireAdminFromRequest(context.env.DB, context.request);
 
   const proposal = await first<{
     id: string;
@@ -40,6 +41,11 @@ export async function onRequestGet(
 
   if (!proposal) {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
+  }
+
+  const access = await getProposalAccessForEvent(context.env.DB, proposal.event_id, admin);
+  if (!access.canReview) {
+    return json({ error: { code: "FORBIDDEN", message: "Missing permission to review proposals" } }, 403);
   }
 
   const speakers = await listProposalSpeakersWithStatus(context.env.DB, context.params.proposalId);

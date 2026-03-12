@@ -12,10 +12,10 @@
  */
 import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
-import { getEventBySlug, resolveEventVenue, resolveHeroImageUrl, resolveSponsorsImageUrl } from "../../../../../../../_lib/services/events";
+import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
 import { first } from "../../../../../../../_lib/db/queries";
 import { parseJsonBody } from "../../../../../../../_lib/validation";
-import { getConfig } from "../../../../../../../_lib/config";
+import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { updateRegistrationById } from "../../../../../../../_lib/services/registrations";
@@ -168,6 +168,7 @@ export async function onRequestPatch(
   }>(context.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [updated.user_id]);
 
   if (user && body.action !== "report_unauthorized") {
+    const appBaseUrl = resolveAppBaseUrl(context.env);
     const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, updated.id);
     const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw);
     const customAnswerRows = await getCustomAnswerRows(context.env.DB, event.id, updated.custom_answers_json);
@@ -180,13 +181,12 @@ export async function onRequestPatch(
       messageType: "transactional",
       subject: `Registration updated for ${event.name}`,
       data: {
-        eventName: event.name,
+        ...buildEventEmailVariables(event, appBaseUrl),
         firstName: user.first_name ?? "",
         lastName: user.last_name ?? "",
         email: user.email,
         organizationName: user.organization_name ?? "",
         jobTitle: user.job_title ?? "",
-        venue: resolveEventVenue(event),
         attendanceType: updated.attendance_type,
         attendanceLabel,
         dayAttendance,
@@ -195,8 +195,6 @@ export async function onRequestPatch(
         status: updated.status,
         statusLabel: STATUS_LABELS[updated.status] ?? updated.status,
         manageUrl: "",
-        sponsorsImageUrl: resolveSponsorsImageUrl(event),
-        heroImageUrl: resolveHeroImageUrl(event),
       },
     });
     context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));

@@ -287,21 +287,32 @@ export const proposalManageSchema = boundedJsonObject(
 export const reviewUpsertSchema = z.object({
   recommendation: z.enum(["accept", "reject", "needs-work"]),
   score: z.number().int().min(1).max(10).optional(),
-  reviewerComment: trimmedString(3, 10_000).optional(),
-  applicantNote: trimmedString(3, 10_000).optional(),
+  reviewerComment: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    trimmedString(3, 10_000).optional(),
+  ),
+  applicantNote: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
+    trimmedString(3, 10_000).optional(),
+  ),
 });
 
 export const reviewPatchSchema = z.object({
   recommendation: z.enum(["accept", "reject", "needs-work"]).optional(),
   score: z.number().int().min(1).max(10).nullable().optional(),
-  reviewerComment: trimmedString(3, 10_000).nullable().optional(),
-  applicantNote: trimmedString(3, 10_000).nullable().optional(),
+  reviewerComment: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    trimmedString(3, 10_000).nullable().optional(),
+  ),
+  applicantNote: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    trimmedString(3, 10_000).nullable().optional(),
+  ),
 });
 
 export const finalizeProposalSchema = z.object({
   finalStatus: z.enum(["accepted", "rejected", "needs_work"]),
   decisionNote: trimmedString(3, 10_000).optional(),
-  minReviewsRequired: z.number().int().min(2).max(10).optional(),
   /** ISO-8601 date by which speakers must upload their presentation slides. */
   presentationDeadline: z.string().datetime().optional(),
 });
@@ -309,10 +320,18 @@ export const finalizeProposalSchema = z.object({
 export const adminEmailTemplateVersionSchema = z.object({
   content: z.string().min(1).max(500_000),
   subjectTemplate: z.string().trim().min(1).max(512).optional(),
+  contentType: z.enum(["markdown", "html", "text"]).optional(),
 });
 
 export const adminEmailTemplateActivateSchema = z.object({
   version: z.number().int().positive(),
+});
+
+export const adminEmailTemplatePreviewSchema = z.object({
+  subjectTemplate: z.string().trim().min(1).max(512).optional(),
+  content: z.string().min(1).max(500_000),
+  contentType: z.enum(["markdown", "html", "text"]).default("markdown"),
+  data: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
 });
 
 export const adminAuthRequestSchema = z.object({
@@ -329,6 +348,30 @@ export const adminRetryOutboxSchema = z.object({
 
 export const adminResetFailedOutboxSchema = z.object({
   ids: z.array(z.string().uuid()).max(100).optional(),
+});
+
+export const adminRunRemindersSchema = z.object({
+  limit: z.number().int().positive().max(500).default(200),
+  dryRun: z.boolean().default(false),
+});
+
+export const adminRunJobsSchema = z.object({
+  reminderLimit: z.number().int().positive().max(500).default(120),
+  outboxLimit: z.number().int().positive().max(500).default(120),
+  runReminders: z.boolean().default(true),
+  runRetention: z.boolean().default(true),
+  runOutbox: z.boolean().default(true),
+  runRetentionMode: z.enum(["always", "daily_window"]).default("always"),
+  retentionHourUtc: z.number().int().min(0).max(23).default(3),
+  dryRun: z.boolean().default(false),
+});
+
+export const inviteReminderPreferenceSchema = z.object({
+  action: z.enum(["postpone_7d", "pause_30d", "resume", "unsubscribe"]),
+});
+
+export const speakerReminderPreferenceSchema = z.object({
+  action: z.enum(["postpone_7d", "pause_30d", "resume"]),
 });
 
 const termSchema = z.object({

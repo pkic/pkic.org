@@ -17,22 +17,26 @@ function toOrigin(value: string | undefined): string | null {
   }
 }
 
-export function resolveAppBaseUrl(env: Pick<Env, "CF_PAGES_URL" | "APP_BASE_URL">, request?: Request): string {
-  return toOrigin(env.CF_PAGES_URL)
-    ?? toOrigin(request?.url)
-    ?? toOrigin(env.APP_BASE_URL)
+export function resolveAppBaseUrl(env: Pick<Env, "CF_PAGES_URL" | "APP_BASE_URL">): string {
+  // APP_BASE_URL takes precedence (set in .dev.vars for local development).
+  // CF_PAGES_URL is set automatically by Cloudflare Pages in all deployed environments.
+  return toOrigin(env.APP_BASE_URL)
+    ?? toOrigin(env.CF_PAGES_URL)
     ?? "http://localhost";
 }
 
 export function getConfig(env: Env, request?: Request) {
   return {
-    appBaseUrl: resolveAppBaseUrl(env, request),
+    appBaseUrl: resolveAppBaseUrl(env),
     minProposalReviews: parseIntOrDefault(env.DEFAULT_MIN_PROPOSAL_REVIEWS, 2),
     referralCodeLength: parseIntOrDefault(env.DEFAULT_REFERRAL_CODE_LENGTH, 7),
     inviteLimitPerAttendee: parseIntOrDefault(env.DEFAULT_INVITE_LIMIT_PER_ATTENDEE, 5),
     waitlistClaimWindowHours: parseIntOrDefault(env.WAITLIST_CLAIM_WINDOW_HOURS, 24),
     magicLinkTtlMinutes: parseIntOrDefault(env.MAGIC_LINK_TTL_MINUTES, 15),
     manageTokenTtlHours: parseIntOrDefault(env.MANAGE_TOKEN_TTL_HOURS, 48),
+    reminderIntervalDays: parseIntOrDefault(env.REMINDER_INTERVAL_DAYS, 7),
+    maxInviteReminders: parseIntOrDefault(env.MAX_INVITE_REMINDERS, 12),
+    maxPresentationReminders: parseIntOrDefault(env.MAX_PRESENTATION_REMINDERS, 12),
     sendgridApiBase: env.SENDGRID_API_BASE,
     emailLayoutR2Key: env.EMAIL_LAYOUT_R2_KEY ?? "layouts/email/default.html",
   };

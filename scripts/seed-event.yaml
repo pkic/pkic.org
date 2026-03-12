@@ -81,24 +81,33 @@ terms:
     - termKey: sponsor-data-sharing
       version: v1
       required: false
-      helpText: "This event is offered free of charge thanks to our sponsors, who cover between $100 and $300 per attendee per day in venue, catering, and production costs. In return, our sponsors would like to know who is attending. By agreeing, you allow us to share your professional profile (name, organization, job title, email address, etc.) with the sponsors of this specific event."
-      displayText: "Yes — I am happy for the PKI Consortium to share my professional profile with the sponsors of this event."
+      helpText: "To offer this event free of charge, our sponsors contribute between $100 and $300 per attendee daily to cover venue, catering, and production costs. By opting in, you allow us to share your professional profile (name, organization, job title, and email) with the sponsors of this specific event for networking and follow-up purposes."
+      displayText: I consent to the PKI Consortium sharing my professional profile with event sponsors and partners.
   speaker:
-    - termKey: speaker-terms
+    - termKey: physical-presence
       version: v1
       required: true
-      contentRef: /speaker-terms/
-      displayText: I accept the speaker terms and session submission conditions.
-    - termKey: code-of-conduct
+      displayText: I confirm that I will attend the conference in person and acknowledge that remote presentations are not permitted.
+    - termKey: expense-responsibility
       version: v1
       required: true
-      contentRef: /code-of-conduct/
-      displayText: I have read and agree to follow the code of conduct.
-    - termKey: photo-policy
+      displayText: I acknowledge that I am responsible for all expenses related to travel, accommodation, and personal subsistence.
+    - termKey: non-commercial-agreement
       version: v1
       required: true
-      displayText: I acknowledge that photos and videos will be taken during the event, and I consent to being photographed or recorded if attending in person.
-
+      displayText: I agree to refrain from promoting specific products, services, or other commercial interests during my session.
+    - termKey: session-distribution
+      version: v1
+      required: true
+      displayText: I consent to my session(s) being promoted, live-streamed, recorded, and made publicly available by the organizers.
+    - termKey: slide-specifications
+      version: v1
+      required: true
+      displayText: I agree to provide my presentation slides in PowerPoint format using a 16:9 aspect ratio.
+    - termKey: topic-depth-focus
+      version: v1
+      required: true
+      displayText: I confirm that my session has a clear and specific focus and is not a broad survey of multiple Post-Quantum Cryptography domains.
 
 organizers:
   - email: admin@pkic.org
@@ -162,7 +171,16 @@ forms:
         type: multi_select
         required: false
         sortOrder: 10
-        options: [Vegetarian, Vegan, Halal, Kosher, Gluten_free, Lactose_free, Nut_allergy, Other]
+        options: 
+          - Vegetarian
+          - Vegan
+          - Halal
+          - Kosher
+          - Gluten free
+          - Lactose free
+          - Nut allergy
+          - Shellfish allergy
+          - Other
         validation:
           uiWidget: checkboxes
           showWhen:
@@ -175,22 +193,35 @@ forms:
         sortOrder: 20
         options:
           - PKI
-          - Post-Quantum Cryptography
-          - Migration
-          - Governance
-          - Compliance
-          - Implementation
-          - Research
-          - Policy
-          - Algorithms
           - Certificate Management
           - Code Signing
-          - TLS/SSL
-          - Hardware Security
+          - Identity and Access Management
           - Zero Trust
-          - Identity
-          - FIPS / NIST standards
+          - Cryptographic Agility
+          - Cryptographic Migration
+          - Hybrid Cryptography
+          - Cryptographic Inventory
+          - Cryptographic Discovery
+          - Algorithms
+          - Cryptanalysis
+          - Key Management
+          - TLS / SSL
+          - SSH
+          - VPN
+          - IPsec
+          - Hardware Security Modules (HSM)
+          - Smart Cards
+          - Security Tokens
+          - Secure Hardware
           - Automation
+          - Cloud Security
+          - IoT Security
+          - Mobile Security
+          - Governance
+          - Compliance
+          - Policy
+          - Standards (NIST / FIPS / ETSI)
+          - Research
           - Open Source
         validation:
           uiWidget: tags
@@ -210,18 +241,21 @@ forms:
         type: select
         required: true
         sortOrder: 10
-        options: [Strategy, Technical, Case_Study, Policy]
+        options: 
+          - Strategy and Roadmaps
+          - Technical Deep Dive
+          - Deployments and Lessons Learned
+          - Policy and Standards
       - key: target_audience
         label: Target audience level
         type: select
         required: true
         sortOrder: 20
-        options: [Beginner, Intermediate, Advanced]
-      - key: demo_required
-        label: Includes live demo
-        type: boolean
-        required: false
-        sortOrder: 30
+        options: 
+          - Introductory
+          - Intermediate
+          - Advanced
+          - Expert
       - key: prior_talk_link
         label: Sample talk or video
         type: url

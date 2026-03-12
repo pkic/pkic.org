@@ -4,6 +4,7 @@ import { normalizeEmail } from "../validation";
 import { randomToken, sha256Hex } from "../utils/crypto";
 import { nowIso, addHours, isPast } from "../utils/time";
 import { uuid } from "../utils/ids";
+import { parseJsonSafe } from "../utils/json";
 import { recordEngagement } from "./engagement";
 import type { DatabaseLike } from "../types";
 
@@ -22,6 +23,8 @@ export interface InviteRecord {
   decline_reason_note: string | null;
   unsubscribe_future: number;
   reminder_count: number;
+  last_communication_at: string | null;
+  reminders_paused_until: string | null;
   max_uses: number;
   used_count: number;
   source_type: string;
@@ -88,7 +91,46 @@ export async function createInvite(
   const token = randomToken(24);
   const tokenHash = await sha256Hex(token);
   const now = nowIso();
-  const expiresAt = addHours(now, payload.ttlHours);
+  let expiresAt = addHours(now, payload.ttlHours);
+
+  const event = await first<{
+    starts_at: string | null;
+    registration_mode: string;
+    settings_json: string;
+  }>(
+    db,
+    "SELECT starts_at, registration_mode, settings_json FROM events WHERE id = ?",
+    [payload.eventId],
+  );
+
+  const registrationClosesAt = event
+    ? (() => {
+      const settings = parseJsonSafe<{ registrationClosesAt?: string | null; registration?: { closesAt?: string | null } }>(
+        event.settings_json,
+        {},
+      );
+      return settings.registration?.closesAt ?? settings.registrationClosesAt ?? null;
+    })()
+    : null;
+
+  // Marketing-style invites for open registration remain valid until registration closes.
+  if (
+    event
+    && event.registration_mode !== "invite_only"
+    && registrationClosesAt
+    && new Date(registrationClosesAt).getTime() > new Date(now).getTime()
+  ) {
+    expiresAt = new Date(registrationClosesAt).toISOString();
+  }
+
+  if (event?.starts_at) {
+    const eventStartMs = new Date(event.starts_at).getTime();
+    const nowMs = new Date(now).getTime();
+    const currentExpiryMs = new Date(expiresAt).getTime();
+    if (Number.isFinite(eventStartMs) && eventStartMs > nowMs && eventStartMs < currentExpiryMs) {
+      expiresAt = new Date(eventStartMs).toISOString();
+    }
+  }
 
   const invite: InviteRecord = {
     id: uuid(),
@@ -105,6 +147,8 @@ export async function createInvite(
     decline_reason_note: null,
     unsubscribe_future: 0,
     reminder_count: 0,
+    last_communication_at: now,
+    reminders_paused_until: null,
     max_uses: 1,
     used_count: 0,
     source_type: payload.sourceType ?? "direct",
@@ -119,8 +163,9 @@ export async function createInvite(
     `INSERT INTO invites (
       id, event_id, inviter_user_id, inviter_registration_id, invitee_email, invitee_first_name, invitee_last_name, invite_type,
       token_hash, status, decline_reason_code, decline_reason_note, unsubscribe_future, reminder_count,
+      last_communication_at, reminders_paused_until,
       max_uses, used_count, source_type, expires_at, accepted_at, declined_at, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       invite.id,
       invite.event_id,
@@ -136,6 +181,8 @@ export async function createInvite(
       invite.decline_reason_note,
       invite.unsubscribe_future,
       invite.reminder_count,
+      invite.last_communication_at,
+      invite.reminders_paused_until,
       invite.max_uses,
       invite.used_count,
       invite.source_type,
@@ -253,4 +300,36 @@ export async function listPendingInviteReminders(db: DatabaseLike): Promise<Invi
      ORDER BY created_at ASC`,
     [nowIso()],
   );
+}
+
+export async function refreshInviteToken(db: DatabaseLike, inviteId: string): Promise<string> {
+  const token = randomToken(24);
+  const tokenHash = await sha256Hex(token);
+  await run(db, "UPDATE invites SET token_hash = ? WHERE id = ?", [tokenHash, inviteId]);
+  return token;
+}
+
+export async function markInviteReminderSent(db: DatabaseLike, inviteId: string): Promise<void> {
+  const now = nowIso();
+  await run(
+    db,
+    `UPDATE invites
+     SET reminder_count = reminder_count + 1,
+         last_communication_at = ?,
+         reminders_paused_until = NULL
+     WHERE id = ?`,
+    [now, inviteId],
+  );
+}
+
+export async function setInviteRemindersPausedUntil(
+  db: DatabaseLike,
+  inviteId: string,
+  pausedUntilIso: string,
+): Promise<void> {
+  await run(db, "UPDATE invites SET reminders_paused_until = ? WHERE id = ?", [pausedUntilIso, inviteId]);
+}
+
+export async function clearInviteRemindersPause(db: DatabaseLike, inviteId: string): Promise<void> {
+  await run(db, "UPDATE invites SET reminders_paused_until = NULL WHERE id = ?", [inviteId]);
 }
