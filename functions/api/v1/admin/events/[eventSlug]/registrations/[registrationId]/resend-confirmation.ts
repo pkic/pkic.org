@@ -7,7 +7,7 @@
  */
 import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
-import { getEventBySlug, resolveEventVenue, resolveHeroImageUrl, resolveSponsorsImageUrl } from "../../../../../../../_lib/services/events";
+import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
 import { first, run } from "../../../../../../../_lib/db/queries";
 import { randomToken, sha256Hex } from "../../../../../../../_lib/utils/crypto";
 import { nowIso, addHours } from "../../../../../../../_lib/utils/time";
@@ -93,11 +93,7 @@ export async function onRequestPost(
       messageType: "transactional",
       subject: `Confirm your registration for ${event.name}`,
       data: {
-        eventName: event.name,
-        eventSlug: event.slug,
-        eventTimezone: event.timezone,
-        eventStartsAt: event.starts_at ?? "",
-        eventEndsAt: event.ends_at ?? "",
+        ...buildEventEmailVariables(event, appBaseUrl),
         firstName: user.first_name ?? "",
         lastName: user.last_name ?? "",
         email: user.email,
@@ -112,8 +108,6 @@ export async function onRequestPost(
         confirmationUrl,
         manageUrl: "",
         shareUrl,
-        sponsorsImageUrl: resolveSponsorsImageUrl(event),
-        heroImageUrl: resolveHeroImageUrl(event),
       },
     });
   } else {
@@ -138,13 +132,7 @@ export async function onRequestPost(
       messageType: "transactional",
       subject: `Registration confirmed for ${event.name}`,
       data: {
-        eventName: event.name,
-        eventSlug: event.slug,
-        eventTimezone: event.timezone,
-        eventStartsAt: event.starts_at ?? "",
-        eventEndsAt: event.ends_at ?? "",
-        eventUrl: event.base_path ? `${appBaseUrl}${event.base_path}` : null,
-        venue: resolveEventVenue(event),
+        ...buildEventEmailVariables(event, appBaseUrl),
         firstName: user.first_name ?? "",
         lastName: user.last_name ?? "",
         email: user.email,
@@ -167,8 +155,6 @@ export async function onRequestPost(
           blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${event.name} — join me!\n${appBaseUrl}/r/${referralRow.code}`)}`,
           redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(`${appBaseUrl}/r/${referralRow.code}`)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
         } : {}),
-        sponsorsImageUrl: resolveSponsorsImageUrl(event),
-        heroImageUrl: resolveHeroImageUrl(event),
       },
       calendar: {
         registrationId: registration.id,

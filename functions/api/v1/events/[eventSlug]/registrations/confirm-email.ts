@@ -1,7 +1,7 @@
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { json, markSensitive } from "../../../../../_lib/http";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
-import { getEventBySlug, resolveEventVenue, resolveHeroImageUrl, resolveSponsorsImageUrl } from "../../../../../_lib/services/events";
+import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
 import { confirmRegistrationByToken } from "../../../../../_lib/services/registrations";
 import { getRegistrationDayAttendance } from "../../../../../_lib/services/event-days";
 import { buildAttendanceEmailData } from "../../../../../_lib/utils/attendance";
@@ -57,14 +57,7 @@ async function confirmRegistration(
         messageType: "transactional",
         subject: `Registration confirmed for ${event.name}`,
         data: {
-          // Event
-          eventName: event.name,
-          eventSlug: event.slug,
-          eventTimezone: event.timezone,
-          eventStartsAt: event.starts_at ?? "",
-          eventEndsAt: event.ends_at ?? "",
-          eventUrl: event.base_path ? `${appBaseUrl}${event.base_path}` : null,
-          venue: resolveEventVenue(event),
+          ...buildEventEmailVariables(event, appBaseUrl),
           // User
           firstName: user.first_name ?? "",
           lastName: user.last_name ?? "",
@@ -90,9 +83,6 @@ async function confirmRegistration(
             blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${event.name} — join me!\n${shareUrl}`)}`,
             redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl as string)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
           } : {}),
-          // Media
-          sponsorsImageUrl: resolveSponsorsImageUrl(event),
-          heroImageUrl: resolveHeroImageUrl(event),
         },
         calendar: {
           registrationId: registration.id,

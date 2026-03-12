@@ -15,7 +15,7 @@ import { parseJsonBody } from "../../../../../_lib/validation";
 import { json, markSensitive } from "../../../../../_lib/http";
 import { AppError } from "../../../../../_lib/errors";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
-import { getEventBySlug, resolveHeroImageUrl, resolveSponsorsImageUrl } from "../../../../../_lib/services/events";
+import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
 import { first, run } from "../../../../../_lib/db/queries";
 import { randomToken, sha256Hex } from "../../../../../_lib/utils/crypto";
 import { nowIso, addHours } from "../../../../../_lib/utils/time";
@@ -113,12 +113,7 @@ export async function onRequestPost(
     messageType: "transactional",
     subject: `Confirm your registration for ${event.name}`,
     data: {
-      // Event
-      eventName: event.name,
-      eventSlug: event.slug,
-      eventTimezone: event.timezone,
-      eventStartsAt: event.starts_at ?? "",
-      eventEndsAt: event.ends_at ?? "",
+      ...buildEventEmailVariables(event, appBaseUrl),
       // User
       firstName: user.first_name ?? "",
       lastName: user.last_name ?? "",
@@ -136,9 +131,6 @@ export async function onRequestPost(
       confirmationUrl,
       manageUrl,
       shareUrl: null,
-      // Media
-      sponsorsImageUrl: resolveSponsorsImageUrl(event),
-      heroImageUrl: resolveHeroImageUrl(event),
     },
   });
 
