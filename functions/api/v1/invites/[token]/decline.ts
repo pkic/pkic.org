@@ -2,7 +2,7 @@ import { parseJsonBody } from "../../../../_lib/validation";
 import { json, markSensitive } from "../../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { declineInvite, findInviteByToken, createInvite } from "../../../../_lib/services/invites";
-import { resolveHeroImageUrl, resolveSponsorsImageUrl } from "../../../../_lib/services/events";
+import { buildEventEmailVariables } from "../../../../_lib/services/events";
 import { first } from "../../../../_lib/db/queries";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { registrationPageUrl, inviteDeclineUrl } from "../../../../_lib/services/frontend-links";
@@ -70,13 +70,11 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
             messageType: "transactional",
             subject: `Invitation: ${event.name}`,
             data: {
-              eventName: event.name,
+              ...buildEventEmailVariables(event, appBaseUrl),
               firstName: newInvite.invitee_first_name ?? "",
               lastName: newInvite.invitee_last_name ?? "",
               registrationUrl,
               declineUrl,
-              sponsorsImageUrl: resolveSponsorsImageUrl(event),
-              heroImageUrl: resolveHeroImageUrl(event),
             },
           });
 

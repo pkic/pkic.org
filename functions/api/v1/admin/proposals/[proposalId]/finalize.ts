@@ -1,6 +1,7 @@
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
+import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
 import {
   finalizeProposalDecision,
   listProposalSpeakersWithStatus,
@@ -10,6 +11,7 @@ import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import { processPendingOutboxBackground, queueEmail } from "../../../../../_lib/email/outbox";
 import { first, run } from "../../../../../_lib/db/queries";
 import { speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
+import { buildEventEmailVariables } from "../../../../../_lib/services/events";
 import type { PagesContext } from "../../../../../_lib/types";
 import { finalizeProposalSchema } from "../../../../../../shared/schemas/api";
 
@@ -17,10 +19,25 @@ export async function onRequestPost(
   context: PagesContext<{ proposalId: string }>,
 ): Promise<Response> {
   const admin = await requireAdminFromRequest(context.env.DB, context.request);
+
+  const accessCheckProposal = await first<{ event_id: string }>(
+    context.env.DB,
+    "SELECT event_id FROM session_proposals WHERE id = ?",
+    [context.params.proposalId],
+  );
+  if (!accessCheckProposal) {
+    return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
+  }
+
+  const access = await getProposalAccessForEvent(context.env.DB, accessCheckProposal.event_id, admin);
+  if (!access.canFinalize) {
+    return json({ error: { code: "FORBIDDEN", message: "Missing permission to finalize proposals" } }, 403);
+  }
+
   const body = await parseJsonBody(context.request, finalizeProposalSchema);
   const config = getConfig(context.env, context.request);
 
-  const minReviewsRequired = body.minReviewsRequired ?? config.minProposalReviews;
+  const minReviewsRequired = config.minProposalReviews;
 
   const finalized = await finalizeProposalDecision(context.env.DB, {
     proposalId: context.params.proposalId,
@@ -73,6 +90,7 @@ export async function onRequestPost(
           subject: `Proposal update: ${proposal.title}`,
           messageType: "transactional",
           data: {
+            ...(event ? buildEventEmailVariables(event, appBaseUrl) : {}),
             eventName: event?.name ?? "",
             firstName: speaker.first_name ?? "",
             lastName: speaker.last_name ?? "",
@@ -105,7 +123,7 @@ export async function onRequestPost(
             subject: `Action required: complete your speaker profile — ${event.name}`,
             messageType: "transactional",
             data: {
-              eventName: event.name,
+              ...buildEventEmailVariables(event, appBaseUrl),
               firstName: speaker.first_name ?? "",
               proposalTitle: proposal.title,
               profileUrl: speakerManageUrl,
@@ -122,13 +140,22 @@ export async function onRequestPost(
             subject: `Please upload your presentation — ${event.name}`,
             messageType: "transactional",
             data: {
-              eventName: event.name,
+              ...buildEventEmailVariables(event, appBaseUrl),
               firstName: speaker.first_name ?? "",
               proposalTitle: proposal.title,
               uploadUrl: speakerManageUrl,
               deadline: proposal.presentation_deadline ?? body.presentationDeadline ?? "",
             },
           });
+
+          await run(
+            context.env.DB,
+            `UPDATE proposal_speakers
+             SET presentation_last_communication_at = ?,
+                 presentation_reminders_paused_until = NULL
+             WHERE proposal_id = ? AND user_id = ?`,
+            [new Date().toISOString(), context.params.proposalId, speaker.user_id],
+          );
         }
       }
     }

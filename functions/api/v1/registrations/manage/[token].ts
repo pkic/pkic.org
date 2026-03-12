@@ -11,7 +11,7 @@ import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms"
 import { registrationManagePageUrl } from "../../../../_lib/services/frontend-links";
 import { buildAttendanceEmailData, STATUS_LABELS } from "../../../../_lib/utils/attendance";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
-import { resolveEventVenue, resolveHeroImageUrl, resolveSponsorsImageUrl } from "../../../../_lib/services/events";
+import { buildEventEmailVariables } from "../../../../_lib/services/events";
 import type { PagesContext } from "../../../../_lib/types";
 import { registrationManageSchema } from "../../../../../shared/schemas/api";
 
@@ -103,13 +103,12 @@ export async function onRequestPatch(context: PagesContext<{ token: string }>): 
         ? `Your registration for ${event.name} has been cancelled and your data removed`
         : `Registration updated for ${event.name}`,
       data: {
-        eventName: event.name,
+        ...buildEventEmailVariables(event, appBaseUrl),
         firstName: user.first_name ?? "",
         lastName: user.last_name ?? "",
         email: user.email,
         organizationName: user.organization_name ?? "",
         jobTitle: user.job_title ?? "",
-        venue: resolveEventVenue(event),
         attendanceType: updated.attendance_type,
         attendanceLabel,
         dayAttendance,
@@ -118,8 +117,6 @@ export async function onRequestPatch(context: PagesContext<{ token: string }>): 
         status: updated.status,
         statusLabel: STATUS_LABELS[updated.status] ?? updated.status,
         manageUrl,
-        sponsorsImageUrl: resolveSponsorsImageUrl(event),
-        heroImageUrl: resolveHeroImageUrl(event),
       },
     });
 

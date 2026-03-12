@@ -45,7 +45,7 @@ export interface Env {
   IMAGES?: ImagesBinding;
   /** Cloudflare Pages deployment URL (for example https://branch.project.pages.dev). */
   CF_PAGES_URL?: string;
-  /** Legacy fallback for local tooling; prefer CF_PAGES_URL or the current request origin. */
+  /** Set in .dev.vars for local development; takes precedence over CF_PAGES_URL. */
   APP_BASE_URL?: string;
   DEFAULT_MIN_PROPOSAL_REVIEWS: string;
   DEFAULT_REFERRAL_CODE_LENGTH: string;
@@ -53,6 +53,9 @@ export interface Env {
   WAITLIST_CLAIM_WINDOW_HOURS: string;
   MAGIC_LINK_TTL_MINUTES: string;
   MANAGE_TOKEN_TTL_HOURS: string;
+  REMINDER_INTERVAL_DAYS?: string;
+  MAX_INVITE_REMINDERS?: string;
+  MAX_PRESENTATION_REMINDERS?: string;
   SENDGRID_API_KEY?: string;
   SENDGRID_API_BASE: string;
   FROM_EMAIL?: string;
