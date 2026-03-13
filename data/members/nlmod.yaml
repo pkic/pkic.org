@@ -53,3 +53,7 @@ representatives:
       x: 
       linkedin: https://www.linkedin.com/in/ing-fekke-bakker-msc-cgeit-cissp-cisa-28024912/
     description: Fekke Bakker is the Operational TSP Manager at the Dutch Ministry of Defence and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
+  {{< video link="https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4" type="video/mp4" poster="nlmod-videoposter.jpg" >}}

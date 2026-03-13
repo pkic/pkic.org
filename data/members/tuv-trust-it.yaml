@@ -52,3 +52,11 @@ representatives:
       x: 
       linkedin: https://www.linkedin.com/in/clemens-wanko-0947a5210/
     description: Clemens is the head of the conformity assessment body (CAB) at TUV AUSTRIA CERT and vice chair of the European accredited eIDAS/ETSI auditors in the ACAB council and is highly interested in harmonized secure interpretatiion and implementation of legal requirements and normative standards.
+
+# Long-form content (markdown)
+content: |
+  ## About TÜV TRUST IT
+
+  Based in Cologne and Vienna, TÜV TRUST IT is the neutral, objective and independent partner for the industry with regard to information security and data privacy. It is our mission to support companies in protecting their information assets. From our viewpoint information assets comprise all relevant data within a company, which is necessary to ensure that business operations run properly,and are provided via IT infrastructure and processes. Information values are thus assets that, like all other corporate assets, need to be protected in accordance with their importance. Our services are based on internationally recognized standards and best practices. It is important for us to make a significant contribution to our customers’ value creation.
+
+  {{< youtube VtyyiZxjp2Q>}}

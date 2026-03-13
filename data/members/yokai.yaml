@@ -49,3 +49,12 @@ representatives:
     social:
       linkedin: https://www.linkedin.com/in/pradeepatmaram/
     description: Pradeep Atmaram serves as Chief Operating Officer at Yokai Network, overseeing operational excellence, go-to-market strategy, and business development. With over 10 years of marketing leadership experience across Singapore, India, and the Middle East markets, he brings deep expertise in scaling secure technology solutions for regulated industries. At Yokai, Pradeep manages strategic partnerships and enterprise deployment of secure collaboration tools, with particular focus on financial services, telecommunications, and government sectors throughout the APAC region.
+
+# Long-form content (markdown)
+title: Yokai Network
+content: |
+  ## Foundational Infrastructure for the Multi-Agent Economy
+
+  Yokai provides the foundational infrastructure powering the emerging autonomous agent economy through our distributed secure messaging protocol. We implement quantum-resistant cryptographic protocols that process over a million messages per second, enabling both human teams and AI agents to discover, coordinate, and share context with absolute security across organizational boundaries—creating the standardized foundation necessary for the Internet of Agents.
+
+  Our comprehensive platform combines cryptographic identity systems, capability-based discovery mechanisms, and tamper-evident verification protocols to ensure agents can establish verifiable trust relationships. By integrating high-performance real-time communication with persistent messaging capabilities, Yokai enables efficient discovery and secure utilization of specialized agent capabilities across distributed networks, creating a cryptographically secured connectivity layer for agent-to-agent interactions while maintaining zero-knowledge verification and cross-organizational trust boundaries.

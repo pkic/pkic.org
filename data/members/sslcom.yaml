@@ -58,3 +58,15 @@ representatives:
       x: 
       linkedin: https://www.linkedin.com/in/leogrove/
     description: Leo is the CEO of SSL.com and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
+  ## Powering Digital Trust in Business
+
+  Founded in 2002, SSL is a Digital Trust Platform that provides full-service PKI solutions securing online communications, applications, and digital content. The company serves individuals, enterprises, and organizations across over 180 countries with comprehensive certificate services, including SSL/TLS, code signing, email security, and document signing certificates. SSL maintains WebTrust audit compliance and participates as a full voting member of the CA/Browser Forum.
+
+  {{< vimeo 135666049 >}}
+
+  At SSL, trust is the foundation of everything we do. We continuously develop technologies that address tomorrow's security challenges, from post-quantum cryptography and content provenance to enterprise-scale managed PKI. 
+
+  We back it all with a commitment to customer success that has made us a trusted partner for thousands of organizations worldwide, delivering the expert guidance and responsive support that teams of every size and technical background need to protect their brand, voice, and operations.

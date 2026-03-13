@@ -58,3 +58,13 @@ representatives:
       x: https://x.com/
       linkedin: https://www.linkedin.com/in/luke-chung-86964717/
     description: Luke Chung, Sunnic's Sales Director, brings a wealth of professional experience spanning over two decades, with a diverse background encompassing roles in Project Management, Sales, and Business Development within the IT and Cybersecurity sectors. Luke has a proven track record of not only driving substantial revenue growth, and successfully leading multimillion-dollar projects, but also a passion for building high-performing teams. Luke excels in fostering and nurturing vital B2B and B2C relationships, crafting pioneering business strategies, and delivering exceptional win-win outcomes that align seamlessly with customers' diverse and evolving business requirements.business 
+
+# Long-form content (markdown)
+content: |
+  ## A secure cyberspace built on the foundation of trust
+
+  Sunnic is a leading provider of comprehensive digital data security technology. We build technologies and offer consultancy services in the fields of data protection, cryptographic key management, Public Key Infrastructure (PKI) and access control solutions, to safeguard our customers most critical assets. Our solutions include Sunnic’s homegrown E-Trust End-to-end Encryption. An innovative solution that provides a secure channel for user password authentication and during transmission, as well as data-at-rest and in-motion.
+
+  ### Mission
+
+  To create bespoke solutions tailored to safeguard your most valuable assets. Your security is our top priority. We we strive to deliver peace of mind an ever-evolving digital landscape.

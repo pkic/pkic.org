@@ -58,3 +58,7 @@ representatives:
       x: 
       linkedin: https://www.linkedin.com/in/mitjatrampuz/
     description: Mitja is managing director of CREAPLUS and business development professional skilled in the information security technology (cybersecurity, hardware security modules - HSMs, cryptography, PKI, network security, 2FA/MFA, ISO/IEC 27001 ISMS, risk management, encryption etc.) with more than 30 years of working experience. He is a holder of different certifications like (ISC)²’s Certified Information Systems Security Professional – CISSP and Certified Cloud Security Professional – CCSP, ISACA’s Certified Information Systems Auditor – CISA and Certified Information Security Manager – CISM, Internal Auditor for ISO/IEC 27001 and others.
+
+# Long-form content (markdown)
+content: |
+  CREAPLUS aims to fill the gap in the cybersecurity market, securing data assets, and digital identity against unauthorized access, cyber-attacks and hacking through modern solutions and comprehensive services. For post-quantum cryptography (PQC), it has expertise in evaluating cryptographic solutions deployed in organisations and across multiple systems. Alongside the expertise of its cryptographers, CREAplus can identify the scope of the existing cryptographic deployment in an organization, provide algorithm selection guidance together with hardware and software recommendations and use crypto-agility to implement it in your environment.

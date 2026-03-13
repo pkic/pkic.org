@@ -52,3 +52,9 @@ representatives:
       x: 
       linkedin: 
     description: Sergii is the CEO at Quantag IT Solutions GmbH and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
+  ## Innovating Since 2014
+
+  Quantag IT Solutions GmbH, established in 2014, specializes in mobile software and security. Our services include IoT and embedded software development, web, and mobile applications, alongside desktop application development and post-quantum cryptography. With expertise in database management and microservices development, we offer comprehensive solutions for modern challenges.

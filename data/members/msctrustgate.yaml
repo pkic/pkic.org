@@ -74,7 +74,17 @@ representatives:
     role: Senior Manager, ICT Operation
     social:
       x: 
-      linkedin: 
+      linkedin: https://www.linkedin.com/in/khairil-nizam-abdul-malek-10b1b212/
     description: Khairil Nizam is an experienced Technical Consultant with a proven track record of building lasting client relationships and delivering innovative solutions. Highly skilled in server hardware and component configuration, as well as system failure analysis. 
       
       Backed by over two decades of expertise in computer networking and a deep understanding of Public Key Infrastructure. Adept at cloud implementation and project management, offering a combination of technical proficiency and leadership to successfully manage complex projects.
+
+# Long-form content (markdown)
+content: |
+  ## A Licensed Certification Authority since 2000
+
+  MSC Trustgate is a trusted and licensed Certification Authority (CA), regulated by the Malaysian Communications and Multimedia Commission (MCMC). Since its establishment, MSC Trustgate has been authorized to issue and manage digital certificates and identities based on Public Key Infrastructure (PKI). Our digital certificates are legally recognized under Malaysia’s Digital Signature Act 1997 (DSA 1997) and the Digital Signature Regulation 1998 (DSR 1998), ensuring that all digitally signed documents have legal standing.
+
+  By providing robust non-repudiation services, MSC Trustgate enhances the security and authenticity of digital transactions and communications, empowering businesses and organizations to operate confidently in the digital space. We serve various industries, from government entities to private enterprises, offering comprehensive solutions for secure digital signatures, encryption, and identity verification.
+
+  {{< youtube rBNpZ_mlHL0 >}}

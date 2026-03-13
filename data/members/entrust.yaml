@@ -64,6 +64,8 @@ representatives:
       Mr. Morton monitors the SSL industry and provides insight into digital certificates through the Entrust Insights blog.
 
       Mr. Morton is a graduate of University of Waterloo, where he received an undergraduate degree in electrical engineering. He also holds a master’s degree in business administration from Concordia University.
+    till: 2025-11-28
+    hidden: true
 
   - name: Paul van Brouwershaven*
     role: Director, Technology Compliance
@@ -80,8 +82,6 @@ representatives:
 
   - name: Chris Bailey
     role: VP of Strategy and Business Development – Certificate Services
-    hidden: true
-    till: 2024-06-29
     social:
       x:
       linkedin:
@@ -89,7 +89,9 @@ representatives:
       Chris Bailey is Vice President of Strategy and Business Development at Entrust, a global leader in the identity-based digital information security market for nearly two decades.
 
       Previously Bailey was the General Manager of Trend Micro SSL and Business Incubation for Trend Micro SSL, which was purchased Entrust. Before that, Bailey served as the CEO and co-founder of the certification authority AffirmTrust, which was acquired by Trend Micro in 2011, and as co-founder and CTO of GeoTrust, a major world Certification Authority acquired by VeriSign in 2006.
-
+    till: 2024-06-29
+    hidden: true
+    
   - name: Kirk Hall
     role: Director, Policy & Compliance
     hidden: true
@@ -118,3 +120,15 @@ representatives:
     hidden: true
     from: 2005-10-01
     till: 2015-02-28
+
+# Long-form content (markdown)
+content: |
+  ## Securing a World in Motion Since 1969
+
+  At Entrust, we’ve established secure connections across the planet and even into outer space. We’ve enabled reliable debit and credit card purchases with our card printing and issuance technologies. Protected international travel with our border control solutions. Created secure experiences on the internet with our SSL technologies. And safeguarded networks and devices with our suite of authentication products.
+
+  ### Founding member
+
+  Back in 2013, Entrust was one of the seven CA's who founded the CA Security Council. In 2021 Entrust played a key role to restructure and expand the scope of the council and changed the name to the Public Key Infrastructure (PKI) Consortium.
+
+  {{< youtube FeCFO5rpeIc>}}

@@ -52,3 +52,23 @@ representatives:
       x:
       linkedin: https://www.linkedin.com/in/teikguan
     description: Teik Guan enjoys working in the niche area of cryptographic security design and integration, having implemented numerous successful projects and products such as CAs, smartcards (Javacard), HSMs, Authentication Servers, for banks, government agencies and enterprises. He holds a PhD in Cybersecurity from SUTD, and BSc, MSc from NUS.
+
+# Long-form content (markdown)
+content: |
+  ## About pQCee
+
+  pQCee is a deep-tech startup in the quantum cybersecurity space.  It is in the business of designing and building post-quantum products and services to strengthen and protect the next generation of computing against quantum attacks.
+
+  ## Be Quantum Ready
+
+  Our 10 focus areas for quantum readiness are:
+  - Migration
+  - Gaps
+  - Threat Surveillance
+  - Authentication
+  - Validation
+  - Frauds / Scams
+  - Human Resource
+  - Business Continuity
+  - Regulations
+  - Public Education

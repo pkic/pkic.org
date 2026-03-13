@@ -56,3 +56,8 @@ representatives:
 
   - name: Pardomuan Sihaloho
     role: Board of Commissioners
+
+# Long-form content (markdown)
+content: |
+  ## About DAVID GROUP
+  DAVID GROUP is multi-sector cybersecurity company that creates software and extraordinary ability electronic products to help Industries, Organizations, Educational Institutions, Governments and Personal Entity against global cyberattacks escalation, electronic warfare and stealth espionage in any critical situation.
