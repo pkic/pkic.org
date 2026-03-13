@@ -1,0 +1,119 @@
+{{/*
+  event-webinar-card.html — sidebar card for sponsored webinars on /events.
+  Shows sponsor logo, title, description snippet, and a register CTA.
+
+  Usage: {{ partial "event-webinar-card.html" . }}  (pass the event Section page as context)
+*/}}
+
+{{- $p := . -}}
+{{- $eventTitle    := $p.Param "heroTitle" | default $p.Title -}}
+{{- $eventLocation := $p.Param "heroDescription" -}}
+{{- $urlParts      := split $p.RelPermalink "/" -}}
+{{- $yearStr       := index $urlParts 2 -}}
+{{- $eventYear     := int $yearStr -}}
+{{- $isUpcoming    := ge $eventYear now.Year -}}
+
+{{/* ── Hero image (replaces gradient banner when set) ────────────────────── */}}
+{{- $cardImg  := false -}}
+{{- $heroName := $p.Param "heroImage" -}}
+{{- with $heroName -}}
+  {{- if not (strings.HasSuffix (. | lower) ".svg") -}}
+    {{- $img := $p.Resources.GetMatch (printf "*%s" .) -}}
+    {{- if $img -}}
+      {{- $cardImg = $img -}}
+    {{- else -}}
+      {{- $s := $p.CurrentSection -}}
+      {{- range seq 6 -}}
+        {{- if and (not $cardImg) $s -}}
+          {{- $found := $s.Resources.GetMatch (printf "*%s" $heroName) -}}
+          {{- if $found -}}{{- $cardImg = $found -}}{{- end -}}
+          {{- $s = $s.Parent -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ── Sponsor logo ─────────────────────────────────────────────────────────── */}}
+{{- $sponsorId   := $p.Param "sponsor" -}}
+{{- $sponsorName := "" -}}
+{{- $sponsorLogo := false -}}
+{{- if $sponsorId -}}
+  {{- range hugo.Data.members -}}
+    {{- if eq .id $sponsorId -}}
+      {{- $sponsorName = .name -}}
+      {{- $svg := resources.Get (printf "images/members/%s/%s.svg" $sponsorId $sponsorId) -}}
+      {{- if $svg -}}
+        {{- $sponsorLogo = $svg -}}
+      {{- else -}}
+        {{- $png := resources.Get (printf "images/members/%s/%s.png" $sponsorId $sponsorId) -}}
+        {{- if $png -}}{{- $sponsorLogo = $png -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+<div class="event-webinar-card mb-4">
+
+  {{/* ── Banner / logo header ──────────────────────────────────────────── */}}
+  <div class="event-webinar-card-banner{{ if $cardImg }} event-webinar-card-banner--photo{{ end }}">
+    {{ if $cardImg }}
+    {{ $thumb := $cardImg.Resize "400x144 Center" }}
+    <img src="{{ $thumb.RelPermalink }}" alt="{{ $eventTitle }}" class="event-webinar-card-banner-img" width="400" height="144" loading="lazy">
+    {{ end }}
+    <div class="event-webinar-card-banner-overlay"></div>
+
+    <span class="event-webinar-badge">Sponsored Webinar</span>
+  </div>
+
+  {{/* ── Card body ─────────────────────────────────────────────────────── */}}
+  <div class="event-webinar-card-body">
+    <h3 class="event-webinar-title">
+      <a href="{{ $p.Permalink }}" class="stretched-link">{{ $eventTitle }}</a>
+    </h3>
+
+    {{ with $p.Param "eventDate" }}
+    {{- $ed := time . -}}
+    <p class="event-webinar-meta">
+      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <time data-local-time="{{ $ed.Format "2006-01-02T15:04:05Z" }}">{{ $ed.Format "2 Jan 2006, 15:04 UTC" }}</time>
+    </p>
+    {{ end }}
+
+    {{ with $eventLocation }}
+    <p class="event-webinar-meta">
+      <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+        <circle cx="12" cy="10" r="3"/>
+      </svg>
+      {{ . }}
+    </p>
+    {{ end }}
+
+    {{ with $p.Summary }}
+    <p class="event-webinar-summary">{{ . | truncate 130 | plainify }}</p>
+    {{ end }}
+
+    {{ if $isUpcoming }}
+    {{ with $p.Param "heroButton" }}
+    <a href="{{ $p.Param "heroButton.link" }}"
+       class="btn btn-sm btn-page-accent w-100 mt-2 event-webinar-register-btn"
+       target="_blank" rel="noopener noreferrer"
+       style="position:relative;z-index:2;">
+      {{ $p.Param "heroButton.label" | default "Register" }}
+    </a>
+    {{ end }}
+    {{ end }}
+  </div>
+
+</div>
+

@@ -337,7 +337,6 @@ export async function upsertEventFromHugo(
     timezone: string;
     startsAt?: string | null;
     endsAt?: string | null;
-    capacityInPerson?: number | null;
     registrationMode?: string;
     inviteLimitAttendee?: number;
     settings?: Record<string, unknown>;
@@ -356,7 +355,7 @@ export async function upsertEventFromHugo(
       ends_at: payload.endsAt ?? null,
       source_path: null,
       base_path: null, // Set on first frontend submission via updateEventBasePath
-      capacity_in_person: payload.capacityInPerson ?? null,
+      capacity_in_person: null,
       registration_mode: payload.registrationMode ?? "invite_or_open",
       invite_limit_attendee: payload.inviteLimitAttendee ?? 5,
       settings_json: stringifyJson(payload.settings ?? {}),
@@ -401,7 +400,7 @@ export async function upsertEventFromHugo(
       payload.timezone,
       payload.startsAt ?? existing.starts_at,
       payload.endsAt ?? existing.ends_at,
-      payload.capacityInPerson ?? existing.capacity_in_person,
+      null,
       payload.registrationMode ?? existing.registration_mode,
       payload.inviteLimitAttendee ?? existing.invite_limit_attendee,
       stringifyJson({

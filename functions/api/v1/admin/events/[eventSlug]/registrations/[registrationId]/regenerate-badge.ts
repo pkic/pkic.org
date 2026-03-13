@@ -27,7 +27,7 @@ export async function onRequestPost(
 ): Promise<Response> {
   const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
   const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+  const appBaseUrl = resolveAppBaseUrl(context.env);
 
   // Look up the referral code owned by this registration
   const row = await first<{ code: string }>(

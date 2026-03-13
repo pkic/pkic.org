@@ -41,7 +41,7 @@ export async function onRequestPost(
   const body = await parseJsonBody(context.request, resendConfirmationSchema);
 
   const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+  const appBaseUrl = resolveAppBaseUrl(context.env);
 
   // Look up the registration by the (possibly-expired) confirmation token.
   // The token hash is cleared when confirmed, so a used token naturally returns 404.

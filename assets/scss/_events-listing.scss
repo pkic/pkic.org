@@ -1,0 +1,356 @@
+// ============================================================
+// Events listing page — /events
+// ============================================================
+
+// ── Section headings ──────────────────────────────────────────────────────────
+
+.events-section-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  border-bottom: 2px solid $gray-200;
+  padding-bottom: 0.75rem;
+}
+
+.events-section-title {
+  font-size: 1.4rem;
+  font-weight: 700;
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  // Override global h2 gradient treatment
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: unset !important;
+  color: $gray-700 !important;
+}
+
+.events-section-title-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.28em 0.75em;
+  border-radius: 6px;
+  vertical-align: middle;
+
+  &--upcoming {
+    background: $green-pale;
+    color: $green-deep;
+  }
+  &--past {
+    background: $gray-200;
+    color: $gray-600;
+  }
+}
+
+// ── Year grouping ─────────────────────────────────────────────────────────────
+
+.events-year-group {
+  position: relative;
+}
+
+.events-year-heading {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: $gray-500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin-bottom: 1rem;
+  // Override global h3 gradient treatment
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: unset !important;
+  color: $gray-500 !important;
+}
+
+// ── Event card tweaks (extends .blog-card) ────────────────────────────────────
+
+.event-card {
+  // Taller header so landscape conference photos look good
+  .event-card-header,
+  .blog-card-header {
+    height: 230px;
+  }
+
+  // Gradient palette for event cards when there is no photo
+  // Base: navy → teal
+  .blog-card-header--gradient {
+    background: linear-gradient(135deg, $blue-deep 0%, $teal 100%);
+    &::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse at 110% -10%, rgba(32,201,151,0.28) 0%, transparent 55%);
+    }
+  }
+  &:nth-child(2n) .blog-card-header--gradient {
+    background: linear-gradient(135deg, $purple-deep 0%, $blue-deep 100%);
+    &::before {
+      background: radial-gradient(ellipse at 110% -10%, rgba(111,66,193,0.25) 0%, transparent 55%);
+    }
+  }
+
+  // Location line (re-uses .blog-card-date styling)
+  .event-card-location {
+    gap: 0.3rem;
+
+    svg { flex-shrink: 0; }
+  }
+}
+
+// ── Badge variants ────────────────────────────────────────────────────────────
+
+.event-card-badge {
+  &--upcoming {
+    background: rgba($green, 0.8) !important;
+    color: #fff !important;
+    border-color: transparent !important;
+  }
+  &--past {
+    background: rgba(255,255,255,0.18) !important;
+    color: #fff !important;
+    border-color: rgba(255,255,255,0.28) !important;
+  }
+}
+
+// ── Sidebar ───────────────────────────────────────────────────────────────────
+
+.events-sidebar {
+  top: 5rem; // offset below fixed navbar
+}
+
+.events-sidebar-header {
+  border-bottom: 2px solid $gray-200;
+  padding-bottom: 0.75rem;
+}
+
+.events-sidebar-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  margin: 0 0 0.35rem;
+  // Override global h2 gradient treatment
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: unset !important;
+  color: $gray-700 !important;
+}
+
+.events-sidebar-desc {
+  font-size: 0.80rem;
+  color: $gray-500;
+  line-height: 1.55;
+  margin: 0;
+
+  // markdownify wraps in <p>; keep spacing compact
+  p {
+    margin-bottom: 0.4rem;
+    &:last-child { margin-bottom: 0; }
+  }
+
+  // bold "not endorsed" stands out
+  strong {
+    color: $gray-600;
+    font-weight: 700;
+  }
+}
+
+// ── Webinar card (sidebar) ────────────────────────────────────────────────────
+
+.event-webinar-card {
+  background: #fff;
+  border: 1px solid $gray-200;
+  border-radius: 0.875rem;
+  overflow: hidden;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  position: relative;
+  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+
+  &:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.11);
+    border-color: $blue;
+  }
+}
+
+// Banner — gradient strip with sponsor logo
+.event-webinar-card-banner {
+  position: relative;
+  height: 72px;
+  background: linear-gradient(135deg, $blue-deep 0%, $purple-deep 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(ellipse at 110% -10%, rgba(90,155,213,0.3) 0%, transparent 55%);
+    pointer-events: none;
+  }
+}
+
+.event-webinar-card-banner-overlay {
+  position: absolute;
+  inset: 0;
+}
+
+.event-webinar-card-logo {
+  position: relative;
+  z-index: 1;
+  background: rgba(255,255,255,0.93);
+  backdrop-filter: blur(4px);
+  border-radius: 0.5rem;
+  padding: 0.45rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  img {
+    max-width: 110px;
+    max-height: 28px;
+    object-fit: contain;
+    display: block;
+  }
+}
+
+.event-webinar-sponsor-name {
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: $gray-700;
+}
+
+// Badge — positioned top-right in banner
+.event-webinar-badge {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.6rem;
+  z-index: 2;
+  display: inline-block;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.22em 0.65em;
+  border-radius: 5px;
+  background: rgba(255,255,255,0.92);
+  color: $gray-700;
+}
+
+// Photo banner variant — image fills the banner
+.event-webinar-card-banner--photo {
+  align-items: flex-end;
+  justify-content: flex-start;
+}
+
+.event-webinar-card-banner-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+// Card body
+.event-webinar-card-body {
+  padding: 0.9rem 1rem 1rem;
+  position: relative;
+}
+
+.event-webinar-title {
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 0 0 0.35rem;
+  // Override global h3 gradient treatment
+  background: none !important;
+  -webkit-background-clip: unset !important;
+  background-clip: unset !important;
+  -webkit-text-fill-color: unset !important;
+  color: $gray-700 !important;
+
+  a {
+    color: inherit;
+    text-decoration: none;
+
+    &::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+    }
+  }
+}
+
+.event-webinar-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.74rem;
+  color: $gray-500;
+  margin: 0 0 0.4rem;
+
+  svg { flex-shrink: 0; }
+}
+
+.event-webinar-summary {
+  font-size: 0.79rem;
+  color: $gray-600;
+  line-height: 1.45;
+  margin: 0 0 0.5rem;
+}
+
+.event-webinar-register-btn {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+// ── Past webinars sub-heading ─────────────────────────────────────────────────
+
+.events-webinar-past-heading {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: $gray-500;
+  margin: 0 0 0.75rem;
+  padding-top: 0.25rem;
+  border-top: 1px solid $gray-200;
+  background: none !important;
+  -webkit-text-fill-color: unset !important;
+  color: $gray-500 !important;
+}
+
+// ── Empty-state webinar box ───────────────────────────────────────────────────
+
+.events-webinar-empty {
+  background: $gray-100;
+  border-radius: 0.75rem;
+  padding: 1.25rem 1.1rem;
+  font-size: 0.85rem;
+  color: $gray-600;
+  line-height: 1.5;
+
+  a {
+    color: $blue-dark;
+    font-weight: 600;
+    text-decoration: underline;
+  }
+}
+
+// ── Sidebar CTA ───────────────────────────────────────────────────────────────
+
+.events-sidebar-cta {
+  .btn-outline-secondary {
+    font-size: 0.78rem;
+  }
+}

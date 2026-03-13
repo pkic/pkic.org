@@ -92,7 +92,6 @@ describe("day waitlist priorities", () => {
     await updateRegistrationByManageToken(db, {
       manageToken: holder.manageToken,
       action: "cancel",
-      eventCapacity: 1,
       waitlistClaimWindowHours: 24,
     });
 
@@ -171,14 +170,12 @@ describe("day waitlist priorities", () => {
     await updateRegistrationByManageToken(db, {
       manageToken: holderOne.manageToken,
       action: "cancel",
-      eventCapacity: 1,
       waitlistClaimWindowHours: 24,
     });
 
     await updateRegistrationByManageToken(db, {
       manageToken: holderTwo.manageToken,
       action: "cancel",
-      eventCapacity: 1,
       waitlistClaimWindowHours: 24,
     });
 

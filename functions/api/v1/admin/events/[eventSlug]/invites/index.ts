@@ -1,7 +1,7 @@
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../_lib/services/events";
-import { all } from "../../../../../../_lib/db/queries";
+import { all, first } from "../../../../../../_lib/db/queries";
 import type { PagesContext } from "../../../../../../_lib/types";
 
 /**
@@ -22,6 +22,8 @@ export async function onRequestGet(
   const url = new URL(context.request.url);
   const statusFilter = url.searchParams.get("status");
   const typeFilter = url.searchParams.get("type");
+  const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10) || 50));
+  const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
 
   const validStatuses = new Set(["sent", "accepted", "declined", "expired", "revoked"]);
   const validTypes = new Set(["attendee", "speaker"]);
@@ -39,7 +41,7 @@ export async function onRequestGet(
     bindings.push(typeFilter);
   }
 
-  const invites = await all(
+  const rows = await all(
     context.env.DB,
     `SELECT
        i.id,
@@ -64,11 +66,31 @@ export async function onRequestGet(
      FROM invites i
      LEFT JOIN users u ON u.id = i.inviter_user_id
      WHERE ${conditions.join(" AND ")}
-     ORDER BY i.created_at DESC`,
-    bindings,
+     ORDER BY i.created_at DESC
+     LIMIT ? OFFSET ?`,
+    [...bindings, limit + 1, offset],
   );
 
-  return json({ invites });
+  const hasMore = rows.length > limit;
+  const invites = hasMore ? rows.slice(0, limit) : rows;
+  const totalRow = await first<{ total: number }>(
+    context.env.DB,
+    `SELECT COUNT(*) AS total
+     FROM invites i
+     WHERE ${conditions.join(" AND ")}`,
+    bindings,
+  );
+  const total = Number(totalRow?.total ?? 0);
+
+  return json({
+    invites,
+    page: {
+      limit,
+      offset,
+      hasMore,
+      total,
+    },
+  });
 }
 
 export async function onRequest(

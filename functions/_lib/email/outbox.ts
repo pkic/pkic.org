@@ -6,8 +6,10 @@ import { uuid } from "../utils/ids";
 import { logError } from "../logging";
 import { resolveAppBaseUrl } from "../config";
 import { resolveTemplate } from "./templates";
-import { renderEmail, renderSubject, EMAIL_PARTIALS } from "./render";
+import { renderEmail, renderSubject } from "./render";
+import { loadEmailPartials } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
+import { applyCampaignCustomText } from "./campaign-custom";
 import type { DatabaseLike, Env } from "../types";
 
 interface OutboxRow {
@@ -145,27 +147,33 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
 
   try {
     const payload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
-    const template = await resolveTemplate(db, row.template_key);
-    const subject = renderSubject(template.subjectTemplate, row.subject ?? "PKI Consortium Update", payload);
-    // Pass content_type through so renderEmail can handle html vs markdown.
-    const contentType = template.contentType as "markdown" | "html" | "text";
-    // Load partials: prefer DB-stored versions so editors can update them via the
-    // admin UI without a code deploy. Fall back to the hardcoded defaults for any
-    // partial that has not yet been seeded to the database.
-    const PARTIAL_NAMES = ["reg_details", "sponsors_block", "about_pkic"] as const;
-    const partials: Record<string, string> = { ...EMAIL_PARTIALS };
-    await Promise.all(
-      PARTIAL_NAMES.map(async (name) => {
-        try {
-          const p = await resolveTemplate(db, `partial_${name}`);
-          partials[name] = p.content;
-        } catch {
-          // Not yet seeded to DB — hardcoded default remains.
-        }
-      }),
-    );
+    const partials = await loadEmailPartials(db);
     const dataWithPartials = { ...payload, _partials: partials };
-    const rendered = await renderEmail(template.content, dataWithPartials, null, contentType, resolveAppBaseUrl(env));
+    const bodyOverride = typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent
+      ? payload.__adminCampaignBodyContent
+      : null;
+
+    let templateVersion = 0;
+    let subject: string;
+    let contentWithCustom: string;
+    let resolvedContentType: "markdown" | "html" | "text" = "markdown";
+
+    if (bodyOverride) {
+      // Direct body still supports subject placeholders like {{eventName}}.
+      subject = renderSubject(row.subject, row.subject ?? "PKI Consortium Update", dataWithPartials);
+      contentWithCustom = bodyOverride;
+      resolvedContentType = "markdown";
+    } else {
+      const template = await resolveTemplate(db, row.template_key);
+      templateVersion = template.version;
+      resolvedContentType = template.contentType as "markdown" | "html" | "text";
+      const customText = typeof payload.__adminCampaignCustomText === "string"
+        ? payload.__adminCampaignCustomText
+        : null;
+      contentWithCustom = applyCampaignCustomText(template.content, resolvedContentType, customText);
+      subject = renderSubject(template.subjectTemplate, row.subject ?? "PKI Consortium Update", dataWithPartials);
+    }
+    const rendered = await renderEmail(contentWithCustom, dataWithPartials, null, resolvedContentType, resolveAppBaseUrl(env));
 
     let attachments: Array<{ filename: string; contentType: string; base64Content: string }> | undefined;
     const calendar = payload.__calendarInvite as CalendarPayload | undefined;
@@ -207,8 +215,13 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
       }
     }
 
+    const bccRecipients = Array.isArray(payload.__bccRecipients)
+      ? payload.__bccRecipients.filter((item): item is string => typeof item === "string" && item.includes("@"))
+      : undefined;
+
     const messageId = await sendViaSendgrid(env, {
       to: row.recipient_email,
+      bcc: bccRecipients,
       subject,
       html: rendered.html,
       text: rendered.text,
@@ -216,7 +229,7 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
       attachments,
     });
 
-    await markOutboxSent(db, row, messageId, template.version);
+    await markOutboxSent(db, row, messageId, templateVersion);
   } catch (error) {
     await markOutboxFailed(db, row, error);
     throw error;

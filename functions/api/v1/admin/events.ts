@@ -6,10 +6,22 @@ import { upsertEventFromHugo } from "../../../_lib/services/events";
 import { writeAuditLog } from "../../../_lib/services/audit";
 import { parseJsonSafe } from "../../../_lib/utils/json";
 import type { PagesContext } from "../../../_lib/types";
-import type { EventRecord } from "../../../_lib/services/events";
 import { adminCreateEventSchema } from "../../../../shared/schemas/api";
 
-interface EventWithStats extends EventRecord {
+interface EventWithStats {
+  id: string;
+  slug: string;
+  name: string;
+  timezone: string;
+  starts_at: string | null;
+  ends_at: string | null;
+  source_path: string | null;
+  base_path: string | null;
+  registration_mode: string;
+  invite_limit_attendee: number;
+  settings_json: string;
+  created_at: string;
+  updated_at: string;
   total_registrations: number;
   confirmed_registrations: number;
   pending_invites: number;
@@ -27,10 +39,22 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
   const events = await all<EventWithStats>(
     context.env.DB,
     `SELECT
-       e.*,
+       e.id,
+       e.slug,
+       e.name,
+       e.timezone,
+       e.starts_at,
+       e.ends_at,
+       e.source_path,
+       e.base_path,
+       e.registration_mode,
+       e.invite_limit_attendee,
+       e.settings_json,
+       e.created_at,
+       e.updated_at,
        COUNT(DISTINCT r.id)                                              AS total_registrations,
        COUNT(DISTINCT CASE WHEN r.status = 'registered' THEN r.id END)  AS confirmed_registrations,
-       COUNT(DISTINCT CASE WHEN i.status = 'sent'       THEN i.id END)  AS pending_invites
+       COUNT(DISTINCT CASE WHEN i.status = 'sent' AND i.invite_type = 'attendee' THEN i.id END)  AS pending_invites
      FROM events e
      LEFT JOIN registrations r ON r.event_id = e.id
      LEFT JOIN invites       i ON i.event_id = e.id
@@ -72,7 +96,6 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     startsAt: body.startsAt ?? undefined,
     endsAt: body.endsAt ?? undefined,
     registrationMode: body.registrationMode,
-    capacityInPerson: body.capacityInPerson ?? undefined,
     inviteLimitAttendee: body.inviteLimitAttendee,
     settings,
   });

@@ -24,9 +24,9 @@ export async function onRequestPatch(context: PagesContext<{ token: string }>): 
   const { registration: current, isJwt } = resolved;
 
   const event = current
-    ? await first<{ id: string; slug: string; name: string; capacity_in_person: number | null; base_path: string | null; starts_at: string | null; settings_json: string }>(
+    ? await first<{ id: string; slug: string; name: string; base_path: string | null; starts_at: string | null; settings_json: string }>(
       context.env.DB,
-      "SELECT id, slug, name, capacity_in_person, base_path, starts_at, settings_json FROM events WHERE id = ?",
+      "SELECT id, slug, name, base_path, starts_at, settings_json FROM events WHERE id = ?",
       [current.event_id],
     )
     : null;
@@ -44,7 +44,6 @@ export async function onRequestPatch(context: PagesContext<{ token: string }>): 
         dayAttendance: body.dayAttendance,
         customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,
         sourceRef: body.sourceRef,
-        eventCapacity: event?.capacity_in_person ?? null,
         waitlistClaimWindowHours: config.waitlistClaimWindowHours,
       }, "admin")
     : await updateRegistrationByManageToken(context.env.DB, {
@@ -54,7 +53,6 @@ export async function onRequestPatch(context: PagesContext<{ token: string }>): 
     dayAttendance: body.dayAttendance,
     customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,
     sourceRef: body.sourceRef,
-    eventCapacity: event?.capacity_in_person ?? null,
     waitlistClaimWindowHours: config.waitlistClaimWindowHours,
   });
 
@@ -82,7 +80,7 @@ export async function onRequestPatch(context: PagesContext<{ token: string }>): 
     job_title: string | null;
   }>(context.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [updated.user_id]);
   if (event && user) {
-    const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+    const appBaseUrl = resolveAppBaseUrl(context.env);
     const manageUrl = registrationManagePageUrl(appBaseUrl, event, context.params.token);
     const templateKey = body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated";
     const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, updated.id);
@@ -151,7 +149,7 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
   const dayWaitlist = await listDayWaitlistForRegistration(context.env.DB, registration.id);
 
   // Derive public headshot URL from R2 key (format: headshots/{userId}/{filename})
-  const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+  const appBaseUrl = resolveAppBaseUrl(context.env);
   let headshotUrl: string | null = null;
   if (user?.headshot_r2_key) {
     const parts = user.headshot_r2_key.split("/");

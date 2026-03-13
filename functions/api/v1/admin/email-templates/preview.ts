@@ -2,6 +2,7 @@ import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { renderEmail, renderSubject } from "../../../../_lib/email/render";
+import { loadEmailPartials } from "../../../../_lib/email/partials";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import type { PagesContext } from "../../../../_lib/types";
 import { adminEmailTemplatePreviewSchema } from "../../../../../shared/schemas/api";
@@ -36,16 +37,18 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     ...buildDefaultPreviewData(appBaseUrl),
     ...(body.data ?? {}),
   };
+  const partials = await loadEmailPartials(context.env.DB);
+  const dataWithPartials = { ...data, _partials: partials };
 
   const subject = renderSubject(
     body.subjectTemplate ?? null,
     "PKI Consortium Preview Subject",
-    data,
+    dataWithPartials,
   );
 
   const rendered = await renderEmail(
     body.content,
-    data,
+    dataWithPartials,
     null,
     body.contentType,
     appBaseUrl,

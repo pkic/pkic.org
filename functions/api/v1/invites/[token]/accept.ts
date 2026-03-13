@@ -17,13 +17,13 @@ import { inviteAcceptAttendeeSchema } from "../../../../../shared/schemas/api";
 import { requireInternalSecret } from "../../../../_lib/request";
 
 export async function onRequestPost(context: PagesContext<{ token: string }>): Promise<Response> {
-  const signingSecret = requireInternalSecret(context.env);
   const config = getConfig(context.env, context.request);
-  const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+  const signingSecret = requireInternalSecret(context.env);
+  const appBaseUrl = resolveAppBaseUrl(context.env);
   const invite = await findInviteByToken(context.env.DB, context.params.token);
-  const event = await first<{ id: string; slug: string; base_path: string | null; starts_at: string | null; name: string; capacity_in_person: number | null; settings_json: string }>(
+  const event = await first<{ id: string; slug: string; base_path: string | null; starts_at: string | null; name: string; settings_json: string }>(
     context.env.DB,
-    "SELECT id, slug, base_path, starts_at, name, capacity_in_person, settings_json FROM events WHERE id = ?",
+    "SELECT id, slug, base_path, starts_at, name, settings_json FROM events WHERE id = ?",
     [invite.event_id],
   );
 
@@ -64,17 +64,7 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
 
   const created = await createRegistration(context.env.DB, {
     event: {
-      ...event,
-      timezone: "UTC",
-      starts_at: null,
-      ends_at: null,
-      source_path: null,
-      base_path: null,
-      registration_mode: "invite_or_open",
-      invite_limit_attendee: config.inviteLimitPerAttendee,
-      settings_json: event.settings_json,
-      slug: event.slug,
-      capacity_in_person: event.capacity_in_person,
+      id: event.id,
     },
     userId: user.id,
     attendanceType: (body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance)) as "in_person" | "virtual" | "on_demand",
