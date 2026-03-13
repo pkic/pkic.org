@@ -37,7 +37,7 @@ export async function onRequestPost(
     context.request.headers.get("x-event-base-path"),
   );
 
-  const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+  const appBaseUrl = resolveAppBaseUrl(context.env);
 
   let inviteId: string | null = null;
   if (body.inviteToken) {

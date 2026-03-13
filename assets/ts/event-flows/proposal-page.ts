@@ -347,7 +347,7 @@ function showSuccessPanel(
     <p class="text-muted small">
       Speakers you listed will each receive a personal email with a private link to confirm
       their participation, complete their profile, and upload a headshot once accepted.
-      You can add more speakers via your management link at any time.
+      If there is context about additional potential speakers, include that in your proposal notes or follow up with the programme team.
     </p>
   `;
 

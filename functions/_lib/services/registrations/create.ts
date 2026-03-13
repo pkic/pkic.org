@@ -3,19 +3,18 @@ import { first, run } from "../../db/queries";
 import { randomToken, sha256Hex } from "../../utils/crypto";
 import { uuid } from "../../utils/ids";
 import { nowIso, addHours } from "../../utils/time";
-import { addToWaitlist, getInPersonRegisteredCount } from "./waitlist";
+import { addToWaitlist } from "./waitlist";
 import { recordReferralConversion } from "../referrals";
 import { recordEngagement } from "../engagement";
 import { deriveEventAttendanceType, replaceRegistrationDayAttendance, type DayAttendanceSelection } from "../event-days";
 import { roleBasedCapacityExemptReason, syncRegistrationDayWaitlist } from "./day-waitlist";
 import { upsertAttendeeParticipant } from "./participant-registration";
 import type { DatabaseLike } from "../../types";
-import type { EventRecord } from "../events";
 import type { RegistrationRecord } from "./types";
 
 async function initialRegistrationStatus(
   db: DatabaseLike,
-  event: EventRecord,
+  eventId: string,
   attendanceType: "in_person" | "virtual" | "on_demand",
   inviteId: string | null,
   hasPerDayAttendance: boolean,
@@ -30,17 +29,16 @@ async function initialRegistrationStatus(
   if (attendanceType !== "in_person") {
     return "registered";
   }
-  const inPersonCount = await getInPersonRegisteredCount(db, event.id);
-  if (event.capacity_in_person && inPersonCount >= event.capacity_in_person) {
-    return "waitlisted";
-  }
+  // Event-level capacity is deprecated; only per-day capacities are enforced.
+  void db;
+  void eventId;
   return "registered";
 }
 
 export async function createRegistration(
   db: DatabaseLike,
   payload: {
-    event: EventRecord;
+    event: { id: string };
     userId: string;
     attendanceType: "in_person" | "virtual" | "on_demand";
     dayAttendance?: DayAttendanceSelection[];
@@ -70,7 +68,7 @@ export async function createRegistration(
   const capacityExempt = Boolean(capacityExemptReason);
   const status = await initialRegistrationStatus(
     db,
-    payload.event,
+    payload.event.id,
     attendanceType,
     payload.inviteId ?? null,
     hasPerDayAttendance,

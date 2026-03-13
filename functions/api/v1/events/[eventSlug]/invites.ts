@@ -32,7 +32,7 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
   }
 
   const config = getConfig(context.env, context.request);
-  const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+  const appBaseUrl = resolveAppBaseUrl(context.env);
   const inviteCount = await countInvitesByInviter(context.env.DB, event.id, registration.user_id);
   const maxAllowed = event.invite_limit_attendee ?? config.inviteLimitPerAttendee;
 

@@ -77,7 +77,7 @@ export async function onRequestPost(
       listProposalSpeakersWithStatus(context.env.DB, context.params.proposalId),
     ]);
 
-    const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+    const appBaseUrl = resolveAppBaseUrl(context.env);
 
     for (const speaker of speakers) {
       // Decision email to the proposer only.

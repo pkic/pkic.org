@@ -22,7 +22,7 @@ export async function onRequestPost(
   const signingSecret = requireInternalSecret(context.env);
   const body = await parseJsonBody(context.request, proposalCreateSchema);
   const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+  const appBaseUrl = resolveAppBaseUrl(context.env);
 
   // Record the Hugo page URL sent by the browser so base_path is always the
   // real event page location, not a hardcoded pattern.

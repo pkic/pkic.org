@@ -12,7 +12,7 @@ import { adminAuthRequestSchema } from "../../../../../shared/schemas/api";
 export async function onRequestPost(context: PagesContext): Promise<Response> {
   const body = await parseJsonBody(context.request, adminAuthRequestSchema);
   const config = getConfig(context.env, context.request);
-  const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+  const appBaseUrl = resolveAppBaseUrl(context.env);
 
   const secret = requireInternalSecret(context.env);
   const ipHash = await hashOptional(getClientIp(context.request), secret);

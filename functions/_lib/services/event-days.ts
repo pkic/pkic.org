@@ -20,6 +20,8 @@ export interface EventDayRecord {
   event_id: string;
   day_date: string;
   label: string | null;
+  starts_at: string | null;
+  ends_at: string | null;
   in_person_capacity: number | null;
   sort_order: number;
   attendance_options_json: string | null;
@@ -56,7 +58,7 @@ export function resolveAttendanceOptions(day: Pick<EventDayRecord, "attendance_o
 export async function listEventDays(db: DatabaseLike, eventId: string): Promise<EventDayRecord[]> {
   return all<EventDayRecord>(
     db,
-    `SELECT id, event_id, day_date, label, in_person_capacity, sort_order, attendance_options_json
+    `SELECT id, event_id, day_date, label, starts_at, ends_at, in_person_capacity, sort_order, attendance_options_json
      FROM event_days
      WHERE event_id = ?
      ORDER BY sort_order ASC, day_date ASC`,

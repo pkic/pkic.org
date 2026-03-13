@@ -35,7 +35,7 @@ describe("referral, waitlist, and calendar flows", () => {
     expect(Number(stats[0].clicks)).toBe(1);
   });
 
-  it("promotes waitlist when an in-person registration is cancelled", async () => {
+  it("does not auto-promote legacy event waitlist on cancellation", async () => {
     const db = new D1DatabaseShim();
     db.runMigrations();
     const { eventId } = await seedEventAndAdmin(db);
@@ -71,7 +71,6 @@ describe("referral, waitlist, and calendar flows", () => {
     await updateRegistrationByManageToken(db, {
       manageToken: manageTokenA,
       action: "cancel",
-      eventCapacity: 1,
       waitlistClaimWindowHours: 24,
     });
 
@@ -79,7 +78,7 @@ describe("referral, waitlist, and calendar flows", () => {
       "SELECT status FROM waitlist_entries WHERE registration_id = ?",
       [regB],
     );
-    expect(waitlist[0].status).toBe("offered");
+    expect(waitlist[0].status).toBe("waiting");
   });
 
   it("logs calendar delivery after send", async () => {
