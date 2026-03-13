@@ -37,12 +37,30 @@ export async function onRequestPatch(
     if (body.virtualUrl === null) { delete updatedSettings["virtualUrl"]; }
     else { updatedSettings["virtualUrl"] = body.virtualUrl; }
   }
+  if (body.heroImageUrl !== undefined) {
+    if (body.heroImageUrl === null) { delete updatedSettings["heroImageUrl"]; }
+    else { updatedSettings["heroImageUrl"] = body.heroImageUrl; }
+  }
+  if (body.location !== undefined) {
+    if (body.location === null) { delete updatedSettings["location"]; }
+    else { updatedSettings["location"] = body.location; }
+  }
+  if (body.sessionTypes !== undefined) {
+    const proposal = (updatedSettings["proposal"] as Record<string, unknown> | undefined) ?? {};
+    if (body.sessionTypes === null || body.sessionTypes.length === 0) {
+      delete proposal["sessionTypes"];
+      if (Object.keys(proposal).length === 0) { delete updatedSettings["proposal"]; }
+      else { updatedSettings["proposal"] = proposal; }
+    } else {
+      updatedSettings["proposal"] = { ...proposal, sessionTypes: body.sessionTypes };
+    }
+  }
   if (body.settings) {
     Object.assign(updatedSettings, body.settings);
   }
 
   // ── Core event fields — use COALESCE so omitted fields are preserved ──────
-  // starts_at / ends_at / capacity_in_person accept an explicit null to clear.
+  // starts_at / ends_at accept an explicit null to clear.
   await run(
     context.env.DB,
     `UPDATE events
@@ -50,7 +68,6 @@ export async function onRequestPatch(
          timezone              = COALESCE(?, timezone),
          starts_at             = IIF(? = 1, starts_at, ?),
          ends_at               = IIF(? = 1, ends_at,   ?),
-         capacity_in_person    = IIF(? = 1, capacity_in_person, ?),
          registration_mode     = COALESCE(?, registration_mode),
          invite_limit_attendee = COALESCE(?, invite_limit_attendee),
          settings_json         = ?,
@@ -62,7 +79,6 @@ export async function onRequestPatch(
       // starts_at sentinel: 1 = omitted (keep existing), 0 = explicit value
       body.startsAt === undefined ? 1 : 0, body.startsAt ?? null,
       body.endsAt   === undefined ? 1 : 0, body.endsAt   ?? null,
-      body.capacityInPerson === undefined ? 1 : 0, body.capacityInPerson ?? null,
       body.registrationMode ?? null,
       body.inviteLimitAttendee ?? null,
       stringifyJson(updatedSettings),

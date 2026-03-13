@@ -20,11 +20,10 @@ async function confirmRegistration(
 ): Promise<Response> {
   const config = getConfig(context.env, context.request);
   const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+  const appBaseUrl = resolveAppBaseUrl(context.env);
 
   const { registration, manageToken } = await confirmRegistrationByToken(context.env.DB, {
     token,
-    eventCapacity: event.capacity_in_person,
     waitlistClaimWindowHours: config.waitlistClaimWindowHours,
   });
 

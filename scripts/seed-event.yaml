@@ -12,11 +12,11 @@ event:
     - tutorial
     - demo
     - lightning_talk
+  # Optional event-level range (kept for compatibility); per-day startsAt/endsAt are preferred.
   startsAt: "2026-12-01T08:00:00.000Z"
   endsAt: "2026-12-03T18:00:00.000Z"
   registrationMode: invite_or_open
   inviteLimitAttendee: 5
-  capacityInPerson: 800
   # location: Short location label displayed on OG badges and in UI.
   location: "Amsterdam, The Netherlands"
   # heroImageUrl: Full URL to the event hero/banner image.
@@ -30,6 +30,8 @@ event:
   days:
     - date: "2026-12-01"
       label: Tuesday 1 December 2026
+      startsAt: "2026-12-01T08:00:00.000Z"
+      endsAt: "2026-12-01T18:00:00.000Z"
       sortOrder: 10
       attendanceOptions:
         - value: in_person
@@ -41,6 +43,8 @@ event:
           label: On-demand
     - date: "2026-12-02"
       label: Wednesday 2 December 2026
+      startsAt: "2026-12-02T08:00:00.000Z"
+      endsAt: "2026-12-02T18:00:00.000Z"
       sortOrder: 20
       attendanceOptions:
         - value: in_person
@@ -52,6 +56,8 @@ event:
           label: On-demand
     - date: "2026-12-03"
       label: Thursday 3 December 2026
+      startsAt: "2026-12-03T08:00:00.000Z"
+      endsAt: "2026-12-03T18:00:00.000Z"
       sortOrder: 30
       attendanceOptions:
         - value: in_person

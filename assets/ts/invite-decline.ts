@@ -11,7 +11,9 @@ interface DeclineInfoValid {
   status: "valid";
   eventName: string | null;
   inviteeFirstName: string | null;
+  inviteType: "attendee" | "speaker";
   registrationUrl: string | null;
+  proposalUrl: string | null;
 }
 
 interface DeclineInfoOther {
@@ -155,10 +157,18 @@ document.addEventListener("DOMContentLoaded", () => {
       el.textContent = firstName || "there";
     });
 
+    applyInviteContextCopy(info);
+
     // Wire registration link for virtual pivot
     if (info.registrationUrl) {
       root!.querySelectorAll<HTMLAnchorElement>("[data-registration-link], [data-registration-link-boss]").forEach((a) => {
         a.href = info.registrationUrl!;
+      });
+    }
+
+    if (info.proposalUrl) {
+      root!.querySelectorAll<HTMLAnchorElement>("[data-proposal-link]").forEach((a) => {
+        a.href = info.proposalUrl!;
       });
     }
 
@@ -168,6 +178,106 @@ document.addEventListener("DOMContentLoaded", () => {
     wireSubmit(tok, base, info);
 
     show(formWrapEl);
+  }
+
+  function applyInviteContextCopy(info: DeclineInfoValid): void {
+    const isSpeaker = info.inviteType === "speaker";
+
+    root!.querySelectorAll<HTMLElement>("[data-copy-target='heading']").forEach((el) => {
+      el.textContent = isSpeaker ? "Not able to submit a proposal?" : "Not able to make it?";
+    });
+
+    root!.querySelectorAll<HTMLElement>("[data-copy-target='intro']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "Please let us know why. It helps us improve future calls for proposals and make the event more relevant to speakers like you."
+        : "Please let us know why. It helps us improve future events and make them more relevant to people like you.";
+    });
+
+    root!.querySelectorAll<HTMLElement>("[data-copy-target='topic-label']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "What theme, topic, or format would make this call for proposals compelling for you?"
+        : "What topic would make this event a must-attend for you?";
+    });
+
+    root!.querySelectorAll<HTMLElement>("[data-copy-target='topic-help']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "helps us shape the call for proposals and speaker experience"
+        : "helps us shape the agenda";
+    });
+
+    root!.querySelectorAll<HTMLElement>("[data-copy-target='nps-question']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "On a scale of 1-10, how likely are you to submit to a future PKI Consortium call for proposals?"
+        : "On a scale of 1-10, how likely are you to attend our next PKI Consortium event?";
+    });
+
+    root!.querySelectorAll<HTMLElement>("[data-copy-target='unsubscribe']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "Don't send me proposal invitations to future events"
+        : "Don't send me invitations to future events";
+    });
+
+    root!.querySelectorAll<HTMLElement>("[data-copy-target='forward-toggle']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "Know someone who should submit a proposal? Make sure they get an invitation"
+        : "Know someone who should attend? Make sure they get an invitation";
+    });
+
+    root!.querySelectorAll<HTMLElement>("[data-copy-target='forward-copy']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "They'll receive a personal proposal invitation by email."
+        : "They'll receive a personal invitation by email.";
+    });
+
+    root!.querySelectorAll<HTMLElement>("[data-copy-target='submit']").forEach((el) => {
+      el.textContent = isSpeaker ? "Decline this proposal invitation" : "Decline this invitation";
+    });
+
+    root!.querySelectorAll<HTMLElement>("[data-copy-target='success-title']").forEach((el) => {
+      el.textContent = isSpeaker ? "Thank you for letting us know" : "Thank you for letting us know";
+    });
+
+    root!.querySelectorAll<HTMLElement>("[data-copy-target='success-body']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "We hope to hear from you in a future call for proposals!"
+        : "We hope to see you at a future event!";
+    });
+
+    const attendeeOnly = root!.querySelectorAll<HTMLElement>("[data-attendee-only]");
+    if (isSpeaker) {
+      attendeeOnly.forEach((el) => hide(el));
+    }
+
+    root!.querySelectorAll<HTMLElement>("[data-reason-label='schedule_conflict']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "I won't be able to prepare or submit in time"
+        : "Schedule conflict - I have another commitment";
+    });
+    root!.querySelectorAll<HTMLElement>("[data-reason-label='travel_not_possible']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "Travel to the event is not realistic for me as a speaker"
+        : "Travel is not possible for me";
+    });
+    root!.querySelectorAll<HTMLElement>("[data-reason-label='content_not_relevant']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "This call for proposals is not a fit for what I would present"
+        : "Content is not relevant to my role";
+    });
+    root!.querySelectorAll<HTMLElement>("[data-reason-label='organization_policy']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "Organisation policy prevents me from speaking or submitting"
+        : "Organisation policy prevents me from attending";
+    });
+    root!.querySelectorAll<HTMLElement>("[data-reason-label='not_interested']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "Speaking at this event doesn't match my current focus"
+        : "This event doesn't match my current focus";
+    });
+    root!.querySelectorAll<HTMLElement>("[data-reason-label='already_registered']").forEach((el) => {
+      el.textContent = isSpeaker
+        ? "I'm already involved in a proposal or already submitted"
+        : "I'm already registered through another link";
+    });
   }
 
   // ── NPS buttons ─────────────────────────────────────────────────────────────
@@ -463,7 +573,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         if (submitBtn) {
           submitBtn.removeAttribute("disabled");
-          submitBtn.textContent = "Decline this invitation";
+            submitBtn.textContent = _info.inviteType === "speaker" ? "Decline this proposal invitation" : "Decline this invitation";
         }
       }
     });

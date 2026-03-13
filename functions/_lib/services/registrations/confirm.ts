@@ -3,7 +3,7 @@ import { first, run } from "../../db/queries";
 import { randomToken, sha256Hex } from "../../utils/crypto";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { addToWaitlist, getInPersonRegisteredCount, promoteWaitlistIfCapacity } from "./waitlist";
+import { addToWaitlist } from "./waitlist";
 import { recordEngagement } from "../engagement";
 import {
   listInPersonEventDayIdsForRegistration,
@@ -16,7 +16,7 @@ import type { RegistrationRecord } from "./types";
 
 export async function confirmRegistrationByToken(
   db: DatabaseLike,
-  payload: { token: string; eventCapacity: number | null; waitlistClaimWindowHours: number },
+  payload: { token: string; waitlistClaimWindowHours: number },
 ): Promise<{ registration: RegistrationRecord; manageToken: string }> {
   const tokenHash = await sha256Hex(payload.token);
   const registration = await first<RegistrationRecord>(
@@ -43,12 +43,8 @@ export async function confirmRegistrationByToken(
   });
   const hasPerDayAttendance = dayEventIds.length > 0;
   let newStatus = "registered";
-  if (!hasPerDayAttendance && !capacityExemptReason && registration.attendance_type === "in_person" && payload.eventCapacity && payload.eventCapacity > 0) {
-    const inPersonCount = await getInPersonRegisteredCount(db, registration.event_id);
-    if (inPersonCount >= payload.eventCapacity) {
-      newStatus = "waitlisted";
-    }
-  }
+  void capacityExemptReason;
+  void hasPerDayAttendance;
   await run(
     db,
     `UPDATE registrations
@@ -86,8 +82,6 @@ export async function confirmRegistrationByToken(
         eventDayIds: dayEventIds,
         claimWindowHours: payload.waitlistClaimWindowHours,
       });
-    } else {
-      await promoteWaitlistIfCapacity(db, updated.event_id, payload.eventCapacity, payload.waitlistClaimWindowHours);
     }
   }
 

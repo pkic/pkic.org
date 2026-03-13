@@ -29,7 +29,7 @@ export async function onRequestPost(
   const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
   const config = getConfig(context.env, context.request);
   const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+  const appBaseUrl = resolveAppBaseUrl(context.env);
 
   const registration = await first<RegistrationRecord>(
     context.env.DB,

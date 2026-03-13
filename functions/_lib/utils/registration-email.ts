@@ -43,6 +43,20 @@ export function buildCustomAnswerRows(
   return rows;
 }
 
+export function buildCustomAnswerVariables(
+  customAnswers: Record<string, unknown> | null | undefined,
+  formFields: FormFieldDefinition[] | null | undefined,
+): Record<string, string> {
+  if (!customAnswers || !formFields?.length) return {};
+  const vars: Record<string, string> = {};
+  for (const field of formFields) {
+    const value = customAnswers[field.key];
+    if (value === undefined || value === null || value === "") continue;
+    vars[field.key] = formatCustomAnswerValue(field.fieldType, value);
+  }
+  return vars;
+}
+
 /**
  * Build a comma-separated list of accepted term titles from in-memory consent +
  * term lists. Useful immediately after registration creation when both are in scope.

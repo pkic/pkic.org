@@ -16,7 +16,7 @@ export async function onRequestPost(
   const body = await parseJsonBody(context.request, adminBulkSpeakerInvitesSchema);
   const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
   const config = getConfig(context.env, context.request);
-  const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+  const appBaseUrl = resolveAppBaseUrl(context.env);
 
   const created: Array<{ email: string; inviteToken: string }> = [];
   for (const item of body.invites) {

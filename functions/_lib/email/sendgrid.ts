@@ -3,6 +3,7 @@ import type { Env } from "../types";
 
 export interface SendgridMessage {
   to: string;
+  bcc?: string[];
   subject: string;
   html: string;
   text: string;
@@ -19,7 +20,12 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
   const fromName = env.FROM_NAME ?? env.SENDGRID_FROM_NAME ?? "PKI Consortium";
 
   const payload: Record<string, unknown> = {
-    personalizations: [{ to: [{ email: message.to }] }],
+    personalizations: [{
+      to: [{ email: message.to }],
+      ...(message.bcc && message.bcc.length > 0
+        ? { bcc: message.bcc.map((email) => ({ email })) }
+        : {}),
+    }],
     from: { email: fromEmail, name: fromName },
     subject: message.subject,
     content: [

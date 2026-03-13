@@ -98,14 +98,34 @@
         <h2 class="webinar-section-heading">Speaker{{ if gt (len .) 1 }}s{{ end }}</h2>
         <div class="row g-3">
           {{ range . }}
-          {{- $speakerName := .representative | default .name -}}
-          {{- $speakerMember := .member | default $sponsorId -}}
+          {{ $slug := .name | urlize }}
+          {{- $hs := resources.GetMatch (printf "images/members/%s/%s.*" $sponsorId $slug) -}}
           <div class="col-sm-6">
-            {{ partial "leader-card.html" (dict
-              "name" $speakerName
-              "role" (.badge | default "Speaker")
-              "affiliation" $speakerMember
-            ) }}
+            <div class="webinar-speaker-card">
+              {{ if $hs }}
+              {{ $thumb := $hs.Resize "120x120 Center" }}
+              <img src="{{ $thumb.RelPermalink }}" alt="{{ .name }}" class="webinar-speaker-avatar" width="60" height="60" loading="lazy">
+              {{ else }}
+              <div class="webinar-speaker-avatar webinar-speaker-avatar--initials">
+                {{- $parts := split .name " " -}}
+                {{- if ge (len $parts) 2 -}}{{ substr (index $parts 0) 0 1 }}{{ substr (index $parts 1) 0 1 }}{{- else -}}{{ substr .name 0 2 | upper }}{{- end -}}
+              </div>
+              {{ end }}
+              <div class="webinar-speaker-info">
+                <strong class="webinar-speaker-name">{{ .name }}</strong>
+                {{ with .title }}<p class="webinar-speaker-title">{{ . }}</p>{{ end }}
+                {{ with .social }}
+                <div class="webinar-speaker-social">
+                  {{ with .linkedin }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+                  </a>{{ end }}
+                  {{ with .x }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer" aria-label="X/Twitter">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.259 5.631zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                  </a>{{ end }}
+                </div>
+                {{ end }}
+              </div>
+            </div>
           </div>
           {{ end }}
         </div>
