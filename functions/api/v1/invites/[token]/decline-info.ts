@@ -3,13 +3,14 @@ import { sha256Hex } from "../../../../_lib/utils/crypto";
 import { first } from "../../../../_lib/db/queries";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { isPast } from "../../../../_lib/utils/time";
-import { registrationPageUrl } from "../../../../_lib/services/frontend-links";
+import { proposalPageUrl, registrationPageUrl } from "../../../../_lib/services/frontend-links";
 import type { PagesContext } from "../../../../_lib/types";
 
 interface InviteRow {
   id: string;
   event_id: string;
   invitee_first_name: string | null;
+  invite_type: "attendee" | "speaker";
   status: string;
   expires_at: string | null;
 }
@@ -35,7 +36,7 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
   const tokenHash = await sha256Hex(context.params.token);
   const invite = await first<InviteRow>(
     context.env.DB,
-    "SELECT id, event_id, invitee_first_name, status, expires_at FROM invites WHERE token_hash = ?",
+    "SELECT id, event_id, invitee_first_name, invite_type, status, expires_at FROM invites WHERE token_hash = ?",
     [tokenHash],
   );
 
@@ -57,22 +58,27 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
   }
 
   // Valid invite — fetch event details to build the registration URL
-  const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+  const appBaseUrl = resolveAppBaseUrl(context.env);
   const event = await first<EventRow>(
     context.env.DB,
     "SELECT id, name, slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
     [invite.event_id],
   );
 
-  const registrationUrl = event
+  const registrationUrl = event && invite.invite_type === "attendee"
     ? registrationPageUrl(appBaseUrl, event, { source: "decline-virtual-pivot" })
+    : null;
+  const proposalUrl = event && invite.invite_type === "speaker"
+    ? proposalPageUrl(appBaseUrl, event, { source: "speaker_invite_decline_reconsider" })
     : null;
 
   return json({
     status: "valid",
     eventName: event?.name ?? null,
     inviteeFirstName: invite.invitee_first_name ?? null,
+    inviteType: invite.invite_type,
     registrationUrl,
+    proposalUrl,
   });
 }
 

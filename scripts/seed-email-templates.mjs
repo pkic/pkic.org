@@ -234,6 +234,24 @@ If you have any questions or would like to discuss your proposal first, please [
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Campaign message templates (admin Send Email)
+  // Variables: firstName, message
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "msg_dear_firstname",
+    subjectTemplate: "Message from PKI Consortium",
+    content: `{{#if firstName}}Dear {{firstName}},{{/if}}
+
+{{message}}
+`,
+  },
+  {
+    key: "msg_message_only",
+    subjectTemplate: "Message from PKI Consortium",
+    content: `{{message}}`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // 6. Proposal submitted
   // Variables: eventName, proposalTitle, manageUrl, shareUrl
   // ─────────────────────────────────────────────────────────────────────────

@@ -398,7 +398,6 @@ export const adminEventSyncSchema = z.object({
     timezone: trimmedString(2, 64),
     startsAt: z.iso.datetime().optional(),
     endsAt: z.iso.datetime().optional(),
-    capacityInPerson: z.number().int().positive().nullable().optional(),
     registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).optional(),
     inviteLimitAttendee: z.number().int().positive().max(50).optional(),
     frontend: z.object({ routes: frontendRoutesSchema }).optional(),
@@ -420,12 +419,80 @@ export const adminEventSettingsSchema = z.object({
   endsAt: z.iso.datetime().nullable().optional(),
   venue: trimmedString(2, 500).nullable().optional(),
   virtualUrl: z.string().trim().url().max(500).nullable().optional(),
+  heroImageUrl: trimmedString(2, 500).nullable().optional(),
+  location: trimmedString(2, 200).nullable().optional(),
+  // ── Proposal / session settings ────────────────────────────────────────────
+  sessionTypes: z.array(z.string().trim().min(1).max(80)).max(20).nullable().optional(),
   // ── Registration settings ──────────────────────────────────────────────────
-  capacityInPerson: z.number().int().positive().nullable().optional(),
   registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).optional(),
   inviteLimitAttendee: z.number().int().positive().max(50).optional(),
   settings: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
   userRetentionDays: z.number().int().positive().max(3650).optional(),
+});
+
+// ── Admin: event terms management ─────────────────────────────────────────────
+
+export const adminEventTermInputSchema = z.object({
+  termKey: z.string().trim().regex(termKeyPattern),
+  version: z.string().trim().regex(versionPattern),
+  required: z.boolean().default(true),
+  contentRef: trimmedString(1, 500).optional(),
+  displayText: trimmedString(3, 4000),
+  helpText: trimmedString(3, 2000).optional(),
+});
+
+export const adminEventTermsReplaceSchema = z.object({
+  attendee: z.array(adminEventTermInputSchema).max(40).default([]),
+  speaker: z.array(adminEventTermInputSchema).max(40).default([]),
+});
+
+// ── Admin: event days management ──────────────────────────────────────────────
+
+export const adminAttendanceOptionSchema = z.object({
+  value: z.string().trim().min(1).max(64).regex(/^[a-z_][a-z0-9_]*$/),
+  label: trimmedString(1, 80),
+  capacity: z.number().int().positive().nullable().optional(),
+});
+
+export const adminEventDayInputSchema = z.object({
+  date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
+  label: trimmedString(1, 200).optional(),
+  startTime: z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+  endTime: z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+  sortOrder: z.number().int().min(0).max(9999).optional(),
+  attendanceOptions: z.array(adminAttendanceOptionSchema).max(20).default([]),
+});
+
+export const adminEventDaysReplaceSchema = z.object({
+  days: z.array(adminEventDayInputSchema).max(31),
+});
+
+// ── Admin: forms management ───────────────────────────────────────────────────
+
+export const adminFormFieldInputSchema = z.object({
+  key: z.string().trim().min(1).max(80).regex(/^[a-z][a-z0-9_]*$/),
+  label: trimmedString(1, 200),
+  fieldType: z.enum(["text", "textarea", "select", "multi_select", "boolean", "number", "date", "email", "url"]),
+  required: z.boolean().default(false),
+  sortOrder: z.number().int().min(0).max(9999).default(0),
+  options: z.array(z.string().trim().min(1).max(500)).max(200).optional(),
+  validation: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
+});
+
+export const adminFormCreateSchema = z.object({
+  key: z.string().trim().min(1).max(120).regex(/^[a-z][a-z0-9-]*$/),
+  purpose: z.enum(["event_registration", "proposal_submission", "survey", "feedback", "application"]),
+  title: trimmedString(2, 200),
+  description: trimmedString(2, 1000).optional(),
+  status: z.enum(["active", "inactive", "archived"]).default("active"),
+  fields: z.array(adminFormFieldInputSchema).max(50).default([]),
+});
+
+export const adminFormUpdateSchema = z.object({
+  title: trimmedString(2, 200).optional(),
+  description: trimmedString(2, 1000).nullable().optional(),
+  status: z.enum(["active", "inactive", "archived"]).optional(),
+  fields: z.array(adminFormFieldInputSchema).max(50).optional(),
 });
 
 export const adminCreateEventSchema = z.object({
@@ -435,7 +502,6 @@ export const adminCreateEventSchema = z.object({
   startsAt: z.iso.datetime().nullable().optional(),
   endsAt: z.iso.datetime().nullable().optional(),
   registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).default("invite_or_open"),
-  capacityInPerson: z.number().int().positive().nullable().optional(),
   inviteLimitAttendee: z.number().int().positive().max(50).default(5),
   venue: trimmedString(2, 500).nullable().optional(),
   virtualUrl: z.string().trim().url().max(500).nullable().optional(),
@@ -464,6 +530,18 @@ export const adminUserUpdateSchema = z
 export const adminUserAnonymizeSchema = z.object({}).strict();
 
 export const adminBulkAttendeeInvitesSchema = z.object({
+  previewToken: z.string().trim().min(16).max(2048),
+  invites: z
+    .array(
+      inviteeSchema.extend({
+        sourceType: sourceTypeSchema.optional(),
+      }),
+    )
+    .min(1)
+    .max(500),
+});
+
+export const adminBulkAttendeeInvitesPreviewSchema = z.object({
   invites: z
     .array(
       inviteeSchema.extend({
@@ -489,6 +567,32 @@ export const adminRegistrationAdmitSchema = z.object({
   mode: z.enum(["vip", "capacity_exempt"]).default("vip"),
   reason: trimmedString(3, 1000),
   dayDates: z.array(dayDateSchema).min(1).max(31).optional(),
+});
+
+// ── Admin: campaign emails ────────────────────────────────────────────────────
+
+const campaignFilterSchema = z.object({
+  audience: z.enum(["attendees", "speakers"]),
+  attendeeStatus: z.enum(["all", "registered", "pending_email_confirmation", "waitlisted", "cancelled"]).optional(),
+  attendanceType: z.enum(["all", "in_person", "virtual", "on_demand"]).optional(),
+  dayDate: z.string().trim().max(20).optional(),
+  speakerStatus: z.enum(["all", "confirmed", "invited", "pending"]).optional(),
+});
+
+const campaignBaseSchema = z.object({
+  templateKey: z.string().trim().min(1).max(200).optional(),
+  subjectOverride: z.string().trim().min(1).max(500).optional(),
+  customText: z.string().trim().max(100_000).optional(),
+  bodyContent: z.string().trim().max(100_000).optional(),
+  sendMode: z.enum(["personal", "bcc_batch"]),
+  batchSize: z.number().int().min(1).max(500).default(50),
+  filter: campaignFilterSchema,
+});
+
+export const adminEventCampaignPreviewSchema = campaignBaseSchema;
+
+export const adminEventCampaignSendSchema = campaignBaseSchema.extend({
+  previewToken: z.string().trim().min(16).max(2048),
 });
 
 export type AdminEventSyncInput = z.infer<typeof adminEventSyncSchema>;

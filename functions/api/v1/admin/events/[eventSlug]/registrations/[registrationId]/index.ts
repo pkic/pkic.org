@@ -134,7 +134,6 @@ export async function onRequestPatch(
       action: body.action as "update" | "cancel" | "report_unauthorized",
       attendanceType: body.attendanceType,
       dayAttendance: body.dayAttendance,
-      eventCapacity: event.capacity_in_person ?? null,
       waitlistClaimWindowHours: config.waitlistClaimWindowHours,
       customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,
       sourceRef: body.sourceRef,

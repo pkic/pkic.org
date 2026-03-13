@@ -23,31 +23,31 @@
       <div data-decline-form class="d-none">
         <div class="text-center mb-4">
           <div class="fs-1 mb-2" aria-hidden="true">🫱</div>
-          <h1 class="h3 fw-bold mb-1">Not able to make it?</h1>
+          <h1 class="h3 fw-bold mb-1" data-copy-target="heading">Not able to make it?</h1>
           <p class="text-muted">
-            Hi <strong data-placeholder="firstName">there</strong> — please let us know why. It helps us
-            improve future events and make them more relevant to people like you.
+            Hi <strong data-placeholder="firstName">there</strong> — <span data-copy-target="intro">please let us know why. It helps us
+            improve future events and make them more relevant to people like you.</span>
           </p>
         </div>
 
         <div data-error-banner class="alert alert-danger d-none mb-3" role="alert"></div>
 
         {{/* ── Virtual / hybrid pivot (travel barrier) ───────────── */}}
-        <div data-virtual-pivot class="alert alert-info border-0 d-none mb-3" role="region" aria-label="Virtual attendance option">
+        <div data-virtual-pivot data-attendee-only class="alert alert-info border-0 d-none mb-3" role="region" aria-label="Virtual attendance option">
           <strong>Can&rsquo;t make it in person?</strong> The event also has a virtual live-stream option.
           You can attend from anywhere in the world at no extra cost.<br>
           <a data-registration-link href="#" class="btn btn-sm btn-primary mt-2">Register for the Virtual Stream &rarr;</a>
         </div>
 
         {{/* ── On-demand pivot (schedule conflict) ────────────────── */}}
-        <div data-on-demand-pivot class="alert alert-info border-0 d-none mb-3" role="region" aria-label="On-demand access option">
+        <div data-on-demand-pivot data-attendee-only class="alert alert-info border-0 d-none mb-3" role="region" aria-label="On-demand access option">
           <strong>Can&rsquo;t make this date?</strong> A live stream won&rsquo;t help if the timing doesn&rsquo;t work either.
           Register for on-demand access and you&rsquo;ll get all the session recordings on your own schedule after the event.<br>
           <a data-registration-link href="#" class="btn btn-sm btn-primary mt-2">Register for On-Demand Access &rarr;</a>
         </div>
 
         {{/* ── Convince-my-boss section ─────────────────────────── */}}
-        <div data-convince-boss class="alert alert-light border d-none mb-3" role="region">
+        <div data-convince-boss data-attendee-only class="alert alert-light border d-none mb-3" role="region">
           <strong>Need to convince your organisation?</strong> Attendees consistently cite
           peer-to-peer networking and access to pre-release standards as the top reasons
           their organisations approve attendance. Virtual attendance is also available —
@@ -62,27 +62,27 @@
             <div class="list-group list-group-flush" data-reason-options>
               <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
                 <input class="form-check-input me-2" type="radio" name="reasonCode" value="schedule_conflict">
-                Schedule conflict &mdash; I have another commitment
+                <span data-reason-label="schedule_conflict">Schedule conflict &mdash; I have another commitment</span>
               </label>
               <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
                 <input class="form-check-input me-2" type="radio" name="reasonCode" value="travel_not_possible">
-                Travel is not possible for me
+                <span data-reason-label="travel_not_possible">Travel is not possible for me</span>
               </label>
               <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
                 <input class="form-check-input me-2" type="radio" name="reasonCode" value="content_not_relevant">
-                Content is not relevant to my role
+                <span data-reason-label="content_not_relevant">Content is not relevant to my role</span>
               </label>
               <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
                 <input class="form-check-input me-2" type="radio" name="reasonCode" value="organization_policy">
-                Organisation policy prevents me from attending
+                <span data-reason-label="organization_policy">Organisation policy prevents me from attending</span>
               </label>
               <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
                 <input class="form-check-input me-2" type="radio" name="reasonCode" value="not_interested">
-                This event doesn&rsquo;t match my current focus
+                <span data-reason-label="not_interested">This event doesn&rsquo;t match my current focus</span>
               </label>
               <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
                 <input class="form-check-input me-2" type="radio" name="reasonCode" value="already_registered">
-                I&rsquo;m already registered through another link
+                <span data-reason-label="already_registered">I&rsquo;m already registered through another link</span>
               </label>
               <label class="list-group-item list-group-item-action px-2 py-2 border-0 rounded-2">
                 <input class="form-check-input me-2" type="radio" name="reasonCode" value="other">
@@ -95,8 +95,8 @@
           {{/* ── Topic gap analysis (shown when content_not_relevant) */}}
           <div data-topic-suggestion class="mb-3 d-none">
             <label class="form-label fw-semibold small" for="topicSuggestion">
-              What topic would make this event a must-attend for you?
-              <span class="text-muted fw-normal">(helps us shape the agenda)</span>
+              <span data-copy-target="topic-label">What topic would make this event a must-attend for you?</span>
+              <span class="text-muted fw-normal" data-copy-target="topic-help">(helps us shape the agenda)</span>
             </label>
             <input type="text" id="topicSuggestion" data-topic-input class="form-control form-control-sm"
               maxlength="200" placeholder="e.g. Post-quantum migration for enterprise CAs">
@@ -118,7 +118,7 @@
           {{/* ── NPS score ─────────────────────────────────────── */}}
           <div class="mb-3" data-nps-section>
             <p class="small fw-semibold mb-2">
-              On a scale of 1&ndash;10, how likely are you to attend our next PKI Consortium event?
+              <span data-copy-target="nps-question">On a scale of 1&ndash;10, how likely are you to attend our next PKI Consortium event?</span>
             </p>
             <div class="d-flex flex-wrap gap-1 align-items-center" data-nps-buttons role="group" aria-label="Likelihood score 1 to 10">
               <span class="text-muted small me-1">Very unlikely</span>
@@ -135,7 +135,7 @@
             <div class="form-check">
               <input class="form-check-input" type="checkbox" id="unsubscribeFuture" data-unsubscribe-future>
               <label class="form-check-label small" for="unsubscribeFuture">
-                Don&rsquo;t send me invitations to future events
+                <span data-copy-target="unsubscribe">Don&rsquo;t send me invitations to future events</span>
               </label>
             </div>
           </div>
@@ -147,11 +147,11 @@
             <button type="button" class="btn btn-link p-0 text-decoration-none fw-semibold small"
               data-forward-toggle aria-expanded="false" aria-controls="forwardEntries">
               <span data-forward-arrow class="me-1" aria-hidden="true">▶</span>
-              Know someone who should attend? Make sure they get an invitation
+              <span data-copy-target="forward-toggle">Know someone who should attend? Make sure they get an invitation</span>
             </button>
             <div id="forwardEntries" data-forward-entries class="mt-3 d-none">
               <div class="event-flow-invite">
-                <p class="event-flow-invite-copy mb-2">
+                <p class="event-flow-invite-copy mb-2" data-copy-target="forward-copy">
                   They&rsquo;ll receive a personal invitation by email.
                 </p>
                 <div class="event-flow-invite-paste-zone">
@@ -181,7 +181,7 @@
           <hr class="my-3">
 
           <button type="submit" class="btn btn-danger w-100" data-submit-btn>
-            Decline this invitation
+            <span data-copy-target="submit">Decline this invitation</span>
           </button>
         </form>
       </div>
@@ -189,9 +189,9 @@
       {{/* ── Success state ──────────────────────────────────────── */}}
       <div data-decline-success class="d-none text-center py-3">
         <div class="fs-1 mb-3" aria-hidden="true">✅</div>
-        <h2 class="h4 fw-bold mb-2">Thank you for letting us know</h2>
+        <h2 class="h4 fw-bold mb-2" data-copy-target="success-title">Thank you for letting us know</h2>
         <p class="text-muted" data-success-forwarded></p>
-        <p class="text-muted mb-4">We hope to see you at a future event!</p>
+        <p class="text-muted mb-4" data-copy-target="success-body">We hope to see you at a future event!</p>
 
         {{/* Parting gift: content hook */}}
         <div class="card border-0 bg-light p-3 text-start mb-4">

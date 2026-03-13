@@ -5,7 +5,7 @@ import { declineInvite, findInviteByToken, createInvite } from "../../../../_lib
 import { buildEventEmailVariables } from "../../../../_lib/services/events";
 import { first } from "../../../../_lib/db/queries";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
-import { registrationPageUrl, inviteDeclineUrl } from "../../../../_lib/services/frontend-links";
+import { proposalPageUrl, registrationPageUrl, inviteDeclineUrl } from "../../../../_lib/services/frontend-links";
 import type { PagesContext } from "../../../../_lib/types";
 import { inviteDeclineSchema } from "../../../../../shared/schemas/api";
 
@@ -31,7 +31,7 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
   // Forward the invite to nominated contacts before declining
   const forwardedEmails: string[] = [];
   if (body.forwards && body.forwards.length > 0) {
-    const appBaseUrl = resolveAppBaseUrl(context.env, context.request);
+    const appBaseUrl = resolveAppBaseUrl(context.env);
 
     const event = await first<{
       id: string;
@@ -52,28 +52,39 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
             inviteeEmail: contact.email,
             inviteeFirstName: contact.firstName ?? null,
             inviteeLastName: contact.lastName ?? null,
-            inviteType: "attendee",
+            inviteType: invite.invite_type,
             sourceType: "declined-forward",
-            ttlHours: 24 * 14,
+            ttlHours: invite.invite_type === "speaker" ? 24 * 21 : 24 * 14,
           });
 
-          const registrationUrl = registrationPageUrl(appBaseUrl, event, {
-            invite: inviteToken,
-            source: "invite",
-          });
+          const registrationUrl = invite.invite_type === "attendee"
+            ? registrationPageUrl(appBaseUrl, event, {
+              invite: inviteToken,
+              source: "invite",
+            })
+            : undefined;
+          const proposalUrl = invite.invite_type === "speaker"
+            ? proposalPageUrl(appBaseUrl, event, {
+              invite: inviteToken,
+              source: "speaker_invite_forward",
+            })
+            : undefined;
           const declineUrl = inviteDeclineUrl(appBaseUrl, event, inviteToken);
 
           const outboxId = await queueEmail(context.env.DB, {
             eventId: event.id,
-            templateKey: "attendee_invite",
+            templateKey: invite.invite_type === "speaker" ? "speaker_invite" : "attendee_invite",
             recipientEmail: newInvite.invitee_email,
             messageType: "transactional",
-            subject: `Invitation: ${event.name}`,
+            subject: invite.invite_type === "speaker"
+              ? `Speaker invitation: ${event.name}`
+              : `Invitation: ${event.name}`,
             data: {
               ...buildEventEmailVariables(event, appBaseUrl),
               firstName: newInvite.invitee_first_name ?? "",
               lastName: newInvite.invitee_last_name ?? "",
               registrationUrl,
+              proposalUrl,
               declineUrl,
             },
           });

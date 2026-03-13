@@ -162,7 +162,7 @@ INSERT INTO events (
   ${toSqlNullableText(config.event.endsAt)},
   NULL,
   NULL,
-  ${config.event.capacityInPerson == null ? "NULL" : toSqlInt(config.event.capacityInPerson, 0)},
+  NULL,
   ${sqlString(config.event.registrationMode ?? "invite_or_open")},
   ${toSqlInt(config.event.inviteLimitAttendee ?? 5, 5)},
   ${sqlString(settingsJson)},
@@ -174,7 +174,7 @@ ON CONFLICT(slug) DO UPDATE SET
   timezone = excluded.timezone,
   starts_at = excluded.starts_at,
   ends_at = excluded.ends_at,
-  capacity_in_person = excluded.capacity_in_person,
+  capacity_in_person = NULL,
   registration_mode = excluded.registration_mode,
   invite_limit_attendee = excluded.invite_limit_attendee,
   settings_json = excluded.settings_json,
@@ -299,12 +299,14 @@ function buildEventDaysSql(config) {
 
     statements.push(`
 INSERT INTO event_days (
-  id, event_id, day_date, label, in_person_capacity, sort_order, attendance_options_json, created_at, updated_at
+  id, event_id, day_date, label, starts_at, ends_at, in_person_capacity, sort_order, attendance_options_json, created_at, updated_at
 ) VALUES (
   ${sqlString(randomUUID())},
   (SELECT id FROM events WHERE slug = ${sqlString(config.event.slug)}),
   ${sqlString(day.date)},
   ${toSqlNullableText(day.label)},
+  ${toSqlNullableText(day.startsAt)},
+  ${toSqlNullableText(day.endsAt)},
   ${day.inPersonCapacity == null ? "NULL" : toSqlInt(day.inPersonCapacity, 0)},
   ${toSqlInt(day.sortOrder ?? index * 10, index * 10)},
   ${day.attendanceOptions == null ? "NULL" : sqlString(JSON.stringify(day.attendanceOptions))},

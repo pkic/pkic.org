@@ -17,7 +17,6 @@ interface EventSummary {
   starts_at: string | null;
   ends_at: string | null;
   registration_mode: string;
-  capacity_in_person: number | null;
   invite_limit_attendee: number;
   confirmed_registrations: number;
   total_registrations: number;
@@ -30,7 +29,91 @@ interface EventDetail extends EventSummary {
   user_retention_days: number | null;
   venue: string | null;
   virtual_url: string | null;
+  hero_image_url: string | null;
+  location: string | null;
+  session_types: string[] | null;
   settings: Record<string, unknown>;
+}
+
+interface AdminEventTerm {
+  id: string;
+  term_key: string;
+  version: string;
+  required: number;
+  content_ref: string | null;
+  display_text: string | null;
+  help_text: string | null;
+}
+
+interface AdminAttendanceOption {
+  value: string;
+  label: string;
+  capacity?: number | null;
+}
+
+interface AdminEventDay {
+  id: string;
+  date: string;
+  label: string | null;
+  startsAt: string | null;
+  endsAt: string | null;
+  sortOrder: number;
+  attendanceOptions: AdminAttendanceOption[];
+  attendanceCounts: Record<string, number>;
+}
+
+function timeInZone(iso: string | null | undefined, timeZone: string | null | undefined): string {
+  if (!iso || !timeZone) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("en-GB", {
+    timeZone,
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23",
+  }).format(date);
+}
+
+interface AdminEventFormSummary {
+  id: string;
+  key: string;
+  scope_type: string;
+  scope_ref: string | null;
+  purpose: string;
+  status: string;
+  title: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+  field_count: number;
+  submission_count: number;
+}
+
+interface AdminFormDetailField {
+  id: string;
+  key: string;
+  label: string;
+  fieldType: string;
+  required: boolean;
+  options: unknown;
+  validation: unknown;
+  sortOrder: number;
+}
+
+interface AdminFormSubmission {
+  id: string;
+  status: string;
+  submittedAt: string;
+  contextType: string | null;
+  contextRef: string | null;
+  submitter: {
+    id: string;
+    email: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    organization: string | null;
+  } | null;
+  answers: Record<string, unknown>;
 }
 
 interface EventPermission {
@@ -472,14 +555,13 @@ async function loadEvents(): Promise<void> {
       '<div id="new-event-form" class="d-none card border-0 shadow-sm mb-3"><div class="card-header bg-white fw-semibold">Create new event</div>' +
       '<div class="card-body">' + newEventFormHtml() + '</div></div>' +
       tbl(
-        ["Event", "Dates", "Mode", "Cap.", "Confirmed", "Total", "Pending", ""],
+        ["Event", "Dates", "Mode", "Confirmed", "Total", "Pending", ""],
         _evList.map(
           (e) =>
             `<tr><td><strong style="font-size:.85rem">${esc(e.name)}</strong><br>` +
             `<span class="mono text-muted">${esc(e.slug)}</span></td>` +
             `<td class="mono" style="white-space:nowrap;font-size:.75rem">${e.starts_at ? esc(e.starts_at.substring(0, 10)) : "—"}</td>` +
             `<td>${badge(e.registration_mode)}</td>` +
-            `<td class="mono">${e.capacity_in_person ?? "∞"}</td>` +
             `<td class="mono">${e.confirmed_registrations ?? 0}</td>` +
             `<td class="mono">${e.total_registrations ?? 0}</td>` +
             `<td class="mono">${e.pending_invites ?? 0}</td>` +
@@ -511,12 +593,9 @@ async function openEvent(slug: string): Promise<void> {
 
   const ev = _evList.find((e) => e.slug === slug) ?? ({} as EventSummary);
   try {
-    // Load full event detail (includes timezone, dates, venue, etc.)
     const detailResp = await api<{ event: EventDetail }>(`/api/v1/admin/events/${slug}`);
     _currentEventDetail = detailResp.event;
 
-    const d = await api<{ registrations: Registration[] }>(`/api/v1/admin/events/${slug}/registrations`);
-    const regs = d.registrations ?? [];
     det.innerHTML =
       '<div class="card border-0 shadow-sm">' +
       '<div class="card-header bg-white d-flex align-items-center justify-content-between">' +
@@ -524,43 +603,51 @@ async function openEvent(slug: string): Promise<void> {
         '<button class="btn btn-sm btn-secondary" id="btn-close-event">&larr; Back</button>' +
       '</div><div class="card-body">' +
         '<ul class="nav nav-tabs mb-3">' +
-          `<li class="nav-item"><button class="nav-link active" data-tab="regs">Registrations (${regs.length})</button></li>` +
-          '<li class="nav-item"><button class="nav-link" data-tab="invite">Send Invites</button></li>' +
-          `<li class="nav-item"><button class="nav-link" data-tab="invlist">Invite List <span class="badge text-bg-secondary" style="font-size:.65rem">${ev.pending_invites ?? 0} pending</span></button></li>` +
-          '<li class="nav-item"><button class="nav-link" data-tab="proposals">Proposals</button></li>' +
-          '<li class="nav-item"><button class="nav-link" data-tab="promoters">Promoters &#127881;</button></li>' +
-          '<li class="nav-item"><button class="nav-link" data-tab="details">Details</button></li>' +
-          '<li class="nav-item"><button class="nav-link" data-tab="team">Team</button></li>' +
+          `<li class="nav-item"><button class="nav-link active" data-main-tab="registrations">Registrations</button></li>` +
+          '<li class="nav-item"><button class="nav-link" data-main-tab="proposals">Proposals</button></li>' +
+          '<li class="nav-item"><button class="nav-link" data-main-tab="promoters">Promoters &#127881;</button></li>' +
+          '<li class="nav-item"><button class="nav-link" data-main-tab="settings">Event Settings</button></li>' +
         '</ul>' +
-        `<div id="et-regs">${regsTable(regs)}</div>` +
-        `<div id="et-invite" class="d-none">${inviteFormHtml(slug)}</div>` +
-        // wireRegsTable called below after innerHTML is set
-        `<div id="et-invlist" class="d-none">${inviteListHtml(slug)}</div>` +
-        `<div id="et-proposals" class="d-none">${proposalsTabHtml()}</div>` +
+        `<div id="et-registrations">${registrationsGroupTabHtml(slug)}</div>` +
+        `<div id="et-proposals-group" class="d-none">${proposalsGroupTabHtml()}</div>` +
         `<div id="et-promoters" class="d-none">${promotersTabHtml()}</div>` +
-        `<div id="et-details" class="d-none">${detailsFormHtml(_currentEventDetail)}</div>` +
-        `<div id="et-team" class="d-none">${teamTabHtml()}</div>` +
+        `<div id="et-settings" class="d-none">${eventSettingsTabHtml()}</div>` +
       '</div></div>';
 
     q("#btn-close-event")?.addEventListener("click", closeEvent);
 
-    det.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((btn) => {
+    det.querySelectorAll<HTMLButtonElement>("[data-main-tab]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        det.querySelectorAll<HTMLButtonElement>("[data-tab]").forEach((b) => b.classList.remove("active"));
-        ["regs", "invite", "invlist", "proposals", "promoters", "details", "team"].forEach((id) => hide(q(`#et-${id}`)));
+        det.querySelectorAll<HTMLButtonElement>("[data-main-tab]").forEach((b) => b.classList.remove("active"));
+        ["registrations", "proposals-group", "promoters", "settings"].forEach((id) => hide(q(`#et-${id}`)));
         btn.classList.add("active");
-        const tab = btn.dataset.tab!;
-        show(q(`#et-${tab}`));
-        if (tab === "invlist")   void loadEventInvites(slug);
-        if (tab === "proposals") void loadEventProposals(slug);
-        if (tab === "promoters") void loadEventPromoters(slug);
-        if (tab === "team")      void loadEventPermissions(slug);
+        const tab = btn.dataset.mainTab!;
+        if (tab === "registrations") {
+          show(q("#et-registrations"));
+          wireRegistrationsGroupTabs(slug);
+          void loadEventRegistrations(slug);
+        }
+        if (tab === "proposals") {
+          show(q("#et-proposals-group"));
+          wireProposalsGroupTabs(slug);
+          void loadEventProposals(slug);
+        }
+        if (tab === "promoters") {
+          show(q("#et-promoters"));
+          void loadEventPromoters(slug);
+        }
+        if (tab === "settings") {
+          show(q("#et-settings"));
+          wireEventSettingsTabs(slug);
+        }
       });
     });
 
     wireInviteForm(slug);
     wireDetailsForm(slug);
-    wireRegsTable(slug, regs);
+    wireRegistrationsGroupTabs(slug);
+    wireProposalsGroupTabs(slug);
+    void loadEventRegistrations(slug);
   } catch (err) {
     det.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
   }
@@ -569,6 +656,512 @@ async function openEvent(slug: string): Promise<void> {
 function closeEvent(): void {
   hide(q("#e-detail"));
   show(q("#e-body"));
+}
+
+function registrationsGroupTabHtml(slug: string): string {
+  return (
+    '<ul class="nav nav-tabs mb-3">' +
+      '<li class="nav-item"><button class="nav-link active" data-reg-tab="regs">Registrations</button></li>' +
+      '<li class="nav-item"><button class="nav-link" data-reg-tab="invlist">Invite List</button></li>' +
+      '<li class="nav-item"><button class="nav-link" data-reg-tab="invite">Send Invite</button></li>' +
+      '<li class="nav-item"><button class="nav-link" data-reg-tab="email">Send Email</button></li>' +
+    '</ul>' +
+    `<div id="et-regs">${registrationsListHtml(slug)}</div>` +
+    `<div id="et-invlist" class="d-none">${inviteListHtml(slug)}</div>` +
+    `<div id="et-invite" class="d-none">${inviteFormHtml(slug)}</div>` +
+    `<div id="et-email" class="d-none">${emailTabHtml("regs")}</div>`
+  );
+}
+
+function wireRegistrationsGroupTabs(slug: string): void {
+  const root = q("#et-registrations");
+  if (!root) return;
+  root.querySelectorAll<HTMLButtonElement>("[data-reg-tab]").forEach((btn) => {
+    btn.onclick = () => {
+      root.querySelectorAll<HTMLButtonElement>("[data-reg-tab]").forEach((b) => b.classList.remove("active"));
+      ["regs", "invlist", "invite", "email"].forEach((id) => hide(q(`#et-${id}`)));
+      btn.classList.add("active");
+      const tab = btn.dataset.regTab!;
+      show(q(`#et-${tab}`));
+      if (tab === "regs") void loadEventRegistrations(slug);
+      if (tab === "invlist") void loadEventInvites(slug);
+      if (tab === "email") void wireEmailTab(slug, "regs", "attendees");
+    };
+  });
+}
+
+function registrationsListHtml(slug: string): string {
+  void slug;
+  return (
+    '<div id="regs-list-body">' + spinner() + '</div>' +
+    '<div id="regs-list-pager" class="mt-2"></div>'
+  );
+}
+
+async function loadEventRegistrations(slug: string): Promise<void> {
+  const body = q("#regs-list-body");
+  const pager = q("#regs-list-pager");
+  if (!body) return;
+  body.innerHTML = spinner();
+  if (pager) pager.innerHTML = "";
+
+  let offset = 0;
+  let pageSize = ADMIN_LIST_PAGE_SIZE_DEFAULT;
+
+  const doLoad = async (): Promise<void> => {
+    body.innerHTML = spinner();
+    try {
+      const query = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
+      const d = await api<{
+        registrations: Registration[];
+        page?: { limit: number; offset: number; hasMore: boolean; total: number };
+      }>(`/api/v1/admin/events/${slug}/registrations?${query.toString()}`);
+
+      const regs = d.registrations ?? [];
+      body.innerHTML = regsTable(regs);
+      wireRegsTable(slug, regs);
+
+      const pageOffset = d.page?.offset ?? offset;
+      const pageLimit = d.page?.limit ?? pageSize;
+      const hasMore = d.page?.hasMore ?? false;
+      const pageTotal = d.page?.total ?? 0;
+      const currentPage = Math.floor(pageOffset / Math.max(1, pageLimit)) + 1;
+
+      if (pager) {
+        pager.innerHTML = pagerHtml(currentPage, hasMore, pageLimit, pageOffset, regs.length, pageTotal);
+        pager.querySelector<HTMLButtonElement>("[data-page-prev]")?.addEventListener("click", () => {
+          offset = Math.max(0, pageOffset - pageLimit);
+          void doLoad();
+        });
+        pager.querySelector<HTMLButtonElement>("[data-page-next]")?.addEventListener("click", () => {
+          offset = pageOffset + pageLimit;
+          void doLoad();
+        });
+        pager.querySelectorAll<HTMLButtonElement>("[data-page-jump]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const page = Number(btn.dataset.pageJump || "1");
+            if (!Number.isFinite(page) || page < 1) return;
+            offset = (page - 1) * pageLimit;
+            void doLoad();
+          });
+        });
+        pager.querySelector<HTMLSelectElement>("[data-page-size]")?.addEventListener("change", (event) => {
+          const nextSize = Number((event.currentTarget as HTMLSelectElement).value);
+          if (!Number.isFinite(nextSize) || nextSize < 1) return;
+          pageSize = nextSize;
+          offset = 0;
+          void doLoad();
+        });
+      }
+    } catch (err) {
+      body.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+      if (pager) pager.innerHTML = "";
+    }
+  };
+
+  const bodyEl = body as HTMLElement;
+  if (!bodyEl.dataset.regListWired) {
+    bodyEl.dataset.regListWired = "1";
+  }
+
+  await doLoad();
+}
+
+function proposalsGroupTabHtml(): string {
+  return (
+    '<ul class="nav nav-tabs mb-3">' +
+      '<li class="nav-item"><button class="nav-link active" data-prop-tab="proposals">Proposals</button></li>' +
+      '<li class="nav-item"><button class="nav-link" data-prop-tab="prop-invlist">Invite List</button></li>' +
+      '<li class="nav-item"><button class="nav-link" data-prop-tab="prop-invite">Send Invite</button></li>' +
+      '<li class="nav-item"><button class="nav-link" data-prop-tab="prop-email">Send Email</button></li>' +
+    '</ul>' +
+    `<div id="et-proposals">${proposalsTabHtml()}</div>` +
+    `<div id="et-prop-invlist" class="d-none">${proposalInviteListHtml()}</div>` +
+    `<div id="et-prop-invite" class="d-none">${proposalInviteFormHtml()}</div>` +
+    `<div id="et-prop-email" class="d-none">${emailTabHtml("prop")}</div>`
+  );
+}
+
+function wireProposalsGroupTabs(slug: string): void {
+  const root = q("#et-proposals-group");
+  if (!root) return;
+  root.querySelectorAll<HTMLButtonElement>("[data-prop-tab]").forEach((btn) => {
+    btn.onclick = () => {
+      root.querySelectorAll<HTMLButtonElement>("[data-prop-tab]").forEach((b) => b.classList.remove("active"));
+      ["proposals", "prop-invlist", "prop-invite", "prop-email"].forEach((id) => hide(q(`#et-${id}`)));
+      btn.classList.add("active");
+      const tab = btn.dataset.propTab!;
+      show(q(`#et-${tab}`));
+      if (tab === "proposals") void loadEventProposals(slug);
+      if (tab === "prop-invlist") void loadProposalInvites(slug);
+      if (tab === "prop-invite") wireProposalInviteForm(slug);
+      if (tab === "prop-email") void wireEmailTab(slug, "prop", "speakers");
+    };
+  });
+}
+
+function proposalInviteFormHtml(): string {
+  return (
+    '<div id="admin-proposal-invite-wrap">' +
+    '<div class="mb-3">' +
+      '<label class="form-label small fw-semibold">Paste emails &amp; names'
+      + ' <span class="text-muted fw-normal">for proposal invites (one per line or CSV)</span></label>' +
+      '<textarea class="form-control form-control-sm" id="pinv-paste" rows="4"'
+      + ' placeholder="alice@example.com&#10;Bob Smith &lt;bob@example.com&gt;&#10;carol.jones@company.com"></textarea>' +
+      '<div class="mt-1 d-flex gap-2 align-items-center flex-wrap">' +
+        '<button type="button" class="btn btn-sm btn-outline-secondary" id="pinv-parse-btn">Parse &darr;</button>' +
+        '<label class="btn btn-sm btn-outline-secondary mb-0" for="pinv-csv">Upload CSV</label>' +
+        '<input type="file" id="pinv-csv" accept=".csv,text/csv" class="visually-hidden">' +
+        '<span class="form-text ms-1">CSV columns: <code>email</code>, <code>firstName</code> (opt.), <code>lastName</code> (opt.)</span>' +
+      '</div>' +
+    '</div>' +
+    '<div class="d-flex gap-1 mb-1 small text-muted text-uppercase" style="font-size:.68rem;font-weight:600;padding:0 .1rem">' +
+      '<span style="flex:1.2">First name</span>' +
+      '<span style="flex:1.2">Last name</span>' +
+      '<span style="flex:2">Email *</span>' +
+      '<span style="width:1.8rem"></span>' +
+    '</div>' +
+    '<div id="pinv-rows" class="mb-2"></div>' +
+    '<div class="d-flex gap-2 align-items-center flex-wrap">' +
+      '<button type="button" class="btn btn-sm btn-outline-secondary" id="pinv-add-btn">+ Add row</button>' +
+      '<button type="button" class="btn btn-sm btn-success" id="pinv-send-btn">Send Proposal Invites</button>' +
+      '<span class="text-muted small" id="pinv-count-lbl"></span>' +
+    '</div>' +
+    '<div id="pinv-form-status" class="mt-2 small"></div>' +
+    '</div>'
+  );
+}
+
+function proposalInviteListHtml(): string {
+  return (
+    '<div class="d-flex gap-2 align-items-center mb-3 flex-wrap">' +
+      '<label class="form-label mb-0 small fw-semibold" for="pinv-filter">Filter status:</label>' +
+      '<select class="form-select form-select-sm" id="pinv-filter" style="width:auto">' +
+        '<option value="">All</option>' +
+        '<option value="sent" selected>Pending (sent)</option>' +
+        '<option value="accepted">Accepted</option>' +
+        '<option value="declined">Declined</option>' +
+        '<option value="expired">Expired</option>' +
+        '<option value="revoked">Revoked</option>' +
+      '</select>' +
+      '<button class="btn btn-sm btn-outline-secondary" id="pinv-list-refresh">&circlearrowright; Refresh</button>' +
+    '</div>' +
+    '<div id="pinv-list-body">' + spinner() + '</div>' +
+    '<div id="pinv-list-pager" class="mt-2"></div>'
+  );
+}
+
+function syncProposalInviteCount(): void {
+  const rows = document.querySelectorAll("#pinv-rows .inv-row");
+  const lbl = q("#pinv-count-lbl");
+  if (lbl) lbl.textContent = rows.length > 0 ? `${rows.length} row${rows.length !== 1 ? "s" : ""}` : "";
+}
+
+function collectProposalInvites(): Array<{ email: string; firstName?: string; lastName?: string }> {
+  const container = q("#pinv-rows");
+  if (!container) return [];
+
+  return Array.from(container.querySelectorAll<HTMLElement>(".inv-row"))
+    .map((row) => ({
+      email: (row.querySelector<HTMLInputElement>("[data-pinv-email]")?.value ?? "").trim(),
+      firstName: (row.querySelector<HTMLInputElement>("[data-pinv-first]")?.value ?? "").trim() || undefined,
+      lastName: (row.querySelector<HTMLInputElement>("[data-pinv-last]")?.value ?? "").trim() || undefined,
+    }))
+    .filter((item) => item.email);
+}
+
+function makeProposalInviteRow(entry?: AdminInviteEntry): HTMLElement {
+  const div = document.createElement("div");
+  div.className = "inv-row d-flex gap-1 mb-1 align-items-center";
+  div.innerHTML =
+    `<input class="form-control form-control-sm" style="flex:1.2" type="text"
+      placeholder="First (opt.)" data-pinv-first autocomplete="off"
+      value="${esc(entry?.firstName ?? "")}">` +
+    `<input class="form-control form-control-sm" style="flex:1.2" type="text"
+      placeholder="Last (opt.)" data-pinv-last autocomplete="off"
+      value="${esc(entry?.lastName ?? "")}">` +
+    `<input class="form-control form-control-sm" style="flex:2" type="email"
+      placeholder="email@example.com" data-pinv-email autocomplete="off"
+      value="${esc(entry?.email ?? "")}">` +
+    '<button type="button" class="btn btn-sm btn-outline-danger p-0 px-1 pinv-remove-btn"' +
+    ' title="Remove row" style="flex:none;height:1.75rem;line-height:1">&times;</button>';
+  div.querySelector<HTMLButtonElement>(".pinv-remove-btn")?.addEventListener("click", () => {
+    div.remove();
+    syncProposalInviteCount();
+  });
+  return div;
+}
+
+function addProposalInviteRow(entry?: AdminInviteEntry): void {
+  const container = q("#pinv-rows");
+  if (!container) return;
+  if (container.querySelectorAll(".inv-row").length >= MAX_ADMIN_INVITES) return;
+  container.appendChild(makeProposalInviteRow(entry));
+  syncProposalInviteCount();
+}
+
+function addParsedProposalEntries(entries: AdminInviteEntry[]): void {
+  const container = q("#pinv-rows");
+  if (!container) return;
+  const existingRows = Array.from(container.querySelectorAll<HTMLElement>(".inv-row"));
+  let idx = 0;
+  for (const row of existingRows) {
+    if (idx >= entries.length) break;
+    const emailEl = row.querySelector<HTMLInputElement>("[data-pinv-email]");
+    if (emailEl && !emailEl.value.trim()) {
+      const firstEl = row.querySelector<HTMLInputElement>("[data-pinv-first]");
+      const lastEl = row.querySelector<HTMLInputElement>("[data-pinv-last]");
+      if (firstEl) firstEl.value = entries[idx].firstName ?? "";
+      if (lastEl) lastEl.value = entries[idx].lastName ?? "";
+      emailEl.value = entries[idx].email;
+      idx++;
+    }
+  }
+  for (; idx < entries.length; idx++) addProposalInviteRow(entries[idx]);
+  syncProposalInviteCount();
+}
+
+function wireProposalInviteForm(slug: string): void {
+  const wrap = q<HTMLElement>("#admin-proposal-invite-wrap");
+  if (!wrap || wrap.dataset.wiredProposalInvite === "1") return;
+  wrap.dataset.wiredProposalInvite = "1";
+
+  addProposalInviteRow();
+
+  q("#pinv-parse-btn")?.addEventListener("click", () => {
+    const text = q<HTMLTextAreaElement>("#pinv-paste")?.value ?? "";
+    const entries = parseAdminInviteText(text);
+    if (!entries.length) { toast("No valid email addresses found in the pasted text", "error"); return; }
+    addParsedProposalEntries(entries);
+    const ta = q<HTMLTextAreaElement>("#pinv-paste");
+    if (ta) ta.value = "";
+    toast(`Parsed ${entries.length} entr${entries.length !== 1 ? "ies" : "y"}`, "success");
+  });
+
+  q<HTMLInputElement>("#pinv-csv")?.addEventListener("change", (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const text = ev.target?.result as string ?? "";
+      const entries = parseAdminCsv(text);
+      if (!entries.length) { toast("No valid rows found in CSV", "error"); return; }
+      addParsedProposalEntries(entries);
+      toast(`Imported ${entries.length} row${entries.length !== 1 ? "s" : ""} from CSV`, "success");
+      (e.target as HTMLInputElement).value = "";
+    };
+    reader.readAsText(file);
+  });
+
+  q("#pinv-add-btn")?.addEventListener("click", () => addProposalInviteRow());
+  q("#pinv-send-btn")?.addEventListener("click", () => void doAdminProposalInvite(slug));
+}
+
+async function doAdminProposalInvite(slug: string): Promise<void> {
+  const container = q("#pinv-rows");
+  const statusEl = q("#pinv-form-status");
+  if (!container) return;
+
+  const invites = collectProposalInvites();
+  if (!invites.length) {
+    if (statusEl) { statusEl.textContent = "No valid email addresses entered."; statusEl.className = "mt-2 small text-danger"; }
+    return;
+  }
+
+  const sendBtn = q<HTMLButtonElement>("#pinv-send-btn");
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "Sending..."; }
+  if (statusEl) { statusEl.textContent = ""; statusEl.className = "mt-2 small"; }
+
+  try {
+    const r = await api<{ created?: unknown[] }>(`/api/v1/admin/events/${slug}/invites/speakers/bulk`, {
+      method: "POST",
+      body: JSON.stringify({ invites }),
+    });
+    const count = r.created?.length ?? invites.length;
+    toast(`Sent ${count} proposal invite${count !== 1 ? "s" : ""}`, "success");
+    container.innerHTML = "";
+    addProposalInviteRow();
+    syncProposalInviteCount();
+    if (statusEl) { statusEl.textContent = `✓ ${count} proposal invitation${count !== 1 ? "s" : ""} queued.`; statusEl.className = "mt-2 small text-success"; }
+  } catch (err) {
+    toast((err as Error).message, "error");
+    if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "mt-2 small text-danger"; }
+  } finally {
+    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Send Proposal Invites"; }
+  }
+}
+
+async function doResendEventInvite(slug: string, inviteId: string): Promise<void> {
+  const statusEl = q(`#inv-resend-status-${inviteId}`);
+  const resendBtn = document.querySelector<HTMLButtonElement>(`[data-resend-invite="${inviteId}"]`);
+
+  if (resendBtn) { resendBtn.disabled = true; resendBtn.textContent = "Sending..."; }
+  if (statusEl) { statusEl.textContent = "Sending..."; statusEl.className = "small text-muted"; }
+
+  try {
+    await api(`/api/v1/admin/events/${slug}/invites/${inviteId}/resend`, { method: "POST", body: "{}" });
+    if (statusEl) { statusEl.textContent = "Resent"; statusEl.className = "small text-success"; }
+    toast("Invite resent", "success");
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "small text-danger"; }
+    toast((err as Error).message, "error");
+  } finally {
+    if (resendBtn) { resendBtn.disabled = false; resendBtn.textContent = "Resend"; }
+  }
+}
+
+async function loadProposalInvites(slug: string, statusFilter?: string): Promise<void> {
+  const body = q("#pinv-list-body");
+  const pager = q("#pinv-list-pager");
+  if (!body) return;
+  body.innerHTML = spinner();
+  if (pager) pager.innerHTML = "";
+
+  const filterSel = q<HTMLSelectElement>("#pinv-filter");
+  const refreshBtn = q<HTMLButtonElement>("#pinv-list-refresh");
+
+  const getFilter = (): string => filterSel?.value ?? (statusFilter ?? "sent");
+  let offset = 0;
+  let pageSize = ADMIN_LIST_PAGE_SIZE_DEFAULT;
+
+  const doLoad = async (): Promise<void> => {
+    body.innerHTML = spinner();
+    const filter = getFilter();
+    const query = new URLSearchParams();
+    query.set("type", "speaker");
+    query.set("limit", String(pageSize));
+    query.set("offset", String(offset));
+    if (filter) query.set("status", filter);
+    const url = `/api/v1/admin/events/${slug}/invites?${query.toString()}`;
+
+    try {
+      const d = await api<{ invites: InviteRecord[]; page?: { limit: number; offset: number; hasMore: boolean; total: number } }>(url);
+      const invites = d.invites ?? [];
+      body.innerHTML = tbl(
+        ["Invitee Email", "Invitee Name", "Status", "Sent", "Declined", "Source", "Actions"],
+        invites.map((i) => {
+          const name = [i.invitee_first_name, i.invitee_last_name].filter(Boolean).join(" ") || "—";
+          const canResend = i.status !== "accepted" && i.status !== "revoked";
+          const action = canResend
+            ? `<button class="btn btn-sm btn-outline-primary" data-resend-invite="${esc(i.id)}">Resend</button><div id="inv-resend-status-${esc(i.id)}" class="small mt-1"></div>`
+            : '<span class="text-muted small">—</span>';
+          return (
+            `<tr><td class="mono" style="font-size:.8rem">${esc(i.invitee_email)}</td>` +
+            `<td>${esc(name)}</td>` +
+            `<td>${inviteBadge(i.status)}</td>` +
+            `<td class="mono">${fmt(i.created_at)}</td>` +
+            `<td class="mono">${i.declined_at ? fmt(i.declined_at) : "—"}</td>` +
+            `<td class="text-muted small">${esc(i.source_type ?? "—")}</td>` +
+            `<td>${action}</td></tr>`
+          );
+        }),
+        "No proposal invites found matching the current filter",
+      );
+
+      body.querySelectorAll<HTMLButtonElement>("[data-resend-invite]").forEach((btn) => {
+        btn.onclick = () => {
+          const inviteId = btn.dataset.resendInvite;
+          if (!inviteId) return;
+          void doResendEventInvite(slug, inviteId);
+        };
+      });
+
+      const pageOffset = d.page?.offset ?? offset;
+      const pageLimit = d.page?.limit ?? pageSize;
+      const hasMore = d.page?.hasMore ?? false;
+      const pageTotal = d.page?.total ?? 0;
+      const currentPage = Math.floor(pageOffset / Math.max(1, pageLimit)) + 1;
+
+      if (pager) {
+        pager.innerHTML = pagerHtml(currentPage, hasMore, pageLimit, pageOffset, invites.length, pageTotal);
+        pager.querySelector<HTMLButtonElement>("[data-page-prev]")?.addEventListener("click", () => {
+          offset = Math.max(0, pageOffset - pageLimit);
+          void doLoad();
+        });
+        pager.querySelector<HTMLButtonElement>("[data-page-next]")?.addEventListener("click", () => {
+          offset = pageOffset + pageLimit;
+          void doLoad();
+        });
+        pager.querySelectorAll<HTMLButtonElement>("[data-page-jump]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const page = Number(btn.dataset.pageJump || "1");
+            if (!Number.isFinite(page) || page < 1) return;
+            offset = (page - 1) * pageLimit;
+            void doLoad();
+          });
+        });
+        pager.querySelector<HTMLSelectElement>("[data-page-size]")?.addEventListener("change", (event) => {
+          const nextSize = Number((event.currentTarget as HTMLSelectElement).value);
+          if (!Number.isFinite(nextSize) || nextSize < 1) return;
+          pageSize = nextSize;
+          offset = 0;
+          void doLoad();
+        });
+      }
+    } catch (err) {
+      body.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+      if (pager) pager.innerHTML = "";
+    }
+  };
+
+  const bodyEl = body as HTMLElement;
+  if (!bodyEl.dataset.proposalInvListWired) {
+    bodyEl.dataset.proposalInvListWired = "1";
+    filterSel?.addEventListener("change", () => {
+      offset = 0;
+      void doLoad();
+    });
+    refreshBtn?.addEventListener("click", () => {
+      offset = 0;
+      void doLoad();
+    });
+  }
+
+  await doLoad();
+}
+
+function eventSettingsTabHtml(): string {
+  return (
+    '<div class="card border-0 bg-light-subtle">' +
+      '<div class="card-body">' +
+        '<div class="mb-3">' +
+          '<h6 class="mb-1">Event Settings</h6>' +
+          '<div class="small text-muted">Configuration areas used during setup and occasional maintenance.</div>' +
+        '</div>' +
+        '<ul class="nav nav-tabs mb-3" id="event-settings-nav">' +
+          '<li class="nav-item"><button class="nav-link active" data-settings-tab="general">General</button></li>' +
+          '<li class="nav-item"><button class="nav-link" data-settings-tab="days">Days</button></li>' +
+          '<li class="nav-item"><button class="nav-link" data-settings-tab="terms">Terms</button></li>' +
+          '<li class="nav-item"><button class="nav-link" data-settings-tab="forms">Forms</button></li>' +
+          '<li class="nav-item"><button class="nav-link" data-settings-tab="team">Team</button></li>' +
+        '</ul>' +
+        `<div id="ets-general">${detailsFormHtml(_currentEventDetail ?? {})}</div>` +
+        `<div id="ets-days" class="d-none">${eventDaysTabHtml()}</div>` +
+        `<div id="ets-terms" class="d-none">${eventTermsTabHtml()}</div>` +
+        `<div id="ets-forms" class="d-none">${eventFormsTabHtml()}</div>` +
+        `<div id="ets-team" class="d-none">${teamTabHtml()}</div>` +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function wireEventSettingsTabs(slug: string): void {
+  const root = q("#et-settings");
+  if (!root) return;
+
+  root.querySelectorAll<HTMLButtonElement>("[data-settings-tab]").forEach((btn) => {
+    btn.onclick = () => {
+      root.querySelectorAll<HTMLButtonElement>("[data-settings-tab]").forEach((b) => b.classList.remove("active"));
+      ["general", "days", "terms", "forms", "team"].forEach((id) => hide(q(`#ets-${id}`)));
+      btn.classList.add("active");
+      const tab = btn.dataset.settingsTab!;
+      show(q(`#ets-${tab}`));
+      if (tab === "days") void loadEventDays(slug);
+      if (tab === "terms") void loadEventTerms(slug);
+      if (tab === "forms") void loadEventForms(slug);
+      if (tab === "team") void loadEventPermissions(slug);
+    };
+  });
 }
 
 function regsTable(regs: Registration[]): string {
@@ -907,12 +1500,142 @@ function inviteFormHtml(slug: string): string {
     // ── Actions
     '<div class="d-flex gap-2 align-items-center flex-wrap">' +
       '<button type="button" class="btn btn-sm btn-outline-secondary" id="inv-add-btn">+ Add row</button>' +
+      '<button type="button" class="btn btn-sm btn-outline-primary" id="inv-preview-btn">Preview Email</button>' +
       '<button type="button" class="btn btn-sm btn-success" id="inv-send-btn">Send Invites</button>' +
       '<span class="text-muted small" id="inv-count-lbl"></span>' +
+    '</div>' +
+    '<div id="inv-preview-status" class="mt-1 small text-muted">Preview required before sending.</div>' +
+    '<div id="inv-preview-panel" class="mt-2 d-none">' +
+      '<div class="card border">' +
+        '<div class="card-header bg-light small fw-semibold">Email Preview</div>' +
+        '<div class="card-body">' +
+          '<div class="small text-muted">Subject</div>' +
+          '<div id="inv-preview-subject" class="fw-semibold mb-2"></div>' +
+          '<ul class="nav nav-tabs mb-2" role="tablist">' +
+            '<li class="nav-item"><button class="nav-link active" id="inv-prev-tab-html" type="button">HTML</button></li>' +
+            '<li class="nav-item"><button class="nav-link" id="inv-prev-tab-text" type="button">Text</button></li>' +
+          '</ul>' +
+          '<div id="inv-prev-html-wrap"><iframe id="inv-preview-html" style="width:100%;height:300px;border:1px solid #dee2e6;border-radius:.375rem;background:#fff"></iframe></div>' +
+          '<pre id="inv-preview-text" class="json-out d-none" style="height:300px"></pre>' +
+          '<div class="form-check mt-2">' +
+            '<input class="form-check-input" type="checkbox" id="inv-preview-confirm">' +
+            '<label class="form-check-label small" for="inv-preview-confirm">I reviewed this preview and confirm sending this email.</label>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
     '</div>' +
     '<div id="inv-form-status" class="mt-2 small"></div>' +
     '</div>'
   );
+}
+
+function emailTabHtml(ns: string): string {
+  const e = (s: string) => `${ns}-em-${s}`;
+  return (
+    `<div id="${e("wrap")}">` +
+      `<div class="row g-2 mb-2">` +
+        `<div class="col-md-6"><label class="form-label small mb-1" for="${e("template")}">Template</label>` +
+          `<select class="form-select form-select-sm" id="${e("template")}"><option value="">— write from scratch —</option></select></div>` +
+        `<div class="col-md-3"><label class="form-label small mb-1" for="${e("mode")}">Delivery mode</label>` +
+          `<select class="form-select form-select-sm" id="${e("mode")}"><option value="personal">Personal (1:1)</option><option value="bcc_batch">Broadcast BCC</option></select></div>` +
+        `<div class="col-md-3 d-none" id="${e("batch-size-wrap")}"><label class="form-label small mb-1">BCC batch size</label>` +
+          `<input class="form-control form-control-sm" id="${e("batch-size")}" type="number" min="1" max="500" value="500"></div>` +
+      `</div>` +
+      `<div class="mb-2"><label class="form-label small mb-1" for="${e("subject")}">Subject</label>` +
+        `<input class="form-control form-control-sm" id="${e("subject")}" type="text" placeholder="Email subject"></div>` +
+      `<div class="row g-2 mb-2">` +
+        `<div class="col-md-8">` +
+          `<label class="form-label small mb-1" for="${e("body")}">Message <span class="text-muted fw-normal">(Markdown, {{variables}})</span></label>` +
+          `<div style="position:relative">` +
+            `<pre id="${e("body-src")}" aria-hidden="true" style="position:absolute;inset:0;margin:0;padding:.375rem .75rem;font-size:.8rem;font-family:SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace;line-height:1.5;white-space:pre-wrap;word-break:break-all;overflow:hidden;border:none;border-radius:.375rem;background:#fff;pointer-events:none;color:#212529"></pre>` +
+            `<textarea class="form-control font-monospace" id="${e("body")}" rows="14" style="position:relative;z-index:1;background:transparent;color:transparent;caret-color:#212529;font-size:.8rem;resize:vertical" placeholder="Write your message here, or load a template above."></textarea>` +
+          `</div>` +
+        `</div>` +
+        `<div class="col-md-4">` +
+          `<div class="card border-0 bg-light h-100 p-2">` +
+            `<div class="small fw-semibold mb-1">Variables</div>` +
+            `<div class="d-flex gap-1 flex-wrap mb-3">` +
+              `<button type="button" class="btn btn-sm btn-outline-secondary" data-em-snippet="{{firstName}}" data-em-target="body" data-em-personal-only="1">firstName</button>` +
+              `<button type="button" class="btn btn-sm btn-outline-secondary" data-em-snippet="{{lastName}}" data-em-target="body" data-em-personal-only="1">lastName</button>` +
+              `<button type="button" class="btn btn-sm btn-outline-secondary" data-em-snippet="{{eventName}}" data-em-target="subject">eventName</button>` +
+              `<button type="button" class="btn btn-sm btn-outline-secondary" data-em-snippet="{{eventUrl}}" data-em-target="body">eventUrl</button>` +
+              `<button type="button" class="btn btn-sm btn-outline-secondary" data-em-snippet="{{proposalTitle}}" data-em-target="body" data-em-personal-only="1">proposalTitle</button>` +
+              `<button type="button" class="btn btn-sm btn-outline-secondary" data-em-snippet="{{registrationUrl}}" data-em-target="body">registrationUrl</button>` +
+              `<button type="button" class="btn btn-sm btn-outline-secondary" data-em-snippet="{{proposalUrl}}" data-em-target="body">proposalUrl</button>` +
+            `</div>` +
+            `<div class="small fw-semibold mb-1">Custom Fields</div>` +
+            `<div class="small text-muted mb-1">Active form fields for this event are available as {{field_key}}.</div>` +
+            `<div class="d-flex gap-1 flex-wrap mb-3" id="${e("custom-fields")}"></div>` +
+            `<div class="small fw-semibold mb-1">Partials</div>` +
+            `<div class="small text-muted mb-1">Include shared email sections.</div>` +
+            `<div class="d-flex gap-1 flex-wrap">` +
+              `<button type="button" class="btn btn-sm btn-outline-info" data-em-snippet="{{> reg_details}}" data-em-target="body" data-em-personal-only="1">reg_details</button>` +
+              `<button type="button" class="btn btn-sm btn-outline-info" data-em-snippet="{{> sponsors_block}}" data-em-target="body">sponsors_block</button>` +
+              `<button type="button" class="btn btn-sm btn-outline-info" data-em-snippet="{{> about_pkic}}" data-em-target="body">about_pkic</button>` +
+            `</div>` +
+            `<div class="small text-muted mt-2 d-none" id="${e("broadcast-note")}">Recipient-specific tags are disabled in Broadcast BCC mode.</div>` +
+          `</div>` +
+        `</div>` +
+      `</div>` +
+      `<div class="row g-2 mb-2" id="${e("attendee-filters")}">` +
+        `<div class="col-md-4"><label class="form-label small mb-1">Registration status</label>` +
+          `<select class="form-select form-select-sm" id="${e("attendee-status")}"><option value="registered">Registered</option><option value="all">All</option><option value="pending_email_confirmation">Pending confirmation</option><option value="waitlisted">Waitlisted</option><option value="cancelled">Cancelled</option></select></div>` +
+        `<div class="col-md-4"><label class="form-label small mb-1">Attendance type</label>` +
+          `<select class="form-select form-select-sm" id="${e("attendance")}"><option value="all">All types</option><option value="in_person">In-person</option><option value="virtual">Virtual</option><option value="on_demand">On-demand</option></select></div>` +
+        `<div class="col-md-4"><label class="form-label small mb-1">Specific day</label>` +
+          `<select class="form-select form-select-sm" id="${e("day")}"><option value="">All days</option></select></div>` +
+      `</div>` +
+      `<div class="row g-2 mb-2 d-none" id="${e("speaker-filters")}">` +
+        `<div class="col-md-4"><label class="form-label small mb-1">Speaker status</label>` +
+          `<select class="form-select form-select-sm" id="${e("speaker-status")}"><option value="confirmed">Confirmed</option><option value="all">All active</option><option value="invited">Invited</option><option value="pending">Pending</option></select></div>` +
+      `</div>` +
+      `<div class="d-flex gap-2 align-items-center flex-wrap mb-2">` +
+        `<button type="button" class="btn btn-sm btn-outline-primary" id="${e("preview-btn")}">Preview Email</button>` +
+        `<button type="button" class="btn btn-sm btn-primary" id="${e("send-btn")}" disabled>Send Email</button>` +
+        `<span class="small text-muted" id="${e("status")}">Preview required before sending.</span>` +
+      `</div>` +
+      `<div id="${e("preview-panel")}" class="d-none">` +
+        `<div class="card border"><div class="card-header bg-light small fw-semibold">Email Preview</div><div class="card-body">` +
+          `<div class="small text-muted">Subject</div><div id="${e("preview-subject")}" class="fw-semibold mb-2"></div>` +
+          `<div class="small text-muted mb-1" id="${e("preview-meta")}"></div>` +
+          `<ul class="nav nav-tabs mb-2" role="tablist">` +
+            `<li class="nav-item"><button class="nav-link active" id="${e("prev-tab-html")}" type="button">HTML</button></li>` +
+            `<li class="nav-item"><button class="nav-link" id="${e("prev-tab-text")}" type="button">Text</button></li>` +
+          `</ul>` +
+          `<div id="${e("prev-html-wrap")}"><iframe id="${e("preview-html")}" style="width:100%;height:300px;border:1px solid #dee2e6;border-radius:.375rem;background:#fff"></iframe></div>` +
+          `<pre id="${e("preview-text")}" class="json-out d-none" style="height:300px"></pre>` +
+          `<div class="form-check mt-2"><input class="form-check-input" type="checkbox" id="${e("confirm")}"><label class="form-check-label small" for="${e("confirm")}">I reviewed this email preview and confirm sending.</label></div>` +
+        `</div></div>` +
+      `</div>` +
+    `</div>`
+  );
+}
+
+function setEmailPreviewTab(ns: string, tab: "html" | "text"): void {
+  const e = (s: string) => `#${ns}-em-${s}`;
+  const htmlBtn = q<HTMLButtonElement>(e("prev-tab-html"));
+  const textBtn = q<HTMLButtonElement>(e("prev-tab-text"));
+  const htmlWrap = q(e("prev-html-wrap"));
+  const textWrap = q(e("preview-text"));
+  if (tab === "html") {
+    htmlBtn?.classList.add("active");
+    textBtn?.classList.remove("active");
+    show(htmlWrap);
+    hide(textWrap);
+  } else {
+    textBtn?.classList.add("active");
+    htmlBtn?.classList.remove("active");
+    hide(htmlWrap);
+    show(textWrap);
+  }
+}
+
+function escEmailHighlight(text: string): string {
+  return text
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/({{[^}]*}})/g, '<mark style="background-color:rgba(255,165,0,.2);border-radius:2px;padding:0 1px">$1</mark>');
 }
 
 function inviteListHtml(slug: string): string {
@@ -930,7 +1653,8 @@ function inviteListHtml(slug: string): string {
       '</select>' +
       '<button class="btn btn-sm btn-outline-secondary" id="inv-list-refresh">&circlearrowright; Refresh</button>' +
     '</div>' +
-    '<div id="inv-list-body">' + spinner() + '</div>'
+    '<div id="inv-list-body">' + spinner() + '</div>' +
+    '<div id="inv-list-pager" class="mt-2"></div>'
   );
 }
 
@@ -1066,31 +1790,37 @@ function proposalsTabHtml(): string {
       '<button class="btn btn-sm btn-outline-secondary" id="proposal-refresh">&circlearrowright; Refresh</button>' +
     '</div>' +
     '<div id="proposal-list-body">' + spinner() + '</div>' +
+    '<div id="proposal-list-pager" class="mt-2"></div>' +
     '<div id="proposal-detail" class="mt-3"></div>'
   );
 }
 
 async function loadEventProposals(slug: string): Promise<void> {
   const body = q("#proposal-list-body");
+  const pager = q("#proposal-list-pager");
   if (!body) return;
+  if (pager) pager.innerHTML = "";
+
+  let offset = 0;
+  let pageSize = ADMIN_LIST_PAGE_SIZE_DEFAULT;
 
   const fetchAndRender = async (): Promise<void> => {
     body.innerHTML = spinner();
     try {
-      const response = await api<{ proposals: ProposalSummary[]; permissions?: ProposalAccess }>(`/api/v1/admin/events/${slug}/proposals`);
-      const access: ProposalAccess = response.permissions ?? { eventPermissions: [], canReview: true, canFinalize: true };
-      _proposalAccessByEventSlug[slug] = access;
       const filter = q<HTMLSelectElement>("#proposal-filter")?.value ?? "";
       const search = (q<HTMLInputElement>("#proposal-search")?.value ?? "").trim().toLowerCase();
-      const proposals = (response.proposals ?? []).filter((proposal) => {
-        if (filter && proposal.status !== filter) return false;
-        if (!search) return true;
-        const proposer = [proposal.proposer_first_name, proposal.proposer_last_name, proposal.proposer_email]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        return proposal.title.toLowerCase().includes(search) || proposer.includes(search);
-      });
+      const query = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
+      if (filter) query.set("status", filter);
+      if (search) query.set("search", search);
+
+      const response = await api<{
+        proposals: ProposalSummary[];
+        permissions?: ProposalAccess;
+        page?: { limit: number; offset: number; hasMore: boolean; total: number };
+      }>(`/api/v1/admin/events/${slug}/proposals?${query.toString()}`);
+      const access: ProposalAccess = response.permissions ?? { eventPermissions: [], canReview: true, canFinalize: true };
+      _proposalAccessByEventSlug[slug] = access;
+      const proposals = response.proposals ?? [];
 
       const rows = proposals.map((proposal) => {
         const proposerName = [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ");
@@ -1119,6 +1849,39 @@ async function loadEventProposals(slug: string): Promise<void> {
         "No proposals match the current filters",
       );
 
+      const pageOffset = response.page?.offset ?? offset;
+      const pageLimit = response.page?.limit ?? pageSize;
+      const hasMore = response.page?.hasMore ?? false;
+      const pageTotal = response.page?.total ?? 0;
+      const currentPage = Math.floor(pageOffset / Math.max(1, pageLimit)) + 1;
+
+      if (pager) {
+        pager.innerHTML = pagerHtml(currentPage, hasMore, pageLimit, pageOffset, proposals.length, pageTotal);
+        pager.querySelector<HTMLButtonElement>("[data-page-prev]")?.addEventListener("click", () => {
+          offset = Math.max(0, pageOffset - pageLimit);
+          void fetchAndRender();
+        });
+        pager.querySelector<HTMLButtonElement>("[data-page-next]")?.addEventListener("click", () => {
+          offset = pageOffset + pageLimit;
+          void fetchAndRender();
+        });
+        pager.querySelectorAll<HTMLButtonElement>("[data-page-jump]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const page = Number(btn.dataset.pageJump || "1");
+            if (!Number.isFinite(page) || page < 1) return;
+            offset = (page - 1) * pageLimit;
+            void fetchAndRender();
+          });
+        });
+        pager.querySelector<HTMLSelectElement>("[data-page-size]")?.addEventListener("change", (event) => {
+          const nextSize = Number((event.currentTarget as HTMLSelectElement).value);
+          if (!Number.isFinite(nextSize) || nextSize < 1) return;
+          pageSize = nextSize;
+          offset = 0;
+          void fetchAndRender();
+        });
+      }
+
       body.querySelectorAll<HTMLButtonElement>("[data-open-proposal]").forEach((btn) => {
         btn.addEventListener("click", () => {
           const proposal = (response.proposals ?? []).find((p) => p.id === btn.dataset.openProposal);
@@ -1128,17 +1891,25 @@ async function loadEventProposals(slug: string): Promise<void> {
       });
     } catch (err) {
       body.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+      if (pager) pager.innerHTML = "";
     }
   };
 
   const bodyEl = body as HTMLElement;
   if (!bodyEl.dataset.proposalWired) {
     bodyEl.dataset.proposalWired = "1";
-    q("#proposal-refresh")?.addEventListener("click", () => void fetchAndRender());
-    q("#proposal-filter")?.addEventListener("change", () => void fetchAndRender());
+    q("#proposal-refresh")?.addEventListener("click", () => {
+      offset = 0;
+      void fetchAndRender();
+    });
+    q("#proposal-filter")?.addEventListener("change", () => {
+      offset = 0;
+      void fetchAndRender();
+    });
     q("#proposal-search")?.addEventListener("keydown", (event) => {
       if ((event as KeyboardEvent).key === "Enter") {
         event.preventDefault();
+        offset = 0;
         void fetchAndRender();
       }
     });
@@ -1525,11 +2296,382 @@ function parseAdminCsv(text: string): AdminInviteEntry[] {
 // ── Admin invite row management ──────────────────────────────────────────────
 
 const MAX_ADMIN_INVITES = 500;
+let _invitePreviewState: { token: string; digest: string; expiresAt: string } | null = null;
+const _emailPreviewTokens = new Map<string, string | null>();
 
 function syncInviteCount(): void {
   const rows = document.querySelectorAll("#inv-rows .inv-row");
   const lbl = q("#inv-count-lbl");
   if (lbl) lbl.textContent = rows.length > 0 ? `${rows.length} row${rows.length !== 1 ? "s" : ""}` : "";
+}
+
+function collectAdminInvites(): Array<{ email: string; firstName?: string; lastName?: string }> {
+  const container = q("#inv-rows");
+  if (!container) return [];
+
+  return Array.from(container.querySelectorAll<HTMLElement>(".inv-row"))
+    .map((row) => ({
+      email: (row.querySelector<HTMLInputElement>("[data-inv-email]")?.value ?? "").trim(),
+      firstName: (row.querySelector<HTMLInputElement>("[data-inv-first]")?.value ?? "").trim() || undefined,
+      lastName: (row.querySelector<HTMLInputElement>("[data-inv-last]")?.value ?? "").trim() || undefined,
+    }))
+    .filter((item) => item.email);
+}
+
+function invitePreviewDigest(invites: Array<{ email: string; firstName?: string; lastName?: string; sourceType?: string }>): string {
+  const normalized = invites.map((item) => ({
+    email: item.email.trim().toLowerCase(),
+    firstName: (item.firstName ?? "").trim(),
+    lastName: (item.lastName ?? "").trim(),
+    sourceType: (item.sourceType ?? "").trim(),
+  }));
+  return JSON.stringify(normalized);
+}
+
+function setInvitePreviewTab(tab: "html" | "text"): void {
+  const htmlBtn = q<HTMLButtonElement>("#inv-prev-tab-html");
+  const textBtn = q<HTMLButtonElement>("#inv-prev-tab-text");
+  const htmlWrap = q("#inv-prev-html-wrap");
+  const textWrap = q("#inv-preview-text");
+  if (tab === "html") {
+    htmlBtn?.classList.add("active");
+    textBtn?.classList.remove("active");
+    show(htmlWrap);
+    hide(textWrap);
+  } else {
+    textBtn?.classList.add("active");
+    htmlBtn?.classList.remove("active");
+    hide(htmlWrap);
+    show(textWrap);
+  }
+}
+
+function invalidateInvitePreview(message = "Preview required before sending."): void {
+  _invitePreviewState = null;
+  const sendBtn = q<HTMLButtonElement>("#inv-send-btn");
+  if (sendBtn) sendBtn.disabled = true;
+
+  const previewConfirm = q<HTMLInputElement>("#inv-preview-confirm");
+  if (previewConfirm) previewConfirm.checked = false;
+
+  const previewPanel = q("#inv-preview-panel");
+  hide(previewPanel);
+
+  const statusEl = q("#inv-preview-status");
+  if (statusEl) {
+    statusEl.textContent = message;
+    statusEl.className = "mt-1 small text-muted";
+  }
+}
+
+function readEmailPayload(
+  ns: string,
+  audience: "attendees" | "speakers",
+): {
+  templateKey?: string;
+  subjectOverride?: string;
+  bodyContent?: string;
+  sendMode: "personal" | "bcc_batch";
+  batchSize: number;
+  filter: {
+    audience: "attendees" | "speakers";
+    attendeeStatus?: "all" | "registered" | "pending_email_confirmation" | "waitlisted" | "cancelled";
+    attendanceType?: "all" | "in_person" | "virtual" | "on_demand";
+    dayDate?: string;
+    speakerStatus?: "all" | "confirmed" | "invited" | "pending";
+  };
+} {
+  const r = (id: string) => `#${ns}-em-${id}`;
+  const templateKeyRaw = (q<HTMLSelectElement>(r("template"))?.value ?? "").trim();
+  const subjectOverrideRaw = (q<HTMLInputElement>(r("subject"))?.value ?? "").trim();
+  const bodyContentRaw = (q<HTMLTextAreaElement>(r("body"))?.value ?? "").trim();
+  const sendMode = (q<HTMLSelectElement>(r("mode"))?.value ?? "personal") as "personal" | "bcc_batch";
+  const batchSize = parseInt(q<HTMLInputElement>(r("batch-size"))?.value ?? "500", 10) || 500;
+  return {
+    templateKey: templateKeyRaw || undefined,
+    subjectOverride: subjectOverrideRaw || undefined,
+    bodyContent: bodyContentRaw || undefined,
+    sendMode,
+    batchSize,
+    filter: {
+      audience,
+      attendeeStatus: audience === "attendees"
+        ? ((q<HTMLSelectElement>(r("attendee-status"))?.value ?? "registered") as "all" | "registered" | "pending_email_confirmation" | "waitlisted" | "cancelled")
+        : undefined,
+      attendanceType: audience === "attendees"
+        ? ((q<HTMLSelectElement>(r("attendance"))?.value ?? "all") as "all" | "in_person" | "virtual" | "on_demand")
+        : undefined,
+      dayDate: audience === "attendees" ? (q<HTMLSelectElement>(r("day"))?.value?.trim() || undefined) : undefined,
+      speakerStatus: audience === "speakers"
+        ? ((q<HTMLSelectElement>(r("speaker-status"))?.value ?? "confirmed") as "all" | "confirmed" | "invited" | "pending")
+        : undefined,
+    },
+  };
+}
+
+function invalidateEmailPreview(ns: string, message = "Preview required before sending."): void {
+  _emailPreviewTokens.set(ns, null);
+  const r = (id: string) => `#${ns}-em-${id}`;
+  const sendBtn = q<HTMLButtonElement>(r("send-btn"));
+  if (sendBtn) sendBtn.disabled = true;
+
+  const confirm = q<HTMLInputElement>(r("confirm"));
+  if (confirm) confirm.checked = false;
+
+  hide(q(r("preview-panel")));
+
+  const statusEl = q(r("status"));
+  if (statusEl) {
+    statusEl.textContent = message;
+    statusEl.className = "small text-muted";
+  }
+}
+
+async function wireEmailTab(slug: string, ns: string, audience: "attendees" | "speakers"): Promise<void> {
+  const r = (id: string) => `#${ns}-em-${id}`;
+  const wrap = q<HTMLElement>(`#${ns}-em-wrap`);
+  if (!wrap || wrap.dataset.wired === "1") return;
+  wrap.dataset.wired = "1";
+
+  const isAttendees = audience === "attendees";
+  q(r("attendee-filters"))?.classList.toggle("d-none", !isAttendees);
+  q(r("speaker-filters"))?.classList.toggle("d-none", isAttendees);
+
+  const templateSelect = q<HTMLSelectElement>(r("template"));
+  const daySelect = q<HTMLSelectElement>(r("day"));
+  const modeSelect = q<HTMLSelectElement>(r("mode"));
+  const customFieldsEl = q<HTMLElement>(r("custom-fields"));
+  const broadcastNoteEl = q<HTMLElement>(r("broadcast-note"));
+  if (!templateSelect || !daySelect || !modeSelect) return;
+
+  const templatesByKey = new Map<string, EmailTemplateVersion>();
+
+  try {
+    const [templatesRes, daysRes, formRes] = await Promise.all([
+      api<{ templates: EmailTemplateVersion[] }>("/api/v1/admin/email-templates"),
+      api<{ days: Array<{ date: string; label: string | null }> }>(`/api/v1/admin/events/${slug}/days`),
+      api<{ form: { fields?: Array<{ key: string; label: string }> } | null }>(`/api/v1/events/${slug}/forms?purpose=${audience === "attendees" ? "event_registration" : "proposal_submission"}`),
+    ]);
+
+    const allMsgTemplates = (templatesRes.templates ?? []).filter((t) => t.template_key.startsWith("msg_"));
+    for (const tmpl of allMsgTemplates) {
+      const existing = templatesByKey.get(tmpl.template_key);
+      if (!existing || tmpl.status === "active" || tmpl.version > existing.version) {
+        templatesByKey.set(tmpl.template_key, tmpl);
+      }
+    }
+
+    const keys = Array.from(templatesByKey.keys()).sort();
+    templateSelect.innerHTML = keys.length
+      ? '<option value="">— write from scratch —</option>' + keys.map((key) => `<option value="${esc(key)}">${esc(key)}</option>`).join("")
+      : '<option value="">No msg_ templates found</option>';
+
+    if (isAttendees) {
+      const dayOptions = (daysRes.days ?? []).map((day) => ({
+        value: day.date,
+        label: day.label ? `${day.date} (${day.label})` : day.date,
+      }));
+      daySelect.innerHTML = '<option value="">All days</option>' + dayOptions.map((d) => `<option value="${esc(d.value)}">${esc(d.label)}</option>`).join("");
+    }
+
+    if (customFieldsEl) {
+      const fields = formRes.form?.fields ?? [];
+      customFieldsEl.innerHTML = fields.length
+        ? fields.map((field) => `<button type="button" class="btn btn-sm btn-outline-secondary" data-em-snippet="{{${esc(field.key)}}}" data-em-target="body" data-em-personal-only="1" title="${esc(field.label ?? field.key)}">${esc(field.key)}</button>`).join("")
+        : '<span class="small text-muted">No active custom fields.</span>';
+    }
+  } catch (err) {
+    toast((err as Error).message, "error");
+  }
+
+  const bodyEl = q<HTMLTextAreaElement>(r("body"));
+  const bodySrcEl = q<HTMLElement>(r("body-src"));
+
+  const syncBodyHighlight = (): void => {
+    if (!bodyEl || !bodySrcEl) return;
+    bodySrcEl.innerHTML = escEmailHighlight(bodyEl.value);
+    bodySrcEl.scrollTop = bodyEl.scrollTop;
+  };
+
+  const loadTemplateContent = (): void => {
+    const tmpl = templatesByKey.get(templateSelect.value);
+    if (!tmpl) return;
+    const subject = q<HTMLInputElement>(r("subject"));
+    if (subject && tmpl.subject_template) subject.value = tmpl.subject_template;
+    if (bodyEl && tmpl.body != null) { bodyEl.value = tmpl.body; syncBodyHighlight(); }
+    invalidateEmailPreview(ns);
+  };
+
+  const syncModeControls = (): void => {
+    const isBroadcast = modeSelect.value === "bcc_batch";
+    q(r("batch-size-wrap"))?.classList.toggle("d-none", !isBroadcast);
+    broadcastNoteEl?.classList.toggle("d-none", !isBroadcast);
+    wrap.querySelectorAll<HTMLButtonElement>("[data-em-personal-only='1']").forEach((btn) => {
+      if (!btn.dataset.emOriginalTitle) btn.dataset.emOriginalTitle = btn.title;
+      btn.disabled = isBroadcast;
+      btn.classList.toggle("disabled", isBroadcast);
+      btn.title = isBroadcast ? "Recipient-specific tags are only available in Personal (1:1) mode." : (btn.dataset.emOriginalTitle ?? "");
+    });
+  };
+
+  const insertSnippet = (snippet: string, target: "subject" | "body"): void => {
+    const field: HTMLInputElement | HTMLTextAreaElement | null = target === "subject"
+      ? q<HTMLInputElement>(r("subject"))
+      : bodyEl;
+    if (!field) return;
+    const start = field.selectionStart ?? field.value.length;
+    const end = field.selectionEnd ?? field.value.length;
+    field.value = `${field.value.slice(0, start)}${snippet}${field.value.slice(end)}`;
+    const nextPos = start + snippet.length;
+    field.focus();
+    field.setSelectionRange(nextPos, nextPos);
+    if (target === "body") syncBodyHighlight();
+    invalidateEmailPreview(ns);
+  };
+
+  wrap.addEventListener("click", (event) => {
+    const btn = (event.target as HTMLElement | null)?.closest<HTMLButtonElement>("[data-em-snippet]");
+    if (!btn) return;
+    const snippet = btn.dataset.emSnippet ?? "";
+    const target = btn.dataset.emTarget === "subject" ? "subject" : "body";
+    insertSnippet(snippet, target);
+  });
+
+  bodyEl?.addEventListener("scroll", () => {
+    if (bodySrcEl && bodyEl) { bodySrcEl.scrollTop = bodyEl.scrollTop; bodySrcEl.scrollLeft = bodyEl.scrollLeft; }
+  });
+
+  [r("template"), r("mode"), r("batch-size"), r("attendee-status"), r("attendance"), r("day"), r("speaker-status"), r("subject"), r("body")].forEach((sel) =>
+    q(sel)?.addEventListener("input", () => { syncBodyHighlight(); invalidateEmailPreview(ns); }),
+  );
+
+  [r("template"), r("mode"), r("attendee-status"), r("attendance"), r("day"), r("speaker-status")].forEach((sel) =>
+    q(sel)?.addEventListener("change", () => { syncModeControls(); invalidateEmailPreview(ns); }),
+  );
+
+  templateSelect.addEventListener("change", () => loadTemplateContent());
+
+  q<HTMLInputElement>(r("confirm"))?.addEventListener("change", (event) => {
+    const sendBtn = q<HTMLButtonElement>(r("send-btn"));
+    if (!sendBtn) return;
+    sendBtn.disabled = !(event.target as HTMLInputElement).checked || !_emailPreviewTokens.get(ns);
+  });
+
+  q(r("prev-tab-html"))?.addEventListener("click", () => setEmailPreviewTab(ns, "html"));
+  q(r("prev-tab-text"))?.addEventListener("click", () => setEmailPreviewTab(ns, "text"));
+
+  q(r("preview-btn"))?.addEventListener("click", () => void doEmailPreview(slug, ns, audience));
+  q(r("send-btn"))?.addEventListener("click", () => void doEmailSend(slug, ns, audience));
+
+  syncModeControls();
+  syncBodyHighlight();
+  invalidateEmailPreview(ns);
+}
+
+async function doEmailPreview(slug: string, ns: string, audience: "attendees" | "speakers"): Promise<void> {
+  const r = (id: string) => `#${ns}-em-${id}`;
+  const payload = readEmailPayload(ns, audience);
+  const statusEl = q(r("status"));
+  const btn = q<HTMLButtonElement>(r("preview-btn"));
+  const sendBtn = q<HTMLButtonElement>(r("send-btn"));
+
+  if (!payload.bodyContent && !payload.templateKey) {
+    if (statusEl) {
+      statusEl.textContent = "Add a message body or select a template first.";
+      statusEl.className = "small text-danger";
+    }
+    return;
+  }
+
+  if (btn) { btn.disabled = true; btn.textContent = "Rendering..."; }
+  if (sendBtn) sendBtn.disabled = true;
+  if (statusEl) { statusEl.textContent = "Rendering email preview..."; statusEl.className = "small text-muted"; }
+
+  try {
+    const result = await api<{
+      previewToken: string;
+      previewExpiresAt: string;
+      recipientCount: number;
+      batchCount: number;
+      sampleRecipients: string[];
+      subject: string;
+      html: string;
+      text: string;
+    }>(`/api/v1/admin/events/${slug}/emails/campaign/preview`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+
+    _emailPreviewTokens.set(ns, result.previewToken);
+
+    const subjectEl = q(r("preview-subject"));
+    const metaEl = q(r("preview-meta"));
+    const iframe = q<HTMLIFrameElement>(r("preview-html"));
+    const textEl = q<HTMLElement>(r("preview-text"));
+    const confirm = q<HTMLInputElement>(r("confirm"));
+
+    if (confirm) confirm.checked = false;
+    if (subjectEl) subjectEl.textContent = result.subject;
+    if (metaEl) {
+      const sample = result.sampleRecipients.slice(0, 5).join(", ");
+      metaEl.textContent = `Recipients: ${result.recipientCount}, batches: ${result.batchCount}${sample ? `, sample: ${sample}` : ""}`;
+    }
+    if (iframe) iframe.srcdoc = result.html;
+    if (textEl) textEl.textContent = result.text;
+
+    setEmailPreviewTab(ns, "html");
+    show(q(r("preview-panel")));
+
+    if (statusEl) {
+      const expiresAt = new Date(result.previewExpiresAt).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" });
+      statusEl.textContent = `Preview ready. Confirm to send. Expires at ${expiresAt}.`;
+      statusEl.className = "small text-success";
+    }
+  } catch (err) {
+    _emailPreviewTokens.set(ns, null);
+    hide(q(r("preview-panel")));
+    if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "small text-danger"; }
+    toast((err as Error).message, "error");
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Preview Email"; }
+  }
+}
+
+async function doEmailSend(slug: string, ns: string, audience: "attendees" | "speakers"): Promise<void> {
+  const r = (id: string) => `#${ns}-em-${id}`;
+  const payload = readEmailPayload(ns, audience);
+  const statusEl = q(r("status"));
+  const sendBtn = q<HTMLButtonElement>(r("send-btn"));
+  const confirm = q<HTMLInputElement>(r("confirm"));
+  const token = _emailPreviewTokens.get(ns) ?? null;
+
+  if (!token) {
+    if (statusEl) { statusEl.textContent = "Preview email before sending."; statusEl.className = "small text-danger"; }
+    return;
+  }
+
+  if (!confirm?.checked) {
+    if (statusEl) { statusEl.textContent = "Confirm preview before sending."; statusEl.className = "small text-danger"; }
+    return;
+  }
+
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "Queueing..."; }
+
+  try {
+    const result = await api<{ queuedRecipients: number; queuedBatches: number }>(`/api/v1/admin/events/${slug}/emails/campaign/send`, {
+      method: "POST",
+      body: JSON.stringify({ ...payload, previewToken: token }),
+    });
+
+    if (statusEl) { statusEl.textContent = `Queued ${result.queuedRecipients} recipients in ${result.queuedBatches} batch(es).`; statusEl.className = "small text-success"; }
+    toast(`Sent to ${result.queuedRecipients} recipients`, "success");
+    invalidateEmailPreview(ns, "Email sent. Render a new preview for the next send.");
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "small text-danger"; }
+    toast((err as Error).message, "error");
+  } finally {
+    if (sendBtn) { sendBtn.textContent = "Send Email"; sendBtn.disabled = !confirm?.checked || !_emailPreviewTokens.get(ns); }
+  }
 }
 
 function makeAdminInviteRow(entry?: AdminInviteEntry): HTMLElement {
@@ -1576,6 +2718,7 @@ function addAdminInviteRow(entry?: AdminInviteEntry): void {
   if (container.querySelectorAll(".inv-row").length >= MAX_ADMIN_INVITES) return;
   container.appendChild(makeAdminInviteRow(entry));
   syncInviteCount();
+  invalidateInvitePreview();
 }
 
 function addParsedAdminEntries(entries: AdminInviteEntry[]): void {
@@ -1601,8 +2744,22 @@ function addParsedAdminEntries(entries: AdminInviteEntry[]): void {
 }
 
 function wireInviteForm(slug: string): void {
+  _invitePreviewState = null;
+
   // Start with one empty row
   addAdminInviteRow();
+
+  const rowContainer = q("#inv-rows");
+  rowContainer?.addEventListener("input", () => invalidateInvitePreview());
+
+  q("#inv-prev-tab-html")?.addEventListener("click", () => setInvitePreviewTab("html"));
+  q("#inv-prev-tab-text")?.addEventListener("click", () => setInvitePreviewTab("text"));
+  q<HTMLInputElement>("#inv-preview-confirm")?.addEventListener("change", (event) => {
+    const sendBtn = q<HTMLButtonElement>("#inv-send-btn");
+    if (!sendBtn) return;
+    const checked = (event.target as HTMLInputElement).checked;
+    sendBtn.disabled = !checked || !_invitePreviewState;
+  });
 
   // Parse button
   q("#inv-parse-btn")?.addEventListener("click", () => {
@@ -1612,6 +2769,7 @@ function wireInviteForm(slug: string): void {
     addParsedAdminEntries(entries);
     const ta = q<HTMLTextAreaElement>("#inv-paste");
     if (ta) ta.value = "";
+    invalidateInvitePreview();
     toast(`Parsed ${entries.length} entr${entries.length !== 1 ? "ies" : "y"}`, "success");
   });
 
@@ -1625,6 +2783,7 @@ function wireInviteForm(slug: string): void {
       addParsedAdminEntries(entries);
       ta.value = "";
       syncInviteCount();
+      invalidateInvitePreview();
     }, 0);
   });
 
@@ -1638,6 +2797,7 @@ function wireInviteForm(slug: string): void {
       const entries = parseAdminCsv(text);
       if (!entries.length) { toast("No valid rows found in CSV", "error"); return; }
       addParsedAdminEntries(entries);
+      invalidateInvitePreview();
       toast(`Imported ${entries.length} row${entries.length !== 1 ? "s" : ""} from CSV`, "success");
       (e.target as HTMLInputElement).value = "";
     };
@@ -1647,8 +2807,91 @@ function wireInviteForm(slug: string): void {
   // Add row button
   q("#inv-add-btn")?.addEventListener("click", () => addAdminInviteRow());
 
+  // Preview button
+  q("#inv-preview-btn")?.addEventListener("click", () => void doAdminInvitePreview(slug));
+
   // Send button
   q("#inv-send-btn")?.addEventListener("click", () => void doAdminInvite(slug));
+}
+
+async function doAdminInvitePreview(slug: string): Promise<void> {
+  const invites = collectAdminInvites();
+  const statusEl = q("#inv-preview-status");
+  const btn = q<HTMLButtonElement>("#inv-preview-btn");
+  const sendBtn = q<HTMLButtonElement>("#inv-send-btn");
+  const previewPanel = q("#inv-preview-panel");
+  const previewConfirm = q<HTMLInputElement>("#inv-preview-confirm");
+
+  if (!invites.length) {
+    if (statusEl) {
+      statusEl.textContent = "Add at least one invitee before previewing.";
+      statusEl.className = "mt-1 small text-danger";
+    }
+    return;
+  }
+
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Rendering...";
+  }
+  if (sendBtn) sendBtn.disabled = true;
+  if (previewConfirm) previewConfirm.checked = false;
+  hide(previewPanel);
+  if (statusEl) {
+    statusEl.textContent = "Rendering preview...";
+    statusEl.className = "mt-1 small text-muted";
+  }
+
+  try {
+    const result = await api<{
+      previewToken: string;
+      previewExpiresAt: string;
+      recipientCount: number;
+      subject: string;
+      html: string;
+      text: string;
+    }>(`/api/v1/admin/events/${slug}/invites/attendees/preview`, {
+      method: "POST",
+      body: JSON.stringify({ invites }),
+    });
+
+    _invitePreviewState = {
+      token: result.previewToken,
+      digest: invitePreviewDigest(invites),
+      expiresAt: result.previewExpiresAt,
+    };
+
+    const previewSubject = q("#inv-preview-subject");
+    const previewHtml = q<HTMLIFrameElement>("#inv-preview-html");
+    const previewText = q<HTMLElement>("#inv-preview-text");
+    if (previewSubject) previewSubject.textContent = result.subject;
+    if (previewHtml) previewHtml.srcdoc = result.html;
+    if (previewText) previewText.textContent = result.text;
+    setInvitePreviewTab("html");
+    show(previewPanel);
+
+    // Explicit confirmation is required after preview is rendered.
+    if (sendBtn) sendBtn.disabled = true;
+    if (statusEl) {
+      const expiresAt = new Date(result.previewExpiresAt).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" });
+      statusEl.textContent = `Preview ready for ${result.recipientCount} invitee(s). Review it and confirm before sending. Expires at ${expiresAt}.`;
+      statusEl.className = "mt-1 small text-success";
+    }
+    toast("Invite preview rendered. Confirm after reviewing to enable send.", "success");
+  } catch (err) {
+    _invitePreviewState = null;
+    hide(previewPanel);
+    if (statusEl) {
+      statusEl.textContent = (err as Error).message;
+      statusEl.className = "mt-1 small text-danger";
+    }
+    toast((err as Error).message, "error");
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = "Preview Email";
+    }
+  }
 }
 
 async function doAdminInvite(slug: string): Promise<void> {
@@ -1656,35 +2899,50 @@ async function doAdminInvite(slug: string): Promise<void> {
   const statusEl = q("#inv-form-status");
   if (!container) return;
 
-  const invites = Array.from(container.querySelectorAll<HTMLElement>(".inv-row"))
-    .map((row) => ({
-      email: (row.querySelector<HTMLInputElement>("[data-inv-email]")?.value ?? "").trim(),
-      firstName: (row.querySelector<HTMLInputElement>("[data-inv-first]")?.value ?? "").trim() || undefined,
-      lastName:  (row.querySelector<HTMLInputElement>("[data-inv-last]")?.value  ?? "").trim() || undefined,
-    }))
-    .filter((i) => i.email);
+  const invites = collectAdminInvites();
 
   if (!invites.length) {
     if (statusEl) { statusEl.textContent = "No valid email addresses entered."; statusEl.className = "mt-2 small text-danger"; }
     return;
   }
 
+  const currentDigest = invitePreviewDigest(invites);
+  if (!_invitePreviewState || _invitePreviewState.digest !== currentDigest) {
+    if (statusEl) {
+      statusEl.textContent = "Preview required. Render a fresh preview before sending.";
+      statusEl.className = "mt-2 small text-danger";
+    }
+    invalidateInvitePreview();
+    return;
+  }
+
+  const previewConfirm = q<HTMLInputElement>("#inv-preview-confirm");
+  if (!previewConfirm?.checked) {
+    if (statusEl) {
+      statusEl.textContent = "Review and confirm the preview before sending.";
+      statusEl.className = "mt-2 small text-danger";
+    }
+    return;
+  }
+
   const sendBtn = q<HTMLButtonElement>("#inv-send-btn");
-  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "Sending…"; }
+  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "Sending..."; }
   if (statusEl) { statusEl.textContent = ""; statusEl.className = "mt-2 small"; }
 
   try {
     const r = await api<{ created?: unknown[] }>(`/api/v1/admin/events/${slug}/invites/attendees/bulk`, {
       method: "POST",
-      body: JSON.stringify({ invites }),
+      body: JSON.stringify({ invites, previewToken: _invitePreviewState.token }),
     });
     const count = r.created?.length ?? invites.length;
     toast(`Sent ${count} invite${count !== 1 ? "s" : ""}`, "success");
+    _invitePreviewState = null;
     if (container) {
       container.innerHTML = "";
       addAdminInviteRow();
       syncInviteCount();
     }
+    invalidateInvitePreview();
     if (statusEl) { statusEl.textContent = `✓ ${count} invitation${count !== 1 ? "s" : ""} queued.`; statusEl.className = "mt-2 small text-success"; }
   } catch (err) {
     toast((err as Error).message, "error");
@@ -1708,25 +2966,70 @@ function inviteBadge(status: string): string {
   return `<span class="badge text-bg-${color}">${esc(label)}</span>`;
 }
 
+const ADMIN_LIST_PAGE_SIZE_DEFAULT = 50;
+const ADMIN_LIST_PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
+const QUICK_PAGE_JUMPS = [1, 2, 3, 4, 5, 10, 20];
+
+function pagerRangeText(offset: number, rowCount: number, total: number): string {
+  if (total <= 0 || rowCount <= 0) {
+    return "Records 0-0 of 0";
+  }
+  const start = offset + 1;
+  const end = offset + rowCount;
+  return `Records ${start}-${end} of ${total}`;
+}
+
+function pagerHtml(currentPage: number, hasMore: boolean, pageSize: number, offset: number, rowCount: number, total: number): string {
+  const maxPage = total > 0 ? Math.max(1, Math.ceil(total / Math.max(1, pageSize))) : 1;
+  const jumpButtons = QUICK_PAGE_JUMPS
+    .map((page) => {
+      const active = page === currentPage;
+      const unavailable = page > maxPage;
+      return `<button type="button" class="btn btn-sm ${active ? "btn-primary" : "btn-outline-secondary"}" data-page-jump="${page}"${active || unavailable ? " disabled" : ""}>${page}</button>`;
+    })
+    .join("");
+
+  const pageSizeOptions = ADMIN_LIST_PAGE_SIZE_OPTIONS
+    .map((size) => `<option value="${size}"${size === pageSize ? " selected" : ""}>${size}</option>`)
+    .join("");
+
+  return (
+    '<div class="d-flex flex-wrap gap-2 align-items-center justify-content-center">' +
+      `<button type="button" class="btn btn-sm btn-outline-secondary" data-page-prev${currentPage <= 1 ? " disabled" : ""}>Prev</button>` +
+      jumpButtons +
+      `<button type="button" class="btn btn-sm btn-outline-secondary" data-page-next${!hasMore ? " disabled" : ""}>Next</button>` +
+      '<span class="small text-muted ms-1">Rows</span>' +
+      `<select class="form-select form-select-sm" data-page-size style="width:auto">${pageSizeOptions}</select>` +
+      `<span class="small text-muted ms-1">${pagerRangeText(offset, rowCount, total)}</span>` +
+    '</div>'
+  );
+}
+
 // ── Invite list (pending + all) ──────────────────────────────────────────────────
 
 async function loadEventInvites(slug: string, statusFilter?: string): Promise<void> {
   const body = q("#inv-list-body");
+  const pager = q("#inv-list-pager");
   if (!body) return;
   body.innerHTML = spinner();
+  if (pager) pager.innerHTML = "";
 
   // Wire filter controls once
   const filterSel = q<HTMLSelectElement>("#inv-filter");
   const refreshBtn = q<HTMLButtonElement>("#inv-list-refresh");
 
   const getFilter = (): string => filterSel?.value ?? (statusFilter ?? "sent");
+  let offset = 0;
+  let pageSize = ADMIN_LIST_PAGE_SIZE_DEFAULT;
 
   const doLoad = async (): Promise<void> => {
     body.innerHTML = spinner();
     const filter = getFilter();
-    const url = `/api/v1/admin/events/${slug}/invites${filter ? `?status=${filter}` : ""}`;
+    const query = new URLSearchParams({ type: "attendee", limit: String(pageSize), offset: String(offset) });
+    if (filter) query.set("status", filter);
+    const url = `/api/v1/admin/events/${slug}/invites?${query.toString()}`;
     try {
-      const d = await api<{ invites: InviteRecord[] }>(url);
+      const d = await api<{ invites: InviteRecord[]; page?: { limit: number; offset: number; hasMore: boolean; total: number } }>(url);
       const invites = d.invites ?? [];
       body.innerHTML = tbl(
         ["Invitee Email", "Invitee Name", "Invited By", "Type", "Status", "Source", "Sent", "Declined", "Decline Reason", "Note"],
@@ -1756,8 +3059,42 @@ async function loadEventInvites(slug: string, statusFilter?: string): Promise<vo
         }),
         "No invites found matching the current filter",
       );
+
+      const pageOffset = d.page?.offset ?? offset;
+      const pageLimit = d.page?.limit ?? pageSize;
+      const hasMore = d.page?.hasMore ?? false;
+      const pageTotal = d.page?.total ?? 0;
+      const currentPage = Math.floor(pageOffset / Math.max(1, pageLimit)) + 1;
+
+      if (pager) {
+        pager.innerHTML = pagerHtml(currentPage, hasMore, pageLimit, pageOffset, invites.length, pageTotal);
+        pager.querySelector<HTMLButtonElement>("[data-page-prev]")?.addEventListener("click", () => {
+          offset = Math.max(0, pageOffset - pageLimit);
+          void doLoad();
+        });
+        pager.querySelector<HTMLButtonElement>("[data-page-next]")?.addEventListener("click", () => {
+          offset = pageOffset + pageLimit;
+          void doLoad();
+        });
+        pager.querySelectorAll<HTMLButtonElement>("[data-page-jump]").forEach((btn) => {
+          btn.addEventListener("click", () => {
+            const page = Number(btn.dataset.pageJump || "1");
+            if (!Number.isFinite(page) || page < 1) return;
+            offset = (page - 1) * pageLimit;
+            void doLoad();
+          });
+        });
+        pager.querySelector<HTMLSelectElement>("[data-page-size]")?.addEventListener("change", (event) => {
+          const nextSize = Number((event.currentTarget as HTMLSelectElement).value);
+          if (!Number.isFinite(nextSize) || nextSize < 1) return;
+          pageSize = nextSize;
+          offset = 0;
+          void doLoad();
+        });
+      }
     } catch (err) {
       body.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+      if (pager) pager.innerHTML = "";
     }
   };
 
@@ -1765,8 +3102,14 @@ async function loadEventInvites(slug: string, statusFilter?: string): Promise<vo
   const bodyEl = body as HTMLElement;
   if (!bodyEl.dataset.invListWired) {
     bodyEl.dataset.invListWired = "1";
-    filterSel?.addEventListener("change", () => void doLoad());
-    refreshBtn?.addEventListener("click", () => void doLoad());
+    filterSel?.addEventListener("change", () => {
+      offset = 0;
+      void doLoad();
+    });
+    refreshBtn?.addEventListener("click", () => {
+      offset = 0;
+      void doLoad();
+    });
   }
 
   await doLoad();
@@ -1799,9 +3142,7 @@ function newEventFormHtml(): string {
         '<option value="invite_only">Invite Only</option>' +
         '<option value="open">Open</option>' +
       '</select></div>' +
-      '<div class="col-md-3"><label class="form-label small fw-semibold">Capacity</label>' +
-      '<input class="form-control form-control-sm" id="ne-cap" type="number" placeholder="Unlimited"></div>' +
-      '<div class="col-md-3"><label class="form-label small fw-semibold">Invite Limit</label>' +
+      '<div class="col-md-6"><label class="form-label small fw-semibold">Invite Limit</label>' +
       '<input class="form-control form-control-sm" id="ne-invlim" type="number" value="5" min="1" max="50"></div>' +
     '</div>' +
     '<div class="row g-2 mb-3">' +
@@ -1836,7 +3177,6 @@ async function doCreateEvent(): Promise<void> {
   const startsEl = q<HTMLInputElement>("#ne-starts");
   const endsEl   = q<HTMLInputElement>("#ne-ends");
   const modeEl   = q<HTMLSelectElement>("#ne-mode");
-  const capEl    = q<HTMLInputElement>("#ne-cap");
   const invlimEl = q<HTMLInputElement>("#ne-invlim");
   const venueEl  = q<HTMLInputElement>("#ne-venue");
   const vurlEl   = q<HTMLInputElement>("#ne-vurl");
@@ -1851,7 +3191,6 @@ async function doCreateEvent(): Promise<void> {
   };
   if (startsEl?.value) body.startsAt = new Date(startsEl.value).toISOString();
   if (endsEl?.value)   body.endsAt   = new Date(endsEl.value).toISOString();
-  if (capEl?.value)    body.capacityInPerson = parseInt(capEl.value) || null;
   if (venueEl?.value.trim())  body.venue = venueEl.value.trim();
   if (vurlEl?.value.trim())   body.virtualUrl = vurlEl.value.trim();
 
@@ -1906,6 +3245,15 @@ function detailsFormHtml(det: Partial<EventDetail>): string {
       '<div class="col-md-6"><label class="form-label small fw-semibold">Virtual URL</label>' +
       `<input class="form-control form-control-sm" id="det-vurl" type="url" value="${esc(det.virtual_url ?? "")}" placeholder="https://..."></div>` +
     '</div>' +
+    '<div class="row g-2 mb-3">' +
+      '<div class="col-md-6"><label class="form-label small fw-semibold">Hero image URL</label>' +
+      `<input class="form-control form-control-sm" id="det-hero" type="text" value="${esc(det.hero_image_url ?? "")}" placeholder="/events/2026/my-event/hero.png"></div>` +
+      '<div class="col-md-6"><label class="form-label small fw-semibold">Location label</label>' +
+      `<input class="form-control form-control-sm" id="det-location" type="text" value="${esc(det.location ?? "")}" placeholder="Amsterdam, The Netherlands"></div>` +
+    '</div>' +
+    '<div class="mb-3"><label class="form-label small fw-semibold">Session types</label>' +
+    `<input class="form-control form-control-sm" id="det-session-types" type="text" value="${esc((det.session_types ?? []).join(", "))}" placeholder="talk, keynote, panel, tutorial">` +
+    '<div class="form-text">Comma-separated; used by proposal submission forms.</div></div>' +
 
     // Registration settings
     '<h6 class="text-uppercase small fw-bold text-muted mb-2 mt-3">Registration Settings</h6>' +
@@ -1916,8 +3264,6 @@ function detailsFormHtml(det: Partial<EventDetail>): string {
       modeOpt("invite_only", "Invite Only") +
     "</select></div>" +
     '<div class="row g-2 mb-3">' +
-      '<div class="col"><label class="form-label small fw-semibold">In-Person Capacity</label>' +
-      `<input class="form-control form-control-sm" type="number" id="det-cap" value="${esc(det.capacity_in_person ?? "")}" placeholder="Unlimited"></div>` +
       '<div class="col"><label class="form-label small fw-semibold">Invite Limit / Attendee</label>' +
       `<input class="form-control form-control-sm" type="number" id="det-invlim" value="${esc(det.invite_limit_attendee ?? 5)}"></div>` +
       '<div class="col"><label class="form-label small fw-semibold">User Retention (days)</label>' +
@@ -1934,12 +3280,590 @@ function wireDetailsForm(slug: string): void {
   q<HTMLFormElement>("#form-details")?.addEventListener("submit", (evt) => void doSaveDetails(evt, slug));
 }
 
+function eventDaysTabHtml(): string {
+  const timezone = _currentEventDetail?.timezone ?? "UTC";
+  return (
+    '<div class="d-flex gap-2 align-items-center mb-3 flex-wrap">' +
+      `<span class="small text-muted">Manage per-day attendance options and local event times (${esc(timezone)})</span>` +
+      '<button class="btn btn-sm btn-outline-secondary ms-auto" id="btn-days-refresh">&circlearrowright; Refresh</button>' +
+      '<button class="btn btn-sm btn-success" id="btn-days-add">+ Add day</button>' +
+      '<button class="btn btn-sm btn-primary" id="btn-days-save">Save Days</button>' +
+    '</div>' +
+    '<div id="days-status" class="small mb-2"></div>' +
+    '<div id="days-body">' + spinner() + '</div>'
+  );
+}
+
+function eventTermsTabHtml(): string {
+  return (
+    '<div class="d-flex gap-2 align-items-center mb-3 flex-wrap">' +
+      '<span class="small text-muted">Manage attendee and speaker consent terms</span>' +
+      '<button class="btn btn-sm btn-outline-secondary ms-auto" id="btn-terms-refresh">&circlearrowright; Refresh</button>' +
+      '<button class="btn btn-sm btn-success" id="btn-terms-add-attendee">+ Attendee term</button>' +
+      '<button class="btn btn-sm btn-success" id="btn-terms-add-speaker">+ Speaker term</button>' +
+      '<button class="btn btn-sm btn-primary" id="btn-terms-save">Save Terms</button>' +
+    '</div>' +
+    '<div id="terms-status" class="small mb-2"></div>' +
+    '<div class="row g-3">' +
+      '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-header bg-white fw-semibold">Attendee terms</div><div class="card-body" id="terms-attendee-body"></div></div></div>' +
+      '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-header bg-white fw-semibold">Speaker terms</div><div class="card-body" id="terms-speaker-body"></div></div></div>' +
+    '</div>'
+  );
+}
+
+function eventFormsTabHtml(): string {
+  return (
+    '<div class="d-flex gap-2 align-items-center mb-3 flex-wrap">' +
+      '<span class="small text-muted">Manage event forms and inspect all submissions</span>' +
+      '<button class="btn btn-sm btn-outline-secondary ms-auto" id="btn-forms-refresh">&circlearrowright; Refresh</button>' +
+      '<button class="btn btn-sm btn-success" id="btn-forms-new">+ New form</button>' +
+    '</div>' +
+    '<div id="forms-status" class="small mb-2"></div>' +
+    '<div id="forms-body">' + spinner() + '</div>' +
+    '<div id="forms-detail" class="mt-3"></div>'
+  );
+}
+
+function dayOptionEditorRow(opt?: AdminAttendanceOption): string {
+  return (
+    '<div class="d-flex gap-2 align-items-center mb-1 day-opt-row">' +
+      `<input class="form-control form-control-sm" data-opt-value value="${esc(opt?.value ?? "")}" placeholder="value (e.g. in_person)">` +
+      `<input class="form-control form-control-sm" data-opt-label value="${esc(opt?.label ?? "")}" placeholder="Label">` +
+      `<input class="form-control form-control-sm" data-opt-capacity type="number" value="${esc(opt?.capacity ?? "")}" placeholder="Capacity (optional)">` +
+      '<button type="button" class="btn btn-sm btn-outline-danger" data-remove-opt>&times;</button>' +
+    '</div>'
+  );
+}
+
+function dayEditorCard(day?: AdminEventDay): string {
+  const opts = day?.attendanceOptions ?? [];
+  const counts = day?.attendanceCounts ?? {};
+  const timezone = _currentEventDetail?.timezone ?? "UTC";
+  const dayStart = timeInZone(day?.startsAt, timezone);
+  const dayEnd = timeInZone(day?.endsAt, timezone);
+  const countSummary = Object.keys(counts).length
+    ? Object.entries(counts).map(([k, v]) => `<span class="badge text-bg-light border me-1">${esc(k)}: ${v}</span>`).join("")
+    : '<span class="text-muted small">No registered attendees yet for this day</span>';
+  return (
+    '<div class="card border mb-3 day-card">' +
+      '<div class="card-body">' +
+        '<div class="row g-2 mb-2">' +
+          `<div class="col-md-3"><label class="form-label small mb-1">Date</label><input class="form-control form-control-sm" type="date" data-day-date value="${esc(day?.date ?? "")}"></div>` +
+          `<div class="col-md-3"><label class="form-label small mb-1">Starts at</label><input class="form-control form-control-sm" type="time" step="60" data-day-starts value="${esc(dayStart)}"></div>` +
+          `<div class="col-md-3"><label class="form-label small mb-1">Ends at</label><input class="form-control form-control-sm" type="time" step="60" data-day-ends value="${esc(dayEnd)}"></div>` +
+          `<div class="col-md-3"><label class="form-label small mb-1">Sort</label><input class="form-control form-control-sm" data-day-sort type="number" value="${esc(day?.sortOrder ?? 0)}"></div>` +
+        '</div>' +
+        '<div class="row g-2 mb-2">' +
+          `<div class="col-md-10"><label class="form-label small mb-1">Label</label><input class="form-control form-control-sm" data-day-label value="${esc(day?.label ?? "")}" placeholder="Thursday 3 December 2026"></div>` +
+          '<div class="col-md-2 d-flex align-items-end"><button type="button" class="btn btn-sm btn-outline-danger w-100" data-remove-day>Remove</button></div>' +
+        '</div>' +
+        '<div class="small fw-semibold mb-1">Attendance options</div>' +
+        '<div class="day-options">' +
+          (opts.length ? opts.map((opt) => dayOptionEditorRow(opt)).join("") : dayOptionEditorRow()) +
+        '</div>' +
+        '<button type="button" class="btn btn-sm btn-outline-secondary mt-1" data-add-opt>+ Option</button>' +
+        `<div class="mt-2">${countSummary}</div>` +
+      '</div>' +
+    '</div>'
+  );
+}
+
+async function loadEventDays(slug: string): Promise<void> {
+  const body = q("#days-body");
+  if (!body) return;
+  body.innerHTML = spinner();
+  try {
+    const d = await api<{ days: AdminEventDay[] }>(`/api/v1/admin/events/${slug}/days`);
+    const days = d.days ?? [];
+    body.innerHTML = days.length ? days.map((day) => dayEditorCard(day)).join("") : '<p class="text-muted fst-italic small">No days configured yet.</p>';
+
+    q("#btn-days-refresh")?.addEventListener("click", () => void loadEventDays(slug));
+    q("#btn-days-add")?.addEventListener("click", () => {
+      body.insertAdjacentHTML("beforeend", dayEditorCard());
+      wireDayCards(body);
+    });
+    q("#btn-days-save")?.addEventListener("click", () => void saveEventDays(slug));
+    wireDayCards(body);
+  } catch (err) {
+    body.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+  }
+}
+
+function wireDayCards(root: Element): void {
+  root.querySelectorAll<HTMLButtonElement>("[data-remove-day]").forEach((btn) => {
+    btn.onclick = () => btn.closest(".day-card")?.remove();
+  });
+  root.querySelectorAll<HTMLButtonElement>("[data-add-opt]").forEach((btn) => {
+    btn.onclick = () => {
+      const wrap = btn.closest(".day-card")?.querySelector(".day-options");
+      if (!wrap) return;
+      wrap.insertAdjacentHTML("beforeend", dayOptionEditorRow());
+      wireDayCards(root);
+    };
+  });
+  root.querySelectorAll<HTMLButtonElement>("[data-remove-opt]").forEach((btn) => {
+    btn.onclick = () => btn.closest(".day-opt-row")?.remove();
+  });
+}
+
+async function saveEventDays(slug: string): Promise<void> {
+  const statusEl = q("#days-status");
+  const cards = Array.from(document.querySelectorAll("#days-body .day-card"));
+  const days = cards.map((card, idx) => {
+    const options = Array.from(card.querySelectorAll(".day-opt-row")).map((optRow) => {
+      const value = (optRow.querySelector<HTMLInputElement>("[data-opt-value]")?.value ?? "").trim();
+      const label = (optRow.querySelector<HTMLInputElement>("[data-opt-label]")?.value ?? "").trim();
+      const capacityRaw = (optRow.querySelector<HTMLInputElement>("[data-opt-capacity]")?.value ?? "").trim();
+      return {
+        value,
+        label,
+        capacity: capacityRaw ? parseInt(capacityRaw, 10) : null,
+      };
+    }).filter((o) => o.value && o.label);
+    return {
+      date: (card.querySelector<HTMLInputElement>("[data-day-date]")?.value ?? "").trim(),
+      label: (card.querySelector<HTMLInputElement>("[data-day-label]")?.value ?? "").trim() || undefined,
+      startTime: (card.querySelector<HTMLInputElement>("[data-day-starts]")?.value ?? "").trim() || undefined,
+      endTime: (card.querySelector<HTMLInputElement>("[data-day-ends]")?.value ?? "").trim() || undefined,
+      sortOrder: parseInt(card.querySelector<HTMLInputElement>("[data-day-sort]")?.value ?? String((idx + 1) * 10), 10) || (idx + 1) * 10,
+      attendanceOptions: options,
+    };
+  }).filter((d) => d.date);
+
+  try {
+    if (statusEl) { statusEl.textContent = "Saving..."; statusEl.className = "small text-muted mb-2"; }
+    const res = await api<{ skipped?: string[] }>(`/api/v1/admin/events/${slug}/days`, {
+      method: "PUT",
+      body: JSON.stringify({ days }),
+    });
+    const skipped = res.skipped ?? [];
+    if (statusEl) {
+      statusEl.textContent = skipped.length
+        ? `Saved with warnings. Could not remove days with registrations: ${skipped.join(", ")}`
+        : "Saved";
+      statusEl.className = skipped.length ? "small text-warning mb-2" : "small text-success mb-2";
+    }
+    toast("Event days updated", "success");
+    await loadEventDays(slug);
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "small text-danger mb-2"; }
+    toast((err as Error).message, "error");
+  }
+}
+
+function termEditorRow(term?: AdminEventTerm): string {
+  return (
+    '<div class="card border mb-2 term-row"><div class="card-body p-2">' +
+    '<div class="row g-2 mb-2">' +
+      `<div class="col-md-4"><input class="form-control form-control-sm" data-term-key value="${esc(term?.term_key ?? "")}" placeholder="term key"></div>` +
+      `<div class="col-md-3"><input class="form-control form-control-sm" data-term-version value="${esc(term?.version ?? "v1")}" placeholder="version"></div>` +
+      `<div class="col-md-3"><input class="form-control form-control-sm" data-term-content-ref value="${esc(term?.content_ref ?? "")}" placeholder="content ref (optional)"></div>` +
+      `<div class="col-md-2 d-flex align-items-center"><div class="form-check"><input class="form-check-input" type="checkbox" data-term-required ${term?.required !== 0 ? "checked" : ""}><label class="form-check-label small">Required</label></div></div>` +
+    '</div>' +
+    `<textarea class="form-control form-control-sm mb-2" data-term-display rows="2" placeholder="Display text">${esc(term?.display_text ?? "")}</textarea>` +
+    `<textarea class="form-control form-control-sm mb-2" data-term-help rows="2" placeholder="Help text (optional)">${esc(term?.help_text ?? "")}</textarea>` +
+    '<button type="button" class="btn btn-sm btn-outline-danger" data-remove-term>Remove</button>' +
+    '</div></div>'
+  );
+}
+
+function wireTermRows(root: Element): void {
+  root.querySelectorAll<HTMLButtonElement>("[data-remove-term]").forEach((btn) => {
+    btn.onclick = () => btn.closest(".term-row")?.remove();
+  });
+}
+
+async function loadEventTerms(slug: string): Promise<void> {
+  const attendeeBody = q("#terms-attendee-body");
+  const speakerBody = q("#terms-speaker-body");
+  if (!attendeeBody || !speakerBody) return;
+
+  attendeeBody.innerHTML = spinner();
+  speakerBody.innerHTML = spinner();
+  try {
+    const d = await api<{ terms: { attendee: AdminEventTerm[]; speaker: AdminEventTerm[] } }>(`/api/v1/admin/events/${slug}/terms`);
+    const attendee = d.terms?.attendee ?? [];
+    const speaker = d.terms?.speaker ?? [];
+
+    attendeeBody.innerHTML = attendee.length ? attendee.map((t) => termEditorRow(t)).join("") : '<p class="text-muted small fst-italic">No attendee terms.</p>';
+    speakerBody.innerHTML = speaker.length ? speaker.map((t) => termEditorRow(t)).join("") : '<p class="text-muted small fst-italic">No speaker terms.</p>';
+
+    q("#btn-terms-refresh")?.addEventListener("click", () => void loadEventTerms(slug));
+    q("#btn-terms-add-attendee")?.addEventListener("click", () => {
+      attendeeBody.insertAdjacentHTML("beforeend", termEditorRow());
+      wireTermRows(attendeeBody);
+    });
+    q("#btn-terms-add-speaker")?.addEventListener("click", () => {
+      speakerBody.insertAdjacentHTML("beforeend", termEditorRow());
+      wireTermRows(speakerBody);
+    });
+    q("#btn-terms-save")?.addEventListener("click", () => void saveEventTerms(slug));
+
+    wireTermRows(attendeeBody);
+    wireTermRows(speakerBody);
+  } catch (err) {
+    const msg = esc((err as Error).message);
+    attendeeBody.innerHTML = `<div class="alert alert-danger">${msg}</div>`;
+    speakerBody.innerHTML = `<div class="alert alert-danger">${msg}</div>`;
+  }
+}
+
+function collectTerms(selector: string): Array<{ termKey: string; version: string; required: boolean; contentRef?: string; displayText: string; helpText?: string }> {
+  return Array.from(document.querySelectorAll(`${selector} .term-row`)).map((row) => {
+    const termKey = (row.querySelector<HTMLInputElement>("[data-term-key]")?.value ?? "").trim();
+    const version = (row.querySelector<HTMLInputElement>("[data-term-version]")?.value ?? "v1").trim();
+    const contentRef = (row.querySelector<HTMLInputElement>("[data-term-content-ref]")?.value ?? "").trim();
+    const displayText = (row.querySelector<HTMLTextAreaElement>("[data-term-display]")?.value ?? "").trim();
+    const helpText = (row.querySelector<HTMLTextAreaElement>("[data-term-help]")?.value ?? "").trim();
+    const required = Boolean(row.querySelector<HTMLInputElement>("[data-term-required]")?.checked);
+    return {
+      termKey,
+      version,
+      required,
+      contentRef: contentRef || undefined,
+      displayText,
+      helpText: helpText || undefined,
+    };
+  }).filter((t) => t.termKey && t.version && t.displayText);
+}
+
+async function saveEventTerms(slug: string): Promise<void> {
+  const statusEl = q("#terms-status");
+  const attendee = collectTerms("#terms-attendee-body");
+  const speaker = collectTerms("#terms-speaker-body");
+  try {
+    if (statusEl) { statusEl.textContent = "Saving..."; statusEl.className = "small text-muted mb-2"; }
+    await api(`/api/v1/admin/events/${slug}/terms`, {
+      method: "PUT",
+      body: JSON.stringify({ attendee, speaker }),
+    });
+    if (statusEl) { statusEl.textContent = "Saved"; statusEl.className = "small text-success mb-2"; }
+    toast("Terms updated", "success");
+    await loadEventTerms(slug);
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "small text-danger mb-2"; }
+    toast((err as Error).message, "error");
+  }
+}
+
+async function loadEventForms(slug: string): Promise<void> {
+  const body = q("#forms-body");
+  const detail = q("#forms-detail");
+  if (!body || !detail) return;
+  body.innerHTML = spinner();
+  detail.innerHTML = "";
+
+  try {
+    const d = await api<{ forms: AdminEventFormSummary[] }>(`/api/v1/admin/events/${slug}/forms`);
+    const forms = d.forms ?? [];
+
+    body.innerHTML = tbl(
+      ["Key", "Title", "Purpose", "Scope", "Status", "Fields", "Answers", "Updated", ""],
+      forms.map((f) =>
+        `<tr>` +
+        `<td class="mono">${esc(f.key)}</td>` +
+        `<td>${esc(f.title)}</td>` +
+        `<td>${badge(f.purpose)}</td>` +
+        `<td>${esc(f.scope_type)}</td>` +
+        `<td>${badge(f.status)}</td>` +
+        `<td class="mono">${f.field_count}</td>` +
+        `<td class="mono">${f.submission_count}</td>` +
+        `<td class="mono">${fmt(f.updated_at)}</td>` +
+        `<td class="d-flex gap-1">` +
+        `<button class="btn btn-sm btn-outline-primary" data-open-form="${esc(f.key)}">Manage</button>` +
+        `<button class="btn btn-sm btn-outline-secondary" data-open-form-results="${esc(f.key)}">Results</button>` +
+        `</td>` +
+        `</tr>`,
+      ),
+      "No forms configured for this event",
+    );
+
+    q("#btn-forms-refresh")?.addEventListener("click", () => void loadEventForms(slug));
+    q("#btn-forms-new")?.addEventListener("click", () => renderNewFormPanel(slug));
+
+    body.querySelectorAll<HTMLButtonElement>("[data-open-form]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.openForm!;
+        void openFormDetail(key, slug);
+      });
+    });
+    body.querySelectorAll<HTMLButtonElement>("[data-open-form-results]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const key = btn.dataset.openFormResults!;
+        void openFormResults(key, slug);
+      });
+    });
+  } catch (err) {
+    body.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+  }
+}
+
+async function openFormResults(formKey: string, slug?: string): Promise<void> {
+  const detail = q("#forms-detail");
+  if (!detail) return;
+  detail.innerHTML = spinner();
+  try {
+    const submissionRes = await api<{ form: { id: string; key: string; title: string; purpose: string }; submissions: AdminFormSubmission[]; total: number }>(
+      `/api/v1/admin/forms/${encodeURIComponent(formKey)}/submissions?limit=200`,
+    );
+    const form = submissionRes.form;
+    const submissions = submissionRes.submissions ?? [];
+
+    detail.innerHTML =
+      '<div class="card border-0 shadow-sm">' +
+      '<div class="card-header bg-white d-flex justify-content-between align-items-center">' +
+      `<span class="fw-semibold">Results: <span class="mono">${esc(form.key)}</span></span>` +
+      '<div class="d-flex gap-2">' +
+      '<button class="btn btn-sm btn-outline-primary" id="form-results-manage">Open Editor</button>' +
+      '<button class="btn btn-sm btn-outline-secondary" id="form-results-close">Close</button>' +
+      '</div>' +
+      '</div><div class="card-body">' +
+      `<div class="small text-muted mb-2">${esc(form.title)} (${esc(form.purpose)})</div>` +
+      '<h6 class="text-uppercase small fw-bold text-muted mb-2">Submissions (' + submissions.length + ')</h6>' +
+      tbl(
+        ["Submitted", "Status", "Submitter", "Context", "Answers", ""],
+        submissions.map((s) =>
+          `<tr>` +
+          `<td class="mono">${fmt(s.submittedAt)}</td>` +
+          `<td>${badge(s.status)}</td>` +
+          `<td>${s.submitter ? esc([s.submitter.firstName, s.submitter.lastName].filter(Boolean).join(" ") || s.submitter.email || s.submitter.id) : "—"}</td>` +
+          `<td class="small text-muted">${esc([s.contextType, s.contextRef].filter(Boolean).join(" / ") || "—")}</td>` +
+          `<td class="mono small">${Object.keys(s.answers || {}).length}</td>` +
+          `<td><button class="btn btn-sm btn-outline-secondary" data-open-answers="${esc(s.id)}">View</button></td>` +
+          `</tr>` +
+          `<tr class="d-none" id="answers-${esc(s.id)}"><td colspan="6"><pre class="json-out mb-0">${esc(JSON.stringify(s.answers, null, 2))}</pre></td></tr>`,
+        ),
+        "No submissions yet",
+      ) +
+      '</div></div>';
+
+    q("#form-results-close")?.addEventListener("click", () => {
+      if (detail) detail.innerHTML = "";
+    });
+    q("#form-results-manage")?.addEventListener("click", () => {
+      void openFormDetail(formKey, slug);
+    });
+
+    detail.querySelectorAll<HTMLButtonElement>("[data-open-answers]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.openAnswers!;
+        const row = q(`#answers-${id}`);
+        if (!row) return;
+        row.classList.toggle("d-none");
+      });
+    });
+  } catch (err) {
+    detail.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+  }
+}
+
+function formFieldEditorRow(field?: AdminFormDetailField): string {
+  const optionsText = Array.isArray(field?.options) ? (field?.options as string[]).join(", ") : "";
+  return (
+    '<tr class="form-field-row">' +
+    `<td><input class="form-control form-control-sm mono" data-f-key value="${esc(field?.key ?? "")}" placeholder="field_key"></td>` +
+    `<td><input class="form-control form-control-sm" data-f-label value="${esc(field?.label ?? "")}" placeholder="Label"></td>` +
+    '<td><select class="form-select form-select-sm" data-f-type>' +
+      ["text", "textarea", "select", "multi_select", "boolean", "number", "date", "email", "url"].map((t) => `<option value="${t}"${field?.fieldType === t ? " selected" : ""}>${t}</option>`).join("") +
+    '</select></td>' +
+    `<td><input class="form-control form-control-sm" data-f-options value="${esc(optionsText)}" placeholder="a, b, c"></td>` +
+    `<td><input class="form-control form-control-sm" data-f-sort type="number" value="${esc(field?.sortOrder ?? 0)}"></td>` +
+    `<td class="text-center"><input class="form-check-input" data-f-required type="checkbox" ${field?.required ? "checked" : ""}></td>` +
+    '<td><button class="btn btn-sm btn-outline-danger" data-f-remove>&times;</button></td>' +
+    '</tr>'
+  );
+}
+
+function renderNewFormPanel(slug: string): void {
+  const detail = q("#forms-detail");
+  if (!detail) return;
+  detail.innerHTML =
+    '<div class="card border-0 shadow-sm"><div class="card-header bg-white fw-semibold">New form</div><div class="card-body">' +
+    '<div class="row g-2 mb-2">' +
+      '<div class="col-md-4"><label class="form-label small">Key</label><input class="form-control form-control-sm mono" id="new-form-key" placeholder="pqc-2026-registration"></div>' +
+      '<div class="col-md-4"><label class="form-label small">Purpose</label><select class="form-select form-select-sm" id="new-form-purpose"><option value="event_registration">event_registration</option><option value="proposal_submission">proposal_submission</option><option value="survey">survey</option><option value="feedback">feedback</option><option value="application">application</option></select></div>' +
+      '<div class="col-md-4"><label class="form-label small">Status</label><select class="form-select form-select-sm" id="new-form-status"><option value="active">active</option><option value="inactive">inactive</option></select></div>' +
+    '</div>' +
+    '<div class="row g-2 mb-2">' +
+      '<div class="col-md-6"><label class="form-label small">Title</label><input class="form-control form-control-sm" id="new-form-title"></div>' +
+      '<div class="col-md-6"><label class="form-label small">Description</label><input class="form-control form-control-sm" id="new-form-description"></div>' +
+    '</div>' +
+    '<div class="d-flex gap-2 mb-2"><button class="btn btn-sm btn-outline-secondary" id="new-form-add-field">+ Field</button></div>' +
+    '<div class="tbl-wrap"><table class="table table-sm"><thead><tr><th>Key</th><th>Label</th><th>Type</th><th>Options</th><th>Sort</th><th>Req.</th><th></th></tr></thead><tbody id="new-form-fields"></tbody></table></div>' +
+    '<div class="d-flex gap-2 mt-2"><button class="btn btn-sm btn-success" id="new-form-save">Create form</button><button class="btn btn-sm btn-outline-secondary" id="new-form-cancel">Cancel</button><span id="new-form-status" class="small"></span></div>' +
+    '</div></div>';
+
+  const fieldsBody = q("#new-form-fields");
+  fieldsBody?.insertAdjacentHTML("beforeend", formFieldEditorRow());
+
+  q("#new-form-add-field")?.addEventListener("click", () => {
+    fieldsBody?.insertAdjacentHTML("beforeend", formFieldEditorRow());
+    wireFormFieldRows(fieldsBody);
+  });
+  q("#new-form-cancel")?.addEventListener("click", () => {
+    if (detail) detail.innerHTML = "";
+  });
+  q("#new-form-save")?.addEventListener("click", () => void createForm(slug));
+  wireFormFieldRows(fieldsBody);
+}
+
+function wireFormFieldRows(root: Element | null): void {
+  if (!root) return;
+  root.querySelectorAll<HTMLButtonElement>("[data-f-remove]").forEach((btn) => {
+    btn.onclick = () => btn.closest(".form-field-row")?.remove();
+  });
+}
+
+function collectFormFields(selector: string): Array<Record<string, unknown>> {
+  return Array.from(document.querySelectorAll(`${selector} .form-field-row`)).map((row, idx) => {
+    const optionsRaw = (row.querySelector<HTMLInputElement>("[data-f-options]")?.value ?? "").trim();
+    const options = optionsRaw ? optionsRaw.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
+    return {
+      key: (row.querySelector<HTMLInputElement>("[data-f-key]")?.value ?? "").trim(),
+      label: (row.querySelector<HTMLInputElement>("[data-f-label]")?.value ?? "").trim(),
+      fieldType: (row.querySelector<HTMLSelectElement>("[data-f-type]")?.value ?? "text").trim(),
+      required: Boolean(row.querySelector<HTMLInputElement>("[data-f-required]")?.checked),
+      sortOrder: parseInt(row.querySelector<HTMLInputElement>("[data-f-sort]")?.value ?? String((idx + 1) * 10), 10) || (idx + 1) * 10,
+      options,
+    };
+  }).filter((f) => (f.key as string) && (f.label as string));
+}
+
+async function createForm(slug: string): Promise<void> {
+  const statusEl = q("#new-form-status");
+  const payload = {
+    key: (q<HTMLInputElement>("#new-form-key")?.value ?? "").trim(),
+    purpose: (q<HTMLSelectElement>("#new-form-purpose")?.value ?? "event_registration").trim(),
+    status: (q<HTMLSelectElement>("#new-form-status")?.value ?? "active").trim(),
+    title: (q<HTMLInputElement>("#new-form-title")?.value ?? "").trim(),
+    description: (q<HTMLInputElement>("#new-form-description")?.value ?? "").trim() || undefined,
+    fields: collectFormFields("#new-form-fields"),
+  };
+  try {
+    if (statusEl) { statusEl.textContent = "Creating..."; statusEl.className = "small text-muted"; }
+    await api(`/api/v1/admin/events/${slug}/forms`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (statusEl) { statusEl.textContent = "Created"; statusEl.className = "small text-success"; }
+    toast("Form created", "success");
+    await loadEventForms(slug);
+  } catch (err) {
+    if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "small text-danger"; }
+    toast((err as Error).message, "error");
+  }
+}
+
+async function openFormDetail(formKey: string, slug?: string): Promise<void> {
+  const detail = q("#forms-detail");
+  if (!detail) return;
+  detail.innerHTML = spinner();
+  try {
+    const [formRes, submissionRes] = await Promise.all([
+      api<{ form: AdminEventFormSummary; fields: AdminFormDetailField[] }>(`/api/v1/admin/forms/${encodeURIComponent(formKey)}`),
+      api<{ submissions: AdminFormSubmission[]; total: number }>(`/api/v1/admin/forms/${encodeURIComponent(formKey)}/submissions?limit=200`),
+    ]);
+
+    const form = formRes.form;
+    const fields = formRes.fields ?? [];
+    const submissions = submissionRes.submissions ?? [];
+
+    detail.innerHTML =
+      '<div class="card border-0 shadow-sm"><div class="card-header bg-white d-flex justify-content-between align-items-center">' +
+      `<span class="fw-semibold">Form: <span class="mono">${esc(form.key)}</span></span>` +
+      '<div class="d-flex gap-2"><button class="btn btn-sm btn-outline-danger" id="form-delete">Archive/Delete</button></div>' +
+      '</div><div class="card-body">' +
+      '<div class="row g-2 mb-2">' +
+        `<div class="col-md-6"><label class="form-label small">Title</label><input class="form-control form-control-sm" id="form-edit-title" value="${esc(form.title)}"></div>` +
+        `<div class="col-md-3"><label class="form-label small">Status</label><select class="form-select form-select-sm" id="form-edit-status"><option value="active"${form.status === "active" ? " selected" : ""}>active</option><option value="inactive"${form.status === "inactive" ? " selected" : ""}>inactive</option><option value="archived"${form.status === "archived" ? " selected" : ""}>archived</option></select></div>` +
+        `<div class="col-md-3"><label class="form-label small">Purpose</label><input class="form-control form-control-sm" value="${esc(form.purpose)}" disabled></div>` +
+      '</div>' +
+      `<div class="mb-2"><label class="form-label small">Description</label><input class="form-control form-control-sm" id="form-edit-description" value="${esc(form.description ?? "")}"></div>` +
+      '<div class="d-flex gap-2 mb-2"><button class="btn btn-sm btn-outline-secondary" id="form-add-field">+ Field</button><button class="btn btn-sm btn-primary" id="form-save">Save form</button><span class="small" id="form-save-status"></span></div>' +
+      '<div class="tbl-wrap mb-3"><table class="table table-sm"><thead><tr><th>Key</th><th>Label</th><th>Type</th><th>Options</th><th>Sort</th><th>Req.</th><th></th></tr></thead><tbody id="form-edit-fields">' +
+      fields.map((f) => formFieldEditorRow(f)).join("") +
+      '</tbody></table></div>' +
+      '<h6 class="text-uppercase small fw-bold text-muted mb-2">Submissions (' + submissions.length + ')</h6>' +
+      tbl(
+        ["Submitted", "Status", "Submitter", "Context", "Answers", ""],
+        submissions.map((s) =>
+          `<tr>` +
+          `<td class="mono">${fmt(s.submittedAt)}</td>` +
+          `<td>${badge(s.status)}</td>` +
+          `<td>${s.submitter ? esc([s.submitter.firstName, s.submitter.lastName].filter(Boolean).join(" ") || s.submitter.email || s.submitter.id) : "—"}</td>` +
+          `<td class="small text-muted">${esc([s.contextType, s.contextRef].filter(Boolean).join(" / ") || "—")}</td>` +
+          `<td class="mono small">${Object.keys(s.answers || {}).length}</td>` +
+          `<td><button class="btn btn-sm btn-outline-secondary" data-open-answers="${esc(s.id)}">View</button></td>` +
+          `</tr>` +
+          `<tr class="d-none" id="answers-${esc(s.id)}"><td colspan="6"><pre class="json-out mb-0">${esc(JSON.stringify(s.answers, null, 2))}</pre></td></tr>`,
+        ),
+        "No submissions yet",
+      ) +
+      '</div></div>';
+
+    const fieldsRoot = q("#form-edit-fields");
+    wireFormFieldRows(fieldsRoot);
+
+    q("#form-add-field")?.addEventListener("click", () => {
+      fieldsRoot?.insertAdjacentHTML("beforeend", formFieldEditorRow());
+      wireFormFieldRows(fieldsRoot);
+    });
+
+    q("#form-save")?.addEventListener("click", async () => {
+      const statusEl = q("#form-save-status");
+      const payload = {
+        title: (q<HTMLInputElement>("#form-edit-title")?.value ?? "").trim(),
+        description: (q<HTMLInputElement>("#form-edit-description")?.value ?? "").trim() || null,
+        status: (q<HTMLSelectElement>("#form-edit-status")?.value ?? "active").trim(),
+        fields: collectFormFields("#form-edit-fields"),
+      };
+      try {
+        if (statusEl) { statusEl.textContent = "Saving..."; statusEl.className = "small text-muted"; }
+        await api(`/api/v1/admin/forms/${encodeURIComponent(formKey)}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload),
+        });
+        if (statusEl) { statusEl.textContent = "Saved"; statusEl.className = "small text-success"; }
+        toast("Form updated", "success");
+        await openFormDetail(formKey, slug);
+      } catch (err) {
+        if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "small text-danger"; }
+        toast((err as Error).message, "error");
+      }
+    });
+
+    q("#form-delete")?.addEventListener("click", async () => {
+      const ok = window.confirm("Archive/delete this form? Existing submissions are preserved and force archive mode.");
+      if (!ok) return;
+      try {
+        await api(`/api/v1/admin/forms/${encodeURIComponent(formKey)}`, { method: "DELETE" });
+        toast("Form archived/deleted", "success");
+        detail.innerHTML = "";
+        if (slug) await loadEventForms(slug);
+      } catch (err) {
+        toast((err as Error).message, "error");
+      }
+    });
+
+    detail.querySelectorAll<HTMLButtonElement>("[data-open-answers]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const id = btn.dataset.openAnswers!;
+        const row = q(`#answers-${id}`);
+        if (!row) return;
+        row.classList.toggle("d-none");
+      });
+    });
+  } catch (err) {
+    detail.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+  }
+}
+
 async function doSaveDetails(evt: Event, slug: string): Promise<void> {
   evt.preventDefault();
   const startsRaw = q<HTMLInputElement>("#det-starts")?.value;
   const endsRaw   = q<HTMLInputElement>("#det-ends")?.value;
-  const capStr    = q<HTMLInputElement>("#det-cap")?.value ?? "";
   const retStr    = q<HTMLInputElement>("#det-retention")?.value ?? "";
+  const sessionTypesRaw = q<HTMLInputElement>("#det-session-types")?.value ?? "";
 
   const toIso = (v: string | undefined): string | null | undefined => {
     if (v === undefined) return undefined;
@@ -1953,14 +3877,22 @@ async function doSaveDetails(evt: Event, slug: string): Promise<void> {
     registrationMode: q<HTMLSelectElement>("#det-mode")?.value,
     startsAt: toIso(startsRaw),
     endsAt:   toIso(endsRaw),
-    capacityInPerson: capStr ? (parseInt(capStr) || null) : null,
     inviteLimitAttendee: parseInt(q<HTMLInputElement>("#det-invlim")?.value ?? "") || undefined,
   };
 
   const venue = q<HTMLInputElement>("#det-venue")?.value.trim();
   const vurl  = q<HTMLInputElement>("#det-vurl")?.value.trim();
+  const hero  = q<HTMLInputElement>("#det-hero")?.value.trim();
+  const location = q<HTMLInputElement>("#det-location")?.value.trim();
+  const sessionTypes = sessionTypesRaw
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   body.venue      = venue || null;
   body.virtualUrl = vurl  || null;
+  body.heroImageUrl = hero || null;
+  body.location = location || null;
+  body.sessionTypes = sessionTypes.length ? sessionTypes : null;
   if (retStr) body.userRetentionDays = parseInt(retStr) || undefined;
 
   const statusEl = q("#det-status");

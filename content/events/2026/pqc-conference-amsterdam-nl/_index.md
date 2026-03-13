@@ -152,6 +152,14 @@ data:
 
       - time: "12:00"
         sessions:
+          - title: "Migration planning: where to start, what to prioritise, and how to avoid common pitfalls"
+            description: |
+              You know you need to migrate — but where do you actually start? This session
+              covers how to build a realistic migration plan, how to prioritise across
+              your inventory, and the common pitfalls that can stall or derail your progress.
+            locations:
+              - plenary
+
           - title: "Hybrid and composite signatures: what to deploy now and what to wait for"
             description: |
               The standards are here — but which hybrid and composite approaches are actually
@@ -685,7 +693,8 @@ Interested in sponsoring the conference? Please reach out via our [sponsorship p
 
 ## Agenda
 
-This is a **preliminary** agenda framework. Session titles and speakers will be added as the program is finalized.
+> This is a **preliminary** agenda framework. Session titles and speakers will be added as the program is finalized.
+{.callout-warning}
 
 {{< agenda default="2026-12-01" >}}
 

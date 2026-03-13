@@ -2,7 +2,7 @@ import { AppError } from "../../errors";
 import { first, run } from "../../db/queries";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
-import { addToWaitlist, claimWaitlistOffer, getInPersonRegisteredCount, promoteWaitlistIfCapacity } from "./waitlist";
+import { claimWaitlistOffer } from "./waitlist";
 import { deriveEventAttendanceType, replaceRegistrationDayAttendance, type DayAttendanceSelection } from "../event-days";
 import {
   claimOfferedDayWaitlist,
@@ -23,7 +23,6 @@ interface UpdatePayload {
   dayAttendance?: DayAttendanceSelection[];
   customAnswersJson?: string | null;
   sourceRef?: string | null;
-  eventCapacity: number | null;
   waitlistClaimWindowHours: number;
 }
 
@@ -63,13 +62,6 @@ async function applyRegistrationUpdate(
         eventDayIds: previousInPersonDayIds,
         claimWindowHours: payload.waitlistClaimWindowHours,
       });
-    } else {
-      await promoteWaitlistIfCapacity(
-        db,
-        registration.event_id,
-        payload.eventCapacity,
-        payload.waitlistClaimWindowHours,
-      );
     }
     const cancelled = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
     if (!cancelled) {
@@ -106,13 +98,6 @@ async function applyRegistrationUpdate(
         eventDayIds: previousInPersonDayIds,
         claimWindowHours: payload.waitlistClaimWindowHours,
       });
-    } else {
-      await promoteWaitlistIfCapacity(
-        db,
-        registration.event_id,
-        payload.eventCapacity,
-        payload.waitlistClaimWindowHours,
-      );
     }
     const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
     if (!updated) {
@@ -145,14 +130,8 @@ async function applyRegistrationUpdate(
       if (registration.status === "waitlisted") {
         await claimWaitlistOffer(db, registration.id, registration.event_id);
         newStatus = "registered";
-      } else if (payload.eventCapacity) {
-        const count = await getInPersonRegisteredCount(db, registration.event_id);
-        if (count >= payload.eventCapacity) {
-          newStatus = "waitlisted";
-          await addToWaitlist(db, registration.event_id, registration.id);
-        } else {
-          newStatus = "registered";
-        }
+      } else {
+        newStatus = "registered";
       }
     }
     if (registration.attendance_type === "in_person" && effectiveAttendanceType !== "in_person") {
@@ -218,14 +197,6 @@ async function applyRegistrationUpdate(
         id, registration_id, from_type, to_type, changed_by, changed_at
       ) VALUES (?, ?, ?, ?, ?, ?)`,
       [uuid(), registration.id, registration.attendance_type, effectiveAttendanceType, changedBy, nowIso()],
-    );
-  }
-  if (!hasPerDayAttendanceContext && registration.attendance_type === "in_person" && effectiveAttendanceType !== "in_person") {
-    await promoteWaitlistIfCapacity(
-      db,
-      registration.event_id,
-      payload.eventCapacity,
-      payload.waitlistClaimWindowHours,
     );
   }
   const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
