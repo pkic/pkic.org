@@ -50,11 +50,11 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name : Atul Sharma
-    role : Chief Executive Officer
-    social :
-      linkedin : https://www.linkedin.com/in/atul-sharma-00b8331/
-    description : Atul brings 20+ years of leadership across cybersecurity, risk management, and digital trust. With deep roots in cryptography and PKI from his early work at VeriSign, he has built and scaled security platforms as CEO of Custodela (acquired by Checkmarx). At QTrino, he bridges cryptography, cloud security, and business outcomes for regulated enterprises.
+  - name: Atul Sharma
+    role: Chief Executive Officer
+    social:
+      linkedin: https://www.linkedin.com/in/atul-sharma-00b8331/
+    description: Atul brings 20+ years of leadership across cybersecurity, risk management, and digital trust. With deep roots in cryptography and PKI from his early work at VeriSign, he has built and scaled security platforms as CEO of Custodela (acquired by Checkmarx). At QTrino, he bridges cryptography, cloud security, and business outcomes for regulated enterprises.
   - name: Prof Jawar Singh
     role: Director 
     social:
