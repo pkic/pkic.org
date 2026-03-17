@@ -1,0 +1,41 @@
+{{/*
+  event-webinar-disclaimer.html — auto-injected notice on sponsored webinar pages.
+
+  Resolves the sponsor name and logo (if they are a PKI Consortium member).
+  Usage: {{ partial "event-webinar-disclaimer.html" . }}
+*/}}
+
+{{- $sponsorId   := .Param "sponsor" -}}
+{{- $sponsorName := $sponsorId -}}
+{{- $sponsorLogo := false -}}
+
+{{- if $sponsorId -}}
+  {{- range hugo.Data.members -}}
+    {{- if eq .id $sponsorId -}}
+      {{- $sponsorName = .name -}}
+      {{/* Try SVG first, then PNG */}}
+      {{- $svg := resources.Get (printf "images/members/%s/%s.svg" $sponsorId $sponsorId) -}}
+      {{- if $svg -}}
+        {{- $sponsorLogo = $svg -}}
+      {{- else -}}
+        {{- $png := resources.Get (printf "images/members/%s/%s.png" $sponsorId $sponsorId) -}}
+        {{- if $png -}}{{- $sponsorLogo = $png -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+<aside class="webinar-disclaimer mt-5 pt-4">
+  <div class="webinar-disclaimer-inner">
+    {{ if $sponsorLogo }}
+    <div class="webinar-disclaimer-logo">
+      <img src="{{ $sponsorLogo.RelPermalink }}" alt="{{ $sponsorName }}" height="28">
+    </div>
+    {{ end }}
+    <p class="webinar-disclaimer-text">
+      This is a sponsored webinar hosted by the PKI Consortium to help fund our activities and keep membership accessible.
+      The content is produced and presented by{{ if $sponsorName }} <strong>{{ $sponsorName }}</strong>{{ end }} and is the sole responsibility of the sponsoring organization.
+      <strong>This webinar is not endorsed by the PKI Consortium or its members.</strong>
+    </p>
+  </div>
+</aside>

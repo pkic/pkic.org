@@ -13,6 +13,7 @@ heroButton:
 
 menu:
     main:
+        weight: 800
 ---
 
 {{< sponsors-level level="all" >}}

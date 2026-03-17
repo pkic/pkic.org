@@ -13,10 +13,6 @@ heroDescription: Trusted digital assets and communication for everyone and every
 aliases:
   - /resources/
 
-menu:
-  main:
-    name: Home
-    weight: -500
 ---
 
 {{< alert >}}

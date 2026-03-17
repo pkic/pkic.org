@@ -1,8 +1,38 @@
 {{ define "main" }}
 
+{{/* ─── Homepage event collections ─────────────────────────────────────── */}}
+{{- $allEventPages := slice -}}
+{{- range (where .Site.Pages "Section" "events") -}}
+  {{- if and (eq .Kind "section") (ne .RelPermalink "/events/") (ne .RelPermalink "/events/webinars/") -}}
+    {{- $urlParts := split .RelPermalink "/" -}}
+    {{- if ge (len $urlParts) 3 -}}
+      {{- $year := index $urlParts 2 -}}
+      {{- if strings.HasPrefix $year "20" -}}
+        {{- $allEventPages = $allEventPages | append . -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+{{- $upcomingEvents := slice -}}
+{{- $pastEvents := slice -}}
+{{- range $allEventPages -}}
+  {{- $eventYear := int (index (split .RelPermalink "/") 2) -}}
+  {{- if ge $eventYear now.Year -}}
+    {{- $upcomingEvents = $upcomingEvents | append . -}}
+  {{- else -}}
+    {{- $pastEvents = $pastEvents | append . -}}
+  {{- end -}}
+{{- end -}}
+{{- $upcomingEvents = sort $upcomingEvents "RelPermalink" "asc" -}}
+{{- $pastEvents = sort $pastEvents "RelPermalink" "desc" -}}
+{{- $heroUpcomingEvents := first 3 $upcomingEvents -}}
+{{- $homepageUpcomingEventCards := first 3 $upcomingEvents -}}
+{{- $homepagePastEventCards := first 3 $pastEvents -}}
+{{- $homepageEventCards := first 3 ($homepageUpcomingEventCards | append $homepagePastEventCards) -}}
+
 {{/* ─── Hero ─────────────────────────────────────────────────────────── */}}
 <section class="pkic-home-hero">
-  <div class="container py-5">
+  <div class="container py-4">
     <div class="row align-items-center gy-4">
       <div class="col-lg-7">
         <p class="text-uppercase fw-bold small mb-2 opacity-75" style="letter-spacing: 0.16em;">{{ $.Param "heroHeader" }}</p>
@@ -16,13 +46,40 @@
       {{ $featuredPost := first 1 (where .Site.RegularPages "Type" "blog") }}
       {{ with index $featuredPost 0 }}
       <div class="col-lg-5 d-none d-lg-block">
-        <a href="{{ .Permalink }}" class="pkic-hero-post-card text-decoration-none d-block">
-          <p class="pkic-hero-post-label">Latest News</p>
-          <h3 class="pkic-hero-post-title">{{ .Title }}</h3>
-          <time class="pkic-hero-post-date" datetime="{{ .PublishDate.Format "2006-01-02" }}">{{ .PublishDate | time.Format ":date_long" }}</time>
-          <p class="pkic-hero-post-summary">{{ .Summary | truncate 140 }}</p>
-          <span class="pkic-hero-post-cta">Read more &rarr;</span>
-        </a>
+        <div class="pkic-hero-post-card">
+          <a href="{{ .Permalink }}" class="text-decoration-none d-block">
+            <p class="pkic-hero-post-label">Latest News</p>
+            <h3 class="pkic-hero-post-title">{{ .Title }}</h3>
+            <time class="pkic-hero-post-date" datetime="{{ .PublishDate.Format "2006-01-02" }}">{{ .PublishDate | time.Format ":date_long" }}</time>
+            <p class="pkic-hero-post-summary mb-2">{{ .Summary | truncate 140 }}</p>
+            <span class="pkic-hero-post-cta">Read more &rarr;</span>
+          </a>
+
+          {{ if $heroUpcomingEvents }}
+          <div class="pt-3 mt-3 border-top" style="border-color: rgba(255,255,255,0.14) !important;">
+            <p class="pkic-hero-post-label mb-2">Upcoming Events</p>
+            <ul class="list-unstyled mb-0">
+              {{ range $heroUpcomingEvents }}
+              <li class="mb-2">
+                <a href="{{ .RelPermalink }}" class="text-decoration-none d-block">
+                  <span class="pkic-hero-post-title d-block mb-1">{{ .Param "heroTitle" | default .Title }}</span>
+                </a>
+                {{ with .Param "eventDate" }}
+                {{ $eventDate := time . }}
+                <time
+                  class="pkic-hero-post-date mb-0 d-block"
+                  datetime="{{ $eventDate.Format "2006-01-02T15:04:05Z" }}"
+                  data-local-time="{{ $eventDate.Format "2006-01-02T15:04:05Z" }}"
+                  data-hour-format="24"
+                >{{ $eventDate.Format "2 Jan 2006, 15:04 UTC" }}</time>
+                {{ end }}
+              </li>
+              {{ end }}
+            </ul>
+            <a href="/events/" class="pkic-hero-post-cta d-inline-block mt-2">View all events &rarr;</a>
+          </div>
+          {{ end }}
+        </div>
       </div>
       {{ end }}
     </div>
@@ -117,6 +174,26 @@
       {{ range $posts }}
       <div class="col-md-4">
         {{ partial "blog-card.html" . }}
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}
+
+{{/* ─── Event cards ─────────────────────────────────────────────────────── */}}
+{{ if $homepageEventCards }}
+<section class="pkic-home-events py-5">
+  <div class="container">
+    <div class="d-flex align-items-baseline justify-content-between mb-4">
+      <h2 class="h3 fw-bold mb-0">Events</h2>
+      <a href="/events/" class="btn btn-sm btn-outline-secondary">All events &rarr;</a>
+    </div>
+
+    <div class="row g-4 align-items-start">
+      {{ range $homepageEventCards }}
+      <div class="col-md-4">
+        {{ partial "event-card.html" . }}
       </div>
       {{ end }}
     </div>

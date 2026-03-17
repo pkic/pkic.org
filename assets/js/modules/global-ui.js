@@ -17,6 +17,30 @@ document.querySelectorAll('time[datetime]').forEach(function ($e) {
   var date = new Date($e.dateTime);
   $e.title = date.toString();
 
+  if ($e.dataset.localTime) {
+    var localDate = new Date($e.dataset.localTime);
+    if (!isNaN(localDate.getTime())) {
+      var localOptions = {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        timeZoneName: 'short'
+      };
+
+      // Default is browser preference; optionally force 24h or 12h per element.
+      if ($e.dataset.hourFormat === '24') {
+        localOptions.hour12 = false;
+      } else if ($e.dataset.hourFormat === '12') {
+        localOptions.hour12 = true;
+      }
+
+      $e.textContent = localDate.toLocaleString([], localOptions);
+      return;
+    }
+  }
+
   if ($e.classList.contains('localTime')) {
     var options = { hour: 'numeric', minute: '2-digit', timeZoneName: 'short', hour12: false };
     $e.textContent = date.toLocaleTimeString([], options).replace(',', '');

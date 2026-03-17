@@ -1,0 +1,146 @@
+{{/*
+  layouts/events/single.webinar.html
+  Rendered for eventType: webinar pages.
+*/}}
+{{ define "main" }}
+
+{{- $sponsorId   := .Param "sponsor" -}}
+{{- $sponsorName := $sponsorId -}}
+{{- $sponsorLogo := false -}}
+{{- if $sponsorId -}}
+  {{- range hugo.Data.members -}}
+    {{- if eq .id $sponsorId -}}
+      {{- $sponsorName = .name -}}
+      {{- $svg := resources.Get (printf "images/members/%s/%s.svg" $sponsorId $sponsorId) -}}
+      {{- if $svg -}}
+        {{- $sponsorLogo = $svg -}}
+      {{- else -}}
+        {{- $png := resources.Get (printf "images/members/%s/%s.png" $sponsorId $sponsorId) -}}
+        {{- if $png -}}{{- $sponsorLogo = $png -}}{{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ── Hero image (optional background) ───────────────────────────────────── */}}
+{{- $heroBg := false -}}
+{{- $heroName := .Param "heroImage" -}}
+{{- with $heroName -}}
+  {{- if not (strings.HasSuffix (. | lower) ".svg") -}}
+    {{- $img := $.Resources.GetMatch (printf "*%s" .) -}}
+    {{- if $img -}}
+      {{- $heroBg = ($img.Resize "1400x560 Center") -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ── Hero banner ──────────────────────────────────────────────────────────── */}}
+<div class="webinar-hero{{ if $heroBg }} webinar-hero--photo{{ end }}"
+  {{- if $heroBg }} style="background-image:url('{{ $heroBg.RelPermalink }}')"{{- end -}}>
+  <div class="webinar-hero-overlay"></div>
+  <div class="container webinar-hero-content">
+
+    {{/* Sponsored Webinar badge + sponsor name */}}
+    <div class="webinar-hero-eyebrow mb-3">
+      <span class="webinar-hero-badge">Sponsored Webinar</span>
+      {{- if $sponsorName }} <span class="webinar-hero-by">by {{ $sponsorName }}</span>{{- end }}
+    </div>
+
+    <h1 class="webinar-hero-title">{{ .Param "heroTitle" | default .Title }}</h1>
+
+    {{ with .Param "eventDate" }}
+    {{- $ed := time . -}}
+    <p class="webinar-hero-meta">
+      <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24"
+           fill="none" stroke="currentColor" stroke-width="2"
+           stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" class="me-1">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/>
+        <line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+      <time data-local-time="{{ $ed.Format "2006-01-02T15:04:05Z" }}" data-hour-format="24">{{ $ed.Format "2 Jan 2006, 15:04 UTC" }}</time>
+    </p>
+    {{ end }}
+
+    {{ with .Param "heroDescription" }}
+    <p class="webinar-hero-description">{{ . }}</p>
+    {{ end }}
+
+    <div class="webinar-hero-actions mt-4 d-flex flex-wrap gap-3 justify-content-center">
+      {{ with .Param "heroButton" }}
+      <a href="{{ $.Param "heroButton.link" }}"
+         class="btn btn-page-accent btn-lg"
+         target="_blank" rel="noopener noreferrer">
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2.5"
+             stroke-linecap="round" stroke-linejoin="round" class="me-2" aria-hidden="true">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        {{ $.Param "heroButton.label" }}
+      </a>
+      {{ end }}
+    </div>
+  </div>
+</div>
+
+{{/* ── Page body ─────────────────────────────────────────────────────────────── */}}
+<div class="container py-5">
+  <div class="row justify-content-center">
+    <div class="col-lg-8" data-pagefind-body>
+
+      {{/* Speaker cards */}}
+      {{ with .Param "speakers" }}
+      <div class="webinar-speakers mb-5">
+        <h2 class="webinar-section-heading">Speaker{{ if gt (len .) 1 }}s{{ end }}</h2>
+        <div class="row g-3">
+          {{ range . }}
+          {{ $slug := .name | urlize }}
+          {{- $hs := resources.GetMatch (printf "images/members/%s/%s.*" $sponsorId $slug) -}}
+          <div class="col-sm-6">
+            <div class="webinar-speaker-card">
+              {{ if $hs }}
+              {{ $thumb := $hs.Resize "120x120 Center" }}
+              <img src="{{ $thumb.RelPermalink }}" alt="{{ .name }}" class="webinar-speaker-avatar" width="60" height="60" loading="lazy">
+              {{ else }}
+              <div class="webinar-speaker-avatar webinar-speaker-avatar--initials">
+                {{- $parts := split .name " " -}}
+                {{- if ge (len $parts) 2 -}}{{ substr (index $parts 0) 0 1 }}{{ substr (index $parts 1) 0 1 }}{{- else -}}{{ substr .name 0 2 | upper }}{{- end -}}
+              </div>
+              {{ end }}
+              <div class="webinar-speaker-info">
+                <strong class="webinar-speaker-name">{{ .name }}</strong>
+                {{ with .title }}<p class="webinar-speaker-title">{{ . }}</p>{{ end }}
+                {{ with .social }}
+                <div class="webinar-speaker-social">
+                  {{ with .linkedin }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer" aria-label="LinkedIn">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M16 8a6 6 0 0 1 6 6v7h-4v-7a2 2 0 0 0-2-2 2 2 0 0 0-2 2v7h-4v-7a6 6 0 0 1 6-6z"/><rect x="2" y="9" width="4" height="12"/><circle cx="4" cy="4" r="2"/></svg>
+                  </a>{{ end }}
+                  {{ with .x }}<a href="{{ . }}" target="_blank" rel="noopener noreferrer" aria-label="X/Twitter">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-4.714-6.231-5.401 6.231H2.744l7.73-8.835L1.254 2.25H8.08l4.259 5.631zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+                  </a>{{ end }}
+                </div>
+                {{ end }}
+              </div>
+            </div>
+          </div>
+          {{ end }}
+        </div>
+      </div>
+      {{ end }}
+
+      {{/* Main content */}}
+      <div class="webinar-content">
+        {{ .Content }}
+      </div>
+
+      {{/* Auto-injected disclaimer */}}
+      {{ partial "event-webinar-disclaimer.html" . }}
+
+    </div>
+  </div>
+</div>
+{{ end }}

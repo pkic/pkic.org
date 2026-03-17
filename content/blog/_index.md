@@ -8,6 +8,7 @@ heroDescription: Show posts by [Author](/authors/), [Tag](/tags/) or [Series](/s
 
 menu:
     main:
+        weight: 700
     footer:
         parent: resources
         weight: 31

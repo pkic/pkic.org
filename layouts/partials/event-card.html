@@ -1,0 +1,91 @@
+{{/*
+  event-card.html — card for individual event listings on the /events page.
+
+  Renders a blog-card–style card with hero image (or gradient fallback),
+  event location/date from heroDescription, and a short summary.
+
+  Usage: {{ partial "event-card.html" . }}  (pass the event Section page as context)
+*/}}
+
+{{- $p := . -}}
+
+{{/* ── Hero image ──────────────────────────────────────────────────────── */}}
+{{- $cardImg     := false -}}
+{{- $heroName    := $p.Param "heroImage" -}}
+{{- with $heroName -}}
+  {{- if not (strings.HasSuffix (. | lower) ".svg") -}}
+    {{/* 1. Page-bundle resource */}}
+    {{- $img := $p.Resources.GetMatch (printf "*%s" .) -}}
+    {{- if $img -}}
+      {{- $cardImg = $img -}}
+    {{- else -}}
+      {{/* 2. Walk up the section tree (handles cascade from ancestor _index.md) */}}
+      {{- $s := $p.CurrentSection -}}
+      {{- range seq 6 -}}
+        {{- if and (not $cardImg) $s -}}
+          {{- $found := $s.Resources.GetMatch (printf "*%s" $heroName) -}}
+          {{- if $found -}}{{- $cardImg = $found -}}{{- end -}}
+          {{- $s = $s.Parent -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ── Derive short event title: prefer heroTitle, fall back to page title ── */}}
+{{- $eventTitle    := $p.Param "heroTitle" | default $p.Title -}}
+{{- $eventLocation := $p.Param "heroDescription" -}}
+
+{{/* ── Upcoming vs past — extract year from URL path ────────────────── */}}
+{{- $urlParts  := split $p.RelPermalink "/" -}}
+{{- $yearStr   := index $urlParts 2 -}}
+{{- $eventYear := int $yearStr -}}
+{{- $isUpcoming := ge $eventYear now.Year -}}
+
+<article class="event-card blog-card">
+  {{/* ── Card image / gradient header ────────────────────────────────── */}}
+  <div class="event-card-header blog-card-header{{ if $cardImg }} blog-card-header--photo{{ else }} blog-card-header--gradient{{ end }}">
+    {{ if $cardImg }}
+      {{ $thumb := $cardImg.Resize "600x320 Center" }}
+      <img
+        src="{{ $thumb.RelPermalink }}"
+        alt="{{ $eventTitle }}"
+        loading="lazy"
+        width="600"
+        height="320"
+      >
+    {{ end }}
+
+    <div class="blog-card-header-overlay"></div>
+
+    {{/* Upcoming / Past badge */}}
+    {{ if $isUpcoming }}
+    <span class="blog-card-tag event-card-badge event-card-badge--upcoming">Upcoming</span>
+    {{ else }}
+    <span class="blog-card-tag event-card-badge event-card-badge--past">Past event</span>
+    {{ end }}
+
+    {{/* Title + location pinned to bottom */}}
+    <div class="blog-card-header-content">
+      <h2 class="blog-card-title">
+        <a href="{{ $p.Permalink }}" class="stretched-link">{{ $eventTitle }}</a>
+      </h2>
+      {{ with $eventLocation }}
+      <p class="blog-card-date event-card-location">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24"
+             fill="none" stroke="currentColor" stroke-width="2"
+             stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/>
+          <circle cx="12" cy="10" r="3"/>
+        </svg>
+        {{ . }}
+      </p>
+      {{ end }}
+    </div>
+  </div>
+
+  {{/* ── Card body ─────────────────────────────────────────────────────── */}}
+  <div class="blog-card-body">
+    <p class="blog-card-summary">{{ $p.Summary | truncate 200 | plainify }}</p>
+  </div>
+</article>

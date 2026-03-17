@@ -9,6 +9,7 @@ heroDescription: Public Key Infrastructure (PKI)
 
 menu: 
     main:
+        weight: 900
     footer:
         parent: consortium
         weight: 11

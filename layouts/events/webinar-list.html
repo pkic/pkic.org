@@ -1,0 +1,68 @@
+{{/*
+  layouts/events/webinar-list.html
+  Full paginated list of all sponsored webinars at /events/webinars/.
+  Queries all site pages with eventType: webinar regardless of location.
+*/}}
+{{ define "main" }}
+{{ partial "hero.html" . }}
+
+{{- $allWebinars := where site.Pages "Params.eventType" "webinar" -}}
+{{- $allWebinars  = sort $allWebinars "Date" "desc" -}}
+
+{{- $today := now.Format "2006-01-02" -}}
+{{- $upcoming := slice -}}
+{{- $past     := slice -}}
+{{- range $allWebinars -}}
+  {{- if ge (.Date.Format "2006-01-02") $today -}}
+    {{- $upcoming = $upcoming | append . -}}
+  {{- else -}}
+    {{- $past = $past | append . -}}
+  {{- end -}}
+{{- end -}}
+
+<div class="container py-5">
+
+  {{ if $upcoming }}
+  <section class="mb-5">
+    <div class="events-section-header mb-4">
+      <h2 class="events-section-title">
+        <span class="events-section-title-badge events-section-title-badge--upcoming">Upcoming</span>
+        Webinars
+      </h2>
+    </div>
+    <div class="row g-4">
+      {{ range $upcoming }}
+      <div class="col-md-6 col-lg-4">
+        {{ partial "event-webinar-card.html" . }}
+      </div>
+      {{ end }}
+    </div>
+  </section>
+  {{ end }}
+
+  {{ if $past }}
+  <section>
+    <div class="events-section-header mb-4">
+      <h2 class="events-section-title">{{ if $upcoming }}Past Webinars{{ else }}All Webinars{{ end }}</h2>
+    </div>
+
+    {{/* Paginate past webinars */}}
+    {{- $pager := .Paginate $past 9 -}}
+    <div class="row g-4">
+      {{ range $pager.Pages }}
+      <div class="col-md-6 col-lg-4">
+        {{ partial "event-webinar-card.html" . }}
+      </div>
+      {{ end }}
+    </div>
+
+    {{ template "_internal/pagination.html" . }}
+  </section>
+  {{ end }}
+
+  {{ if and (not $upcoming) (not $past) }}
+  <p class="text-muted">No webinars found.</p>
+  {{ end }}
+
+</div>
+{{ end }}
