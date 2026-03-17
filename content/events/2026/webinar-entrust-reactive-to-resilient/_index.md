@@ -24,7 +24,6 @@ params:
   speakers:
     - member: entrust
       representative: Samantha Mabey
-      badge: Leadership
 
 ---
 
