@@ -54,3 +54,9 @@ representatives:
       x: 
       linkedin: https://www.linkedin.com/in/bret-laughlin-5a12168
     description: Bret is the CEO at QubitOwl and represents the organization at the PKI Consortium.
+  - name: Brett VanWagoner
+    role: SVP, Product
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/brettvanwagoner
+    description: Brett VanWagoner represents QubitOwl at the PKI Consortium and leads product management for the CONTINUUM CADI platform.
