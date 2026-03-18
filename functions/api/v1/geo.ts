@@ -37,6 +37,17 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:1313",
 ]);
 
+/** Returns true for exact known origins and *.pkic.pages.dev preview deploys. */
+function isAllowedOrigin(origin: string): boolean {
+  if (ALLOWED_ORIGINS.has(origin)) return true;
+  try {
+    const { hostname, protocol } = new URL(origin);
+    return protocol === "https:" && /^[a-z0-9-]+\.pkic\.pages\.dev$/.test(hostname);
+  } catch {
+    return false;
+  }
+}
+
 export async function onRequest(context: PagesContext): Promise<Response> {
   const request = context.request;
 
@@ -47,10 +58,8 @@ export async function onRequest(context: PagesContext): Promise<Response> {
   if (secFetchSite !== null && secFetchSite !== "same-origin" && secFetchSite !== "none") {
     return json({ error: "forbidden" }, 403);
   }
-
-  // For browsers / clients that don't send Sec-Fetch-Site, fall back to Origin.
   const origin = request.headers.get("origin");
-  if (origin !== null && !ALLOWED_ORIGINS.has(origin)) {
+  if (origin !== null && !isAllowedOrigin(origin)) {
     return json({ error: "forbidden" }, 403);
   }
 

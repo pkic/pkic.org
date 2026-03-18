@@ -1,0 +1,12 @@
+{{/*
+  donation-thank-you.html — Renders the post-donation badge container.
+  The badge is populated dynamically by donation-thank-you.ts using the
+  Stripe session_id parameter appended to the URL by Stripe's redirect.
+
+  Inner content (markdown) is shown when the session cannot be confirmed —
+  e.g. the session_id is missing, invalid, or the webhook has not yet fired.
+*/}}
+<div data-donation-badge hidden></div>
+<div data-donation-pending-content hidden>{{ .Inner | markdownify }}</div>
+
+{{ partial "script.html" (dict "path" "ts/shared/donation-thank-you.ts") }}

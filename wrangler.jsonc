@@ -92,7 +92,16 @@
   // ADMIN_API_KEY           — Long-lived API key for headless admin access & stats
   //                           (used by the admin UI and automated reporting)
   //                           Generate with: openssl rand -hex 32
-  // STRIPE_SECRET_KEY       — Stripe secret key for creating Checkout Sessions
-  //                           (donation flow). Obtain from Stripe Dashboard →
-  //                           Developers → API keys.
+  // STRIPE_SECRET_KEY       — Stripe restricted key for the donation flow.
+  //                           Required permissions: Checkout Sessions (write),
+  //                           Payment Intents (read), Charges (read),
+  //                           Balance Transactions (read).
+  //                           Obtain from Stripe Dashboard → Developers → API keys.
+  // STRIPE_WEBHOOK_SECRET        — Stripe webhook signing secret (whsec_…).
+  //                               Configure the endpoint in Stripe Dashboard →
+  //                               Developers → Webhooks, select event:
+  //                               checkout.session.completed
+  //                               Obtain the signing secret from that webhook config.
+  // DONATION_NOTIFICATION_EMAIL  — BCC recipient for donation thank-you emails.
+  //                               Set to contact@pkic.org for internal records.
 }

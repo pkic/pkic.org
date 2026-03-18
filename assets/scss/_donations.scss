@@ -1,0 +1,154 @@
+// ── Donation form ────────────────────────────────────────────────────────────
+
+.donation-form {
+  max-width: 32rem;
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
+  padding: 1.75rem;
+
+  // When embedded inside the event flow success panel, drop the card chrome
+  .event-flow-donation-cta & {
+    border: none;
+    padding: 0;
+    background: transparent;
+  }
+}
+
+.donation-form-heading {
+  margin-bottom: 0.25rem;
+}
+
+.donation-form-description {
+  color: var(--bs-secondary-color);
+  margin-bottom: 1.25rem;
+}
+
+.donation-form-identity {
+  margin-bottom: 1.25rem;
+}
+
+.donation-form-label {
+  font-size: 0.875rem;
+  margin-bottom: 0.25rem;
+}
+
+.donation-form-currency-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.donation-form-currency-label {
+  margin-bottom: 0;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.donation-form-currency-select {
+  max-width: 18rem;
+}
+
+.donation-form-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.donation-preset-btn {
+  min-width: 4.5rem;
+  font-weight: 600;
+
+  &.active {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: #fff;
+  }
+}
+
+.donation-form-custom {
+  margin-bottom: 1.25rem;
+}
+
+.donation-form-submit {
+  display: block;
+  width: 100%;
+  max-width: 14rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.donation-form-status {
+  min-height: 1.25rem;
+}
+
+.donation-form-disclaimer {
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color);
+  margin-top: 1rem;
+  margin-bottom: 0;
+}
+
+// ── Donation thank-you badge ─────────────────────────────────────────────────
+
+.donation-badge {
+  text-align: center;
+  padding: 2rem 1rem;
+  border: 2px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
+  margin: 1.5rem 0;
+}
+
+.donation-badge-amount {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--bs-emphasis-color);
+  line-height: 1.1;
+  margin-bottom: 0.5rem;
+}
+
+.donation-badge-title {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.donation-badge-body {
+  color: var(--bs-secondary-color);
+  margin-bottom: 1.25rem;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.donation-badge-share-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.donation-badge-share {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.donation-badge-share-btn {
+  min-width: 100px;
+}
+
+.donation-badge-disclaimer {
+  font-size: 0.75rem;
+  color: var(--bs-secondary-color);
+  margin-bottom: 0;
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.donation-badge-loading {
+  font-size: 0.9rem;
+}

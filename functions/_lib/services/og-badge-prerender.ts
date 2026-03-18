@@ -13,7 +13,7 @@
  * swallow errors so a badge failure never breaks the primary request flow.
  */
 
-import { renderBadgeSvg, type BadgeRole } from "./og-badge";
+import { renderBadgeSvg, renderDonationBadgeSvg, type BadgeRole } from "./og-badge";
 import { first, all } from "../db/queries";
 import { fetchGravatar } from "../utils/gravatar";
 import type { Env } from "../types";
@@ -371,4 +371,72 @@ export async function trySeedGravatarThenPrerender(
     await fetchGravatar(userId, email, env); // skips if headshot already exists
     await prerenderAndCache(referralCode, env, origin);
   } catch { /* silent */ }
+}
+
+// ─── Donation badge generation ────────────────────────────────────────────────
+
+interface DonationRow {
+  donor_name: string | null;
+  gross_amount: number;
+  currency: string;
+}
+
+/**
+ * Fetch a completed donation by Stripe session ID, render a donation badge
+ * SVG, and rasterise to PNG.
+ *
+ * Returns `null` when the session ID is not found or the donation is not yet
+ * completed (webhook has not fired).
+ */
+export async function generateDonationBadgePng(
+  sessionId: string,
+  env: Pick<Env, "DB">,
+  origin: string,
+): Promise<Uint8Array | null> {
+  const [Resvg, fontBuffers, row] = await Promise.all([
+    ensureWasm(),
+    getFontBuffers(origin),
+    first<DonationRow>(
+      env.DB,
+      `SELECT donor_name, gross_amount, currency
+       FROM   donations
+       WHERE  checkout_session_id = ?
+         AND  completed_at IS NOT NULL`,
+      [sessionId],
+    ),
+  ]);
+
+  if (!row) return null;
+
+  // Format the amount using the same logic as the thank-you page TS.
+  // We do it server-side here — Intl is available in Workers.
+  const currency   = row.currency.toUpperCase();
+  // Zero-decimal currencies (JPY, KRW, …) store amounts in major units already.
+  const zeroDecimal = ["BIF","CLP","DJF","GNF","JPY","KMF","KRW","MGA","PYG","RWF","UGX","VND","VUV","XAF","XOF","XPF"].includes(currency);
+  const majorAmount = zeroDecimal ? row.gross_amount : row.gross_amount / 100;
+  let formattedAmount: string;
+  try {
+    formattedAmount = new Intl.NumberFormat(undefined, {
+      style: "currency",
+      currency,
+      minimumFractionDigits: 0,
+      maximumFractionDigits: zeroDecimal ? 0 : 2,
+    }).format(majorAmount);
+  } catch {
+    formattedAmount = `${currency} ${majorAmount}`;
+  }
+
+  const fullName    = (row.donor_name ?? "").trim();
+  const [first, ...rest] = fullName.split(" ");
+
+  const svg = renderDonationBadgeSvg({
+    firstName:      first || "A supporter",
+    lastName:       rest.length > 0 ? rest.join(" ") : null,
+    formattedAmount,
+  });
+
+  const resvg = new Resvg(svg, {
+    font: { fontBuffers, defaultFontFamily: "Roboto" },
+  });
+  return resvg.render().asPng();
 }
