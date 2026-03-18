@@ -1,7 +1,12 @@
 import { getJson, postJson, ApiClientError } from "../shared/api-client";
 import { normalizeValidation } from "../shared/validation-map";
 import { renderSharePanel } from "../shared/render-share-panel";
+import { renderDonationCta } from "../shared/render-donation-cta";
 import { bootstrap, setStatus } from "./boot";
+
+function escapeHtml(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
 
 interface ConfirmResponse {
   success: true;
@@ -15,6 +20,19 @@ interface ConfirmInfoResponse {
   eventName: string | null;
   /** True when the pending token exists but has passed its expiry time. */
   expired: boolean;
+}
+
+/**
+ * Replace {firstName}, {eventName} and {forEvent} tokens in a template string
+ * with the actual values. All substituted values are plain text, not HTML —
+ * the caller is responsible for escaping before inserting into innerHTML.
+ */
+function interpolate(template: string, firstName: string, eventName: string): string {
+  const forEvent = eventName ? ` for the ${eventName}` : "";
+  return template
+    .replace(/\{firstName\}/g, firstName || "You")
+    .replace(/\{eventName\}/g, eventName || "")
+    .replace(/\{forEvent\}/g, forEvent);
 }
 
 /**
@@ -49,8 +67,10 @@ function showConfirmedPanel(
 ): void {
   form.classList.add("d-none");
 
-  const greeting = firstName ? `${firstName}, you're` : "You're";
-  const forEvent = eventName ? ` for the ${eventName}` : "";
+  const successTitle  = root.dataset["successTitle"]  ?? "{firstName}, you're registered{forEvent}!";
+  const successBody   = root.dataset["successBody"]   ?? "Your calendar invite is on its way. Use the link in your confirmation email to manage your registration.";
+  const waitlistTitle = root.dataset["waitlistTitle"] ?? "{firstName}, you're on the waitlist{forEvent}!";
+  const waitlistBody  = root.dataset["waitlistBody"]  ?? "We have your email confirmed. We'll notify you as soon as an in-person spot becomes available. Check the email we sent you for your manage link.";
 
   const panel = document.createElement("div");
   panel.className = "event-flow-success";
@@ -58,18 +78,14 @@ function showConfirmedPanel(
   if (result.status === "waitlisted") {
     panel.innerHTML = `
       <div class="event-flow-success-icon" aria-hidden="true">📋</div>
-      <h2 class="event-flow-success-title">${greeting} on the waitlist!</h2>
-      <p class="event-flow-success-body">
-        We have your email confirmed. We'll notify you as soon as an in-person
-        spot becomes available${forEvent}. Check the email we sent you for your
-        manage link.
-      </p>
+      <h2 class="event-flow-success-title">${escapeHtml(interpolate(waitlistTitle, firstName, eventName))}</h2>
+      <p class="event-flow-success-body">${escapeHtml(interpolate(waitlistBody, firstName, eventName))}</p>
     `;
   } else {
     panel.innerHTML = `
       <div class="event-flow-success-icon" aria-hidden="true">🎉</div>
-      <h2 class="event-flow-success-title">${greeting} registered${forEvent}!</h2>
-      <p class="event-flow-success-body">Your calendar invite is on its way. Use the link in your confirmation email to manage your registration.</p>
+      <h2 class="event-flow-success-title">${escapeHtml(interpolate(successTitle, firstName, eventName))}</h2>
+      <p class="event-flow-success-body">${escapeHtml(interpolate(successBody, firstName, eventName))}</p>
     `;
   }
 
@@ -86,6 +102,9 @@ function showConfirmedPanel(
     });
     panel.appendChild(shareContainer);
   }
+
+  // Donation CTA — placed after the share panel at the emotional peak.
+  renderDonationCta(panel, { eventSlug });
 
   root.appendChild(panel);
 }
@@ -106,18 +125,18 @@ function showExpiredPanel(
 ): void {
   form.classList.add("d-none");
 
+  const expiredTitle = root.dataset["expiredTitle"] ?? "Your confirmation link has expired";
+  const expiredBody  = root.dataset["expiredBody"]  ?? "The verification link{forEvent} is no longer valid — these links expire after 48 hours for security. Click the button below and we'll send a fresh one to the same email address.";
+
   const greeting = firstName ? `Hi ${firstName}!` : "Hi there!";
-  const forEvent = eventName ? ` for ${eventName}` : "";
 
   const panel = document.createElement("div");
   panel.className = "event-flow-success";
   panel.innerHTML = `
     <div class="event-flow-success-icon" aria-hidden="true">⏰</div>
-    <h2 class="event-flow-success-title">Your confirmation link has expired</h2>
+    <h2 class="event-flow-success-title">${escapeHtml(interpolate(expiredTitle, firstName, eventName))}</h2>
     <p class="event-flow-success-body">
-      ${greeting} The verification link${forEvent} is no longer valid — these
-      links expire after 48&nbsp;hours for security. Click the button below and
-      we'll send a fresh one to the same email address straight away.
+      ${escapeHtml(greeting)} ${escapeHtml(interpolate(expiredBody, firstName, eventName))}
     </p>
     <button type="button" class="btn btn-primary px-4" data-resend-btn>
       Send me a new link

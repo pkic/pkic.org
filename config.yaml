@@ -144,13 +144,30 @@ markup:
       attribute:
         block: true
 
-             style-src 'unsafe-inline' 'self';
-             font-src 'self';
+module:
+  mounts:
+    - source: assets
+      target: assets
+    - source: shared
+      target: assets/shared
+    - source: static
+      target: static
+    - source: layouts
+      target: layouts
+    - source: content
+      target: content
+    - source: data
+      target: data
+    - source: i18n
+      target: i18n
+    - source: archetypes
+      target: archetypes
+  imports:
     - path: github.com/gohugoio/hugo-mod-bootstrap-scss/v5
 
 outputFormats:
   rss:
-             connect-src ws://localhost:1313/livereload 'self' data:;
+    mediatype: application/rss
     path: feed
   news:
     baseName: index
@@ -188,7 +205,7 @@ outputFormats:
     baseName: event-speakers2
     notAlternative: true
     isHTML: true
-  event-data: 
+  event-data:
     mediatype: application/json
     isPlainText: true
     baseName: event-data

@@ -1,6 +1,26 @@
 {{- $eventSlug := partial "event-flow-slug.html" . -}}
 {{- $eventPagePath := partial "event-flow-page-path.html" . -}}
-<div class="event-flow" data-event-registration-confirm data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
+
+{{/* Text overrides — use {firstName} and {eventName} as placeholder tokens. */}}
+{{- $successTitle   := .Get "successTitle"   | default "{firstName}, you're registered{forEvent}!" -}}
+{{- $successBody    := .Get "successBody"    | default "Your calendar invite is on its way. Use the link in your confirmation email to manage your registration." -}}
+{{- $waitlistTitle  := .Get "waitlistTitle"  | default "{firstName}, you're on the waitlist{forEvent}!" -}}
+{{- $waitlistBody   := .Get "waitlistBody"   | default "We have your email confirmed. We'll notify you as soon as an in-person spot becomes available. Check the email we sent you for your manage link." -}}
+{{- $expiredTitle   := .Get "expiredTitle"   | default "Your confirmation link has expired" -}}
+{{- $expiredBody    := .Get "expiredBody"    | default "The verification link{forEvent} is no longer valid — these links expire after 48 hours for security. Click the button below and we'll send a fresh one to the same email address." -}}
+
+<div class="event-flow"
+  data-event-registration-confirm
+  data-event-slug="{{ $eventSlug }}"
+  data-event-page-path="{{ $eventPagePath }}"
+  data-api-base="/api/v1"
+  data-success-title="{{ $successTitle }}"
+  data-success-body="{{ $successBody }}"
+  data-waitlist-title="{{ $waitlistTitle }}"
+  data-waitlist-body="{{ $waitlistBody }}"
+  data-expired-title="{{ $expiredTitle }}"
+  data-expired-body="{{ $expiredBody }}"
+>
 
   {{/* Skeleton shown while the personalisation fetch is in-flight */}}
   <div data-confirm-loading class="my-3" aria-hidden="true">

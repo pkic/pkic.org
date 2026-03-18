@@ -1,0 +1,24 @@
+{{/*
+  donation-form.html — Donation widget shortcode.
+  Delegates to layouts/partials/donation-form-widget.html.
+
+  Parameters (all optional):
+    heading          — Override the default heading text.
+    description      — Override the default description text.
+    email            — Pre-fill the donor's email.
+    name             — Pre-fill the donor's name.
+    organizationName — Pre-fill the donor's organisation.
+    source           — Source label for attribution metadata.
+    successPath      — Relative path for post-donation redirect.
+    cancelPath       — Relative path if donor cancels.
+*/}}
+{{ partial "donation-form-widget.html" (dict
+  "heading"          (.Get "heading"          | default "")
+  "description"      (.Get "description"      | default "")
+  "email"            (.Get "email"            | default "")
+  "name"             (.Get "name"             | default "")
+  "organizationName" (.Get "organizationName" | default "")
+  "source"           (.Get "source"           | default "")
+  "successPath"      (.Get "successPath"      | default "")
+  "cancelPath"       (.Get "cancelPath"       | default "")
+) }}
