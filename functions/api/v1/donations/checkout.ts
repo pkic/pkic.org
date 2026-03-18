@@ -111,6 +111,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
 
   if (email) {
     params.set("customer_email", email);
+    params.set("payment_intent_data[receipt_email]", email);
   }
 
   // Store donor identity and attribution in Stripe metadata for reconciliation
