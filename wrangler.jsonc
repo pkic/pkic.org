@@ -53,6 +53,7 @@
         }
       ],
       "vars": {
+        "HUGO_VERSION": "0.158.0",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
         "DEFAULT_REFERRAL_CODE_LENGTH": "7",
         "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
@@ -70,6 +71,7 @@
     }
   },
   "vars": {
+    "HUGO_VERSION": "0.158.0",
     "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
     "DEFAULT_REFERRAL_CODE_LENGTH": "7",
     "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
@@ -90,4 +92,7 @@
   // ADMIN_API_KEY           — Long-lived API key for headless admin access & stats
   //                           (used by the admin UI and automated reporting)
   //                           Generate with: openssl rand -hex 32
+  // STRIPE_SECRET_KEY       — Stripe secret key for creating Checkout Sessions
+  //                           (donation flow). Obtain from Stripe Dashboard →
+  //                           Developers → API keys.
 }
