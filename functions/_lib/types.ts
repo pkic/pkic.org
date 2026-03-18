@@ -71,6 +71,16 @@ export interface Env {
    * a Bearer token is granted admin privileges without a DB session lookup.
    */
   ADMIN_API_KEY?: string;
+  /** Stripe secret key for creating Checkout Sessions (donation flow). */
+  STRIPE_SECRET_KEY?: string;
+  /** Stripe webhook signing secret for verifying checkout.session.completed events. */
+  STRIPE_WEBHOOK_SECRET?: string;
+  /**
+   * BCC address for donation thank-you emails. When set, every donor
+   * thank-you email is BCC'd here so the team has an internal record.
+   * Typically: contact@pkic.org
+   */
+  DONATION_NOTIFICATION_EMAIL?: string;
 }
 
 export interface PagesContext<P extends Record<string, string> = Record<string, string>> {

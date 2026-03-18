@@ -4,6 +4,7 @@ import { renderConsentInputs, readConsentValues } from "../shared/render-consent
 import { applyCustomFieldVisibility, renderCustomFields, readCustomFieldValues } from "../shared/render-custom-fields";
 import { readDayAttendance, renderDayAttendance } from "../shared/render-day-attendance";
 import { renderSharePanel } from "../shared/render-share-panel";
+import { renderDonationCta } from "../shared/render-donation-cta";
 import type { EventFormsResponse } from "../shared/types";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form-validation";
 import { installStepNavigation } from "../shared/step-navigation";
@@ -57,6 +58,9 @@ function showSuccessPanel(
   form: HTMLFormElement,
   result: RegistrationSubmitResponse,
   firstName: string,
+  lastName: string,
+  email: string,
+  organization: string,
   eventName: string,
   eventSlug: string,
 ): void {
@@ -124,6 +128,11 @@ function showSuccessPanel(
       panel.appendChild(shareContainer);
     }
   }
+
+  // Donation CTA — shown on all outcomes; emotional investment is high
+  // regardless of whether the registration is confirmed, pending, or waitlisted.
+  const fullName = [firstName, lastName].filter(Boolean).join(" ");
+  renderDonationCta(panel, { name: fullName || undefined, email, organizationName: organization || undefined, source: window.location.pathname });
 
   root.appendChild(panel);
 }
@@ -252,7 +261,7 @@ async function main(): Promise<void> {
 
       const result = await postJson<RegistrationSubmitResponse>(`${apiBase}/events/${eventSlug}/registrations`, payload, eventPathHeaders);
       clearReferralSession();
-      showSuccessPanel(boot.root, form, result, firstName, eventName, boot.eventSlug);
+      showSuccessPanel(boot.root, form, result, firstName, payload.lastName, payload.email, "", eventName, boot.eventSlug);
     } catch (error) {
       const normalized = normalizeValidation(error);
       setStatus(statusEl, normalized.globalMessage, true);

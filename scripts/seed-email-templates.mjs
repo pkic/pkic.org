@@ -447,6 +447,42 @@ If the button above does not work, copy and paste the following URL into your br
 \`{{magicLinkUrl}}\`
 `,
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 15. Donation thank-you
+  // Sent when the Stripe webhook confirms a completed donation.
+  // Variables: firstName, name, email, organizationName,
+  //            currency, formattedAmount, donateUrl
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "donation_thank_you",
+    subjectTemplate: "Thank you for your donation to the PKI Consortium",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Donor,{{/if}}
+
+Thank you for your generous contribution of **{{formattedAmount}}** to the **PKI Consortium**.
+
+Your voluntary donation helps us keep our conferences free and open to more of the global PKI community — from security engineers to researchers, policymakers, and open-source contributors.
+
+<div class="notice notice-success">&#10003; Your payment has been confirmed. A receipt from our payment processor will be sent separately to <strong>{{email}}</strong>.</div>
+
+---
+
+**Your donation details**
+
+> **Name:** {{name}}
+> {{#if organizationName}}**Organisation:** {{organizationName}}
+> {{/if}}**Amount:** {{formattedAmount}}
+
+---
+
+The PKI Consortium is a 501(c)(6) non-profit business league registered in Utah, USA (#10462204-0140). This contribution was made voluntarily — no goods or services were provided in exchange.
+
+If you have any questions, please [contact us](mailto:contact@pkic.org).
+
+With gratitude,<br>
+The PKI Consortium team
+`,
+  },
 ];
 function sqlString(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
