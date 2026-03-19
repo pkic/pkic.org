@@ -15,6 +15,7 @@ params:
   heroDescription: "Online | Sponsored webinar by Entrust"
   heroImage: webinar-entrust.jpg
   eventDate: 2026-03-19T16:00:00Z
+  eventDuration: 1
 
   heroButton:
     label: Register for this webinar
