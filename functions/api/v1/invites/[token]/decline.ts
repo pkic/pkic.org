@@ -7,7 +7,7 @@ import { first } from "../../../../_lib/db/queries";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { proposalPageUrl, registrationPageUrl, inviteDeclineUrl } from "../../../../_lib/services/frontend-links";
 import type { PagesContext } from "../../../../_lib/types";
-import { inviteDeclineSchema } from "../../../../../shared/schemas/api";
+import { inviteDeclineSchema } from "../../../../../assets/shared/schemas/api";
 
 // ── GET: Redirect to the Hugo-managed decline page ───────────────────────────
 // The form UI lives at the event-specific /invite/decline/ Hugo page driven by

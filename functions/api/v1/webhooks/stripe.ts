@@ -165,9 +165,9 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
 
   // Read back the donor record so we can address the thank-you email correctly.
   interface DonorRow {
-    donor_name: string;
-    donor_email: string;
-    donor_organization: string | null;
+    name: string;
+    email: string;
+    organization: string | null;
     currency: string;
     gross_amount: number;
   }
@@ -175,7 +175,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
   let donor: DonorRow | null = null;
   if (result.meta?.changes !== 0) {
     donor = await env.DB.prepare(
-      `SELECT donor_name, donor_email, donor_organization, currency, gross_amount
+      `SELECT name, email, organization, currency, gross_amount
        FROM donations WHERE checkout_session_id = ?`,
     )
       .bind(session.id)
@@ -191,7 +191,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     await env.DB.prepare(
       `INSERT OR IGNORE INTO donations
          (id, checkout_session_id, payment_intent_id,
-          donor_name, donor_email, currency, gross_amount, net_amount, completed_at)
+          name, email, currency, gross_amount, net_amount, completed_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     )
       .bind(
@@ -209,9 +209,9 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
 
     if (session.customer_email) {
       donor = {
-        donor_name: "Unknown",
-        donor_email: session.customer_email,
-        donor_organization: null,
+        name: "Unknown",
+        email: session.customer_email,
+        organization: null,
         currency: fallbackCurrency,
         gross_amount: fallbackGross,
       };
@@ -219,22 +219,22 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
   }
 
   // ── Send thank-you email ─────────────────────────────────────────────────
-  if (donor?.donor_email) {
-    try {
-      const formattedAmount = formatMajorAmount(donor.gross_amount, donor.currency);
-      const firstName = donor.donor_name !== "Unknown" ? (donor.donor_name.split(" ")[0] ?? "") : "";
-      const bcc = env.DONATION_NOTIFICATION_EMAIL ? [env.DONATION_NOTIFICATION_EMAIL] : [];
+  if (donor?.email) {
+      try {
+        const formattedAmount = formatMajorAmount(donor.gross_amount, donor.currency);
+        const firstName = donor.name !== "Unknown" ? (donor.name.split(" ")[0] ?? "") : "";
+        const bcc = env.DONATION_NOTIFICATION_EMAIL ? [env.DONATION_NOTIFICATION_EMAIL] : [];
 
       const outboxId = await queueEmail(env.DB, {
         templateKey: "donation_thank_you",
-        recipientEmail: donor.donor_email,
+        recipientEmail: donor.email,
         messageType: "transactional",
         subject: "Thank you for your donation to the PKI Consortium",
         data: {
           firstName,
-          name: donor.donor_name,
-          email: donor.donor_email,
-          organizationName: donor.donor_organization ?? "",
+          name: donor.name,
+          email: donor.email,
+          organizationName: donor.organization ?? "",
           currency: donor.currency.toUpperCase(),
           formattedAmount,
           donateUrl: "https://pkic.org/donate/",

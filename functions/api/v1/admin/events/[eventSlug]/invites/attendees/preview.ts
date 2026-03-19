@@ -6,6 +6,7 @@ import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { renderEmail, renderSubject } from "../../../../../../../_lib/email/render";
 import { resolveTemplate } from "../../../../../../../_lib/email/templates";
+import { loadEmailLayout } from "../../../../../../../_lib/email/partials";
 import { registrationPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import {
@@ -13,7 +14,7 @@ import {
   signAttendeeInvitePreviewToken,
 } from "../../../../../../../_lib/services/admin-invite-preview";
 import type { PagesContext } from "../../../../../../../_lib/types";
-import { adminBulkAttendeeInvitesPreviewSchema } from "../../../../../../../../shared/schemas/api";
+import { adminBulkAttendeeInvitesPreviewSchema } from "../../../../../../../../assets/shared/schemas/api";
 
 const PREVIEW_TTL_SECONDS = 10 * 60;
 
@@ -38,6 +39,7 @@ export async function onRequestPost(
   const declineUrl = inviteDeclineUrl(appBaseUrl, event, "preview-token");
 
   const template = await resolveTemplate(context.env.DB, "attendee_invite");
+  const layoutHtml = await loadEmailLayout(context.env.DB);
   const digest = await computeAttendeeInviteDigest(body.invites);
   const preview = await signAttendeeInvitePreviewToken({
     secret,
@@ -60,7 +62,7 @@ export async function onRequestPost(
   const rendered = await renderEmail(
     template.content,
     data,
-    null,
+    layoutHtml,
     template.contentType as "markdown" | "html" | "text",
     appBaseUrl,
   );

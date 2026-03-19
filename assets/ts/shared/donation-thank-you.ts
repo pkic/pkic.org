@@ -144,9 +144,11 @@ function renderBadge(container: HTMLElement, session: DonationSession, sessionId
         >in Share</a>
       </div>
       <p class="donation-badge-disclaimer">
-        The PKI Consortium is a 501(c)(6) non-profit business league registered in Utah, USA.
-        This is a voluntary donation — no goods or services are provided in exchange.
-        Please consult your tax advisor regarding deductibility in your jurisdiction.
+        PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts 
+        to PKI Consortium are not deductible as charitable contributions for federal income tax 
+        purposes in the United States. This payment is voluntary and is not a ticket, fee, or 
+        payment for goods or services. Please consult your tax advisor regarding any possible 
+        business-expense treatment or other tax consequences.
       </p>
     </div>
   `;

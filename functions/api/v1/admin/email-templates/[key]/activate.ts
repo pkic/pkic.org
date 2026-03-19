@@ -3,7 +3,7 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { activateTemplateVersion } from "../../../../../_lib/email/templates";
 import type { PagesContext } from "../../../../../_lib/types";
-import { adminEmailTemplateActivateSchema } from "../../../../../../shared/schemas/api";
+import { adminEmailTemplateActivateSchema } from "../../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(context: PagesContext<{ key: string }>): Promise<Response> {
   await requireAdminFromRequest(context.env.DB, context.request);

@@ -3,8 +3,8 @@ import { onRequestPost } from "../functions/api/v1/donations/checkout";
 import { createContext } from "./helpers/context";
 import { handleError } from "../functions/_lib/http";
 import type { Env, PagesContext } from "../functions/_lib/types";
-import { SUPPORTED_CURRENCY_CODES, currencyForCountry, toSmallestUnit, toMajorUnit } from "../shared/constants/currencies";
-import { donationCheckoutSchema } from "../shared/schemas/donation";
+import { SUPPORTED_CURRENCY_CODES, currencyForCountry, toSmallestUnit, toMajorUnit } from "../assets/shared/constants/currencies";
+import { donationCheckoutSchema } from "../assets/shared/schemas/donation";
 
 // ── Schema validation ──────────────────────────────────────────────────────
 
@@ -28,6 +28,17 @@ describe("donationCheckoutSchema", () => {
       successPath: "/events/2026/pqc/confirm/",
       cancelPath: "/events/2026/pqc/register/",
       metadata: { source: "/events/2026/pqc/" },
+      embedded: true,
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts embedded: false explicitly", () => {
+    const result = donationCheckoutSchema.safeParse({
+      amount: 5000,
+      currency: "usd",
+      name: "Alice",
+      embedded: false,
     });
     expect(result.success).toBe(true);
   });
@@ -164,6 +175,7 @@ describe("POST /api/v1/donations/checkout", () => {
       INTERNAL_SIGNING_SECRET: "test-signing-secret",
       FEEDBACK_IDENTITY_SECRET_V1: "feedback-secret",
       STRIPE_SECRET_KEY: "sk_test_fake",
+      STRIPE_PUBLISHABLE_KEY: "pk_test_fake",
       ...overrides,
     };
   }
@@ -241,6 +253,38 @@ describe("POST /api/v1/donations/checkout", () => {
     expect(response.status).toBe(403);
   });
 
+  it("returns clientSecret and publishableKey for embedded checkout", async () => {
+    const mockStripeResponse = {
+      id: "cs_test_embedded123",
+      client_secret: "cs_test_embedded123_secret_fake",
+    };
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Response(JSON.stringify(mockStripeResponse), { status: 200 }),
+    );
+
+    const env = makeEnv();
+    const ctx = makeContext(env, makeRequest({
+      amount: 10000,
+      currency: "usd",
+      name: "Alice Donor",
+      embedded: true,
+    }));
+    const response = await callEndpoint(ctx);
+    expect(response.status).toBe(200);
+
+    const body = await response.json() as { clientSecret: string; publishableKey: string };
+    expect(body.clientSecret).toBe("cs_test_embedded123_secret_fake");
+    expect(body.publishableKey).toBe("pk_test_fake");
+
+    const [, stripeInit] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    const params = new URLSearchParams(stripeInit.body as string);
+    expect(params.get("ui_mode")).toBe("embedded");
+    expect(params.get("return_url")).toContain("/donate/complete/");
+    expect(params.get("return_url")).toContain("{CHECKOUT_SESSION_ID}");
+    expect(params.has("success_url")).toBe(false);
+    expect(params.has("cancel_url")).toBe(false);
+  });
+
   it("returns checkout URL on success", async () => {
     const mockStripeResponse = {
       id: "cs_test_fake123",
@@ -276,8 +320,8 @@ describe("POST /api/v1/donations/checkout", () => {
     expect(params.get("line_items[0][price_data][currency]")).toBe("eur");
     expect(params.get("line_items[0][price_data][unit_amount]")).toBe("10000");
     expect(params.get("customer_email")).toBe("donor@example.com");
-    expect(params.get("custom_text[submit][message]")).toContain("voluntary donation");
-    expect(params.get("success_url")).toContain("/donate/thank-you/");
+    expect(params.get("custom_text[submit][message]")).toContain("voluntary");
+    expect(params.get("success_url")).toContain("/donate/complete/");
     expect(params.get("success_url")).toContain("{CHECKOUT_SESSION_ID}");
     expect(params.get("metadata[donor_name]")).toBe("Alice Donor");
 
@@ -504,7 +548,7 @@ describe("GET /api/v1/donations/session", () => {
     const dbRow = {
       gross_amount: 5000,
       currency: "usd",
-      donor_name: "Alice Donor",
+      name: "Alice Donor",
       source: "/events/2026/pqc/",
       completed_at: "2026-01-01T10:00:00Z",
     };

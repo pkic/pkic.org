@@ -15,7 +15,7 @@ import { first, run } from "../../../../_lib/db/queries";
 import { nowIso } from "../../../../_lib/utils/time";
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import type { PagesContext } from "../../../../_lib/types";
-import { adminUserUpdateSchema } from "../../../../../shared/schemas/api";
+import { adminUserUpdateSchema } from "../../../../../assets/shared/schemas/api";
 
 interface UserRow {
   id: string;

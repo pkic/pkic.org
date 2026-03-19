@@ -293,6 +293,8 @@ interface EmailTemplateVersion {
   created_at: string;
 }
 
+const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
+
 interface TemplateHelperItem {
   category: "Variables" | "Conditions" | "CTAs";
   label: string;
@@ -308,6 +310,7 @@ let _evList: EventSummary[] = [];
 let _currentEventDetail: EventDetail | null = null;
 let _proposalAccessByEventSlug: Record<string, ProposalAccess> = {};
 let _templateEditorFocus: "subject" | "body" = "body";
+let _templateEditorKey: string | null = null;
 
 const TEMPLATE_HELPERS: TemplateHelperItem[] = [
   { category: "Variables", label: "eventName", snippet: "{{eventName}}", target: "subject" },
@@ -4653,22 +4656,27 @@ function openTemplate(key: string, versions: EmailTemplateVersion[]): void {
   const listEl = q("#t-body");
   const editorEl = q("#t-editor");
   if (!editorEl) return;
+  _templateEditorKey = key;
   hide(listEl);
   show(editorEl);
 
   // Prefer active version for pre-fill; fall back to latest draft
   const active = versions.find((v) => v.status === "active");
   const current = active ?? versions[0];
+  const isLayoutTemplate = key === EMAIL_LAYOUT_TEMPLATE_KEY;
 
   editorEl.innerHTML =
     '<div class="card border-0 shadow-sm">' +
       '<div class="card-header bg-white d-flex align-items-center justify-content-between">' +
-        `<span class="fw-semibold">Edit: <span class="mono">${esc(key)}</span></span>` +
+        `<span class="fw-semibold">Edit: <span class="mono">${esc(key)}</span>${isLayoutTemplate ? ' <span class="badge text-bg-info ms-2">shared shell</span>' : ''}</span>` +
         '<button class="btn btn-sm btn-secondary" id="btn-close-template">&larr; Back to list</button>' +
       '</div>' +
       '<div class="card-body">' +
         '<div class="row g-3">' +
           '<div class="col-lg-7">' +
+            (isLayoutTemplate
+              ? '<div class="alert alert-info small py-2 mb-3">This template controls the outer email shell used for all emails.</div>'
+              : '') +
             '<div class="mb-2">' +
               '<label class="form-label small fw-semibold mb-1" for="t-content-type">Content type</label>' +
               '<select class="form-select form-select-sm" id="t-content-type" style="max-width:180px">' +
@@ -4962,6 +4970,7 @@ async function doRenderTemplatePreview(): Promise<void> {
   const contentType = (q<HTMLSelectElement>("#t-content-type")?.value ?? "markdown") as "markdown" | "html" | "text";
   const dataRaw = q<HTMLTextAreaElement>("#t-preview-data")?.value.trim() ?? "";
   const statusEl = q("#t-preview-status");
+  const isLayoutTemplate = _templateEditorKey === EMAIL_LAYOUT_TEMPLATE_KEY;
 
   if (!content.trim()) {
     toast("Body cannot be empty", "error");
@@ -4987,14 +4996,20 @@ async function doRenderTemplatePreview(): Promise<void> {
   if (statusEl) statusEl.textContent = "Rendering preview...";
 
   try {
+    const layoutHtml = isLayoutTemplate ? content : undefined;
+    const previewContent = isLayoutTemplate
+      ? "<h2>Layout preview</h2><p>This is how body content will appear inside the shared email shell.</p>"
+      : content;
+    const previewContentType = isLayoutTemplate ? "html" : contentType;
     const result = await api<{ subject: string; html: string; text: string }>(
       "/api/v1/admin/email-templates/preview",
       {
         method: "POST",
         body: JSON.stringify({
           subjectTemplate: subjectTemplate || undefined,
-          content,
-          contentType,
+          content: previewContent,
+          contentType: previewContentType,
+          layoutHtml,
           data,
         }),
       },
@@ -5018,7 +5033,9 @@ async function doRenderTemplatePreview(): Promise<void> {
 async function doSaveTemplateVersion(key: string): Promise<void> {
   const subject = q<HTMLInputElement>("#t-subject")?.value.trim() ?? "";
   const content = q<HTMLTextAreaElement>("#t-content")?.value ?? "";
-  const contentType = (q<HTMLSelectElement>("#t-content-type")?.value ?? "markdown") as "markdown" | "html" | "text";
+  const contentType = _templateEditorKey === EMAIL_LAYOUT_TEMPLATE_KEY
+    ? "html"
+    : (q<HTMLSelectElement>("#t-content-type")?.value ?? "markdown") as "markdown" | "html" | "text";
   const btn = q<HTMLButtonElement>("#btn-t-save");
   if (!content.trim()) { toast("Body cannot be empty", "error"); return; }
   if (btn) { btn.disabled = true; btn.textContent = "Saving…"; }

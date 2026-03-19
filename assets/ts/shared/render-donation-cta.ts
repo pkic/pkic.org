@@ -22,6 +22,8 @@ export interface DonationCtaOptions {
   organizationName?: string | null;
   /** URL path or label indicating where the donation is being initiated. */
   source?: string | null;
+  /** Number of event days — used to compute the per-event cost anchor shown to donors. */
+  days?: number | null;
 }
 
 export function renderDonationCta(container: HTMLElement, options: DonationCtaOptions): void {
@@ -37,19 +39,25 @@ export function renderDonationCta(container: HTMLElement, options: DonationCtaOp
     : "";
   const sourceAttr = options.source ? ` data-donation-source="${escapeAttr(options.source)}"` : "";
 
+  // Cost anchor — per-day framing by default; total shown when days are known.
+  const days = options.days && options.days > 0 ? options.days : null;
+  const costAnchor = days
+    ? `roughly <strong>$${150 * days}–$${300 * days} per attendee</strong> for this ${days}-day event`
+    : `roughly <strong>$150–$300 per attendee per day</strong>`;
+
   section.innerHTML = `
     <div class="event-flow-donation-cta-inner">
       <p class="event-flow-donation-cta-heading">Help welcome more attendees</p>
       <p class="event-flow-donation-cta-body">
         Our events — and membership — are completely free. We run on sponsors and voluntary donations.
-        Hosting you at this event costs us roughly <strong>$300–$500 per attendee</strong>.
+        Hosting you at this event costs us ${costAnchor}.
         A donation of any size helps us keep the doors open to everyone.
       </p>
 
       <div
         class="donation-form donation-form--compact"
         data-donation-form
-        data-donation-success-path="/donate/thank-you/"
+        data-donation-success-path="/donate/complete/"
         ${nameAttr}${emailAttr}${orgAttr}${sourceAttr}
       >
         <!--
@@ -63,13 +71,15 @@ export function renderDonationCta(container: HTMLElement, options: DonationCtaOp
         <input type="hidden" data-donation-org-input />
 
         <!--
-          Currency selector — required by initDonationForm() to proceed past
-          its early-return guard. Hidden here; geo-detection still runs and
-          updates the preset labels to the visitor's local currency.
+          Currency selector — geo-detection sets the default; the select lets
+          visitors switch between currencies without leaving the panel.
+          Populated with all supported currencies by initDonationForm().
         -->
-        <select data-donation-currency style="display:none">
-          <option value="usd">USD</option>
-        </select>
+        <div class="event-flow-donation-cta-currency">
+          <select data-donation-currency class="form-select form-select-sm" aria-label="Select currency">
+            <option value="usd">USD ($) — US Dollar</option>
+          </select>
+        </div>
 
         <!-- Preset amount buttons — rendered and replaced by initDonationForm() -->
         <div data-donation-presets class="donation-form-presets">
@@ -106,8 +116,12 @@ export function renderDonationCta(container: HTMLElement, options: DonationCtaOp
       <p class="event-flow-donation-cta-disclaimer">
         The PKI Consortium is a 501(c)(6) non-profit. No goods or services are provided in exchange.
       </p>
+      <p class="event-flow-donation-cta-sponsor">
+        Interested in sponsoring our events? <a href="/sponsors/sponsor/">Enquire about sponsor options &rarr;</a>
+      </p>
     </div>
   `;
+
 
   container.appendChild(section);
 

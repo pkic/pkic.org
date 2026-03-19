@@ -1,4 +1,4 @@
-import { SOURCE_TYPES } from "./constants/source-types";
+import { SOURCE_TYPES } from "../../shared/constants/source-types";
 
 export interface QueryContext {
   eventSlug: string | null;

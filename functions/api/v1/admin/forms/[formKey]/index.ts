@@ -19,7 +19,7 @@ import { uuid } from "../../../../../_lib/utils/ids";
 import { AppError } from "../../../../../_lib/errors";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import type { DatabaseLike, PagesContext } from "../../../../../_lib/types";
-import { adminFormUpdateSchema } from "../../../../../../shared/schemas/api";
+import { adminFormUpdateSchema } from "../../../../../../assets/shared/schemas/api";
 
 interface FormRow {
   id: string;

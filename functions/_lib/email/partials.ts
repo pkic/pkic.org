@@ -1,20 +1,20 @@
 import type { DatabaseLike } from "../types";
-import { EMAIL_PARTIALS } from "./render";
 import { resolveTemplate } from "./templates";
 
-export const EMAIL_PARTIAL_NAMES = ["reg_details", "sponsors_block", "about_pkic"] as const;
+export const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
+export const EMAIL_PARTIAL_NAMES = ["reg_details", "sponsors_block", "about_pkic", "donation_request"] as const;
 
 export async function loadEmailPartials(db: DatabaseLike): Promise<Record<string, string>> {
-  const partials: Record<string, string> = { ...EMAIL_PARTIALS };
-  await Promise.all(
+  const entries = await Promise.all(
     EMAIL_PARTIAL_NAMES.map(async (name) => {
-      try {
-        const tmpl = await resolveTemplate(db, `partial_${name}`);
-        partials[name] = tmpl.content;
-      } catch {
-        // Not seeded in DB yet; keep hardcoded fallback from EMAIL_PARTIALS.
-      }
+      const tmpl = await resolveTemplate(db, `partial_${name}`);
+      return [name, tmpl.content] as const;
     }),
   );
-  return partials;
+  return Object.fromEntries(entries);
+}
+
+export async function loadEmailLayout(db: DatabaseLike): Promise<string> {
+  const tmpl = await resolveTemplate(db, EMAIL_LAYOUT_TEMPLATE_KEY);
+  return tmpl.content;
 }

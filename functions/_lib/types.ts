@@ -73,6 +73,8 @@ export interface Env {
   ADMIN_API_KEY?: string;
   /** Stripe secret key for creating Checkout Sessions (donation flow). */
   STRIPE_SECRET_KEY?: string;
+  /** Stripe publishable key returned to the client for Embedded Checkout. */
+  STRIPE_PUBLISHABLE_KEY?: string;
   /** Stripe webhook signing secret for verifying checkout.session.completed events. */
   STRIPE_WEBHOOK_SECRET?: string;
   /**

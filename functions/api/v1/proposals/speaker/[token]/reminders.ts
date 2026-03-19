@@ -4,7 +4,7 @@ import { addHours, nowIso } from "../../../../../_lib/utils/time";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
 import { run } from "../../../../../_lib/db/queries";
 import type { PagesContext } from "../../../../../_lib/types";
-import { speakerReminderPreferenceSchema } from "../../../../../../shared/schemas/api";
+import { speakerReminderPreferenceSchema } from "../../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(context: PagesContext<{ token: string }>): Promise<Response> {
   markSensitive(context);

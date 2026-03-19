@@ -12,7 +12,7 @@ import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../_lib/services/frontend-links";
 import type { PagesContext } from "../../../../_lib/types";
-import { proposalCreateSchema } from "../../../../../shared/schemas/api";
+import { proposalCreateSchema } from "../../../../../assets/shared/schemas/api";
 import { requireInternalSecret } from "../../../../_lib/request";
 
 export async function onRequestPost(

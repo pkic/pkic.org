@@ -14,7 +14,7 @@ describe("admin campaign preview token", () => {
       sendMode: "personal",
       batchSize: 500,
       filter: { audience: "attendees", attendanceType: "all" },
-      recipients: [{ email: "a@example.com", firstName: "A", lastName: "B" }],
+      recipients: [{ email: "a@example.com", firstName: "A", lastName: "B", templateData: {} }],
     });
 
     const signed = await signCampaignPreviewToken({
@@ -44,7 +44,7 @@ describe("admin campaign preview token", () => {
       sendMode: "personal",
       batchSize: 500,
       filter: { audience: "attendees", attendanceType: "all" },
-      recipients: [{ email: "a@example.com", firstName: "A", lastName: "B" }],
+      recipients: [{ email: "a@example.com", firstName: "A", lastName: "B", templateData: {} }],
     });
 
     const digestB = await computeCampaignDigest({
@@ -54,7 +54,7 @@ describe("admin campaign preview token", () => {
       sendMode: "personal",
       batchSize: 500,
       filter: { audience: "attendees", attendanceType: "all" },
-      recipients: [{ email: "a@example.com", firstName: "A", lastName: "B" }],
+      recipients: [{ email: "a@example.com", firstName: "A", lastName: "B", templateData: {} }],
     });
 
     const signed = await signCampaignPreviewToken({

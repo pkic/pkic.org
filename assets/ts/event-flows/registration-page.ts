@@ -63,6 +63,7 @@ function showSuccessPanel(
   organization: string,
   eventName: string,
   eventSlug: string,
+  days?: number,
 ): void {
   form.classList.add("d-none");
 
@@ -132,7 +133,7 @@ function showSuccessPanel(
   // Donation CTA — shown on all outcomes; emotional investment is high
   // regardless of whether the registration is confirmed, pending, or waitlisted.
   const fullName = [firstName, lastName].filter(Boolean).join(" ");
-  renderDonationCta(panel, { name: fullName || undefined, email, organizationName: organization || undefined, source: window.location.pathname });
+  renderDonationCta(panel, { name: fullName || undefined, email, organizationName: organization || undefined, source: window.location.pathname, days });
 
   root.appendChild(panel);
 }
@@ -178,10 +179,12 @@ async function main(): Promise<void> {
   const dayAttendanceContainer = boot.root.querySelector<HTMLElement>("[data-day-attendance]");
 
   let eventName = eventSlug;
+  let eventDayCount = 0;
 
   try {
     const forms = await getJson<EventFormsResponse>(`${apiBase}/events/${eventSlug}/forms?purpose=event_registration`);
     eventName = forms.event.name;
+    eventDayCount = forms.eventDays.length;
     if (consentsContainer) {
       renderConsentInputs(consentsContainer, forms.requiredTerms);
     }
@@ -261,7 +264,7 @@ async function main(): Promise<void> {
 
       const result = await postJson<RegistrationSubmitResponse>(`${apiBase}/events/${eventSlug}/registrations`, payload, eventPathHeaders);
       clearReferralSession();
-      showSuccessPanel(boot.root, form, result, firstName, payload.lastName, payload.email, "", eventName, boot.eventSlug);
+      showSuccessPanel(boot.root, form, result, firstName, payload.lastName, payload.email, "", eventName, boot.eventSlug, eventDayCount || undefined);
     } catch (error) {
       const normalized = normalizeValidation(error);
       setStatus(statusEl, normalized.globalMessage, true);
