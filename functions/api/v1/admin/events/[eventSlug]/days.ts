@@ -20,7 +20,7 @@ import { stringifyJson } from "../../../../../_lib/utils/json";
 import { localDateTimeInTimeZoneToIso } from "../../../../../_lib/utils/timezone";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import type { DatabaseLike, PagesContext } from "../../../../../_lib/types";
-import { adminEventDaysReplaceSchema } from "../../../../../../shared/schemas/api";
+import { adminEventDaysReplaceSchema } from "../../../../../../assets/shared/schemas/api";
 
 interface DayCountRow {
   event_day_id: string;

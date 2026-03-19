@@ -1,5 +1,9 @@
 // ── Donation form ────────────────────────────────────────────────────────────
 
+.donation-checkout-overlay {
+  width: 100%;
+}
+
 .donation-form {
   max-width: 32rem;
   background: var(--bs-body-bg);

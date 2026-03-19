@@ -7,7 +7,7 @@ import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import { logInfo } from "../../../../_lib/logging";
 import type { PagesContext } from "../../../../_lib/types";
-import { adminAuthRequestSchema } from "../../../../../shared/schemas/api";
+import { adminAuthRequestSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(context: PagesContext): Promise<Response> {
   const body = await parseJsonBody(context.request, adminAuthRequestSchema);

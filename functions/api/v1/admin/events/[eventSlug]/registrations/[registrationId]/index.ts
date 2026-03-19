@@ -25,7 +25,7 @@ import { buildAttendanceEmailData, STATUS_LABELS } from "../../../../../../../_l
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../../../_lib/utils/registration-email";
 import { nowIso } from "../../../../../../../_lib/utils/time";
 import type { DatabaseLike, PagesContext } from "../../../../../../../_lib/types";
-import { registrationManageSchema } from "../../../../../../../../shared/schemas/api";
+import { registrationManageSchema } from "../../../../../../../../assets/shared/schemas/api";
 import { z } from "zod";
 
 // ── Shared query ──────────────────────────────────────────────────────────────

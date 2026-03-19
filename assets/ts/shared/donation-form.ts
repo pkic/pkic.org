@@ -6,7 +6,7 @@
  * it to a default currency. The donor can switch currencies via a `<select>`.
  * Preset amount buttons (50/100/250/500/1000) and a custom-amount input are
  * provided. Clicking "Donate" creates a Stripe Checkout Session via the
- * backend and redirects the browser to Stripe's hosted page.
+ * backend and mounts Stripe Embedded Checkout inline.
  *
  * Donor identity (name, email, organisation) is collected in the form and
  * submitted to the backend for tax-reporting purposes. When context is
@@ -101,6 +101,12 @@ async function initForm(root: HTMLElement): Promise<void> {
   const donateBtn = root.querySelector<HTMLButtonElement>("[data-donation-submit]");
   const statusEl = root.querySelector<HTMLElement>("[data-donation-status]");
 
+  // The checkout container and back button live alongside the form in the wrapper div.
+  const widget = root.parentElement;
+  const checkoutContainer = widget?.querySelector<HTMLElement>("[data-donation-checkout]") ?? null;
+  const checkoutMount = widget?.querySelector<HTMLElement>("[data-donation-checkout-mount]") ?? null;
+  const backBtn = widget?.querySelector<HTMLButtonElement>("[data-donation-back]") ?? null;
+
   if (!currencySelect || !presetContainer || !customInput || !donateBtn) return;
 
   // ── Pre-fill identity fields from config ───────────────────────────────
@@ -157,7 +163,7 @@ async function initForm(root: HTMLElement): Promise<void> {
     isCustom = true;
   });
 
-  // ── Donate button ──────────────────────────────────────────────────────
+  // ── Donate button ──────────────────────────────────────────────────
   donateBtn.addEventListener("click", async () => {
     // Validate identity
     const name = nameInput?.value.trim() ?? "";
@@ -181,7 +187,7 @@ async function initForm(root: HTMLElement): Promise<void> {
 
     donateBtn.disabled = true;
     const originalText = donateBtn.textContent;
-    donateBtn.textContent = "Redirecting…";
+    donateBtn.textContent = "Loading…";
     clearStatus();
 
     const email = emailInput?.value.trim() || undefined;
@@ -189,17 +195,21 @@ async function initForm(root: HTMLElement): Promise<void> {
 
     try {
       const smallestUnit = toSmallestUnit(selectedAmount, selectedCurrency);
-      const res = await postJson<{ url: string }>(`${API_BASE}/donations/checkout`, {
-        amount: smallestUnit,
-        currency: selectedCurrency,
-        name,
-        email,
-        organizationName,
-        successPath: config.successPath || undefined,
-        cancelPath: config.cancelPath || undefined,
-        metadata: config.source ? { source: config.source } : undefined,
-      });
-      window.location.href = res.url;
+      const res = await postJson<{ clientSecret: string; publishableKey: string }>(
+        `${API_BASE}/donations/checkout`,
+        {
+          amount: smallestUnit,
+          currency: selectedCurrency,
+          name,
+          email,
+          organizationName,
+          successPath: config.successPath || undefined,
+          cancelPath: config.cancelPath || undefined,
+          metadata: config.source ? { source: config.source } : undefined,
+          embedded: true,
+        },
+      );
+      await mountEmbeddedCheckout(res.clientSecret, res.publishableKey);
     } catch (err: unknown) {
       const message =
         err instanceof Error ? err.message : "Something went wrong. Please try again.";
@@ -208,6 +218,49 @@ async function initForm(root: HTMLElement): Promise<void> {
       donateBtn.textContent = originalText;
     }
   });
+
+  // ── Back button ────────────────────────────────────────────────────────
+  backBtn?.addEventListener("click", () => {
+    destroyEmbeddedCheckout();
+    showForm();
+  });
+
+  // ── Embedded Checkout lifecycle ────────────────────────────────────────
+
+  let embeddedCheckout: { destroy(): void } | null = null;
+
+  function showForm(): void {
+    root.hidden = false;
+    if (checkoutContainer) checkoutContainer.hidden = true;
+    if (checkoutMount) checkoutMount.innerHTML = "";
+    donateBtn.disabled = false;
+    donateBtn.textContent = "Donate";
+  }
+
+  function showCheckout(): void {
+    root.hidden = true;
+    if (checkoutContainer) checkoutContainer.hidden = false;
+  }
+
+  function destroyEmbeddedCheckout(): void {
+    if (embeddedCheckout) {
+      embeddedCheckout.destroy();
+      embeddedCheckout = null;
+    }
+  }
+
+  async function mountEmbeddedCheckout(clientSecret: string, publishableKey: string): Promise<void> {
+    if (!checkoutMount) {
+      throw new Error("Embedded checkout container not found");
+    }
+    const stripe = await loadStripe(publishableKey);
+    const checkout = await stripe.initEmbeddedCheckout({
+      fetchClientSecret: () => Promise.resolve(clientSecret),
+    });
+    embeddedCheckout = checkout;
+    showCheckout();
+    checkout.mount(checkoutMount);
+  }
 
   // ── Helpers ────────────────────────────────────────────────────────────
 
@@ -248,12 +301,35 @@ function populateCurrencySelect(select: HTMLSelectElement, defaultCode: string):
   }
 }
 
+/**
+ * Round an amount to a visually clean number appropriate for its magnitude.
+ * Used when converting USD preset amounts to other currencies.
+ */
+function niceRound(amount: number): number {
+  if (amount < 10)      return Math.max(1, Math.round(amount));
+  if (amount < 50)      return Math.round(amount / 5) * 5;
+  if (amount < 250)     return Math.round(amount / 10) * 10;
+  if (amount < 1000)    return Math.round(amount / 50) * 50;
+  if (amount < 5000)    return Math.round(amount / 100) * 100;
+  if (amount < 25000)   return Math.round(amount / 500) * 500;
+  if (amount < 100000)  return Math.round(amount / 1000) * 1000;
+  if (amount < 500000)  return Math.round(amount / 5000) * 5000;
+  return Math.round(amount / 10000) * 10000;
+}
+
 function renderPresets(container: HTMLElement, currencyCode: string): void {
   const info = currencyInfo(currencyCode);
-  container.innerHTML = PRESET_AMOUNTS.map(
-    (amt) =>
-      `<button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="${amt}">${formatAmount(amt, info)}</button>`,
-  ).join("");
+  const rate = info.approxUsdRate ?? 1;
+  // If the currency is within 25% of USD, keep the same preset amounts for cleanliness.
+  const effectiveRate = Math.abs(rate - 1) < 0.25 ? 1 : rate;
+  // Scale USD base amounts to local currency and round to clean numbers.
+  const amounts = Array.from(new Set(PRESET_AMOUNTS.map((usd) => niceRound(usd * effectiveRate))));
+  container.innerHTML = amounts
+    .map(
+      (amt) =>
+        `<button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="${amt}">${formatAmount(amt, info)}</button>`,
+    )
+    .join("");
 }
 
 function activatePreset(container: HTMLElement, amount: number): void {
@@ -284,6 +360,49 @@ function formatAmount(amount: number, info: CurrencyInfo): string {
   } catch {
     return `${info.symbol}${amount}`;
   }
+}
+
+// ── Stripe.js loader ─────────────────────────────────────────────────────────
+
+type StripeInstance = {
+  initEmbeddedCheckout(options: { fetchClientSecret: () => Promise<string> }): Promise<{
+    mount(container: HTMLElement): void;
+    destroy(): void;
+  }>;
+};
+
+type StripeConstructor = (publishableKey: string) => StripeInstance;
+
+let stripeScriptLoad: Promise<void> | null = null;
+
+function ensureStripeScript(): Promise<void> {
+  if (!stripeScriptLoad) {
+    stripeScriptLoad = new Promise<void>((resolve, reject) => {
+      // Already loaded by another form instance or prior navigation
+      if (typeof (window as unknown as Record<string, unknown>)["Stripe"] === "function") {
+        resolve();
+        return;
+      }
+      const script = document.createElement("script");
+      script.src = "https://js.stripe.com/v3/";
+      script.onload = () => resolve();
+      script.onerror = () => {
+        stripeScriptLoad = null; // allow retry on next attempt
+        reject(new Error("Failed to load Stripe.js"));
+      };
+      document.head.appendChild(script);
+    });
+  }
+  return stripeScriptLoad;
+}
+
+async function loadStripe(publishableKey: string): Promise<StripeInstance> {
+  await ensureStripeScript();
+  const Stripe = (window as unknown as Record<string, unknown>)["Stripe"] as StripeConstructor | undefined;
+  if (typeof Stripe !== "function") {
+    throw new Error("Stripe.js did not expose a Stripe constructor");
+  }
+  return Stripe(publishableKey);
 }
 
 // ── Auto-init on DOMContentLoaded (deferred script) ──────────────────────────

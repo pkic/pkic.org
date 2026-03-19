@@ -3,7 +3,7 @@ import { json } from "../../../../_lib/http";
 import { verifyAdminMagicLink } from "../../../../_lib/auth/admin";
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import type { PagesContext } from "../../../../_lib/types";
-import { adminAuthVerifySchema } from "../../../../../shared/schemas/api";
+import { adminAuthVerifySchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(context: PagesContext): Promise<Response> {
   const body = await parseJsonBody(context.request, adminAuthVerifySchema);

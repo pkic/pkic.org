@@ -8,7 +8,7 @@ import {
   setInviteRemindersPausedUntil,
 } from "../../../../_lib/services/invites";
 import type { PagesContext } from "../../../../_lib/types";
-import { inviteReminderPreferenceSchema } from "../../../../../shared/schemas/api";
+import { inviteReminderPreferenceSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(context: PagesContext<{ token: string }>): Promise<Response> {
   markSensitive(context);

@@ -6,7 +6,7 @@ import { upsertEventFromHugo } from "../../../_lib/services/events";
 import { writeAuditLog } from "../../../_lib/services/audit";
 import { parseJsonSafe } from "../../../_lib/utils/json";
 import type { PagesContext } from "../../../_lib/types";
-import { adminCreateEventSchema } from "../../../../shared/schemas/api";
+import { adminCreateEventSchema } from "../../../../assets/shared/schemas/api";
 
 interface EventWithStats {
   id: string;

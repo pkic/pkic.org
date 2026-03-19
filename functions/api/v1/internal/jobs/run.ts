@@ -6,7 +6,7 @@ import { processPendingOutbox } from "../../../../_lib/email/outbox";
 import { runReminderCycle } from "../../../../_lib/services/reminders";
 import { runRetentionJob } from "../../../../_lib/services/retention";
 import type { PagesContext } from "../../../../_lib/types";
-import { adminRunJobsSchema } from "../../../../../shared/schemas/api";
+import { adminRunJobsSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(context: PagesContext): Promise<Response> {
   await requireAdminFromRequest(context.env.DB, context.request, context.env);

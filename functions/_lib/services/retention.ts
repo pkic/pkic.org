@@ -17,6 +17,12 @@ function olderThanDays(isoDate: string, days: number): boolean {
   return new Date(isoDate).getTime() < cutoff;
 }
 
+/**
+ * Retention scope: events/registrations/users ONLY.
+ *
+ * The `donations` table is explicitly excluded from all retention processing.
+ * Donor PII and financial data must be retained for ≥7 years per IRS §6001.
+ */
 export async function runRetentionJob(db: DatabaseLike): Promise<{ redactedRegistrations: number }> {
   const policies = await all<RetentionPolicyRow>(db, "SELECT * FROM retention_policies");
   if (policies.length === 0) {

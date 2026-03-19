@@ -13,7 +13,7 @@ import { buildAttendanceEmailData, STATUS_LABELS } from "../../../../_lib/utils/
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
 import { buildEventEmailVariables } from "../../../../_lib/services/events";
 import type { PagesContext } from "../../../../_lib/types";
-import { registrationManageSchema } from "../../../../../shared/schemas/api";
+import { registrationManageSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPatch(context: PagesContext<{ token: string }>): Promise<Response> {
   const body = await parseJsonBody(context.request, registrationManageSchema);

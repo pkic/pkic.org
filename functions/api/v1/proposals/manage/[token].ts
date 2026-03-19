@@ -4,7 +4,7 @@ import { all } from "../../../../_lib/db/queries";
 import { getProposalByManageToken, updateProposalByManageToken } from "../../../../_lib/services/proposals";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
 import type { PagesContext } from "../../../../_lib/types";
-import { proposalManageSchema } from "../../../../../shared/schemas/api";
+import { proposalManageSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPatch(context: PagesContext<{ token: string }>): Promise<Response> {
   const body = await parseJsonBody(context.request, proposalManageSchema);

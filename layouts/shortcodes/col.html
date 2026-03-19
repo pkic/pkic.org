@@ -1,0 +1,31 @@
+{{/*
+  col.html — Bootstrap column for use inside {{% row %}} in Markdown content.
+
+  Use with the percent-sign syntax so inner Markdown is rendered:
+    {{% col size="7" %}}
+    ## My heading
+    Some **markdown** content here.
+    {{% /col %}}
+
+  Parameters (all optional):
+    size    — Bootstrap lg column width 1–12 (default: auto)
+    sm      — Bootstrap sm column width 1–12 (default: none)
+    md      — Bootstrap md column width 1–12 (default: none)
+    sticky  — If "true", makes the column sticky (position:sticky; top:5rem)
+    class   — Extra CSS classes to add to the column div
+*/}}
+{{- $size   := .Get "size"   | default "" -}}
+{{- $sm     := .Get "sm"     | default "" -}}
+{{- $md     := .Get "md"     | default "" -}}
+{{- $sticky := .Get "sticky" | default "" -}}
+{{- $class  := .Get "class"  | default "" -}}
+
+{{- $colClass := "col" -}}
+{{- with $sm     }}{{- $colClass = printf "%s col-sm-%s"  $colClass . -}}{{ end -}}
+{{- with $md     }}{{- $colClass = printf "%s col-md-%s"  $colClass . -}}{{ end -}}
+{{- with $size   }}{{- $colClass = printf "%s col-lg-%s"  $colClass . -}}{{ end -}}
+{{- with $class  }}{{- $colClass = printf "%s %s"         $colClass . -}}{{ end -}}
+
+<div class="{{ $colClass }}"{{ with $sticky }} style="position:sticky;top:5rem"{{ end }}>
+{{ .Inner }}
+</div>

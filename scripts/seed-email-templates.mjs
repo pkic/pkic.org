@@ -6,14 +6,173 @@ import YAML from "yaml";
 
 const DEFAULT_CONFIG_PATH = path.join(process.cwd(), "scripts", "seed-event.yaml");
 const DEFAULT_BUCKET = process.env.ASSETS_BUCKET_NAME ?? "pkic-assets";
-const DEFAULT_LAYOUT_KEY = process.env.EMAIL_LAYOUT_R2_KEY ?? "layouts/email/default.html";
 const DEFAULT_ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "admin@pkic.org";
-const DEFAULT_LAYOUT_HTML = "<!doctype html><html><body>{{{body_html}}}</body></html>"; // NOTE: layout is rendered server-side in render.ts — this R2 value is not currently consumed.
+const DEFAULT_LAYOUT_HTML = `<!doctype html>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="color-scheme" content="light dark">
+  <meta name="supported-color-schemes" content="light dark">
+  <meta name="x-apple-disable-message-reformatting">
+  <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
+  <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
+  <style>
+    body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
+    table,td{mso-table-lspace:0pt;mso-table-rspace:0pt}
+    img{-ms-interpolation-mode:bicubic;border:0;height:auto;line-height:100%;outline:none;text-decoration:none}
+    table{border-collapse:collapse!important}
+    body{height:100%!important;margin:0!important;padding:0!important;width:100%!important;background-color:#f0f4f8}
+    a[x-apple-data-detectors]{color:inherit!important;text-decoration:none!important;font-size:inherit!important;font-family:inherit!important;font-weight:inherit!important;line-height:inherit!important}
+    u+#body a{color:inherit!important;text-decoration:none!important}
+    .eb h1{font-size:24px;font-weight:700;color:#0d1b2a;margin:0 0 20px;line-height:1.3;letter-spacing:-0.01em}
+    .eb h2{font-size:18px;font-weight:700;color:#0d1b2a;margin:28px 0 10px;line-height:1.35;padding-bottom:8px;border-bottom:2px solid #f0f4f8}
+    .eb h3{font-size:14px;font-weight:700;color:#198754;margin:20px 0 8px;text-transform:uppercase;letter-spacing:0.04em}
+    .eb p{margin:0 0 16px;color:#374151;line-height:1.75}
+    .eb p:last-child{margin-bottom:0}
+    .eb a{color:#198754;text-decoration:underline;font-weight:500}
+    .eb strong{color:#0d1b2a;font-weight:700}
+    .eb em{color:#4b5563;font-style:italic}
+    .eb ul,.eb ol{margin:0 0 16px;padding-left:22px;color:#374151}
+    .eb li{margin-bottom:6px;line-height:1.65}
+    .eb blockquote li{font-size:13px;margin-bottom:3px;line-height:1.55}
+    .eb hr{border:none;border-top:1px solid #e5e9ef;margin:28px 0}
+    .eb blockquote{margin:20px 0;padding:14px 20px;background:#f8fafc;border-left:4px solid #198754;border-radius:0 6px 6px 0;color:#4b5563}
+    .eb blockquote p{margin:0;color:#4b5563;font-style:italic}
+    .eb blockquote strong{color:#374151}
+    .eb blockquote a{color:#374151;text-decoration:underline}
+    .eb code{font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;padding:2px 7px;border-radius:4px;color:#0d1b2a;border:1px solid #e5e9ef}
+    .eb pre{background:#f8fafc;border:1px solid #e5e9ef;border-radius:6px;padding:16px;font-size:13px;overflow:auto;margin:0 0 16px}
+    .eb table{width:100%;border-collapse:collapse;margin:0 0 20px}
+    .eb th{background:#f8fafc;border-bottom:2px solid #e5e9ef;color:#0d1b2a;font-size:13px;font-weight:700;padding:10px 14px;text-align:left}
+    .eb td{border-bottom:1px solid #f0f4f8;color:#374151;font-size:14px;padding:10px 14px;vertical-align:top}
+    .eb tr:last-child td{border-bottom:none}
+    .notice{margin:16px 0;padding:14px 18px;border-radius:6px;border-left:4px solid;font-size:14px;line-height:1.65}
+    .notice-success{background:#f0f7f4;border-color:#198754;color:#14532d}
+    .notice-warning{background:#fffbeb;border-color:#d97706;color:#92400e}
+    .notice-info{background:#eff6ff;border-color:#3b82f6;color:#1e40af}
+    .notice-danger{background:#fef2f2;border-color:#ef4444;color:#991b1b}
+    .notice a,.notice strong{color:inherit}
+    .cta,.cta-navy{text-align:center;margin:28px 0}
+    .cta a,.cta-navy a{display:inline-block;color:#ffffff!important;text-decoration:none!important;font-size:15px;font-weight:700;padding:14px 36px;border-radius:6px;font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif}
+    .cta a{background:#198754}
+    .cta-navy a{background:#0d1b2a}
+    .cta-secondary{text-align:center;margin:12px 0 28px}
+    .cta-secondary a{display:inline-block;color:#6b7280!important;text-decoration:none!important;font-size:13px;font-weight:400;padding:8px 20px;border-radius:6px;border:1px solid #d1d5db;font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif;background:#ffffff}
+    @media only screen and (max-width:680px){
+      .ew{width:100%!important;border-radius:0!important}
+      .ep{padding:28px 24px!important}
+      .ef{padding:20px 24px!important}
+      .eh{padding:24px!important}
+    }
+    @media (prefers-color-scheme:dark){
+      body,.ow{background-color:#0f172a!important}
+      .eb{background-color:#1e2235!important;color:#d1d5db!important}
+      .eb h1{color:#f9fafb!important}
+      .eb h2{color:#f9fafb!important;border-bottom-color:#374151!important}
+      .eb h3{color:#4ade80!important}
+      .eb p{color:#d1d5db!important}
+      .eb a{color:#4ade80!important}
+      .eb strong{color:#f9fafb!important}
+      .eb em{color:#9ca3af!important}
+      .eb ul,.eb ol,.eb li{color:#d1d5db!important}
+      .eb hr{border-top-color:#374151!important}
+      .eb blockquote{background:#1a2744!important;border-left-color:#4ade80!important}
+      .eb blockquote p{color:#9ca3af!important}
+      .eb blockquote strong{color:#d1d5db!important}
+      .eb blockquote a{color:#9ca3af!important}
+      .eb code{background:#0f172a!important;color:#e2e8f0!important;border-color:#374151!important}
+      .eb pre{background:#0f172a!important;border-color:#374151!important}
+      .eb th{background:#263148!important;color:#f9fafb!important;border-bottom-color:#374151!important}
+      .eb td{border-bottom-color:#374151!important;color:#d1d5db!important}
+      .notice-success{background:#0f2a1c!important;color:#86efac!important}
+      .notice-warning{background:#2a1f0f!important;color:#fbbf24!important}
+      .notice-info{background:#0f1f3a!important;color:#93c5fd!important}
+      .notice-danger{background:#2a0f0f!important;color:#fca5a5!important}
+    }
+  </style>
+</head>
+<body id="body" style="margin:0;padding:0;background-color:#f0f4f8;font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif;">
+  <div style="display:none;max-height:0;overflow:hidden;mso-hide:all;">PKI Consortium &zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;&zwnj;&nbsp;</div>
+  <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" class="ow" style="background-color:#f0f4f8;">
+    <tr>
+      <td align="center" style="padding:32px 12px;">
+        <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="660" class="ew" style="max-width:660px;width:100%;border-radius:10px;overflow:hidden;box-shadow:0 2px 4px rgba(0,0,0,0.05),0 8px 32px rgba(0,0,0,0.08);">
+          <tr>
+            <td class="eh" align="center" style="background-color:#000000;padding:28px 40px;text-align:center;">
+              <a href="{{baseUrl}}" target="_blank" style="text-decoration:none;display:inline-block;line-height:1;">
+                <img src="{{baseUrl}}/img/logo-white.png" width="160" alt="PKI Consortium" style="display:block;width:160px;max-width:160px;height:auto;border:0;">
+              </a>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding:0;font-size:0;line-height:0;background:linear-gradient(to right,#198754,#20c997,#5a9bd5,#ffc107,#ed7d31,#dc3545);height:5px;line-height:5px;">&nbsp;</td>
+          </tr>
+          {{#if heroImageUrl}}<tr>
+            <td style="padding:0;line-height:0;font-size:0;">
+              <img src="{{baseUrl}}/{{heroImageUrl}}" width="660" alt="" style="display:block;width:100%;max-width:660px;height:auto;border:0;">
+            </td>
+          </tr>{{/if}}
+          <tr>
+            <td class="ep eb" style="background-color:#ffffff;padding:40px 40px;font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:16px;line-height:1.75;color:#374151;">
+              {{{body_html}}}
+            </td>
+          </tr>
+          <tr>
+            <td class="ef" style="background-color:#0d1b2a;padding:24px 40px;">
+              <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%">
+                <tr>
+                  <td align="center" style="font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#6b7280;text-align:center;">
+                    <p style="margin:0 0 8px;">
+                      <a href="{{baseUrl}}" target="_blank" style="color:#4ade80;text-decoration:none;font-weight:600;">pkic.org</a>
+                      <span style="color:#374151;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>
+                      <a href="{{baseUrl}}/privacy/" target="_blank" style="color:#6b7280;text-decoration:none;">Privacy Policy</a>
+                      <span style="color:#374151;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>
+                      <a href="{{baseUrl}}/join/" target="_blank" style="color:#6b7280;text-decoration:none;">Become a Member</a>
+                    </p>
+                    <p style="margin:0;color:#4b5563;font-size:11px;">&copy; PKI Consortium &mdash; Advancing trust and security in digital infrastructure.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
 
-// NOTE: email partials (partial_reg_details, partial_sponsors_block, partial_about_pkic)
-// are seeded automatically by migration 0009 and managed via the admin UI.
-// Do not add them here — the migration is the single source of truth.
+// NOTE: shared email partials are seeded here and managed via the admin UI.
+// Keep these in sync with the editor labels and the partial loader.
 const DEFAULT_TEMPLATES = [
+  {
+    key: "email_layout",
+    subjectTemplate: null,
+    contentType: "html",
+    content: DEFAULT_LAYOUT_HTML,
+  },
+  // ─────────────────────────────────────────────────────────────────────────
+  // Shared donation request block
+  // Variables: baseUrl
+  // Partials:  {{> donation_request}}
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "partial_donation_request",
+    subjectTemplate: null,
+    contentType: "markdown",
+    content: `---
+
+**Help to keep the PKI Consortium Membership, Conferences, and Resources free**
+
+If what we do is valuable to you or your organization, please consider a voluntary contribution — any amount helps us keep membership, conferences, and resources open to the widest possible audience.
+
+<div class="cta-secondary"><a href="{{baseUrl}}/donate/">Support the PKI Consortium &rarr;</a></div>
+
+<div class="notice notice-info">Contributions to the PKI Consortium are <strong>entirely voluntary</strong> and are not a ticket, fee, or payment for goods or services. The PKI Consortium is a <strong>501(c)(6) nonprofit business league</strong> — donations are <strong>not deductible as charitable contributions</strong> for U.S. federal income tax purposes. Consult your tax advisor regarding any applicable treatment in your jurisdiction.<br><br>Does your organization want to make a bigger impact? Sponsors directly fund free, open events for the global PKI and security community — <a href="{{baseUrl}}/sponsors/">explore sponsorship opportunities at pkic.org/sponsors/</a>.</div>
+`,
+  },
   // ─────────────────────────────────────────────────────────────────────────
   // 1. Email confirmation request
   // Variables: eventName, firstName, lastName, email, organizationName,
@@ -41,6 +200,8 @@ Once confirmed you can [manage your registration]({{manageUrl}}) at any time.
 Know someone who should attend? Share your personal referral link: [{{shareUrl}}]({{shareUrl}})
 
 {{> sponsors_block}}
+
+{{> donation_request}}
 `,
   },
 
@@ -84,6 +245,8 @@ Know someone who should attend? Share your personal referral link and use the at
 We look forward to seeing you at the *{{eventName}}**!
 
 {{> sponsors_block}}
+
+{{> donation_request}}
 `,
   },
 
@@ -193,6 +356,8 @@ Join security experts, researchers, and industry leaders to explore the latest d
 {{> about_pkic}}
 
 {{> sponsors_block}}
+
+{{> donation_request}}
 `,
   },
 
@@ -230,6 +395,8 @@ If you have any questions or would like to discuss your proposal first, please [
 {{> about_pkic}}
 
 {{> sponsors_block}}
+
+{{> donation_request}}
 `,
   },
 
@@ -280,6 +447,8 @@ You can view or edit your proposal at any time: [Manage my proposal &rarr;]({{ma
 Encourage colleagues to attend by sharing your referral link: [{{shareUrl}}]({{shareUrl}})
 
 Thank you for contributing to **{{eventName}}** and the broader PKI community!
+
+{{> donation_request}}
 `,
   },
 
@@ -321,6 +490,8 @@ We have completed our review of your proposal submitted to **{{eventName}}**.
 If you have any questions, please [contact us](mailto:contact@pkic.org).
 
 Thank you for your interest in contributing to **{{eventName}}**.
+
+{{> donation_request}}
 `,
   },
 
@@ -348,6 +519,8 @@ Please review the proposal and **confirm or decline your participation**. You wi
 If you have questions, please [contact us](mailto:contact@pkic.org).
 
 {{> sponsors_block}}
+
+{{> donation_request}}
 `,
   },
 
@@ -374,6 +547,8 @@ To help us promote your session, please take a moment to complete your speaker p
 <div class="cta"><a href="{{profileUrl}}">Review &amp; update my speaker profile &rarr;</a></div>
 
 Your profile can be updated at any time up until the event.
+
+{{> donation_request}}
 `,
   },
 
@@ -404,6 +579,8 @@ Please upload your presentation slides by the deadline below so our team can pre
 You can replace your file at any time before the deadline.
 
 If you have any questions, please [contact us](mailto:contact@pkic.org).
+
+{{> donation_request}}
 `,
   },
 
@@ -475,8 +652,7 @@ Your voluntary donation helps us keep our conferences free and open to more of t
 
 ---
 
-The PKI Consortium is a 501(c)(6) non-profit business league registered in Utah, USA (#10462204-0140). This contribution was made voluntarily — no goods or services were provided in exchange.
-
+PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States. This payment is voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor regarding any possible business-expense treatment or other tax consequences.
 If you have any questions, please [contact us](mailto:contact@pkic.org).
 
 With gratitude,<br>
@@ -503,7 +679,6 @@ function parseArgs(argv) {
     configPath: DEFAULT_CONFIG_PATH,
     bucket: DEFAULT_BUCKET,
     adminEmail: DEFAULT_ADMIN_EMAIL,
-    layoutKey: DEFAULT_LAYOUT_KEY,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -549,10 +724,6 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (arg === "--layout-key" && next) {
-      parsed.layoutKey = next;
-      index += 1;
-    }
   }
 
   return parsed;
@@ -608,8 +779,6 @@ function seedConfig(config, cli) {
   }
 
   return {
-    layoutKey: config?.emailTemplates?.layoutKey ?? cli.layoutKey,
-    layoutHtml: config?.emailTemplates?.layoutHtml ?? DEFAULT_LAYOUT_HTML,
     templates: Array.from(merged.values()),
   };
 }
@@ -692,14 +861,6 @@ function main() {
   const seed = seedConfig(config, cli);
 
   ensureAdminExists(cli);
-
-  // Seed the layout to R2 if a bucket is configured (used for HTML wrapping).
-  // Template content goes to DB only, so no R2 content uploads are needed.
-  try {
-    putR2Object(cli, cli.bucket, seed.layoutKey, seed.layoutHtml, "text/html; charset=utf-8");
-  } catch {
-    // R2 bucket may not be configured in dev — layout will fall back to plain HTML.
-  }
 
   const sql = buildTemplateSqlStatements(cli, seed.templates);
   const executeArgs = [

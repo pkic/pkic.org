@@ -331,6 +331,7 @@ export const adminEmailTemplatePreviewSchema = z.object({
   subjectTemplate: z.string().trim().min(1).max(512).optional(),
   content: z.string().min(1).max(500_000),
   contentType: z.enum(["markdown", "html", "text"]).default("markdown"),
+  layoutHtml: z.string().min(1).max(500_000).optional(),
   data: z.record(z.string().trim().min(1).max(80), z.unknown()).optional(),
 });
 

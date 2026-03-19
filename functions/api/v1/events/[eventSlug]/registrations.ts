@@ -19,7 +19,7 @@ import { buildAttendanceEmailData } from "../../../../_lib/utils/attendance";
 import { buildAcceptedTermsText, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
 import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../_lib/services/frontend-links";
 import type { PagesContext } from "../../../../_lib/types";
-import { registrationCreateSchema } from "../../../../../shared/schemas/api";
+import { registrationCreateSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(
   context: PagesContext<{ eventSlug: string }>,

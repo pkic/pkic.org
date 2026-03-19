@@ -7,7 +7,7 @@ import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { proposalPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
 import type { PagesContext } from "../../../../../../../_lib/types";
-import { adminBulkSpeakerInvitesSchema } from "../../../../../../../../shared/schemas/api";
+import { adminBulkSpeakerInvitesSchema } from "../../../../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(
   context: PagesContext<{ eventSlug: string }>,

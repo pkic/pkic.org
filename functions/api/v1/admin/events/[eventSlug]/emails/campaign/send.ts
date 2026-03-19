@@ -16,7 +16,7 @@ import {
   verifyCampaignPreviewToken,
 } from "../../../../../../../_lib/services/admin-email-campaign";
 import type { PagesContext } from "../../../../../../../_lib/types";
-import { adminEventCampaignSendSchema } from "../../../../../../../../shared/schemas/api";
+import { adminEventCampaignSendSchema } from "../../../../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(
   context: PagesContext<{ eventSlug: string }>,
@@ -83,7 +83,7 @@ export async function onRequestPost(
   }
 
   // Validate template exists only when not using a direct body override
-  const templateKey = body.bodyContent ? (body.templateKey || "__direct__") : body.templateKey;
+  const templateKey = body.bodyContent ? (body.templateKey || "__direct__") : (body.templateKey as string);
   const template = !body.bodyContent ? await resolveTemplate(context.env.DB, templateKey) : null;
 
   if (body.sendMode === "bcc_batch") {

@@ -5,6 +5,7 @@ import { buildCustomAnswerRows, buildCustomAnswerVariables } from "../utils/regi
 import { hmacSha256Hex, sha256Hex } from "../utils/crypto";
 import { parseJsonSafe } from "../utils/json";
 import type { DatabaseLike } from "../types";
+import type { FormFieldDefinition } from "./forms/read";
 
 export interface CampaignRecipient {
   email: string;
@@ -229,7 +230,7 @@ function buildAttendeeTemplateData(
     attendance_type: string | null;
     custom_answers_json: string | null;
   },
-  formFields: Array<{ key: string; label: string; fieldType: string }> | undefined,
+  formFields: FormFieldDefinition[] | undefined,
 ): Record<string, unknown> {
   const customAnswers = parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null);
   return {
@@ -250,7 +251,7 @@ function buildSpeakerTemplateData(
     proposal_type: string | null;
     details_json: string | null;
   },
-  formFields: Array<{ key: string; label: string; fieldType: string }> | undefined,
+  formFields: FormFieldDefinition[] | undefined,
 ): Record<string, unknown> {
   const customAnswers = parseJsonSafe<Record<string, unknown> | null>(row.details_json, null);
   return {

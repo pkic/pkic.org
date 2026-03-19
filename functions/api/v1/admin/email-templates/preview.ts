@@ -2,10 +2,10 @@ import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { renderEmail, renderSubject } from "../../../../_lib/email/render";
-import { loadEmailPartials } from "../../../../_lib/email/partials";
+import { loadEmailLayout, loadEmailPartials } from "../../../../_lib/email/partials";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import type { PagesContext } from "../../../../_lib/types";
-import { adminEmailTemplatePreviewSchema } from "../../../../../shared/schemas/api";
+import { adminEmailTemplatePreviewSchema } from "../../../../../assets/shared/schemas/api";
 
 function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
   return {
@@ -38,6 +38,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     ...(body.data ?? {}),
   };
   const partials = await loadEmailPartials(context.env.DB);
+  const layoutHtml = body.layoutHtml ?? await loadEmailLayout(context.env.DB);
   const dataWithPartials = { ...data, _partials: partials };
 
   const subject = renderSubject(
@@ -49,7 +50,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
   const rendered = await renderEmail(
     body.content,
     dataWithPartials,
-    null,
+    layoutHtml,
     body.contentType,
     appBaseUrl,
   );

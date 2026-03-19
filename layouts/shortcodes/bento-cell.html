@@ -1,0 +1,17 @@
+{{/*
+  bento-cell.html — A single cell inside a {{% bento %}} grid.
+
+  Parameters (all optional):
+    span     — Number of columns this cell should span (default: 1)
+    rowspan  — Number of rows this cell should span (default: 1)
+    class    — Extra CSS classes to add to the cell div
+*/}}
+{{- $span    := .Get "span"    | default "1" -}}
+{{- $rowspan := .Get "rowspan" | default "1" -}}
+{{- $class   := .Get "class"   | default "" -}}
+
+{{- $style := printf "grid-column:span %s;grid-row:span %s" $span $rowspan -}}
+
+<div class="bento-cell{{ with $class }} {{ . }}{{ end }}" style="{{ $style }}">
+{{ .Inner }}
+</div>

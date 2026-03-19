@@ -16,7 +16,7 @@ import { uuid } from "../../../../../_lib/utils/ids";
 import { stringifyJson } from "../../../../../_lib/utils/json";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import type { PagesContext } from "../../../../../_lib/types";
-import { adminFormCreateSchema } from "../../../../../../shared/schemas/api";
+import { adminFormCreateSchema } from "../../../../../../assets/shared/schemas/api";
 
 interface FormRow {
   id: string;

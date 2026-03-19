@@ -5,7 +5,8 @@
   "compatibility_flags": ["nodejs_compat"],
   "pages_build_output_dir": "public",
   "dev": {
-    "port": 8788
+    "port": 8788,
+    "local_protocol": "https"
   },
   "d1_databases": [
     {
@@ -66,7 +67,8 @@
         "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
         "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
         "FROM_EMAIL": "noreply@pkic.org",
-        "FROM_NAME": "PKI Consortium (Preview)"
+        "FROM_NAME": "PKI Consortium (Preview)",
+        "STRIPE_PUBLISHABLE_KEY": "pk_test_51TADczLT173BlQwOCJAhV0Mf5xxJXJWG9VWkprhXUSJZTaYdqr5vJynipzUfCglU93cIoCBBNOkviwhOqQ3ZFPNk00cxzuEyMH"
       }
     }
   },
@@ -84,7 +86,8 @@
     "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
     "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
     "FROM_EMAIL": "noreply@pkic.org",
-    "FROM_NAME": "PKI Consortium"
+    "FROM_NAME": "PKI Consortium",
+    "STRIPE_PUBLISHABLE_KEY": "pk_live_51TADczLT173BlQwOkLRjg7nIK7sX9gZJj4DAvD30X8mKpP3Zu3ksMmMk6GYE2moavKccbH3VBqCHDF09mAlny3kg00pZN2Ke0d"
   }
   // ── Secrets (set via: wrangler secret put <NAME>) ──────────────────────────
   // SENDGRID_API_KEY        — SendGrid API key for sending emails
@@ -97,6 +100,9 @@
   //                           Payment Intents (read), Charges (read),
   //                           Balance Transactions (read).
   //                           Obtain from Stripe Dashboard → Developers → API keys.
+  // STRIPE_PUBLISHABLE_KEY  — Stripe publishable key (pk_live_… / pk_test_…).
+  //                           Set in vars (not secrets) since it is safe to expose publicly.
+  //                           Update the values in vars and env.preview.vars above.
   // STRIPE_WEBHOOK_SECRET        — Stripe webhook signing secret (whsec_…).
   //                               Configure the endpoint in Stripe Dashboard →
   //                               Developers → Webhooks, select event:

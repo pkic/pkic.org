@@ -16,7 +16,7 @@ import type { PagesContext } from "../../../_lib/types";
 interface DonationBadgeRow {
   gross_amount: number;
   currency: string;
-  donor_name: string;
+  name: string;
   source: string | null;
   completed_at: string | null;
 }
@@ -32,7 +32,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
   }
 
   const row = await env.DB.prepare(
-    `SELECT gross_amount, currency, donor_name, source, completed_at
+    `SELECT gross_amount, currency, name, source, completed_at
      FROM donations
      WHERE checkout_session_id = ?
        AND completed_at IS NOT NULL`,
@@ -48,7 +48,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
   return json({
     grossAmount: row.gross_amount,
     currency: row.currency,
-    donorFirstName: row.donor_name.split(" ")[0] ?? null,
+    donorFirstName: row.name.split(" ")[0] ?? null,
     source: row.source,
     completedAt: row.completed_at,
   });

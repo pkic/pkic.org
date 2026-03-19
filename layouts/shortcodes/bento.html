@@ -1,0 +1,31 @@
+{{/*
+  bento.html — CSS Grid bento-style layout wrapper for use in Markdown.
+
+  Use with the percent-sign syntax so inner Markdown is rendered:
+    {{% bento cols="3" gap="1rem" %}}
+    {{% bento-cell span="2" %}} Wide content {{% /bento-cell %}}
+    {{% bento-cell %}} Narrow content {{% /bento-cell %}}
+    {{% /bento %}}
+
+  Parameters (all optional):
+    cols     — Number of equal grid columns (default: 3)
+    rows     — Number of equal grid rows (default: none — auto)
+    gap      — CSS gap value, e.g. "1rem", "1.5rem" (default: "1rem")
+    min      — Minimum column width for auto-fill, e.g. "15rem" (default: none — uses cols)
+    class    — Extra CSS classes to add to the grid container
+*/}}
+{{- $cols  := .Get "cols"  | default "3" -}}
+{{- $rows  := .Get "rows"  | default "" -}}
+{{- $gap   := .Get "gap"   | default "1rem" -}}
+{{- $min   := .Get "min"   | default "" -}}
+{{- $class := .Get "class" | default "" -}}
+
+{{- $gridCols := printf "repeat(%s, 1fr)" $cols -}}
+{{- with $min  }}{{- $gridCols = printf "repeat(auto-fill, minmax(%s, 1fr))" . -}}{{ end -}}
+
+{{- $style := printf "display:grid;grid-template-columns:%s;gap:%s" $gridCols $gap -}}
+{{- with $rows }}{{- $style = printf "%s;grid-template-rows:repeat(%s, 1fr)" $style . -}}{{ end -}}
+
+<div class="bento-grid{{ with $class }} {{ . }}{{ end }}" style="{{ $style }}">
+{{ .Inner }}
+</div>

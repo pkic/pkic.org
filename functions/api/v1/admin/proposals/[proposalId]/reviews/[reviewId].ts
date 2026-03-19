@@ -5,7 +5,7 @@ import { getProposalAccessForEvent } from "../../../../../../_lib/auth/proposal-
 import { first } from "../../../../../../_lib/db/queries";
 import { updateReviewById } from "../../../../../../_lib/services/proposals";
 import type { PagesContext } from "../../../../../../_lib/types";
-import { reviewPatchSchema } from "../../../../../../../shared/schemas/api";
+import { reviewPatchSchema } from "../../../../../../../assets/shared/schemas/api";
 
 export async function onRequestPatch(
   context: PagesContext<{ proposalId: string; reviewId: string }>,

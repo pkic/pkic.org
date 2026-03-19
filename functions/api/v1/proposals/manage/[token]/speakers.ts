@@ -27,7 +27,7 @@ import {
   normalizedEmailSchema,
   firstNameSchema,
   lastNameSchema,
-} from "../../../../../../shared/schemas/api";
+} from "../../../../../../assets/shared/schemas/api";
 
 const coSpeakerInviteSchema = z.object({
   email: normalizedEmailSchema,

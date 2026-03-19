@@ -42,6 +42,8 @@ export const donationCheckoutSchema = z.object({
       source: z.string().trim().max(500).optional(),
     })
     .optional(),
+  /** When true, creates a Stripe Embedded Checkout session (returns clientSecret). */
+  embedded: z.boolean().optional(),
 });
 
 export type DonationCheckoutInput = z.infer<typeof donationCheckoutSchema>;

@@ -6,7 +6,7 @@ import { listProposalReviews, upsertProposalReview } from "../../../../../_lib/s
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { first } from "../../../../../_lib/db/queries";
 import type { PagesContext } from "../../../../../_lib/types";
-import { reviewUpsertSchema } from "../../../../../../shared/schemas/api";
+import { reviewUpsertSchema } from "../../../../../../assets/shared/schemas/api";
 
 export async function onRequestGet(
   context: PagesContext<{ proposalId: string }>,

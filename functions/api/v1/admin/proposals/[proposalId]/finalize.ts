@@ -13,7 +13,7 @@ import { first, run } from "../../../../../_lib/db/queries";
 import { speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { buildEventEmailVariables } from "../../../../../_lib/services/events";
 import type { PagesContext } from "../../../../../_lib/types";
-import { finalizeProposalSchema } from "../../../../../../shared/schemas/api";
+import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(
   context: PagesContext<{ proposalId: string }>,

@@ -15,7 +15,7 @@ import { nowIso } from "../../../../../_lib/utils/time";
 import { parseJsonSafe, stringifyJson } from "../../../../../_lib/utils/json";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import type { PagesContext } from "../../../../../_lib/types";
-import { adminEventSettingsSchema } from "../../../../../../shared/schemas/api";
+import { adminEventSettingsSchema } from "../../../../../../assets/shared/schemas/api";
 
 export async function onRequestPatch(
   context: PagesContext<{ eventSlug: string }>,

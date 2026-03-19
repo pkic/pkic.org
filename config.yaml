@@ -145,23 +145,6 @@ markup:
         block: true
 
 module:
-  mounts:
-    - source: assets
-      target: assets
-    - source: shared
-      target: assets/shared
-    - source: static
-      target: static
-    - source: layouts
-      target: layouts
-    - source: content
-      target: content
-    - source: data
-      target: data
-    - source: i18n
-      target: i18n
-    - source: archetypes
-      target: archetypes
   imports:
     - path: github.com/gohugoio/hugo-mod-bootstrap-scss/v5
 
@@ -249,9 +232,9 @@ caches:
           block-all-mixed-content;
           style-src 'unsafe-inline' 'self';
           font-src 'self';
-          script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/ localhost:*;
+          script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/ https://js.stripe.com localhost:*;
           img-src 'self' https://i.ytimg.com localhost:* data:;
-          frame-src https://www.youtube-nocookie.com/ https://player.vimeo.com/ https://www.youtube.com/;
+          frame-src https://www.youtube-nocookie.com/ https://player.vimeo.com/ https://www.youtube.com/ https://js.stripe.com;
           media-src https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4 localhost:*;
           connect-src ws://localhost:1313/livereload 'self' data:;
 

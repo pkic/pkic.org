@@ -4,7 +4,7 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { replaceEventTerms, upsertEventFromHugo } from "../../../../_lib/services/events";
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import type { PagesContext } from "../../../../_lib/types";
-import { adminEventSyncSchema } from "../../../../../shared/schemas/api";
+import { adminEventSyncSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(context: PagesContext): Promise<Response> {
   const admin = await requireAdminFromRequest(context.env.DB, context.request);
