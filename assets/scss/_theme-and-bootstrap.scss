@@ -215,7 +215,17 @@ body {
   flex-direction: column;
   min-height: 100vh;
   font-family: "Roboto", sans-serif !important;
-  overflow-x: hidden;
+  // overflow-x must NOT be set here — it breaks position:sticky on the navbar
+  // and section navs (any overflow value other than `visible` on an ancestor
+  // turns off sticky for all descendants). Clipping is handled on <main> instead.
+}
+
+// Clip wide content inside the page body without breaking sticky positioning.
+// The navbar and mega-menu panels are siblings of <main>, not descendants,
+// so they are unaffected by this rule.
+main {
+  overflow-x: clip; // `clip` (unlike `hidden`) does not create a scroll container,
+                    // so position:sticky inside <main> still works correctly.
 }
 
 table {
