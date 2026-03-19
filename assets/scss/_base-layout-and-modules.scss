@@ -489,8 +489,8 @@ main :is(h2, h3, h4):hover .header-link {
 
 self-assessment {
   --pkimm-sticky-top-offset: calc(
-    56px + 44px + 1.5rem
-  ); // navbar (57px) + wg-section-nav (44px)
+    var(--pkic-navbar-height, 57px) + 44px + 1.5rem
+  ); // navbar + wg-section-nav (44px)
 
   .pkimm-tabs {
     z-index: 150 !important; // below wg-section-nav (200) so its dropdowns render on top

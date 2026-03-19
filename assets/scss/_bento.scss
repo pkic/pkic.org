@@ -364,7 +364,7 @@ $wg-colors: (
   border-top: 3px solid #6f42c1;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   position: sticky;
-  top: 57px;
+  top: var(--pkic-navbar-height);
   z-index: 200;
   overflow-x: auto;
   scrollbar-width: none;
