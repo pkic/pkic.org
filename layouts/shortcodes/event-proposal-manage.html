@@ -1,5 +1,5 @@
-{{- $eventSlug := partial "event-flow-slug.html" . -}}
-{{- $eventPagePath := partial "event-flow-page-path.html" . -}}
+{{- $eventSlug := partial "events/flow/slug.html" . -}}
+{{- $eventPagePath := partial "events/flow/page-path.html" . -}}
 <div class="event-flow" data-event-proposal-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
   <p class="form-text mb-3">Open this page from your proposal management link.</p>
   <form class="row g-3 my-2 needs-validation" novalidate>

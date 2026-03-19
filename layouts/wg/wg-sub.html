@@ -13,7 +13,7 @@
 
 {{/* ── Compact sub-page header ──────────────────────────────────── */}}
 <div class="wg-sub-header wg-{{ $wg.Params.wgID | lower }}">
-  {{ partial "wg-icon.html" (dict "id" ($wg.Params.card.icon | default ($wg.Params.wgID | lower)) "class" "wg-sub-header-watermark") }}
+  {{ partial "wg/icon.html" (dict "id" ($wg.Params.card.icon | default ($wg.Params.wgID | lower)) "class" "wg-sub-header-watermark") }}
   <div class="container">
     <p class="wg-sub-eyebrow">
       <a href="/wg/">Working Groups</a>
@@ -50,7 +50,7 @@
         {{- $isActive := strings.HasPrefix $.Page.RelPermalink $delURL -}}
         {{- $delSection := $.Site.GetPage $delURL -}}
         {{- $delHasChildren := and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
-        {{- $slug := $delURL | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+        {{- $slug := partial "wg/path-slug.html" (dict "path" $delURL) -}}
         {{- if $delHasChildren -}}
         <div class="wg-nav-link-wrap" data-panel="wg-nav-tree-{{ $slug }}">
           <a class="wg-nav-link{{ if $isActive }} is-active{{ end }}" href="{{ $delURL }}">{{ $label }}</a>
@@ -95,11 +95,11 @@
   {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
     {{- $delSection := $.Site.GetPage $delURL -}}
     {{- if and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
-      {{- $slug := $delURL | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+      {{- $slug := partial "wg/path-slug.html" (dict "path" $delURL) -}}
       {{- $isActive := strings.HasPrefix $.Page.RelPermalink $delURL -}}
       {{- $treePage := cond $isActive $.Page $delSection -}}
 <div class="wg-nav-tree-panel wg-{{ $wg.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
-  {{ partial "wg-sidebar-tree.html" $treePage }}
+  {{ partial "wg/sidebar-tree.html" $treePage }}
 </div>
     {{- end -}}
   {{- end -}}
@@ -174,7 +174,7 @@
         {{- end -}}
       {{- end -}}
       {{- range (sort $wgMembers "name") -}}
-        {{- partial "member-card.html" (dict "member" . "site" $.Site "showDescription" true "showWorkingGroups" false "showSocialHover" true) -}}
+        {{- partial "members/card.html" (dict "member" . "site" $.Site "showDescription" true "showWorkingGroups" false "showSocialHover" true) -}}
       {{- end -}}
     </div>
     <div class="text-center mt-4">

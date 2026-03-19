@@ -19,7 +19,7 @@
      AUTO-DETECTED WG-CONTENT RENDERING (nested deliverable sections)
      ────────────────────────────────────────────────────────────────── */}}
 {{ if $isNestedContent }}
-  {{ partial "wg-sub-navigation.html" . }}
+  {{ partial "wg/sub-navigation.html" . }}
 
 {{ else }}
 {{/* ──────────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@
         {{- $label := .menuTitle | default (.title | truncate 22 "…") -}}
         {{- $delSection := $.Site.GetPage $delURL -}}
         {{- $delHasChildren := and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
-        {{- $slug := $delURL | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+        {{- $slug := partial "wg/path-slug.html" (dict "path" $delURL) -}}
         {{- if $delHasChildren -}}
         <div class="wg-nav-link-wrap" data-panel="wg-nav-tree-{{ $slug }}">
           <a class="wg-nav-link" href="{{ $delURL }}">{{ $label }}</a>
@@ -132,9 +132,9 @@
   {{- if and $delURL (strings.HasPrefix $delURL $wgBase) -}}
     {{- $delSection := $.Site.GetPage $delURL -}}
     {{- if and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
-      {{- $slug := $delURL | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+      {{- $slug := partial "wg/path-slug.html" (dict "path" $delURL) -}}
 <div class="wg-nav-tree-panel wg-{{ $.Page.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
-  {{ partial "wg-sidebar-tree.html" $delSection }}
+  {{ partial "wg/sidebar-tree.html" $delSection }}
 </div>
     {{- end -}}
   {{- end -}}
@@ -197,7 +197,7 @@
         <div class="wg-key-card wg-key-card--{{ $color }}">
           {{ with .badge }}<span class="badge wg-key-badge">{{ . }}</span>{{ end }}
           <div class="wg-key-icon">
-            {{ partial "wg-icon.html" (dict "id" .icon "class" "wg-key-svg") }}
+            {{ partial "wg/icon.html" (dict "id" .icon "class" "wg-key-svg") }}
           </div>
           <h3 class="wg-key-title">{{ .title }}</h3>
           <p class="wg-key-desc">{{ .description }}</p>
@@ -328,7 +328,7 @@
         {{- end -}}
       {{- end -}}
       {{- range (shuffle $wgMembers) -}}
-        {{- partial "member-card.html" (dict "member" . "site" $.Site "showDescription" false "showWorkingGroups" false "showSocialHover" true) -}}
+        {{- partial "members/card.html" (dict "member" . "site" $.Site "showDescription" false "showWorkingGroups" false "showSocialHover" true) -}}
       {{- end -}}
     </div>
     <div class="text-center mt-4">

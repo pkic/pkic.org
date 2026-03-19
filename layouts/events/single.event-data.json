@@ -1,2 +1,2 @@
-{{- $data := partial "add-headshots.html" . -}}
+{{- $data := partial "events/add-headshots.html" . -}}
 {{- $data | jsonify -}}

@@ -33,7 +33,7 @@
     <div class="row g-4">
       {{ range $upcoming }}
       <div class="col-md-6 col-lg-4">
-        {{ partial "event-webinar-card.html" . }}
+        {{ partial "events/webinar-card.html" . }}
       </div>
       {{ end }}
     </div>
@@ -51,7 +51,7 @@
     <div class="row g-4">
       {{ range $pager.Pages }}
       <div class="col-md-6 col-lg-4">
-        {{ partial "event-webinar-card.html" . }}
+        {{ partial "events/webinar-card.html" . }}
       </div>
       {{ end }}
     </div>

@@ -1,5 +1,5 @@
-{{- $eventSlug := partial "event-flow-slug.html" . -}}
-{{- $eventPagePath := partial "event-flow-page-path.html" . -}}
+{{- $eventSlug := partial "events/flow/slug.html" . -}}
+{{- $eventPagePath := partial "events/flow/page-path.html" . -}}
 <div class="event-flow" data-event-registration-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
 
   {{/* ── Greeting / status banner ──────────────────────────────────────── */}}
@@ -33,7 +33,7 @@
       {{/* ── Your details ─────────────────────────────────────────────── */}}
       <div class="col-12">
         <h3 class="h5">Your details</h3>
-        {{- partial "event-flow-personal-fields.html" (dict "prefix" "manage") -}}
+        {{- partial "events/flow/personal-fields.html" (dict "prefix" "manage") -}}
       </div>
 
       {{/* ── Event-specific questions (same pipeline as registration) ──── */}}
