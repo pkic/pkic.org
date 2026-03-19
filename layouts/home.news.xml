@@ -1,4 +1,4 @@
-{{- $items := partialCached "rss.html" . "global" -}}
+{{- $items := partialCached "rss/index.html" . "global" -}}
 
 {{- $items = sort $items "pubDate" "desc" -}}
 

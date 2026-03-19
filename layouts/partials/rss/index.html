@@ -3,7 +3,7 @@
   {{- $member := . -}}
   {{- if eq (default "en" (substr .blog.language 0 2) ) "en" -}}
     {{- with .blog.feed -}}
-      {{- $feedItems := partialCached "rss-item-data.html" . . -}}
+      {{- $feedItems := partialCached "rss/item-data.html" . . -}}
       {{- range $feedItems -}}
         {{- $enriched := merge . (dict
           "memberId"          $member.id

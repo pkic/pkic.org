@@ -180,7 +180,7 @@
   Event sponsor strip — only Diamond (weight 6) and Titanium (weight 5) sponsors.
   Sorted highest-to-lowest then placed center-outward via CSS order, so Diamonds
   land in the middle and Titaniums fan out to the sides.
-  Uses the same sponsors-collect.html partial as the sponsors shortcode.
+  Uses the same sponsors/collect.html partial as the sponsors shortcode.
 */}}
 {{/*
   Collect sponsors with their effective weight so we can sort highest-to-lowest
@@ -189,7 +189,7 @@
 */}}
 {{- $sponsorItems := slice -}}
 {{- $sponsoring := $page.Params.sponsoring | default $page.Site.Params.name -}}
-{{- $eventSponsors := partial "sponsors-collect.html" (dict "site" $page.Site "sponsoring" $sponsoring "level" "all" "minWeight" 5) -}}
+{{- $eventSponsors := partial "sponsors/collect.html" (dict "site" $page.Site "sponsoring" $sponsoring "level" "all" "minWeight" 5) -}}
   {{- range $eventSponsors -}}
     {{- $s := . -}}
     {{- $logo := "" -}}

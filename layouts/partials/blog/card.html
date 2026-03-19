@@ -33,7 +33,7 @@
     <p class="blog-card-summary">{{ $p.Summary | truncate 180 | plainify }}</p>
     {{ with $p.Params.authors }}
     <div class="blog-card-author">
-      {{ partial "blog-author-avatars.html" $p }}
+      {{ partial "blog/author-avatars.html" $p }}
     </div>
     {{ end }}
   </div>

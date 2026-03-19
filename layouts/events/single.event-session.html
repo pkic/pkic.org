@@ -764,16 +764,16 @@
         <div id="sponsors">
             {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Kuala Lumpur 2025" }}
             {{ .Scratch.Set "level" "Diamond" }}
-            {{ partial "sponsors.html" . }}
+            {{ partial "sponsors/grid.html" . }}
 
             {{ .Scratch.Set "level" "Titanium" }}
-            {{ partial "sponsors.html" . }}
+            {{ partial "sponsors/grid.html" . }}
 
             {{ .Scratch.Set "level" "Leader" }}
-            {{ partial "sponsors.html" . }}
+            {{ partial "sponsors/grid.html" . }}
 
             {{ .Scratch.Set "level" "Platinum" }}
-            {{ partial "sponsors.html" . }}
+            {{ partial "sponsors/grid.html" . }}
         </div>
 
         <div id="textbar" class="yellow-black">

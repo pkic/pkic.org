@@ -1,5 +1,5 @@
 {{/*
-  members-listing.html — shared A-Z member grid with sidebar + search bar.
+  members/listing.html — shared A-Z member grid with sidebar + search bar.
 
   Params (passed via dict):
     members  — slice of member data objects
@@ -72,7 +72,7 @@
       <div class="members-grid">
         {{- range $members -}}
           {{- if in $digits (strings.ToUpper (substr .name 0 1)) -}}
-            {{- partial "member-card.html" (dict "member" . "site" $site "showDescription" true "showWorkingGroups" true "showSocialHover" true) -}}
+            {{- partial "members/card.html" (dict "member" . "site" $site "showDescription" true "showWorkingGroups" true "showSocialHover" true) -}}
           {{- end -}}
         {{- end -}}
       </div>
@@ -86,7 +86,7 @@
         <div class="members-grid">
           {{- range $members -}}
             {{- if eq (strings.ToUpper (substr .name 0 1)) $l -}}
-              {{- partial "member-card.html" (dict "member" . "site" $site "showDescription" true "showWorkingGroups" true "showSocialHover" true) -}}
+              {{- partial "members/card.html" (dict "member" . "site" $site "showDescription" true "showWorkingGroups" true "showSocialHover" true) -}}
             {{- end -}}
           {{- end -}}
         </div>
@@ -100,7 +100,7 @@
         {{- range $members -}}
           {{- $c := strings.ToUpper (substr .name 0 1) -}}
           {{- if and (not (in $digits $c)) (not (in $alphaList $c)) -}}
-            {{- partial "member-card.html" (dict "member" . "site" $site "showDescription" true "showWorkingGroups" true "showSocialHover" true) -}}
+            {{- partial "members/card.html" (dict "member" . "site" $site "showDescription" true "showWorkingGroups" true "showSocialHover" true) -}}
           {{- end -}}
         {{- end -}}
       </div>

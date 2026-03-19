@@ -74,7 +74,7 @@
             {{- $eventDate := time (.Param "eventDate") -}}
             {{ if eq ($eventDate.Format "2006") $yr }}
             <div class="col-md-6">
-              {{ partial "event-card.html" . }}
+              {{ partial "events/card.html" . }}
             </div>
             {{ end }}
             {{ end }}
@@ -103,7 +103,7 @@
               {{- $eventDate := time (.Param "eventDate") -}}
               {{ if eq ($eventDate.Format "2006") $yr }}
               <div class="col-md-6">
-                {{ partial "event-card.html" . }}
+                {{ partial "events/card.html" . }}
               </div>
               {{ end }}
               {{ end }}
@@ -152,7 +152,7 @@
           {{ if $upcomingWebinars }}
           <div class="events-webinar-list mb-4">
             {{ range first 3 $upcomingWebinars }}
-            {{ partial "event-webinar-card.html" . }}
+            {{ partial "events/webinar-card.html" . }}
             {{ end }}
           </div>
           {{ end }}
@@ -163,7 +163,7 @@
           {{ end }}
           <div class="events-webinar-list">
             {{ range first 2 $pastWebinars }}
-            {{ partial "event-webinar-card.html" . }}
+            {{ partial "events/webinar-card.html" . }}
             {{ end }}
           </div>
           {{ end }}

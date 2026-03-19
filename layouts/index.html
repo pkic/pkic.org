@@ -1,7 +1,10 @@
 {{ define "main" }}
 
 {{/* ─── Homepage event collections ─────────────────────────────────────── */}}
-{{- $allEvents      := sort (where site.Pages "Params.eventType" "!=" nil) "Params.eventDate" "asc" -}}
+{{- $sitePages      := site.Pages -}}
+{{- $regularPages   := .Site.RegularPages -}}
+{{- $wgSections     := where $sitePages "Section" "wg" -}}
+{{- $allEvents      := sort (where $sitePages "Params.eventType" "!=" nil) "Params.eventDate" "asc" -}}
 {{- $today          := now.Format "2006-01-02" -}}
 {{- $upcomingEvents := slice -}}
 {{- $pastEvents     := slice -}}
@@ -30,7 +33,7 @@
           <a href="/join/" class="btn btn-pkic-outline btn-lg px-4">Join the Consortium</a>
         </div>
       </div>
-      {{ $featuredPost := first 1 (where .Site.RegularPages "Type" "blog") }}
+      {{ $featuredPost := first 1 (where $regularPages "Type" "blog") }}
       {{ with index $featuredPost 0 }}
       <div class="col-lg-5 d-none d-lg-block">
         <div class="pkic-hero-post-card">
@@ -76,7 +79,6 @@
 {{/* ─── Stats bar ───────────────────────────────────────────────────── */}}
 {{ $memberCount := len hugo.Data.members }}
 {{/* Only count top-level, non-draft working group sections */}}
-{{ $wgSections := where .Site.Pages "Section" "wg" }}
 {{ $wgCount := 0 }}
 {{ range $wgSections }}
   {{ if and (eq .Kind "section") (eq .Parent.RelPermalink "/wg/") (not .Draft) }}
@@ -115,13 +117,12 @@
 {{ .Scratch.Set "limit" "80" }}
 <section class="members-overview">
   <div class="container-fluid px-2 px-md-3 py-4 text-center members">
-    {{ partial "members.html" . }}
+    {{ partial "members/wall.html" . }}
   </div>
 </section>
 
 {{/* ─── Working Groups spotlight ──────────────────────────────────── */}}
 {{/* Collect WG section pages that have .Params.card, sorted by card.order */}}
-{{ $wgSections := where .Site.Pages "Section" "wg" }}
 {{ $wgCards := slice }}
 {{ range $wgSections }}
   {{ if and (eq .Kind "section") (ne .RelPermalink "/wg/") .Params.card }}
@@ -141,7 +142,7 @@
     <div class="row g-4">
       {{ range $wgCards }}
       <div class="col-sm-6 col-xl-3">
-        {{ partial "wg-spotlight-card.html" . }}
+        {{ partial "wg/spotlight-card.html" . }}
       </div>
       {{ end }}
     </div>
@@ -149,7 +150,7 @@
 </section>
 
 {{/* ─── Recent blog posts ─────────────────────────────────────────────── */}}
-{{ $posts := first 3 (where .Site.RegularPages "Type" "blog") }}
+{{ $posts := first 3 (where $regularPages "Type" "blog") }}
 {{ if $posts }}
 <section class="pkic-recent-posts py-5" style="background:#fff; position:relative; z-index:1;">
   <div class="container">
@@ -160,7 +161,7 @@
     <div class="row g-4 align-items-start">
       {{ range $posts }}
       <div class="col-md-4">
-        {{ partial "blog-card.html" . }}
+        {{ partial "blog/card.html" . }}
       </div>
       {{ end }}
     </div>
@@ -180,7 +181,7 @@
     <div class="row g-4 align-items-start">
       {{ range $homepageEventCards }}
       <div class="col-md-4">
-        {{ partial "event-card.html" . }}
+        {{ partial "events/card.html" . }}
       </div>
       {{ end }}
     </div>

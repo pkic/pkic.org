@@ -1,7 +1,7 @@
 {{- with . -}}
   {{- $feedURL := . -}}
   {{- $t := debug.Timer $feedURL -}}
-  {{- $items := partialCached "rss-item-data.html" $feedURL $feedURL -}}
+  {{- $items := partialCached "rss/item-data.html" $feedURL $feedURL -}}
   {{- range first 3 $items -}}
     <div class="card mb-3">
       <div class="row g-0">

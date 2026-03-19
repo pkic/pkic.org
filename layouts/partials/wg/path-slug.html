@@ -1,0 +1,2 @@
+{{- $path := .path | default "" -}}
+{{- $path | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
