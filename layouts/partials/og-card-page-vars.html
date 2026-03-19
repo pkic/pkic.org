@@ -1,0 +1,47 @@
+{{- $page := . -}}
+
+{{/* ── Page accent colour ──────────────────────────────────────────────── */}}
+{{- $themeVars := partial "page-theme-colors.html" (dict "page" $page) -}}
+
+{{/* ── Hero background image ───────────────────────────────────────────── */}}
+{{- $heroBgImage := "" -}}
+{{- with $page.Params.heroImage -}}
+  {{- with $page.Resources.GetMatch (printf "*%s" .) -}}
+    {{- $heroBgImage = .RelPermalink -}}
+  {{- else -}}
+    {{- with resources.Get (strings.TrimPrefix "/" .) -}}
+      {{- $heroBgImage = .RelPermalink -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ── Theme gradient ───────────────────────────────────────────────────── */}}
+{{- $themeGradient := partial "page-theme-gradient.html" $page -}}
+
+{{/* ── Watermark image — cascade: explicit param → WG icon → default logo ── */}}
+{{- $watermarkUrl := "url('/img/logo.svg')" -}}
+{{- with $page.Param "ogWatermark" -}}
+  {{- $watermarkUrl = printf "url('%s')" . -}}
+{{- else -}}
+  {{- with $page.Params.wgID -}}
+    {{- $wgIconMap := dict "CA" "ca" "PQC" "pqc" "PKIMM" "pkimm" "CM" "cm" "TCWG" "tc" -}}
+    {{- with index $wgIconMap . -}}
+      {{- with resources.Get (printf "icons/wg/%s.svg" .) -}}
+        {{- $watermarkUrl = printf "url('%s')" .RelPermalink -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* ── Assemble the CSS ────────────────────────────────────────────────── */}}
+{{- $heroBgProp := "" -}}
+{{- if $heroBgImage -}}
+  {{- $heroBgProp = printf "--og-hero-bg-url: url('%s');" $heroBgImage -}}
+{{- end -}}
+
+{{- $css := printf ":root{%s--og-theme-gradient:linear-gradient(%s);--og-watermark-url:%s;%s}" $themeVars $themeGradient $watermarkUrl $heroBgProp -}}
+{{/* Path must be unique per page — resources.FromString caches by path, so a shared
+     path would return the first-built page's vars for every subsequent page. */}}
+{{- $resourcePath := printf "og-card-vars/%s.css" (strings.Trim $page.RelPermalink "/") -}}
+{{- $varsResource := resources.FromString $resourcePath $css | resources.Fingerprint -}}
+<link rel="stylesheet" href="{{ $varsResource.RelPermalink }}">

@@ -8,39 +8,7 @@
     {{ $sponsoring = . }}
 {{ end }}
 
-{{ $sponsors := slice }}
-
-<!-- member sponsors -->
-{{ range hugo.Data.members }}
-    {{ if or 
-        (and (eq $level "all") (or 
-            (gt .sponsor.level "")
-            (index .sponsor.sponsoring $sponsoring)
-        ))
-
-        (eq .sponsor.level $level)
-        (and (index .sponsor.sponsoring $sponsoring) (eq (index .sponsor.sponsoring $sponsoring).level $level))
-    }}
-
-        {{ $sponsors = $sponsors | append . }}
-    {{ end }}
-{{ end }}
-
-<!-- non-member sponsors -->
-{{ range hugo.Data.sponsors }}
-    {{ if or 
-        (and (eq $level "all") (or 
-            (gt .sponsor.level "")
-            (index .sponsor.sponsoring $sponsoring)
-        ))
-
-        (eq .sponsor.level $level)
-        (and (index .sponsor.sponsoring $sponsoring) (eq (index .sponsor.sponsoring $sponsoring).level $level))
-    }}
-    
-        {{ $sponsors = $sponsors | append . }}
-    {{ end }}
-{{ end }}
+{{ $sponsors := partial "sponsors-collect.html" (dict "site" $.Site "sponsoring" $sponsoring "level" $level) }}
 
 <div class="sponsors-list">
 {{ if gt (len $sponsors) 0 }}

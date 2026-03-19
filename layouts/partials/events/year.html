@@ -1,0 +1,25 @@
+{{/*
+  Return event year as int.
+
+  Priority:
+    1) params.eventDate year
+    2) /events/<year>/... permalink segment
+    3) page Date year
+*/}}
+
+{{- $eventDate := .Param "eventDate" -}}
+{{- if $eventDate -}}
+  {{- (time $eventDate).Year -}}
+{{- else -}}
+  {{- $parts := split .RelPermalink "/" -}}
+  {{- if ge (len $parts) 3 -}}
+    {{- $yearSeg := index $parts 2 -}}
+    {{- if and (eq (len $yearSeg) 4) (strings.HasPrefix $yearSeg "20") -}}
+      {{- int $yearSeg -}}
+    {{- else -}}
+      {{- .Date.Year -}}
+    {{- end -}}
+  {{- else -}}
+    {{- .Date.Year -}}
+  {{- end -}}
+{{- end -}}

@@ -6,14 +6,18 @@
 {{ define "main" }}
 {{ partial "hero.html" . }}
 
-{{- $allWebinars := where site.Pages "Params.eventType" "webinar" -}}
-{{- $allWebinars  = sort $allWebinars "Date" "desc" -}}
+{{- $allWebinars := slice -}}
+{{- range where site.Pages "Section" "events" -}}
+  {{- if eq (.Param "eventType") "webinar" -}}
+    {{- $allWebinars = $allWebinars | append . -}}
+  {{- end -}}
+{{- end -}}
+{{- $allWebinars = sort $allWebinars "Date" "desc" -}}
 
-{{- $today := now.Format "2006-01-02" -}}
 {{- $upcoming := slice -}}
-{{- $past     := slice -}}
+{{- $past := slice -}}
 {{- range $allWebinars -}}
-  {{- if ge (.Date.Format "2006-01-02") $today -}}
+  {{- if eq (partial "events/is-upcoming.html" .) "true" -}}
     {{- $upcoming = $upcoming | append . -}}
   {{- else -}}
     {{- $past = $past | append . -}}

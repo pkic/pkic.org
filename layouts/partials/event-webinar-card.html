@@ -8,10 +8,7 @@
 {{- $p := . -}}
 {{- $eventTitle    := $p.Param "heroTitle" | default $p.Title -}}
 {{- $eventLocation := $p.Param "heroDescription" -}}
-{{- $urlParts      := split $p.RelPermalink "/" -}}
-{{- $yearStr       := index $urlParts 2 -}}
-{{- $eventYear     := int $yearStr -}}
-{{- $isUpcoming    := ge $eventYear now.Year -}}
+{{- $isUpcoming    := eq (partial "events/is-upcoming.html" $p) "true" -}}
 
 {{/* ── Hero image (replaces gradient banner when set) ────────────────────── */}}
 {{- $cardImg  := false -}}
@@ -58,7 +55,7 @@
   {{/* ── Banner / logo header ──────────────────────────────────────────── */}}
   <div class="event-webinar-card-banner{{ if $cardImg }} event-webinar-card-banner--photo{{ end }}">
     {{ if $cardImg }}
-    {{ $thumb := $cardImg.Resize "400x144 Center" }}
+    {{ $thumb := $cardImg.Fill "400x144 Center" }}
     <img src="{{ $thumb.RelPermalink }}" alt="{{ $eventTitle }}" class="event-webinar-card-banner-img" width="400" height="144" loading="lazy">
     {{ end }}
     <div class="event-webinar-card-banner-overlay"></div>

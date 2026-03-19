@@ -1,11 +1,11 @@
 {{ $latest := dict }}
 {{ $latestUrl := "https://api.github.com/repos/pkic/ltl/releases/latest" }}
-{{ with try (resources.GetRemote $latestUrl) }}
-    {{ with .Err }}
-        {{ errorf "%s" . }}
-    {{ else with .Value }}
-        {{ $latest = . | transform.Unmarshal }}
-    {{end }}
+{{ $latestRemote := try (resources.GetRemote $latestUrl) }}
+{{ with $latestRemote.Err }}
+    {{ errorf "failed to fetch latest LTL release metadata from %s: %s. GitHub may be down, rate-limiting requests, or unreachable from this build environment." $latestUrl . }}
+    {{ return }}
+{{ else with $latestRemote.Value }}
+    {{ $latest = . | transform.Unmarshal }}
 {{ end }}
 {{ $ltl := dict }}
 {{ $ltlUrl := (printf "https://github.com/pkic/ltl/releases/download/%s/ltl.json" $latest.tag_name) }}

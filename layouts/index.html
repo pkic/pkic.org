@@ -1,31 +1,34 @@
 {{ define "main" }}
 
 {{/* ─── Homepage event collections ─────────────────────────────────────── */}}
+{{- $heroEventPages := slice -}}
 {{- $allEventPages := slice -}}
-{{- range (where .Site.Pages "Section" "events") -}}
-  {{- if and (eq .Kind "section") (ne .RelPermalink "/events/") (ne .RelPermalink "/events/webinars/") -}}
-    {{- $urlParts := split .RelPermalink "/" -}}
-    {{- if ge (len $urlParts) 3 -}}
-      {{- $year := index $urlParts 2 -}}
-      {{- if strings.HasPrefix $year "20" -}}
-        {{- $allEventPages = $allEventPages | append . -}}
-      {{- end -}}
-    {{- end -}}
+{{- range where .Site.Pages "Section" "events" -}}
+  {{- $eventType := .Param "eventType" -}}
+  {{- if $eventType -}}
+    {{- $heroEventPages = $heroEventPages | append . -}}
+    {{- $allEventPages = $allEventPages | append . -}}
   {{- end -}}
 {{- end -}}
+{{- $heroUpcomingEvents := slice -}}
+{{- range $heroEventPages -}}
+  {{- if eq (partial "events/is-upcoming.html" .) "true" -}}
+    {{- $heroUpcomingEvents = $heroUpcomingEvents | append . -}}
+  {{- end -}}
+{{- end -}}
+{{- $heroUpcomingEvents = sort $heroUpcomingEvents "Date" "asc" -}}
+{{- $heroUpcomingEvents = first 3 $heroUpcomingEvents -}}
 {{- $upcomingEvents := slice -}}
 {{- $pastEvents := slice -}}
 {{- range $allEventPages -}}
-  {{- $eventYear := int (index (split .RelPermalink "/") 2) -}}
-  {{- if ge $eventYear now.Year -}}
+  {{- if eq (partial "events/is-upcoming.html" .) "true" -}}
     {{- $upcomingEvents = $upcomingEvents | append . -}}
   {{- else -}}
     {{- $pastEvents = $pastEvents | append . -}}
   {{- end -}}
 {{- end -}}
-{{- $upcomingEvents = sort $upcomingEvents "RelPermalink" "asc" -}}
-{{- $pastEvents = sort $pastEvents "RelPermalink" "desc" -}}
-{{- $heroUpcomingEvents := first 3 $upcomingEvents -}}
+{{- $upcomingEvents = sort $upcomingEvents "Date" "asc" -}}
+{{- $pastEvents = sort $pastEvents "Date" "desc" -}}
 {{- $homepageUpcomingEventCards := first 3 $upcomingEvents -}}
 {{- $homepagePastEventCards := first 3 $pastEvents -}}
 {{- $homepageEventCards := first 3 ($homepageUpcomingEventCards | append $homepagePastEventCards) -}}
@@ -100,16 +103,16 @@
   <div class="container">
     <div class="row g-0 text-center">
       <div class="col">
-        <div class="pkic-stat"><span class="pkic-stat-num">{{ $memberCount }}</span><span class="pkic-stat-label">Members</span></div>
+        <a href="/members/" class="pkic-stat"><span class="pkic-stat-num">{{ $memberCount }}</span><span class="pkic-stat-label">Members</span></a>
       </div>
       <div class="col">
-        <div class="pkic-stat"><span class="pkic-stat-num">~1K</span><span class="pkic-stat-label">Representatives</span></div>
+        <a href="/members/" class="pkic-stat"><span class="pkic-stat-num">~1K</span><span class="pkic-stat-label">Representatives</span></a>
       </div>
       <div class="col">
-        <div class="pkic-stat"><span class="pkic-stat-num">{{ $wgCount }}</span><span class="pkic-stat-label">Working Groups</span></div>
+        <a href="/wg/" class="pkic-stat"><span class="pkic-stat-num">{{ $wgCount }}</span><span class="pkic-stat-label">Working Groups</span></a>
       </div>
       <div class="col d-none d-sm-block">
-        <div class="pkic-stat"><span class="pkic-stat-num">Free</span><span class="pkic-stat-label">to Join</span></div>
+        <a href="/join/" class="pkic-stat"><span class="pkic-stat-num">Free</span><span class="pkic-stat-label">to Join</span></a>
       </div>
     </div>
   </div>

@@ -1,0 +1,87 @@
+{{/*
+  sponsors-collect.html — returns a slice of sponsor data objects.
+
+  Used by partials/sponsors.html, shortcodes/sponsors-level.html, and the OG
+  card template so that the filtering logic lives in exactly one place.
+
+  Input (dict):
+    .site       — site context, used for the .Params.name fallback (required)
+    .sponsoring — event name key (string); defaults to site.Params.name
+    .level      — exact level filter: "all" matches any sponsor (default "all")
+    .minWeight  — minimum sponsorlevels weight (int); 0 = no minimum (default 0)
+                  Applied on top of the level filter. Useful for the OG card
+                  sponsor strip which only shows Gold / Leader and above.
+
+  Returns: slice of sponsor objects from hugo.Data.members + hugo.Data.sponsors
+*/}}
+
+{{- $site      := .site -}}
+{{- $level     := .level | default "all" -}}
+{{- $sponsoring := .sponsoring | default $site.Params.name -}}
+{{- $minWeight := .minWeight | default 0 -}}
+
+{{- $sponsors := slice -}}
+
+{{- range hugo.Data.members -}}
+  {{- $s := . -}}
+  {{- $match := false -}}
+
+  {{- if eq $level "all" -}}
+    {{- if or (gt $s.sponsor.level "") (index $s.sponsor.sponsoring $sponsoring) -}}
+      {{- $match = true -}}
+    {{- end -}}
+  {{- else -}}
+    {{- if or
+        (eq $s.sponsor.level $level)
+        (and (index $s.sponsor.sponsoring $sponsoring) (eq (index $s.sponsor.sponsoring $sponsoring).level $level))
+    -}}
+      {{- $match = true -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if and $match (gt $minWeight 0) -}}
+    {{- $genWeight := index hugo.Data.sponsorlevels ($s.sponsor.level | default "") | default 0 -}}
+    {{- $evtWeight := 0 -}}
+    {{- with index $s.sponsor.sponsoring $sponsoring -}}
+      {{- $evtWeight = index hugo.Data.sponsorlevels (.level | default "") | default 0 -}}
+    {{- end -}}
+    {{- if not (or (ge $genWeight $minWeight) (ge $evtWeight $minWeight)) -}}
+      {{- $match = false -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if $match -}}{{- $sponsors = $sponsors | append $s -}}{{- end -}}
+{{- end -}}
+
+{{- range hugo.Data.sponsors -}}
+  {{- $s := . -}}
+  {{- $match := false -}}
+
+  {{- if eq $level "all" -}}
+    {{- if or (gt $s.sponsor.level "") (index $s.sponsor.sponsoring $sponsoring) -}}
+      {{- $match = true -}}
+    {{- end -}}
+  {{- else -}}
+    {{- if or
+        (eq $s.sponsor.level $level)
+        (and (index $s.sponsor.sponsoring $sponsoring) (eq (index $s.sponsor.sponsoring $sponsoring).level $level))
+    -}}
+      {{- $match = true -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if and $match (gt $minWeight 0) -}}
+    {{- $genWeight := index hugo.Data.sponsorlevels ($s.sponsor.level | default "") | default 0 -}}
+    {{- $evtWeight := 0 -}}
+    {{- with index $s.sponsor.sponsoring $sponsoring -}}
+      {{- $evtWeight = index hugo.Data.sponsorlevels (.level | default "") | default 0 -}}
+    {{- end -}}
+    {{- if not (or (ge $genWeight $minWeight) (ge $evtWeight $minWeight)) -}}
+      {{- $match = false -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if $match -}}{{- $sponsors = $sponsors | append $s -}}{{- end -}}
+{{- end -}}
+
+{{- return $sponsors -}}

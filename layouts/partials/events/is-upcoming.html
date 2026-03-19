@@ -1,0 +1,16 @@
+{{/*
+  Return true when the event should be treated as upcoming.
+
+  If eventDate exists, compare exact day.
+  Otherwise, fall back to event year logic.
+*/}}
+
+{{- $eventDate := .Param "eventDate" -}}
+{{- if $eventDate -}}
+  {{- $eventDay := (time $eventDate).Format "2006-01-02" -}}
+  {{- $today := now.Format "2006-01-02" -}}
+  {{- if ge $eventDay $today -}}true{{- else -}}false{{- end -}}
+{{- else -}}
+  {{- $eventYear := int (partial "events/year.html" .) -}}
+  {{- if ge $eventYear now.Year -}}true{{- else -}}false{{- end -}}
+{{- end -}}

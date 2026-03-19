@@ -63,7 +63,7 @@
 
       <div class="blog-author-info">
         <div class="blog-author-name-row">
-          <a class="blog-author-name" href="/members/{{ $member.id }}/#{{ $repName | urlize }}" title="View {{ $repName }}'s profile">{{ $repName }}</a>
+          <a class="blog-author-name" href="/members/{{ $member.id }}/#{{ $repName | urlize }}" title="View {{ $repName }}'s profile" data-pagefind-filter="author">{{ $repName }}</a>
           {{- with $rep.social }}
           <div class="blog-author-social">{{ partial "social.html" . }}</div>
           {{- end }}
@@ -117,7 +117,7 @@
           {{- range first 2 $parts -}}{{- substr . 0 1 | upper -}}{{- end -}}
         </div>
         <div class="blog-author-info">
-          <div class="blog-author-name">{{ $authorName }}</div>
+          <div class="blog-author-name" data-pagefind-filter="author">{{ $authorName }}</div>
           {{- with $rep.role }}<div class="blog-author-role">{{ . }}</div>{{- end }}
           {{- with $rep.social }}
           <div class="blog-author-social">{{ partial "social.html" . }}</div>
@@ -141,7 +141,7 @@
       {{- range first 2 $parts -}}{{- substr . 0 1 | upper -}}{{- end -}}
     </div>
     <div class="blog-author-info">
-      <div class="blog-author-name">{{ . }}</div>
+      <div class="blog-author-name" data-pagefind-filter="author">{{ . }}</div>
     </div>
   </div>
 {{- end -}}

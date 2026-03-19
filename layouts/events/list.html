@@ -10,28 +10,25 @@
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}}
       <div class="col-lg-9">
 
-        {{/* All direct-child event sections (year folders have no _index.md so
-             events are immediate children of the events section).
-             Split out webinars from consortium events.
-             Skip non-year sub-sections (e.g. /events/webinars/). */}}
-        {{- $allEvents      := .Sections -}}
         {{- $consortiumEvts := slice -}}
-        {{- $webinars       := slice -}}
-        {{- range $allEvents -}}
-          {{- $urlSeg := index (split .RelPermalink "/") 2 -}}
-          {{- if strings.HasPrefix $urlSeg "20" -}}
-            {{- if eq (.Param "eventType") "webinar" -}}
+        {{- $webinars := slice -}}
+        {{- range where site.Pages "Section" "events" -}}
+          {{- $eventType := .Param "eventType" -}}
+          {{- if $eventType -}}
+            {{- if eq $eventType "webinar" -}}
               {{- $webinars = $webinars | append . -}}
             {{- else -}}
               {{- $consortiumEvts = $consortiumEvts | append . -}}
             {{- end -}}
           {{- end -}}
         {{- end -}}
+        {{- $consortiumEvts = sort $consortiumEvts "Date" "desc" -}}
+        {{- $webinars = sort $webinars "Date" "desc" -}}
 
-        {{/* Collect unique years from URL paths, then sort descending */}}
+        {{/* Collect unique years from event date, then sort descending */}}
         {{- $years := slice -}}
         {{- range $consortiumEvts -}}
-          {{- $yr := index (split .RelPermalink "/") 2 -}}
+          {{- $yr := int (partial "events/year.html" .) -}}
           {{- if not (in $years $yr) -}}
             {{- $years = $years | append $yr -}}
           {{- end -}}
@@ -42,7 +39,7 @@
         {{- $upcomingYears := slice -}}
         {{- $pastYears     := slice -}}
         {{- range $years -}}
-          {{- if ge (int .) now.Year -}}
+          {{- if ge . now.Year -}}
             {{- $upcomingYears = $upcomingYears | append . -}}
           {{- else -}}
             {{- $pastYears = $pastYears | append . -}}
@@ -62,7 +59,7 @@
           {{ $yr := . }}
           <div class="row g-4{{ if gt (len $upcomingYears) 1 }} mb-4{{ end }}">
             {{ range $consortiumEvts }}
-            {{ if eq (index (split .RelPermalink "/") 2) $yr }}
+            {{ if eq (int (partial "events/year.html" .)) $yr }}
             <div class="col-md-6">
               {{ partial "event-card.html" . }}
             </div>
@@ -90,7 +87,7 @@
             <h3 class="events-year-heading">{{ $yr }}</h3>
             <div class="row g-4">
               {{ range $consortiumEvts }}
-              {{ if eq (index (split .RelPermalink "/") 2) $yr }}
+              {{ if eq (int (partial "events/year.html" .)) $yr }}
               <div class="col-md-6">
                 {{ partial "event-card.html" . }}
               </div>
@@ -129,9 +126,8 @@
           {{ if $webinars }}
           {{- $upcomingWebinars := slice -}}
           {{- $pastWebinars := slice -}}
-          {{- $today := now.Format "2006-01-02" -}}
           {{- range $webinars -}}
-            {{- if ge (.Date.Format "2006-01-02") $today -}}
+            {{- if eq (partial "events/is-upcoming.html" .) "true" -}}
               {{- $upcomingWebinars = $upcomingWebinars | append . -}}
             {{- else -}}
               {{- $pastWebinars = $pastWebinars | append . -}}

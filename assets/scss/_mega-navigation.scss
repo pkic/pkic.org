@@ -40,18 +40,353 @@
   }
 }
 
-.pkic-search-btn {
+// ─── Navbar search: compact trigger → expanded input ─────────────────
+
+// Provides the stacking context for the absolutely-centred search
+.pkic-navbar-container {
+  position: relative;
+}
+
+// Centre search widget — taken out of flex flow, pinned to visual centre
+.pkic-navbar-search {
+  @media (min-width: 992px) {
+    position: absolute;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 240px;
+    transition: width 0.25s ease;
+    z-index: 10;
+
+    &.is-active { width: clamp(280px, 40vw, 540px); }
+  }
+}
+
+// Default compact trigger button
+.pkic-search-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 0.55rem;
+  padding: 0.32rem 0.65rem;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 0.84rem;
+  cursor: pointer;
+  justify-content: space-between;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+  width: 100%;
+
+  &:hover {
+    border-color: rgba(255, 255, 255, 0.32);
+    background: rgba(255, 255, 255, 0.11);
+    color: rgba(255, 255, 255, 0.85);
+  }
+}
+
+.pkic-search-trigger-label {
+  @media (max-width: 767.98px) { display: none; }
+}
+
+.pkic-search-shortcut {
+  font-size: 0.68rem;
+  font-family: inherit;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 0.3rem;
+  padding: 0.1rem 0.35rem;
+  color: rgba(255, 255, 255, 0.4);
+  line-height: 1.4;
+  @media (max-width: 1199.98px) { display: none; }
+}
+
+// Expanded input wrap — hidden by default, shown when search is active
+.pkic-search-input-wrap {
+  display: none;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 0.55rem;
+  padding: 0.32rem 0.75rem;
+  width: 100%; // fill the absolutely-positioned parent
+}
+
+.pkic-search-input-icon {
+  color: rgba(255, 255, 255, 0.4);
+  flex-shrink: 0;
+}
+
+.pkic-search-input-field {
+  flex: 1;
+  min-width: 0;
   background: none;
   border: none;
-  padding: 0.4rem 0.6rem;
-  border-radius: 0.45rem;
-  color: rgba(255, 255, 255, 0.55);
+  outline: none;
+  color: #fff;
+  font-size: 0.875rem;
+
+  &::placeholder { color: rgba(255, 255, 255, 0.32); }
+  &::-webkit-search-cancel-button { display: none; }
+}
+
+.pkic-search-close-btn {
+  background: none;
+  border: none;
+  padding: 0.1rem 0.15rem;
+  border-radius: 0.25rem;
+  color: rgba(255, 255, 255, 0.45);
   cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
+  line-height: 1;
   display: flex;
   align-items: center;
+  flex-shrink: 0;
+  transition: color 0.15s ease;
 
-  &:hover { color: #fff; background: rgba(255,255,255,0.08); }
+  &:hover { color: #fff; }
+}
+
+// Active state: search expands to fill the navbar, nav collapses
+#pkicMainNav.pkic-search-active {
+  .pkic-search-trigger    { display: none; }
+  .pkic-search-input-wrap { display: flex; }
+
+  @media (min-width: 992px) {
+    // Leave absolute flow, expand to fill remaining flex space
+    .pkic-navbar-search {
+      position: static !important;
+      transform: none !important;
+      flex: 1 !important;
+      width: auto !important;
+      transition: none;
+      margin: 0 0.5rem;
+    }
+    // Hide nav items so search takes the full row
+    .navbar-collapse { display: none !important; }
+  }
+}
+
+// ─── Search panel ─────────────────────────────────────────────────────
+// The panel fills the entire viewport below the navbar, making it feel
+// like the rest of the page has been replaced by search results.
+body.pkic-search-open { overflow: hidden; }
+
+#pkicSearchBackdrop { display: none !important; }
+
+.pkic-search-panel {
+  position: fixed;
+  top: 57px;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1036;
+  background: var(--bs-body-bg, #fff);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
+}
+
+
+.pkic-search-panel-close {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  background: none;
+  border: 1px solid rgba(0, 0, 0, 0.13);
+  border-radius: 0.45rem;
+  padding: 0.35rem 0.85rem;
+  font-size: 0.85rem;
+  color: rgba(0, 0, 0, 0.55);
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+
+  kbd {
+    font-size: 0.65rem;
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(0, 0, 0, 0.12);
+    border-radius: 0.25rem;
+    padding: 0.05rem 0.3rem;
+    color: rgba(0, 0, 0, 0.35);
+    font-family: inherit;
+  }
+
+  &:hover {
+    border-color: rgba(0, 0, 0, 0.28);
+    color: rgba(0, 0, 0, 0.85);
+    background: rgba(0, 0, 0, 0.03);
+  }
+}
+
+.pkic-search-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+}
+
+.pkic-filter-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.3rem 0.85rem;
+  border-radius: 2rem;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  background: transparent;
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  white-space: nowrap;
+
+  &:hover {
+    border-color: rgba(0, 0, 0, 0.35);
+    color: rgba(0, 0, 0, 0.85);
+  }
+
+  &.is-active {
+    background: rgba(25, 135, 84, 0.08);
+    border-color: rgba(25, 135, 84, 0.55);
+    color: #198754;
+  }
+}
+
+.pkic-search-results-grid {
+  display: flex;
+  flex-direction: column;
+}
+
+// ─── Two-column layout: sidebar + results ─────────────────────────────────
+
+.pkic-search-layout {
+  display: flex;
+  gap: 2.5rem;
+  align-items: flex-start;
+}
+
+// Narrow sticky sidebar for facets
+.pkic-search-sidebar {
+  flex: 0 0 220px;
+  width: 220px;
+  position: sticky;
+  top: 3.5rem; // below the sticky close bar
+  align-self: flex-start;
+  max-height: calc(100vh - 57px - 3.5rem);
+  overflow-y: auto;
+  scrollbar-width: none;
+  padding-bottom: 2rem;
+  padding-right: 1.5rem;
+  border-right: 1px solid rgba(0, 0, 0, 0.09);
+
+  &::-webkit-scrollbar { display: none; }
+
+  @media (max-width: 767.98px) {
+    display: none; // Hide on mobile, facets accessible via section pills
+  }
+}
+
+// Main results column
+.pkic-search-main {
+  flex: 1;
+  min-width: 0;
+}
+
+// Facet group (Author / Tag)
+.pkic-facet-group {
+  margin-bottom: 1.5rem;
+
+  & + & { padding-top: 1rem; border-top: 1px solid rgba(0,0,0,0.07); }
+}
+
+.pkic-facet-heading {
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: rgba(0,0,0,0.55);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 0.55rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.pkic-facet-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.pkic-facet-item {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 0.28rem 0;
+  text-align: left;
+  cursor: pointer;
+  color: rgba(0,0,0,0.65);
+  font-size: 0.84rem;
+  border-radius: 0.25rem;
+  transition: color 0.13s ease;
+
+  &:hover {
+    color: rgba(0,0,0,0.9);
+    .pkic-facet-check { border-color: rgba(0,0,0,0.4); }
+  }
+
+  &.is-active {
+    color: #1d4ed8;
+    .pkic-facet-check {
+      border-color: #1d4ed8;
+      background: #1d4ed8;
+      // Checkmark
+      &::after {
+        content: '';
+        display: block;
+        width: 4px;
+        height: 7px;
+        border: 1.5px solid #fff;
+        border-top: 0;
+        border-left: 0;
+        transform: rotate(45deg) translate(-1px, -1px);
+      }
+    }
+  }
+}
+
+// Checkbox visual
+.pkic-facet-check {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid rgba(0,0,0,0.22);
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.13s ease, background 0.13s ease;
+}
+
+.pkic-facet-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pkic-facet-count {
+  font-size: 0.75rem;
+  color: rgba(0,0,0,0.35);
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 // ─── WG Mega-menu panel ──────────────────────────────────────────────
@@ -320,100 +655,112 @@
 
 
 
-// ─── Search overlay ───────────────────────────────────────────────────
-
-.pkic-search-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.88);
-  backdrop-filter: blur(10px);
-  z-index: 1060;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 5rem 1rem 2rem;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.2s ease, visibility 0.2s ease;
-
-  &.is-open { opacity: 1; visibility: visible; }
-}
-
-.pkic-search-box { width: 100%; max-width: 700px; }
-
-.pkic-search-input-wrap {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  border-radius: 1rem;
-  padding: 0.9rem 1.25rem;
-
-  .pkic-search-input-field {
-    flex: 1;
-    background: none;
-    border: none;
-    outline: none;
-    color: #fff;
-    font-size: 1.15rem;
-    &::placeholder { color: rgba(255, 255, 255, 0.35); }
-  }
-}
-
-.pkic-search-esc {
-  font-size: 0.62rem;
-  font-weight: 700;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  border-radius: 0.35rem;
-  padding: 0.15rem 0.5rem;
-  cursor: pointer;
-  background: none;
-  transition: color 0.15s ease, border-color 0.15s ease;
-  &:hover { color: #fff; border-color: rgba(255,255,255,0.55); }
-}
-
-.pkic-search-results-list {
-  margin-top: 1.25rem;
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  max-height: calc(100vh - 260px);
-  overflow-y: auto;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
-}
+// ─── Search result rows (dark on white) ─────────────────────────────────────
 
 .pkic-search-result-item {
-  display: block;
-  padding: 0.875rem 1.25rem;
-  border-radius: 0.75rem;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  text-decoration: none;
-  color: #fff;
-  transition: background 0.15s ease;
+  display: flex;
+  gap: 1.25rem;
+  padding: 1.1rem 0;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+  text-decoration: none !important;
+  color: #111;
+  align-items: flex-start;
 
-  &:hover { background: rgba(255,255,255,0.14); color: #fff; text-decoration: none; }
+  &:hover {
+    color: #000;
+    text-decoration: none !important;
+    .pkic-sr-title { color: #000; text-decoration: underline; }
+  }
 
-  .pkic-sr-title   { font-weight: 700; font-size: 0.95rem; margin-bottom: 0.2rem; }
-  .pkic-sr-url     { font-size: 0.7rem; color: #7cf0be; opacity: 0.85; margin-bottom: 0.3rem; }
-  .pkic-sr-excerpt {
-    font-size: 0.82rem;
-    color: rgba(255, 255, 255, 0.6);
-    line-height: 1.5;
-    mark { background: none; color: #7cf0be; font-weight: 600; }
+  &:last-child { border-bottom: none; }
+}
+
+.pkic-sr-thumb {
+  width: 100px;
+  height: 66px;
+  border-radius: 0.35rem;
+  object-fit: cover;
+  flex-shrink: 0;
+  @media (max-width: 575.98px) { display: none; }
+}
+
+.pkic-sr-thumb-placeholder {
+  width: 100px;
+  height: 66px;
+  border-radius: 0.35rem;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.4rem;
+  background: rgba(0, 0, 0, 0.04);
+  @media (max-width: 575.98px) { display: none; }
+}
+
+.pkic-sr-body { flex: 1; min-width: 0; }
+
+.pkic-sr-type {
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  margin-bottom: 0.2rem;
+  color: var(--pkic-sr-accent-bright, rgba(0,0,0,0.35));
+}
+
+.pkic-sr-title {
+  font-weight: 600;
+  font-size: 1rem;
+  color: rgba(0, 0, 0, 0.88);
+  margin-bottom: 0.3rem;
+  line-height: 1.35;
+  transition: color 0.12s ease;
+}
+
+.pkic-sr-excerpt {
+  font-size: 0.85rem;
+  color: rgba(0, 0, 0, 0.55);
+  line-height: 1.6;
+  margin: 0 0 0.3rem;
+  mark { background: rgba(255,214,0,0.35); color: inherit; font-weight: 600; padding: 0 0.1em; border-radius: 2px; }
+}
+
+.pkic-sr-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  margin-top: 0.25rem;
+}
+
+.pkic-sr-tag {
+  display: inline-flex;
+  padding: 0.08rem 0.38rem;
+  border-radius: 0.2rem;
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.4);
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+
+  &--author {
+    background: rgba(37, 99, 235, 0.06);
+    color: rgba(37, 99, 235, 0.7);
   }
 }
 
 .pkic-search-hint {
-  color: rgba(255, 255, 255, 0.4);
-  font-size: 0.9rem;
+  color: rgba(0, 0, 0, 0.35);
+  font-size: 1rem;
+  padding: 4rem 0 2rem;
   text-align: center;
-  margin-top: 2rem;
+  margin: 0;
+}
+
+.pkic-search-count {
+  font-size: 0.8rem;
+  color: rgba(0, 0, 0, 0.35);
+  letter-spacing: 0.02em;
+  margin-bottom: 0.5rem;
 }
 
 
@@ -448,5 +795,8 @@
       border-radius: 0.35rem;
     }
   }
+
+  // Search trigger in collapsed mobile menu — full width
+  #pkicNavSearchMobile .pkic-search-trigger { width: 100%; }
 }
 

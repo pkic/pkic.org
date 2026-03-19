@@ -13,7 +13,7 @@ params:
 
   heroTitle: "From Reactive to Resilient: Regaining Control of Today's Cryptographic Complexity"
   heroDescription: "Online | Sponsored webinar by Entrust"
-  #heroImage: entrust-cover.png
+  heroImage: entrust-cover.jpg
 
   eventDate: 2026-04-02T15:00:00Z
 

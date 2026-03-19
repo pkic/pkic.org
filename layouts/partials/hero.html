@@ -121,27 +121,7 @@
     {{ end }}
   </div>
 {{ else }}
-{{/* Color-keyed gradient dict (for WG pages with explicit `color:` param) */}}
-{{- $gradients := dict
-  "blue"   "135deg, #08152e 0%, #0d2452 55%, #081a38 100%"
-  "green"  "135deg, #0a1f14 0%, #0d3d24 55%, #0a2f14 100%"
-  "orange" "135deg, #1e0c05 0%, #3d1a08 55%, #2a140a 100%"
-  "purple" "135deg, #110820 0%, #2a0d3d 55%, #0e0820 100%"
-  "teal"   "135deg, #051d1d 0%, #0b3838 55%, #051d24 100%"
-  "red"    "135deg, #200808 0%, #3d0d0d 55%, #200a14 100%"
--}}
-{{/* Section-based gradient fallback so every section type has a distinct palette */}}
-{{- $sectionGrads := dict
-  "blog"      "135deg, #0c0e2a 0%, #142058 50%, #0a183a 100%"
-  "members"   "135deg, #10082a 0%, #200d42 50%, #0c0820 100%"
-  "about"     "135deg, #0a0c20 0%, #141c3a 50%, #0a1428 100%"
-  "events"    "135deg, #1a0a04 0%, #38200a 50%, #1a1408 100%"
-  "resources" "135deg, #041a18 0%, #083430 50%, #041a24 100%"
-  "pqcc"      "135deg, #0c1428 0%, #142050 50%, #0c1a2e 100%"
-  "activities" "135deg, #041816 0%, #083028 50%, #041820 100%"
--}}
-{{- $sectionGrad := index $sectionGrads ($.Section | default "") | default "" -}}
-{{- $grad := index $gradients ($.Params.color | default "") | default $sectionGrad | default "135deg, #0a1f14 0%, #0d3d24 55%, #0a2f40 100%" -}}
+{{- $grad := partial "page-theme-gradient.html" $ -}}
 <div class="pkic-page-hero{{ with $.Params.wgID }} wg-{{ lower (index $.Params "wgID") }}{{ end }}" style="background: linear-gradient({{ $grad }});">{{ with $.Params.wgID }}
   {{ partial "wg-icon.html" (dict "id" ($.Params.card.icon | default (lower .)) "class" "pkic-page-hero-watermark") }}{{ end }}
   <div class="container py-5">

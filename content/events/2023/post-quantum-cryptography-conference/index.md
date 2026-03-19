@@ -4,9 +4,10 @@ draft: false
 title: Post-Quantum Cryptography Conference
 summary: Speakers at this conference include some of the world’s top Post-Quantum Cryptography (PQC) experts and come from government science agencies, standards bodies, and private organizations at the forefront of this new challenge to digital security. Topics will cover the status of PQC standardization at NIST, ETSI, and IETF, government preparations, migration strategies, etc.
 
-
-heroTitle: Post-Quantum Cryptography Conference
-heroDescription: Friday March 3, 2023 - Ottawa, Canada - Hybrid
+params:
+  eventType: conference
+  heroTitle: Post-Quantum Cryptography Conference
+  heroDescription: Friday March 3, 2023 - Ottawa, Canada - Hybrid
 
 data:
   timezone: America/Toronto

@@ -1,0 +1,67 @@
+{{- $input := . -}}
+{{- $page := $input -}}
+{{- if reflect.IsMap $input -}}
+  {{- $page = $input.page -}}
+{{- end -}}
+{{- $inherit := false -}}
+{{- if reflect.IsMap $input -}}
+  {{- $inherit = $input.inherit | default false -}}
+{{- end -}}
+
+{{- $colorHex := dict
+  "green"  "#198754"
+  "blue"   "#5a9bd5"
+  "orange" "#ed7d31"
+  "purple" "#6f42c1"
+  "teal"   "#20c997"
+  "red"    "#dc3545"
+-}}
+{{- $colorHex2 := dict
+  "green"  "#487caa"
+  "blue"   "#198754"
+  "orange" "#7a5c3e"
+  "purple" "#487caa"
+  "teal"   "#6f42c1"
+  "red"    "#7a4f3a"
+-}}
+{{- $sectionHex := dict
+  "blog"       "#5a9bd5"
+  "members"    "#6f42c1"
+  "about"      "#198754"
+  "events"     "#ed7d31"
+  "resources"  "#20c997"
+  "pqcc"       "#5a9bd5"
+  "pqccm"      "#5a9bd5"
+  "activities" "#20c997"
+  "wg"         "#198754"
+-}}
+{{- $sectionHex2 := dict
+  "blog"       "#198754"
+  "members"    "#487caa"
+  "about"      "#487caa"
+  "events"     "#7a5c3e"
+  "resources"  "#487caa"
+  "pqcc"       "#198754"
+  "pqccm"      "#198754"
+  "activities" "#487caa"
+  "wg"         "#487caa"
+-}}
+
+{{- $accent := index $sectionHex $page.Section | default "#198754" -}}
+{{- $accent2 := index $sectionHex2 $page.Section | default "#487caa" -}}
+{{- $cp := $page.Params.color -}}
+{{- if $inherit -}}
+  {{- if not $cp -}}
+    {{- range $page.Ancestors -}}
+      {{- if and (not $cp) .Params.color -}}
+        {{- $cp = .Params.color -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+  {{- if not $cp }}{{- $cp = $page.FirstSection.Params.color -}}{{ end -}}
+{{- end -}}
+{{- with $cp -}}
+  {{- $accent = index $colorHex . | default $accent -}}
+  {{- $accent2 = index $colorHex2 . | default $accent2 -}}
+{{- end -}}
+--page-accent: {{ $accent }}; --page-accent-2: {{ $accent2 }};

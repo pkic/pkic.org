@@ -26,7 +26,8 @@ menu:
 # https://github.com/pkic/pkic.github.io/tree/main/data/members
 
 outputs:
-  - HTML
+  - html
+  - og-card
   - members-data
 ---
 

@@ -223,13 +223,13 @@
       {{- end -}}
     </div>
 
-    {{/* Job title at org from member YAML */}}
+    {{/* Job title at org from member YAML — suppress "at Name" when member is independent (name == person name) */}}
     {{- if and $rep $rep.role -}}
-      <div class="person-card-jobtitle">{{ $rep.role }}{{- with $member }} at {{ .name }}{{- end }}</div>
+      <div class="person-card-jobtitle">{{ $rep.role }}{{- with $member -}}{{- if ne .name $name }} at {{ .name }}{{- end -}}{{- end -}}</div>
     {{- end -}}
 
-    {{/* Org logo or name */}}
-    {{- if $member -}}
+    {{/* Org logo or name — only shown when there is a logo or a real org website */}}
+    {{- if and $member (or $orgImg $member.website) -}}
     <div class="person-card-org">
       {{- if $orgImg -}}
         {{- $logoSrc := $orgImg.Permalink -}}

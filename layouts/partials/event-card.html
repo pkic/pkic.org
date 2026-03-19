@@ -36,17 +36,13 @@
 {{- $eventTitle    := $p.Param "heroTitle" | default $p.Title -}}
 {{- $eventLocation := $p.Param "heroDescription" -}}
 
-{{/* ── Upcoming vs past — extract year from URL path ────────────────── */}}
-{{- $urlParts  := split $p.RelPermalink "/" -}}
-{{- $yearStr   := index $urlParts 2 -}}
-{{- $eventYear := int $yearStr -}}
-{{- $isUpcoming := ge $eventYear now.Year -}}
+{{- $isUpcoming := eq (partial "events/is-upcoming.html" $p) "true" -}}
 
 <article class="event-card blog-card">
   {{/* ── Card image / gradient header ────────────────────────────────── */}}
   <div class="event-card-header blog-card-header{{ if $cardImg }} blog-card-header--photo{{ else }} blog-card-header--gradient{{ end }}">
     {{ if $cardImg }}
-      {{ $thumb := $cardImg.Resize "600x320 Center" }}
+      {{ $thumb := $cardImg.Fill "600x320 Center" }}
       <img
         src="{{ $thumb.RelPermalink }}"
         alt="{{ $eventTitle }}"

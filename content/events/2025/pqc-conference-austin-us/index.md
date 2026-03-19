@@ -5,8 +5,11 @@ title: Post-Quantum Cryptography Conference - Wednesday 15 and Thursday 16 Janua
 summary: |
   At this two day conference we will have speakers from U.S. National Institute of Standards and Technology (NIST) and many more
 
-heroTitle: Post-Quantum Cryptography Conference
-heroDescription: January 15 and 16, 2025 - Austin, Texas, US | Online
+params:
+  eventType: conference
+  sponsoring: "Post-Quantum Cryptography Conference Austin 2025"
+  heroTitle: Post-Quantum Cryptography Conference
+  heroDescription: January 15 and 16, 2025 - Austin, Texas, US | Online
 
 data:
   name: Post-Quantum Cryptography Conference

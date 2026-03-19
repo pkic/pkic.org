@@ -1,12 +1,34 @@
 
 <nav class="sticky-top navbar navbar-expand-lg pkic-navbar" id="pkicMainNav">
-  <div class="container">
+  <div class="container pkic-navbar-container">
     <a href="/" class="navbar-brand d-flex align-items-center">
       <img src="/img/logo.svg" height="30" alt="PKI Consortium">
     </a>
+
+    {{/* ── Centre: search (desktop only, absolutely positioned) ────── */}}
+    <div class="pkic-navbar-search d-none d-lg-flex" id="pkicNavSearch">
+      <button class="pkic-search-trigger" id="pkicSearchToggle" type="button" aria-label="Open search">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16">
+          <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
+        </svg>
+        <span class="pkic-search-trigger-label">Search…</span>
+        <kbd class="pkic-search-shortcut" id="pkicSearchKbd">⌘K</kbd>
+      </button>
+      <div class="pkic-search-input-wrap" id="pkicSearchInputWrap">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" class="pkic-search-input-icon" viewBox="0 0 16 16">
+          <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
+        </svg>
+        <input type="search" id="pkicSearchInput" class="pkic-search-input-field" placeholder="Search…" autocomplete="off" spellcheck="false" aria-label="Search">
+        <button class="pkic-search-close-btn" id="pkicSearchClose" type="button" aria-label="Close search">
+          <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 12 12"><path d="M2 2l8 8M2 10l8-8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+
     <button class="navbar-toggler border-0" type="button" data-bs-toggle="collapse" data-bs-target="#navbarContent" aria-controls="navbarContent" aria-expanded="false" aria-label="Toggle navigation">
       <span class="navbar-toggler-icon"></span>
     </button>
+
     <div class="collapse navbar-collapse" id="navbarContent">
 
       {{- if $.Page.FirstSection.Param "sideMenu" -}}
@@ -16,7 +38,17 @@
       <hr class="border-secondary">
       {{- end -}}
 
-      <div class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-lg-center">
+      {{/* ── Mobile search (inside collapse, not shown on desktop) ──── */}}
+      <div class="d-lg-none mb-2" id="pkicNavSearchMobile">
+        <button class="pkic-search-trigger w-100" id="pkicSearchToggleMobile" type="button" aria-label="Open search">
+          <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" viewBox="0 0 16 16">
+            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
+          </svg>
+          <span>Search…</span>
+        </button>
+      </div>
+
+      <div class="navbar-nav ms-auto mb-2 mb-lg-0 align-items-lg-center" id="pkicNavItems">
         {{ $currentPage := . }}
         {{ range .Site.Menus.main }}
         {{ if .HasChildren }}
@@ -37,16 +69,41 @@
         <a class="nav-link{{ if $currentPage.IsMenuCurrent "main" . }} active{{ end }}" title="{{ .Title }}" href="{{ .URL }}">{{ .Name }}</a>
         {{ end }}
         {{ end }}
-
-        <button class="pkic-search-btn ms-1" id="searchOpenBtn" aria-label="Search (Ctrl+K)">
-          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
-            <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
-          </svg>
-        </button>
       </div>
     </div>
   </div>
 </nav>
+
+{{/* ── Search backdrop: click anywhere outside results to dismiss ──── */}}
+<div id="pkicSearchBackdrop" aria-hidden="true"></div>
+
+{{/* ── Search results panel (drops down from navbar) ────────────── */}}
+<div class="pkic-search-panel" id="pkicSearchPanel" hidden aria-label="Search results">
+  <div class="container pb-5">
+    {{/* Section filter pills + close button in one sticky row */}}
+    <div class="pkic-search-filters" id="pkicSearchFilters">
+      <button class="pkic-filter-pill is-active" data-type="">All</button>
+      <button class="pkic-filter-pill" data-type="blog">Blog</button>
+      <button class="pkic-filter-pill" data-type="events">Events</button>
+      <button class="pkic-filter-pill" data-type="wg">Working Groups</button>
+      <button class="pkic-filter-pill" data-type="members">Members</button>
+      <button class="pkic-search-panel-close ms-auto" id="pkicSearchPanelClose" type="button" aria-label="Close search">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 12 12" fill="none"><path d="M2 2l8 8M2 10l8-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span>Close search</span>
+        <kbd>Esc</kbd>
+      </button>
+    </div>
+    {{/* Two-column: facet sidebar + results */}}
+    <div class="pkic-search-layout">
+      <aside class="pkic-search-sidebar" id="pkicSearchSubfilters" hidden></aside>
+      <div class="pkic-search-main">
+        <div id="pkicSearchResults">
+          <p class="pkic-search-hint">Start typing to search across all content…</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
 {{/* ── WG Mega-menu panel ────────────────────────────────────────────── */}}
 <div class="pkic-mega-panel" id="pkic-wg-mega" aria-label="Working Groups navigation">
@@ -155,21 +212,7 @@
   </div>
 </div>
 
-{{/* ── Search overlay ───────────────────────────────────────────────── */}}
-<div class="pkic-search-overlay" id="pkicSearchOverlay" role="dialog" aria-modal="true" aria-label="Site search">
-  <div class="pkic-search-box">
-    <div class="pkic-search-input-wrap">
-      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" opacity="0.45" viewBox="0 0 16 16">
-        <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
-      </svg>
-      <input type="search" id="pkicSearchInput" class="pkic-search-input-field" placeholder="Search PKIC…" autocomplete="off" spellcheck="false" aria-label="Search">
-      <button class="pkic-search-esc" id="pkicSearchClose" aria-label="Close search">ESC</button>
-    </div>
-    <div class="pkic-search-results-list" id="pkicSearchResults">
-      <p class="pkic-search-hint">Start typing to search across all content…</p>
-    </div>
-  </div>
-</div>
+
 
 {{ partial "script.html" (dict "path" "js/navbar.js" "build" false) }}
 

@@ -1,0 +1,292 @@
+{{- $page := . -}}
+{{- $title := $page.Params.heroTitle | default $page.Title -}}
+{{- $subtitle := ($page.Params.heroDescription | default $page.Description | default $page.Summary) | markdownify | plainify -}}
+
+{{/* Site stylesheet — shared components: .pkic-page-hero, fonts, resets */}}
+{{- $sass := resources.Get "scss/main.scss" -}}
+{{- $style := $sass | css.Sass | resources.Fingerprint -}}
+
+{{/* Eyebrow / kicker label — distinguished between list (section) and individual pages */}}
+{{- $eyebrow := "" -}}
+{{- if $page.IsHome -}}
+  {{- $eyebrow = $page.Site.Params.shortName -}}
+{{- else if eq $page.Section "members" -}}
+  {{- $eyebrow = cond $page.IsSection "Member Organizations" "Member" -}}
+{{- else if eq ($page.Param "eventType") "webinar" -}}
+  {{- $eyebrow = "Sponsored Webinar" -}}
+{{- else if eq $page.Section "events" -}}
+  {{- $eyebrow = cond $page.IsSection "Events" "PKI Consortium Event" -}}
+{{- else if eq $page.Section "wg" -}}
+  {{- $eyebrow = cond $page.IsSection "Working Groups" "Working Group" -}}
+{{- else if $page.Section -}}
+  {{- $eyebrow = printf "%s | %s" ($page.Section | humanize) $page.Site.Params.shortName -}}
+{{- end -}}
+
+{{/*
+  Hero background image — checked in this order:
+  1. Page bundle resource (e.g. heroImage: sunset.jpg next to index.md)
+  2. Global asset (e.g. heroImage: images/foo.jpg in assets/)
+  SVGs are served directly; the og-card is always rendered by a headless browser.
+*/}}
+{{- $heroBgImage := "" -}}
+{{- with $page.Params.heroImage -}}
+  {{- $path := . -}}
+  {{- with $page.Resources.GetMatch (printf "*%s" $path) -}}
+    {{- $heroBgImage = .RelPermalink -}}
+  {{- else -}}
+    {{- with resources.Get (strings.TrimPrefix "/" $path) -}}
+      {{- $heroBgImage = .RelPermalink -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/*
+  Visual panel image — logo (member/sponsor) or speaker headshot.
+  Only shown when a real image is found; no empty placeholder.
+*/}}
+{{- $visualImage := "" -}}
+{{- $visualIsRound := false -}}
+{{- $visualOnWhite := false -}}
+
+{{- with $page.Params.socialCardImage -}}
+  {{- with $page.Resources.GetMatch (printf "*%s" .) -}}
+    {{- $visualImage = .RelPermalink -}}
+  {{- else -}}
+    {{- with resources.Get (strings.TrimPrefix "/" .) -}}
+      {{- $visualImage = .RelPermalink -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if and (not $visualImage) (eq $page.Section "members") ($page.Param "id") -}}
+  {{- $id := $page.Param "id" -}}
+  {{- with resources.Get (printf "images/members/%s/%s.svg" $id $id) -}}
+    {{- $visualImage = .RelPermalink -}}
+    {{- $visualOnWhite = true -}}
+  {{- else -}}
+    {{- with resources.Get (printf "images/members/%s/%s.png" $id $id) -}}
+      {{- $visualImage = .RelPermalink -}}
+      {{- $visualOnWhite = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if and (not $visualImage) ($page.Param "speakers") -}}
+  {{- $speaker := index ($page.Param "speakers") 0 -}}
+  {{- $speakerMember := index $speaker "member" | default ($page.Param "sponsor") -}}
+  {{- $speakerName := index $speaker "representative" | default (index $speaker "name") | default "" -}}
+  {{- $speakerSlug := $speakerName | urlize -}}
+  {{- if $speakerMember -}}
+    {{- range slice "png" "jpg" "jpeg" "webp" -}}
+      {{- if not $visualImage -}}
+        {{- with resources.Get (printf "images/members/%s/%s.%s" $speakerMember $speakerSlug .) -}}
+          {{- $visualImage = .RelPermalink -}}
+          {{- $visualIsRound = true -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{/* Also check as a page bundle resource (event speaker photos) */}}
+    {{- if not $visualImage -}}
+      {{- range slice "jpg" "jpeg" "png" "webp" -}}
+        {{- if not $visualImage -}}
+          {{- with $page.Resources.GetMatch (printf "speakers/%s.%s" $speakerSlug .) -}}
+            {{- $visualImage = .RelPermalink -}}
+            {{- $visualIsRound = true -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if and (not $visualImage) ($page.Param "sponsor") -}}
+  {{- $id := $page.Param "sponsor" -}}
+  {{- with resources.Get (printf "images/members/%s/%s.svg" $id $id) -}}
+    {{- $visualImage = .RelPermalink -}}
+    {{- $visualOnWhite = true -}}
+  {{- else -}}
+    {{- with resources.Get (printf "images/members/%s/%s.png" $id $id) -}}
+      {{- $visualImage = .RelPermalink -}}
+      {{- $visualOnWhite = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/*
+  WG leader card — rendered in the right panel for any page that has chair data.
+  Takes priority over the image-based visual panel so WG pages always show the
+  chair card even if a logo is also present.
+*/}}
+{{- $chairName := "" -}}
+{{- $chairRole := "" -}}
+{{- $viceChairName := "" -}}
+{{- $viceChairRole := "" -}}
+{{- with $page.Params.chair -}}
+  {{- $chairName = .name -}}
+  {{- $chairRole = printf "%s Chair" ($page.Params.wgID | default "WG") -}}
+  {{- with .viceChair -}}
+    {{- $viceChairName = . -}}
+    {{- $viceChairRole = printf "%s Vice Chair" ($page.Params.wgID | default "WG") -}}
+  {{- end -}}
+{{- end -}}
+{{- $hasLeaderCard := ne $chairName "" -}}
+
+{{/* Member logo wall — collected for the /members/ section list page and the home page */}}
+{{- $memberLogos := slice -}}
+{{- if or (and $page.IsSection (eq $page.Section "members")) $page.IsHome -}}
+  {{- range where $page.Site.RegularPages "Section" "members" -}}
+    {{- $id := .Params.id -}}
+    {{- if $id -}}
+      {{- $logo := "" -}}
+      {{- with resources.Get (printf "images/members/%s/%s.svg" $id $id) -}}
+        {{- $logo = .RelPermalink -}}
+      {{- else -}}
+        {{- with resources.Get (printf "images/members/%s/%s.png" $id $id) -}}
+          {{- $logo = .RelPermalink -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if $logo -}}
+        {{- $memberLogos = $memberLogos | append $logo -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* WG member wall — same treatment for individual WG pages, filtered to that WG's members */}}
+{{- with $page.Params.wgID -}}
+  {{- $wgID := . -}}
+  {{- range hugo.Data.members -}}
+    {{- if in (.workingGroups | default slice) $wgID -}}
+      {{- $id := .id -}}
+      {{- $logo := "" -}}
+      {{- with resources.Get (printf "images/members/%s/%s.svg" $id $id) -}}
+        {{- $logo = .RelPermalink -}}
+      {{- else -}}
+        {{- with resources.Get (printf "images/members/%s/%s.png" $id $id) -}}
+          {{- $logo = .RelPermalink -}}
+        {{- end -}}
+      {{- end -}}
+      {{- if $logo -}}
+        {{- $memberLogos = $memberLogos | append $logo -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $hasMemberWall := gt (len $memberLogos) 0 -}}
+{{- if $hasMemberWall -}}{{- $memberLogos = shuffle $memberLogos -}}{{- end -}}
+
+{{/*
+  Event sponsor strip — only Diamond (weight 6) and Titanium (weight 5) sponsors.
+  Sorted highest-to-lowest then placed center-outward via CSS order, so Diamonds
+  land in the middle and Titaniums fan out to the sides.
+  Uses the same sponsors-collect.html partial as the sponsors shortcode.
+*/}}
+{{/*
+  Collect sponsors with their effective weight so we can sort highest-to-lowest
+  and arrange them center-outward (most important in the middle) via CSS order.
+  Cap at 8 logos to prevent overflow on the 1200px canvas.
+*/}}
+{{- $sponsorItems := slice -}}
+{{- $sponsoring := $page.Params.sponsoring | default $page.Site.Params.name -}}
+{{- $eventSponsors := partial "sponsors-collect.html" (dict "site" $page.Site "sponsoring" $sponsoring "level" "all" "minWeight" 5) -}}
+  {{- range $eventSponsors -}}
+    {{- $s := . -}}
+    {{- $logo := "" -}}
+    {{- if $s.logo -}}
+      {{- with resources.GetMatch (printf "images/sponsors/**/%s" $s.logo) -}}
+        {{- $logo = .RelPermalink -}}
+      {{- end -}}
+    {{- else -}}
+      {{- with resources.Get (printf "images/members/%s/%s.svg" $s.id $s.id) -}}
+        {{- $logo = .RelPermalink -}}
+      {{- else -}}
+        {{- with resources.Get (printf "images/members/%s/%s.png" $s.id $s.id) -}}
+          {{- $logo = .RelPermalink -}}
+        {{- end -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if $logo -}}
+      {{/* Effective weight = max of general level and event-specific level */}}
+      {{- $weight := index hugo.Data.sponsorlevels ($s.sponsor.level | default "") | default 0 -}}
+      {{- with index $s.sponsor.sponsoring $sponsoring -}}
+        {{- $evtWeight := index hugo.Data.sponsorlevels (.level | default "") | default 0 -}}
+        {{- if gt $evtWeight $weight -}}{{- $weight = $evtWeight -}}{{- end -}}
+      {{- end -}}
+      {{- $sponsorItems = $sponsorItems | append (dict "logo" $logo "weight" $weight) -}}
+    {{- end -}}
+  {{- end -}}
+{{- $hasSponsorStrip := gt (len $sponsorItems) 0 -}}
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="robots" content="noindex">
+  <title>{{ $title }}</title>
+  {{/* Site stylesheet — shared components: .pkic-page-hero, .pkic-page-hero-kicker, fonts, resets */}}
+  <link rel="stylesheet" href="{{ $style.RelPermalink }}">
+  {{/* OG card layout stylesheet — canvas sizing, grid, visual panel, footer */}}
+  {{- $ogStyle := resources.Get "scss/og-card.scss" | css.Sass | resources.Fingerprint -}}
+  <link rel="stylesheet" href="{{ $ogStyle.RelPermalink }}">
+  {{/* Per-page CSS custom properties (accent colour, theme gradient, hero image URL) */}}
+  {{ partial "og-card-page-vars.html" . }}
+</head>
+<body class="{{ if $heroBgImage }}og-has-hero-bg{{ end }}">
+  <div class="pkic-rainbow-stripe"></div>
+  <div class="pkic-page-hero">
+    {{ if not $hasMemberWall }}<div class="og-hero-watermark" aria-hidden="true"></div>{{ end }}
+    {{ if $hasMemberWall }}
+    <div class="og-member-wall-bg" aria-hidden="true">
+      {{ range $memberLogos }}<div class="og-member-logo"><img src="{{ . }}" alt=""></div>{{ end }}
+    </div>
+    {{ end }}
+    <div class="og-hero-inner{{ if or $hasLeaderCard $visualImage }} og-hero-inner--with-visual{{ end }}">
+      <section>
+        {{ with $eyebrow }}<p class="pkic-page-hero-kicker">{{ . }}</p>{{ end }}
+        <h1 class="og-title">{{ $title }}</h1>
+        {{ with $subtitle }}<p class="og-subtitle">{{ . }}</p>{{ end }}
+      </section>
+      {{ if $hasLeaderCard }}
+      <aside class="og-visual-aside--card">
+        {{ partial "person-card.html" (dict "name" $chairName "role" $chairRole "color" ($page.Params.color | default "green") "size" "sm") }}
+        {{ with $viceChairName }}
+        {{ partial "person-card.html" (dict "name" . "role" $viceChairRole "color" ($page.Params.color | default "green") "size" "sm") }}
+        {{ end }}
+      </aside>
+      {{ else if $visualImage }}
+      <aside class="og-visual-aside">
+        <div class="og-visual{{ if $visualIsRound }} og-visual--round{{ else if $visualOnWhite }} og-visual--on-white{{ end }}">
+          <img src="{{ $visualImage }}" alt="">
+        </div>
+      </aside>
+      {{ end }}
+    </div>
+    {{ with $page.Param "heroButton.label" }}
+    <div class="og-hero-cta">
+      <span>{{ . }}</span>
+      <span>→</span>
+    </div>
+    {{ end }}
+  </div>
+  <footer class="og-footer">
+    <div class="og-footer-logo">
+      <img src="/img/logo.svg" alt="{{ $page.Site.Params.shortName }}">
+    </div>
+    {{ if $hasSponsorStrip }}
+    <div class="og-footer-sponsors" aria-hidden="true">
+      <span class="og-footer-sponsors-label">Our Diamond &amp; Titanium Sponsors</span>
+      <div class="og-footer-sponsors-logos">
+        {{- $sorted := sort $sponsorItems "weight" "desc" -}}
+        {{- $capped := first 8 $sorted -}}
+        {{ range $i, $item := $capped -}}
+          {{- $order := 0 -}}
+          {{- if eq (mod $i 2) 0 -}}{{- $order = sub 0 (div $i 2) -}}{{- else -}}{{- $order = div (add $i 1) 2 -}}{{- end -}}
+          <div class="og-sponsor-logo" style="order: {{ $order }}"><img src="{{ $item.logo }}" alt=""></div>
+        {{- end }}
+      </div>
+    </div>
+    {{ end }}
+  </footer>
+</body>
+</html>

@@ -1,13 +1,7 @@
 (function () {
   'use strict';
 
-  var backdrop   = document.getElementById('pkicMegaBackdrop');
-  var overlay    = document.getElementById('pkicSearchOverlay');
-  var sInput     = document.getElementById('pkicSearchInput');
-  var sResults   = document.getElementById('pkicSearchResults');
-  var openBtn    = document.getElementById('searchOpenBtn');
-  var closeBtn   = document.getElementById('pkicSearchClose');
-
+  var backdrop = document.getElementById('pkicMegaBackdrop');
   if (!backdrop) return; // navbar not present on this page
 
   // ── Multi-panel Mega menu ─────────────────────────────────────────────
@@ -102,41 +96,165 @@
 
   backdrop.addEventListener('click', closeMega);
 
-  // ── Search overlay ───────────────────────────────────────────────────
+  // ── Inline search bar ────────────────────────────────────────────────
 
-  var pf = null;
+  // ── Search ────────────────────────────────────────────────────────────
+
+  var searchNav    = document.getElementById('pkicMainNav');
+  var searchToggle = document.getElementById('pkicSearchToggle');
+  var sInput       = document.getElementById('pkicSearchInput');
+  var sClose       = document.getElementById('pkicSearchClose');
+  var sPanel       = document.getElementById('pkicSearchPanel');
+  var sResults   = document.getElementById('pkicSearchResults');
+  var sFilters    = document.getElementById('pkicSearchFilters');
+  var sSubfilters = document.getElementById('pkicSearchSubfilters');
+  var sPanelClose = document.getElementById('pkicSearchPanelClose');
+  var pf           = null;
+  var currentQuery  = '';
+  var currentType   = '';
+  var currentTag    = '';
+  var currentAuthor = '';
+  var allResults    = [];
+  var debounce;
+
+  // Platform-appropriate shortcut label
+  var sKbd = document.getElementById('pkicSearchKbd');
+  if (sKbd) {
+    sKbd.textContent = /Mac|iPhone|iPad/i.test(navigator.userAgent) ? '⌘K' : 'Ctrl K';
+  }
+
+  function loadPagefind() {
+    if (pf) return;
+    import('/pagefind/pagefind.js').then(function (m) {
+      pf = m;
+      if (pf.init) pf.init();
+    }).catch(function () {});
+  }
 
   function openSearch() {
     closeMega();
-    overlay.classList.add('is-open');
-    document.body.style.overflow = 'hidden';
-    setTimeout(function () { sInput.focus(); }, 80);
-    if (!pf) {
-      import('/pagefind/pagefind.js').then(function (m) {
-        pf = m;
-        if (pf.init) pf.init();
-      }).catch(function () {});
-    }
+    if (!searchNav || !sPanel) return;
+    searchNav.classList.add('pkic-search-active');
+    var navSearch = document.getElementById('pkicNavSearch');
+    if (navSearch) navSearch.classList.add('is-active');
+    sPanel.hidden = false;
+    document.body.classList.add('pkic-search-open');
+    loadPagefind();
+    if (sInput) { sInput.value = ''; sInput.focus(); }
+    setResults('<p class="pkic-search-hint">Start typing to search across all content\u2026</p>');
   }
 
   function closeSearch() {
-    overlay.classList.remove('is-open');
-    document.body.style.overflow = '';
-    sInput.value = '';
-    sResults.innerHTML = '<p class="pkic-search-hint">Start typing to search across all content\u2026</p>';
+    if (!searchNav || !sPanel) return;
+    searchNav.classList.remove('pkic-search-active');
+    var navSearch = document.getElementById('pkicNavSearch');
+    if (navSearch) navSearch.classList.remove('is-active');
+    sPanel.hidden = true;
+    document.body.classList.remove('pkic-search-open');
+    if (sInput) sInput.value = '';
+    currentQuery = '';
+    allResults   = [];
+    currentType  = '';
+    clearTimeout(debounce);
+    resetFilterPills();
+    setResults('<p class="pkic-search-hint">Start typing to search across all content\u2026</p>');
   }
 
-  if (openBtn)  openBtn.addEventListener('click', openSearch);
-  if (closeBtn) closeBtn.addEventListener('click', closeSearch);
+  function setResults(html) {
+    if (sResults) sResults.innerHTML = html;
+  }
 
-  overlay.addEventListener('click', function (e) { if (e.target === overlay) closeSearch(); });
+  function resetFilterPills() {
+    if (!sFilters) return;
+    sFilters.querySelectorAll('.pkic-filter-pill').forEach(function (p) {
+      var base = (p.dataset.label || p.textContent).replace(/\s*\(\d+\)$/, '').trim();
+      if (!p.dataset.label) p.dataset.label = base;
+      p.textContent = base;
+      p.classList.toggle('is-active', (p.dataset.type || '') === '');
+    });
+    currentTag = '';
+    currentAuthor = '';
+    if (sSubfilters) sSubfilters.hidden = true;
+  }
+
+  if (searchToggle) searchToggle.addEventListener('click', openSearch);
+
+  var searchToggleMobile = document.getElementById('pkicSearchToggleMobile');
+  if (searchToggleMobile) searchToggleMobile.addEventListener('click', openSearch);
+
+  if (sClose)       sClose.addEventListener('click', closeSearch);
+  if (sPanelClose)  sPanelClose.addEventListener('click', closeSearch);
+
+  var sBackdrop = document.getElementById('pkicSearchBackdrop');
+  if (sBackdrop) sBackdrop.addEventListener('click', closeSearch);
+
+  if (sFilters) {
+    sFilters.addEventListener('click', function (e) {
+      var pill = e.target.closest('.pkic-filter-pill');
+      if (!pill) return;
+      currentType = pill.dataset.type || '';
+      // Reset secondary filters when section changes
+      currentTag = ''; currentAuthor = '';
+      sFilters.querySelectorAll('.pkic-filter-pill').forEach(function (p) {
+        p.classList.toggle('is-active', p === pill);
+      });
+      renderSubfilters();
+      renderResults();
+    });
+  }
+
+  if (sSubfilters) {
+    sSubfilters.addEventListener('click', function (e) {
+      var item = e.target.closest('.pkic-facet-item');
+      if (!item) return;
+      var kind  = item.dataset.kind;
+      var value = item.dataset.value;
+      if (kind === 'tag') {
+        currentTag    = (currentTag === value) ? '' : value;
+        currentAuthor = '';
+      } else {
+        currentAuthor = (currentAuthor === value) ? '' : value;
+        currentTag    = '';
+      }
+      // Update active states in sidebar
+      sSubfilters.querySelectorAll('.pkic-facet-item').forEach(function (el) {
+        var active = (el.dataset.kind === 'tag'    && el.dataset.value === currentTag) ||
+                     (el.dataset.kind === 'author' && el.dataset.value === currentAuthor);
+        el.classList.toggle('is-active', active);
+      });
+      renderResults();
+    });
+  }
 
   document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') { closeMega(); closeSearch(); }
-    if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); openSearch(); }
+    if (e.key === 'Escape') {
+      if (sPanel && !sPanel.hidden) { closeSearch(); }
+      else { closeMega(); }
+    }
+    if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+      e.preventDefault();
+      if (sPanel && !sPanel.hidden) { closeSearch(); }
+      else { openSearch(); }
+    }
   });
 
-  // ── Search handler ───────────────────────────────────────────────────
+  if (sInput) {
+    sInput.addEventListener('input', function () {
+      clearTimeout(debounce);
+      var q = this.value.trim();
+      currentQuery = q;
+      if (!q) {
+        allResults = [];
+        resetFilterPills();
+        setResults('<p class="pkic-search-hint">Start typing to search across all content\u2026</p>');
+        return;
+      }
+      setResults('<p class="pkic-search-hint">Searching\u2026</p>');
+      debounce = setTimeout(function () { runSearch(q); }, 220);
+    });
+  }
+
+  // ── Result rendering ──────────────────────────────────────────────────
 
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) {
@@ -144,38 +262,141 @@
     });
   }
 
-  var debounce;
-  sInput.addEventListener('input', function () {
-    clearTimeout(debounce);
-    var q = this.value.trim();
-    if (!q) { sResults.innerHTML = '<p class="pkic-search-hint">Start typing to search across all content\u2026</p>'; return; }
-    debounce = setTimeout(function () { runSearch(q); }, 220);
-  });
+  var TYPE_CONFIG = {
+    blog:    { label: 'Blog',          color: '#2563eb', icon: '✍️' },
+    events:  { label: 'Events',        color: '#d97706', icon: '📅' },
+    wg:      { label: 'Working Group', color: '#059669', icon: '⚙️' },
+    members: { label: 'Members',       color: '#7c3aed', icon: '🏢' },
+  };
+  var DEFAULT_TYPE = { label: 'Page', color: '#6b7280', icon: '📄' };
+
+  // Blog posts use date-based permalinks: /YYYY/MM/DD/slug/ — never /blog/
+  function getTypeFromUrl(url) {
+    if (!url) return '';
+    if (/\/\d{4}\/\d{2}\/\d{2}\//.test(url)) return 'blog';
+    if (/\/events\//.test(url))  return 'events';
+    if (/\/wg\//.test(url))      return 'wg';
+    if (/\/members\//.test(url)) return 'members';
+    return '';
+  }
+
+  function renderResults() {
+    if (!sResults) return;
+    var filtered = allResults.filter(function (d) {
+      if (currentType && getTypeFromUrl(d.url) !== currentType) return false;
+      if (currentTag    && !(d.filters && d.filters.tag    && d.filters.tag.indexOf(currentTag) !== -1))       return false;
+      if (currentAuthor && !(d.filters && d.filters.author && d.filters.author.indexOf(currentAuthor) !== -1)) return false;
+      return true;
+    });
+
+    if (!filtered.length) {
+      setResults('<p class="pkic-search-hint">No results' +
+        (currentType || currentTag || currentAuthor ? ' matching these filters' : ' for <strong>' + esc(currentQuery) + '</strong>') + '</p>');
+      return;
+    }
+
+    var cards = filtered.map(function (d) {
+      var type    = getTypeFromUrl(d.url);
+      var cfg     = TYPE_CONFIG[type] || DEFAULT_TYPE;
+      var title   = esc(d.meta && d.meta.title ? d.meta.title : 'Untitled');
+      var excerpt = d.excerpt ? '<p class="pkic-sr-excerpt">' + d.excerpt + '</p>' : '';
+      var image   = d.meta && d.meta.image;
+      var thumb   = image
+        ? '<img class="pkic-sr-thumb" src="' + esc(image) + '" alt="" loading="lazy">'
+        : '<div class="pkic-sr-thumb-placeholder" style="background:' + cfg.bg + '">' + cfg.icon + '</div>';
+      var tags    = (d.filters && d.filters.tag)    ? d.filters.tag.slice(0, 3)    : [];
+      var authors = (d.filters && d.filters.author) ? d.filters.author.slice(0, 2) : [];
+      var meta    = authors.concat(tags);
+      var metaHtml = meta.length
+        ? '<div class="pkic-sr-meta">' +
+          authors.map(function (a) { return '<span class="pkic-sr-tag pkic-sr-tag--author">' + esc(a) + '</span>'; }).join('') +
+          tags.map(function (t)    { return '<span class="pkic-sr-tag">' + esc(t) + '</span>'; }).join('') +
+          '</div>'
+        : '';
+      return '<a class="pkic-search-result-item" href="' + esc(d.url) + '">' +
+        thumb +
+        '<div class="pkic-sr-body">' +
+          '<div class="pkic-sr-type" style="color:' + cfg.color + '">' + cfg.label + '</div>' +
+          '<div class="pkic-sr-title">' + title + '</div>' +
+          excerpt + metaHtml +
+        '</div></a>';
+    }).join('');
+
+    setResults(
+      '<p class="pkic-search-count">' + filtered.length + '\u00a0result' + (filtered.length !== 1 ? 's' : '') + '</p>' +
+      '<div class="pkic-search-results-grid">' + cards + '</div>'
+    );
+  }
+
+  function updateFilterCounts() {
+    if (!sFilters) return;
+    sFilters.querySelectorAll('.pkic-filter-pill').forEach(function (pill) {
+      var type  = pill.dataset.type || '';
+      var count = type
+        ? allResults.filter(function (d) { return getTypeFromUrl(d.url) === type; }).length
+        : allResults.length;
+      var base  = (pill.dataset.label || pill.textContent).replace(/\s*\(\d+\)$/, '').trim();
+      if (!pill.dataset.label) pill.dataset.label = base;
+      pill.textContent = count ? base + ' (' + count + ')' : base;
+    });
+  }
+
+  // Build sidebar facet groups (Author + Tag) for results matching current section
+  function renderSubfilters() {
+    if (!sSubfilters) return;
+    var sectionResults = currentType
+      ? allResults.filter(function (d) { return getTypeFromUrl(d.url) === currentType; })
+      : allResults;
+
+    var tagCounts = {}, authorCounts = {};
+    sectionResults.forEach(function (d) {
+      (d.filters && d.filters.tag    || []).forEach(function (t) { tagCounts[t]    = (tagCounts[t]    || 0) + 1; });
+      (d.filters && d.filters.author || []).forEach(function (a) { authorCounts[a] = (authorCounts[a] || 0) + 1; });
+    });
+
+    var tags    = Object.keys(tagCounts)   .sort(function (a, b) { return tagCounts[b]    - tagCounts[a]; }).slice(0, 15);
+    var authors = Object.keys(authorCounts).sort(function (a, b) { return authorCounts[b] - authorCounts[a]; }).slice(0, 10);
+
+    if (!tags.length && !authors.length) { sSubfilters.hidden = true; return; }
+
+    function facetGroup(heading, kind, items, counts, activeVal) {
+      var rows = items.map(function (v) {
+        var active = v === activeVal ? ' is-active' : '';
+        return '<li>' +
+          '<button class="pkic-facet-item' + active + '" type="button" data-kind="' + kind + '" data-value="' + esc(v) + '">' +
+            '<span class="pkic-facet-check" aria-hidden="true"></span>' +
+            '<span class="pkic-facet-name">' + esc(v) + '</span>' +
+            '<span class="pkic-facet-count">' + counts[v] + '</span>' +
+          '</button>' +
+        '</li>';
+      }).join('');
+      return '<div class="pkic-facet-group">' +
+        '<div class="pkic-facet-heading">' + heading + '</div>' +
+        '<ul class="pkic-facet-list">' + rows + '</ul>' +
+      '</div>';
+    }
+
+    var html = '';
+    if (authors.length) html += facetGroup('Author', 'author', authors, authorCounts, currentAuthor);
+    if (tags.length)    html += facetGroup('Tag',    'tag',    tags,    tagCounts,    currentTag);
+
+    sSubfilters.innerHTML = html;
+    sSubfilters.hidden = false;
+  }
 
   async function runSearch(q) {
     if (!pf) {
-      sResults.innerHTML = '<p class="pkic-search-hint">Search index not available \u2014 run <code>hugo build</code> first.</p>';
+      setResults('<p class="pkic-search-hint">Search index not available \u2014 build the site first.</p>');
       return;
     }
-    sResults.innerHTML = '<p class="pkic-search-hint">Searching\u2026</p>';
     try {
       var res = await pf.search(q);
-      if (!res.results.length) {
-        sResults.innerHTML = '<p class="pkic-search-hint">No results for <strong>' + esc(q) + '</strong></p>';
-        return;
-      }
-      var top  = await Promise.all(res.results.slice(0, 8).map(function (r) { return r.data(); }));
-      sResults.innerHTML = top.map(function (d) {
-        var title   = esc(d.meta && d.meta.title ? d.meta.title : 'Untitled');
-        var excerpt = d.excerpt || '';
-        return '<a class="pkic-search-result-item" href="' + esc(d.url) + '">' +
-          '<div class="pkic-sr-title">'   + title   + '</div>' +
-          '<div class="pkic-sr-url">'     + esc(d.url) + '</div>' +
-          (excerpt ? '<div class="pkic-sr-excerpt">' + excerpt + '</div>' : '') +
-          '</a>';
-      }).join('');
+      allResults = await Promise.all(res.results.slice(0, 24).map(function (r) { return r.data(); }));
+      updateFilterCounts();
+      renderSubfilters();
+      renderResults();
     } catch (err) {
-      sResults.innerHTML = '<p class="pkic-search-hint">Search unavailable. <a href="/blog/" style="color:#7cf0be">Browse the blog \u2192</a></p>';
+      setResults('<p class="pkic-search-hint">Search unavailable. <a href="/blog/" style="color:#7cf0be">Browse the blog \u2192</a></p>');
     }
   }
 

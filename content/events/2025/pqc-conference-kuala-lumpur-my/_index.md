@@ -11,6 +11,7 @@ aliases:
 layout: single
 outputs:
  - html
+ - og-card
  - event-data
  - event-overlays
  - event-session
@@ -19,8 +20,11 @@ outputs:
  - event-agenda
 
 params:
+  eventType: conference
+  sponsoring: "Post-Quantum Cryptography Conference Kuala Lumpur 2025"
+  
   heroButton: 
-    label: You can now request an invite for our Next Conference in Amsterdam (Netherlands)!
+    label: Request an invite for our Next Conference in Amsterdam (Netherlands)!
     link: /register
 
   heroTitle: Post-Quantum Cryptography Conference

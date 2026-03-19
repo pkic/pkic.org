@@ -1,0 +1,437 @@
+// ============================================================
+// OG card canvas stylesheet
+// ============================================================
+// Imported standalone (NOT via main.scss) so it only loads on og-card pages.
+// Imports _theme-and-bootstrap for SCSS color tokens; all other site styles
+// come from main.scss which is also linked on og-card pages for shared
+// components (.pkic-page-hero, .pkic-page-hero-kicker, fonts, etc.).
+//
+// Dynamic per-page values (theme gradient, hero image URL, page accent) are
+// NOT embedded here — they are supplied via CSS custom properties in a small
+// Hugo-generated CSS resource linked separately (see og-card-vars partial).
+// ============================================================
+
+@import "theme-and-bootstrap";
+
+// ── Shared rainbow gradient ───────────────────────────────────────────────
+// Defined once as a placeholder so it can be @extended in two places
+// (top stripe and footer bottom edge) without duplicating the color stops.
+// Uses the canonical SCSS tokens from _theme-and-bootstrap.
+%rainbow-gradient {
+  background: linear-gradient(
+    90deg,
+    $green  0%,
+    $teal   18%,
+    $blue   46%,
+    $yellow 78%,
+    $orange 89%,
+    $red    100%
+  );
+}
+
+// ── Canvas sizing ─────────────────────────────────────────────────────────
+// The screenshot pipeline sets --window-size=1200,630; the card fills the
+// entire viewport so the captured dimensions are always exactly 1200×630.
+html,
+body {
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+  margin: 0;
+}
+
+body {
+  display: grid;
+  grid-template-rows: 8px 1fr 72px;
+  background: #060606;
+}
+
+// ── Top rainbow stripe ────────────────────────────────────────────────────
+.pkic-rainbow-stripe {
+  @extend %rainbow-gradient;
+}
+
+// ── Hero area ─────────────────────────────────────────────────────────────
+.pkic-page-hero {
+  padding: 0 !important;
+  height: 100%;
+  background: var(--og-theme-gradient, linear-gradient(135deg, #0a1f14 0%, #0d3d24 55%, #0a2f40 100%));
+}
+
+// Brand watermark — large logo in the background.
+// Keeps the composition readable without skewing the image.
+// Defined in the HTML as <div class="og-hero-watermark"> so it can be
+// styled without interfering with the ::before / ::after pseudo-elements.
+.og-hero-watermark {
+  position: absolute;
+  inset: 0;
+  top: 50%;
+  left: 40%;
+  // Uses the per-page --og-watermark-url var (WG icon, custom override, or default logo)
+  background: var(--og-watermark-url, url('/img/logo.svg')) 28% 18% / 52% auto no-repeat;
+  opacity: 0.015;
+  transform: scale(2);
+  transform-origin: center center;
+  pointer-events: none;
+  z-index: 0;
+}
+
+// Slightly reduce the watermark opacity when a real hero photo is present
+// so it doesn't compete with the image content.
+.og-has-hero-bg .og-hero-watermark {
+  opacity: 0.025;
+}
+
+// Depth layers — white highlight top-left + page-accent glow bottom-right.
+.pkic-page-hero::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 6% 30%,  rgba(255, 255, 255, 0.09) 0%, transparent 45%),
+    radial-gradient(ellipse at 88% 85%, color-mix(in srgb, var(--page-accent, #198754) 28%, transparent) 0%, transparent 42%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+// Photo background overlay
+.og-has-hero-bg .pkic-page-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(105deg, rgba(4, 7, 13, 0.82) 0%, rgba(4, 7, 13, 0.38) 55%, rgba(4, 7, 13, 0.60) 100%),
+    var(--og-hero-bg-url);
+  background-size: auto, cover;
+  background-position: center, center;
+  background-repeat: no-repeat;
+  z-index: 0;
+}
+
+// ── Hero inner grid ───────────────────────────────────────────────────────
+// Safe-zone padding: 84px horizontal keeps content away from platform crops.
+// align-content centres the block vertically in the hero height.
+.og-hero-inner {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  padding: 56px 84px 48px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-content: center;
+  align-items: center;
+  gap: 40px;
+}
+
+// Two-column layout when a visual panel is present
+.og-hero-inner--with-visual {
+  grid-template-columns: minmax(0, 1fr) 340px;
+}
+
+// ── Kicker / eyebrow ─────────────────────────────────────────────────────
+// Override the site's small grey kicker with a coloured pill badge —
+// it adds immediate hierarchy and brings the page accent into the composition.
+.pkic-page-hero-kicker {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.10);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  font-size: 13px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.12em !important;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.92) !important;
+  margin-bottom: 20px !important;
+
+  // Accent dot — uses the page accent colour for an instant colour pop
+  &::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--page-accent, #198754);
+    flex-shrink: 0;
+    box-shadow: 0 0 8px var(--page-accent, #198754);
+  }
+}
+
+// ── Card text ─────────────────────────────────────────────────────────────
+.og-title {
+  font-size: 66px;
+  line-height: 1.06;
+  font-weight: 900;
+  letter-spacing: -0.03em;
+  color: #fff;
+  margin: 0 0 16px;
+  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+  .og-hero-inner--with-visual & {
+    font-size: 54px;
+    text-wrap: balance;
+  }
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+
+.og-subtitle {
+  font-size: 21px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.82);
+  margin: 0;
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.30);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+// ── Visual panel — image (logos / headshots) ─────────────────────────────
+.og-visual-aside {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.og-visual {
+  width: 256px;
+  height: 256px;
+  border-radius: 32px;
+  // Default: semi-transparent panel
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 32px;
+  // Warm shadow + subtle accent glow ties the panel to the page colour
+  box-shadow:
+    0 32px 72px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.06),
+    0 0 60px color-mix(in srgb, var(--page-accent, #198754) 35%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+
+  img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+}
+
+// White panel — brand logos are designed for white backgrounds
+.og-visual--on-white {
+  background: #fff;
+  border: none;
+  padding: 32px;
+}
+
+// Round variant — speaker headshots
+.og-visual--round {
+  background: rgba(255, 255, 255, 0.12);
+  border: 3px solid rgba(255, 255, 255, 0.72);
+  border-radius: 999px;
+  padding: 0;
+
+  img {
+    object-fit: cover;
+    border-radius: inherit;
+  }
+}
+
+// ── Leader card panel ─────────────────────────────────────────────────────
+// No outer card border — the two person-cards float directly on the hero.
+// person-card base CSS assumes white background — override for dark hero context.
+.og-visual-aside--card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-self: center;
+  width: 100%;
+
+  .person-card {
+    background: rgba(255, 255, 255, 0.05);
+    backdrop-filter: blur(16px);
+    border-color: rgba(255, 255, 255, 0.10);
+    box-shadow: none;
+    max-width: none;
+    flex: none;
+    width: 100%;
+    padding-bottom: 1rem; // slightly more breathing room than base 0.75rem
+
+    &:hover {
+      box-shadow: none;
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+  }
+
+  // Allow names to wrap — no truncation in OG card context
+  .person-card-name,
+  .person-card-name:hover {
+    color: #fff;
+    white-space: normal;
+    overflow: visible;
+    text-overflow: unset;
+  }
+
+  .person-card-jobtitle,
+  .person-card-org-name {
+    color: rgba(255, 255, 255, 0.65);
+    margin-top: 0;
+  }
+
+  .person-card-org-logo {
+    filter: brightness(0) invert(1) opacity(0.75);
+  }
+
+  // White ring to suit the dark context
+  .person-card-avatar-frame {
+    border-color: rgba(255, 255, 255, 0.75);
+    background: rgba(255, 255, 255, 0.10);
+  }
+
+  // Role arc: frosted white pill with white text
+  .person-card-role-arc {
+    background: rgba(255, 255, 255, 0.18);
+    backdrop-filter: blur(8px);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    color: rgba(255, 255, 255, 0.95);
+    font-weight: 900;
+  }
+
+  // LinkedIn link is not clickable in a static image — hide it
+  .person-card-linkedin {
+    display: none;
+  }
+}
+
+// ── Member logo wall — full-bleed 3D background layer ────────────────────
+// All logos rendered as a flat grid behind the hero text.
+// Logos are inverted to white and faded so they read as a texture, not content.
+.og-member-wall-bg {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 10px;
+  padding: 16px;
+  align-content: start;
+  transform: scale(1.12);
+  transform-origin: center top;
+  opacity: 0.18;
+  pointer-events: none;
+
+  .og-member-logo {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 44px;
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 8px;
+    padding: 6px;
+    overflow: hidden;
+
+    img {
+      max-height: 28px;
+      max-width: 100%;
+      object-fit: contain;
+      filter: brightness(0) invert(1);
+      display: block;
+    }
+  }
+}
+
+// ── Hero CTA badge — floats at the bottom-right of the hero, above the footer ─
+.og-hero-cta {
+  position: absolute;
+  bottom: 20px;
+  right: 84px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 22px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, $green-dark, $green-light);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  box-shadow: 0 4px 20px rgba(25, 135, 84, 0.45);
+}
+
+// ── Footer ────────────────────────────────────────────────────────────────────
+// Sponsor logos live in the footer bar — replacing the CTA button when present.
+// This keeps the grid always at 3 rows and shows sponsors consistently on all cards.
+
+.og-footer-sponsors {
+  display: flex;
+  align-items: center;
+  position: relative;
+  gap: 0;
+}
+
+.og-footer-sponsors-label {
+  position: absolute;
+  top: 0;
+  left: 50%;
+  transform: translate(-50%, calc(-100% - 6px));
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.20);
+  white-space: nowrap;
+}
+
+.og-footer-sponsors-logos {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+}
+
+.og-sponsor-logo {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+
+  img {
+    display: block;
+    height: 22px;
+    max-width: 100px;
+    width: auto;
+    filter: brightness(0) invert(1) opacity(0.70);
+  }
+}
+
+.og-footer {
+  position: relative;
+  overflow: visible;
+  background: #060606;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 84px;
+
+  // Bottom rainbow stripe (same gradient as the top bar)
+  &::after {
+    @extend %rainbow-gradient;
+    content: "";
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 6px;
+  }
+}
+
+.og-footer-logo img {
+  height: 36px;
+  width: auto;
+  display: block;
+}

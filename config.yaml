@@ -157,6 +157,12 @@ outputFormats:
     path: /news/feed/
     isPlainText: false
     mediaType: application/rss
+  og-card:
+    mediatype: text/html
+    baseName: og-card
+    isPlainText: false
+    notAlternative: true
+    isHTML: true
   redirects:
     baseName: _redirects
     path: /
@@ -165,37 +171,51 @@ outputFormats:
   event-overlays:
     mediatype: text/html
     baseName: event-overlays
+    notAlternative: true
+    isHTML: true
   event-session:
     mediatype: text/html
     baseName: event-session
+    notAlternative: true
+    isHTML: true
   event-speakers:
     mediatype: text/html
     baseName: event-speakers
+    notAlternative: true
+    isHTML: true
   event-speakers2:
     mediatype: text/html
     baseName: event-speakers2
-  event-data:
+    notAlternative: true
+    isHTML: true
+  event-data: 
     mediatype: application/json
     isPlainText: true
     baseName: event-data
+    notAlternative: true
   event-agenda:
     mediatype: text/calendar
     baseName: agenda
     isPlainText: true
+    notAlternative: true
   members-data:
     mediatype: application/json
     isPlainText: true
     baseName: members-data
+    notAlternative: true
 
 outputs:
   home:
-    - HTML
+    - html
     - news
     - redirects
+    - og-card
   page:
-    - HTML
+    - html
+    - og-card
   section:
-    - HTML
+    - html
+    - og-card
 
 caches:
   getresource:
@@ -212,23 +232,23 @@ server:
         Content-Security-Policy:
           default-src 'none'; form-action 'self'; base-uri 'self';
           block-all-mixed-content;
-          style-src 'unsafe-inline' 'self' https://fonts.googleapis.com/;
-          font-src https://fonts.gstatic.com/s/roboto/;
+          style-src 'unsafe-inline' 'self';
+          font-src 'self';
           script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/;
           img-src 'self' https://i.ytimg.com data:;
           frame-src https://www.youtube-nocookie.com/ https://player.vimeo.com/ https://www.youtube.com/;
           media-src  https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4;
-          connect-src ws://localhost:1313/livereload 'self' https://fonts.gstatic.com/s/roboto/ data:;
+          connect-src ws://localhost:1313/livereload 'self' data:;
 
     - for: /questions.html
       values:
         Content-Security-Policy:
           default-src 'none'; form-action 'self'; base-uri 'self';
           block-all-mixed-content;
-          style-src 'unsafe-inline' 'self' https://fonts.googleapis.com/;
-          font-src https://fonts.gstatic.com/s/roboto/;
+          style-src 'unsafe-inline' 'self';
+          font-src 'self';
           script-src 'self' https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js https://pkic.github.io/self-assessment/;
           img-src 'self' data:;
           frame-src https://www.youtube-nocookie.com/ https://player.vimeo.com/ https://www.youtube.com/;
           media-src  https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4;
-          connect-src ws://localhost:1313/livereload 'self' https://docs.google.com/spreadsheets/d/ https://fonts.gstatic.com/s/roboto/ data:;
+          connect-src ws://localhost:1313/livereload 'self' https://docs.google.com/spreadsheets/d/ data:;

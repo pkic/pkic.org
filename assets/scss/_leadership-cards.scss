@@ -196,7 +196,7 @@
 .person-card {
   display: flex;
   flex-direction: column;  // footer spans full width below avatar+body row
-  padding: 1.1rem 1.25rem 0;  // no bottom padding — footer provides it
+  padding: 1.1rem 1.25rem 0.75rem;  // footer overrides bottom padding when present via :has()
   background: #fff;
   border: 1px solid $gray-200;
   border-radius: 0.85rem;
@@ -294,10 +294,13 @@
 
 // ─── Card body ────────────────────────────────────────────────────────────────
 
+.person-card:has(.person-card-footer) {
+  padding-bottom: 0;  // footer provides its own bottom spacing
+}
+
 .person-card-body {
   flex: 1;
   min-width: 0;
-  padding-bottom: 0.75rem;
 }
 
 .person-card-name-row {
