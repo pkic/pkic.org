@@ -22,7 +22,8 @@ outputs:
 params:
   eventType: conference
   sponsoring: "Post-Quantum Cryptography Conference Kuala Lumpur 2025"
-  
+  eventDate: 2025-10-28T00:00:00Z
+  eventDuration: 3
   heroButton: 
     label: Request an invite for our Next Conference in Amsterdam (Netherlands)!
     link: /register

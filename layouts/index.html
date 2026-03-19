@@ -1,37 +1,21 @@
 {{ define "main" }}
 
 {{/* ─── Homepage event collections ─────────────────────────────────────── */}}
-{{- $heroEventPages := slice -}}
-{{- $allEventPages := slice -}}
-{{- range where .Site.Pages "Section" "events" -}}
-  {{- $eventType := .Param "eventType" -}}
-  {{- if $eventType -}}
-    {{- $heroEventPages = $heroEventPages | append . -}}
-    {{- $allEventPages = $allEventPages | append . -}}
-  {{- end -}}
-{{- end -}}
-{{- $heroUpcomingEvents := slice -}}
-{{- range $heroEventPages -}}
-  {{- if eq (partial "events/is-upcoming.html" .) "true" -}}
-    {{- $heroUpcomingEvents = $heroUpcomingEvents | append . -}}
-  {{- end -}}
-{{- end -}}
-{{- $heroUpcomingEvents = sort $heroUpcomingEvents "Date" "asc" -}}
-{{- $heroUpcomingEvents = first 3 $heroUpcomingEvents -}}
+{{- $allEvents      := sort (where site.Pages "Params.eventType" "!=" nil) "Params.eventDate" "asc" -}}
+{{- $today          := now.Format "2006-01-02" -}}
 {{- $upcomingEvents := slice -}}
-{{- $pastEvents := slice -}}
-{{- range $allEventPages -}}
-  {{- if eq (partial "events/is-upcoming.html" .) "true" -}}
+{{- $pastEvents     := slice -}}
+{{- range $allEvents -}}
+  {{- $eventDate := time (.Param "eventDate") -}}
+  {{- if ge ($eventDate.Format "2006-01-02") $today -}}
     {{- $upcomingEvents = $upcomingEvents | append . -}}
   {{- else -}}
     {{- $pastEvents = $pastEvents | append . -}}
   {{- end -}}
 {{- end -}}
-{{- $upcomingEvents = sort $upcomingEvents "Date" "asc" -}}
-{{- $pastEvents = sort $pastEvents "Date" "desc" -}}
-{{- $homepageUpcomingEventCards := first 3 $upcomingEvents -}}
-{{- $homepagePastEventCards := first 3 $pastEvents -}}
-{{- $homepageEventCards := first 3 ($homepageUpcomingEventCards | append $homepagePastEventCards) -}}
+{{- $heroUpcomingEvents := first 1 $upcomingEvents -}}
+{{- $heroMoreCount      := sub (len $upcomingEvents) 1 -}}
+{{- $homepageEventCards := first 3 ((where $upcomingEvents "Params.eventType" "conference") | append (sort (where $pastEvents "Params.eventType" "conference") "Params.eventDate" "desc")) -}}
 
 {{/* ─── Hero ─────────────────────────────────────────────────────────── */}}
 <section class="pkic-home-hero">
@@ -79,7 +63,7 @@
               </li>
               {{ end }}
             </ul>
-            <a href="/events/" class="pkic-hero-post-cta d-inline-block mt-2">View all events &rarr;</a>
+            <a href="/events/" class="pkic-hero-post-cta d-inline-block mt-2">{{ if gt $heroMoreCount 0 }}+{{ $heroMoreCount }} more · {{ end }}View all upcoming and past events &rarr;</a>
           </div>
           {{ end }}
         </div>

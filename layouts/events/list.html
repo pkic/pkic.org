@@ -33,25 +33,14 @@
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}}
       <div class="col-lg-9">
 
-        {{- $consortiumEvts := slice -}}
-        {{- $webinars := slice -}}
-        {{- range where site.Pages "Section" "events" -}}
-          {{- $eventType := .Param "eventType" -}}
-          {{- if $eventType -}}
-            {{- if eq $eventType "webinar" -}}
-              {{- $webinars = $webinars | append . -}}
-            {{- else -}}
-              {{- $consortiumEvts = $consortiumEvts | append . -}}
-            {{- end -}}
-          {{- end -}}
-        {{- end -}}
-        {{- $consortiumEvts = sort $consortiumEvts "Date" "desc" -}}
-        {{- $webinars = sort $webinars "Date" "desc" -}}
+        {{- $consortiumEvts := sort (where site.Pages "Params.eventType" "conference") "Params.eventDate" "asc" -}}
+        {{- $webinars       := sort (where site.Pages "Params.eventType" "webinar") "Params.eventDate" "asc" -}}
+        {{- $today := now.Format "2006-01-02" -}}
 
         {{/* Collect unique years from event date, then sort descending */}}
         {{- $years := slice -}}
         {{- range $consortiumEvts -}}
-          {{- $yr := int (partial "events/year.html" .) -}}
+          {{- $yr := (time (.Param "eventDate")).Format "2006" -}}
           {{- if not (in $years $yr) -}}
             {{- $years = $years | append $yr -}}
           {{- end -}}
@@ -62,7 +51,7 @@
         {{- $upcomingYears := slice -}}
         {{- $pastYears     := slice -}}
         {{- range $years -}}
-          {{- if ge . now.Year -}}
+          {{- if ge (int .) now.Year -}}
             {{- $upcomingYears = $upcomingYears | append . -}}
           {{- else -}}
             {{- $pastYears = $pastYears | append . -}}
@@ -82,7 +71,8 @@
           {{ $yr := . }}
           <div class="row g-4{{ if gt (len $upcomingYears) 1 }} mb-4{{ end }}">
             {{ range $consortiumEvts }}
-            {{ if eq (int (partial "events/year.html" .)) $yr }}
+            {{- $eventDate := time (.Param "eventDate") -}}
+            {{ if eq ($eventDate.Format "2006") $yr }}
             <div class="col-md-6">
               {{ partial "event-card.html" . }}
             </div>
@@ -110,7 +100,8 @@
             <h3 class="events-year-heading">{{ $yr }}</h3>
             <div class="row g-4">
               {{ range $consortiumEvts }}
-              {{ if eq (int (partial "events/year.html" .)) $yr }}
+              {{- $eventDate := time (.Param "eventDate") -}}
+              {{ if eq ($eventDate.Format "2006") $yr }}
               <div class="col-md-6">
                 {{ partial "event-card.html" . }}
               </div>
@@ -150,7 +141,8 @@
           {{- $upcomingWebinars := slice -}}
           {{- $pastWebinars := slice -}}
           {{- range $webinars -}}
-            {{- if eq (partial "events/is-upcoming.html" .) "true" -}}
+            {{- $eventDate := time (.Param "eventDate") -}}
+            {{- if ge ($eventDate.Format "2006-01-02") $today -}}
               {{- $upcomingWebinars = $upcomingWebinars | append . -}}
             {{- else -}}
               {{- $pastWebinars = $pastWebinars | append . -}}

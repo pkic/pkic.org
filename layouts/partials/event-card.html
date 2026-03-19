@@ -36,7 +36,9 @@
 {{- $eventTitle    := $p.Param "heroTitle" | default $p.Title -}}
 {{- $eventLocation := $p.Param "heroDescription" -}}
 
-{{- $isUpcoming := eq (partial "events/is-upcoming.html" $p) "true" -}}
+{{/* ── Upcoming vs past — compare the actual event date ─────────────── */}}
+{{- $eventDate := time ($p.Param "eventDate") -}}
+{{- $isUpcoming := ge ($eventDate.Format "2006-01-02") (now.Format "2006-01-02") -}}
 
 <article class="event-card blog-card">
   {{/* ── Card image / gradient header ────────────────────────────────── */}}

@@ -1,6 +1,5 @@
 ---
 date: 2026-02-24T08:00:00Z
-draft: false
 title: Post-Quantum Cryptography Conference - December 1 - 3, 2026 - Amsterdam, The Netherlands
 summary: |
   The PKI Consortium will host the next Post-Quantum Cryptography (PQC) Conference in Amsterdam. Over three days, we will bring together public- and private-sector leaders, standards bodies, and implementers to share practical migration experience and to accelerate real-world post-quantum readiness.
@@ -24,6 +23,9 @@ cascade:
     heroDescription: December 1 - 3, 2026 - Amsterdam, The Netherlands | Hybrid
 
 params:
+  eventType: conference
+  eventDate: 2026-12-01T00:00:00Z
+  eventDuration: 3
   heroButton:
     label: Request an invite / registration updates
     link: register/
