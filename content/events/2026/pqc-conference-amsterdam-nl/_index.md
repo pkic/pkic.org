@@ -10,6 +10,7 @@ aliases:
 layout: single
 outputs:
  - html
+ - og-card
  - event-data
  - event-overlays
  - event-session
