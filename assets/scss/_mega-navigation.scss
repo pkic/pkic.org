@@ -2,6 +2,12 @@
 // PKIC Navbar — true black + mega-menu + search overlay
 // ====================================================================
 
+// Single source of truth for navbar height — used by section navs, search
+// panel, mega-menu panels, and scroll-margin calculations throughout the site.
+:root {
+  --pkic-navbar-height: 57px;
+}
+
 .pkic-navbar {
   background: #000 !important;
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
@@ -12,6 +18,7 @@
     color: rgba(255, 255, 255, 0.72) !important;
     padding: 0.45rem 0.85rem;
     border-radius: 0.45rem;
+    white-space: nowrap; // prevent nav item text from wrapping to a second line
     transition:
       color 0.15s ease,
       background 0.15s ease;
@@ -57,21 +64,24 @@
 // Provides the stacking context for the absolutely-centred search
 .pkic-navbar-container {
   position: relative;
+
+  // At desktop breakpoint: collapse takes its natural width (nav items don't
+  // shrink/wrap), and the search uses margin:auto to consume the free space
+  // equally on both sides — centering itself in the gap between logo and nav.
+  @media (min-width: 992px) {
+    > .navbar-collapse {
+      flex-grow: 0; // override Bootstrap's flex-grow:1 so nav items stay at natural width
+    }
+  }
 }
 
-// Centre search widget — taken out of flex flow, pinned to visual centre
+// Centre search widget — margin:auto splits free space equally left & right
 .pkic-navbar-search {
   @media (min-width: 992px) {
-    position: absolute;
-    left: 50%;
-    transform: translateX(-50%);
-    width: 240px;
-    transition: width 0.25s ease;
+    flex: 0 1 240px; // can shrink slightly if space is tight, baseline 240px
+    min-width: 120px;
+    margin: 0 auto;  // absorbs all remaining gap → search sits centred between logo and nav
     z-index: 10;
-
-    &.is-active {
-      width: clamp(280px, 40vw, 540px);
-    }
   }
 }
 
@@ -87,7 +97,7 @@
   color: rgba(255, 255, 255, 0.55);
   font-size: 0.84rem;
   cursor: pointer;
-  justify-content: space-between;
+  justify-content: flex-start;
   transition:
     border-color 0.15s ease,
     background 0.15s ease,
@@ -117,6 +127,7 @@
   padding: 0.1rem 0.35rem;
   color: rgba(255, 255, 255, 0.4);
   line-height: 1.4;
+  margin-left: auto; // push to trailing edge even with justify-content: flex-start
   @media (max-width: 1199.98px) {
     display: none;
   }
@@ -184,13 +195,9 @@
   }
 
   @media (min-width: 992px) {
-    // Leave absolute flow, expand to fill remaining flex space
+    // Let search fill the rest of the row once nav is hidden
     .pkic-navbar-search {
-      position: static !important;
-      transform: none !important;
-      flex: 1 !important;
-      width: auto !important;
-      transition: none;
+      flex: 1 1 auto !important;
       margin: 0 0.5rem;
     }
     // Hide nav items so search takes the full row
@@ -213,7 +220,7 @@ body.pkic-search-open {
 
 .pkic-search-panel {
   position: fixed;
-  top: 57px;
+  top: var(--pkic-navbar-height);
   left: 0;
   right: 0;
   bottom: 0;
@@ -318,7 +325,7 @@ body.pkic-search-open {
   position: sticky;
   top: 3.5rem; // below the sticky close bar
   align-self: flex-start;
-  max-height: calc(100vh - 57px - 3.5rem);
+  max-height: calc(100vh - var(--pkic-navbar-height) - 3.5rem);
   overflow-y: auto;
   scrollbar-width: none;
   padding-bottom: 2rem;
@@ -486,7 +493,7 @@ body.pkic-search-open {
 
 .pkic-mega-panel {
   position: fixed;
-  top: 57px;
+  top: var(--pkic-navbar-height);
   left: 0;
   right: 0;
   z-index: 1040;
@@ -529,7 +536,7 @@ body.pkic-search-open {
 .pkic-mega-backdrop {
   position: fixed;
   inset: 0;
-  top: 57px;
+  top: var(--pkic-navbar-height);
   z-index: 1030;
   background: rgba(0, 0, 0, 0.3);
   backdrop-filter: blur(2px);
