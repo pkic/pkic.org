@@ -20,12 +20,12 @@
 %rainbow-gradient {
   background: linear-gradient(
     90deg,
-    $green  0%,
-    $teal   18%,
-    $blue   46%,
+    $green 0%,
+    $teal 18%,
+    $blue 46%,
     $yellow 78%,
     $orange 89%,
-    $red    100%
+    $red 100%
   );
 }
 
@@ -55,7 +55,10 @@ body {
 .pkic-page-hero {
   padding: 0 !important;
   height: 100%;
-  background: var(--og-theme-gradient, linear-gradient(135deg, #0a1f14 0%, #0d3d24 55%, #0a2f40 100%));
+  background: var(
+    --og-theme-gradient,
+    linear-gradient(135deg, #0a1f14 0%, #0d3d24 55%, #0a2f40 100%)
+  );
 }
 
 // Brand watermark — large logo in the background.
@@ -68,7 +71,8 @@ body {
   top: 50%;
   left: 40%;
   // Uses the per-page --og-watermark-url var (WG icon, custom override, or default logo)
-  background: var(--og-watermark-url, url('/img/logo.svg')) 28% 18% / 52% auto no-repeat;
+  background: var(--og-watermark-url, url("/img/logo.svg")) 28% 18% / 52% auto
+    no-repeat;
   opacity: 0.015;
   transform: scale(2);
   transform-origin: center center;
@@ -88,8 +92,16 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse at 6% 30%,  rgba(255, 255, 255, 0.09) 0%, transparent 45%),
-    radial-gradient(ellipse at 88% 85%, color-mix(in srgb, var(--page-accent, #198754) 28%, transparent) 0%, transparent 42%);
+    radial-gradient(
+      ellipse at 6% 30%,
+      rgba(255, 255, 255, 0.09) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      ellipse at 88% 85%,
+      color-mix(in srgb, var(--page-accent, #198754) 28%, transparent) 0%,
+      transparent 42%
+    );
   pointer-events: none;
   z-index: 1;
 }
@@ -100,7 +112,12 @@ body {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(105deg, rgba(4, 7, 13, 0.82) 0%, rgba(4, 7, 13, 0.38) 55%, rgba(4, 7, 13, 0.60) 100%),
+    linear-gradient(
+      105deg,
+      rgba(4, 7, 13, 0.82) 0%,
+      rgba(4, 7, 13, 0.38) 55%,
+      rgba(4, 7, 13, 0.6) 100%
+    ),
     var(--og-hero-bg-url);
   background-size: auto, cover;
   background-position: center, center;
@@ -137,7 +154,7 @@ body {
   gap: 8px;
   padding: 6px 16px 6px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.18);
   font-size: 13px !important;
   font-weight: 700 !important;
@@ -166,11 +183,15 @@ body {
   letter-spacing: -0.03em;
   color: #fff;
   margin: 0 0 16px;
-  text-shadow: 0 2px 16px rgba(0, 0, 0, 0.35), 0 1px 3px rgba(0, 0, 0, 0.25);
+  text-shadow:
+    0 2px 16px rgba(0, 0, 0, 0.35),
+    0 1px 3px rgba(0, 0, 0, 0.25);
+
   .og-hero-inner--with-visual & {
     font-size: 54px;
     text-wrap: balance;
   }
+
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
@@ -182,7 +203,7 @@ body {
   line-height: 1.5;
   color: rgba(255, 255, 255, 0.82);
   margin: 0;
-  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.30);
+  text-shadow: 0 1px 10px rgba(0, 0, 0, 0.3);
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
@@ -255,7 +276,7 @@ body {
   .person-card {
     background: rgba(255, 255, 255, 0.05);
     backdrop-filter: blur(16px);
-    border-color: rgba(255, 255, 255, 0.10);
+    border-color: rgba(255, 255, 255, 0.1);
     box-shadow: none;
     max-width: none;
     flex: none;
@@ -290,7 +311,7 @@ body {
   // White ring to suit the dark context
   .person-card-avatar-frame {
     border-color: rgba(255, 255, 255, 0.75);
-    background: rgba(255, 255, 255, 0.10);
+    background: rgba(255, 255, 255, 0.1);
   }
 
   // Role arc: frosted white pill with white text
@@ -385,7 +406,7 @@ body {
   font-weight: 800;
   letter-spacing: 0.18em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.20);
+  color: rgba(255, 255, 255, 0.2);
   white-space: nowrap;
 }
 
@@ -405,7 +426,7 @@ body {
     height: 22px;
     max-width: 100px;
     width: auto;
-    filter: brightness(0) invert(1) opacity(0.70);
+    filter: brightness(0) invert(1) opacity(0.7);
   }
 }
 

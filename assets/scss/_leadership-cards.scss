@@ -3,8 +3,8 @@
 // Compose with the leader-card.html partial.
 
 .wg-leadership-panel {
-  background: rgba(0,0,0,0.03);
-  border: 1px solid rgba(0,0,0,0.08);
+  background: rgba(0, 0, 0, 0.03);
+  border: 1px solid rgba(0, 0, 0, 0.08);
   border-radius: 1rem;
   padding: 1.25rem;
   margin-bottom: 1rem;
@@ -21,7 +21,7 @@
 
 .wg-leadership-persons {
   display: flex;
-  flex-direction: column;  // compact cards always stack vertically in the sidebar
+  flex-direction: column; // compact cards always stack vertically in the sidebar
   gap: 0.6rem;
 
   // Legacy modifier — kept for any remaining large-card contexts
@@ -50,7 +50,7 @@
   height: 72px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(0,0,0,0.08);
+  border: 2px solid rgba(0, 0, 0, 0.08);
   margin-bottom: 0.15rem;
 
   &--large {
@@ -142,7 +142,9 @@
   filter: grayscale(1) contrast(0.7);
   transition: filter 0.15s;
 
-  .wg-leader-card:hover & { filter: none; }
+  .wg-leader-card:hover & {
+    filter: none;
+  }
 
   &--large {
     max-width: 120px;
@@ -154,7 +156,9 @@
   font-size: 0.72rem;
   color: $gray-500;
   text-decoration: none;
-  &:hover { color: $green; }
+  &:hover {
+    color: $green;
+  }
 }
 
 .wg-leader-linkedin {
@@ -168,7 +172,9 @@
   margin-top: 0.2rem;
   transition: opacity 0.15s;
 
-  &:hover { opacity: 0.8; }
+  &:hover {
+    opacity: 0.8;
+  }
 
   // Icon-only variant used in the name row of large cards
   &--icon {
@@ -195,17 +201,19 @@
 
 .person-card {
   display: flex;
-  flex-direction: column;  // footer spans full width below avatar+body row
-  padding: 1.1rem 1.25rem 0.75rem;  // footer overrides bottom padding when present via :has()
+  flex-direction: column; // footer spans full width below avatar+body row
+  padding: 1.1rem 1.25rem 0.75rem; // footer overrides bottom padding when present via :has()
   background: #fff;
   border: 1px solid $gray-200;
   border-radius: 0.85rem;
   flex: 1 1 280px;
   max-width: 440px;
-  transition: box-shadow 0.18s, border-color 0.18s;
+  transition:
+    box-shadow 0.18s,
+    border-color 0.18s;
 
   &:hover {
-    box-shadow: 0 4px 18px rgba(0,0,0,0.08);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.08);
     border-color: $gray-300;
   }
 
@@ -227,7 +235,9 @@
 .person-card-avatar-frame {
   position: relative;
   flex-shrink: 0;
-  width: calc(var(--avatar-px, 80px) + 8px);  // +8px for 3px ring on each side + 1px gap
+  width: calc(
+    var(--avatar-px, 80px) + 8px
+  ); // +8px for 3px ring on each side + 1px gap
   height: calc(var(--avatar-px, 80px) + 8px);
   border-radius: 50%;
   // Active ring: solid green
@@ -295,7 +305,7 @@
 // ─── Card body ────────────────────────────────────────────────────────────────
 
 .person-card:has(.person-card-footer) {
-  padding-bottom: 0;  // footer provides its own bottom spacing
+  padding-bottom: 0; // footer provides its own bottom spacing
 }
 
 .person-card-body {
@@ -322,7 +332,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
 
-  &:hover { color: $green; }
+  &:hover {
+    color: $green;
+  }
 }
 
 .person-card-linkedin {
@@ -332,7 +344,9 @@
   text-decoration: none;
   flex-shrink: 0;
   transition: opacity 0.15s;
-  &:hover { opacity: 0.75; }
+  &:hover {
+    opacity: 0.75;
+  }
 }
 
 .person-card-jobtitle {
@@ -349,7 +363,7 @@
 .person-card-org-logo-wrap {
   display: flex;
   align-items: center;
-  height: 28px;         // fixed container height — applies equally to SVG and raster
+  height: 28px; // fixed container height — applies equally to SVG and raster
   max-width: 120px;
   overflow: hidden;
 }
@@ -363,13 +377,16 @@
   object-fit: contain;
   filter: grayscale(1) contrast(0.65) brightness(0.95);
   transition: filter 0.18s;
-  .person-card:hover & { filter: none; }
+  .person-card:hover & {
+    filter: none;
+  }
 }
 
 .person-card-org-name {
   font-size: 0.78rem;
   color: $gray-500;
   text-decoration: none;
-  &:hover { color: $green; }
+  &:hover {
+    color: $green;
+  }
 }
-

@@ -6,7 +6,12 @@
 
 .webinar-hero {
   position: relative;
-  background: linear-gradient(135deg, $blue-deep 0%, $purple-deep 55%, $green-deep 100%);
+  background: linear-gradient(
+    135deg,
+    $blue-deep 0%,
+    $purple-deep 55%,
+    $green-deep 100%
+  );
   background-size: cover;
   background-position: center;
   padding: 4rem 0 3.5rem;
@@ -17,19 +22,30 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse at 80% 20%, rgba(90,155,213,0.35) 0%, transparent 55%),
-                radial-gradient(ellipse at 20% 80%, rgba(32,201,151,0.20) 0%, transparent 50%);
+    background:
+      radial-gradient(
+        ellipse at 80% 20%,
+        rgba(90, 155, 213, 0.35) 0%,
+        transparent 55%
+      ),
+      radial-gradient(
+        ellipse at 20% 80%,
+        rgba(32, 201, 151, 0.2) 0%,
+        transparent 50%
+      );
     pointer-events: none;
   }
 
   // When a photo is used, suppress the radial shimmer
-  &--photo::before { display: none; }
+  &--photo::before {
+    display: none;
+  }
 }
 
 .webinar-hero-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0,0,0,0.18);
+  background: rgba(0, 0, 0, 0.18);
 }
 
 .webinar-hero-content {
@@ -84,8 +100,8 @@
   font-weight: 800;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  background: rgba(255,255,255,0.18);
-  border: 1px solid rgba(255,255,255,0.32);
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.32);
   color: #fff;
   border-radius: 2rem;
   padding: 0.28em 0.85em;
@@ -130,7 +146,7 @@
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
-  border: 2px solid rgba(0,0,0,0.07);
+  border: 2px solid rgba(0, 0, 0, 0.07);
 }
 
 .webinar-speaker-avatar--initials {
@@ -177,7 +193,9 @@
     color: $gray-500;
     transition: color 0.15s ease;
 
-    &:hover { color: $blue; }
+    &:hover {
+      color: $blue;
+    }
   }
 }
 
@@ -188,7 +206,9 @@
   ul {
     padding-left: 1.25rem;
 
-    li { margin-bottom: 0.3rem; }
+    li {
+      margin-bottom: 0.3rem;
+    }
   }
 }
 
@@ -225,5 +245,7 @@
   line-height: 1.55;
   margin: 0;
 
-  strong { color: $gray-600; }
+  strong {
+    color: $gray-600;
+  }
 }

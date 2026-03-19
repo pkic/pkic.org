@@ -86,13 +86,21 @@
       position: absolute;
       inset: 0;
       pointer-events: none;
-      background: radial-gradient(ellipse at 110% -10%, rgba(32,201,151,0.28) 0%, transparent 55%);
+      background: radial-gradient(
+        ellipse at 110% -10%,
+        rgba(32, 201, 151, 0.28) 0%,
+        transparent 55%
+      );
     }
   }
   &:nth-child(2n) .blog-card-header--gradient {
     background: linear-gradient(135deg, $purple-deep 0%, $blue-deep 100%);
     &::before {
-      background: radial-gradient(ellipse at 110% -10%, rgba(111,66,193,0.25) 0%, transparent 55%);
+      background: radial-gradient(
+        ellipse at 110% -10%,
+        rgba(111, 66, 193, 0.25) 0%,
+        transparent 55%
+      );
     }
   }
 
@@ -100,7 +108,9 @@
   .event-card-location {
     gap: 0.3rem;
 
-    svg { flex-shrink: 0; }
+    svg {
+      flex-shrink: 0;
+    }
   }
 }
 
@@ -113,9 +123,9 @@
     border-color: transparent !important;
   }
   &--past {
-    background: rgba(255,255,255,0.18) !important;
+    background: rgba(255, 255, 255, 0.18) !important;
     color: #fff !important;
-    border-color: rgba(255,255,255,0.28) !important;
+    border-color: rgba(255, 255, 255, 0.28) !important;
   }
 }
 
@@ -143,7 +153,7 @@
 }
 
 .events-sidebar-desc {
-  font-size: 0.80rem;
+  font-size: 0.8rem;
   color: $gray-500;
   line-height: 1.55;
   margin: 0;
@@ -151,7 +161,9 @@
   // markdownify wraps in <p>; keep spacing compact
   p {
     margin-bottom: 0.4rem;
-    &:last-child { margin-bottom: 0; }
+    &:last-child {
+      margin-bottom: 0;
+    }
   }
 
   // bold "not endorsed" stands out
@@ -168,13 +180,16 @@
   border: 1px solid $gray-200;
   border-radius: 0.875rem;
   overflow: hidden;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.06);
   position: relative;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.11);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.11);
     border-color: $blue;
   }
 }
@@ -193,7 +208,11 @@
     content: "";
     position: absolute;
     inset: 0;
-    background: radial-gradient(ellipse at 110% -10%, rgba(90,155,213,0.3) 0%, transparent 55%);
+    background: radial-gradient(
+      ellipse at 110% -10%,
+      rgba(90, 155, 213, 0.3) 0%,
+      transparent 55%
+    );
     pointer-events: none;
   }
 }
@@ -206,7 +225,7 @@
 .event-webinar-card-logo {
   position: relative;
   z-index: 1;
-  background: rgba(255,255,255,0.93);
+  background: rgba(255, 255, 255, 0.93);
   backdrop-filter: blur(4px);
   border-radius: 0.5rem;
   padding: 0.45rem 1rem;
@@ -241,7 +260,7 @@
   text-transform: uppercase;
   padding: 0.22em 0.65em;
   border-radius: 5px;
-  background: rgba(255,255,255,0.92);
+  background: rgba(255, 255, 255, 0.92);
   color: $gray-700;
 }
 
@@ -298,7 +317,9 @@
   color: $gray-500;
   margin: 0 0 0.4rem;
 
-  svg { flex-shrink: 0; }
+  svg {
+    flex-shrink: 0;
+  }
 }
 
 .event-webinar-summary {

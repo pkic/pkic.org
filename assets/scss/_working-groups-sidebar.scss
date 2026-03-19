@@ -9,7 +9,10 @@
   font-size: 0.7rem;
   color: $gray-400;
 
-  svg { flex-shrink: 0; opacity: 0.6; }
+  svg {
+    flex-shrink: 0;
+    opacity: 0.6;
+  }
 }
 
 .person-card-footer-label {
@@ -34,10 +37,12 @@
   border: 1px solid $gray-200;
   border-radius: 0.65rem;
   width: 100%;
-  transition: box-shadow 0.15s, border-color 0.15s;
+  transition:
+    box-shadow 0.15s,
+    border-color 0.15s;
 
   &:hover {
-    box-shadow: 0 2px 10px rgba(0,0,0,0.07);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
     border-color: $gray-300;
   }
 }
@@ -52,7 +57,7 @@
   height: 48px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(0,0,0,0.07);
+  border: 2px solid rgba(0, 0, 0, 0.07);
 
   &--initials {
     display: flex;
@@ -86,7 +91,9 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  &:hover { color: $green; }
+  &:hover {
+    color: $green;
+  }
 }
 
 .person-card-compact-role {
@@ -134,7 +141,9 @@
   object-fit: contain;
   filter: grayscale(1) contrast(0.65) brightness(0.95);
   transition: filter 0.15s;
-  .person-card-compact:hover & { filter: none; }
+  .person-card-compact:hover & {
+    filter: none;
+  }
 }
 
 // ── Past position cards ───────────────────────────────────────────────────────
@@ -142,18 +151,33 @@
 // current positions. Visual differentiation is via .person-card--past (muted bg)
 // and .person-card-avatar-frame--past (grey ring). No separate timeline needed.
 
-
 // ── Theme-colored CTA button (uses --page-accent) ─────────────────────────────
 .btn-page-accent {
   --bs-btn-color: #fff;
   --bs-btn-bg: var(--page-accent, #{$green});
   --bs-btn-border-color: var(--page-accent, #{$green});
   --bs-btn-hover-color: #fff;
-  --bs-btn-hover-bg: color-mix(in srgb, var(--page-accent, #{$green}) 85%, #000);
-  --bs-btn-hover-border-color: color-mix(in srgb, var(--page-accent, #{$green}) 85%, #000);
+  --bs-btn-hover-bg: color-mix(
+    in srgb,
+    var(--page-accent, #{$green}) 85%,
+    #000
+  );
+  --bs-btn-hover-border-color: color-mix(
+    in srgb,
+    var(--page-accent, #{$green}) 85%,
+    #000
+  );
   --bs-btn-active-color: #fff;
-  --bs-btn-active-bg: color-mix(in srgb, var(--page-accent, #{$green}) 75%, #000);
-  --bs-btn-active-border-color: color-mix(in srgb, var(--page-accent, #{$green}) 75%, #000);
+  --bs-btn-active-bg: color-mix(
+    in srgb,
+    var(--page-accent, #{$green}) 75%,
+    #000
+  );
+  --bs-btn-active-border-color: color-mix(
+    in srgb,
+    var(--page-accent, #{$green}) 75%,
+    #000
+  );
   --bs-btn-disabled-color: #fff;
   --bs-btn-disabled-bg: var(--page-accent, #{$green});
   --bs-btn-disabled-border-color: var(--page-accent, #{$green});
@@ -162,7 +186,7 @@
 // ── WG Sidebar layout (flexbox, no Bootstrap grid) ───────────────────────────
 
 $sidebar-width: 260px;
-$toggle-width:  1.4rem;
+$toggle-width: 1.4rem;
 
 .wg-layout {
   display: flex;
@@ -184,8 +208,8 @@ $toggle-width:  1.4rem;
   flex-shrink: 0;
   width: $sidebar-width;
   max-height: calc(100vh - 180px);
-  overflow-x: hidden;              // clips .wg-sidebar during collapse
-  overflow-y: auto;                // allows sidebar content to scroll
+  overflow-x: hidden; // clips .wg-sidebar during collapse
+  overflow-y: auto; // allows sidebar content to scroll
   transition: width 0.25s ease;
 
   // Collapsed: shrink to just the toggle button width (not 0)
@@ -193,7 +217,9 @@ $toggle-width:  1.4rem;
     width: $toggle-width;
   }
 
-  @media (max-width: 991px) { display: none; }
+  @media (max-width: 991px) {
+    display: none;
+  }
 }
 
 // Toggle — absolutely pinned to top-right of the wrapper
@@ -212,37 +238,55 @@ $toggle-width:  1.4rem;
   border: none;
   border-radius: 0 0.4rem 0.4rem 0;
   background: #1e1e2e;
-  color: rgba(255,255,255,0.35);
+  color: rgba(255, 255, 255, 0.35);
   cursor: pointer;
-  transition: color 0.15s, background 0.15s;
+  transition:
+    color 0.15s,
+    background 0.15s;
 
-  svg { transition: transform 0.25s ease; }
-  &:hover { color: #fff; background: #2a2a3e; }
+  svg {
+    transition: transform 0.25s ease;
+  }
+  &:hover {
+    color: #fff;
+    background: #2a2a3e;
+  }
 
-  @media (max-width: 991px) { display: none; }
+  @media (max-width: 991px) {
+    display: none;
+  }
 }
 
 // Collapsed state — arrow flips, border-radius becomes fully rounded (standalone pill)
 .wg-sidebar-wrap.is-collapsed .wg-sidebar-toggle {
   border-radius: 0.4rem;
   background: #fff;
-  color: rgba(0,0,0,0.35);
-  border: 1px solid rgba(0,0,0,0.15);
-  svg { transform: rotate(180deg); }
-  &:hover { color: rgba(0,0,0,0.75); background: #f0f0f0; }
+  color: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  svg {
+    transform: rotate(180deg);
+  }
+  &:hover {
+    color: rgba(0, 0, 0, 0.75);
+    background: #f0f0f0;
+  }
 }
 
 // Hide nav content when collapsed — only the toggle button remains visible
 .wg-sidebar-wrap.is-collapsed .wg-sidebar {
   visibility: hidden;
   opacity: 0;
-  transition: opacity 0.15s ease, visibility 0s 0.15s;
+  transition:
+    opacity 0.15s ease,
+    visibility 0s 0.15s;
 }
 
 .wg-sidebar-wrap:not(.is-collapsed) .wg-sidebar {
   visibility: visible;
   opacity: 1;
-  transition: opacity 0.2s ease 0.1s, visibility 0s;
+  transition:
+    opacity 0.2s ease 0.1s,
+    visibility 0s;
 }
 
 // Content fills remaining space; left padding = comfortable gap from sidebar
@@ -251,7 +295,9 @@ $toggle-width:  1.4rem;
   min-width: 0;
   padding-left: 1.5rem;
 
-  @media (max-width: 991px) { padding-left: 0; }
+  @media (max-width: 991px) {
+    padding-left: 0;
+  }
 }
 
 // ── Nav tree panel (fixed-position, escapes overflow:auto) ────────────────────
@@ -268,18 +314,24 @@ $toggle-width:  1.4rem;
   width: 1.4rem;
   border: none;
   background: transparent;
-  color: rgba(255,255,255,0.5);
+  color: rgba(255, 255, 255, 0.5);
   cursor: pointer;
   padding: 0;
   transition: color 0.15s;
 
   &[aria-expanded="true"] {
     color: #fff;
-    svg { transform: rotate(180deg); }
+    svg {
+      transform: rotate(180deg);
+    }
   }
 
-  svg { transition: transform 0.2s ease; }
-  &:hover { color: #fff; }
+  svg {
+    transition: transform 0.2s ease;
+  }
+  &:hover {
+    color: #fff;
+  }
 }
 
 // Panel positioned by JS via getBoundingClientRect
@@ -291,14 +343,16 @@ $toggle-width:  1.4rem;
   max-height: 70vh;
   overflow-y: auto;
   background: #16161e;
-  border: 1px solid rgba(255,255,255,0.1);
+  border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 0.5rem;
   padding: 0.75rem;
-  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.15) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 
-  &[hidden] { display: none; }
+  &[hidden] {
+    display: none;
+  }
 }
 
 .wg-sidebar {
@@ -307,7 +361,7 @@ $toggle-width:  1.4rem;
   border-radius: 0.5rem;
   padding: 1rem $toggle-width 1.25rem 0.75rem; // right padding clears the absolute toggle
   scrollbar-width: thin;
-  scrollbar-color: rgba(255,255,255,0.15) transparent;
+  scrollbar-color: rgba(255, 255, 255, 0.15) transparent;
 }
 
 .wg-sidebar-root {
@@ -316,15 +370,19 @@ $toggle-width:  1.4rem;
   text-transform: uppercase;
   letter-spacing: 0.1em;
   font-weight: 700;
-  color: rgba(255,255,255,0.45);
+  color: rgba(255, 255, 255, 0.45);
   padding: 0 0.25rem 0.75rem;
   margin-bottom: 0.5rem;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   text-decoration: none;
   transition: color 0.15s;
 
-  &:hover { color: rgba(255,255,255,0.75); }
-  &.is-active { color: var(--wg-color, #7c3aed); }
+  &:hover {
+    color: rgba(255, 255, 255, 0.75);
+  }
+  &.is-active {
+    color: var(--wg-color, #7c3aed);
+  }
 }
 
 .wg-sidebar-list {
@@ -341,7 +399,9 @@ $toggle-width:  1.4rem;
 .wg-sidebar-group {
   summary {
     list-style: none;
-    &::-webkit-details-marker { display: none; }
+    &::-webkit-details-marker {
+      display: none;
+    }
   }
 }
 
@@ -354,19 +414,23 @@ $toggle-width:  1.4rem;
   transition: background 0.12s;
   user-select: none;
 
-  &:hover { background: rgba(255,255,255,0.06); }
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
 }
 
 .wg-sidebar-link {
   flex: 1;
-  color: rgba(255,255,255,0.7);
+  color: rgba(255, 255, 255, 0.7);
   text-decoration: none;
   font-size: 0.875rem;
   font-weight: 500;
   line-height: 1.35;
   transition: color 0.12s;
 
-  &:hover { color: #fff; }
+  &:hover {
+    color: #fff;
+  }
   &.is-active {
     color: var(--wg-color, #7c3aed);
     font-weight: 650;
@@ -378,7 +442,9 @@ $toggle-width:  1.4rem;
   display: block;
   border-radius: 0.375rem;
   padding: 0.3rem 0.5rem;
-  &:hover { background: rgba(255,255,255,0.06); }
+  &:hover {
+    background: rgba(255, 255, 255, 0.06);
+  }
 }
 
 .wg-sidebar-chevron {
@@ -388,7 +454,7 @@ $toggle-width:  1.4rem;
   display: flex;
   align-items: center;
   justify-content: center;
-  color: rgba(255,255,255,0.3);
+  color: rgba(255, 255, 255, 0.3);
   transition: color 0.12s;
   pointer-events: none; // chevron is decorative; clicking summary area toggles
 
@@ -406,7 +472,7 @@ details[open] > .wg-sidebar-summary .wg-sidebar-chevron svg {
   list-style: none;
   padding: 0.25rem 0 0.25rem 0.75rem;
   margin: 0;
-  border-left: 1px solid rgba(255,255,255,0.08);
+  border-left: 1px solid rgba(255, 255, 255, 0.08);
 
   li {
     margin-bottom: 0.05rem;
@@ -415,14 +481,16 @@ details[open] > .wg-sidebar-summary .wg-sidebar-chevron svg {
       display: block;
       padding: 0.25rem 0.5rem;
       border-radius: 0.3rem;
-      color: rgba(255,255,255,0.55);
+      color: rgba(255, 255, 255, 0.55);
       font-size: 0.8125rem;
       text-decoration: none;
-      transition: color 0.12s, background 0.12s;
+      transition:
+        color 0.12s,
+        background 0.12s;
 
       &:hover {
-        color: rgba(255,255,255,0.85);
-        background: rgba(255,255,255,0.05);
+        color: rgba(255, 255, 255, 0.85);
+        background: rgba(255, 255, 255, 0.05);
       }
 
       &.is-active {
@@ -445,6 +513,5 @@ details[open] > .wg-sidebar-summary .wg-sidebar-chevron svg {
 
 .wg-sidebar-level3 {
   padding-left: 0.75rem;
-  border-left: 1px solid rgba(255,255,255,0.05);
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
 }
-

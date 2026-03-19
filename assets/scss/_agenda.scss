@@ -37,29 +37,35 @@
   }
 
   .agenda-grid {
-     width: 100% !important;
-     height: auto !important;
-     margin: 0 !important;
-     max-width: none !important;
-     left: 0 !important;
-     box-sizing: border-box !important;
-     &[data-locations] {
-        grid-template-columns: 100px repeat(var(--location-count, 10), minmax(320px, 1fr)) !important;
-        min-width: calc(100px + var(--location-count, 10) * 320px + 2rem) !important;
-        max-width: none !important;
-     }
+    width: 100% !important;
+    height: auto !important;
+    margin: 0 !important;
+    max-width: none !important;
+    left: 0 !important;
+    box-sizing: border-box !important;
+    &[data-locations] {
+      grid-template-columns: 100px repeat(
+          var(--location-count, 10),
+          minmax(320px, 1fr)
+        ) !important;
+      min-width: calc(
+        100px + var(--location-count, 10) * 320px + 2rem
+      ) !important;
+      max-width: none !important;
+    }
   }
 
   // Override fixed widths for the grid items in fullscreen
-  .agenda-time, .agenda-content {
+  .agenda-time,
+  .agenda-content {
     width: auto !important;
     min-width: 320px !important;
     max-width: none !important;
   }
 
   .agenda-time {
-     max-width: 100px !important;
-     min-width: 100px !important;
+    max-width: 100px !important;
+    min-width: 100px !important;
   }
 
   .agenda-session {
@@ -69,7 +75,7 @@
   // Fix break positioning in fullscreen
   .agenda-break {
     position: relative !important;
-    
+
     &::before {
       width: 100vw !important;
       left: 50% !important;
@@ -82,7 +88,8 @@
     z-index: 1100 !important;
   }
 
-  #fullscreen-btn, #expand-all-btn {
+  #fullscreen-btn,
+  #expand-all-btn {
     position: static !important; // Let flexbox handle positioning
     z-index: 1100 !important;
     width: auto !important;
@@ -90,7 +97,7 @@
     max-width: none !important;
     padding: 0.5rem 0.75rem !important;
     border-radius: 0.375rem !important; // Match Bootstrap .btn border-radius
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
   }
 }
 
@@ -109,12 +116,12 @@
   overflow-x: visible;
   width: fit-content;
   min-width: 100%;
-  
+
   // Default grid template for larger screens
   @for $i from 1 through 10 {
     &[data-locations="#{$i}"] {
-        grid-template-columns: 100px repeat($i, minmax(320px, 1fr));
-        min-width: calc(100px + #{$i} * 320px + 2rem);
+      grid-template-columns: 100px repeat($i, minmax(320px, 1fr));
+      min-width: calc(100px + #{$i} * 320px + 2rem);
     }
   }
 }
@@ -139,13 +146,13 @@
   cursor: pointer;
   z-index: 15;
   transition: all 0.3s ease;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 
   &:hover {
     background: white;
     border-color: var(--bs-primary);
     color: var(--bs-primary);
-    box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
     transform: translateY(-50%) scale(1.05);
   }
 
@@ -172,7 +179,7 @@
 // Overflow fade indicators - use absolute positioning within the container wrapper
 .desktop-agenda::before,
 .desktop-agenda::after {
-  content: '';
+  content: "";
   position: absolute;
   top: 0;
   bottom: 0;
@@ -185,12 +192,12 @@
 
 .desktop-agenda::before {
   left: 100px; // After time column
-  background: linear-gradient(to right, rgba(255,255,255,0.8), transparent);
+  background: linear-gradient(to right, rgba(255, 255, 255, 0.8), transparent);
 }
 
 .desktop-agenda::after {
   right: 0;
-  background: linear-gradient(to left, rgba(255,255,255,0.8), transparent);
+  background: linear-gradient(to left, rgba(255, 255, 255, 0.8), transparent);
 }
 
 .desktop-agenda.show-left-fade::before {
@@ -204,7 +211,7 @@
 // Ensure buttons stay above gradients
 .desktop-agenda {
   position: relative;
-  
+
   .float-end {
     position: relative;
     z-index: 20; // Higher than gradients and arrows
@@ -223,7 +230,7 @@
   background: white;
   z-index: 11; // Higher than break to be in front when overlapping
   border-right: 1px solid #dee2e6;
-  box-shadow: 2px 0 4px rgba(0,0,0,0.05);
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
 }
 
 .time-main {
@@ -280,8 +287,8 @@
 }
 
 .session-content,
- .mobile-session-content {
-   padding: 1rem;
+.mobile-session-content {
+  padding: 1rem;
 }
 
 .session-content {
@@ -297,13 +304,17 @@
 }
 
 .session-content::after {
-  content: '';
+  content: "";
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   height: 2.5em;
-  background: linear-gradient(to bottom, rgba(255,255,255,0) 0%, rgba(255,255,255,0.9) 80%);
+  background: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.9) 80%
+  );
   pointer-events: none;
   display: block;
 }
@@ -415,7 +426,7 @@
 // Ensure buttons stay above gradients
 .desktop-agenda {
   position: relative;
-  
+
   .agenda-controls {
     z-index: 20; // Higher than gradients and arrows
   }
@@ -428,19 +439,19 @@
   display: flex;
   align-items: center;
   justify-content: flex-start; // keep card origin aligned left
-  padding: .5rem 0 .75rem .5rem;
+  padding: 0.5rem 0 0.75rem 0.5rem;
   pointer-events: none; // prevents the large grid cell from intercepting events
 }
 
 .agenda-break .break-card {
   background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
   color: #fff;
-  padding: .9rem 1.4rem; // slightly higher / taller
+  padding: 0.9rem 1.4rem; // slightly higher / taller
   border-radius: 10px;
   font-weight: 600;
   font-size: 1rem; // a touch larger for visibility
   line-height: 1.2;
-  box-shadow: 0 4px 10px rgba(0,0,0,.15);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
   white-space: nowrap;
   width: var(--agenda-break-width, auto);
   max-width: var(--agenda-break-width, 100%);
@@ -456,10 +467,14 @@
 }
 
 // When only one location is selected the grid-column becomes '2'; ensure width still works
-.agenda-grid[data-locations="1"] .agenda-break { grid-column: 2; }
+.agenda-grid[data-locations="1"] .agenda-break {
+  grid-column: 2;
+}
 
 // ensure mobile break retains spacing if used elsewhere
-.mobile-break { margin-bottom: 1rem; }
+.mobile-break {
+  margin-bottom: 1rem;
+}
 
 // All Location-specific styles (now unified as single colors)
 @each $location, $color in $all-pkic-locations-colors {
@@ -468,7 +483,10 @@
     --location-color: #{$color};
     --location-color-rgb: #{red($color)}, #{green($color)}, #{blue($color)};
     --location-bg: white; // Explicitly set background to white for sessions
-    --location-border: #{rgba($color, 0.3)}; // Border uses the base color with opacity
+    --location-border: #{rgba(
+        $color,
+        0.3
+      )}; // Border uses the base color with opacity
     --location-text-color: #212529;
     --location-text-color-secondary: #6c757d;
   }
@@ -502,18 +520,34 @@
 
   // Save button colors for session registration
   .btn.location-0-session-btn {
-    background-color: #{map-get($all-pkic-locations-colors, 'location-0')} !important;
-    border-color: #{map-get($all-pkic-locations-colors, 'location-0')} !important;
+    background-color: #{map-get(
+        $all-pkic-locations-colors,
+        "location-0"
+      )} !important;
+    border-color: #{map-get(
+        $all-pkic-locations-colors,
+        "location-0"
+      )} !important;
   }
 
   .btn.location-0-session-btn:hover {
-    background-color: #{darken(map-get($all-pkic-locations-colors, 'location-0'), 10%)} !important;
-    border-color: #{darken(map-get($all-pkic-locations-colors, 'location-0'), 10%)} !important;
+    background-color: #{darken(
+        map-get($all-pkic-locations-colors, "location-0"),
+        10%
+      )} !important;
+    border-color: #{darken(
+        map-get($all-pkic-locations-colors, "location-0"),
+        10%
+      )} !important;
   }
 
   // Modal header still gets a slight gradient for visual interest, using the base color
   .#{$location}-modal .modal-header {
-    background: linear-gradient(135deg, #{$color} 0%, #{darken($color, 15%)} 100%);
+    background: linear-gradient(
+      135deg,
+      #{$color} 0%,
+      #{darken($color, 15%)} 100%
+    );
     color: white;
     border-bottom: none;
     padding: 1.5rem;
@@ -523,7 +557,9 @@
   .location-filter-btn.#{$location} {
     background: #{rgba($color, 0.1)}; // Light background for button
     color: #{$color}; // Text color is the base color
-    border: 2px solid #{rgba($color, 0.3)}; // Border is a lighter shade of the base color
+    border: 2px
+      solid
+      #{rgba($color, 0.3)}; // Border is a lighter shade of the base color
   }
 
   .location-filter-btn.#{$location}:hover,
@@ -583,7 +619,7 @@
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 
     &::after {
-      content: '✓';
+      content: "✓";
       position: absolute;
       top: -0.3rem;
       right: -0.3rem;
@@ -694,9 +730,9 @@
   .agenda-grid {
     @for $i from 1 through 10 {
       &[data-locations="#{$i}"] {
-          grid-template-columns: 100px repeat($i, minmax(280px, 1fr));
-          min-width: calc(100px + #{$i} * 280px + 2rem);
-          max-width: none;
+        grid-template-columns: 100px repeat($i, minmax(280px, 1fr));
+        min-width: calc(100px + #{$i} * 280px + 2rem);
+        max-width: none;
       }
     }
   }

@@ -24,10 +24,12 @@
     border-radius: 1rem;
     padding: 2rem 2rem 1.75rem;
     color: #fff;
-    transition: background 0.2s, border-color 0.2s;
+    transition:
+      background 0.2s,
+      border-color 0.2s;
 
     &:hover {
-      background: rgba(255, 255, 255, 0.10);
+      background: rgba(255, 255, 255, 0.1);
       border-color: rgba(255, 255, 255, 0.22);
     }
   }
@@ -121,7 +123,9 @@
     color: inherit;
     text-decoration: none;
 
-    &:last-child { border-right: none; }
+    &:last-child {
+      border-right: none;
+    }
   }
 
   .pkic-stat-num {
@@ -215,14 +219,20 @@
   background: #fff;
   border-radius: 14px;
   overflow: hidden;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 4px 16px rgba(0, 0, 0, 0.07);
+  box-shadow:
+    0 1px 3px rgba(0, 0, 0, 0.06),
+    0 4px 16px rgba(0, 0, 0, 0.07);
   display: flex;
   flex-direction: column;
-  transition: transform 0.22s ease, box-shadow 0.22s ease;
+  transition:
+    transform 0.22s ease,
+    box-shadow 0.22s ease;
 
   &:hover {
     transform: translateY(-5px);
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.08), 0 16px 48px rgba(0, 0, 0, 0.14);
+    box-shadow:
+      0 4px 8px rgba(0, 0, 0, 0.08),
+      0 16px 48px rgba(0, 0, 0, 0.14);
   }
 
   // Gradient header with decorative circles
@@ -243,7 +253,7 @@
 
     // Decorative circles
     &::before {
-      content: '';
+      content: "";
       position: absolute;
       right: -24px;
       top: -24px;
@@ -255,7 +265,7 @@
     }
 
     &::after {
-      content: '';
+      content: "";
       position: absolute;
       right: 30px;
       bottom: -38px;
@@ -303,7 +313,9 @@
         color: inherit;
         text-decoration: none;
 
-        &:hover { text-decoration: underline; }
+        &:hover {
+          text-decoration: underline;
+        }
       }
     }
 
@@ -339,26 +351,35 @@
   &-primary {
     background: #1a7a4a;
     color: #fff !important;
-    &:hover { background: #155e3a; }
+    &:hover {
+      background: #155e3a;
+    }
   }
 
   &-secondary {
     background: rgba(26, 122, 74, 0.12);
     color: #1a7a4a !important;
-    &:hover { background: rgba(26, 122, 74, 0.22); }
+    &:hover {
+      background: rgba(26, 122, 74, 0.22);
+    }
   }
 
   &-warning {
     background: #ffc107;
     color: #1a1a1a !important;
     font-weight: 600;
-    &:hover { background: #e5ac00; }
+    &:hover {
+      background: #e5ac00;
+    }
   }
 
   &-muted {
     background: rgba(0, 0, 0, 0.055);
     color: #495057 !important;
-    &:hover { background: rgba(0, 0, 0, 0.11); color: #1a1a1a !important; }
+    &:hover {
+      background: rgba(0, 0, 0, 0.11);
+      color: #1a1a1a !important;
+    }
   }
 }
 
@@ -375,7 +396,7 @@
 
 .pkic-leadership-label {
   color: rgba(255, 255, 255, 0.55);
-  letter-spacing: 0.10em;
+  letter-spacing: 0.1em;
 }
 
 // ============================================================
@@ -404,18 +425,48 @@
     flex: 1;
     color: #fff;
 
-    p, li, ul, ol, strong, em, b, i { color: #fff; }
-    p:last-child { margin-bottom: 0; }
-    a { color: #fff !important; font-weight: 600; text-decoration: underline; text-underline-offset: 2px; }
-    a:hover { color: rgba(255, 255, 255, 0.85) !important; }
-    code { background: rgba(255, 255, 255, 0.15); border-radius: 0.25rem; padding: 0.1em 0.35em; }
+    p,
+    li,
+    ul,
+    ol,
+    strong,
+    em,
+    b,
+    i {
+      color: #fff;
+    }
+    p:last-child {
+      margin-bottom: 0;
+    }
+    a {
+      color: #fff !important;
+      font-weight: 600;
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+    a:hover {
+      color: rgba(255, 255, 255, 0.85) !important;
+    }
+    code {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 0.25rem;
+      padding: 0.1em 0.35em;
+    }
   }
 }
 
-.pkic-alert-success { border-left-color: $green !important; }
-.pkic-alert-info    { border-left-color: $blue !important; }
-.pkic-alert-warning { border-left-color: #e6a817 !important; }
-.pkic-alert-danger  { border-left-color: #e05252 !important; }
+.pkic-alert-success {
+  border-left-color: $green !important;
+}
+.pkic-alert-info {
+  border-left-color: $blue !important;
+}
+.pkic-alert-warning {
+  border-left-color: #e6a817 !important;
+}
+.pkic-alert-danger {
+  border-left-color: #e05252 !important;
+}
 
 // ============================================================
 // Cards shortcode — accent bar + polish
@@ -431,15 +482,22 @@
   overflow: hidden;
   border: none;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:hover {
     transform: translateY(-3px);
     box-shadow: 0 8px 28px rgba(0, 0, 0, 0.12);
   }
 
-  .card-title { font-weight: 700; }
-  .card-text  { color: $gray-600; font-size: 0.9rem; }
+  .card-title {
+    font-weight: 700;
+  }
+  .card-text {
+    color: $gray-600;
+    font-size: 0.9rem;
+  }
 }
 
 .pkic-card-header {
@@ -448,7 +506,9 @@
   font-weight: 600;
   border-bottom: none;
 
-  a { color: rgba(255, 255, 255, 0.9); }
+  a {
+    color: rgba(255, 255, 255, 0.9);
+  }
 }
 
 .pkic-card-footer {
@@ -463,6 +523,9 @@
 
 .wg-alt-section {
   background-color: #f4f6f8;
-  background-image: radial-gradient(ellipse at 80% 50%, rgba(90, 155, 213, 0.04) 0%, transparent 70%);
+  background-image: radial-gradient(
+    ellipse at 80% 50%,
+    rgba(90, 155, 213, 0.04) 0%,
+    transparent 70%
+  );
 }
-

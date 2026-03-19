@@ -8,15 +8,19 @@
   width: 210px;
   background: #fff;
   border-radius: 10px;
-  box-shadow: 0 6px 24px rgba(0,0,0,.14), 0 1px 5px rgba(0,0,0,.08);
+  box-shadow:
+    0 6px 24px rgba(0, 0, 0, 0.14),
+    0 1px 5px rgba(0, 0, 0, 0.08);
   overflow: hidden;
   pointer-events: none;
   opacity: 0;
-  transition: opacity .15s ease;
+  transition: opacity 0.15s ease;
   white-space: normal;
   text-align: left;
 
-  &.member-hovercard--visible { opacity: 1; }
+  &.member-hovercard--visible {
+    opacity: 1;
+  }
 }
 
 .member-hovercard-body {
@@ -25,7 +29,7 @@
 
 .member-hovercard-name {
   display: block;
-  font-size: .82rem;
+  font-size: 0.82rem;
   font-weight: 700;
   color: #111;
   line-height: 1.35;
@@ -33,7 +37,7 @@
 
 .member-hovercard-slogan {
   display: block;
-  font-size: .72rem;
+  font-size: 0.72rem;
   color: #666;
   margin-top: 4px;
   line-height: 1.4;
@@ -42,9 +46,9 @@
 .member-hovercard-footer {
   display: block;
   padding: 5px 14px 6px;
-  font-size: .68rem;
+  font-size: 0.68rem;
   font-weight: 700;
-  letter-spacing: .09em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   text-align: center;
   color: #fff;
@@ -53,12 +57,24 @@
 // Sponsor tier gradients — mapped to sponsorlevels.yaml integers 1–6
 // Member tiers  : Bronze(1), Silver(2), Gold(3), Platinum(4), Titanium(5), Diamond(6)
 // Event tiers   : Ambassador(1), Innovator(2), Inspirator(3), Leader(4)
-.sponsor-tier-1 { background: linear-gradient(135deg, #b87333, #8b5320); } // Bronze / Ambassador
-.sponsor-tier-2 { background: linear-gradient(135deg, #7a7a7a, #555);    } // Silver / Innovator
-.sponsor-tier-3 { background: linear-gradient(135deg, #c9950c, #9a6f00); } // Gold   / Inspirator
-.sponsor-tier-4 { background: linear-gradient(135deg, #3d7a8a, #25515e); } // Platinum / Leader
-.sponsor-tier-5 { background: linear-gradient(135deg, #455a64, #1c313a); } // Titanium
-.sponsor-tier-6 { background: linear-gradient(135deg, #0097b2, #006b82); } // Diamond
+.sponsor-tier-1 {
+  background: linear-gradient(135deg, #b87333, #8b5320);
+} // Bronze / Ambassador
+.sponsor-tier-2 {
+  background: linear-gradient(135deg, #7a7a7a, #555);
+} // Silver / Innovator
+.sponsor-tier-3 {
+  background: linear-gradient(135deg, #c9950c, #9a6f00);
+} // Gold   / Inspirator
+.sponsor-tier-4 {
+  background: linear-gradient(135deg, #3d7a8a, #25515e);
+} // Platinum / Leader
+.sponsor-tier-5 {
+  background: linear-gradient(135deg, #455a64, #1c313a);
+} // Titanium
+.sponsor-tier-6 {
+  background: linear-gradient(135deg, #0097b2, #006b82);
+} // Diamond
 
 // ── Zoom overlay (Titanium / Diamond sponsors) ─────────────────────────────
 // Sits inside .members (position:relative; overflow:hidden).  The parent's
@@ -73,20 +89,20 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: rgba(255, 255, 255, .97);
+  background: rgba(255, 255, 255, 0.97);
   opacity: 0;
   pointer-events: none;
   // Fast fade-in, slower ease-out handled by :not() below
-  transition: opacity .3s ease;
+  transition: opacity 0.3s ease;
 
   &.member-zoom-overlay--visible {
     opacity: 1;
-    transition: opacity .3s ease;
+    transition: opacity 0.3s ease;
   }
 
   // Slow fade-out so the logo wall reappears gently
   &:not(.member-zoom-overlay--visible) {
-    transition: opacity .65s ease-out;
+    transition: opacity 0.65s ease-out;
   }
 }
 
@@ -107,14 +123,14 @@
 }
 
 .member-zoom-name {
-  font-size: .9rem;
+  font-size: 0.9rem;
   font-weight: 700;
   color: #111;
   line-height: 1.3;
 }
 
 .member-zoom-slogan {
-  font-size: .75rem;
+  font-size: 0.75rem;
   color: #555;
   line-height: 1.4;
 }
@@ -123,9 +139,9 @@
   display: inline-block;
   padding: 4px 16px 5px;
   border-radius: 20px;
-  font-size: .66rem;
+  font-size: 0.66rem;
   font-weight: 700;
-  letter-spacing: .09em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
   color: #fff;
 }
@@ -139,12 +155,24 @@
     overflow: hidden;
     position: relative;
     // mask top/bottom edges so logos fade in/out softly
-    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%);
-            mask-image: linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%);
+    -webkit-mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      #000 8%,
+      #000 92%,
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to bottom,
+      transparent 0%,
+      #000 8%,
+      #000 92%,
+      transparent 100%
+    );
     // Suppress the mask while the zoom overlay is showing so it fills cleanly
     &.members--zooming {
       -webkit-mask-image: none;
-              mask-image: none;
+      mask-image: none;
     }
   }
 }
@@ -169,11 +197,13 @@
 }
 
 @keyframes logo-wall-scroll {
-  from { transform: translateY(0); }
-  to   { transform: translateY(-50%); }
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
 }
-
-
 
 .linkArea {
   color: currentColor;
@@ -187,4 +217,3 @@
   -moz-user-select: none;
   user-select: none;
 }
-

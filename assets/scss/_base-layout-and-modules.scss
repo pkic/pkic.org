@@ -44,22 +44,32 @@ blockquote {
   padding: 2rem 2.25rem 2.75rem 5rem; // extra bottom for the gradient stripe
   background: $gray-900;
   border-radius: 1.25rem;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 16px 48px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.15),
+    0 16px 48px rgba(0, 0, 0, 0.1);
   font-size: 1.25em;
   font-style: italic;
   font-weight: 400;
   color: #ffffff;
   line-height: 1.8;
   overflow: hidden;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2), 0 24px 64px rgba(0, 0, 0, 0.15);
+    box-shadow:
+      0 8px 24px rgba(0, 0, 0, 0.2),
+      0 24px 64px rgba(0, 0, 0, 0.15);
   }
 
-  p { color: inherit; }
-  p:last-child { margin-bottom: 0; }
+  p {
+    color: inherit;
+  }
+  p:last-child {
+    margin-bottom: 0;
+  }
 
   h4 {
     color: $green;
@@ -74,13 +84,13 @@ blockquote {
 
 // Large vivid green " mark — structural accent
 blockquote::before {
-  content: '\201C';
+  content: "\201C";
   position: absolute;
   top: 1rem;
   left: 1.5rem;
   font-size: 5rem;
   line-height: 1;
-  font-family: Georgia, 'Times New Roman', serif;
+  font-family: Georgia, "Times New Roman", serif;
   font-style: normal;
   font-weight: 900;
   color: $green;
@@ -91,7 +101,7 @@ blockquote::before {
 
 // Brand-color gradient stripe along the bottom
 blockquote::after {
-  content: '';
+  content: "";
   position: absolute;
   bottom: 0;
   left: 0;
@@ -151,9 +161,13 @@ blockquote::after {
     user-select: none;
   }
 
-  &::after { content: none; }
+  &::after {
+    content: none;
+  }
 
-  p:last-child { margin-bottom: 0; }
+  p:last-child {
+    margin-bottom: 0;
+  }
 }
 
 // Info: dark pull-quote card with yellow icon accent — same style as blockquote
@@ -168,22 +182,36 @@ blockquote::after {
   padding: 1.1rem 2.25rem 1.75rem 6.5rem;
   border-radius: 1.25rem;
   border: none;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 16px 48px rgba(0, 0, 0, 0.1);
+  box-shadow:
+    0 4px 16px rgba(0, 0, 0, 0.15),
+    0 16px 48px rgba(0, 0, 0, 0.1);
   overflow: hidden;
 
   &:hover {
     transform: none !important;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15), 0 16px 48px rgba(0, 0, 0, 0.1);
+    box-shadow:
+      0 4px 16px rgba(0, 0, 0, 0.15),
+      0 16px 48px rgba(0, 0, 0, 0.1);
   }
 
-  p { color: inherit; }
-  p:last-child { margin-bottom: 0; }
-  a { color: #ffffff !important; text-decoration: underline; text-underline-offset: 2px; }
-  a:hover { color: rgba(255, 255, 255, 0.85) !important; }
+  p {
+    color: inherit;
+  }
+  p:last-child {
+    margin-bottom: 0;
+  }
+  a {
+    color: #ffffff !important;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+  a:hover {
+    color: rgba(255, 255, 255, 0.85) !important;
+  }
 
   // Large filled yellow info circle — absolute positioned like the " mark
   &::before {
-    content: '' !important;
+    content: "" !important;
     position: absolute !important;
     top: 1.25rem !important;
     left: 1.5rem !important;
@@ -204,7 +232,7 @@ blockquote::after {
 
   // Yellow gradient stripe at the bottom
   &::after {
-    content: '' !important;
+    content: "" !important;
     position: absolute;
     bottom: 0;
     left: 0;
@@ -283,7 +311,7 @@ main .header-link {
   vertical-align: middle;
   text-decoration: none !important;
 }
-main :is(h2,h3,h4):hover .header-link {
+main :is(h2, h3, h4):hover .header-link {
   opacity: 0.6;
 }
 
@@ -303,14 +331,15 @@ main :is(h2,h3,h4):hover .header-link {
     transparent 100%
   );
   background-repeat: no-repeat;
-  background-size: 60% 1px;     // barely-there hint at rest
+  background-size: 60% 1px; // barely-there hint at rest
   background-position: 0 100%;
-  transition: background-size 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
-              background-image 0.2s ease,
-              color 0.2s ease;
+  transition:
+    background-size 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    background-image 0.2s ease,
+    color 0.2s ease;
 
   &::after {
-    content: '';
+    content: "";
     position: absolute;
     bottom: 0;
     left: -20%;
@@ -344,10 +373,20 @@ main :is(h2,h3,h4):hover .header-link {
 }
 
 @keyframes link-shimmer {
-  0%   { left: -20%; opacity: 0; }
-  10%  { opacity: 1; }
-  90%  { opacity: 1; }
-  100% { left: 110%; opacity: 0; }
+  0% {
+    left: -20%;
+    opacity: 0;
+  }
+  10% {
+    opacity: 1;
+  }
+  90% {
+    opacity: 1;
+  }
+  100% {
+    left: 110%;
+    opacity: 0;
+  }
 }
 
 // Marquee outer wrapper — overflow is already clipped by the parent .members
@@ -410,8 +449,12 @@ main :is(h2,h3,h4):hover .header-link {
 }
 
 @keyframes member-marquee {
-  from { transform: translateX(0); }
-  to   { transform: translateX(-50%); }
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
 }
 
 @media (min-width: 768px) {
@@ -421,7 +464,9 @@ main :is(h2,h3,h4):hover .header-link {
 }
 
 self-assessment {
-  --pkimm-sticky-top-offset: calc(56px + 44px + 1.5rem);; // navbar (57px) + wg-section-nav (44px)
+  --pkimm-sticky-top-offset: calc(
+    56px + 44px + 1.5rem
+  ); // navbar (57px) + wg-section-nav (44px)
 
   .pkimm-tabs {
     z-index: 150 !important; // below wg-section-nav (200) so its dropdowns render on top
@@ -433,4 +478,3 @@ self-assessment {
 @import "session-registration";
 @import "bento";
 @import "blog";
-

@@ -11,7 +11,9 @@
   flex-direction: column;
   height: 100%;
   position: relative;
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
 
   &:hover {
     transform: translateY(-3px);
@@ -50,10 +52,11 @@
   .blog-card-header-overlay {
     position: absolute;
     inset: 0;
-    background: linear-gradient(to top,
-      rgba(0,0,0,0.72) 0%,
-      rgba(0,0,0,0.30) 50%,
-      rgba(0,0,0,0.10) 100%
+    background: linear-gradient(
+      to top,
+      rgba(0, 0, 0, 0.72) 0%,
+      rgba(0, 0, 0, 0.3) 50%,
+      rgba(0, 0, 0, 0.1) 100%
     );
   }
 
@@ -66,33 +69,67 @@
       position: absolute;
       inset: 0;
       pointer-events: none;
-      background: radial-gradient(ellipse at 110% -10%, rgba(32,201,151,0.25) 0%, transparent 55%);
+      background: radial-gradient(
+        ellipse at 110% -10%,
+        rgba(32, 201, 151, 0.25) 0%,
+        transparent 55%
+      );
     }
   }
   // 2 — blue-deep → purple-deep
-  &:nth-child(6n+2) .blog-card-header--gradient {
+  &:nth-child(6n + 2) .blog-card-header--gradient {
     background: linear-gradient(135deg, $blue-deep 0%, $purple-deep 100%);
-    &::before { background: radial-gradient(ellipse at 110% -10%, rgba(90,155,213,0.25) 0%, transparent 55%); }
+    &::before {
+      background: radial-gradient(
+        ellipse at 110% -10%,
+        rgba(90, 155, 213, 0.25) 0%,
+        transparent 55%
+      );
+    }
   }
   // 3 — purple-deep → green-deep
-  &:nth-child(6n+3) .blog-card-header--gradient {
+  &:nth-child(6n + 3) .blog-card-header--gradient {
     background: linear-gradient(135deg, $purple-deep 0%, $green-deep 100%);
-    &::before { background: radial-gradient(ellipse at 110% -10%, rgba(111,66,193,0.25) 0%, transparent 55%); }
+    &::before {
+      background: radial-gradient(
+        ellipse at 110% -10%,
+        rgba(111, 66, 193, 0.25) 0%,
+        transparent 55%
+      );
+    }
   }
   // 4 — orange-dark → red-dark
-  &:nth-child(6n+4) .blog-card-header--gradient {
+  &:nth-child(6n + 4) .blog-card-header--gradient {
     background: linear-gradient(135deg, $orange-dark 0%, $red-dark 100%);
-    &::before { background: radial-gradient(ellipse at 110% -10%, rgba(237,125,49,0.30) 0%, transparent 55%); }
+    &::before {
+      background: radial-gradient(
+        ellipse at 110% -10%,
+        rgba(237, 125, 49, 0.3) 0%,
+        transparent 55%
+      );
+    }
   }
   // 5 — red-deep → purple-deep
-  &:nth-child(6n+5) .blog-card-header--gradient {
+  &:nth-child(6n + 5) .blog-card-header--gradient {
     background: linear-gradient(135deg, $red-deep 0%, $purple-deep 100%);
-    &::before { background: radial-gradient(ellipse at 110% -10%, rgba(220,53,69,0.25) 0%, transparent 55%); }
+    &::before {
+      background: radial-gradient(
+        ellipse at 110% -10%,
+        rgba(220, 53, 69, 0.25) 0%,
+        transparent 55%
+      );
+    }
   }
   // 6 — green-dark → orange-dark
   &:nth-child(6n) .blog-card-header--gradient {
     background: linear-gradient(135deg, $green-dark 0%, $orange-dark 100%);
-    &::before { background: radial-gradient(ellipse at 110% -10%, rgba(25,135,84,0.30) 0%, transparent 55%); }
+    &::before {
+      background: radial-gradient(
+        ellipse at 110% -10%,
+        rgba(25, 135, 84, 0.3) 0%,
+        transparent 55%
+      );
+    }
   }
 
   // Logo overlay — for SVG/logo heroImages centred on gradient header
@@ -100,7 +137,10 @@
     position: absolute;
     top: 50%;
     left: 50%;
-    transform: translate(-50%, calc(-50% - 14px)); // nudge up to leave room for title
+    transform: translate(
+      -50%,
+      calc(-50% - 14px)
+    ); // nudge up to leave room for title
     z-index: 1;
     background: rgba(255, 255, 255, 0.92);
     backdrop-filter: blur(4px);
@@ -130,9 +170,9 @@
     text-transform: uppercase;
     padding: 0.3em 0.8em;
     border-radius: 6px;
-    background: rgba(255,255,255,0.18);
+    background: rgba(255, 255, 255, 0.18);
     color: #fff;
-    border: 1px solid rgba(255,255,255,0.28);
+    border: 1px solid rgba(255, 255, 255, 0.28);
     backdrop-filter: blur(6px);
     white-space: nowrap;
   }
@@ -174,10 +214,12 @@
     align-items: center;
     gap: 0.35rem;
     font-size: 0.76rem;
-    color: rgba(255,255,255,0.75);
+    color: rgba(255, 255, 255, 0.75);
     margin: 0;
 
-    svg { flex-shrink: 0; }
+    svg {
+      flex-shrink: 0;
+    }
   }
 
   // ── Body ──────────────────────────────────────────────────
@@ -216,7 +258,6 @@
     flex-wrap: wrap;
   }
 }
-
 
 .blog-tag {
   display: inline-block;
@@ -284,14 +325,21 @@
     border-bottom: 1px solid $gray-200;
     line-height: 1.35;
 
-    &:first-child { padding-top: 0; }
-    &:last-child { border-bottom: none; padding-bottom: 0; }
+    &:first-child {
+      padding-top: 0;
+    }
+    &:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
   }
 
   a {
     color: $gray-700;
     text-decoration: none;
-    &:hover { color: $green; }
+    &:hover {
+      color: $green;
+    }
   }
 }
 
@@ -324,7 +372,9 @@
   padding: 0.75rem 0;
   border-bottom: 1px solid $gray-100;
 
-  &:last-child { border-bottom: none; }
+  &:last-child {
+    border-bottom: none;
+  }
 }
 
 .blog-author-avatar {
@@ -349,7 +399,7 @@
 
 .blog-author-info {
   flex: 1;
-  min-width: 0;  // allow text truncation if needed
+  min-width: 0; // allow text truncation if needed
 }
 
 .blog-author-name-row {
@@ -369,7 +419,9 @@
   overflow: hidden;
   text-overflow: ellipsis;
 
-  &:hover { color: $green; }
+  &:hover {
+    color: $green;
+  }
 }
 
 .blog-author-role {
@@ -390,14 +442,18 @@
   filter: grayscale(1) contrast(0.65) brightness(0.95);
   transition: filter 0.18s;
 
-  .blog-author-card:hover & { filter: grayscale(0); }
+  .blog-author-card:hover & {
+    filter: grayscale(0);
+  }
 }
 
 .blog-author-org-name {
   font-size: 0.75rem;
   color: $gray-500;
   text-decoration: none;
-  &:hover { color: $green; }
+  &:hover {
+    color: $green;
+  }
 }
 
 .blog-author-social {
@@ -412,7 +468,9 @@
     color: $gray-400;
     transition: color 0.15s;
 
-    &:hover { color: $gray-800; }
+    &:hover {
+      color: $gray-800;
+    }
   }
 }
 
@@ -445,12 +503,14 @@
   border-radius: 0.75rem;
   text-decoration: none;
   color: inherit;
-  transition: border-color 0.15s, box-shadow 0.15s;
+  transition:
+    border-color 0.15s,
+    box-shadow 0.15s;
   background: $gray-100;
 
   &:hover {
     border-color: $green;
-    box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
     color: inherit;
   }
 }
@@ -504,7 +564,9 @@
   // Overlapping stacked bubbles
   > * {
     margin-left: -6px;
-    &:first-child { margin-left: 0; }
+    &:first-child {
+      margin-left: 0;
+    }
   }
 }
 
@@ -551,7 +613,9 @@
   a {
     color: $gray-600;
     text-decoration: none;
-    &:hover { color: $green; }
+    &:hover {
+      color: $green;
+    }
   }
 }
 
@@ -575,7 +639,9 @@
 
     a {
       color: rgba(255, 255, 255, 0.85);
-      &:hover { color: #fff; }
+      &:hover {
+        color: #fff;
+      }
     }
   }
 }
@@ -629,7 +695,9 @@
   display: inline-flex;
   align-items: center;
   text-decoration: none;
-  transition: opacity 0.15s, transform 0.15s;
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
 
   &:hover {
     opacity: 0.8;
@@ -645,15 +713,35 @@
   filter: grayscale(0.15);
   transition: filter 0.15s;
 
-  .blog-sidebar-sponsor-link:hover & { filter: grayscale(0); }
+  .blog-sidebar-sponsor-link:hover & {
+    filter: grayscale(0);
+  }
 }
 
-.blog-sidebar-sponsor-logo-diamond  { height: 44px; max-width: 140px; }
-.blog-sidebar-sponsor-logo-titanium { height: 36px; max-width: 120px; }
-.blog-sidebar-sponsor-logo-platinum { height: 30px; max-width: 110px; }
-.blog-sidebar-sponsor-logo-gold     { height: 24px; max-width:  90px; }
-.blog-sidebar-sponsor-logo-silver   { height: 20px; max-width:  80px; }
-.blog-sidebar-sponsor-logo-bronze   { height: 18px; max-width:  70px; }
+.blog-sidebar-sponsor-logo-diamond {
+  height: 44px;
+  max-width: 140px;
+}
+.blog-sidebar-sponsor-logo-titanium {
+  height: 36px;
+  max-width: 120px;
+}
+.blog-sidebar-sponsor-logo-platinum {
+  height: 30px;
+  max-width: 110px;
+}
+.blog-sidebar-sponsor-logo-gold {
+  height: 24px;
+  max-width: 90px;
+}
+.blog-sidebar-sponsor-logo-silver {
+  height: 20px;
+  max-width: 80px;
+}
+.blog-sidebar-sponsor-logo-bronze {
+  height: 18px;
+  max-width: 70px;
+}
 
 .blog-sidebar-sponsors-footer {
   text-align: center;
@@ -668,9 +756,10 @@
   color: $gray-400;
   text-decoration: none;
 
-  &:hover { color: $green; }
+  &:hover {
+    color: $green;
+  }
 }
-
 
 // ============================================================
 // News cards  (same .blog-card base, member logo in footer)
@@ -685,7 +774,7 @@
   .news-card-sponsor-badge {
     background: rgba($amber, 0.95);
     color: $gray-900;
-    border-color: rgba($amber, 0.60);
+    border-color: rgba($amber, 0.6);
     font-weight: 700;
   }
 }
@@ -693,25 +782,55 @@
 // ── Gradient cycling ──────────────────────────────────────────
 // Each .blog-card is the sole child of its col, so :nth-child on the card
 // always resolves to 1. Target the wrapping column instead.
-.row [class*="col-"]:nth-child(6n+2) .news-card .blog-card-header--gradient {
+.row [class*="col-"]:nth-child(6n + 2) .news-card .blog-card-header--gradient {
   background: linear-gradient(135deg, $blue-deep 0%, $purple-deep 100%);
-  &::before { background: radial-gradient(ellipse at 110% -10%, rgba(90,155,213,0.25) 0%, transparent 55%); }
+  &::before {
+    background: radial-gradient(
+      ellipse at 110% -10%,
+      rgba(90, 155, 213, 0.25) 0%,
+      transparent 55%
+    );
+  }
 }
-.row [class*="col-"]:nth-child(6n+3) .news-card .blog-card-header--gradient {
+.row [class*="col-"]:nth-child(6n + 3) .news-card .blog-card-header--gradient {
   background: linear-gradient(135deg, $purple-deep 0%, $green-deep 100%);
-  &::before { background: radial-gradient(ellipse at 110% -10%, rgba(111,66,193,0.25) 0%, transparent 55%); }
+  &::before {
+    background: radial-gradient(
+      ellipse at 110% -10%,
+      rgba(111, 66, 193, 0.25) 0%,
+      transparent 55%
+    );
+  }
 }
-.row [class*="col-"]:nth-child(6n+4) .news-card .blog-card-header--gradient {
+.row [class*="col-"]:nth-child(6n + 4) .news-card .blog-card-header--gradient {
   background: linear-gradient(135deg, $orange-dark 0%, $red-dark 100%);
-  &::before { background: radial-gradient(ellipse at 110% -10%, rgba(237,125,49,0.30) 0%, transparent 55%); }
+  &::before {
+    background: radial-gradient(
+      ellipse at 110% -10%,
+      rgba(237, 125, 49, 0.3) 0%,
+      transparent 55%
+    );
+  }
 }
-.row [class*="col-"]:nth-child(6n+5) .news-card .blog-card-header--gradient {
+.row [class*="col-"]:nth-child(6n + 5) .news-card .blog-card-header--gradient {
   background: linear-gradient(135deg, $red-deep 0%, $purple-deep 100%);
-  &::before { background: radial-gradient(ellipse at 110% -10%, rgba(220,53,69,0.25) 0%, transparent 55%); }
+  &::before {
+    background: radial-gradient(
+      ellipse at 110% -10%,
+      rgba(220, 53, 69, 0.25) 0%,
+      transparent 55%
+    );
+  }
 }
 .row [class*="col-"]:nth-child(6n) .news-card .blog-card-header--gradient {
   background: linear-gradient(135deg, $green-dark 0%, $orange-dark 100%);
-  &::before { background: radial-gradient(ellipse at 110% -10%, rgba(25,135,84,0.30) 0%, transparent 55%); }
+  &::before {
+    background: radial-gradient(
+      ellipse at 110% -10%,
+      rgba(25, 135, 84, 0.3) 0%,
+      transparent 55%
+    );
+  }
 }
 
 // ── Card footer: logo (left) + domain link (right) ────────────
@@ -775,8 +894,12 @@
   transition: color 0.15s;
   white-space: nowrap;
 
-  &:hover { color: $green; }
-  svg { flex-shrink: 0; }
+  &:hover {
+    color: $green;
+  }
+  svg {
+    flex-shrink: 0;
+  }
 }
 
 // ── Section headings (Sponsor Highlights / Latest Member News) ─
@@ -805,7 +928,9 @@
     color: $gray-500;
     font-weight: 600;
     -webkit-text-fill-color: $gray-500 !important;
-    svg { display: none; }
+    svg {
+      display: none;
+    }
   }
 }
 

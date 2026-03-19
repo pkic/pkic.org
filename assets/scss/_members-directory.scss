@@ -7,10 +7,19 @@
   font-weight: 600;
   letter-spacing: 0.01em;
   box-shadow: 0 2px 14px rgba(25, 135, 84, 0.38);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 
-  &:hover, &:focus { transform: translateY(-1px); box-shadow: 0 4px 22px rgba(25, 135, 84, 0.5); color: #fff; }
-  &:active { transform: translateY(0); }
+  &:hover,
+  &:focus {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 22px rgba(25, 135, 84, 0.5);
+    color: #fff;
+  }
+  &:active {
+    transform: translateY(0);
+  }
 }
 
 .btn-pkic-outline {
@@ -18,9 +27,13 @@
   color: #fff;
   border: 1.5px solid rgba(255, 255, 255, 0.5);
   font-weight: 500;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
 
-  &:hover, &:focus {
+  &:hover,
+  &:focus {
     background: rgba(255, 255, 255, 0.12);
     border-color: rgba(255, 255, 255, 0.85);
     color: #fff;
@@ -30,7 +43,11 @@
 
 // ─── Members A-Z sidebar layout ───────────────────────────────────────
 
-.members-search-bar { max-width: 560px; margin-left: auto; margin-right: auto; }
+.members-search-bar {
+  max-width: 560px;
+  margin-left: auto;
+  margin-right: auto;
+}
 
 .members-layout {
   display: flex;
@@ -48,7 +65,9 @@
   max-height: calc(100vh - 88px);
   overflow-y: auto;
   scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
+  &::-webkit-scrollbar {
+    display: none;
+  }
 
   .az-sidebar-link {
     display: flex;
@@ -61,11 +80,23 @@
     font-weight: 700;
     color: #bbb;
     text-decoration: none;
-    transition: background 0.12s ease, color 0.12s ease;
+    transition:
+      background 0.12s ease,
+      color 0.12s ease;
 
-    &:hover                         { background: $green; color: #fff; }
-    &.is-active                     { background: $green; color: #fff; }
-    &.is-empty, &.is-empty-search   { color: #ddd; pointer-events: none; }
+    &:hover {
+      background: $green;
+      color: #fff;
+    }
+    &.is-active {
+      background: $green;
+      color: #fff;
+    }
+    &.is-empty,
+    &.is-empty-search {
+      color: #ddd;
+      pointer-events: none;
+    }
   }
 }
 
@@ -76,11 +107,16 @@
   top: 68px;
 }
 
-.members-content { flex: 1; min-width: 0; }
+.members-content {
+  flex: 1;
+  min-width: 0;
+}
 
 .member-letter-group {
   margin-bottom: 2.5rem;
-  &.is-hidden { display: none; }
+  &.is-hidden {
+    display: none;
+  }
 }
 
 .member-letter-heading {
@@ -94,4 +130,3 @@
   margin-bottom: 1rem;
   scroll-margin-top: 80px;
 }
-

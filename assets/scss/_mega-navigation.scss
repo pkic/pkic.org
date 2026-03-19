@@ -12,15 +12,24 @@
     color: rgba(255, 255, 255, 0.72) !important;
     padding: 0.45rem 0.85rem;
     border-radius: 0.45rem;
-    transition: color 0.15s ease, background 0.15s ease;
+    transition:
+      color 0.15s ease,
+      background 0.15s ease;
 
-    &:hover { color: #fff !important; background: rgba(255,255,255,0.08); }
-    &.active, &.is-active { color: #fff !important; background: rgba(255,255,255,0.05); }
+    &:hover {
+      color: #fff !important;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    &.active,
+    &.is-active {
+      color: #fff !important;
+      background: rgba(255, 255, 255, 0.05);
+    }
   }
 
   .navbar-toggler {
-    border-color: rgba(255,255,255,0.25);
-    color: rgba(255,255,255,0.75);
+    border-color: rgba(255, 255, 255, 0.25);
+    color: rgba(255, 255, 255, 0.75);
     // Force the hamburger icon to use white strokes (Bootstrap defaults to a dark SVG)
     --bs-navbar-toggler-icon-bg: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255%2C 255%2C 255%2C 0.75%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e");
   }
@@ -31,11 +40,14 @@
 
   .dropdown-menu {
     background: #111;
-    border: 1px solid rgba(255,255,255,0.12);
+    border: 1px solid rgba(255, 255, 255, 0.12);
 
     .dropdown-item {
-      color: rgba(255,255,255,0.8);
-      &:hover { background: rgba(255,255,255,0.08); color: #fff; }
+      color: rgba(255, 255, 255, 0.8);
+      &:hover {
+        background: rgba(255, 255, 255, 0.08);
+        color: #fff;
+      }
     }
   }
 }
@@ -57,7 +69,9 @@
     transition: width 0.25s ease;
     z-index: 10;
 
-    &.is-active { width: clamp(280px, 40vw, 540px); }
+    &.is-active {
+      width: clamp(280px, 40vw, 540px);
+    }
   }
 }
 
@@ -74,7 +88,10 @@
   font-size: 0.84rem;
   cursor: pointer;
   justify-content: space-between;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
   white-space: nowrap;
   width: 100%;
 
@@ -86,7 +103,9 @@
 }
 
 .pkic-search-trigger-label {
-  @media (max-width: 767.98px) { display: none; }
+  @media (max-width: 767.98px) {
+    display: none;
+  }
 }
 
 .pkic-search-shortcut {
@@ -98,7 +117,9 @@
   padding: 0.1rem 0.35rem;
   color: rgba(255, 255, 255, 0.4);
   line-height: 1.4;
-  @media (max-width: 1199.98px) { display: none; }
+  @media (max-width: 1199.98px) {
+    display: none;
+  }
 }
 
 // Expanded input wrap — hidden by default, shown when search is active
@@ -127,8 +148,12 @@
   color: #fff;
   font-size: 0.875rem;
 
-  &::placeholder { color: rgba(255, 255, 255, 0.32); }
-  &::-webkit-search-cancel-button { display: none; }
+  &::placeholder {
+    color: rgba(255, 255, 255, 0.32);
+  }
+  &::-webkit-search-cancel-button {
+    display: none;
+  }
 }
 
 .pkic-search-close-btn {
@@ -144,13 +169,19 @@
   flex-shrink: 0;
   transition: color 0.15s ease;
 
-  &:hover { color: #fff; }
+  &:hover {
+    color: #fff;
+  }
 }
 
 // Active state: search expands to fill the navbar, nav collapses
 #pkicMainNav.pkic-search-active {
-  .pkic-search-trigger    { display: none; }
-  .pkic-search-input-wrap { display: flex; }
+  .pkic-search-trigger {
+    display: none;
+  }
+  .pkic-search-input-wrap {
+    display: flex;
+  }
 
   @media (min-width: 992px) {
     // Leave absolute flow, expand to fill remaining flex space
@@ -163,16 +194,22 @@
       margin: 0 0.5rem;
     }
     // Hide nav items so search takes the full row
-    .navbar-collapse { display: none !important; }
+    .navbar-collapse {
+      display: none !important;
+    }
   }
 }
 
 // ─── Search panel ─────────────────────────────────────────────────────
 // The panel fills the entire viewport below the navbar, making it feel
 // like the rest of the page has been replaced by search results.
-body.pkic-search-open { overflow: hidden; }
+body.pkic-search-open {
+  overflow: hidden;
+}
 
-#pkicSearchBackdrop { display: none !important; }
+#pkicSearchBackdrop {
+  display: none !important;
+}
 
 .pkic-search-panel {
   position: fixed;
@@ -188,7 +225,6 @@ body.pkic-search-open { overflow: hidden; }
   scrollbar-color: rgba(0, 0, 0, 0.15) transparent;
 }
 
-
 .pkic-search-panel-close {
   display: inline-flex;
   align-items: center;
@@ -200,7 +236,10 @@ body.pkic-search-open { overflow: hidden; }
   font-size: 0.85rem;
   color: rgba(0, 0, 0, 0.55);
   cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    color 0.15s ease,
+    background 0.15s ease;
 
   kbd {
     font-size: 0.65rem;
@@ -241,7 +280,10 @@ body.pkic-search-open { overflow: hidden; }
   font-size: 0.8rem;
   font-weight: 500;
   cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease,
+    color 0.15s ease;
   white-space: nowrap;
 
   &:hover {
@@ -283,7 +325,9 @@ body.pkic-search-open { overflow: hidden; }
   padding-right: 1.5rem;
   border-right: 1px solid rgba(0, 0, 0, 0.09);
 
-  &::-webkit-scrollbar { display: none; }
+  &::-webkit-scrollbar {
+    display: none;
+  }
 
   @media (max-width: 767.98px) {
     display: none; // Hide on mobile, facets accessible via section pills
@@ -300,13 +344,16 @@ body.pkic-search-open { overflow: hidden; }
 .pkic-facet-group {
   margin-bottom: 1.5rem;
 
-  & + & { padding-top: 1rem; border-top: 1px solid rgba(0,0,0,0.07); }
+  & + & {
+    padding-top: 1rem;
+    border-top: 1px solid rgba(0, 0, 0, 0.07);
+  }
 }
 
 .pkic-facet-heading {
   font-size: 0.78rem;
   font-weight: 700;
-  color: rgba(0,0,0,0.55);
+  color: rgba(0, 0, 0, 0.55);
   text-transform: uppercase;
   letter-spacing: 0.08em;
   margin-bottom: 0.55rem;
@@ -331,14 +378,16 @@ body.pkic-search-open { overflow: hidden; }
   padding: 0.28rem 0;
   text-align: left;
   cursor: pointer;
-  color: rgba(0,0,0,0.65);
+  color: rgba(0, 0, 0, 0.65);
   font-size: 0.84rem;
   border-radius: 0.25rem;
   transition: color 0.13s ease;
 
   &:hover {
-    color: rgba(0,0,0,0.9);
-    .pkic-facet-check { border-color: rgba(0,0,0,0.4); }
+    color: rgba(0, 0, 0, 0.9);
+    .pkic-facet-check {
+      border-color: rgba(0, 0, 0, 0.4);
+    }
   }
 
   &.is-active {
@@ -348,7 +397,7 @@ body.pkic-search-open { overflow: hidden; }
       background: #1d4ed8;
       // Checkmark
       &::after {
-        content: '';
+        content: "";
         display: block;
         width: 4px;
         height: 7px;
@@ -366,12 +415,14 @@ body.pkic-search-open { overflow: hidden; }
   flex-shrink: 0;
   width: 14px;
   height: 14px;
-  border: 1.5px solid rgba(0,0,0,0.22);
+  border: 1.5px solid rgba(0, 0, 0, 0.22);
   border-radius: 3px;
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: border-color 0.13s ease, background 0.13s ease;
+  transition:
+    border-color 0.13s ease,
+    background 0.13s ease;
 }
 
 .pkic-facet-name {
@@ -384,7 +435,7 @@ body.pkic-search-open { overflow: hidden; }
 
 .pkic-facet-count {
   font-size: 0.75rem;
-  color: rgba(0,0,0,0.35);
+  color: rgba(0, 0, 0, 0.35);
   flex-shrink: 0;
   font-variant-numeric: tabular-nums;
 }
@@ -397,7 +448,9 @@ body.pkic-search-open { overflow: hidden; }
   align-items: center;
   gap: 0;
 
-  > .nav-link { pointer-events: all; }
+  > .nav-link {
+    pointer-events: all;
+  }
 }
 
 .pkic-mega-chevron {
@@ -409,16 +462,26 @@ body.pkic-search-open { overflow: hidden; }
   padding: 0;
   border: none;
   background: transparent;
-  color: rgba(255,255,255,0.7);
+  color: rgba(255, 255, 255, 0.7);
   cursor: pointer;
   border-radius: 4px;
-  transition: color 0.15s, background 0.15s, transform 0.2s;
+  transition:
+    color 0.15s,
+    background 0.15s,
+    transform 0.2s;
   flex-shrink: 0;
 
-  svg { transition: transform 0.2s ease; }
+  svg {
+    transition: transform 0.2s ease;
+  }
 
-  &:hover { color: #fff; background: rgba(255,255,255,0.08); }
-  &.is-open svg { transform: rotate(180deg); }
+  &:hover {
+    color: #fff;
+    background: rgba(255, 255, 255, 0.08);
+  }
+  &.is-open svg {
+    transform: rotate(180deg);
+  }
 }
 
 .pkic-mega-panel {
@@ -429,12 +492,24 @@ body.pkic-search-open { overflow: hidden; }
   z-index: 1040;
   background: #fff;
   border-bottom: 3px solid transparent;
-  border-image: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red) 1;
+  border-image: linear-gradient(
+      to right,
+      $green,
+      $teal,
+      $blue,
+      $yellow,
+      $orange,
+      $red
+    )
+    1;
   box-shadow: 0 16px 48px rgba(0, 0, 0, 0.12);
   transform: translateY(-10px);
   opacity: 0;
   visibility: hidden;
-  transition: transform 0.22s ease, opacity 0.22s ease, visibility 0.22s ease;
+  transition:
+    transform 0.22s ease,
+    opacity 0.22s ease,
+    visibility 0.22s ease;
 
   &.is-open {
     transform: translateY(0);
@@ -460,9 +535,14 @@ body.pkic-search-open { overflow: hidden; }
   backdrop-filter: blur(2px);
   opacity: 0;
   visibility: hidden;
-  transition: opacity 0.22s ease, visibility 0.22s ease;
+  transition:
+    opacity 0.22s ease,
+    visibility 0.22s ease;
 
-  &.is-open { opacity: 1; visibility: visible; }
+  &.is-open {
+    opacity: 1;
+    visibility: visible;
+  }
 }
 
 .pkic-mega-wg-card {
@@ -475,7 +555,10 @@ body.pkic-search-open { overflow: hidden; }
   color: #1a1a1a;
   border: 1px solid rgba(0, 0, 0, 0.06);
   background: #fff;
-  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 
   &:hover {
     background: #f5f7fa;
@@ -497,7 +580,10 @@ body.pkic-search-open { overflow: hidden; }
     border-radius: 0.6rem;
   }
 
-  .pkic-mega-card-body { flex: 1; min-width: 0; }
+  .pkic-mega-card-body {
+    flex: 1;
+    min-width: 0;
+  }
 
   .pkic-mega-wg-id {
     font-size: 0.62rem;
@@ -528,25 +614,53 @@ body.pkic-search-open { overflow: hidden; }
     font-size: 1rem;
     color: $green;
     opacity: 0;
-    transition: opacity 0.15s ease, transform 0.15s ease;
+    transition:
+      opacity 0.15s ease,
+      transform 0.15s ease;
     align-self: center;
   }
 
-  &:hover .pkic-mega-arrow { opacity: 1; transform: translateX(3px); }
+  &:hover .pkic-mega-arrow {
+    opacity: 1;
+    transform: translateX(3px);
+  }
 }
 
-.pkic-mega-wg-card--green  { .pkic-mega-icon { background: rgba(25, 135, 84,  0.1); } }
-.pkic-mega-wg-card--blue   { .pkic-mega-icon { background: rgba(90, 155, 213, 0.1); } }
-.pkic-mega-wg-card--orange { .pkic-mega-icon { background: rgba(237, 125, 49, 0.1); } }
-.pkic-mega-wg-card--purple { .pkic-mega-icon { background: rgba(111, 66, 193,  0.1); } }
-.pkic-mega-wg-card--teal   { .pkic-mega-icon { background: rgba(32, 201, 151,  0.1); } }
+.pkic-mega-wg-card--green {
+  .pkic-mega-icon {
+    background: rgba(25, 135, 84, 0.1);
+  }
+}
+.pkic-mega-wg-card--blue {
+  .pkic-mega-icon {
+    background: rgba(90, 155, 213, 0.1);
+  }
+}
+.pkic-mega-wg-card--orange {
+  .pkic-mega-icon {
+    background: rgba(237, 125, 49, 0.1);
+  }
+}
+.pkic-mega-wg-card--purple {
+  .pkic-mega-icon {
+    background: rgba(111, 66, 193, 0.1);
+  }
+}
+.pkic-mega-wg-card--teal {
+  .pkic-mega-icon {
+    background: rgba(32, 201, 151, 0.1);
+  }
+}
 
 .pkic-mega-footer-link {
   font-size: 0.82rem;
   font-weight: 600;
   color: $green;
   text-decoration: none;
-  &:hover { color: $green-dark; text-decoration: underline; }
+  &:hover {
+    color: $green-dark;
+    text-decoration: underline;
+  }
 }
 
 // ─── Members Mega-menu panel ───────────────────────────────────────────
@@ -567,7 +681,10 @@ body.pkic-search-open { overflow: hidden; }
   text-decoration: none;
   color: inherit;
   min-width: 90px;
-  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    transform 0.15s ease;
 
   &:hover {
     background: rgba(25, 135, 84, 0.1);
@@ -595,7 +712,9 @@ body.pkic-search-open { overflow: hidden; }
   margin-bottom: 0.2rem;
 }
 
-.pkic-members-stat-card--indep .pkic-members-stat-num { color: #5a9bd5; }
+.pkic-members-stat-card--indep .pkic-members-stat-num {
+  color: #5a9bd5;
+}
 
 .pkic-members-stat-label {
   font-size: 0.68rem;
@@ -615,7 +734,10 @@ body.pkic-search-open { overflow: hidden; }
   text-decoration: none !important;
   color: #1a1a1a;
   background: #fff;
-  transition: background 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+  transition:
+    background 0.15s ease,
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
 
   &:hover {
     background: #f5f7fa;
@@ -624,7 +746,10 @@ body.pkic-search-open { overflow: hidden; }
     color: #000;
     text-decoration: none !important;
 
-    .pkic-mega-arrow { opacity: 1; transform: translateX(3px); }
+    .pkic-mega-arrow {
+      opacity: 1;
+      transform: translateX(3px);
+    }
   }
 }
 
@@ -653,8 +778,6 @@ body.pkic-search-open { overflow: hidden; }
   line-height: 1.3;
 }
 
-
-
 // ─── Search result rows (dark on white) ─────────────────────────────────────
 
 .pkic-search-result-item {
@@ -669,10 +792,15 @@ body.pkic-search-open { overflow: hidden; }
   &:hover {
     color: #000;
     text-decoration: none !important;
-    .pkic-sr-title { color: #000; text-decoration: underline; }
+    .pkic-sr-title {
+      color: #000;
+      text-decoration: underline;
+    }
   }
 
-  &:last-child { border-bottom: none; }
+  &:last-child {
+    border-bottom: none;
+  }
 }
 
 .pkic-sr-thumb {
@@ -681,7 +809,9 @@ body.pkic-search-open { overflow: hidden; }
   border-radius: 0.35rem;
   object-fit: cover;
   flex-shrink: 0;
-  @media (max-width: 575.98px) { display: none; }
+  @media (max-width: 575.98px) {
+    display: none;
+  }
 }
 
 .pkic-sr-thumb-placeholder {
@@ -694,10 +824,15 @@ body.pkic-search-open { overflow: hidden; }
   justify-content: center;
   font-size: 1.4rem;
   background: rgba(0, 0, 0, 0.04);
-  @media (max-width: 575.98px) { display: none; }
+  @media (max-width: 575.98px) {
+    display: none;
+  }
 }
 
-.pkic-sr-body { flex: 1; min-width: 0; }
+.pkic-sr-body {
+  flex: 1;
+  min-width: 0;
+}
 
 .pkic-sr-type {
   font-size: 0.62rem;
@@ -705,7 +840,7 @@ body.pkic-search-open { overflow: hidden; }
   letter-spacing: 0.1em;
   text-transform: uppercase;
   margin-bottom: 0.2rem;
-  color: var(--pkic-sr-accent-bright, rgba(0,0,0,0.35));
+  color: var(--pkic-sr-accent-bright, rgba(0, 0, 0, 0.35));
 }
 
 .pkic-sr-title {
@@ -722,7 +857,13 @@ body.pkic-search-open { overflow: hidden; }
   color: rgba(0, 0, 0, 0.55);
   line-height: 1.6;
   margin: 0 0 0.3rem;
-  mark { background: rgba(255,214,0,0.35); color: inherit; font-weight: 600; padding: 0 0.1em; border-radius: 2px; }
+  mark {
+    background: rgba(255, 214, 0, 0.35);
+    color: inherit;
+    font-weight: 600;
+    padding: 0 0.1em;
+    border-radius: 2px;
+  }
 }
 
 .pkic-sr-meta {
@@ -763,7 +904,6 @@ body.pkic-search-open { overflow: hidden; }
   margin-bottom: 0.5rem;
 }
 
-
 // ─── Mobile: disable mega panels below the lg navbar breakpoint ───────────
 // Below lg (991.98px) the navbar collapses to the hamburger menu.
 // The fixed mega panels don't work on mobile, so we hide them entirely
@@ -771,11 +911,15 @@ body.pkic-search-open { overflow: hidden; }
 // collapsed menu are sufficient.
 @media (max-width: 991.98px) {
   // Hide the disclosure chevrons — they only open the desktop mega panel
-  .pkic-mega-chevron { display: none !important; }
+  .pkic-mega-chevron {
+    display: none !important;
+  }
 
   // Keep the panels and backdrop entirely out of the flow / paint
   .pkic-mega-panel,
-  .pkic-mega-backdrop { display: none !important; }
+  .pkic-mega-backdrop {
+    display: none !important;
+  }
 
   // Ensure the mobile navbar has comfortable padding and the container
   // doesn't exceed the viewport, eliminating the white strip on the right
@@ -797,6 +941,7 @@ body.pkic-search-open { overflow: hidden; }
   }
 
   // Search trigger in collapsed mobile menu — full width
-  #pkicNavSearchMobile .pkic-search-trigger { width: 100%; }
+  #pkicNavSearchMobile .pkic-search-trigger {
+    width: 100%;
+  }
 }
-
