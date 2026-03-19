@@ -376,7 +376,7 @@ export async function trySeedGravatarThenPrerender(
 // ─── Donation badge generation ────────────────────────────────────────────────
 
 interface DonationRow {
-  donor_name: string | null;
+  name: string | null;
   gross_amount: number;
   currency: string;
 }
@@ -393,12 +393,12 @@ export async function generateDonationBadgePng(
   env: Pick<Env, "DB">,
   origin: string,
 ): Promise<Uint8Array | null> {
-  const [Resvg, fontBuffers, row] = await Promise.all([
+  const [Resvg, fontBuffers, donationRow] = await Promise.all([
     ensureWasm(),
     getFontBuffers(origin),
     first<DonationRow>(
       env.DB,
-      `SELECT donor_name, gross_amount, currency
+      `SELECT name, gross_amount, currency
        FROM   donations
        WHERE  checkout_session_id = ?
          AND  completed_at IS NOT NULL`,
@@ -406,14 +406,14 @@ export async function generateDonationBadgePng(
     ),
   ]);
 
-  if (!row) return null;
+  if (!donationRow) return null;
 
   // Format the amount using the same logic as the thank-you page TS.
   // We do it server-side here — Intl is available in Workers.
-  const currency   = row.currency.toUpperCase();
+  const currency   = donationRow.currency.toUpperCase();
   // Zero-decimal currencies (JPY, KRW, …) store amounts in major units already.
   const zeroDecimal = ["BIF","CLP","DJF","GNF","JPY","KMF","KRW","MGA","PYG","RWF","UGX","VND","VUV","XAF","XOF","XPF"].includes(currency);
-  const majorAmount = zeroDecimal ? row.gross_amount : row.gross_amount / 100;
+  const majorAmount = zeroDecimal ? donationRow.gross_amount : donationRow.gross_amount / 100;
   let formattedAmount: string;
   try {
     formattedAmount = new Intl.NumberFormat(undefined, {
@@ -426,11 +426,11 @@ export async function generateDonationBadgePng(
     formattedAmount = `${currency} ${majorAmount}`;
   }
 
-  const fullName    = (row.donor_name ?? "").trim();
-  const [first, ...rest] = fullName.split(" ");
+  const fullName    = (donationRow.name ?? "").trim();
+  const [firstName, ...rest] = fullName.split(" ");
 
   const svg = renderDonationBadgeSvg({
-    firstName:      first || "A supporter",
+    firstName:      firstName || "A supporter",
     lastName:       rest.length > 0 ? rest.join(" ") : null,
     formattedAmount,
   });

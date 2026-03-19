@@ -16,7 +16,7 @@
     .cancelPath       — Relative redirect path if donor cancels
 */}}
 {{- $heading          := .heading          | default "Support the PKI Consortium" -}}
-{{- $description      := .description      | default "Your voluntary contribution helps us keep our events accessible and admit more attendees. Every donation makes a difference." -}}
+{{- $description      := .description      | default "Your voluntary contribution helps us to keep the PKI Consortium Membership, Conferences, and Resources free. Every donation makes a difference." -}}
 {{- $email            := .email            | default "" -}}
 {{- $name             := .name             | default "" -}}
 {{- $organizationName := .organizationName | default "" -}}
@@ -24,6 +24,7 @@
 {{- $successPath      := .successPath      | default "" -}}
 {{- $cancelPath       := .cancelPath       | default "" -}}
 
+<div class="donation-widget">
 <div
   class="donation-form"
   data-donation-form
@@ -118,12 +119,17 @@
   <p class="donation-form-status small mt-2" data-donation-status hidden></p>
 
   {{ if $description }}
-  <p class="donation-form-disclaimer">
-    The PKI Consortium is a 501(c)(6) non-profit business league registered in Utah, USA.
-    This is a voluntary donation — no goods or services are provided in exchange.
-    Please consult your tax advisor regarding deductibility in your jurisdiction.
-  </p>
+  <p class="donation-form-disclaimer">{{ partial "donation-disclaimer.html" . }}</p>
   {{ end }}
 </div>
+
+{{/* Embedded Stripe Checkout container — shown after the donor clicks Donate */}}
+<div class="donation-checkout-overlay" data-donation-checkout hidden>
+  <button type="button" class="btn btn-sm btn-outline-secondary donation-checkout-back mb-3" data-donation-back>
+    ← Back
+  </button>
+  <div data-donation-checkout-mount></div>
+</div>
+</div>{{/* .donation-widget */}}
 
 {{ partial "script.html" (dict "path" "ts/shared/donation-form.ts") }}

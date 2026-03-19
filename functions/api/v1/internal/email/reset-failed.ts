@@ -3,7 +3,7 @@ import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { resetFailedOutbox, processPendingOutbox } from "../../../../_lib/email/outbox";
 import type { PagesContext } from "../../../../_lib/types";
-import { adminResetFailedOutboxSchema } from "../../../../../shared/schemas/api";
+import { adminResetFailedOutboxSchema } from "../../../../../assets/shared/schemas/api";
 
 /**
  * POST /api/v1/internal/email/reset-failed

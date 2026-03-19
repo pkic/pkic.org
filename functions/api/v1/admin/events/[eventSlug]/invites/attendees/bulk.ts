@@ -13,7 +13,7 @@ import {
   verifyAttendeeInvitePreviewToken,
 } from "../../../../../../../_lib/services/admin-invite-preview";
 import type { PagesContext } from "../../../../../../../_lib/types";
-import { adminBulkAttendeeInvitesSchema } from "../../../../../../../../shared/schemas/api";
+import { adminBulkAttendeeInvitesSchema } from "../../../../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(
   context: PagesContext<{ eventSlug: string }>,

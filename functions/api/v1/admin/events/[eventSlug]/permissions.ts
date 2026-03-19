@@ -11,7 +11,7 @@ import { nowIso } from "../../../../../_lib/utils/time";
 import { uuid } from "../../../../../_lib/utils/ids";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import type { PagesContext } from "../../../../../_lib/types";
-import { adminEventPermissionSchema } from "../../../../../../shared/schemas/api";
+import { adminEventPermissionSchema } from "../../../../../../assets/shared/schemas/api";
 
 interface PermissionRow {
   id: string;

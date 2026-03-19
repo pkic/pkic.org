@@ -12,7 +12,7 @@ import { buildRegistrationIcs } from "../../../../../_lib/utils/calendar";
 import { registrationManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import type { UserRecord } from "../../../../../_lib/services/users";
 import type { PagesContext } from "../../../../../_lib/types";
-import { registrationConfirmSchema } from "../../../../../../shared/schemas/api";
+import { registrationConfirmSchema } from "../../../../../../assets/shared/schemas/api";
 
 async function confirmRegistration(
   context: PagesContext<{ eventSlug: string }>,

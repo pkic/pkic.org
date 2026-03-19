@@ -7,7 +7,7 @@ import { logError } from "../logging";
 import { resolveAppBaseUrl } from "../config";
 import { resolveTemplate } from "./templates";
 import { renderEmail, renderSubject } from "./render";
-import { loadEmailPartials } from "./partials";
+import { loadEmailLayout, loadEmailPartials } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import type { DatabaseLike, Env } from "../types";
@@ -148,6 +148,7 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
   try {
     const payload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
     const partials = await loadEmailPartials(db);
+    const layoutHtml = await loadEmailLayout(db);
     const dataWithPartials = { ...payload, _partials: partials };
     const bodyOverride = typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent
       ? payload.__adminCampaignBodyContent
@@ -173,7 +174,7 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
       contentWithCustom = applyCampaignCustomText(template.content, resolvedContentType, customText);
       subject = renderSubject(template.subjectTemplate, row.subject ?? "PKI Consortium Update", dataWithPartials);
     }
-    const rendered = await renderEmail(contentWithCustom, dataWithPartials, null, resolvedContentType, resolveAppBaseUrl(env));
+    const rendered = await renderEmail(contentWithCustom, dataWithPartials, layoutHtml, resolvedContentType, resolveAppBaseUrl(env));
 
     let attachments: Array<{ filename: string; contentType: string; base64Content: string }> | undefined;
     const calendar = payload.__calendarInvite as CalendarPayload | undefined;

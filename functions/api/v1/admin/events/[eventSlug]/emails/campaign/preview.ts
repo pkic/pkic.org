@@ -8,7 +8,7 @@ import { renderEmail, renderSubject } from "../../../../../../../_lib/email/rend
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import { applyCampaignCustomText } from "../../../../../../../_lib/email/campaign-custom";
-import { loadEmailPartials } from "../../../../../../../_lib/email/partials";
+import { loadEmailLayout, loadEmailPartials } from "../../../../../../../_lib/email/partials";
 import { proposalPageUrl, registrationPageUrl } from "../../../../../../../_lib/services/frontend-links";
 import {
   chunkRecipients,
@@ -18,7 +18,7 @@ import {
   signCampaignPreviewToken,
 } from "../../../../../../../_lib/services/admin-email-campaign";
 import type { PagesContext } from "../../../../../../../_lib/types";
-import { adminEventCampaignPreviewSchema } from "../../../../../../../../shared/schemas/api";
+import { adminEventCampaignPreviewSchema } from "../../../../../../../../assets/shared/schemas/api";
 
 const PREVIEW_TTL_SECONDS = 10 * 60;
 
@@ -109,6 +109,7 @@ export async function onRequestPost(
   let subject: string;
   let rendered: { html: string; text: string };
   const partials = await loadEmailPartials(context.env.DB);
+  const layoutHtml = await loadEmailLayout(context.env.DB);
   const sample = uniqueRecipients[0];
   const routeVars = body.filter.audience === "attendees"
     ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "admin_email" }) }
@@ -128,9 +129,9 @@ export async function onRequestPost(
     const data = sampleData;
     const dataWithPartials = { ...data, _partials: partials };
     subject = renderSubject(body.subjectOverride ?? null, `Update: ${event.name}`, dataWithPartials);
-    rendered = await renderEmail(body.bodyContent, dataWithPartials, null, "markdown", appBaseUrl);
+    rendered = await renderEmail(body.bodyContent, dataWithPartials, layoutHtml, "markdown", appBaseUrl);
   } else {
-    const template = await resolveTemplate(context.env.DB, body.templateKey);
+    const template = await resolveTemplate(context.env.DB, body.templateKey as string);
     const data = {
       ...sampleData,
       customText: body.customText ?? "",
@@ -139,7 +140,7 @@ export async function onRequestPost(
     subject = renderSubject(template.subjectTemplate, body.subjectOverride ?? `Update: ${event.name}`, dataWithPartials);
     const templateContentType = template.contentType as "markdown" | "html" | "text";
     const content = applyCampaignCustomText(template.content, templateContentType, body.customText ?? null);
-    rendered = await renderEmail(content, dataWithPartials, null, templateContentType, appBaseUrl);
+    rendered = await renderEmail(content, dataWithPartials, layoutHtml, templateContentType, appBaseUrl);
   }
 
   const batchCount = body.sendMode === "bcc_batch"

@@ -5,7 +5,7 @@ import {
   consentItemSchema,
   normalizedEmailSchema,
   sourceTypeSchema,
-} from "../../shared/schemas/api";
+} from "../../assets/shared/schemas/api";
 
 export async function parseJsonBody<T>(request: Request, schema: z.ZodSchema<T>): Promise<T> {
   let body: unknown;

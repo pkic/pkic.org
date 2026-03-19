@@ -5,6 +5,29 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import type { DatabaseLike } from "../types";
 
+const TEMPLATE_CACHE_TTL_MS = 60_000;
+
+interface CachedTemplateResolution {
+  expiresAt: number;
+  value: {
+    version: number;
+    content: string;
+    contentType: string;
+    subjectTemplate: string | null;
+  } | null;
+}
+
+const activeTemplateCache = new Map<string, CachedTemplateResolution>();
+
+export function invalidateTemplateCache(templateKey?: string): void {
+  if (templateKey) {
+    activeTemplateCache.delete(templateKey);
+    return;
+  }
+
+  activeTemplateCache.clear();
+}
+
 export interface TemplateVersionRow {
   id: string;
   template_key: string;
@@ -115,12 +138,23 @@ export async function activateTemplateVersion(
     "UPDATE email_template_versions SET status = 'active' WHERE template_key = ? AND version = ?",
     [payload.templateKey, payload.version],
   );
+
+  invalidateTemplateCache(payload.templateKey);
 }
 
 export async function resolveTemplate(
   db: DatabaseLike,
   templateKey: string,
 ): Promise<{ version: number; content: string; contentType: string; subjectTemplate: string | null }> {
+  const cached = activeTemplateCache.get(templateKey);
+  if (cached && cached.expiresAt > Date.now()) {
+    if (cached.value) {
+      return cached.value;
+    }
+
+    throw new AppError(404, "EMAIL_TEMPLATE_NOT_FOUND", `No template configured for key '${templateKey}'`);
+  }
+
   const active = await first<TemplateVersionRow>(
     db,
     `SELECT * FROM email_template_versions
@@ -137,12 +171,19 @@ export async function resolveTemplate(
     throw new AppError(500, "EMAIL_TEMPLATE_MISSING_BODY", `Template '${templateKey}' v${active.version} has no body content`);
   }
 
-  return {
+  const resolved = {
     version: active.version,
     content: active.body,
     contentType: active.content_type ?? "markdown",
     subjectTemplate: active.subject_template,
   };
+
+  activeTemplateCache.set(templateKey, {
+    expiresAt: Date.now() + TEMPLATE_CACHE_TTL_MS,
+    value: resolved,
+  });
+
+  return resolved;
 }
 
 

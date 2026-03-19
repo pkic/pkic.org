@@ -5,7 +5,7 @@ import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { processPendingOutbox } from "../../../../_lib/email/outbox";
 import { runReminderCycle } from "../../../../_lib/services/reminders";
 import type { PagesContext } from "../../../../_lib/types";
-import { adminRunRemindersSchema } from "../../../../../shared/schemas/api";
+import { adminRunRemindersSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(context: PagesContext): Promise<Response> {
   await requireAdminFromRequest(context.env.DB, context.request, context.env);

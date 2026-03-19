@@ -9,7 +9,7 @@ import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { registrationPageUrl, inviteDeclineUrl } from "../../../../_lib/services/frontend-links";
 import type { PagesContext } from "../../../../_lib/types";
-import { registrationInviteCreateSchema } from "../../../../../shared/schemas/api";
+import { registrationInviteCreateSchema } from "../../../../../assets/shared/schemas/api";
 
 function getManageTokenFromRequest(request: Request): string | null {
   const auth = request.headers.get("authorization") ?? "";

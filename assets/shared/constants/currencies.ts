@@ -13,38 +13,45 @@ export interface CurrencyInfo {
   name: string;
   /** Stripe zero-decimal currency — amounts are in major units, not cents. */
   zeroDecimal?: boolean;
+  /**
+   * Approximate number of this currency's units equal to 1 USD.
+   * Used only for scaling donation preset buttons to sensible local amounts.
+   * These are indicative rates for UX purposes — not for financial conversion.
+   * Omit for USD (implicitly 1).
+   */
+  approxUsdRate?: number;
 }
 
 /** Currencies available in the donation form, ordered for the picker dropdown. */
 export const CURRENCIES: readonly CurrencyInfo[] = [
-  { code: "usd", symbol: "$", name: "US Dollar" },
-  { code: "eur", symbol: "€", name: "Euro" },
-  { code: "gbp", symbol: "£", name: "British Pound" },
-  { code: "cad", symbol: "CA$", name: "Canadian Dollar" },
-  { code: "aud", symbol: "A$", name: "Australian Dollar" },
-  { code: "chf", symbol: "CHF", name: "Swiss Franc" },
-  { code: "jpy", symbol: "¥", name: "Japanese Yen", zeroDecimal: true },
-  { code: "sek", symbol: "kr", name: "Swedish Krona" },
-  { code: "nok", symbol: "kr", name: "Norwegian Krone" },
-  { code: "dkk", symbol: "kr", name: "Danish Krone" },
-  { code: "pln", symbol: "zł", name: "Polish Złoty" },
-  { code: "czk", symbol: "Kč", name: "Czech Koruna" },
-  { code: "huf", symbol: "Ft", name: "Hungarian Forint", zeroDecimal: true },
-  { code: "sgd", symbol: "S$", name: "Singapore Dollar" },
-  { code: "hkd", symbol: "HK$", name: "Hong Kong Dollar" },
-  { code: "nzd", symbol: "NZ$", name: "New Zealand Dollar" },
-  { code: "mxn", symbol: "MX$", name: "Mexican Peso" },
-  { code: "brl", symbol: "R$", name: "Brazilian Real" },
-  { code: "inr", symbol: "₹", name: "Indian Rupee" },
-  { code: "krw", symbol: "₩", name: "South Korean Won", zeroDecimal: true },
-  { code: "twd", symbol: "NT$", name: "New Taiwan Dollar" },
-  { code: "thb", symbol: "฿", name: "Thai Baht" },
-  { code: "myr", symbol: "RM", name: "Malaysian Ringgit" },
-  { code: "php", symbol: "₱", name: "Philippine Peso" },
-  { code: "zar", symbol: "R", name: "South African Rand" },
-  { code: "ils", symbol: "₪", name: "Israeli Shekel" },
-  { code: "aed", symbol: "د.إ", name: "UAE Dirham" },
-  { code: "sar", symbol: "﷼", name: "Saudi Riyal" },
+  { code: "usd", symbol: "$",    name: "US Dollar" },
+  { code: "eur", symbol: "€",    name: "Euro",                approxUsdRate: 0.92 },
+  { code: "gbp", symbol: "£",    name: "British Pound",       approxUsdRate: 0.79 },
+  { code: "cad", symbol: "CA$",  name: "Canadian Dollar",     approxUsdRate: 1.38 },
+  { code: "aud", symbol: "A$",   name: "Australian Dollar",   approxUsdRate: 1.57 },
+  { code: "chf", symbol: "CHF",  name: "Swiss Franc",         approxUsdRate: 0.90 },
+  { code: "jpy", symbol: "¥",    name: "Japanese Yen",        approxUsdRate: 150,  zeroDecimal: true },
+  { code: "sek", symbol: "kr",   name: "Swedish Krona",       approxUsdRate: 10.5 },
+  { code: "nok", symbol: "kr",   name: "Norwegian Krone",     approxUsdRate: 10.7 },
+  { code: "dkk", symbol: "kr",   name: "Danish Krone",        approxUsdRate: 6.9  },
+  { code: "pln", symbol: "zł",   name: "Polish Złoty",        approxUsdRate: 4.0  },
+  { code: "czk", symbol: "Kč",   name: "Czech Koruna",        approxUsdRate: 23   },
+  { code: "huf", symbol: "Ft",   name: "Hungarian Forint",    approxUsdRate: 385,  zeroDecimal: true },
+  { code: "sgd", symbol: "S$",   name: "Singapore Dollar",    approxUsdRate: 1.36 },
+  { code: "hkd", symbol: "HK$",  name: "Hong Kong Dollar",    approxUsdRate: 7.8  },
+  { code: "nzd", symbol: "NZ$",  name: "New Zealand Dollar",  approxUsdRate: 1.68 },
+  { code: "mxn", symbol: "MX$",  name: "Mexican Peso",        approxUsdRate: 20   },
+  { code: "brl", symbol: "R$",   name: "Brazilian Real",      approxUsdRate: 5.8  },
+  { code: "inr", symbol: "₹",    name: "Indian Rupee",        approxUsdRate: 87   },
+  { code: "krw", symbol: "₩",    name: "South Korean Won",    approxUsdRate: 1450, zeroDecimal: true },
+  { code: "twd", symbol: "NT$",  name: "New Taiwan Dollar",   approxUsdRate: 33   },
+  { code: "thb", symbol: "฿",    name: "Thai Baht",           approxUsdRate: 36   },
+  { code: "myr", symbol: "RM",   name: "Malaysian Ringgit",   approxUsdRate: 4.5  },
+  { code: "php", symbol: "₱",    name: "Philippine Peso",     approxUsdRate: 58   },
+  { code: "zar", symbol: "R",    name: "South African Rand",  approxUsdRate: 18.5 },
+  { code: "ils", symbol: "₪",    name: "Israeli Shekel",      approxUsdRate: 3.7  },
+  { code: "aed", symbol: "د.إ",  name: "UAE Dirham",          approxUsdRate: 3.67 },
+  { code: "sar", symbol: "﷼",    name: "Saudi Riyal",         approxUsdRate: 3.75 },
 ] as const;
 
 /** Set of supported currency codes for validation. */

@@ -13,7 +13,7 @@ import { trySeedGravatarThenPrerender } from "../../../../_lib/services/og-badge
 import { proposalPageUrl } from "../../../../_lib/services/frontend-links";
 import { deriveEventAttendanceType } from "../../../../_lib/services/event-days";
 import type { PagesContext } from "../../../../_lib/types";
-import { inviteAcceptAttendeeSchema } from "../../../../../shared/schemas/api";
+import { inviteAcceptAttendeeSchema } from "../../../../../assets/shared/schemas/api";
 import { requireInternalSecret } from "../../../../_lib/request";
 
 export async function onRequestPost(context: PagesContext<{ token: string }>): Promise<Response> {

@@ -15,7 +15,7 @@ import { nowIso } from "../../../../../_lib/utils/time";
 import { uuid } from "../../../../../_lib/utils/ids";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import type { DatabaseLike, PagesContext } from "../../../../../_lib/types";
-import { adminEventTermsReplaceSchema } from "../../../../../../shared/schemas/api";
+import { adminEventTermsReplaceSchema } from "../../../../../../assets/shared/schemas/api";
 
 interface TermRow {
   id: string;

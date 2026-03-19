@@ -9,7 +9,7 @@ import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { nowIso } from "../../../../../../../_lib/utils/time";
 import { uuid } from "../../../../../../../_lib/utils/ids";
 import type { PagesContext } from "../../../../../../../_lib/types";
-import { adminRegistrationAdmitSchema } from "../../../../../../../../shared/schemas/api";
+import { adminRegistrationAdmitSchema } from "../../../../../../../../assets/shared/schemas/api";
 
 interface RegistrationRow {
   id: string;
