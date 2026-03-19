@@ -1,5 +1,5 @@
 <p>
-    <strong><a href="{{ .Permalink }}" title="{{ .Title }}">{{ .Title }}</a></strong>
+    <strong><a href="{{ .RelPermalink }}" title="{{ .Title }}">{{ .Title }}</a></strong>
     {{ with .Params.authors }}
     {{ $customDateFormat := "January 2, 2006" }}
     {{ with $.Site.Params.customDateFormat }}{{ $customDateFormat = . }}{{ end }}

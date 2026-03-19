@@ -34,7 +34,7 @@
       {{ with index $featuredPost 0 }}
       <div class="col-lg-5 d-none d-lg-block">
         <div class="pkic-hero-post-card">
-          <a href="{{ .Permalink }}" class="text-decoration-none d-block">
+          <a href="{{ .RelPermalink }}" class="text-decoration-none d-block">
             <p class="pkic-hero-post-label">Latest News</p>
             <h3 class="pkic-hero-post-title">{{ .Title }}</h3>
             <time class="pkic-hero-post-date" datetime="{{ .PublishDate.Format "2006-01-02" }}">{{ .PublishDate | time.Format ":date_long" }}</time>

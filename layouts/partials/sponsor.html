@@ -6,7 +6,7 @@
     {{ $img = resources.GetMatch (printf "/images/sponsors/**/%s.*" $id) }}
 {{ end }}
 {{ if $img }}
-    {{ $logoURL = $img.Permalink }}
+    {{ $logoURL = $img.RelPermalink }}
 {{ end }}
 
 {{ $title := printf "%s is a sponsor" $id }}

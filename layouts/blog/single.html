@@ -103,7 +103,7 @@
                       {{ with $img }}
                       {{ $title := printf "%s — %s sponsor" $s.name $lvl }}
                       <a href="{{ $s.website }}" target="_blank" rel="noopener noreferrer" title="{{ $title }}" class="blog-sidebar-sponsor-link">
-                        <img src="{{ $img.Permalink }}" alt="{{ $s.name }}" class="blog-sidebar-sponsor-logo blog-sidebar-sponsor-logo-{{ $lvl | lower }}" loading="lazy">
+                        <img src="{{ $img.RelPermalink }}" alt="{{ $s.name }}" class="blog-sidebar-sponsor-logo blog-sidebar-sponsor-logo-{{ $lvl | lower }}" loading="lazy">
                       </a>
                       {{ end }}
                     {{ end }}
@@ -129,7 +129,7 @@
   <div class="container">
     <div class="blog-post-nav-inner">
       {{ with .PrevInSection }}
-      <a class="blog-post-nav-item blog-post-nav-prev" href="{{ .Permalink }}" title="{{ i18n "previousArticle" }}">
+      <a class="blog-post-nav-item blog-post-nav-prev" href="{{ .RelPermalink }}" title="{{ i18n "previousArticle" }}">
         <span class="blog-post-nav-label">
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
           {{ i18n "previousArticle" }}
@@ -138,7 +138,7 @@
       </a>
       {{ else }}<div></div>{{ end }}
       {{ with .NextInSection }}
-      <a class="blog-post-nav-item blog-post-nav-next" href="{{ .Permalink }}" title="{{ i18n "nextArticle" }}">
+      <a class="blog-post-nav-item blog-post-nav-next" href="{{ .RelPermalink }}" title="{{ i18n "nextArticle" }}">
         <span class="blog-post-nav-label">
           {{ i18n "nextArticle" }}
           <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>

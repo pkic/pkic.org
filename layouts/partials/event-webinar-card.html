@@ -67,7 +67,7 @@
   {{/* ── Card body ─────────────────────────────────────────────────────── */}}
   <div class="event-webinar-card-body">
     <h3 class="event-webinar-title">
-      <a href="{{ $p.Permalink }}" class="stretched-link">{{ $eventTitle }}</a>
+      <a href="{{ $p.RelPermalink }}" class="stretched-link">{{ $eventTitle }}</a>
     </h3>
 
     {{ with $p.Param "eventDate" }}

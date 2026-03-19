@@ -15,7 +15,7 @@
     {{ if $date.After (time .memberSince) }}
     {{ $href := .website }}
     {{ with $.Site.GetPage (printf "/members/%s" .id) }}
-        {{ $href = .Permalink }}
+        {{ $href = .RelPermalink }}
     {{ end }}
 
     {{ $img := resources.GetMatch (printf "/images/members/%s/%s.*" .id .id) }}
@@ -42,7 +42,7 @@
             "name" .name
             "slogan" (.slogan | default "")
             "href" $href
-            "img" $img.Permalink
+            "img" $img.RelPermalink
             "sponsorLevel" $sponsorLevel
             "sponsorLevelName" $sponsorLevelName
         ) }}
@@ -83,7 +83,7 @@
                 "name" .name
                 "slogan" ""
                 "href" $.website
-                "img" .Permalink
+                "img" .RelPermalink
                 "sponsorLevel" $sponsorLevel
                 "sponsorLevelName" $sponsorLevelName
             ) }}

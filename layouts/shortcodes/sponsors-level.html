@@ -63,7 +63,7 @@
                                     {{ if .logo }}
                                         {{ $img = resources.GetMatch (printf "/images/sponsors/**/%s" .logo) }}
                                     {{ end }}
-                                    <img class="sponsor-logo" data-weight="{{ $level.weight }}" style="--sponsor-weight: {{ $level.weight }};" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
+                                    <img class="sponsor-logo" data-weight="{{ $level.weight }}" style="--sponsor-weight: {{ $level.weight }};" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.RelPermalink }}">
                                 </a>
                             </div>
                         {{ end }}

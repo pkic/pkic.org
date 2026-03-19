@@ -68,7 +68,7 @@
   <div class="blog-author-avatars-bubbles">
     {{- range first 3 $items -}}
       {{- if .headshot }}
-      <img class="blog-card-avatar-img" src="{{ .headshot.Permalink }}" alt="{{ .name }}" title="{{ .name }}" loading="lazy">
+      <img class="blog-card-avatar-img" src="{{ .headshot.RelPermalink }}" alt="{{ .name }}" title="{{ .name }}" loading="lazy">
       {{- else }}
       <div class="blog-card-avatar-initials" title="{{ .name }}" aria-label="{{ .name }}">
         {{- $parts := split .name " " -}}
