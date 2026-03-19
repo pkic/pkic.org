@@ -330,6 +330,32 @@ describe("POST /api/v1/donations/checkout", () => {
     expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining("checkout_session_id"));
   });
 
+  it("uses the Pages branch alias when CF_PAGES_BRANCH is set", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Response(JSON.stringify({ id: "cs_test_branch", url: "https://checkout.stripe.com/c/pay_branch" }), { status: 200 }),
+    );
+
+    const env = makeEnv({
+      CF_PAGES_URL: "https://39431008.pkic.pages.dev",
+      CF_PAGES_BRANCH: "events",
+    });
+    const ctx = makeContext(env, makeRequest({
+      amount: 10000,
+      currency: "usd",
+      name: "Branch Alias Donor",
+    }, {
+      origin: "https://events.pkic.pages.dev",
+    }));
+
+    const response = await callEndpoint(ctx);
+    expect(response.status).toBe(200);
+
+    const [, stripeInit] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    const params = new URLSearchParams(stripeInit.body as string);
+    expect(params.get("success_url")).toContain("https://events.pkic.pages.dev/donate/complete/");
+    expect(params.get("cancel_url")).toContain("https://events.pkic.pages.dev/donate/");
+  });
+
   it("passes custom success/cancel paths and metadata", async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
       new Response(JSON.stringify({ id: "cs_test_fake", url: "https://checkout.stripe.com/c/pay_fake" }), { status: 200 }),

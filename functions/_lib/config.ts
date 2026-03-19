@@ -17,10 +17,30 @@ function toOrigin(value: string | undefined): string | null {
   }
 }
 
-export function resolveAppBaseUrl(env: Pick<Env, "CF_PAGES_URL" | "APP_BASE_URL">): string {
+function toBranchAliasOrigin(branch: string | undefined, pagesUrl: string | undefined): string | null {
+  if (!branch || !pagesUrl) {
+    return null;
+  }
+
+  try {
+    const parsed = new URL(pagesUrl);
+    const hostParts = parsed.hostname.split(".");
+    if (hostParts.length < 3) {
+      return null;
+    }
+
+    return `${parsed.protocol}//${branch}.${hostParts.slice(1).join(".")}`;
+  } catch {
+    return null;
+  }
+}
+
+export function resolveAppBaseUrl(env: Pick<Env, "CF_PAGES_URL" | "CF_PAGES_BRANCH" | "APP_BASE_URL">): string {
   // APP_BASE_URL takes precedence (set in .dev.vars for local development).
+  // CF_PAGES_BRANCH resolves branch aliases like https://events.pkic.pages.dev.
   // CF_PAGES_URL is set automatically by Cloudflare Pages in all deployed environments.
   return toOrigin(env.APP_BASE_URL)
+    ?? toBranchAliasOrigin(env.CF_PAGES_BRANCH, env.CF_PAGES_URL)
     ?? toOrigin(env.CF_PAGES_URL)
     ?? "http://localhost";
 }

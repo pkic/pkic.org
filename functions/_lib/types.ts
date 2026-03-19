@@ -45,6 +45,8 @@ export interface Env {
   IMAGES?: ImagesBinding;
   /** Cloudflare Pages deployment URL (for example https://branch.project.pages.dev). */
   CF_PAGES_URL?: string;
+  /** Cloudflare Pages branch name used to build the branch alias origin. */
+  CF_PAGES_BRANCH?: string;
   /** Set in .dev.vars for local development; takes precedence over CF_PAGES_URL. */
   APP_BASE_URL?: string;
   DEFAULT_MIN_PROPOSAL_REVIEWS: string;
