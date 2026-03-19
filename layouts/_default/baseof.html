@@ -9,7 +9,7 @@
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" {{ if hugo.IsProduction }}integrity="{{ $style.Data.Integrity }}"{{ end }}>
     
   </head>
-  <body style="{{ $themeVars }}">
+  <body style="{{ $themeVars | safeCSS }}">
     {{ partial "navbar.html" . }}
     
     {{ partial "edit-on-github.html" . }}
