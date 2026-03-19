@@ -1,5 +1,5 @@
 {{/*
-  blog-author-card.html — renders one author card per author listed in .Params.authors.
+  blog/author-card.html — renders one author card per author listed in .Params.authors.
 
   For each author the partial:
     1. Looks them up in hugo.Data.members (current PKI Consortium members)
@@ -13,7 +13,7 @@
     • Social links (via social.html partial, consistent with the rest of the site)
     • Organization logo (or name with link if no logo)
 
-  Usage:  {{ partial "blog-author-card.html" . }}   (pass the Page as context)
+  Usage:  {{ partial "blog/author-card.html" . }}   (pass the Page as context)
 */}}
 
 {{- $page    := . -}}

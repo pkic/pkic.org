@@ -1,5 +1,5 @@
-{{- $eventSlug := partial "event-flow-slug.html" . -}}
-{{- $eventPagePath := partial "event-flow-page-path.html" . -}}
+{{- $eventSlug := partial "events/flow/slug.html" . -}}
+{{- $eventPagePath := partial "events/flow/page-path.html" . -}}
 <div class="event-flow" data-event-registration data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
 
   {{/* ── Step progress indicator ─────────────────────────────────────────── */}}

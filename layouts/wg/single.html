@@ -12,7 +12,7 @@
 
 {{/* ── Compact sub-page header ──────────────────────────────────────── */}}
 <div class="wg-sub-header wg-{{ $wg.Params.wgID | lower }}">
-  {{ partial "wg-icon.html" (dict "id" ($wg.Params.card.icon | default ($wg.Params.wgID | lower)) "class" "wg-sub-header-watermark") }}
+  {{ partial "wg/icon.html" (dict "id" ($wg.Params.card.icon | default ($wg.Params.wgID | lower)) "class" "wg-sub-header-watermark") }}
   <div class="container">
     <p class="wg-sub-eyebrow">
       <a href="/wg/">Working Groups</a>

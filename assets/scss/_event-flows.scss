@@ -794,7 +794,7 @@
 .event-flow-success-title {
   font-size: 1.45rem;
   font-weight: 700;
-  color: var(--bs-success);
+  color: var(--bs-success-text-emphasis);
   margin-bottom: 0.5rem;
 }
 
@@ -1310,8 +1310,7 @@
 }
 
 .event-flow-donation-cta-sponsor {
-  font-size: 0.8rem;
-  color: var(--bs-secondary-color);
-  margin-top: 0.6rem;
+  font-size: 0.9rem;
+  margin-top: 1rem;
   margin-bottom: 0;
 }

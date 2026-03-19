@@ -8,7 +8,7 @@
     {{ $sponsoring = . }}
 {{ end }}
 
-{{ $sponsors := partial "sponsors-collect.html" (dict "site" $.Site "sponsoring" $sponsoring "level" $level) }}
+{{ $sponsors := partial "sponsors/collect.html" (dict "site" $.Site "sponsoring" $sponsoring "level" $level) }}
 
 <div class="sponsors-list">
 {{ if gt (len $sponsors) 0 }}

@@ -1,7 +1,7 @@
 
 {{ define "main" }}
 {{ partial "hero.html" . }}
-{{ partial "members-nav.html" . }}
+{{ partial "members/nav.html" . }}
 
 {{- $members := slice -}}
 {{- range sort hugo.Data.members "name" -}}
@@ -11,5 +11,5 @@
 {{- end -}}
 
 {{ with .Content }}<div class="py-4"><div id="content" class="container">{{ . }}</div></div>{{ end }}
-{{ partial "members-listing.html" (dict "members" $members "prefix" "m" "site" .Site "label" "organizations") }}
+{{ partial "members/listing.html" (dict "members" $members "prefix" "m" "site" .Site "label" "organizations") }}
 {{ end }}

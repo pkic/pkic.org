@@ -114,7 +114,7 @@ export function renderDonationCta(container: HTMLElement, options: DonationCtaOp
       </div>
 
       <p class="event-flow-donation-cta-disclaimer">
-        The PKI Consortium is a 501(c)(6) non-profit. No goods or services are provided in exchange.
+        PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States. This payment is voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor regarding any possible business-expense treatment or other tax consequences.
       </p>
       <p class="event-flow-donation-cta-sponsor">
         Interested in sponsoring our events? <a href="/sponsors/sponsor/">Enquire about sponsor options &rarr;</a>
