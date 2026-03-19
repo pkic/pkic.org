@@ -138,16 +138,32 @@
   display: none;
   align-items: center;
   gap: 0.5rem;
+  // Dark variant (navbar) — overridden to light below when inside the panel
   background: rgba(255, 255, 255, 0.07);
   border: 1px solid rgba(255, 255, 255, 0.32);
   border-radius: 0.55rem;
   padding: 0.32rem 0.75rem;
-  width: 100%; // fill the absolutely-positioned parent
+  width: 100%;
+
+  // Light variant — when rendered inside the white search panel
+  .pkic-search-panel & {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.18);
+  }
+
+  // Always visible when used as the panel's standalone input (not toggled by JS)
+  &.pkic-search-panel-input {
+    display: flex;
+  }
 }
 
 .pkic-search-input-icon {
   color: rgba(255, 255, 255, 0.4);
   flex-shrink: 0;
+
+  .pkic-search-panel & {
+    color: rgba(0, 0, 0, 0.35);
+  }
 }
 
 .pkic-search-input-field {
@@ -164,6 +180,12 @@
   }
   &::-webkit-search-cancel-button {
     display: none;
+  }
+
+  // Light variant — inside the white search panel
+  .pkic-search-panel & {
+    color: #1a1a1a;
+    &::placeholder { color: rgba(0, 0, 0, 0.35); }
   }
 }
 

@@ -80,6 +80,15 @@
 {{/* ── Search results panel (drops down from navbar) ────────────── */}}
 <div class="pkic-search-panel" id="pkicSearchPanel" hidden aria-label="Search results">
   <div class="container pb-5">
+    {{/* ── Mobile: search input — only shown on screens < lg where the navbar input is hidden ── */}}
+    <div class="d-lg-none pt-3 pb-1">
+      <div class="pkic-search-input-wrap pkic-search-panel-input">
+        <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" fill="currentColor" class="pkic-search-input-icon" viewBox="0 0 16 16">
+          <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0"/>
+        </svg>
+        <input type="search" id="pkicSearchInputMobile" class="pkic-search-input-field" placeholder="Search…" autocomplete="off" spellcheck="false" aria-label="Search">
+      </div>
+    </div>
     {{/* Section filter pills + close button in one sticky row */}}
     <div class="pkic-search-filters" id="pkicSearchFilters">
       <button class="pkic-filter-pill is-active" data-type="">All</button>
