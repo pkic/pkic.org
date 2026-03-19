@@ -17,6 +17,7 @@
 import { resolveAppBaseUrl } from "../../../_lib/config";
 import { AppError } from "../../../_lib/errors";
 import { json, markSensitive } from "../../../_lib/http";
+import { logError } from "../../../_lib/logging";
 import type { PagesContext } from "../../../_lib/types";
 import { donationCheckoutSchema } from "../../../../assets/shared/schemas/donation";
 
@@ -48,10 +49,22 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
   // ── Origin guard ─────────────────────────────────────────────────────────
   const secFetchSite = request.headers.get("sec-fetch-site");
   if (secFetchSite !== null && secFetchSite !== "same-origin" && secFetchSite !== "none") {
+    logError("DONATION_CHECKOUT_CROSS_ORIGIN_BLOCKED", {
+      reason: "sec-fetch-site",
+      secFetchSite,
+      origin: request.headers.get("origin"),
+      appBaseUrl,
+    });
     throw new AppError(403, "FORBIDDEN", "Cross-origin requests are not allowed");
   }
   const origin = request.headers.get("origin");
   if (origin !== null && !isAllowedOrigin(origin, appBaseUrl)) {
+    logError("DONATION_CHECKOUT_CROSS_ORIGIN_BLOCKED", {
+      reason: "origin",
+      secFetchSite,
+      origin,
+      appBaseUrl,
+    });
     throw new AppError(403, "FORBIDDEN", "Cross-origin requests are not allowed");
   }
 
