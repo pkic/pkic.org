@@ -29,11 +29,17 @@
   "images": {
     "binding": "IMAGES"
   },
+  "observability": {
+    "enabled": true
+  },
   // ── Preview environment (all non-production branches) ────────────────────
   "env": {
     "preview": {
       "images": {
         "binding": "IMAGES"
+      },
+      "observability": {
+        "enabled": true
       },
       "d1_databases": [
         {
