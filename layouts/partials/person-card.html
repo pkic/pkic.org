@@ -109,7 +109,7 @@
   <div class="person-card-compact-avatar-wrap">
     {{- if $headshot -}}
       {{- $h := $headshot.Fill (printf "%dx%d Center" $avatarPx $avatarPx) -}}
-      <img class="person-card-compact-avatar" src="{{ $h.Permalink }}" alt="{{ $name }}" loading="lazy">
+      <img class="person-card-compact-avatar" src="{{ $h.RelPermalink }}" alt="{{ $name }}" loading="lazy">
     {{- else -}}
       <div class="person-card-compact-avatar person-card-compact-avatar--initials wg-{{ $color }}">
         {{- $parts := split $name " " -}}
@@ -137,9 +137,9 @@
     {{- if $member -}}
     <div class="person-card-compact-org">
       {{- if $orgImg -}}
-        {{- $logoSrc := $orgImg.Permalink -}}
+        {{- $logoSrc := $orgImg.RelPermalink -}}
         {{- if ne $orgImg.MediaType.SubType "svg" -}}
-          {{- $logoSrc = ($orgImg.Fit "80x22").Permalink -}}
+          {{- $logoSrc = ($orgImg.Fit "80x22").RelPermalink -}}
         {{- end -}}
         <a href="{{ $member.website }}" target="_blank" rel="noopener noreferrer" title="{{ $member.name }}" class="person-card-compact-org-logo-wrap">
           <img src="{{ $logoSrc }}" alt="{{ $member.name }}" class="person-card-compact-org-logo">
@@ -160,7 +160,7 @@
   <div class="person-tl-avatar-wrap">
     {{- if $headshot -}}
       {{- $h := $headshot.Fill (printf "%dx%d Center" $avatarPx $avatarPx) -}}
-      <img class="person-tl-avatar" src="{{ $h.Permalink }}" alt="{{ $name }}" loading="lazy">
+      <img class="person-tl-avatar" src="{{ $h.RelPermalink }}" alt="{{ $name }}" loading="lazy">
     {{- else -}}
       <div class="person-tl-avatar person-tl-avatar--initials wg-{{ $color }}">
         {{- $parts := split $name " " -}}
@@ -195,7 +195,7 @@
        style="--avatar-px: {{ $avatarPx }}px">
     {{- if $headshot -}}
       {{- $h := $headshot.Fill (printf "%dx%d Center" $avatarPx $avatarPx) -}}
-      <img class="person-card-avatar" src="{{ $h.Permalink }}" alt="{{ $name }}" loading="lazy">
+      <img class="person-card-avatar" src="{{ $h.RelPermalink }}" alt="{{ $name }}" loading="lazy">
     {{- else -}}
       <div class="person-card-avatar person-card-avatar--initials wg-{{ $color }}">
         {{- $parts := split $name " " -}}
@@ -232,10 +232,10 @@
     {{- if and $member (or $orgImg $member.website) -}}
     <div class="person-card-org">
       {{- if $orgImg -}}
-        {{- $logoSrc := $orgImg.Permalink -}}
+        {{- $logoSrc := $orgImg.RelPermalink -}}
         {{- if ne $orgImg.MediaType.SubType "svg" -}}
           {{- $sized := $orgImg.Fit "120x28" -}}
-          {{- $logoSrc = $sized.Permalink -}}
+          {{- $logoSrc = $sized.RelPermalink -}}
         {{- end -}}
         <a href="{{ $member.website }}" target="_blank" rel="noopener noreferrer" title="{{ $member.name }}" class="person-card-org-logo-wrap">
           <img src="{{ $logoSrc }}" alt="{{ $member.name }}" class="person-card-org-logo">

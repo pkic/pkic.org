@@ -208,7 +208,7 @@
             {{ $wg := .Site.GetPage "/wg"}}
             {{ range $wg.Sections }}
                 {{ $wgID := printf "wg-%s" (.Title | anchorize) }}
-                <label for="{{ $wgID }}" class="form-label">Do you or any of you colleagues want to join the <a href="{{ .Permalink }}" target="_blank">{{ .Title }}</a>?</label>
+                <label for="{{ $wgID }}" class="form-label">Do you or any of you colleagues want to join the <a href="{{ .RelPermalink }}" target="_blank">{{ .Title }}</a>?</label>
                 <div class="input-group mb-3">
                     <div class="input-group-text">
                         <input class="form-check-input mt-0" id="{{ $wgID }}-check" type="checkbox" name="I would like to join the {{ .Title }}" title="I would like to join the {{ .Title }}">

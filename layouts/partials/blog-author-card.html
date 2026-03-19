@@ -53,7 +53,7 @@
 
     <div class="blog-author-card">
       {{- if $headshot }}
-      <img class="blog-author-avatar" src="{{ $headshot.Permalink }}" alt="{{ $repName }}" loading="lazy">
+      <img class="blog-author-avatar" src="{{ $headshot.RelPermalink }}" alt="{{ $repName }}" loading="lazy">
       {{- else }}
       <div class="blog-author-avatar blog-author-initials">
         {{- $parts := split $repName " " -}}
@@ -72,10 +72,10 @@
 
         {{/* Org logo - always show if available; fallback text only when no role (role already names the org) */}}
         {{- if $orgImg -}}
-          {{- $logoSrc := $orgImg.Permalink -}}
+          {{- $logoSrc := $orgImg.RelPermalink -}}
           {{- if ne $orgImg.MediaType.SubType "svg" -}}
             {{- $sized := $orgImg.Fit "120x32" -}}
-            {{- $logoSrc = $sized.Permalink -}}
+            {{- $logoSrc = $sized.RelPermalink -}}
           {{- end -}}
           <div class="blog-author-org">
             <a href="{{ $member.website }}" target="_blank" rel="noopener noreferrer" title="{{ $member.name }}">
