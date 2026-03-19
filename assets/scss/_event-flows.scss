@@ -794,6 +794,10 @@
 .event-flow-success-title {
   font-size: 1.45rem;
   font-weight: 700;
+  // Cancel the main h2 gradient clip-text so the success colour actually renders
+  background: none;
+  background-clip: unset;
+  -webkit-text-fill-color: var(--bs-success-text-emphasis);
   color: var(--bs-success-text-emphasis);
   margin-bottom: 0.5rem;
 }
