@@ -36,7 +36,7 @@
                 {{ end }}
 
                 {{ with $img}}
-                <img style="{{ with $.Scratch.Get `max-height` }}max-height: {{ math.Round (mul (int .) $levelseq) }}px;{{ end }}{{ with $.Scratch.Get `max-width` }}max-width: {{ math.Round (mul (int .) $levelseq) }}px;{{ end }}{{ with $.Scratch.Get `height` }}height: {{ math.Round (mul (int .) $levelseq) }}px;{{ end }}" class="sponsor-logo{{ with $.Scratch.Get `class` }} {{ . }}{{ end }}" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.Permalink }}">
+                <img style="{{ with $.Scratch.Get `max-height` }}max-height: {{ math.Round (mul (int .) $levelseq) }}px;{{ end }}{{ with $.Scratch.Get `max-width` }}max-width: {{ math.Round (mul (int .) $levelseq) }}px;{{ end }}{{ with $.Scratch.Get `height` }}height: {{ math.Round (mul (int .) $levelseq) }}px;{{ end }}" class="sponsor-logo{{ with $.Scratch.Get `class` }} {{ . }}{{ end }}" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.RelPermalink }}">
                 {{ end }}
             </a>
         {{ end }}

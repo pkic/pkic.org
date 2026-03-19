@@ -8,9 +8,9 @@
         {{ $x600 := .Resize "x600" }}
 
         {{- $speakers = $speakers | append (merge $speaker (dict "headshot" (dict 
-            "x150" $x150.Permalink
-            "x250" $x250.Permalink
-            "x600" $x600.Permalink
+            "x150" $x150.RelPermalink
+            "x250" $x250.RelPermalink
+            "x600" $x600.RelPermalink
         ))) -}}
 
     {{- else -}}

@@ -28,7 +28,7 @@
 {{- $href := $member.website -}}
 {{- $external := true -}}
 {{- with $memberPage -}}
-  {{- $href = .Permalink -}}
+  {{- $href = .RelPermalink -}}
   {{- $external = false -}}
 {{- end -}}
 
@@ -38,7 +38,7 @@
   {{- $img := resources.GetMatch (printf "/images/members/%s/%s.*" $member.id $member.id) -}}
   <div class="member-card-logo-wrap">
   {{- with $img -}}
-    <img class="member-card-logo" src="{{ .Permalink }}" alt="{{ $member.name }} logo" loading="lazy" />
+    <img class="member-card-logo" src="{{ .RelPermalink }}" alt="{{ $member.name }} logo" loading="lazy" />
   {{- else -}}
     {{- $words := split $member.name " " -}}
     {{- $initials := "" -}}
