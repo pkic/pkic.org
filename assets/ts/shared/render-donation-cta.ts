@@ -12,6 +12,7 @@
  * remove the main source of drop-off for people who are already willing.
  */
 import { initDonationForm } from "./donation-form";
+import { buildDonationWidget } from "./build-donation-widget";
 
 export interface DonationCtaOptions {
   /** Donor's full name — used to pre-fill the name field. */
@@ -30,113 +31,53 @@ export function renderDonationCta(container: HTMLElement, options: DonationCtaOp
   const section = document.createElement("div");
   section.className = "event-flow-donation-cta";
 
-  // Build data-attribute string for identity pre-fill (values are already
-  // trusted internal strings, but we escape for safe HTML attribute embedding).
-  const nameAttr = options.name ? ` data-donation-name="${escapeAttr(options.name)}"` : "";
-  const emailAttr = options.email ? ` data-donation-email="${escapeAttr(options.email)}"` : "";
-  const orgAttr = options.organizationName
-    ? ` data-donation-organization="${escapeAttr(options.organizationName)}"`
-    : "";
-  const sourceAttr = options.source ? ` data-donation-source="${escapeAttr(options.source)}"` : "";
-
   // Cost anchor — per-day framing by default; total shown when days are known.
   const days = options.days && options.days > 0 ? options.days : null;
   const costAnchor = days
     ? `roughly <strong>$${150 * days}–$${300 * days} per attendee</strong> for this ${days}-day event`
     : `roughly <strong>$150–$300 per attendee per day</strong>`;
 
-  section.innerHTML = `
-    <div class="event-flow-donation-cta-inner">
-      <p class="event-flow-donation-cta-heading">Help welcome more attendees</p>
-      <p class="event-flow-donation-cta-body">
-        Our events — and membership — are completely free. We run on sponsors and voluntary donations.
-        Hosting you at this event costs us ${costAnchor}.
-        A donation of any size helps us keep the doors open to everyone.
-      </p>
-
-      <div
-        class="donation-form donation-form--compact"
-        data-donation-form
-        data-donation-success-path="/donate/complete/"
-        ${nameAttr}${emailAttr}${orgAttr}${sourceAttr}
-      >
-        <!--
-          Hidden identity inputs — pre-filled by initDonationForm() from the
-          data-donation-* attributes above. Keeping them hidden means the
-          attendee sees only the amount selector, which is the only decision
-          they actually need to make at this point.
-        -->
-        <input type="hidden" data-donation-name-input />
-        <input type="hidden" data-donation-email-input />
-        <input type="hidden" data-donation-org-input />
-
-        <!--
-          Currency selector — geo-detection sets the default; the select lets
-          visitors switch between currencies without leaving the panel.
-          Populated with all supported currencies by initDonationForm().
-        -->
-        <div class="event-flow-donation-cta-currency">
-          <select data-donation-currency class="form-select form-select-sm" aria-label="Select currency">
-            <option value="usd">USD ($) — US Dollar</option>
-          </select>
-        </div>
-
-        <!-- Preset amount buttons — rendered and replaced by initDonationForm() -->
-        <div data-donation-presets class="donation-form-presets">
-          <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="50">$50</button>
-          <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="100">$100</button>
-          <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="250">$250</button>
-          <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="500">$500</button>
-          <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="1000">$1,000</button>
-        </div>
-
-        <!-- Custom amount -->
-        <div class="donation-form-custom mt-2">
-          <div class="input-group input-group-sm">
-            <span class="input-group-text" data-donation-currency-prefix>$</span>
-            <input
-              type="number"
-              class="form-control"
-              data-donation-custom-input
-              placeholder="Or other amount"
-              min="1"
-              step="1"
-              aria-label="Custom donation amount"
-            />
-          </div>
-        </div>
-
-        <button type="button" class="btn btn-page-accent w-100 mt-3" data-donation-submit>
-          Donate
-        </button>
-
-        <p class="donation-form-status small mt-2" data-donation-status hidden></p>
-      </div>
-
-      <p class="event-flow-donation-cta-disclaimer">
-        PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States. This payment is voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor regarding any possible business-expense treatment or other tax consequences.
-      </p>
-      <p class="event-flow-donation-cta-sponsor">
-        Interested in sponsoring our events? <a href="/sponsors/sponsor/">Enquire about sponsor options &rarr;</a>
-      </p>
-    </div>
+  const inner = document.createElement("div");
+  inner.className = "event-flow-donation-cta-inner";
+  inner.innerHTML = `
+    <p class="event-flow-donation-cta-heading">Help welcome more attendees</p>
+    <p class="event-flow-donation-cta-body">
+      Our events — and membership — are completely free. We run on sponsors and voluntary donations.
+      Hosting you at this event costs us ${costAnchor}.
+      A donation of any size helps us keep the doors open to everyone.
+    </p>
   `;
 
+  // Build the widget DOM using the shared builder — single source of truth for
+  // the [data-donation-form] + [data-donation-checkout] structure.
+  const widget = buildDonationWidget({
+    extraClasses: "donation-form--compact",
+    successPath: "/donate/complete/",
+    name: options.name,
+    email: options.email,
+    organizationName: options.organizationName,
+    source: options.source,
+    hideIdentityFields: true,
+  });
 
+  inner.appendChild(widget);
+
+  inner.insertAdjacentHTML("beforeend", `
+    <p class="event-flow-donation-cta-disclaimer">
+      PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States. This payment is voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor regarding any possible business-expense treatment or other tax consequences.
+    </p>
+    <p class="event-flow-donation-cta-sponsor">
+      Interested in sponsoring our events? <a href="/sponsors/sponsor/">Enquire about sponsor options &rarr;</a>
+    </p>
+  `);
+
+  section.appendChild(inner);
   container.appendChild(section);
 
   // Initialise the embedded form after it is in the DOM so all selectors resolve.
-  const formRoot = section.querySelector<HTMLElement>("[data-donation-form]");
+  const formRoot = widget.querySelector<HTMLElement>("[data-donation-form]");
   if (formRoot) {
     initDonationForm(formRoot);
   }
-}
-
-function escapeAttr(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/"/g, "&quot;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }
 
