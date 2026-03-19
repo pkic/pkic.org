@@ -13,28 +13,18 @@ params:
 
   heroTitle: "From Reactive to Resilient: Regaining Control of Today's Cryptographic Complexity"
   heroDescription: "Online | Sponsored webinar by Entrust"
-  heroImage: webinar-entrust.jpg
-  eventDate: 2026-03-19T16:00:00Z
+  heroImage: entrust-cover.jpg
+
+  eventDate: 2026-04-02T15:00:00Z
   eventDuration: 1
 
   heroButton:
     label: Register for this webinar
-    link: https://events.teams.microsoft.com/event/placeholder
+    link: https://events.teams.microsoft.com/event/dc393668-3364-4707-9dbe-febbd5cdc8e6@ca9957e9-0ed0-4d29-9457-9d36f9369594
 
   speakers:
-    - name: Samantha Mabey
-      title: Director of Product Marketing for the Data Security Solutions at Entrust
-      bio: |
-        Samantha Mabey is the Director of Product Marketing for the Data Security
-        Solutions at Entrust, where she oversees marketing strategy and communications
-        for the cryptographic security solutions, as well as leads the efforts around
-        Zero Trust and Post Quantum. She acts as host of several acclaimed podcasts,
-        including the Cybersecurity Institute Podcast, where she engages with industry
-        experts on critical topics in cybersecurity, digital trust, and post quantum
-        preparedness. Combining her marketing acumen with a passion for digital security,
-        Samantha is a recognized leader and influential voice in the industry.
-      social:
-        linkedin: https://www.linkedin.com/in/samanthamabey/
+    - member: entrust
+      representative: Samantha Mabey
 
 ---
 
