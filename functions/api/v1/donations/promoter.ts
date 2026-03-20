@@ -21,6 +21,7 @@ import { first, run } from "../../../_lib/db/queries";
 import { randomBase62 } from "../../../_lib/utils/ids";
 import { resolveAppBaseUrl } from "../../../_lib/config";
 import { nowIso } from "../../../_lib/utils/time";
+import type { DatabaseLike } from "../../../_lib/types";
 import type { PagesContext } from "../../../_lib/types";
 
 interface DonationRow {
@@ -98,6 +99,48 @@ function respondWithCode(code: string, sessionId: string, appBaseUrl: string): R
     shareUrl: `${appBaseUrl}/donate/r/${encodeURIComponent(code)}`,
     ogImageUrl: `${appBaseUrl}/api/v1/og/donation/${encodeURIComponent(sessionId)}`,
   });
+}
+
+/**
+ * Server-side helper: creates (or returns an existing) promoter code for a
+ * completed donation. Safe to call from the Stripe webhook and admin sync.
+ * Returns null if the donation is not found or not yet completed.
+ */
+export async function getOrCreatePromoterCode(
+  db: DatabaseLike,
+  sessionId: string,
+  appBaseUrl: string,
+): Promise<{ code: string; shareUrl: string } | null> {
+  const donation = await first<{ id: string; name: string }>(
+    db,
+    `SELECT id, name FROM donations WHERE checkout_session_id = ? AND status = 'completed'`,
+    [sessionId],
+  );
+  if (!donation) return null;
+
+  const existing = await first<{ code: string }>(
+    db,
+    "SELECT code FROM donation_promoters WHERE donation_id = ? LIMIT 1",
+    [donation.id],
+  );
+  if (existing) {
+    return { code: existing.code, shareUrl: `${appBaseUrl}/donate/r/${encodeURIComponent(existing.code)}` };
+  }
+
+  const firstName = donation.name.split(" ")[0] ?? null;
+  for (let attempt = 0; attempt < 10; attempt++) {
+    const code = randomBase62(8);
+    const clash = await first<{ code: string }>(db, "SELECT code FROM donation_promoters WHERE code = ?", [code]);
+    if (clash) continue;
+    await run(
+      db,
+      `INSERT INTO donation_promoters (code, donation_id, checkout_session_id, name, clicks, created_at)
+       VALUES (?, ?, ?, ?, 0, ?)`,
+      [code, donation.id, sessionId, firstName, nowIso()],
+    );
+    return { code, shareUrl: `${appBaseUrl}/donate/r/${encodeURIComponent(code)}` };
+  }
+  return null;
 }
 
 export async function onRequest(context: PagesContext): Promise<Response> {

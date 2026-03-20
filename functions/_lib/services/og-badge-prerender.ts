@@ -293,6 +293,42 @@ export async function generateBadgePng(
 // ─── Cache management ─────────────────────────────────────────────────────────
 
 /**
+ * Convert a PNG buffer to JPEG (via the Images binding when available) and
+ * store the result in R2. Falls back to storing raw PNG in local dev where the
+ * IMAGES binding is absent — content-type is set correctly in both cases so the
+ * outbox can read it back without assuming JPEG.
+ *
+ * Returns the stored content-type so callers can log or branch if needed.
+ * Throws on R2 write failure (callers should catch as appropriate).
+ */
+async function pngToR2(
+  png: Uint8Array,
+  r2Key: string,
+  customMetadata: Record<string, string>,
+  env: Pick<Env, "ASSETS_BUCKET" | "IMAGES">,
+): Promise<void> {
+  if (!env.ASSETS_BUCKET) return;
+
+  if (env.IMAGES) {
+    const pngStream = new ReadableStream<Uint8Array>({
+      start(ctrl) { ctrl.enqueue(png); ctrl.close(); },
+    });
+    const result  = await env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 85 });
+    const jpegBuf = await (await result.response()).arrayBuffer();
+    await env.ASSETS_BUCKET.put(r2Key, jpegBuf, {
+      httpMetadata: { contentType: "image/jpeg" },
+      customMetadata,
+    });
+  } else {
+    // Fallback for local dev: store raw PNG.
+    await env.ASSETS_BUCKET.put(r2Key, png.buffer as ArrayBuffer, {
+      httpMetadata: { contentType: "image/png" },
+      customMetadata,
+    });
+  }
+}
+
+/**
  * Generate the badge PNG, convert it to JPEG via the Cloudflare Images binding,
  * and store the JPEG at og-badges/{code}. Silently swallows errors so it is
  * always safe to call via context.waitUntil().
@@ -308,27 +344,7 @@ export async function prerenderAndCache(
   try {
     const png = await generateBadgePng(code, env, origin);
     if (!png || !env.ASSETS_BUCKET) return;
-
-    if (env.IMAGES) {
-      // Convert PNG → JPEG via the Images binding (no HTTP round-trip, in-process).
-      const pngStream = new ReadableStream<Uint8Array>({
-        start(ctrl) { ctrl.enqueue(png); ctrl.close(); },
-      });
-      const result  = await env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg" });
-      const jpegBuf = await (await result.response()).arrayBuffer();
-      await env.ASSETS_BUCKET.put(
-        `${R2_KEY_PREFIX}${code}`,
-        jpegBuf,
-        { httpMetadata: { contentType: "image/jpeg" }, customMetadata: { referralCode: code } },
-      );
-    } else {
-      // Fallback for local dev: store raw PNG.
-      await env.ASSETS_BUCKET.put(
-        `${R2_KEY_PREFIX}${code}`,
-        png.buffer as ArrayBuffer,
-        { httpMetadata: { contentType: "image/png" }, customMetadata: { referralCode: code } },
-      );
-    }
+    await pngToR2(png, `${R2_KEY_PREFIX}${code}`, { referralCode: code }, env);
   } catch { /* silent — badge pre-render must never break the primary flow */ }
 }
 
@@ -439,4 +455,28 @@ export async function generateDonationBadgePng(
     font: { fontBuffers, defaultFontFamily: "Roboto" },
   });
   return resvg.render().asPng();
+}
+
+/**
+ * Generates the donation badge for `sessionId`, converts it to JPEG, and
+ * stores it in R2 at `og-badges/donation-{sessionId}`. No-ops gracefully when
+ * the IMAGES or ASSETS_BUCKET bindings are absent (e.g. local dev without R2).
+ *
+ * Call this before queueing the thank-you email so the badge is already in R2
+ * when `processOutboxById` looks it up. Pass `__badgeCode: `donation-${sessionId}``
+ * in the email data so the outbox attaches it automatically.
+ */
+export async function prerenderDonationBadge(
+  sessionId: string,
+  env: Pick<Env, "DB" | "ASSETS_BUCKET" | "IMAGES">,
+  origin: string,
+): Promise<void> {
+  if (!env.ASSETS_BUCKET) return;
+  const png = await generateDonationBadgePng(sessionId, env, origin);
+  if (!png) return;
+  try {
+    await pngToR2(png, `og-badges/donation-${sessionId}`, { sessionId }, env);
+  } catch {
+    // Non-fatal — email will be sent without the attachment
+  }
 }

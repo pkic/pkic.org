@@ -25,6 +25,9 @@ import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { all } from "../../../../_lib/db/queries";
 import { queueEmail, processOutboxByIdBackground } from "../../../../_lib/email/outbox";
+import { prerenderDonationBadge } from "../../../../_lib/services/og-badge-prerender";
+import { resolveAppBaseUrl } from "../../../../_lib/config";
+import { getOrCreatePromoterCode } from "../../donations/promoter";
 import type { PagesContext } from "../../../../_lib/types";
 
 interface PendingDonation {
@@ -199,6 +202,14 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
             const firstName = donor.name !== "Unknown" ? (donor.name.split(" ")[0] ?? "") : "";
             const formattedAmount = formatMajorAmount(donor.gross_amount, donor.currency);
             const bcc = env.DONATION_NOTIFICATION_EMAIL ? [env.DONATION_NOTIFICATION_EMAIL] : [];
+            const origin = resolveAppBaseUrl(env);
+
+            // Pre-render the donation badge to R2 so the outbox can attach it
+            await prerenderDonationBadge(sessionId, env, origin);
+
+            // Create the personalised share link so we can include it in the email
+            const promoter = await getOrCreatePromoterCode(env.DB, sessionId, origin);
+
             const outboxId = await queueEmail(env.DB, {
               templateKey: "donation_thank_you",
               recipientEmail: donor.email,
@@ -212,6 +223,8 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
                 currency: donor.currency.toUpperCase(),
                 formattedAmount,
                 donateUrl: "https://pkic.org/donate/",
+                shareUrl: promoter?.shareUrl ?? "https://pkic.org/donate/",
+                __badgeCode: `donation-${sessionId}`,
                 ...(bcc.length > 0 ? { __bccRecipients: bcc } : {}),
               },
             });
