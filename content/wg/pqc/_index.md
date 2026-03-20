@@ -24,6 +24,11 @@ heroButton:
 
 wgID: PQC
 color: blue
+sectionNav: true
+
+cascade:
+  params:
+    sectionNav: true
 
 card:
   icon: pqc

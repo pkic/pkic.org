@@ -20,6 +20,11 @@ heroButton:
 
 wgID: CM
 color: orange
+sectionNav: true
+
+cascade:
+  params:
+    sectionNav: true
 
 chair:
   name: Zsolt Rózsahegyi

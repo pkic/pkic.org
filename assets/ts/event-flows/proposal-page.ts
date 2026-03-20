@@ -1,4 +1,5 @@
 import { getJson, postJson } from "../shared/api-client";
+import { setButtonLoading, resetButton } from "../shared/button-loading";
 import { clearReferralSession } from "../shared/query-context";
 import { applyFieldErrors, normalizeValidation } from "../shared/validation-map";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/render-consents";
@@ -467,7 +468,7 @@ async function main(): Promise<void> {
     if (!validateBeforeSubmit(form, statusEl)) return;
 
     const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
-    if (submit) submit.disabled = true;
+    if (submit) setButtonLoading(submit);
 
     try {
       const isPresenting = isPresentingCheckbox?.checked ?? false;
@@ -517,7 +518,7 @@ async function main(): Promise<void> {
       applyFieldErrors(form, normalized.fields);
     } finally {
       const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
-      if (submit) submit.disabled = false;
+      if (submit) resetButton(submit);
     }
   });
 }

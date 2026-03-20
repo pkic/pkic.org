@@ -21,6 +21,11 @@ heroButton:
 
 wgID: CA
 color: green
+sectionNav: true
+
+cascade:
+  params:
+    sectionNav: true
 
 intro: |
   The **CA Working Group** is focused on discussions and information sharing among publicly trusted Certificate Authorities.

@@ -13,9 +13,10 @@
             {{ .content | markdownify }}
           </div>
           {{ else }}
-          <div class="pkic-card-accent-bar"></div>
+          <div class="pkic-card-accent-bar{{ with .color }} pkic-card-accent--{{ . }}{{ end }}"></div>
           {{ end }}
           <div class="card-body d-flex flex-column">
+            {{ with .icon }}<span class="pkic-card-icon">{{ . }}</span>{{ end }}
             {{ with .title }}<h5 class="card-title fw-bold">{{ . }}</h5>{{ end }}
             {{ with .text }}<p class="card-text text-muted">{{ . | markdownify }}</p>{{ end }}
             
