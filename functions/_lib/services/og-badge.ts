@@ -566,7 +566,7 @@ export function renderDonationBadgeSvg(data: DonationBadgeData): string {
   <!-- Caption -->
   <text x="${SAFE_L}" y="${subY}"
         font-family="${FONT}" font-size="${SUB_SIZE}" font-weight="400"
-        fill="rgba(255,255,255,0.55)">to support free and open PKI events for everyone</text>
+        fill="rgba(255,255,255,0.55)">to keep our memberships, resources, and events free</text>
 
   <!-- ═══ BOTTOM BAR ═══ -->
   <rect x="0" y="${BRAND_TOP}" width="${W}" height="${BRAND_H + STRIPE_H}" fill="#000"/>
