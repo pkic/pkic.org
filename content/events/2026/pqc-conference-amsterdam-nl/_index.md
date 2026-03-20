@@ -30,7 +30,7 @@ params:
   eventDate: 2026-12-01T00:00:00Z
   eventDuration: 3
   heroButton:
-    label: Request an invite / registration updates
+    label: Register now
     link: register/
   heroTitle: Post-Quantum Cryptography Conference
 
@@ -660,11 +660,28 @@ The post-quantum cryptography transition has entered its deployment phase. NIST'
 > The conference is open to anyone working on post-quantum cryptography and is **not limited** to members of the PKI Consortium.
 {.callout-info}
 
+{{< photo-grid >}}
+cols: 3
+gap: "0.375rem"
+height: 240
+photos:
+  - src: "photos/ANN04967.jpg"
+    alt: "Packed auditorium at PQC Conference 2025, Kuala Lumpur"
+    span: 2
+    rowspan: 2
+  - src: "photos/ASP_1760.jpg"
+    alt: "Keynote address: Navigating National Cyber Resilience in the Quantum Era"
+    caption: "PQC Conference 2025 — Kuala Lumpur"
+  - src: "photos/ANN05834.jpg"
+    alt: "Panel discussion at PQC Conference 2025"
+    caption: "PQC Conference 2025 — Kuala Lumpur"
+{{< /photo-grid >}}
+
 ## Why now
 
 The threat is no longer theoretical — and the window to act is narrower than most organisations assume.
 
-{{% bento cols="2" gap="1.5rem" %}}
+{{% bento cols="3" gap="1.5rem" %}}
 {{% bento-cell %}}
 
 **NIST standards are final**
@@ -679,6 +696,7 @@ ML-KEM, ML-DSA, and SLH-DSA are published standards. The deployment phase has be
 Adversaries are already collecting encrypted traffic today. Anything protected by classical cryptography now may be readable once sufficiently capable quantum computers exist.
 
 {{% /bento-cell %}}
+{{% bento-cell img="photos/ANN06210.jpg" alt="Networking at PQC Conference 2025" rowspan="2" caption="Networking — PQC Conference 2025" %}}{{% /bento-cell %}}
 {{% bento-cell %}}
 
 **Regulatory pressure is accelerating**
@@ -702,62 +720,108 @@ Organisations that move first build institutional capability that compounds. Tho
 This is a working conference for practitioners at the execution stage, not an awareness event.
 
 {{< cards >}}
+card_style: bento
 cards:
-  - icon: "🧭"
+  - icon: "compass"
+    color: bento-blue
     title: "A practical migration roadmap"
     width: "col-md-4"
     text: "Leave with a structured, prioritised approach to PQC migration — built from real deployment experience, not theoretical frameworks."
-  - icon: "⚖️"
+  - icon: "gavel"
+    color: bento-purple
     title: "Regulatory clarity"
     width: "col-md-4"
     text: "Understand what NIS2, DORA, and national mandates actually require, on what timelines, and how to document progress for auditors and regulators."
-  - icon: "🔭"
+  - icon: "telescope"
+    color: bento-teal
     title: "Vendor and technology landscape"
     width: "col-md-4"
     text: "Separate credible PQC readiness from marketing claims. Understand which products, libraries, and protocols are genuinely ready to deploy today."
-  - icon: "📊"
+  - icon: "bar-chart"
+    color: bento-green
     title: "Peer benchmarking"
-    width: "col-md-4"
+    width: "col-md-6"
     text: "Find out where your organisation stands relative to peers in your sector — and what separates those making progress from those that are stalling."
-  - icon: "💡"
+  - icon: "lightbulb"
+    color: bento-orange
     title: "Lessons from early adopters"
-    width: "col-md-4"
+    width: "col-md-3"
     text: "Hear directly from organisations that have been through it: what failed, what they would do differently, and what genuinely accelerated their migration."
-  - icon: "🤝"
+  - icon: "users"
+    color: bento-blue
     title: "Connections that move things forward"
-    width: "col-md-4"
+    width: "col-md-3"
     text: "Meet the government contacts, standards contributors, and architects you cannot reach through marketing channels — and leave with relationships that deliver."
 {{< /cards >}}
 
-{{< button label="Request an invite or registration updates" link="/events/2026/pqc-conference-amsterdam-nl/register/" type="primary" >}}
+{{< button label="Register now" link="/events/2026/pqc-conference-amsterdam-nl/register/" type="primary" >}}
+
+## Sponsors
+
+Sponsoring the 2026 PQC Conference places your organisation in front of the most concentrated audience of post-quantum cryptography decision-makers in the world.
+
+{{% row gap="4" align="start" %}}
+{{% col size="4" %}}
+
+**Direct access to buyers**
+
+Enterprise architects, CISOs, and government programme leads attending this conference are actively specifying and procuring PQC-ready solutions.
+
+{{% /col %}}
+{{% col size="4" %}}
+
+**Credibility in a growing market**
+
+Association with the PKI Consortium's neutral, vendor-agnostic platform signals genuine technical commitment — a distinction that matters to buyers evaluating competing claims.
+
+{{% /col %}}
+{{% col size="4" %}}
+
+**Global reach**
+
+Plenary sessions are live streamed internationally. Conference recordings and coverage reach an audience far beyond the attendees in the room.
+
+{{% /col %}}
+{{% /row %}}
+
+{{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
+
+{{< button label="View sponsorship opportunities" link="/sponsors/" type="outline-primary" >}}
 
 ## Who should attend
 
 Whether you are setting strategic direction or building the migration in production, this conference is for people actively working on the transition — not watching from the sidelines.
 
 {{< cards >}}
+card_style: bento
 cards:
-  - icon: "🛡️"
+  - icon: "shield-check"
+    color: bento-blue-pale
     title: "Security and risk leadership"
-    width: "col-md-4"
+    width: "col-md-3"
     text: "CISOs, CROs, and security executives navigating PQC strategy, board-level reporting, and organisational investment decisions."
-  - icon: "🏗️"
+  - icon: "building"
+    color: bento-teal
     title: "PKI and cryptography architects"
-    width: "col-md-4"
+    width: "col-md-6"
     text: "Engineers and architects designing migration paths, evaluating hybrid strategies, and building crypto-agile infrastructure."
-  - icon: "☁️"
+  - icon: "cloud"
+    color: bento-green-pale
     title: "Cloud and infrastructure engineers"
-    width: "col-md-4"
+    width: "col-md-3"
     text: "The teams implementing PQC in TLS stacks, certificate pipelines, HSMs, and cloud-native environments."
-  - icon: "🏛️"
+  - icon: "landmark"
+    color: bento-purple-pale
     title: "Government and policy professionals"
     width: "col-md-4"
     text: "National programme leads, regulatory staff, and policy architects coordinating mandates, timelines, and cross-agency alignment."
-  - icon: "🔐"
+  - icon: "terminal"
+    color: bento-blue
     title: "DevSecOps and platform teams"
     width: "col-md-4"
     text: "Teams managing the software supply chain, code signing, container trust, and CI/CD pipeline integrity facing the PQC transition."
-  - icon: "🏢"
+  - icon: "layers"
+    color: bento-orange-pale
     title: "Technology vendors"
     width: "col-md-4"
     text: "Companies building PQC-ready products who want to understand enterprise buyer requirements directly from the people making procurement decisions."
@@ -768,41 +832,42 @@ cards:
 Each day is structured around a focused theme, with keynotes and panels in the main hall and technical workshops and expert-led breakouts running in parallel.
 
 {{< cards >}}
+card_style: bento
 cards:
-  - icon: "🏢"
-    color: blue
+  - icon: "building"
+    color: bento-blue
     title: "Enterprise PQC Migration"
-    width: "col-md-4"
+    width: "col-md-8"
     text: "Where to start, how to prioritise, and how to sustain progress across complex, multi-system environments."
-  - icon: "🔍"
-    color: teal
+  - icon: "search"
+    color: bento-teal
     title: "Cryptographic Discovery and Inventory"
     width: "col-md-4"
     text: "Finding what you have, keeping inventories current, and turning discovery output into a credible remediation plan."
-  - icon: "⚙️"
-    color: green
+  - icon: "settings"
+    color: bento-green
     title: "Crypto-Agility and Automation"
     width: "col-md-4"
     text: "Designing systems that can swap algorithms without a full rebuild — and the tooling to maintain cryptographic posture continuously."
-  - icon: "🔗"
-    color: orange
+  - icon: "link"
+    color: bento-orange
     title: "Supply Chain and Vendor Readiness"
     width: "col-md-4"
     text: "The PQC readiness of the libraries, hardware, cloud services, and open-source components your organisation depends on."
-  - icon: "🏛️"
-    color: purple
+  - icon: "landmark"
+    color: bento-purple
     title: "Government and Regulatory Direction"
     width: "col-md-4"
     text: "National mandates, EU regulations, ETSI, ISO, and what the overlapping landscape means for compliance timelines in practice."
-  - icon: "🎯"
-    color: blue
+  - icon: "award"
+    color: bento-blue
     title: "Real-World Deployment Case Studies"
-    width: "col-md-4"
+    width: "col-md-6"
     text: "Unfiltered accounts from organisations that have deployed: what worked, what broke, and what they would do differently."
-  - icon: "🔄"
-    color: teal
+  - icon: "refresh"
+    color: bento-teal
     title: "Vendor Ecosystem and Interoperability"
-    width: "col-md-4"
+    width: "col-md-6"
     text: "Which products and protocols are genuinely interoperable today — and how to test claims before committing to a migration path."
 {{< /cards >}}
 
@@ -816,7 +881,7 @@ cards:
 
 The 2026 conference returns to the Meervaart in Amsterdam — the venue that hosted one of the world's first major PQC conferences in November 2023 — but at a scale that reflects how much the field has grown. For three days, **the entire venue is ours**.
 
-{{% bento cols="3" gap="1.5rem" %}}
+{{% bento cols="4" gap="1.5rem" %}}
 {{% bento-cell %}}
 
 **Plenary hall**
@@ -838,6 +903,7 @@ The former main hall (270 capacity) dedicated to deep-dive sessions, also live s
 Expert-led small-group sessions capped at 25–100 participants, where the real conversations happen.
 
 {{% /bento-cell %}}
+{{% bento-cell img="photos/IMG_2025.JPEG" alt="Audience at PQC Conference 2023, Amsterdam" caption="Amsterdam 2023 — the conference returns" %}}{{% /bento-cell %}}
 {{% /bento %}}
 
 **Session formats:**
@@ -879,38 +945,6 @@ The programme committee is reviewing speaker submissions now. We are looking for
 Preference is given to case studies, technical depth, and honest accounts. We do not accept general awareness content or sessions structured around product positioning.
 
 {{< button label="Submit a speaker proposal" link="/events/2026/pqc-conference-amsterdam-nl/propose/" type="primary" >}}
-
-## Sponsors
-
-Sponsoring the 2026 PQC Conference places your organisation in front of the most concentrated audience of post-quantum cryptography decision-makers in the world.
-
-{{% row gap="4" align="start" %}}
-{{% col size="4" %}}
-
-**Direct access to buyers**
-
-Enterprise architects, CISOs, and government programme leads attending this conference are actively specifying and procuring PQC-ready solutions.
-
-{{% /col %}}
-{{% col size="4" %}}
-
-**Credibility in a growing market**
-
-Association with the PKI Consortium's neutral, vendor-agnostic platform signals genuine technical commitment — a distinction that matters to buyers evaluating competing claims.
-
-{{% /col %}}
-{{% col size="4" %}}
-
-**Global reach**
-
-Plenary sessions are live streamed internationally. Conference recordings and coverage reach an audience far beyond the attendees in the room.
-
-{{% /col %}}
-{{% /row %}}
-
-{{< button label="View sponsorship opportunities" link="/sponsors/" type="outline-primary" >}}
-
-{{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
 
 ## Agenda
 

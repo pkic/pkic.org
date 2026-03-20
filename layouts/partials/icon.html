@@ -1,0 +1,41 @@
+{{/*
+  Partial: icon.html
+  Renders an inline SVG icon by name (Lucide-style, stroke="currentColor").
+  Usage: {{ partial "icon" (dict "name" "compass" "size" "2rem" "class" "my-icon") }}
+
+  File-based icons are loaded first from assets/icons/<name>.svg.
+  The file must use class="ICON_CLASS" as the placeholder.
+  To add a new icon: just drop a .svg into assets/icons/ — no code changes needed.
+  Inline fallback paths are kept for icons that have no file equivalent.
+*/}}
+{{- $name      := .name  | default "" -}}
+{{- $size      := .size  | default "1.5rem" -}}
+{{- $class     := .class | default "" -}}
+{{- $iconClass := printf "pkic-icon%s" (cond (ne $class "") (printf " %s" $class) "") -}}
+
+{{/* ── 1. File-based lookup: assets/icons/<name>.svg ──────────────────────── */}}
+{{- $resource := resources.Get (printf "icons/%s.svg" $name) -}}
+{{- if $resource -}}
+  {{- $content := $resource.Content | replaceRE `class="ICON_CLASS"` (printf `class="%s" width="%s" height="%s"` $iconClass $size $size) -}}
+  {{ $content | safeHTML }}
+{{- else -}}
+{{/* ── 2. Inline fallback for icons without an SVG file ───────────────────── */}}
+<svg class="{{ $iconClass }}"
+     xmlns="http://www.w3.org/2000/svg"
+     width="{{ $size }}" height="{{ $size }}"
+     viewBox="0 0 24 24"
+     fill="none"
+     stroke="currentColor"
+     stroke-width="1.75"
+     stroke-linecap="round"
+     stroke-linejoin="round"
+     aria-hidden="true">
+{{- if eq $name "map" -}}
+<polygon points="3 6 9 3 15 6 21 3 21 18 15 21 9 18 3 21"/><line x1="9" x2="9" y1="3" y2="18"/><line x1="15" x2="15" y1="6" y2="21"/>
+{{- else if eq $name "star" -}}
+<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+{{- else -}}
+<circle cx="12" cy="12" r="10"/>
+{{- end -}}
+</svg>
+{{- end -}}
