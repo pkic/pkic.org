@@ -34,8 +34,17 @@ function buildConsentCard(term: RequiredTerm): HTMLElement {
 
   // Keep card class in sync with checked state
   const syncCard = (card: HTMLElement) => {
-    card.classList.toggle("is-checked", checkbox.checked);
-    card.setAttribute("aria-checked", String(checkbox.checked));
+    const checked = checkbox.checked;
+    card.classList.toggle("is-checked", checked);
+    card.setAttribute("aria-checked", String(checked));
+    // Mirror Bootstrap was-validated feedback: once the form has been validated,
+    // keep required unchecked cards red; clear red as soon as user checks.
+    const form = checkbox.closest("form");
+    if (form?.classList.contains("was-validated") && checkbox.required) {
+      card.classList.toggle("is-invalid", !checked);
+    } else if (checked) {
+      card.classList.remove("is-invalid");
+    }
   };
 
   // ── Featured card (has explanatory context) ──────────────────────────────
@@ -85,6 +94,13 @@ function buildConsentCard(term: RequiredTerm): HTMLElement {
     actionLabel.textContent = label;
 
     bottomZone.append(checkbox, indicator, actionLabel);
+
+    if (!term.required) {
+      const badge = document.createElement("span");
+      badge.className = "event-flow-consent-optional-badge";
+      badge.textContent = "Optional";
+      bottomZone.append(badge);
+    }
 
     if (term.contentRef) {
       const readLink = document.createElement("a");
@@ -144,6 +160,13 @@ function buildConsentCard(term: RequiredTerm): HTMLElement {
 
   card.append(checkbox, indicator, actionLabel);
 
+  if (!term.required) {
+    const badge = document.createElement("span");
+    badge.className = "event-flow-consent-optional-badge";
+    badge.textContent = "Optional";
+    card.append(badge);
+  }
+
   if (term.contentRef) {
     const readLink = document.createElement("a");
     readLink.href = term.contentRef;
@@ -192,6 +215,24 @@ export function renderConsentInputs(container: HTMLElement, terms: RequiredTerm[
   }
 
   container.append(list);
+}
+
+/**
+ * Mark all required-but-unchecked consent cards as invalid.
+ * Call this after adding `was-validated` to the form, so cards get the same
+ * red-border treatment as Bootstrap text inputs in an invalid state.
+ */
+export function syncConsentValidation(form: HTMLFormElement): void {
+  const checkboxes = form.querySelectorAll<HTMLInputElement>("input.event-flow-consent-native-check");
+  for (const cb of Array.from(checkboxes)) {
+    const card = cb.closest<HTMLElement>(".event-flow-consent-card");
+    if (!card) continue;
+    if (cb.required && !cb.checked) {
+      card.classList.add("is-invalid");
+    } else {
+      card.classList.remove("is-invalid");
+    }
+  }
 }
 
 export function readConsentValues(form: HTMLFormElement): Array<{ termKey: string; version: string }> {

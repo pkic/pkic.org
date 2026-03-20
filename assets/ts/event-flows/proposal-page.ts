@@ -1,7 +1,7 @@
 import { getJson, postJson } from "../shared/api-client";
 import { clearReferralSession } from "../shared/query-context";
 import { applyFieldErrors, normalizeValidation } from "../shared/validation-map";
-import { renderConsentInputs, readConsentValues } from "../shared/render-consents";
+import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/render-consents";
 import { renderCustomFields, readCustomFieldValues } from "../shared/render-custom-fields";
 import { renderProfileLinks, type ProfileLinksWidget } from "../shared/render-profile-links";
 import { installStepNavigation } from "../shared/step-navigation";
@@ -463,6 +463,7 @@ async function main(): Promise<void> {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     form.classList.add("was-validated");
+    syncConsentValidation(form);
     if (!validateBeforeSubmit(form, statusEl)) return;
 
     const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
