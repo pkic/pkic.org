@@ -67,7 +67,7 @@ function readConfig(root: HTMLElement): DonationConfig {
     name: root.dataset.donationName || params.get("name") || undefined,
     email: root.dataset.donationEmail || params.get("email") || undefined,
     organizationName: root.dataset.donationOrganization || params.get("org") || undefined,
-    source: params.get("source") || window.location.pathname,
+    source: params.get("ref") || params.get("source") || window.location.pathname,
     successPath: root.dataset.donationSuccessPath || undefined,
     cancelPath: root.dataset.donationCancelPath || undefined,
   };

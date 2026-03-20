@@ -20,9 +20,12 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
     outboxByStatus,
     topEvents,
     recentActivity,
-    donationsByStatus,
-    donationTotals,
+    donationsByCurrency,
     donationMonthly,
+    donationDaily,
+    donationWeekly,
+    registrationWeekly,
+    registrationMonthly,
   ] = await Promise.all([
     all<{ status: string; count: number }>(
       db,
@@ -68,31 +71,79 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
        ORDER BY date ASC`,
       [],
     ),
-    all<{ status: string; count: number }>(
+    all<{ status: string; currency: string; count: number; total_gross: number; avg_gross: number; total_net: number | null }>(
       db,
-      `SELECT status, COUNT(*) AS count FROM donations GROUP BY status`,
-      [],
-    ),
-    all<{ currency: string; total_gross: number; total_net: number | null; count: number }>(
-      db,
-      `SELECT currency,
-              SUM(gross_amount) AS total_gross,
-              SUM(net_amount)   AS total_net,
-              COUNT(*)          AS count
+      `SELECT status, currency,
+              COUNT(*)                   AS count,
+              SUM(gross_amount)          AS total_gross,
+              ROUND(AVG(gross_amount))   AS avg_gross,
+              SUM(net_amount)            AS total_net
        FROM donations
-       WHERE status = 'completed'
-       GROUP BY currency
-       ORDER BY total_gross DESC`,
+       GROUP BY status, currency
+       ORDER BY status, total_gross DESC`,
       [],
     ),
-    all<{ month: string; count: number; gross: number }>(
+    all<{ month: string; count: number; completed: number; pending: number; failed: number; expired: number; gross: number }>(
       db,
       `SELECT strftime('%Y-%m', created_at) AS month,
               COUNT(*) AS count,
-              SUM(gross_amount) AS gross
+              COUNT(CASE WHEN status = 'completed' THEN 1 END) AS completed,
+              COUNT(CASE WHEN status = 'pending'   THEN 1 END) AS pending,
+              COUNT(CASE WHEN status = 'failed'    THEN 1 END) AS failed,
+              COUNT(CASE WHEN status = 'expired'   THEN 1 END) AS expired,
+              SUM(CASE WHEN status = 'completed' THEN gross_amount ELSE 0 END) AS gross
        FROM donations
-       WHERE status = 'completed'
-         AND created_at >= date('now', '-12 months')
+       WHERE created_at >= date('now', '-12 months')
+       GROUP BY month
+       ORDER BY month ASC`,
+      [],
+    ),
+    all<{ date: string; count: number; completed: number; pending: number; failed: number; expired: number; gross: number }>(
+      db,
+      `SELECT date(created_at) AS date,
+              COUNT(*) AS count,
+              COUNT(CASE WHEN status = 'completed' THEN 1 END) AS completed,
+              COUNT(CASE WHEN status = 'pending'   THEN 1 END) AS pending,
+              COUNT(CASE WHEN status = 'failed'    THEN 1 END) AS failed,
+              COUNT(CASE WHEN status = 'expired'   THEN 1 END) AS expired,
+              SUM(CASE WHEN status = 'completed' THEN gross_amount ELSE 0 END) AS gross
+       FROM donations
+       WHERE created_at >= date('now', '-30 days')
+       GROUP BY date(created_at)
+       ORDER BY date ASC`,
+      [],
+    ),
+    all<{ week: string; count: number; completed: number; pending: number; failed: number; expired: number; gross: number }>(
+      db,
+      `SELECT strftime('%Y-W%W', created_at) AS week,
+              COUNT(*) AS count,
+              COUNT(CASE WHEN status = 'completed' THEN 1 END) AS completed,
+              COUNT(CASE WHEN status = 'pending'   THEN 1 END) AS pending,
+              COUNT(CASE WHEN status = 'failed'    THEN 1 END) AS failed,
+              COUNT(CASE WHEN status = 'expired'   THEN 1 END) AS expired,
+              SUM(CASE WHEN status = 'completed' THEN gross_amount ELSE 0 END) AS gross
+       FROM donations
+       WHERE created_at >= date('now', '-84 days')
+       GROUP BY strftime('%Y-%W', created_at)
+       ORDER BY week ASC`,
+      [],
+    ),
+    all<{ week: string; count: number }>(
+      db,
+      `SELECT strftime('%Y-W%W', created_at) AS week,
+              COUNT(*) AS count
+       FROM registrations
+       WHERE created_at >= date('now', '-84 days')
+       GROUP BY strftime('%Y-%W', created_at)
+       ORDER BY week ASC`,
+      [],
+    ),
+    all<{ month: string; count: number }>(
+      db,
+      `SELECT strftime('%Y-%m', created_at) AS month,
+              COUNT(*) AS count
+       FROM registrations
+       WHERE created_at >= date('now', '-12 months')
        GROUP BY month
        ORDER BY month ASC`,
       [],
@@ -103,11 +154,19 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
   const toMap = (rows: Array<{ status: string; count: number }>) =>
     Object.fromEntries(rows.map((r) => [r.status, r.count]));
 
+  // Derive per-status count totals from the combined status+currency rows
+  const donationsByStatus = donationsByCurrency.reduce<Record<string, number>>((acc, r) => {
+    acc[r.status] = (acc[r.status] ?? 0) + r.count;
+    return acc;
+  }, {});
+
   return json({
     generatedAt: new Date().toISOString(),
     registrations: {
       byStatus: toMap(registrationsByStatus),
       total: registrationsByStatus.reduce((s, r) => s + r.count, 0),
+      weekly: registrationWeekly,
+      monthly: registrationMonthly,
     },
     invites: {
       byStatus: toMap(invitesByStatus),
@@ -120,6 +179,13 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
     },
     topEvents,
     recentActivity,
+    donations: {
+      byStatus: donationsByStatus,
+      byCurrency: donationsByCurrency,
+      daily: donationDaily,
+      weekly: donationWeekly,
+      monthly: donationMonthly,
+    },
   });
 }
 

@@ -79,6 +79,69 @@ export async function initDonationThankYou(): Promise<void> {
   }
 
   renderBadge(container, session, sessionId);
+  // Obtain (or create) the personalized share link in the background; update
+  // the share buttons once the code is resolved.
+  void fetchPromoterCode(sessionId).then((result) => {
+    if (!result) return;
+    updateShareLinks(container, result.shareUrl, session, formattedAmountFor(session));
+  });
+}
+
+interface PromoterResult {
+  code: string;
+  shareUrl: string;
+  ogImageUrl: string;
+}
+
+async function fetchPromoterCode(sessionId: string): Promise<PromoterResult | null> {
+  try {
+    const res = await fetch("/api/v1/donations/promoter", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId }),
+    });
+    if (!res.ok) return null;
+    return (await res.json()) as PromoterResult;
+  } catch {
+    return null;
+  }
+}
+
+function formattedAmountFor(session: DonationSession): string {
+  const info = currencyInfo(session.currency);
+  const majorAmount = toMajorUnit(session.grossAmount, session.currency);
+  return formatCurrency(majorAmount, info.code.toUpperCase(), info.zeroDecimal);
+}
+
+/** Swap the generic donate URL in the share buttons for the personalized /donate/r/:code URL. */
+function updateShareLinks(container: HTMLElement, shareUrl: string, session: DonationSession, formattedAmount: string): void {
+  const shareText = `I just made a voluntary donation of ${formattedAmount} to the PKI Consortium to keep our memberships, resources, and events free! 🎉`;
+  const twitterHref   = `https://twitter.com/intent/tweet?${new URLSearchParams({ text: shareText, url: shareUrl })}`;
+  const linkedinHref  = `https://www.linkedin.com/sharing/share-offsite/?${new URLSearchParams({ url: shareUrl })}`;
+
+  const twitterBtn = container.querySelector<HTMLAnchorElement>("[data-share-twitter]");
+  const linkedinBtn = container.querySelector<HTMLAnchorElement>("[data-share-linkedin]");
+  const linkInput  = container.querySelector<HTMLInputElement>("[data-share-link]");
+  const copyBtn    = container.querySelector<HTMLButtonElement>("[data-share-copy]");
+
+  if (twitterBtn)  twitterBtn.href  = twitterHref;
+  if (linkedinBtn) linkedinBtn.href = linkedinHref;
+
+  if (linkInput) {
+    linkInput.value = shareUrl;
+    linkInput.hidden = false;
+    linkInput.closest<HTMLElement>("[data-share-link-row]")?.removeAttribute("hidden");
+  }
+  if (copyBtn) {
+    copyBtn.hidden = false;
+    copyBtn.addEventListener("click", () => {
+      void navigator.clipboard?.writeText(shareUrl).then(() => {
+        const orig = copyBtn.textContent;
+        copyBtn.textContent = "Copied!";
+        setTimeout(() => { copyBtn.textContent = orig; }, 2000);
+      });
+    });
+  }
 }
 
 function renderBadge(container: HTMLElement, session: DonationSession, sessionId: string): void {
@@ -87,8 +150,10 @@ function renderBadge(container: HTMLElement, session: DonationSession, sessionId
   const formattedAmount = formatCurrency(majorAmount, info.code.toUpperCase(), info.zeroDecimal);
   const greeting = session.donorFirstName ? `${session.donorFirstName}, thank` : "Thank";
 
-  const shareText = `I just made a voluntary donation of ${formattedAmount} to the PKI Consortium to keep our memberships, resources, and events free! 🎉`;
+  // Initial share URL is the generic donate page; it gets swapped for the
+  // personalized /donate/r/:code URL once fetchPromoterCode resolves.
   const shareUrl = "https://pkic.org/donate/";
+  const shareText = `I just made a voluntary donation of ${formattedAmount} to the PKI Consortium to keep our memberships, resources, and events free! 🎉`;
 
   const twitterHref = `https://twitter.com/intent/tweet?${new URLSearchParams({ text: shareText, url: shareUrl })}`;
   const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?${new URLSearchParams({ url: shareUrl })}`;
@@ -131,6 +196,7 @@ function renderBadge(container: HTMLElement, session: DonationSession, sessionId
         <a
           href="${escapeAttr(twitterHref)}"
           class="btn btn-outline-secondary donation-badge-share-btn"
+          data-share-twitter
           target="_blank"
           rel="noopener"
           aria-label="Share on X / Twitter"
@@ -138,10 +204,31 @@ function renderBadge(container: HTMLElement, session: DonationSession, sessionId
         <a
           href="${escapeAttr(linkedinHref)}"
           class="btn btn-outline-secondary donation-badge-share-btn"
+          data-share-linkedin
           target="_blank"
           rel="noopener"
           aria-label="Share on LinkedIn"
         >in Share</a>
+      </div>
+      <div class="donation-badge-share-link-row" data-share-link-row hidden>
+        <p class="donation-badge-share-label mb-1">Your personal share link:</p>
+        <div class="d-flex gap-2 align-items-center">
+          <input
+            type="text"
+            class="form-control form-control-sm"
+            data-share-link
+            value="${escapeAttr(shareUrl)}"
+            readonly
+            aria-label="Your personalised donation share link"
+          />
+          <button
+            type="button"
+            class="btn btn-sm btn-outline-secondary flex-shrink-0"
+            data-share-copy
+            aria-label="Copy link"
+          >Copy</button>
+        </div>
+        <p class="text-muted small mt-1">Sharing this link lets us track who is driving donations — even without donating yourself.</p>
       </div>
       <p class="donation-badge-disclaimer">
         PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts 

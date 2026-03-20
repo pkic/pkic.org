@@ -206,12 +206,33 @@ interface BadgeRoleInfo {
   available_roles: string[];
 }
 
+interface DonationPeriod {
+  count: number;
+  completed: number;
+  pending: number;
+  failed: number;
+  expired: number;
+  gross: number;
+}
+
 interface StatsResponse {
-  registrations: { byStatus: Record<string, number>; total: number };
+  registrations: {
+    byStatus: Record<string, number>;
+    total: number;
+    weekly: Array<{ week: string; count: number }>;
+    monthly: Array<{ month: string; count: number }>;
+  };
   invites: { byStatus: Record<string, number>; total: number };
   email: { outboxByStatus: Record<string, number>; totalQueued: number; totalFailed: number };
   topEvents: Array<{ slug: string; name: string; confirmed: number; total: number }>;
   recentActivity: Array<{ date: string; registrations: number; invites: number }>;
+  donations: {
+    byStatus: Record<string, number>;
+    byCurrency: Array<{ status: string; currency: string; count: number; total_gross: number; avg_gross: number; total_net: number | null }>;
+    daily: Array<{ date: string } & DonationPeriod>;
+    weekly: Array<{ week: string } & DonationPeriod>;
+    monthly: Array<{ month: string } & DonationPeriod>;
+  };
 }
 
 interface InviteRecord {
@@ -482,13 +503,20 @@ async function loadDashboard(): Promise<void> {
   el.innerHTML = spinner();
   try {
     const s = await api<StatsResponse>("/api/v1/admin/stats");
-    const { registrations: r, email: em, invites: inv } = s;
+    const { registrations: r, email: em, invites: inv, donations: don } = s;
+    const donTop = don.byCurrency.find((d) => d.status === "completed");
+    const donCompleted = don.byStatus.completed ?? 0;
+    const donPending = don.byStatus.pending ?? 0;
+    const donFailed = don.byStatus.failed ?? 0;
+    const donExpired = don.byStatus.expired ?? 0;
     el.innerHTML =
       '<div class="stat-grid">' +
         sc("Total Registrations", r.total, `${r.byStatus.registered ?? 0} confirmed`) +
         sc("Pending Invites", inv.byStatus.sent ?? 0, `${inv.total} total`) +
         sc("Queued Emails", em.totalQueued, "") +
         sc("Failed Emails", em.totalFailed, "go to Email tab to fix", em.totalFailed > 0 ? "danger" : "") +
+        sc("Completed Donations", donCompleted, donTop ? `${fmtMoney(donTop.total_gross, donTop.currency)} total` : "no data") +
+        sc("Pending Donations", donPending, [donFailed > 0 ? `${donFailed} failed` : "", donExpired > 0 ? `${donExpired} expired` : ""].filter(Boolean).join(" · ") || "none failed", donFailed > 0 ? "danger" : "") +
       "</div>" +
       '<div class="row g-3">' +
         '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
@@ -543,6 +571,14 @@ function statusBars(byStatus: Record<string, number>, total: number): string {
       );
     })
     .join("");
+}
+
+function fmtMoney(cents: number, currency: string): string {
+  return (cents / 100).toLocaleString("en-US", {
+    style: "currency",
+    currency: currency.toUpperCase(),
+    minimumFractionDigits: 2,
+  });
 }
 
 // ── Events ─────────────────────────────────────────────────────────────────────
@@ -5323,18 +5359,46 @@ async function loadDonations(filter?: string): Promise<void> {
     });
 
     el.innerHTML =
-      `<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">` +
-        filterBtns +
-        `<div class="ms-auto d-flex gap-2">` +
-          `<button class="btn btn-sm btn-success" id="btn-don-sync-pending">↺ Sync all pending (${pending})</button>` +
-          (failed > 0 ? `<span class="badge text-bg-danger ms-1" title="Payment failed">${failed} failed</span>` : "") +
+      `<ul class="nav nav-tabs mb-3" id="don-tabs" role="tablist">` +
+        `<li class="nav-item"><button class="nav-link active" data-don-tab="list">Donations</button></li>` +
+        `<li class="nav-item"><button class="nav-link" data-don-tab="promoters">Share Links</button></li>` +
+      `</ul>` +
+      `<div id="don-tab-list">` +
+        `<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">` +
+          filterBtns +
+          `<div class="ms-auto d-flex gap-2">` +
+            `<button class="btn btn-sm btn-success" id="btn-don-sync-pending">↺ Sync all pending (${pending})</button>` +
+            (failed > 0 ? `<span class="badge text-bg-danger ms-1" title="Payment failed">${failed} failed</span>` : "") +
+          `</div>` +
         `</div>` +
+        tbl(
+          ["Session ID", "Donor", "Amount", "Status", "Source", "Created", "Completed"],
+          rows,
+          "No donations found",
+        ) +
       `</div>` +
-      tbl(
-        ["Session ID", "Donor", "Amount", "Status", "Source", "Created", "Completed"],
-        rows,
-        "No donations found",
-      );
+      `<div id="don-tab-promoters" class="d-none">` +
+        `<div class="d-flex justify-content-end mb-2">` +
+          `<button class="btn btn-sm btn-outline-secondary" id="btn-promoters-refresh">↺ Refresh</button>` +
+        `</div>` +
+        `<div id="don-promoters-body"></div>` +
+      `</div>`;
+
+    // Tab switching
+    el.querySelectorAll<HTMLButtonElement>("[data-don-tab]").forEach((tabBtn) => {
+      tabBtn.addEventListener("click", () => {
+        el.querySelectorAll<HTMLButtonElement>("[data-don-tab]").forEach((b) => b.classList.remove("active"));
+        tabBtn.classList.add("active");
+        const tab = tabBtn.dataset.donTab!;
+        el.querySelectorAll<HTMLElement>("[id^='don-tab-']").forEach((pane) => {
+          pane.classList.toggle("d-none", pane.id !== `don-tab-${tab}`);
+        });
+        if (tab === "promoters") void loadDonationPromoters();
+      });
+    });
+
+    // Promoters refresh (rendered inside tab pane)
+    el.querySelector<HTMLButtonElement>("#btn-promoters-refresh")?.addEventListener("click", () => void loadDonationPromoters());
 
     // Filter buttons
     el.querySelectorAll<HTMLButtonElement>("[data-don-filter]").forEach((btn) => {
@@ -5377,8 +5441,51 @@ async function loadDonations(filter?: string): Promise<void> {
         .catch((err: Error) => { toast(err.message, "error"); void loadDonations(); });
     });
 
+    void loadDonationPromoters();
+
   } catch (err) {
     if (el) el.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+  }
+}
+
+async function loadDonationPromoters(): Promise<void> {
+  const el = q("#don-promoters-body");
+  if (!el) return;
+  el.innerHTML = spinner();
+  try {
+    const data = await api<{ promoters: Array<{
+      code: string;
+      name: string | null;
+      checkout_session_id: string | null;
+      clicks: number;
+      attributed_total: number;
+      attributed_completed: number;
+      attributed_gross: number;
+      currency: string | null;
+      created_at: string;
+    }> }>("/api/v1/admin/donations/promoters");
+
+    const appBase = window.location.origin;
+    el.innerHTML = tbl(
+      ["Name", "Share URL", "Clicks", "Attributed (compl.)", "Attributed Gross", "Created"],
+      data.promoters.map((p) => {
+        const shareUrl = `${appBase}/donate/r/${esc(p.code)}`;
+        const gross = p.attributed_gross > 0 && p.currency
+          ? fmtMoney(p.attributed_gross, p.currency)
+          : "\u2014";
+        return `<tr>
+          <td>${p.name ? esc(p.name) : `<span class="text-muted fst-italic">anonymous</span>`}</td>
+          <td class="mono small"><a href="${shareUrl}" target="_blank" rel="noopener">/donate/r/${esc(p.code)}</a></td>
+          <td>${p.clicks}</td>
+          <td>${p.attributed_completed} / ${p.attributed_total}</td>
+          <td class="mono">${gross}</td>
+          <td class="small text-muted">${fmt(p.created_at)}</td>
+        </tr>`;
+      }),
+      "No promoter links yet",
+    );
+  } catch (err) {
+    el.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
   }
 }
 
@@ -5390,41 +5497,131 @@ async function loadStats(): Promise<void> {
   el.innerHTML = spinner();
   try {
     const s = await api<StatsResponse>("/api/v1/admin/stats");
+    const primaryCurrency = s.donations.byCurrency.find((r) => r.status === "completed")?.currency ?? "usd";
+
+    const donationPeriodRows = (rows: Array<{ gross: number } & DonationPeriod>, keyCol: string, keyVal: (r: DonationPeriod & { gross: number }) => string) =>
+      rows.map((d) =>
+        `<tr><td class="mono">${esc(keyVal(d))}</td><td>${d.count}</td><td>${d.completed}</td>` +
+        `<td>${d.pending}</td><td>${d.failed}</td><td>${d.expired}</td>` +
+        `<td class="mono">${d.gross > 0 ? fmtMoney(d.gross, primaryCurrency) : "\u2014"}</td></tr>`,
+      );
+
+    const tabContent = {
+      overview:
+        '<div class="row g-3">' +
+          '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
+            '<h6 class="text-uppercase small fw-bold text-muted mb-3">Registrations</h6>' +
+            tbl(
+              ["Status", "Count"],
+              Object.entries(s.registrations.byStatus).map(([k, v]) => `<tr><td>${badge(k)}</td><td class="mono">${v}</td></tr>`),
+              "None",
+            ) +
+          "</div></div></div>" +
+          '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
+            '<h6 class="text-uppercase small fw-bold text-muted mb-3">Invites</h6>' +
+            tbl(
+              ["Status", "Count"],
+              Object.entries(s.invites.byStatus).map(([k, v]) => `<tr><td>${badge(k)}</td><td class="mono">${v}</td></tr>`),
+              "None",
+            ) +
+          "</div></div></div>" +
+        "</div>" +
+        '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+          '<h6 class="text-uppercase small fw-bold text-muted mb-3">Activity — last 30 days</h6>' +
+          tbl(
+            ["Date", "Registrations", "Invites"],
+            s.recentActivity.map((d) => `<tr><td class="mono">${esc(d.date)}</td><td>${d.registrations}</td><td>${d.invites}</td></tr>`),
+            "No data",
+          ) +
+        "</div></div>",
+
+      registrations:
+        '<div class="card border-0 shadow-sm"><div class="card-body">' +
+          '<h6 class="text-uppercase small fw-bold text-muted mb-3">Registrations — Weekly (last 12 weeks)</h6>' +
+          tbl(
+            ["Week", "Count"],
+            s.registrations.weekly.map((d) => `<tr><td class="mono">${esc(d.week)}</td><td>${d.count}</td></tr>`),
+            "No data",
+          ) +
+        "</div></div>" +
+        '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+          '<h6 class="text-uppercase small fw-bold text-muted mb-3">Registrations — Monthly (last 12 months)</h6>' +
+          tbl(
+            ["Month", "Count"],
+            s.registrations.monthly.map((d) => `<tr><td class="mono">${esc(d.month)}</td><td>${d.count}</td></tr>`),
+            "No data",
+          ) +
+        "</div></div>",
+
+      donations:
+        '<div class="card border-0 shadow-sm"><div class="card-body">' +
+          '<h6 class="text-uppercase small fw-bold text-muted mb-3">Donations by Status &amp; Currency</h6>' +
+          tbl(
+            ["Status", "Currency", "Count", "Gross", "Avg Gross", "Net Total"],
+            s.donations.byCurrency.map((d) =>
+              `<tr><td>${badge(d.status)}</td>` +
+              `<td class="mono">${esc(d.currency.toUpperCase())}</td>` +
+              `<td>${d.count}</td>` +
+              `<td class="mono">${fmtMoney(d.total_gross, d.currency)}</td>` +
+              `<td class="mono">${fmtMoney(d.avg_gross, d.currency)}</td>` +
+              `<td class="mono">${d.total_net != null ? fmtMoney(d.total_net, d.currency) : `\u2014 <span class="text-muted small">(${esc(d.status)})</span>`}</td></tr>`,
+            ),
+            "No donations",
+          ) +
+        "</div></div>" +
+        '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+          '<h6 class="text-uppercase small fw-bold text-muted mb-3">Donations — Daily (last 30 days)</h6>' +
+          tbl(
+            ["Date", "Total", "Compl.", "Pend.", "Failed", "Expd.", `Gross (${primaryCurrency.toUpperCase()})`],
+            donationPeriodRows(s.donations.daily, "date", (d) => (d as { date: string } & DonationPeriod).date),
+            "No data",
+          ) +
+        "</div></div>" +
+        '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+          '<h6 class="text-uppercase small fw-bold text-muted mb-3">Donations — Weekly (last 12 weeks)</h6>' +
+          tbl(
+            ["Week", "Total", "Compl.", "Pend.", "Failed", "Expd.", `Gross (${primaryCurrency.toUpperCase()})`],
+            donationPeriodRows(s.donations.weekly, "week", (d) => (d as { week: string } & DonationPeriod).week),
+            "No data",
+          ) +
+        "</div></div>" +
+        '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+          '<h6 class="text-uppercase small fw-bold text-muted mb-3">Donations — Monthly (last 12 months)</h6>' +
+          tbl(
+            ["Month", "Total", "Compl.", "Pend.", "Failed", "Expd.", `Gross (${primaryCurrency.toUpperCase()})`],
+            donationPeriodRows(s.donations.monthly, "month", (d) => (d as { month: string } & DonationPeriod).month),
+            "No data",
+          ) +
+        "</div></div>" +
+        '<details class="card border-0 shadow-sm mt-3">' +
+          '<summary class="card-body text-muted small" style="cursor:pointer">JSON export (for automated reporting)</summary>' +
+          `<div class="card-body pt-0"><pre class="json-out">${esc(JSON.stringify(s, null, 2))}</pre></div>` +
+        "</details>",
+    };
+
     el.innerHTML =
-      '<div class="row g-3">' +
-        '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
-          '<h6 class="text-uppercase small fw-bold text-muted mb-3">Registrations</h6>' +
-          tbl(
-            ["Status", "Count"],
-            Object.entries(s.registrations.byStatus).map(([k, v]) => `<tr><td>${badge(k)}</td><td class="mono">${v}</td></tr>`),
-            "None",
-          ) +
-        "</div></div></div>" +
-        '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
-          '<h6 class="text-uppercase small fw-bold text-muted mb-3">Invites</h6>' +
-          tbl(
-            ["Status", "Count"],
-            Object.entries(s.invites.byStatus).map(([k, v]) => `<tr><td>${badge(k)}</td><td class="mono">${v}</td></tr>`),
-            "None",
-          ) +
-        "</div></div></div>" +
-      "</div>" +
-      '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
-        '<h6 class="text-uppercase small fw-bold text-muted mb-3">Activity — last 30 days</h6>' +
-        tbl(
-          ["Date", "Registrations", "Invites"],
-          s.recentActivity.map((d) => `<tr><td class="mono">${esc(d.date)}</td><td>${d.registrations}</td><td>${d.invites}</td></tr>`),
-          "No data",
-        ) +
-      "</div></div>" +
-      '<details class="card border-0 shadow-sm mt-3">' +
-        '<summary class="card-body text-muted small" style="cursor:pointer">JSON export (for automated reporting)</summary>' +
-        `<div class="card-body pt-0"><pre class="json-out">${esc(JSON.stringify(s, null, 2))}</pre></div>` +
-      "</details>";
+      '<ul class="nav nav-tabs mb-3" id="stats-tabs" role="tablist">' +
+        '<li class="nav-item" role="presentation"><button class="nav-link active" data-stats-tab="overview">Overview</button></li>' +
+        '<li class="nav-item" role="presentation"><button class="nav-link" data-stats-tab="registrations">Registrations</button></li>' +
+        '<li class="nav-item" role="presentation"><button class="nav-link" data-stats-tab="donations">Donations</button></li>' +
+      "</ul>" +
+      `<div id="stats-tab-content">${tabContent.overview}</div>`;
+
+    // Wire tab switching via event delegation
+    el.querySelector("#stats-tabs")?.addEventListener("click", (evt) => {
+      const btn = (evt.target as Element).closest<HTMLButtonElement>("[data-stats-tab]");
+      if (!btn) return;
+      const tab = btn.dataset.statsTab as keyof typeof tabContent;
+      el.querySelectorAll<HTMLButtonElement>("[data-stats-tab]").forEach((b) => b.classList.remove("active"));
+      btn.classList.add("active");
+      const content = el.querySelector("#stats-tab-content");
+      if (content) content.innerHTML = tabContent[tab] ?? "";
+    });
   } catch (err) {
     el.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
   }
 }
+
 
 // ── Auth ───────────────────────────────────────────────────────────────────────
 
