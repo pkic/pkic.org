@@ -4,8 +4,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "sh -c 'hugo serve -e development --port 1313 & HUGO_PID=$!; trap \"kill $HUGO_PID\" EXIT INT TERM; npx wrangler pages dev --ip 0.0.0.0 --proxy 1313'",
-    "dev:hugo": "hugo serve -e development",
+    "dev": "sh -c 'hugo serve -w -e development --port 1313 & HUGO_PID=$!; trap \"kill $HUGO_PID\" EXIT INT TERM; npx wrangler pages dev --ip 0.0.0.0 --proxy 1313'",
+    "dev:hugo": "hugo serve -w -e development",
     "dev:wrangler": "npx wrangler pages dev --ip 0.0.0.0 --proxy 1313",
     "typecheck": "npm run typecheck:backend && npm run typecheck:frontend",
     "typecheck:backend": "tsc --noEmit -p tsconfig.json",
