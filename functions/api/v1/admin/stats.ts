@@ -20,6 +20,9 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
     outboxByStatus,
     topEvents,
     recentActivity,
+    donationsByStatus,
+    donationTotals,
+    donationMonthly,
   ] = await Promise.all([
     all<{ status: string; count: number }>(
       db,
@@ -63,6 +66,35 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
          ON date(i.created_at) = date(r.created_at)
        GROUP BY date(r.created_at)
        ORDER BY date ASC`,
+      [],
+    ),
+    all<{ status: string; count: number }>(
+      db,
+      `SELECT status, COUNT(*) AS count FROM donations GROUP BY status`,
+      [],
+    ),
+    all<{ currency: string; total_gross: number; total_net: number | null; count: number }>(
+      db,
+      `SELECT currency,
+              SUM(gross_amount) AS total_gross,
+              SUM(net_amount)   AS total_net,
+              COUNT(*)          AS count
+       FROM donations
+       WHERE status = 'completed'
+       GROUP BY currency
+       ORDER BY total_gross DESC`,
+      [],
+    ),
+    all<{ month: string; count: number; gross: number }>(
+      db,
+      `SELECT strftime('%Y-%m', created_at) AS month,
+              COUNT(*) AS count,
+              SUM(gross_amount) AS gross
+       FROM donations
+       WHERE status = 'completed'
+         AND created_at >= date('now', '-12 months')
+       GROUP BY month
+       ORDER BY month ASC`,
       [],
     ),
   ]);
