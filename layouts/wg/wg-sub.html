@@ -26,6 +26,7 @@
 </div>
 
 {{/* ── Sticky section nav ──────────────────────────────────────────── */}}
+{{- if $.Page.Params.sectionNav -}}
 <nav class="wg-section-nav wg-{{ $wg.Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
   <div class="container d-flex gap-1">
     {{/* About → always links to WG landing */}}
@@ -88,6 +89,7 @@
     <a class="wg-nav-link{{ if eq $sec "blog" }} is-active{{ end }}" href="/blog/?wg={{ $wgID | lower }}">Blog</a>
   </div>
 </nav>
+{{- end -}}
 
 {{/* Tree panels — one per deliverable section with child pages */}}
 {{- range $wg.Params.deliverables -}}

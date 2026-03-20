@@ -1,4 +1,5 @@
 import { getJson, patchJson, postJson } from "../shared/api-client";
+import { setButtonLoading, resetButton } from "../shared/button-loading";
 import type { ProposalManageResponse } from "../shared/types";
 import { applyFieldErrors, normalizeValidation } from "../shared/validation-map";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form-validation";
@@ -84,9 +85,7 @@ async function main(): Promise<void> {
     }
 
     const submit = boot.form.querySelector<HTMLButtonElement>("button[type='submit']");
-    if (submit) {
-      submit.disabled = true;
-    }
+    if (submit) setButtonLoading(submit);
 
     try {
       const response = await patchJson<{ success: true; proposal: { status: string } }>(
@@ -104,9 +103,7 @@ async function main(): Promise<void> {
       setStatus(boot.statusEl, normalized.globalMessage, true);
       applyFieldErrors(boot.form, normalized.fields);
     } finally {
-      if (submit) {
-        submit.disabled = false;
-      }
+      if (submit) resetButton(submit);
     }
   });
 
@@ -139,8 +136,7 @@ async function main(): Promise<void> {
       return;
     }
 
-    inviteBtn.disabled = true;
-    if (csStatus) { csStatus.textContent = "Sending…"; csStatus.className = "mt-2 small text-muted"; }
+    setButtonLoading(inviteBtn);
 
     try {
       await postJson(`${boot.apiBase}/proposals/manage/${encodeURIComponent(token)}/speakers`, {
@@ -161,7 +157,7 @@ async function main(): Promise<void> {
       const normalized = normalizeValidation(error);
       if (csStatus) { csStatus.textContent = normalized.globalMessage; csStatus.className = "mt-2 small text-danger"; }
     } finally {
-      inviteBtn.disabled = false;
+      resetButton(inviteBtn);
     }
   });
 }

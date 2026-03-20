@@ -1,4 +1,5 @@
 import { getJson, patchJson } from "../shared/api-client";
+import { setButtonLoading, resetButton } from "../shared/button-loading";
 import type { EventFormsResponse, RegistrationManageResponse } from "../shared/types";
 import { applyFieldErrors, normalizeValidation } from "../shared/validation-map";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form-validation";
@@ -587,7 +588,7 @@ async function main(): Promise<void> {
 
     const submitBtn = form.querySelector<HTMLButtonElement>("button[type='submit']");
     const cancelBtn = form.querySelector<HTMLButtonElement>("[data-action='cancel']");
-    if (submitBtn) submitBtn.disabled = true;
+    if (submitBtn) setButtonLoading(submitBtn);
     if (cancelBtn) cancelBtn.disabled = true;
 
     try {
@@ -620,7 +621,7 @@ async function main(): Promise<void> {
       const normalized = normalizeValidation(error);
       setStatus(statusEl, normalized.globalMessage, true);
       applyFieldErrors(form, normalized.fields);
-      if (submitBtn) submitBtn.disabled = false;
+      if (submitBtn) resetButton(submitBtn);
       if (cancelBtn) cancelBtn.disabled = false;
     }
   });
@@ -642,7 +643,7 @@ async function main(): Promise<void> {
   root.querySelector<HTMLButtonElement>("[data-confirm-cancel-yes]")?.addEventListener("click", async () => {
     const yesBtn = root.querySelector<HTMLButtonElement>("[data-confirm-cancel-yes]");
     const noBtn = root.querySelector<HTMLButtonElement>("[data-confirm-cancel-no]");
-    if (yesBtn) yesBtn.disabled = true;
+    if (yesBtn) setButtonLoading(yesBtn);
     if (noBtn) noBtn.disabled = true;
 
     try {
@@ -663,7 +664,7 @@ async function main(): Promise<void> {
       cancelConfirmPanel?.classList.add("d-none");
       if (manageFormEl) manageFormEl.classList.remove("d-none");
       setStatus(statusEl, normalized.globalMessage, true);
-      if (yesBtn) yesBtn.disabled = false;
+      if (yesBtn) resetButton(yesBtn);
       if (noBtn) noBtn.disabled = false;
     }
   });
@@ -683,7 +684,7 @@ async function main(): Promise<void> {
   root.querySelector<HTMLButtonElement>("[data-unauthorized-yes]")?.addEventListener("click", async () => {
     const yesBtn = root.querySelector<HTMLButtonElement>("[data-unauthorized-yes]");
     const noBtn = root.querySelector<HTMLButtonElement>("[data-unauthorized-no]");
-    if (yesBtn) yesBtn.disabled = true;
+    if (yesBtn) setButtonLoading(yesBtn);
     if (noBtn) noBtn.disabled = true;
 
     try {
@@ -705,7 +706,7 @@ async function main(): Promise<void> {
       unauthorizedPanel?.classList.add("d-none");
       if (manageFormEl) manageFormEl.classList.remove("d-none");
       setStatus(statusEl, normalized.globalMessage, true);
-      if (yesBtn) yesBtn.disabled = false;
+      if (yesBtn) resetButton(yesBtn);
       if (noBtn) noBtn.disabled = false;
     }
   });
