@@ -1,0 +1,49 @@
+{{/*
+  photo-grid.html — Mosaic photo bento grid using page bundle resources.
+
+  Usage (angle-bracket syntax):
+    {{< photo-grid >}}
+    cols: 3
+    gap: "0.5rem"
+    photos:
+      - src: "photos/foo.jpg"
+        alt: "Caption text"
+        span: 2
+        rowspan: 2
+        caption: "Optional overlay caption"
+    {{< /photo-grid >}}
+
+  Parameters (all under the YAML block):
+    cols      — grid column count (default: 3)
+    gap       — CSS gap (default: "0.5rem")
+    height    — base row height in px (default: 220)
+    photos[]
+      src       — page-resource path (required)
+      alt       — img alt text
+      span      — column span (default: 1)
+      rowspan   — row span (default: 1)
+      caption   — optional visible overlay text
+*/}}
+{{- $yaml   := .Inner | transform.Unmarshal -}}
+{{- $cols   := $yaml.cols   | default "3" -}}
+{{- $gap    := $yaml.gap    | default "0.5rem" -}}
+{{- $height := $yaml.height | default 220 -}}
+{{- $style  := printf "grid-template-columns:repeat(%s,1fr);gap:%s;grid-auto-rows:%dpx" $cols $gap $height -}}
+
+<div class="pkic-photo-grid" style="{{ $style }}">
+  {{- range $yaml.photos -}}
+  {{- $span    := .span    | default 1 -}}
+  {{- $rowspan := .rowspan | default 1 -}}
+  {{- $cellStyle := printf "grid-column:span %d;grid-row:span %d" $span $rowspan -}}
+  {{- $img := $.Page.Resources.GetMatch .src -}}
+  {{- if $img -}}
+  {{- $w := mul $span 700 -}}
+  {{- $h := mul $rowspan (add $height 10) -}}
+  {{- $processed := $img.Fill (printf "%dx%d q80" $w $h) -}}
+  <div class="pkic-photo-cell" style="{{ $cellStyle }}">
+    <img src="{{ $processed.RelPermalink }}" alt="{{ .alt | default "" }}" loading="lazy">
+    {{- with .caption -}}<span class="pkic-photo-caption">{{ . }}</span>{{- end -}}
+  </div>
+  {{- end -}}
+  {{- end -}}
+</div>
