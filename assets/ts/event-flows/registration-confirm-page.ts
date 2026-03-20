@@ -17,6 +17,9 @@ interface ConfirmResponse {
 
 interface ConfirmInfoResponse {
   firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  organizationName: string | null;
   eventName: string | null;
   /** True when the pending token exists but has passed its expiry time. */
   expired: boolean;
@@ -60,7 +63,10 @@ function showConfirmedPanel(
   form: HTMLFormElement,
   result: ConfirmResponse,
   firstName: string,
+  lastName: string,
   eventName: string,
+  email: string,
+  organizationName: string,
   shareUrl: string | null | undefined,
   manageToken: string | null | undefined,
   eventSlug: string,
@@ -104,7 +110,12 @@ function showConfirmedPanel(
   }
 
   // Donation CTA — placed after the share panel at the emotional peak.
-  renderDonationCta(panel, { eventSlug });
+  const donorName = [firstName, lastName].filter(Boolean).join(" ") || undefined;
+  renderDonationCta(panel, {
+    name: donorName,
+    email: email || undefined,
+    organizationName: organizationName || undefined,
+  });
 
   root.appendChild(panel);
 }
@@ -190,6 +201,9 @@ async function main(): Promise<void> {
   // The skeleton stays visible during this fetch so the user never sees raw
   // placeholder tokens — [data-placeholder] elements are filled before reveal.
   let firstName = "";
+  let lastName = "";
+  let email = "";
+  let organizationName = "";
   let eventName = "";
   let isExpired = false;
   try {
@@ -197,6 +211,9 @@ async function main(): Promise<void> {
       `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-info?token=${encodeURIComponent(token)}`,
     );
     firstName = info.firstName ?? "";
+    lastName = info.lastName ?? "";
+    email = info.email ?? "";
+    organizationName = info.organizationName ?? "";
     eventName = info.eventName ?? "";
     isExpired = info.expired ?? false;
   } catch {
@@ -245,7 +262,7 @@ async function main(): Promise<void> {
         `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-email`,
         { token },
       );
-      showConfirmedPanel(boot.root, boot.form, result, firstName, eventName, result.shareUrl, result.manageToken, boot.eventSlug);
+      showConfirmedPanel(boot.root, boot.form, result, firstName, lastName, eventName, email, organizationName, result.shareUrl, result.manageToken, boot.eventSlug);
     } catch (error) {
       // If the link expired between page load and click, replace form with
       // the resend panel rather than just showing an error alert.
