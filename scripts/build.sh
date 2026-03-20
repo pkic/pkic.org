@@ -20,6 +20,6 @@ else
 fi
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-git submodule update --remote
+git submodule update --init --remote
 "${HUGO_BIN}" --minify --cacheDir "$(pwd)/.cache"
 npx -y pagefind --site "public"

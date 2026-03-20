@@ -7,6 +7,8 @@
  * a "parting gift" success state.
  */
 
+import { setButtonLoading, resetButton } from "./shared/button-loading";
+
 interface DeclineInfoValid {
   status: "valid";
   eventName: string | null;
@@ -535,11 +537,8 @@ document.addEventListener("DOMContentLoaded", () => {
       if (npsScore && npsScore >= 1 && npsScore <= 10) payload.npsScore = npsScore;
       if (forwards.length > 0) payload.forwards = forwards;
 
-      const submitBtn = $("[data-submit-btn]", root!);
-      if (submitBtn) {
-        submitBtn.setAttribute("disabled", "");
-        submitBtn.textContent = "Submitting\u2026";
-      }
+      const submitBtn = $("[data-submit-btn]", root!) as HTMLButtonElement | null;
+      if (submitBtn) setButtonLoading(submitBtn);
 
       try {
         const result = await apiFetch<{ success: boolean; forwarded: string[] }>(
@@ -571,10 +570,7 @@ document.addEventListener("DOMContentLoaded", () => {
           errorBanner.textContent = msg;
           show(errorBanner);
         }
-        if (submitBtn) {
-          submitBtn.removeAttribute("disabled");
-            submitBtn.textContent = _info.inviteType === "speaker" ? "Decline this proposal invitation" : "Decline this invitation";
-        }
+        if (submitBtn) resetButton(submitBtn);
       }
     });
   }

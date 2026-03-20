@@ -475,6 +475,21 @@
 .pkic-card-accent-bar {
   height: 4px;
   background: linear-gradient(90deg, $green, $blue);
+
+  &.pkic-card-accent--blue   { background: $blue; }
+  &.pkic-card-accent--green  { background: $green; }
+  &.pkic-card-accent--teal   { background: $teal; }
+  &.pkic-card-accent--purple { background: $purple; }
+  &.pkic-card-accent--orange { background: $orange; }
+  &.pkic-card-accent--red    { background: $red; }
+}
+
+.pkic-card-icon {
+  display: block;
+  font-size: 2rem;
+  line-height: 1;
+  margin-bottom: 0.75rem;
+
 }
 
 .pkic-wg-card {

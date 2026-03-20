@@ -411,6 +411,23 @@ function spinner(): string {
   return '<div class="text-center py-4"><div class="spinner-border text-success" role="status"></div></div>';
 }
 
+function setButtonLoading(btn: HTMLButtonElement): void {
+  btn.dataset.originalHtml = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML =
+    `<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>` +
+    (btn.textContent?.trim() ?? "");
+}
+
+function resetButton(btn: HTMLButtonElement): void {
+  const original = btn.dataset.originalHtml;
+  if (original !== undefined) {
+    btn.innerHTML = original;
+    delete btn.dataset.originalHtml;
+  }
+  btn.disabled = false;
+}
+
 function fmt(s: string | null | undefined): string {
   if (!s) return "—";
   return new Date(s).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" });
@@ -1011,7 +1028,7 @@ async function doAdminProposalInvite(slug: string): Promise<void> {
   }
 
   const sendBtn = q<HTMLButtonElement>("#pinv-send-btn");
-  if (sendBtn) { sendBtn.disabled = true; sendBtn.textContent = "Sending..."; }
+  if (sendBtn) setButtonLoading(sendBtn);
   if (statusEl) { statusEl.textContent = ""; statusEl.className = "mt-2 small"; }
 
   try {
@@ -1029,7 +1046,7 @@ async function doAdminProposalInvite(slug: string): Promise<void> {
     toast((err as Error).message, "error");
     if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "mt-2 small text-danger"; }
   } finally {
-    if (sendBtn) { sendBtn.disabled = false; sendBtn.textContent = "Send Proposal Invites"; }
+    if (sendBtn) resetButton(sendBtn);
   }
 }
 
@@ -1037,8 +1054,7 @@ async function doResendEventInvite(slug: string, inviteId: string): Promise<void
   const statusEl = q(`#inv-resend-status-${inviteId}`);
   const resendBtn = document.querySelector<HTMLButtonElement>(`[data-resend-invite="${inviteId}"]`);
 
-  if (resendBtn) { resendBtn.disabled = true; resendBtn.textContent = "Sending..."; }
-  if (statusEl) { statusEl.textContent = "Sending..."; statusEl.className = "small text-muted"; }
+  if (resendBtn) setButtonLoading(resendBtn);
 
   try {
     await api(`/api/v1/admin/events/${slug}/invites/${inviteId}/resend`, { method: "POST", body: "{}" });
@@ -1048,7 +1064,7 @@ async function doResendEventInvite(slug: string, inviteId: string): Promise<void
     if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "small text-danger"; }
     toast((err as Error).message, "error");
   } finally {
-    if (resendBtn) { resendBtn.disabled = false; resendBtn.textContent = "Resend"; }
+    if (resendBtn) resetButton(resendBtn);
   }
 }
 
@@ -1358,7 +1374,7 @@ function wireRegsTable(slug: string, regs: Registration[]): void {
 
 async function doOpenManagePage(slug: string, regId: string): Promise<void> {
   const openBtn = document.querySelector<HTMLButtonElement>(`[data-open-manage="${regId}"]`);
-  if (openBtn) { openBtn.disabled = true; openBtn.textContent = "Opening…"; }
+  if (openBtn) setButtonLoading(openBtn);
   try {
     // POST with Bearer auth to issue a 15-minute manage token.
     // Returns { manageUrl } — the full registrant-facing manage page URL.
@@ -1370,13 +1386,13 @@ async function doOpenManagePage(slug: string, regId: string): Promise<void> {
   } catch (err) {
     toast((err as Error).message, "error");
   } finally {
-    if (openBtn) { openBtn.disabled = false; openBtn.textContent = "Open Manage Page ↗"; }
+    if (openBtn) resetButton(openBtn);
   }
 }
 
 async function doRegenerateBadge(slug: string, regId: string): Promise<void> {
   const btn = document.querySelector<HTMLButtonElement>(`[data-regen-badge="${regId}"]`);
-  if (btn) { btn.disabled = true; btn.textContent = "Regenerating…"; }
+  if (btn) setButtonLoading(btn);
   try {
     const res = await api<{ badgeUrl: string }>(`/api/v1/admin/events/${slug}/registrations/${regId}/regenerate-badge`, { method: "POST", body: "{}" });
     toast("Badge regenerated — opening…", "success");
@@ -1385,7 +1401,7 @@ async function doRegenerateBadge(slug: string, regId: string): Promise<void> {
   } catch (err) {
     toast((err as Error).message, "error");
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "\u21BB Regenerate"; }
+    if (btn) resetButton(btn);
   }
 }
 
@@ -1393,7 +1409,7 @@ async function doResendConfirmation(slug: string, regId: string): Promise<void> 
   const statusEl = document.getElementById(`rd-resend-status-${regId}`);
   const resendBtn = document.querySelector<HTMLButtonElement>(`[data-resend-reg="${regId}"]`);
 
-  if (resendBtn) { resendBtn.disabled = true; resendBtn.textContent = "Sending…"; }
+  if (resendBtn) setButtonLoading(resendBtn);
   if (statusEl) { statusEl.textContent = ""; statusEl.className = "mt-2 small"; }
 
   try {
@@ -1404,7 +1420,7 @@ async function doResendConfirmation(slug: string, regId: string): Promise<void> 
     toast((err as Error).message, "error");
     if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "mt-2 small text-danger"; }
   } finally {
-    if (resendBtn) { resendBtn.disabled = false; resendBtn.textContent = "Resend Email"; }
+    if (resendBtn) resetButton(resendBtn);
   }
 }
 
@@ -1486,7 +1502,7 @@ async function doSetBadgeRoleOverride(
 
   const roleValue = select?.value || null; // empty string → null (revert to auto)
 
-  if (saveBtn) { saveBtn.disabled = true; saveBtn.textContent = "Saving…"; }
+  if (saveBtn) setButtonLoading(saveBtn);
   if (statusEl) { statusEl.textContent = ""; statusEl.className = "small"; }
 
   try {
@@ -1508,7 +1524,7 @@ async function doSetBadgeRoleOverride(
   } catch (err) {
     toast((err as Error).message, "error");
     if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "small text-danger"; }
-    if (saveBtn) { saveBtn.disabled = false; saveBtn.textContent = "Save"; }
+    if (saveBtn) resetButton(saveBtn);
   }
 }
 

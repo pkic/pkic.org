@@ -10,9 +10,22 @@
         if (!form.checkValidity()) {
           event.preventDefault()
           event.stopPropagation()
+          form.classList.add('was-validated')
+          return
         }
 
         form.classList.add('was-validated')
+
+        // Show spinner on the submit button while the native POST is in flight.
+        // The page navigates away on success; on error the server redirects back
+        // with ?status=error so button state resets on page reload automatically.
+        const submitBtn = form.querySelector('button[type="submit"]')
+        if (submitBtn) {
+          submitBtn.disabled = true
+          submitBtn.innerHTML =
+            '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>' +
+            submitBtn.textContent.trim()
+        }
       }, false)
     })
 

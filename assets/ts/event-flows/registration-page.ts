@@ -1,4 +1,5 @@
 import { getJson, postJson } from "../shared/api-client";
+import { setButtonLoading, resetButton } from "../shared/button-loading";
 import { applyFieldErrors, normalizeValidation } from "../shared/validation-map";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/render-consents";
 import { applyCustomFieldVisibility, renderCustomFields, readCustomFieldValues } from "../shared/render-custom-fields";
@@ -242,9 +243,7 @@ async function main(): Promise<void> {
     }
 
     const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
-    if (submit) {
-      submit.disabled = true;
-    }
+    if (submit) setButtonLoading(submit);
 
     try {
       const firstName = readRequired(form, "firstName");
@@ -272,9 +271,7 @@ async function main(): Promise<void> {
       applyFieldErrors(form, normalized.fields);
     } finally {
       const submit = form.querySelector<HTMLButtonElement>("button[type='submit']");
-      if (submit) {
-        submit.disabled = false;
-      }
+      if (submit) resetButton(submit);
     }
   });
 }

@@ -25,6 +25,7 @@
 </div>
 
 {{/* ── Sticky section nav ──────────────────────────────────────────── */}}
+{{- if $.Page.Params.sectionNav -}}
 <nav class="wg-section-nav wg-{{ $wg.Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
   <div class="container d-flex gap-1">
     <a class="wg-nav-link" href="{{ $base }}">About</a>
@@ -67,6 +68,7 @@
     <a class="wg-nav-link" href="/blog/?wg={{ $wg.Params.wgID | lower }}">Blog</a>
   </div>
 </nav>
+{{- end -}}
 
 {{/* ── Charter content ─────────────────────────────────────────────── */}}
 <div class="container py-5">

@@ -1,4 +1,5 @@
 import { getJson, postJson, ApiClientError } from "../shared/api-client";
+import { setButtonLoading, resetButton } from "../shared/button-loading";
 import { normalizeValidation } from "../shared/validation-map";
 import { renderSharePanel } from "../shared/render-share-panel";
 import { renderDonationCta } from "../shared/render-donation-cta";
@@ -158,8 +159,7 @@ function showExpiredPanel(
   const resendBtn = panel.querySelector<HTMLButtonElement>("[data-resend-btn]");
   resendBtn?.addEventListener("click", async () => {
     if (!resendBtn) return;
-    resendBtn.disabled = true;
-    resendBtn.textContent = "Sending…";
+    setButtonLoading(resendBtn);
 
     try {
       await postJson(
@@ -175,7 +175,7 @@ function showExpiredPanel(
     } catch (error) {
       const normalized = normalizeValidation(error);
       setStatus(statusEl, normalized.globalMessage, true);
-      resendBtn.disabled = false;
+      resetButton(resendBtn);
       resendBtn.textContent = "Try again";
     }
   });
@@ -252,10 +252,7 @@ async function main(): Promise<void> {
   const confirmButton = boot.form.querySelector<HTMLButtonElement>("button[type='submit']");
   boot.form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    if (confirmButton) {
-      confirmButton.disabled = true;
-      confirmButton.textContent = "Confirming…";
-    }
+    if (confirmButton) setButtonLoading(confirmButton);
 
     try {
       const result = await postJson<ConfirmResponse>(
@@ -280,10 +277,7 @@ async function main(): Promise<void> {
         );
       } else {
         setStatus(boot.statusEl, normalized.globalMessage, true);
-        if (confirmButton) {
-          confirmButton.disabled = false;
-          confirmButton.textContent = "Confirm registration";
-        }
+        if (confirmButton) resetButton(confirmButton);
       }
     }
   });

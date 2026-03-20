@@ -15,7 +15,8 @@
 {{- end -}}
 
 {{/* Wrap everything so no output is ever produced unless all conditions pass */}}
-{{- if and (not $isWG) $.Page.Params.sectionNav -}}
+{{/* Opt-in: only render when sectionNav is explicitly true */}}
+{{- if and (not $isWG) (eq $.Page.Params.sectionNav true) -}}
 
 {{/* ── Find nav root and sub-sections ───────────────────────────────── */}}
 {{- $navRoot  := $.Page.CurrentSection -}}

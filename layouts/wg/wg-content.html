@@ -45,6 +45,7 @@
     {{- $subRoot = . -}}
   {{- end -}}
 {{- end -}}
+{{- if $.Page.Params.sectionNav -}}
 <nav class="wg-section-nav wg-{{ $wg.Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
   <div class="container d-flex gap-1">
     <a class="wg-nav-link" href="{{ $base }}">About</a>
@@ -146,6 +147,7 @@
   {{ partial "wg/sidebar-tree.html" $.Page }}
 </div>
   {{- end -}}
+{{- end -}}
 {{- end -}}
 {{ end }}
 

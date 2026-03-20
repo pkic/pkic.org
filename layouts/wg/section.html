@@ -50,6 +50,7 @@
 {{- $resourcesPage   := .GetPage "resources" -}}
 {{- $confPage        := .GetPage "conferences" -}}
 {{- $charterPage     := .GetPage "charter" -}}
+{{- if .Params.sectionNav -}}
 <nav class="wg-section-nav wg-{{ .Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
   <div class="container d-flex gap-1">
     {{ if or .Params.intro .Content .Params.chair }}
@@ -124,6 +125,7 @@
     <a class="wg-nav-link" href="/blog/?wg={{ .Params.wgID | lower }}">Blog</a>
   </div>
 </nav>
+{{- end -}}
 
 {{/* Tree panels — one per deliverable section with child pages */}}
 {{- $wgBase := .RelPermalink -}}

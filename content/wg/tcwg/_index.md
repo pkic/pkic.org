@@ -20,6 +20,11 @@ heroButton:
 
 wgID: TCWG
 color: teal
+sectionNav: true
+
+cascade:
+  params:
+    sectionNav: true
 
 chair:
   name: Neal Fuerst
