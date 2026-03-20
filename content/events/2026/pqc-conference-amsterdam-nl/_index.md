@@ -1,6 +1,7 @@
 ---
 date: 2026-02-24T08:00:00Z
 title: Post-Quantum Cryptography Conference - December 1 - 3, 2026 - Amsterdam, The Netherlands
+linkTitle: Overview
 summary: |
   The PKI Consortium will host the next Post-Quantum Cryptography (PQC) Conference in Amsterdam. Over three days, we will bring together public- and private-sector leaders, standards bodies, and implementers to share practical migration experience and to accelerate real-world post-quantum readiness.
 
@@ -22,6 +23,7 @@ cascade:
   params:
     heroImage: amsterdam-nl.png
     heroDescription: December 1 - 3, 2026 - Amsterdam, The Netherlands | Hybrid
+    sectionNav: true
 
 params:
   eventType: conference
@@ -651,54 +653,246 @@ data:
         title: "Farewell networking & drinks"
 ---
 
-## Conference details
+The post-quantum cryptography transition has entered its deployment phase. NIST's first standards — ML-KEM, ML-DSA, and SLH-DSA — are final. National programmes are moving from guidance to mandates. And adversaries are already collecting encrypted data today, waiting for the moment they can decrypt it.
 
-The PKI Consortium will host the next Post-Quantum Cryptography (PQC) Conference on **Tuesday, December 1 to Thursday, December 3, 2026** in **Amsterdam, the Netherlands**.
+**This is where the migration community gathers.** Three days of unfiltered practitioner experience, regulatory clarity, and the connections that accelerate real-world PQC deployment — in the city that hosted one of the world's first major PQC conferences.
 
-This conference is designed for executives, technical leaders, and practitioners from the public and private sector who are actively preparing for post-quantum migration.
-
-> The conference is open to anyone interested in preparing for Post-Quantum Cryptography and is **not limited** to members of the PKI Consortium.
+> The conference is open to anyone working on post-quantum cryptography and is **not limited** to members of the PKI Consortium.
 {.callout-info}
 
-## Date and location
+## Why now
 
-**Date:** Tuesday, December 1 to Thursday, December 3, 2026  
-**Venue:** Meervaart, Amsterdam, the Netherlands
+The threat is no longer theoretical — and the window to act is narrower than most organisations assume.
 
-While we initially planned to host the event in Germany, we have decided to return to the Meervaart in Amsterdam, the same venue we used in 2023.
+{{% bento cols="2" gap="1.5rem" %}}
+{{% bento-cell %}}
 
-This time we have secured the entire venue for three days, which significantly expands what we can do:
+**NIST standards are final**
 
-- Main hall capacity of up to 800 attendees, compared to 270 in 2023
-- The former main hall (270 attendees) repurposed for the parallel track
-- Nine additional rooms (+/- 25-100 attendees) available for breakout sessions and workshops
+ML-KEM, ML-DSA, and SLH-DSA are published standards. The deployment phase has begun — the question is how fast your organisation can move.
 
-## Program format (preliminary)
+{{% /bento-cell %}}
+{{% bento-cell %}}
 
-We are planning:
+**Harvest now, decrypt later**
 
-- **45-minute session blocks** (30 minute presentation + 10 minute Q&A + 5 minutes to switch rooms)
-- **60-minute panel blocks** (55 minutes + 5 minutes to switch rooms)
-- **Lunch:** 90 minutes (1.5 hours)
-- **Breaks:** 45 minutes
+Adversaries are already collecting encrypted traffic today. Anything protected by classical cryptography now may be readable once sufficiently capable quantum computers exist.
 
-Each day includes a structured, experience-driven theme block:
+{{% /bento-cell %}}
+{{% bento-cell %}}
 
-- A short plenary introduction to frame the theme and set practical objectives
-- Expert-led breakout sessions, where each group examines the same theme from different perspectives
-- A reconvened plenary panel to synthesize insights and distill practical takeaways
+**Regulatory pressure is accelerating**
+
+NIS2, DORA, and national cybersecurity mandates are beginning to require demonstrable cryptographic agility. Enforcement timelines are shorter than most migration programmes assume.
+
+{{% /bento-cell %}}
+{{% bento-cell %}}
+
+**TLS certificate lifetimes shrinking to 47 days**
+
+The CA/Browser Forum is moving toward 47-day maximum certificate lifetimes. Organisations not yet automating will find PQC migration compound an already urgent challenge.
+
+{{% /bento-cell %}}
+{{% /bento %}}
+
+Organisations that move first build institutional capability that compounds. Those that wait accumulate technical debt — and exposure — with every month of delay.
+
+## What you will gain
+
+This is a working conference for practitioners at the execution stage, not an awareness event.
+
+{{< cards >}}
+cards:
+  - title: "A practical migration roadmap"
+    width: "col-md-4"
+    text: "Leave with a structured, prioritised approach to PQC migration — built from real deployment experience, not theoretical frameworks."
+  - title: "Regulatory clarity"
+    width: "col-md-4"
+    text: "Understand what NIS2, DORA, and national mandates actually require, on what timelines, and how to document progress for auditors and regulators."
+  - title: "Vendor and technology landscape"
+    width: "col-md-4"
+    text: "Separate credible PQC readiness from marketing claims. Understand which products, libraries, and protocols are genuinely ready to deploy today."
+  - title: "Peer benchmarking"
+    width: "col-md-4"
+    text: "Find out where your organisation stands relative to peers in your sector — and what separates those making progress from those that are stalling."
+  - title: "Lessons from early adopters"
+    width: "col-md-4"
+    text: "Hear directly from organisations that have been through it: what failed, what they would do differently, and what genuinely accelerated their migration."
+  - title: "Connections that move things forward"
+    width: "col-md-4"
+    text: "Meet the government contacts, standards contributors, and architects you cannot reach through marketing channels — and leave with relationships that deliver."
+{{< /cards >}}
+
+{{< button label="Request an invite or registration updates" link="/events/2026/pqc-conference-amsterdam-nl/register/" type="primary" >}}
+
+## Who should attend
+
+Whether you are setting strategic direction or building the migration in production, this conference is for people actively working on the transition — not watching from the sidelines.
+
+{{< cards >}}
+cards:
+  - title: "Security and risk leadership"
+    width: "col-md-4"
+    text: "CISOs, CROs, and security executives navigating PQC strategy, board-level reporting, and organisational investment decisions."
+  - title: "PKI and cryptography architects"
+    width: "col-md-4"
+    text: "Engineers and architects designing migration paths, evaluating hybrid strategies, and building crypto-agile infrastructure."
+  - title: "Cloud and infrastructure engineers"
+    width: "col-md-4"
+    text: "The teams implementing PQC in TLS stacks, certificate pipelines, HSMs, and cloud-native environments."
+  - title: "Government and policy professionals"
+    width: "col-md-4"
+    text: "National programme leads, regulatory staff, and policy architects coordinating mandates, timelines, and cross-agency alignment."
+  - title: "DevSecOps and platform teams"
+    width: "col-md-4"
+    text: "Teams managing the software supply chain, code signing, container trust, and CI/CD pipeline integrity facing the PQC transition."
+  - title: "Technology vendors"
+    width: "col-md-4"
+    text: "Companies building PQC-ready products who want to understand enterprise buyer requirements directly from the people making procurement decisions."
+{{< /cards >}}
+
+## Conference themes
+
+Each day is structured around a focused theme, with keynotes and panels in the main hall and technical workshops and expert-led breakouts running in parallel.
+
+{{< cards >}}
+cards:
+  - title: "Enterprise PQC Migration"
+    width: "col-md-4"
+    text: "Where to start, how to prioritise, and how to sustain progress across complex, multi-system environments."
+  - title: "Cryptographic Discovery and Inventory"
+    width: "col-md-4"
+    text: "Finding what you have, keeping inventories current, and turning discovery output into a credible remediation plan."
+  - title: "Crypto-Agility and Automation"
+    width: "col-md-4"
+    text: "Designing systems that can swap algorithms without a full rebuild — and the tooling to maintain cryptographic posture continuously."
+  - title: "Supply Chain and Vendor Readiness"
+    width: "col-md-4"
+    text: "The PQC readiness of the libraries, hardware, cloud services, and open-source components your organisation depends on."
+  - title: "Government and Regulatory Direction"
+    width: "col-md-4"
+    text: "National mandates, EU regulations, ETSI, ISO, and what the overlapping landscape means for compliance timelines in practice."
+  - title: "Real-World Deployment Case Studies"
+    width: "col-md-4"
+    text: "Unfiltered accounts from organisations that have deployed: what worked, what broke, and what they would do differently."
+  - title: "Vendor Ecosystem and Interoperability"
+    width: "col-md-4"
+    text: "Which products and protocols are genuinely interoperable today — and how to test claims before committing to a migration path."
+{{< /cards >}}
+
+> Full agenda and confirmed speakers will be published progressively as the programme is finalised. [Subscribe for updates.](/events/2026/pqc-conference-amsterdam-nl/register/)
+{.callout-info}
+
+## Venue and format
+
+**Venue:** [Meervaart](https://www.meervaart.nl/), Amsterdam, the Netherlands  
+**Date:** Tuesday, December 1 to Thursday, December 3, 2026
+
+The 2026 conference returns to the Meervaart in Amsterdam — the venue that hosted one of the world's first major PQC conferences in November 2023 — but at a scale that reflects how much the field has grown. For three days, **the entire venue is ours**.
+
+{{% bento cols="3" gap="1.5rem" %}}
+{{% bento-cell %}}
+
+**Plenary hall**
+
+Up to 800 attendees — three times the capacity of 2023 — live streamed globally.
+
+{{% /bento-cell %}}
+{{% bento-cell %}}
+
+**Parallel technical track**
+
+The former main hall (270 capacity) dedicated to deep-dive sessions, also live streamed.
+
+{{% /bento-cell %}}
+{{% bento-cell %}}
+
+**7 breakout rooms**
+
+Expert-led small-group sessions capped at 25–100 participants, where the real conversations happen.
+
+{{% /bento-cell %}}
+{{% /bento %}}
+
+**Session formats:**
+
+- **45-minute session blocks** — 30-minute presentation, 10-minute Q&A, 5-minute changeover
+- **60-minute panel discussions** — 55 minutes of structured conversation, 5-minute changeover
+- **90-minute lunch** — designed as a networking window, not just a break
+- **45-minute coffee breaks** — long enough for the conversations that matter
+
+Each day follows a structured experience arc: framing keynote → expert workshops and breakouts → synthesis panel. Every attendee leaves each day with concrete, actionable insight — not just a stack of slides to read later.
+
+## Expected speakers
+
+Speakers are selected for depth of experience and willingness to speak candidly, not seniority or marketing budget. You will hear from:
+
+- National cybersecurity agencies and government programme leads
+- Standards bodies, NIST contributors, and ETSI working group members
+- Enterprise security and PKI architects who have run real migrations
+- Open-source project maintainers and cryptographic library authors
+- Cloud provider security teams
+- Certificate authorities and PKI service providers
+- Researchers from academia and national laboratories
+
+> **No product promotion.** Speakers at PKI Consortium events do not promote products or commercial services from the stage — a policy that applies without exception.
+{.callout-warning}
+
+Confirmed speakers will be announced progressively. [Subscribe for updates.](/events/2026/pqc-conference-amsterdam-nl/register/)
+
+## Call for speakers
+
+The programme committee is reviewing speaker submissions now. We are looking for practitioners who are:
+
+- Leading PQC migration initiatives at scale in enterprise or government
+- Deploying crypto-agility in production environments
+- Contributing to standards processes or national programmes
+- Building cryptographic tooling, libraries, or infrastructure
+- Willing to share what has not worked — without commercial messaging
+
+Preference is given to case studies, technical depth, and honest accounts. We do not accept general awareness content or sessions structured around product positioning.
+
+{{< button label="Submit a speaker proposal" link="/events/2026/pqc-conference-amsterdam-nl/propose/" type="primary" >}}
 
 ## Sponsors
 
-Interested in sponsoring the conference? Please reach out via our [sponsorship page](/sponsors/) or contact us at contact (at) pkic.org.
+Sponsoring the 2026 PQC Conference places your organisation in front of the most concentrated audience of post-quantum cryptography decision-makers in the world.
+
+{{% row gap="4" align="start" %}}
+{{% col size="4" %}}
+
+**Direct access to buyers**
+
+Enterprise architects, CISOs, and government programme leads attending this conference are actively specifying and procuring PQC-ready solutions.
+
+{{% /col %}}
+{{% col size="4" %}}
+
+**Credibility in a growing market**
+
+Association with the PKI Consortium's neutral, vendor-agnostic platform signals genuine technical commitment — a distinction that matters to buyers evaluating competing claims.
+
+{{% /col %}}
+{{% col size="4" %}}
+
+**Global reach**
+
+Plenary sessions are live streamed internationally. Conference recordings and coverage reach an audience far beyond the attendees in the room.
+
+{{% /col %}}
+{{% /row %}}
+
+{{< button label="View sponsorship opportunities" link="/sponsors/" type="outline-primary" >}}
 
 {{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
 
 ## Agenda
 
-> This is a **preliminary** agenda framework. Session titles and speakers will be added as the program is finalized.
+The full three-day agenda — searchable by day, location, and track — is on the [agenda page](/events/2026/pqc-conference-amsterdam-nl/agenda/).
+
+> This is a **preliminary** agenda framework. Session titles and confirmed speakers will be updated progressively as the programme is finalised.
 {.callout-warning}
 
-{{< agenda default="2026-12-01" >}}
+{{< button label="View the full agenda" link="/events/2026/pqc-conference-amsterdam-nl/agenda/" type="outline-primary" >}}
 
-For more information about this conference, please contact the PKI Consortium at contact (at) pkic.org.
+For further information, contact the PKI Consortium at contact (at) pkic.org.
