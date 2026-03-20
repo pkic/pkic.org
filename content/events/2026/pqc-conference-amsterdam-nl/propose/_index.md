@@ -1,5 +1,6 @@
 ---
 title: Submit a Session Proposal
+linkTitle: Call for Speakers
 aliases: 
   - /call
 description: Propose a session for the PQC Conference 2026 in Amsterdam, Netherlands.

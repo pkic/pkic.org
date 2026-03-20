@@ -1,8 +1,18 @@
+{{/* Find the page that holds event data; walk up ancestors if the current page lacks it */}}
+{{- $dataPage := $.Page -}}
+{{- if not $.Page.Params.data -}}
+  {{- range $.Page.Ancestors -}}
+    {{- if and (eq $dataPage $.Page) .Params.data -}}
+      {{- $dataPage = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
 {{- $speakers := slice -}}
-{{- range $.Page.Params.data.speakers -}}
+{{- range $dataPage.Params.data.speakers -}}
     {{- $speaker := . -}}
     {{- $headshot := (printf "speakers/%s.*" (default (.name | urlize | safeURL) .id)) -}}
-    {{- with $.Page.Resources.GetMatch $headshot -}}
+    {{- with $dataPage.Resources.GetMatch $headshot -}}
         {{ $x150 := .Resize "x150" }}        
         {{ $x250 := .Resize "x250" }}
         {{ $x600 := .Resize "x600" }}
@@ -17,5 +27,5 @@
         {{- $speakers = $speakers | append $speaker -}}
     {{- end -}}
 {{- end -}}
-{{- $data := merge $.Page.Params.data (dict "speakers" $speakers) -}}
+{{- $data := merge $dataPage.Params.data (dict "speakers" $speakers) -}}
 {{- return $data -}}

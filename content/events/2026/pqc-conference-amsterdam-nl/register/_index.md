@@ -1,5 +1,6 @@
 ---
 title: Register for the Post-Quantum Cryptography Conference 2026 in Amsterdam, Netherlands
+linkTitle: Register
 description: Join us in Amsterdam for the Post-Quantum Cryptography Conference 2026, where experts from around the world will gather to discuss the latest advancements in Post-Quantum Cryptography.
 
 aliases:
