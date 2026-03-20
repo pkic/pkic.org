@@ -1,0 +1,61 @@
+{{/*
+  section-nav.html
+  Renders a sticky horizontal section nav.
+  Only active when sectionNav: true is set in front matter (supports cascade).
+  WG pages are always excluded — they have their own nav system.
+*/}}
+
+{{- $isWG := $.Params.wgID -}}
+{{- if not $isWG -}}
+  {{- range $.Ancestors -}}
+    {{- if and (not $isWG) .Params.wgID -}}
+      {{- $isWG = true -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* Wrap everything so no output is ever produced unless all conditions pass */}}
+{{- if and (not $isWG) $.Page.Params.sectionNav -}}
+
+{{/* ── Find nav root and sub-sections ───────────────────────────────── */}}
+{{- $navRoot  := $.Page.CurrentSection -}}
+{{- $subPages := slice -}}
+{{- range $navRoot.Sections -}}
+  {{- if ne .Params.robots "noindex" -}}
+    {{- $subPages = $subPages | append . -}}
+  {{- end -}}
+{{- end -}}
+
+{{/* If on a leaf section (e.g. agenda/), walk up to find siblings */}}
+{{- if eq (len $subPages) 0 -}}
+  {{- $parent := $navRoot.Parent -}}
+  {{- if and $parent (ne $parent.Kind "home") -}}
+    {{- $parentSubs := slice -}}
+    {{- range $parent.Sections -}}
+      {{- if ne .Params.robots "noindex" -}}
+        {{- $parentSubs = $parentSubs | append . -}}
+      {{- end -}}
+    {{- end -}}
+    {{- if gt (len $parentSubs) 0 -}}
+      {{- $navRoot  = $parent -}}
+      {{- $subPages = $parentSubs -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- if gt (len $subPages) 0 -}}
+{{- $current  := $.Page.RelPermalink -}}
+{{- $rootHref := $navRoot.RelPermalink -}}
+<nav class="wg-section-nav" id="sectionNav" aria-label="Page sections">
+  <div class="container d-flex gap-1">
+    <a class="wg-nav-link{{ if eq $current $rootHref }} is-active{{ end }}"
+       href="{{ $rootHref }}">{{ $navRoot.LinkTitle }}</a>
+    {{- range $subPages }}
+    <a class="wg-nav-link{{ if strings.HasPrefix $current .RelPermalink }} is-active{{ end }}"
+       href="{{ .RelPermalink }}">{{ .LinkTitle }}</a>
+    {{- end }}
+  </div>
+</nav>
+{{- end -}}
+
+{{- end -}}{{/* end sectionNav guard */}}
