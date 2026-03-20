@@ -1,6 +1,10 @@
 # Copy this file to `.dev.vars` for local `wrangler pages dev`.
 # `.dev.vars` is gitignored.
 
+# Set to the local dev URL so internal font/image fetches (for OG badge rendering)
+# use localhost HTTP and avoid TLS cert issues. Stripe allows HTTP on localhost.
+# APP_BASE_URL=http://localhost:8788
+
 # Required for HMAC signing of internal tokens and hashed identifiers.
 INTERNAL_SIGNING_SECRET=replace-with-strong-random-value
 
