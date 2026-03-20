@@ -414,6 +414,8 @@ function badge(status: string): string {
     queued: "primary", retrying: "warning", failed: "danger", sending: "primary",
     // Email template version statuses
     active: "success", draft: "warning",
+    // Donation statuses
+    pending: "warning", completed: "success", expired: "secondary", failed: "danger",
     // Event/registration mode
     invite_only: "warning", invite_or_open: "primary", open: "success",
     // Proposal statuses / outcomes
@@ -452,6 +454,7 @@ function nav(sec: string): void {
     email: loadEmail,
     templates: loadTemplates,
     stats: loadStats,
+    donations: loadDonations,
     users: loadUsers,
   };
   loaders[sec]?.();
@@ -5224,6 +5227,161 @@ async function doResetFailed(): Promise<void> {
   }
 }
 
+// ── Donations ──────────────────────────────────────────────────────────────────
+
+interface DonationRow {
+  id: string;
+  checkout_session_id: string;
+  payment_intent_id: string | null;
+  name: string;
+  email: string;
+  organization: string | null;
+  currency: string;
+  gross_amount: number;
+  net_amount: number | null;
+  source: string | null;
+  status: string;
+  created_at: string;
+  completed_at: string | null;
+}
+
+interface DonationsResponse {
+  donations: DonationRow[];
+  summary: Record<string, number>;
+  limit: number;
+  offset: number;
+}
+
+interface DonationSyncResult {
+  sessionId: string;
+  outcome: "completed" | "expired" | "still_pending" | "error";
+  error?: string;
+}
+
+interface DonationSyncResponse {
+  synced: number;
+  completed: number;
+  expired: number;
+  errors: number;
+  results: DonationSyncResult[];
+}
+
+let _donFilter = "";
+
+function fmtAmount(smallestUnit: number, currency: string): string {
+  const zeroDecimal = new Set(["bif","clp","gnf","jpy","kmf","krw","mga","pyg","rwf","ugx","vnd","vuv","xaf","xof","xpf"]);
+  const major = zeroDecimal.has(currency.toLowerCase()) ? smallestUnit : smallestUnit / 100;
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency", currency: currency.toUpperCase(),
+      minimumFractionDigits: 0, maximumFractionDigits: zeroDecimal.has(currency.toLowerCase()) ? 0 : 2,
+    }).format(major);
+  } catch { return `${major} ${currency.toUpperCase()}`; }
+}
+
+async function loadDonations(filter?: string): Promise<void> {
+  const el = q("#don-body");
+  if (!el) return;
+  if (filter !== undefined) _donFilter = filter;
+  el.innerHTML = spinner();
+  try {
+    const qs = _donFilter ? `?status=${encodeURIComponent(_donFilter)}` : "";
+    const data = await api<DonationsResponse>(`/api/v1/admin/donations${qs}`);
+
+    const total     = Object.values(data.summary).reduce((s, v) => s + v, 0);
+    const completed = data.summary["completed"] ?? 0;
+    const pending   = data.summary["pending"] ?? 0;
+    const expired   = data.summary["expired"] ?? 0;
+    const failed    = data.summary["failed"] ?? 0;
+
+    const filterBtns = (["", "pending", "completed", "expired", "failed"] as const).map((f) => {
+      const active = _donFilter === f ? " active" : "";
+      const label  = f ? f.charAt(0).toUpperCase() + f.slice(1) : "All";
+      const cnt    = f === "" ? total : (data.summary[f] ?? 0);
+      return `<button class="btn btn-sm btn-outline-secondary${active}" data-don-filter="${f}">${label} <span class="badge text-bg-secondary">${cnt}</span></button>`;
+    }).join(" ");
+
+    const rows = data.donations.map((d) => {
+      const donBadge = badge(d.status);
+      const gross = fmtAmount(d.gross_amount, d.currency);
+      const net   = d.net_amount !== null ? fmtAmount(d.net_amount, d.currency) : "—";
+      const syncBtn = d.status === "pending"
+        ? `<button class="btn btn-xs btn-outline-primary btn-don-sync" data-session="${esc(d.checkout_session_id)}" style="font-size:.7rem;padding:.1rem .4rem">Sync</button>`
+        : "";
+      const badgeBtn = d.status === "completed"
+        ? `<a class="btn btn-xs btn-outline-secondary" href="/api/v1/og/donation/${esc(d.checkout_session_id)}?name=${encodeURIComponent(d.name)}" download="${esc(d.name.replace(/[^\w\s-]/g, ""))}-donation-badge.jpeg" style="font-size:.7rem;padding:.1rem .4rem">🖼 Badge</a>`
+        : "";
+      return `<tr>
+        <td class="mono small">${esc(d.checkout_session_id.slice(0, 24))}…</td>
+        <td>${esc(d.name)}<br><small class="text-muted">${esc(d.email)}</small>${d.organization ? `<br><small class="text-muted">${esc(d.organization)}</small>` : ""}</td>
+        <td>${gross}<br><small class="text-muted">Net: ${net}</small></td>
+        <td>${donBadge} ${syncBtn}${badgeBtn}</td>
+        <td class="small text-muted">${d.source ? esc(d.source) : "—"}</td>
+        <td class="small text-muted">${fmt(d.created_at)}</td>
+        <td class="small text-muted">${fmt(d.completed_at)}</td>
+      </tr>`;
+    });
+
+    el.innerHTML =
+      `<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">` +
+        filterBtns +
+        `<div class="ms-auto d-flex gap-2">` +
+          `<button class="btn btn-sm btn-success" id="btn-don-sync-pending">↺ Sync all pending (${pending})</button>` +
+          (failed > 0 ? `<span class="badge text-bg-danger ms-1" title="Payment failed">${failed} failed</span>` : "") +
+        `</div>` +
+      `</div>` +
+      tbl(
+        ["Session ID", "Donor", "Amount", "Status", "Source", "Created", "Completed"],
+        rows,
+        "No donations found",
+      );
+
+    // Filter buttons
+    el.querySelectorAll<HTMLButtonElement>("[data-don-filter]").forEach((btn) => {
+      btn.addEventListener("click", () => void loadDonations(btn.dataset.donFilter!));
+    });
+
+    // Per-row sync button
+    el.querySelectorAll<HTMLButtonElement>(".btn-don-sync").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const sessionId = btn.dataset.session!;
+        btn.disabled = true;
+        btn.textContent = "…";
+        api<DonationSyncResponse>("/api/v1/admin/donations/sync", {
+          method: "POST",
+          body: JSON.stringify({ sessionIds: [sessionId] }),
+        })
+          .then((res) => {
+            const r = res.results[0];
+            if (r?.outcome === "completed") toast("Donation marked as completed.", "success");
+            else if (r?.outcome === "expired") toast("Session expired — donation marked expired.", "info");
+            else if (r?.outcome === "still_pending") toast("Session still pending on Stripe.", "info");
+            else toast(r?.error ?? "Sync failed.", "error");
+            void loadDonations();
+          })
+          .catch((err: Error) => { toast(err.message, "error"); btn.disabled = false; btn.textContent = "Sync"; });
+      });
+    });
+
+    // Sync all pending
+    q<HTMLButtonElement>("#btn-don-sync-pending")?.addEventListener("click", () => {
+      if (pending === 0) { toast("No pending donations to sync.", "info"); return; }
+      const btn = q<HTMLButtonElement>("#btn-don-sync-pending");
+      if (btn) { btn.disabled = true; btn.textContent = "Syncing…"; }
+      api<DonationSyncResponse>("/api/v1/admin/donations/sync", { method: "POST" })
+        .then((res) => {
+          toast(`Synced ${res.synced}: ${res.completed} completed, ${res.expired} expired, ${res.errors} errors.`,
+            res.errors > 0 ? "error" : "success");
+          void loadDonations();
+        })
+        .catch((err: Error) => { toast(err.message, "error"); void loadDonations(); });
+    });
+
+  } catch (err) {
+    if (el) el.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+  }
+}
+
 // ── Stats ──────────────────────────────────────────────────────────────────────
 
 async function loadStats(): Promise<void> {
@@ -5316,6 +5474,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   q("#btn-logout")?.addEventListener("click", () => { clearAuth(); location.reload(); });
   q("#btn-t-refresh")?.addEventListener("click", () => void loadTemplates());
+  q("#btn-don-refresh")?.addEventListener("click", () => void loadDonations());
 
   q<HTMLFormElement>("#form-magic")?.addEventListener("submit", (evt) => {
     evt.preventDefault();

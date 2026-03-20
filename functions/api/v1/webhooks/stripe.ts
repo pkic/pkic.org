@@ -2,14 +2,23 @@
  * POST /api/v1/webhooks/stripe
  *
  * Handles Stripe webhook events. Currently processes:
- *   - checkout.session.completed — marks a donation as paid and stores the
- *     net amount (gross minus Stripe fee) for tax reporting.
+ *   - checkout.session.completed              — marks a donation as paid and
+ *     stores the net amount (gross minus Stripe fee) for tax reporting.
+ *   - checkout.session.async_payment_succeeded — delayed-payment confirmation
+ *     (bank transfer / ACH / SEPA); treated identically to .completed.
+ *   - checkout.session.expired                — marks a donation as expired
+ *     and emails the donor with a link to retry.
+ *   - checkout.session.async_payment_failed   — delayed payment bounced;
+ *     marks as 'failed' and emails the donor.
  *
  * Signature verification uses HMAC-SHA256 via the Web Crypto API (no SDK).
  * The tolerance window is 300 seconds (Stripe's recommendation).
  *
  * Required Stripe webhook events to configure in the Dashboard:
  *   checkout.session.completed
+ *   checkout.session.async_payment_succeeded
+ *   checkout.session.async_payment_failed
+ *   checkout.session.expired
  *
  * Wrangler secret: STRIPE_WEBHOOK_SECRET (whsec_…)
  */
@@ -126,7 +135,102 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     return json({ error: "Invalid JSON" }, 400);
   }
 
-  if (event.type !== "checkout.session.completed") {
+  if (event.type === "checkout.session.async_payment_failed") {
+    const failedSession = event.data.object as StripeCheckoutSession;
+    await env.DB.prepare(
+      `UPDATE donations SET status = 'failed' WHERE checkout_session_id = ? AND status NOT IN ('completed')`,
+    )
+      .bind(failedSession.id)
+      .run();
+
+    interface FailedDonorRow {
+      name: string;
+      email: string;
+      currency: string;
+      gross_amount: number;
+    }
+    const failedDonor = await env.DB.prepare(
+      `SELECT name, email, currency, gross_amount FROM donations WHERE checkout_session_id = ?`,
+    )
+      .bind(failedSession.id)
+      .first<FailedDonorRow>();
+
+    if (failedDonor?.email) {
+      try {
+        const firstName = failedDonor.name !== "Unknown" ? (failedDonor.name.split(" ")[0] ?? "") : "";
+        const formattedAmount = formatMajorAmount(failedDonor.gross_amount, failedDonor.currency);
+        const outboxId = await queueEmail(env.DB, {
+          templateKey: "donation_payment_failed",
+          recipientEmail: failedDonor.email,
+          messageType: "transactional",
+          subject: "Your donation payment failed — PKI Consortium",
+          data: {
+            firstName,
+            name: failedDonor.name,
+            formattedAmount,
+            currency: failedDonor.currency.toUpperCase(),
+          },
+        });
+        context.waitUntil(processOutboxByIdBackground(env.DB, env, outboxId));
+      } catch (err) {
+        console.error("Failed to queue donation payment failed email", err);
+      }
+    }
+
+    return json({ received: true });
+  }
+
+  if (event.type === "checkout.session.expired") {
+    const expiredSession = event.data.object as StripeCheckoutSession;
+    await env.DB.prepare(
+      `UPDATE donations SET status = 'expired' WHERE checkout_session_id = ? AND status = 'pending'`,
+    )
+      .bind(expiredSession.id)
+      .run();
+
+    // Send a "your checkout expired" email with a retry link
+    interface ExpiredDonorRow {
+      name: string;
+      email: string;
+      currency: string;
+      gross_amount: number;
+      source: string | null;
+    }
+    const expiredDonor = await env.DB.prepare(
+      `SELECT name, email, currency, gross_amount, source
+       FROM donations WHERE checkout_session_id = ?`,
+    )
+      .bind(expiredSession.id)
+      .first<ExpiredDonorRow>();
+
+    if (expiredDonor?.email) {
+      try {
+        const firstName = expiredDonor.name !== "Unknown" ? (expiredDonor.name.split(" ")[0] ?? "") : "";
+        const formattedAmount = formatMajorAmount(expiredDonor.gross_amount, expiredDonor.currency);
+        const outboxId = await queueEmail(env.DB, {
+          templateKey: "donation_expired",
+          recipientEmail: expiredDonor.email,
+          messageType: "transactional",
+          subject: "Your donation checkout expired — PKI Consortium",
+          data: {
+            firstName,
+            name: expiredDonor.name,
+            formattedAmount,
+            currency: expiredDonor.currency.toUpperCase(),
+          },
+        });
+        context.waitUntil(processOutboxByIdBackground(env.DB, env, outboxId));
+      } catch (err) {
+        console.error("Failed to queue donation expired email", err);
+      }
+    }
+
+    return json({ received: true });
+  }
+
+  // checkout.session.async_payment_succeeded is treated identically to
+  // checkout.session.completed — the payment has now been confirmed.
+  if (event.type !== "checkout.session.completed" && event.type !== "checkout.session.async_payment_succeeded") {
     // Acknowledge other events without processing them
     return json({ received: true });
   }
@@ -152,7 +256,8 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     `UPDATE donations
      SET payment_intent_id = ?,
          net_amount        = ?,
-         completed_at      = ?
+         completed_at      = ?,
+         status            = 'completed'
      WHERE checkout_session_id = ?`,
   )
     .bind(
@@ -191,8 +296,8 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     await env.DB.prepare(
       `INSERT OR IGNORE INTO donations
          (id, checkout_session_id, payment_intent_id,
-          name, email, currency, gross_amount, net_amount, completed_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          name, email, currency, gross_amount, net_amount, completed_at, status)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'completed')`,
     )
       .bind(
         donationId,

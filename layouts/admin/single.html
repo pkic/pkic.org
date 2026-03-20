@@ -103,6 +103,7 @@
     <button class="sidebar-link" data-sec="email"><span class="icon">✉</span> Email</button>
     <button class="sidebar-link" data-sec="templates"><span class="icon">✏</span> Templates</button>
     <button class="sidebar-link" data-sec="stats"><span class="icon">≋</span> Stats</button>
+    <button class="sidebar-link" data-sec="donations"><span class="icon">💳</span> Donations</button>
     <button class="sidebar-link" data-sec="users"><span class="icon">👥</span> Users</button>
     <div style="margin-top:auto" class="px-1 pt-3">
       <button id="btn-logout" class="btn btn-sm btn-outline-secondary w-100">Sign out</button>
@@ -131,6 +132,10 @@
     <div id="s-stats" class="adm-section">
       <div class="page-heading">Statistics <button class="btn btn-sm btn-outline-secondary" onclick="loadStats()">↺ Refresh</button></div>
       <div id="r-body"></div>
+    </div>
+    <div id="s-donations" class="adm-section">
+      <div class="page-heading">Donations <button class="btn btn-sm btn-outline-secondary" id="btn-don-refresh">↺ Refresh</button></div>
+      <div id="don-body"></div>
     </div>
     <div id="s-users" class="adm-section">
       <div class="page-heading">Users &amp; Permissions</div>

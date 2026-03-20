@@ -659,6 +659,64 @@ With gratitude,<br>
 The PKI Consortium team
 `,
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 16. Donation expired — checkout session timed out before payment
+  // Sent when Stripe fires checkout.session.expired for a known donor.
+  // Variables: firstName, name, formattedAmount, currency
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "donation_expired",
+    subjectTemplate: "Your donation checkout expired — PKI Consortium",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Donor,{{/if}}
+
+It looks like your checkout for a **{{formattedAmount}}** donation to the **PKI Consortium** was not completed — this can happen if you closed the page, navigated away, or the session expired.
+
+**No charge was made to your account.**
+
+If you still wish to support us, you can start a new checkout at any time:
+
+<div class="cta"><a href="https://pkic.org/donate/">Retry my donation &rarr;</a></div>
+
+Of course, there is absolutely no obligation — but if you change your mind, we would truly appreciate your support.
+
+PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States.
+
+If you have any questions, please [contact us](mailto:contact@pkic.org).
+
+The PKI Consortium team
+`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 17. Donation payment failed — async payment bounced after checkout
+  // Sent when Stripe fires checkout.session.async_payment_failed.
+  // Variables: firstName, name, formattedAmount, currency
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "donation_payment_failed",
+    subjectTemplate: "Your donation payment failed — PKI Consortium",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Donor,{{/if}}
+
+We wanted to let you know that the payment for your **{{formattedAmount}}** donation to the **PKI Consortium** unfortunately did not go through.
+
+This can happen with bank transfers, direct debits, or other delayed payment methods if the payment was declined or returned by your bank.
+
+**No funds have been taken from your account.**
+
+If you would still like to support the PKI Consortium, you are very welcome to try again:
+
+<div class="cta"><a href="https://pkic.org/donate/">Try donating again &rarr;</a></div>
+
+Of course, there is absolutely no obligation — but if you change your mind, we would truly appreciate your support.
+
+PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States.
+
+If you have any questions or believe this is an error, please [contact us](mailto:contact@pkic.org).
+
+The PKI Consortium team
+`,
+  },
 ];
 function sqlString(value) {
   return `'${String(value).replaceAll("'", "''")}'`;
