@@ -629,31 +629,46 @@ If the button above does not work, copy and paste the following URL into your br
   // 15. Donation thank-you
   // Sent when the Stripe webhook confirms a completed donation.
   // Variables: firstName, name, email, organizationName,
-  //            currency, formattedAmount, donateUrl
+  //            currency, formattedAmount, donateUrl, shareUrl
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "donation_thank_you",
-    subjectTemplate: "Thank you for your donation to the PKI Consortium",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Donor,{{/if}}
+    subjectTemplate: "You just helped secure the internet — thank you, {{firstName}}",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear supporter,{{/if}}
 
-Thank you for your generous contribution of **{{formattedAmount}}** to the **PKI Consortium**.
+Your **{{formattedAmount}}** donation just landed — and it means more than you might think.
 
-Your voluntary donation helps us keep our conferences free and open to more of the global PKI community — from security engineers to researchers, policymakers, and open-source contributors.
+Every dollar we raise lets us keep our conferences **free and open** to security engineers, researchers, policymakers, and open-source contributors who otherwise couldn't attend. You didn't just write a cheque — you opened a door for someone in the global PKI community.
 
-<div class="notice notice-success">&#10003; Your payment has been confirmed. A receipt from our payment processor will be sent separately to <strong>{{email}}</strong>.</div>
+**That makes you one of us.** Welcome to a small but growing group of people who are actively shaping the future of digital trust.
 
 ---
 
-**Your donation details**
+### Your donation details
 
 > **Name:** {{name}}
 > {{#if organizationName}}**Organisation:** {{organizationName}}
 > {{/if}}**Amount:** {{formattedAmount}}
 
+<div class="notice notice-success">&#10003; Payment confirmed. A receipt from our payment processor will be sent separately to <strong>{{email}}</strong>.</div>
+
 ---
 
-PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States. This payment is voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor regarding any possible business-expense treatment or other tax consequences.
-If you have any questions, please [contact us](mailto:contact@pkic.org).
+### Want to go further? Become our top fundraiser.
+
+We've created a **personal fundraising page just for you** — with your name and badge attached. When someone donates through your link, it counts toward your total.
+
+<div class="cta"><a href="{{shareUrl}}">Share your fundraising page &rarr;</a></div>
+
+Even a single share to your network could match — or multiply — what you donated today. Who in your network cares about open security standards? Send them your link.
+
+We track every contribution that comes through your page, and our top fundraisers get a shout-out in our community newsletter.
+
+---
+
+*PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States. This payment is voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor regarding any possible business-expense treatment or other tax consequences.*
+
+Questions? [contact us](mailto:contact@pkic.org).
 
 With gratitude,<br>
 The PKI Consortium team

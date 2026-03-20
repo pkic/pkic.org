@@ -194,6 +194,8 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
 
     // Attach badge to email. prerenderAndCache stores a JPEG at og-badges/{code}
     // (same 1200×630 as the OG image, JPEG q85 — ~80–90 % smaller than PNG).
+    // In local dev (no IMAGES binding) it may fall back to PNG — we read the
+    // content-type from the R2 object's httpMetadata to use the correct extension.
     const badgeCode = payload.__badgeCode as string | undefined;
     if (badgeCode && env.ASSETS_BUCKET) {
       try {
@@ -203,12 +205,15 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
 
         const badgeObj = await env.ASSETS_BUCKET.get(`og-badges/${badgeCode}`);
         if (badgeObj) {
+          const contentType   = badgeObj.httpMetadata?.contentType ?? "image/jpeg";
+          const ext           = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
           const buf           = await badgeObj.arrayBuffer();
           const base64        = btoa(Array.from(new Uint8Array(buf), (b) => String.fromCharCode(b)).join(""));
-          const badgeFilename = namePart ? `attendee-badge-${namePart}.jpg` : "attendee-badge.jpg";
+          const baseName      = namePart ? `attendee-badge-${namePart}` : "attendee-badge";
+          const badgeFilename = `${baseName}.${ext}`;
           attachments = [
             ...(attachments ?? []),
-            { filename: badgeFilename, contentType: "image/jpeg", base64Content: base64 },
+            { filename: badgeFilename, contentType, base64Content: base64 },
           ];
         }
       } catch {
