@@ -113,7 +113,7 @@ terms:
     - termKey: topic-depth-focus
       version: v1
       required: true
-      displayText: I confirm that my session has a clear and specific focus and is not a broad survey of multiple Post-Quantum Cryptography domains.
+      displayText: I confirm that my session has a clear focus and does not cover several aspects or areas of Post-Quantum Cryptography.
 
 organizers:
   - email: admin@pkic.org
