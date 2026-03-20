@@ -6,7 +6,7 @@
   "pages_build_output_dir": "public",
   "dev": {
     "port": 8788,
-    "local_protocol": "https"
+    "local_protocol": "http"
   },
   "d1_databases": [
     {
