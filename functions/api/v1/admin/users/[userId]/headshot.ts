@@ -12,6 +12,7 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { first, run } from "../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
+import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
 import { AppError } from "../../../../../_lib/errors";
 import type { PagesContext } from "../../../../../_lib/types";
@@ -136,7 +137,7 @@ async function onPut(context: PagesContext<{ userId: string }>): Promise<Respons
     { r2Key, uploadedBy: "admin" },
   );
 
-  const origin = new URL(context.request.url).origin;
+  const origin = resolveAppBaseUrl(context.env);
   context.waitUntil(invalidateAndRerender(user.id, context.env, origin));
 
   return json({ success: true, r2Key });

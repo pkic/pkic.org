@@ -9,6 +9,7 @@
  */
 
 import { json } from "../../../_lib/http";
+import { resolveAppBaseUrl } from "../../../_lib/config";
 import { generateBadgePng } from "../../../_lib/services/og-badge-prerender";
 import type { PagesContext } from "../../../_lib/types";
 
@@ -21,7 +22,7 @@ export async function onRequestGet(context: PagesContext<{ code: string }>): Pro
   const { code } = context.params;
   const r2Key    = `${R2_KEY_PREFIX}${code}`;
   const bucket   = context.env.ASSETS_BUCKET;
-  const origin   = new URL(context.request.url).origin;
+  const origin   = resolveAppBaseUrl(context.env);
   const url      = new URL(context.request.url);
   const isDownload = url.searchParams.get("download") === "1";
 
