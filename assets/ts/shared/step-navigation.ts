@@ -98,6 +98,18 @@ export function installStepNavigation(
       firstInvalid?.focus();
     }
 
+    // Sync consent card visual states for any consent checkboxes in this step.
+    // Runs unconditionally so cards go green/red as the user progresses.
+    for (const cb of Array.from(stepEl.querySelectorAll<HTMLInputElement>("input.event-flow-consent-native-check"))) {
+      const card = cb.closest<HTMLElement>(".event-flow-consent-card");
+      if (!card) continue;
+      if (cb.required && !cb.checked) {
+        card.classList.add("is-invalid");
+      } else {
+        card.classList.remove("is-invalid");
+      }
+    }
+
     return !hasErrors;
   }
 

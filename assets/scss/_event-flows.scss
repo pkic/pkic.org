@@ -334,6 +334,17 @@
       }
     }
   }
+
+  // ── Required but unchecked after a validation attempt ─────────────────────
+  &.is-invalid {
+    border-color: var(--bs-danger);
+    background: var(--bs-danger-bg-subtle);
+    box-shadow: 0 0 0 3px rgba(var(--bs-danger-rgb), 0.12);
+
+    .event-flow-consent-indicator {
+      border-color: var(--bs-danger);
+    }
+  }
 }
 
 // Custom visual checkbox indicator (square → animated checkmark)
@@ -396,6 +407,20 @@
   }
 }
 
+// Optional badge — shown on non-required consent cards
+.event-flow-consent-optional-badge {
+  flex-shrink: 0;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: var(--bs-secondary-color);
+  border: 1px solid var(--bs-border-color);
+  border-radius: 0.25rem;
+  padding: 0.1em 0.4em;
+  white-space: nowrap;
+  line-height: 1.4;
+  align-self: center;
+}
+
 // ── Featured card (has contextual note) ───────────────────────────────────
 // Layout: top zone shows *why* this matters; bottom zone is the agreement action.
 // The card starts with an amber accent and transitions to green on agreement.
@@ -436,6 +461,19 @@
 
     .event-flow-consent-card-action {
       background: var(--bs-success-bg-subtle);
+    }
+  }
+
+  &.is-invalid {
+    border-color: var(--bs-danger);
+    box-shadow: 0 0 0 3px rgba(var(--bs-danger-rgb), 0.12);
+
+    .event-flow-consent-card-action {
+      background: var(--bs-danger-bg-subtle);
+
+      .event-flow-consent-indicator {
+        border-color: var(--bs-danger);
+      }
     }
   }
 

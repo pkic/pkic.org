@@ -1,6 +1,6 @@
 import { getJson, postJson } from "../shared/api-client";
 import { applyFieldErrors, normalizeValidation } from "../shared/validation-map";
-import { renderConsentInputs, readConsentValues } from "../shared/render-consents";
+import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/render-consents";
 import { applyCustomFieldVisibility, renderCustomFields, readCustomFieldValues } from "../shared/render-custom-fields";
 import { readDayAttendance, renderDayAttendance } from "../shared/render-day-attendance";
 import { renderSharePanel } from "../shared/render-share-panel";
@@ -236,6 +236,7 @@ async function main(): Promise<void> {
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
     form.classList.add("was-validated");
+    syncConsentValidation(form);
     if (!validateBeforeSubmit(form, statusEl)) {
       return;
     }
