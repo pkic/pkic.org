@@ -6,12 +6,18 @@ import type { PagesContext } from "../../../../../_lib/types";
 
 interface ConfirmInfoRow {
   first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  organization_name: string | null;
   event_name: string;
   confirmation_token_expires_at: string | null;
 }
 
 interface ConfirmInfoResponse {
   firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  organizationName: string | null;
   eventName: string | null;
   /** True when the confirmation token exists but has passed its expiry time. */
   expired: boolean;
@@ -35,7 +41,7 @@ export async function onRequestGet(
   markSensitive(context);
   const token = new URL(context.request.url).searchParams.get("token");
 
-  const empty: ConfirmInfoResponse = { firstName: null, eventName: null, expired: false };
+  const empty: ConfirmInfoResponse = { firstName: null, lastName: null, email: null, organizationName: null, eventName: null, expired: false };
 
   if (!token || token.trim().length === 0) {
     return json(empty);
@@ -45,7 +51,7 @@ export async function onRequestGet(
 
   const row = await first<ConfirmInfoRow>(
     context.env.DB,
-    `SELECT u.first_name, e.name AS event_name, r.confirmation_token_expires_at
+    `SELECT u.first_name, u.last_name, u.email, u.organization_name, e.name AS event_name, r.confirmation_token_expires_at
      FROM registrations r
      JOIN users u ON u.id = r.user_id
      JOIN events e ON e.id = r.event_id
@@ -66,6 +72,9 @@ export async function onRequestGet(
 
   return json({
     firstName: row.first_name ?? null,
+    lastName: row.last_name ?? null,
+    email: row.email ?? null,
+    organizationName: row.organization_name ?? null,
     eventName: row.event_name,
     expired,
   } satisfies ConfirmInfoResponse);
