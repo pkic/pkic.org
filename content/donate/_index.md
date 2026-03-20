@@ -16,30 +16,32 @@ The PKI Consortium is a **Utah non-profit** that advances trust in digital commu
 
 ## The real cost of "free"
 
-Running a professional conference costs **$150–$300 per attendee per day** — venue, A/V, catering, travel support, and infrastructure. A typical two-day event costs us **$300–$600 per person we welcome through the door**. Sponsors cover the bulk of it, but voluntary donations from attendees and the community cover the gap and determine how many seats we can offer.
+Running the PKI Consortium means maintaining infrastructure, coordinating working groups, producing publications, and supporting a global community of practitioners — all year round, not just during events.
 
-## What does a meaningful donation look like?
+On top of that, hosting free conferences is expensive. A professional event costs **$150–$300 per attendee per day** — venue, A/V, catering, travel support, and logistics. A typical three-day event costs us **$450–$900 per person we welcome through the door**. We rely on sponsor funding and voluntary donations from the community to make it happen — and the more we raise, the more seats we can offer.
 
-| Amount | What it means for us |
-|--------:|----------------------|
-| **$2,500** | Covers our cost of hosting roughly five attendees for a full two-day event |
-| **$1,000** | Covers our cost of hosting two attendees — one who can donate, one who cannot |
-| **$500** | Covers our cost of hosting one attendee for a typical two-day event |
-| **$250** | Covers our cost of hosting one attendee for one day |
-| **$100** | A meaningful contribution toward the cost of a single attendee |
-| **$50** | A thank-you — appreciated, and every one counts |
+Your donation keeps all of this free and growing:
 
-Forty people giving $50 equals two people giving $1,000 — both matter. The more the community contributes, the more seats we can offer to people who cannot donate at all.
+- Membership and community resources, free for all practitioners
+- Research and working groups advancing PKI best practices
+- Open-source tooling and developer resources
+- More events and workshops around the world
 
-## Your donation also helps us
+## What your gift makes possible
 
-- Keep membership and resources free
-- Fund research and working groups advancing PKI best practices
-- Support open-source tooling and devloper resources
-- Host more events and workshops around the world
+Every amount has a direct use — and forty people giving $50 equals two people giving $1,000. Both matter.
+
+| Amount | What your gift makes possible |
+|-------:|-------------------------------|
+| **$2,500** | Helps us welcome **3–5 attendees** for a full three-day event — covering venue, A/V, and catering |
+| **$1,000** | Funds a working group publication or covers the full cost of **1–2 conference attendees** |
+| **$500** | Roughly covers **one attendee for the full event** — the real per-person cost at the lower end of our range |
+| **$250** | Supports open-source tooling development, or covers **one full day** of attendance for one person |
+| **$100** | Helps keep membership and community resources free for practitioners who cannot contribute themselves |
+| **$50** | Joins the community effort — many gifts at this level fund a workshop or expand event capacity |
 
 {{< alert type="info" >}}
-**Not sure how much?** A two-day event costs us roughly **$500 per attendee we host**. If that feels like a lot, $100–$250 is a genuine and appreciated contribution. If $50 is what you can do right now, we are grateful.
+**Not sure how much?** A three-day event costs us roughly **$450–$900 per attendee we host**. If that feels like a lot, $100–$250 is a genuine and appreciated contribution. If $50 is what you can do right now, we are grateful.
 {{< /alert >}}
 
 {{% /col %}}
