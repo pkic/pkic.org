@@ -1,9 +1,25 @@
 {{ $yaml := .Inner | transform.Unmarshal }}
+{{- $cardStyle := $yaml.card_style | default "default" -}}
 
-<section id="{{ with $yaml.section_id }}{{ . }}{{ else }}cards-section{{ end }}" class="{{ with $yaml.section_class }}{{ . }}{{ end }}">
-  <div class="row">
+<section id="{{ with $yaml.section_id }}{{ . }}{{ else }}cards-section{{ end }}" class="{{ with $yaml.section_class }}{{ . }}{{ end }}{{ if eq $cardStyle "bento" }} pkic-card-bento{{ end }}">
+  <div class="row g-3">
     {{ range $yaml.cards }}
-      <div class="{{ with .width }}{{ . }}{{ else }}col-md{{ end }} mb-4">
+      <div class="{{ with .width }}{{ . }}{{ else }}col-md{{ end }}{{ if ne $cardStyle "bento" }} mb-4{{ end }}">
+        {{- if eq $cardStyle "bento" -}}
+        <div class="bento-card {{ with .color }}{{ . }}{{ end }} h-100">
+          {{ with .icon }}{{ partial "icon" (dict "name" . "size" "2.25rem") }}{{ end }}
+          <p class="bento-title">{{ .title }}</p>
+          <div class="bento-text">{{ with .text }}{{ . | markdownify }}{{ end }}</div>
+          {{- if .links -}}
+          <div class="mt-auto pt-3">
+            {{- range .links -}}
+            {{- $u := urls.Parse .url -}}
+            <a href="{{ .url }}" class="btn btn-sm btn-light me-2"{{- if $u.IsAbs }} target="_blank" rel="external"{{ end }}>{{ .text }}</a>
+            {{- end -}}
+          </div>
+          {{- end -}}
+        </div>
+        {{- else -}}
         <div class="card pkic-wg-card {{ with .card_class }}{{ . }}{{ end }} h-100">
           {{ with .image }}
           <img src="{{ . }}" class="card-img-top" alt="{{ $.card_title }}">
@@ -40,6 +56,7 @@
           </div>
           {{ end }}
         </div>
+        {{- end }}
       </div>
     {{ end }}
   </div>
