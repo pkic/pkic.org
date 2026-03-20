@@ -171,69 +171,52 @@ export async function onRequestGet(context: PagesContext<{ code: string }>): Pro
   const code         = context.params.code;
   const userAgent    = getUserAgent(context.request);
 
-  // ── Social scraper path (no click recorded, serve OG HTML) ─────────────────
-  if (isSocialScraper(userAgent)) {
-    // Look up person data without touching click counters
-    const person = await lookupOgPerson(context.env.DB, code);
+  // ── Validate the code exists and get its event_id ─────────────────────────
+  const refRow = await first<{ event_id: string }>(
+    context.env.DB,
+    "SELECT event_id FROM referral_codes WHERE code = ?",
+    [code],
+  );
 
-    // Resolve the redirect target for the canonical link
-    const refRow = person
-      ? await first<{ event_id: string }>(
-          context.env.DB,
-          "SELECT event_id FROM referral_codes WHERE code = ?",
-          [code],
-        )
-      : null;
-
-    let redirectUrl = `${appBaseUrl}/events/`;
-    if (refRow) {
-      const event = await first<{ slug: string; base_path: string | null; starts_at: string | null; settings_json: string }>(
-        context.env.DB,
-        "SELECT slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
-        [refRow.event_id],
-      );
-      if (event) {
-        redirectUrl = registrationPageUrl(appBaseUrl, event, {
-          ref: code,
-          source: "referral_link",
-        });
-      }
-    }
-
-    return new Response(buildOgHtml(code, appBaseUrl, redirectUrl, person), {
-      headers: {
-        "Content-Type": "text/html; charset=utf-8",
-        // Allow CDN to cache the OG page for a short window; invalidated when badge is refreshed
-        "Cache-Control": "public, max-age=300, s-maxage=300",
-      },
-    });
-  }
-
-  // ── Regular browser path (record click + redirect) ─────────────────────────
-  const referral = await recordReferralClick(context.env.DB, {
-    code,
-    ip: getClientIp(context.request),
-    userAgent,
-    secret: signingSecret,
-  });
-
-  if (!referral) {
+  if (!refRow) {
     return json({ error: { code: "REFERRAL_NOT_FOUND", message: "Unknown referral code" } }, 404);
   }
 
-  const event = await first<{ slug: string; base_path: string | null; starts_at: string | null; settings_json: string }>(
-    context.env.DB,
-    "SELECT slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
-    [referral.event_id],
-  );
-  const target = event
-    ? registrationPageUrl(appBaseUrl, event, {
-        ref: referral.code,
-        source: "referral_link",
-      })
-    : `${appBaseUrl}/register?ref=${encodeURIComponent(referral.code)}`;
+  // ── For real browsers, record the click (fire-and-forget) ─────────────────
+  // Scrapers are excluded so they don't inflate click counts.
+  if (!isSocialScraper(userAgent)) {
+    void recordReferralClick(context.env.DB, {
+      code,
+      ip: getClientIp(context.request),
+      userAgent,
+      secret: signingSecret,
+    }).catch(() => { /* ignore */ });
+  }
 
-  return Response.redirect(target, 302);
+  // ── Resolve redirect URL and person data in parallel ──────────────────────
+  const [eventRow, person] = await Promise.all([
+    first<{ slug: string; base_path: string | null; starts_at: string | null; settings_json: string }>(
+      context.env.DB,
+      "SELECT slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
+      [refRow.event_id],
+    ),
+    lookupOgPerson(context.env.DB, code),
+  ]);
+
+  const redirectUrl = eventRow
+    ? registrationPageUrl(appBaseUrl, eventRow, { ref: code, source: "referral_link" })
+    : `${appBaseUrl}/events/`;
+
+  // ── Always serve the OG HTML page ─────────────────────────────────────────
+  // Using a meta-refresh (and JS fallback) instead of a 302 redirect means
+  // every crawler — not just the ones in the UA whitelist — can read the
+  // personalised Open Graph tags before being sent to the destination.
+  return new Response(buildOgHtml(code, appBaseUrl, redirectUrl, person), {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=300, s-maxage=300",
+    },
+  });
 }
 
 export async function onRequest(context: PagesContext<{ code: string }>): Promise<Response> {
