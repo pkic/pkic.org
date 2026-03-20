@@ -20,6 +20,7 @@ import { first, run } from "../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { uuid } from "../../../../../_lib/utils/ids";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
+import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
 import { AppError } from "../../../../../_lib/errors";
 import type { PagesContext } from "../../../../../_lib/types";
@@ -128,12 +129,12 @@ async function onPut(context: PagesContext<{ token: string }>): Promise<Response
     { r2Key, registrationId: registration.id },
   );
 
-  const origin = new URL(context.request.url).origin;
-  context.waitUntil(invalidateAndRerender(user.id, context.env, origin));
+  const appOrigin = resolveAppBaseUrl(context.env);
+  context.waitUntil(invalidateAndRerender(user.id, context.env, appOrigin));
 
   const parts = r2Key.split("/");
   const pubFilename = parts.slice(2).join("/");
-  const headshotUrl = `${origin}/api/v1/headshots/${user.id}/${pubFilename}`;
+  const headshotUrl = `${new URL(context.request.url).origin}/api/v1/headshots/${user.id}/${pubFilename}`;
 
   return json({ success: true, headshotUrl });
 }
@@ -177,7 +178,7 @@ async function onDelete(context: PagesContext<{ token: string }>): Promise<Respo
     { registrationId: registration.id },
   );
 
-  const origin = new URL(context.request.url).origin;
+  const origin = resolveAppBaseUrl(context.env);
   context.waitUntil(invalidateAndRerender(user.id, context.env, origin));
 
   return json({ success: true });

@@ -12,6 +12,7 @@
  * Speakers can re-upload at any time to replace their headshot.
  */
 import { json, markSensitive } from "../../../../../_lib/http";
+import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
 import {
   getSpeakerByManageToken,
@@ -84,7 +85,7 @@ export async function onRequestPut(context: PagesContext<{ token: string }>): Pr
 
   await updateSpeakerProfile(context.env.DB, user.id, { headshotR2Key: r2Key });
 
-  const origin = new URL(context.request.url).origin;
+  const origin = resolveAppBaseUrl(context.env);
   context.waitUntil(invalidateAndRerender(user.id, context.env, origin));
 
   return json({ success: true, r2Key });

@@ -87,7 +87,7 @@ function renderBadge(container: HTMLElement, session: DonationSession, sessionId
   const formattedAmount = formatCurrency(majorAmount, info.code.toUpperCase(), info.zeroDecimal);
   const greeting = session.donorFirstName ? `${session.donorFirstName}, thank` : "Thank";
 
-  const shareText = `I just made a voluntary donation of ${formattedAmount} to the PKI Consortium to support free and open PKI events! 🎉`;
+  const shareText = `I just made a voluntary donation of ${formattedAmount} to the PKI Consortium to keep our memberships, resources, and events free! 🎉`;
   const shareUrl = "https://pkic.org/donate/";
 
   const twitterHref = `https://twitter.com/intent/tweet?${new URLSearchParams({ text: shareText, url: shareUrl })}`;
@@ -101,7 +101,7 @@ function renderBadge(container: HTMLElement, session: DonationSession, sessionId
       <div class="donation-badge-amount">${formattedAmount}</div>
       <h2 class="donation-badge-title">${greeting} you for your donation!</h2>
       <p class="donation-badge-body">
-        Your generous contribution helps the PKI Consortium keep its events free,
+        Your generous contribution helps the PKI Consortium keep its memberships, resources, and events free,
         open, and accessible to more of the global PKI community.
       </p>
       <div class="donation-badge-og-preview" data-donation-badge-preview>

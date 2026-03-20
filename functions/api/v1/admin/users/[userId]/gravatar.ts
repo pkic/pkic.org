@@ -22,6 +22,7 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { first } from "../../../../../_lib/db/queries";
 import { gravatarHash, fetchGravatar } from "../../../../../_lib/utils/gravatar";
+import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
@@ -70,7 +71,7 @@ export async function onRequestPost(
     { r2Key, gravatarHash: emailHash },
   );
 
-  const origin = new URL(context.request.url).origin;
+  const origin = resolveAppBaseUrl(context.env);
   context.waitUntil(invalidateAndRerender(user.id, context.env, origin));
 
   return json({ success: true, r2Key, source: "gravatar" });
