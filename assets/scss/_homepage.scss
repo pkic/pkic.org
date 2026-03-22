@@ -646,3 +646,33 @@
     transparent 70%
   );
 }
+.hero-sponsors-overlay {
+  background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 1;
+}
+
+.hero-sponsors-container {
+  filter: brightness(0) invert(1);
+  pointer-events: auto;
+  opacity: 0.55;
+}
+
+.hero-sponsor-link {
+  opacity: 0.8;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.hero-sponsor-logo {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  max-height: calc(12px + (6px * (var(--sponsor-weight, 5) - 1)));
+  max-width: calc(60px + (30px * (var(--sponsor-weight, 5) - 1)));
+  min-height: 15px;
+  min-width: 60px;
+}

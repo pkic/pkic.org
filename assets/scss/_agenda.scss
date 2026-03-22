@@ -261,6 +261,7 @@
   cursor: pointer;
   transition: all 0.2s ease;
   overflow: hidden;
+  position: relative;
 
   &:hover {
     transform: translateY(-1px);
@@ -288,7 +289,7 @@
 
 .session-content,
 .mobile-session-content {
-  padding: 1rem;
+  padding: 0.65rem 1rem 1.6rem;
 }
 
 .session-content {
@@ -362,6 +363,8 @@
 .mobile-speaker-avatar {
   border-radius: 50%;
   flex-shrink: 0;
+  align-self: flex-start;
+  object-fit: cover;
 }
 
 .speaker-avatar {
@@ -423,6 +426,20 @@
   margin-top: 0.75rem;
 }
 
+.session-duration {
+  position: absolute;
+  bottom: 0.45rem;
+  left: 0.65rem;
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  font-size: 0.65rem;
+  font-weight: 500;
+  color: #b0b7c0;
+  pointer-events: none;
+  line-height: 1;
+}
+
 // Ensure buttons stay above gradients
 .desktop-agenda {
   position: relative;
@@ -446,24 +463,45 @@
 .agenda-break .break-card {
   background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
   color: #fff;
-  padding: 0.9rem 1.4rem; // slightly higher / taller
+  padding: 0.9rem 1.4rem;
   border-radius: 10px;
   font-weight: 600;
-  font-size: 1rem; // a touch larger for visibility
+  font-size: 1rem;
   line-height: 1.2;
   box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
   white-space: nowrap;
   width: var(--agenda-break-width, auto);
   max-width: var(--agenda-break-width, 100%);
-  pointer-events: auto; // clickable if needed later
+  pointer-events: auto;
   position: sticky;
   left: calc(var(--agenda-time-width, 100px));
-  /* Ensure it sits above sessions horizontally */
   z-index: 12;
   text-align: center;
   display: flex;
   justify-content: center;
   align-items: center;
+  gap: 0.75rem;
+}
+
+.break-title {
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.break-duration {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25em;
+  font-size: 0.7rem;
+  font-weight: 500;
+  opacity: 0.7;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 20px;
+  padding: 0.15em 0.55em;
+  letter-spacing: 0.03em;
+  vertical-align: middle;
+  margin-left: 0.6rem;
 }
 
 // When only one location is selected the grid-column becomes '2'; ensure width still works
@@ -474,6 +512,14 @@
 // ensure mobile break retains spacing if used elsewhere
 .mobile-break {
   margin-bottom: 1rem;
+  background: linear-gradient(135deg, #6c757d 0%, #495057 100%);
+  color: #fff;
+  padding: 0.65rem 1rem;
+  border-radius: 8px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
 }
 
 // All Location-specific styles (now unified as single colors)
@@ -635,6 +681,33 @@
   }
 }
 
+// Fix: main h2 in _base-layout-and-modules.scss applies gradient text + -webkit-text-fill-color: transparent
+// which overrides `color: white` set by .location-X-modal .modal-header. Reset those properties here.
+.session-modal .modal-header h2.modal-title {
+  background: none;
+  -webkit-background-clip: initial;
+  -webkit-text-fill-color: white;
+  background-clip: initial;
+  color: white;
+  margin-top: 0;
+}
+
+.session-track-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  font-size: 0.65rem;
+  font-weight: 600;
+  line-height: 1;
+  padding: 0.25rem 0.5rem;
+  border-radius: 0 6px 0 6px;
+  background: var(--location-color, #{$primary});
+  color: white;
+  z-index: 1;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 // Modal styling - simplified
 .session-modal .modal-content {
   border: none;
@@ -653,7 +726,8 @@
 }
 
 .time-badge-modal,
-.location-badge-modal {
+.location-badge-modal,
+.track-badge-modal {
   background: rgba(255, 255, 255, 0.2);
   padding: 0.25rem 0.5rem;
   border-radius: 4px;
@@ -693,6 +767,8 @@
   height: 80px;
   border-radius: 50%;
   flex-shrink: 0;
+  align-self: flex-start;
+  object-fit: cover;
 }
 
 .speaker-initial-large {

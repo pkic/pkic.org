@@ -1,0 +1,22 @@
+{{/*
+  stat-grid — numeric social-proof / metric grid.
+
+  Use {{< >}} syntax (raw inner content processed as YAML).
+
+  Inner YAML:
+    stats:
+      - number: "6"
+        label:  "Editions"
+      - number: "40+"
+        label:  "Countries"
+*/}}
+{{- $yaml := .Inner | transform.Unmarshal -}}
+
+<div class="stat-grid {{ .Get "class" }}">
+  {{- range $yaml.stats }}
+  <div class="stat-grid-item">
+    <div class="stat-grid-number">{{ .number }}</div>
+    <div class="stat-grid-label">{{ .label }}</div>
+  </div>
+  {{- end }}
+</div>

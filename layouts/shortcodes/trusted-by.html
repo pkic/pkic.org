@@ -1,0 +1,11 @@
+{{ $yaml := .Inner | transform.Unmarshal }}
+<div class="py-5 text-center bg-light rounded-4 my-5 px-3">
+  <h5 class="text-muted text-uppercase fw-bold mb-4" style="letter-spacing: 0.1em; font-size: 0.85rem;">{{ $yaml.heading | default "Join practitioners from these leading organizations" }}</h5>
+  <div class="d-flex flex-wrap justify-content-center align-items-center gap-4 opacity-75">
+    {{ range $yaml.logos }}
+      <div class="px-3" style="max-height: 40px; display: flex; align-items: center; filter: grayscale(100%); transition: filter 0.3s; cursor: pointer;" onmouseover="this.style.filter='grayscale(0%)'" onmouseout="this.style.filter='grayscale(100%)'">
+        <span class="fs-5 fw-bold text-secondary">{{ . }}</span>
+      </div>
+    {{ end }}
+  </div>
+</div>

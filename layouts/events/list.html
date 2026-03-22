@@ -33,7 +33,7 @@
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}}
       <div class="col-lg-9">
 
-        {{- $consortiumEvts := sort (where site.Pages "Params.eventType" "conference") "Params.eventDate" "asc" -}}
+        {{- $consortiumEvts := sort (where site.Pages "Params.eventType" "conference") "Params.eventDate" "desc" -}}
         {{- $webinars       := sort (where site.Pages "Params.eventType" "webinar") "Params.eventDate" "asc" -}}
         {{- $today := now.Format "2006-01-02" -}}
 
