@@ -1,3 +1,258 @@
+// ── Event countdown timer ─────────────────────────────────────────────────
+.event-countdown {
+  background: linear-gradient(135deg, $gray-900 0%, #1a3a5c 100%);
+  border-radius: 1.5rem;
+  padding: 2.5rem 1.5rem 2rem;
+  text-align: center;
+  color: #fff;
+  box-shadow:
+    0 8px 32px rgba(0, 0, 0, 0.25),
+    0 2px 8px rgba(0, 0, 0, 0.15);
+
+  .countdown-label {
+    font-size: 0.8rem;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 1.25rem;
+  }
+
+  .countdown-units {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    gap: 0.25rem;
+    flex-wrap: nowrap;
+  }
+
+  .countdown-unit {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 5rem;
+  }
+
+  .countdown-value {
+    font-size: clamp(2.5rem, 7vw, 4.5rem);
+    font-weight: 900;
+    line-height: 1;
+    color: $teal;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .countdown-text {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.45);
+    margin-top: 0.35rem;
+  }
+
+  .countdown-sep {
+    font-size: clamp(2rem, 6vw, 3.5rem);
+    font-weight: 900;
+    line-height: 1;
+    color: rgba(255, 255, 255, 0.2);
+    padding: 0 0.1rem;
+    align-self: flex-start;
+    padding-top: 0.05em;
+  }
+
+  .countdown-cta {
+    .btn {
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+  }
+
+  // Bottom accent strip matching the site brand gradient
+  position: relative;
+  overflow: hidden;
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red);
+  }
+}
+
+// ── Stat grid — numeric social-proof bar ─────────────────────────────────
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
+  border-radius: 1.25rem;
+  overflow: hidden;
+  margin: 2rem 0;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+
+  @media (min-width: 768px) {
+    grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
+  }
+
+  .stat-grid-item {
+    padding: 2rem 1.5rem;
+    text-align: center;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    transition: background-color 0.3s ease;
+
+    &:hover {
+      background-color: rgba(255, 255, 255, 0.02);
+    }
+
+    &:nth-child(2n) {
+      border-right: none;
+    }
+
+    @media (min-width: 768px) {
+      border-bottom: none;
+      &:nth-child(2n) {
+        border-right: 1px solid rgba(255, 255, 255, 0.05);
+      }
+      &:last-child {
+        border-right: none;
+      }
+    }
+  }
+
+  .stat-grid-number {
+    font-size: clamp(2rem, 4vw, 3rem);
+    font-weight: 800;
+    line-height: 1;
+    margin-bottom: 0.5rem;
+    background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    letter-spacing: -0.02em;
+  }
+
+  .stat-grid-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.7);
+  }
+}
+
+// ── Testimonials grid ─────────────────────────────────────────────────────
+.testimonials-grid {
+  margin: 3rem 0;
+
+  .testimonial-card {
+    background: $gray-900;
+    border-radius: 1.25rem;
+    padding: 2rem 1.75rem 1.75rem;
+    color: #fff;
+    height: 100%;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+
+    &::before {
+      content: "\201C";
+      position: absolute;
+      top: 0.75rem;
+      left: 1.25rem;
+      font-size: 4rem;
+      line-height: 1;
+      font-family: Georgia, serif;
+      color: $teal;
+      opacity: 0.6;
+      pointer-events: none;
+    }
+  }
+
+  .testimonial-quote {
+    font-size: 0.95rem;
+    line-height: 1.7;
+    color: rgba(255, 255, 255, 0.85);
+    flex: 1;
+    margin-top: 1.25rem;
+    font-style: italic;
+  }
+
+  .testimonial-author {
+    margin-top: 1.25rem;
+    font-size: 0.8rem;
+    font-weight: 700;
+    color: $teal;
+    letter-spacing: 0.05em;
+  }
+
+  .testimonial-role {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.4);
+    font-weight: 400;
+    font-style: normal;
+    display: block;
+    margin-top: 0.1rem;
+  }
+}
+
+// ── Urgency banner — scarcity / deadline callout ──────────────────────────
+.urgency-banner {
+  border-radius: 1rem;
+  padding: 1.5rem 2rem;
+  color: #fff;
+  display: flex;
+  align-items: flex-start;
+  gap: 1.25rem;
+  margin: 2rem 0;
+  // Default variant: danger (red)
+  background: linear-gradient(135deg, #2d0a0a 0%, #4a1500 100%);
+  border: 1px solid rgba(220, 53, 69, 0.4);
+  box-shadow: 0 4px 20px rgba(220, 53, 69, 0.2);
+
+  .urgency-banner-icon {
+    font-size: 2rem;
+    flex-shrink: 0;
+    line-height: 1.2;
+  }
+
+  .urgency-banner-body {
+    flex: 1;
+    font-size: 0.95rem;
+
+    strong {
+      color: #ff8a80;
+    }
+
+    p:last-child {
+      margin-bottom: 0;
+    }
+  }
+
+  &.urgency-banner--warning {
+    background: linear-gradient(135deg, #2a1800 0%, #4a2d00 100%);
+    border-color: rgba(255, 193, 7, 0.4);
+    box-shadow: 0 4px 20px rgba(255, 193, 7, 0.15);
+
+    .urgency-banner-body strong {
+      color: #ffd060;
+    }
+  }
+
+  &.urgency-banner--info {
+    background: linear-gradient(135deg, #071824 0%, #0a2a3e 100%);
+    border-color: rgba(90, 155, 213, 0.4);
+    box-shadow: 0 4px 20px rgba(90, 155, 213, 0.15);
+
+    .urgency-banner-body strong {
+      color: #81b5e0;
+    }
+  }
+}
+
 // ── Hero SVG logo overlay ────────────────────────────────────────────────
 .hero-logo-wrap {
   display: inline-flex;

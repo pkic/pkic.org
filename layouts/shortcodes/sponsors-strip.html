@@ -1,0 +1,9 @@
+{{- $site := $.Site -}}
+{{- $sponsoring := .Get "sponsoring" | default $site.Params.name -}}
+{{- $minWeight := .Get "minWeight" | default 5 -}}
+{{- $containerClass := .Get "class" | default "d-flex justify-content-center align-items-center flex-wrap gap-4 my-4" -}}
+{{- $linkClass := .Get "linkClass" | default "sponsor-link" -}}
+{{- $logoClass := .Get "logoClass" | default "sponsor-logo" -}}
+{{- $logoStyle := .Get "logoStyle" | default "max-height: 40px; width: auto;" -}}
+
+{{ partial "sponsors/strip.html" (dict "site" $site "sponsoring" $sponsoring "minWeight" $minWeight "containerClass" $containerClass "linkClass" $linkClass "logoClass" $logoClass "logoStyle" $logoStyle) }}

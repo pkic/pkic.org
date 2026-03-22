@@ -62,7 +62,9 @@
   {{ $2k := $img.Resize "2560x" }}
   {{ $4k := $img.Resize "3840x" }}
 
-  <div class="position-relative w-100" style="height:60vh; max-height:40vh;">
+  {{ $heroHeight := $.Params.heroHeight | default "60vh" }}
+  {{ $heroMaxHeight := $.Params.heroMaxHeight | default "50vh" }}
+  <div class="position-relative w-100" style="height: {{ $heroHeight }}; min-height: {{ $heroMaxHeight }};">
     <picture>
       <source
         media="(min-width:1200px)"
@@ -120,7 +122,16 @@
       </div>
     </div>
 
+    
+    {{ $minSponsorLevel := $.Params.heroSponsorLevel }}
+    {{ if $minSponsorLevel }}
+      <div class="hero-sponsors-overlay position-absolute bottom-0 start-50 translate-middle-x w-100 d-none d-md-block pb-4 pt-5" style="z-index: 10;">
+        {{ partial "sponsors/strip.html" (dict "site" $.Site "sponsoring" ($.Params.sponsoring | default $.Site.Params.name) "minWeight" $minSponsorLevel "label" "Our Diamond & Titanium Sponsors") }}
+      </div>
+    {{ end }}
+
     {{ with $.Params.heroImageCredit }}
+
       <div class="position-absolute bottom-0 end-0 p-1 m-1 text-end text-white bg-dark bg-opacity-50 rounded small">
         {{ i18n "image" }}:
         {{ if and $.Params.heroImageLicense $.Params.heroImageLicenseURL }}

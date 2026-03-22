@@ -1,4 +1,4 @@
-{{- $data := partial "events/add-headshots.html" . -}}
+{{- $data := partial "events/event-data.html" . -}}
 {{- with $data.agenda -}}
     {{- $today := time.Now | time.Format "2006-01-02" -}}
     {{- if $data.timezone -}}
@@ -159,7 +159,7 @@
                                     {{ end }}
                                 {{ else }}
                                     <div class="mobile-break">
-                                    {{ $timeSlot.title }}
+                                        <span class="break-title">{{ $timeSlot.title }}</span>{{- if $timeSlot.durationMinutes -}}<span class="break-duration"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="currentColor" class="bi bi-clock" viewBox="0 0 16 16"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg> {{ $timeSlot.durationMinutes }} min</span>{{- end -}}
                                     </div>
                                 {{ end}}
                             {{- else -}}
@@ -170,7 +170,7 @@
                                         {{- range $sessions -}}
                                             <div class="mobile-session-card location-{{ $locationIndex }}-session" 
                                                  data-bs-toggle="modal" 
-                                                 data-bs-target="#sessionModal-{{ .title | urlize }}">
+                                                 data-bs-target="#sessionModal-{{ $timeSlot.time | replaceRE ":" "" }}-{{ $locationIndex }}-{{ .title | urlize }}">
 
                                                 <div class="mobile-location-badge location-{{ $locationIndex }}">
                                                     {{ strings.FirstUpper (replace $location "_" " ") }}
@@ -205,6 +205,12 @@
                                                         <div class="mobile-session-preview">{{ .description | markdownify }}</div>
                                                     {{- end -}}
                                                 </div>
+                                                {{- if $timeSlot.durationMinutes -}}
+                                                    <div class="session-duration">
+                                                        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-clock" viewBox="0 0 16 16"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg>
+                                                        {{ $timeSlot.durationMinutes }} min
+                                                    </div>
+                                                {{- end -}}
                                             </div>
                                         {{- end -}}
                                     {{- end -}}
@@ -288,7 +294,7 @@
                                                     {{ end }}
                                                 {{ else }}
                                                 <div class="text-center">
-                                                    <div class="fs-3">{{ $timeSlot.title }}</div>
+                                                    <span class="break-title">{{ $timeSlot.title }}</span>{{- if $timeSlot.durationMinutes -}}<span class="break-duration"><svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" fill="currentColor" class="bi bi-clock" viewBox="0 0 16 16"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg> {{ $timeSlot.durationMinutes }} min</span>{{- end -}}
                                                 </div>
                                                 {{ end }}
                                             </div>
@@ -300,7 +306,10 @@
                                                 {{- $sessions := where $timeSlot.sessions "locations" "intersect" (slice $location) -}}
                                                 {{- if $sessions -}}
                                                     {{- range $sessions -}}
-                                                        <div class="session-card location-{{ $locationIndex }}-session" data-bs-toggle="modal" data-bs-target="#sessionModal-{{ .title | urlize }}">
+                                                        <div class="session-card location-{{ $locationIndex }}-session" data-bs-toggle="modal" data-bs-target="#sessionModal-{{ $timeSlot.time | replaceRE ":" "" }}-{{ $locationIndex }}-{{ .title | urlize }}">
+                                                            {{- if .track -}}
+                                                                <span class="session-track-badge">{{ .track }}</span>
+                                                            {{- end -}}
                                                             <div class="session-content">
                                                                 <h6 class="session-title">{{ .title }}</h6>
                                                                 
@@ -335,11 +344,17 @@
                                                                     </div>
                                                                 {{- end -}}
                                                             </div>
+                                                            {{- if $timeSlot.durationMinutes -}}
+                                                            <div class="session-duration">
+                                                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-clock" viewBox="0 0 16 16"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg>
+                                                                {{ $timeSlot.durationMinutes }} min
+                                                            </div>
+                                                            {{- end -}}
                                                             {{- if or .youtube .presentation -}}
                                                             <div class="card-footer bg-light border-0 p-2">
                                                                 <div class="d-flex gap-2 justify-content-end">
                                                                     {{- if .youtube -}}
-                                                                        <button class="btn btn-outline-danger btn-sm" onclick="event.stopPropagation();" data-bs-toggle="modal" data-bs-target="#sessionModal-{{ .title | urlize }}">
+                                                                        <button class="btn btn-outline-danger btn-sm" onclick="event.stopPropagation();" data-bs-toggle="modal" data-bs-target="#sessionModal-{{ $timeSlot.time | replaceRE ":" "" }}-{{ $locationIndex }}-{{ .title | urlize }}">
                                                                             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-youtube" viewBox="0 0 16 16">
                                                                                 <path d="M8.051 1.999h.089c.822.003 4.987.033 6.11.335a2.01 2.01 0 0 1 1.415 1.42c.101.38.172.883.22 1.402l.01.104.022.26.008.104c.065.914.073 1.77.074 1.957v.075c-.001.194-.01 1.108-.082 2.06l-.008.105-.009.104c-.05.572-.124 1.14-.235 1.558a2.01 2.01 0 0 1-1.415 1.42c-1.16.312-5.569.334-6.18.335h-.142c-.309 0-1.587-.006-2.927-.052l-.17-.006-.087-.004-.171-.007-.171-.007c-1.11-.049-2.167-.128-2.654-.26a2.01 2.01 0 0 1-1.415-1.419c-.111-.417-.185-.986-.235-1.558L.09 9.82l-.008-.104A31 31 0 0 1 0 7.68v-.123c.002-.215.01-.958.064-1.778l.007-.103.003-.052.008-.104.022-.26.01-.104c.048-.519.119-1.023.22-1.402a2.01 2.01 0 0 1 1.415-1.42c.487-.13 1.544-.21 2.654-.26l.17-.007.172-.006.086-.003.171-.007A100 100 0 0 1 7.858 2zM6.4 5.209v4.818l4.157-2.408z"/>
                                                                             </svg>
@@ -380,7 +395,7 @@
                                 {{- if $sessions -}}
                                     {{- range $sessions -}}
                                         <!-- Enhanced Modal -->
-                                        <div class="modal fade session-modal" id="sessionModal-{{ .title | urlize }}" tabindex="-1" aria-labelledby="sessionModal-{{ .title | urlize }}-label" aria-hidden="true">
+                                        <div class="modal fade session-modal" id="sessionModal-{{ $timeSlot.time | replaceRE ":" "" }}-{{ $locationIndex }}-{{ .title | urlize }}" tabindex="-1" aria-labelledby="sessionModal-{{ $timeSlot.time | replaceRE ":" "" }}-{{ $locationIndex }}-{{ .title | urlize }}-label" aria-hidden="true">
                                             <div class="modal-dialog modal-xl modal-fullscreen-md-down">
                                                 <div class="modal-content location-{{ $locationIndex }}-modal">
                                                     <div class="modal-header">
@@ -392,7 +407,7 @@
                                                                         <path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/>
                                                                         <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/>
                                                                     </svg>
-                                                                    {{ $timeSlot.time }}
+                                                                    {{ $timeSlot.time }}{{- if $timeSlot.endTime }} – {{ $timeSlot.endTime }}{{- end }}
                                                                 </span>
                                                                 <span class="location-badge-modal">
                                                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-geo-alt" viewBox="0 0 16 16">
@@ -401,6 +416,15 @@
                                                                     </svg>
                                                                     {{ strings.FirstUpper (replace $location "_" " ") }}
                                                                 </span>
+                                                                {{- if .track -}}
+                                                                <span class="track-badge-modal">
+                                                                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-tag" viewBox="0 0 16 16">
+                                                                        <path d="M6 4.5a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0m-1 0a.5.5 0 1 0-2 0 .5.5 0 0 0 2 0"/>
+                                                                        <path d="M2 1h4.586a1 1 0 0 1 .707.293l7 7a1 1 0 0 1 0 1.414l-4.586 4.586a1 1 0 0 1-1.414 0l-7-7A1 1 0 0 1 1 6.586V2a1 1 0 0 1 1-1m0 5.586 7 7 4.586-4.586-7-7H2z"/>
+                                                                    </svg>
+                                                                    {{ .track }}
+                                                                </span>
+                                                                {{- end -}}
                                                             </div>
                                                         </div>
                                                         <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>

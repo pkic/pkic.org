@@ -1,4 +1,4 @@
-{{- $data := .Page.Params.data -}}
+{{- $data := partial "events/event-data.html" . -}}
 BEGIN:VCALENDAR
 VERSION:2.0
 PRODID:-//PKI Consortium//NONSGML v1.0//EN
@@ -19,7 +19,9 @@ BEGIN:VEVENT
 UID:{{ printf "%s-%s-%s" $session.locations $date $slot.time | urlize }}@ics.pkic.org
 DTSTAMP:{{ now.Format "20060102T150405Z" }}
 DTSTART:{{ ( time.AsTime (printf "%sT%s:00" $date $slot.time) $data.timezone ).UTC | time.Format "20060102T150405Z" }}
-DTEND:{{ ( time.AsTime (printf "%sT%s:00" $date (index $slots (add $index 1)).time) $data.timezone ).UTC | time.Format "20060102T150405Z" }}
+{{- with $slot.endTime }}
+DTEND:{{ ( time.AsTime (printf "%sT%s:00" $date .) $data.timezone ).UTC | time.Format "20060102T150405Z" }}
+{{- end }}
 SUMMARY:{{ strings.TrimSpace (replaceRE "(.{70})" "${1}\n    " $session.title | default "No title available") }}
 DESCRIPTION: 
     {{- if $data.draft -}}** Please note that this is a preliminary agenda

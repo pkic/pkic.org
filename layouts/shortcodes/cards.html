@@ -7,6 +7,12 @@
       <div class="{{ with .width }}{{ . }}{{ else }}col-md{{ end }}{{ if ne $cardStyle "bento" }} mb-4{{ end }}">
         {{- if eq $cardStyle "bento" -}}
         <div class="bento-card {{ with .color }}{{ . }}{{ end }} h-100">
+          {{ $cardTitle := .title }}
+          {{ with .image }}
+          <div class="bento-hero-image-wrapper">
+            <img src="{{ . }}" class="bento-hero-image" alt="{{ $cardTitle }}">
+          </div>
+          {{ end }}
           {{ with .icon }}{{ partial "icon" (dict "name" . "size" "2.25rem") }}{{ end }}
           <p class="bento-title">{{ .title }}</p>
           <div class="bento-text">{{ with .text }}{{ . | markdownify }}{{ end }}</div>

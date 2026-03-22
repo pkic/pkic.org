@@ -51,12 +51,6 @@
                 {{- $startMins := add (mul (int $sh) 60) (int $sm) -}}
                 {{- $endMins   := add (mul (int $nh) 60) (int $nm) -}}
                 {{- $dur := sub $endMins $startMins -}}
-                {{- /* Subtract transition time only when both this slot and the next have sessions (session → session),
-                     and neither slot is flagged noTransition: true.
-                     Break/lunch slots and slots before breaks keep their full duration. */ -}}
-                {{- if and $slot.sessions $nextSlot.sessions (not $slot.noTransition) (gt $dur $transitionMins) -}}
-                    {{- $dur = sub $dur $transitionMins -}}
-                {{- end -}}
                 {{- $enrichedSlots = $enrichedSlots | append (merge $slot (dict
                     "endTime"         $nextSlot.time
                     "durationMinutes" $dur

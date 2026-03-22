@@ -14,6 +14,7 @@ params:
 
 data:
   timezone: Europe/Amsterdam
+  transitionMinutes: 0
 
   # Locations with sessions in parallel -----------------------------------------
   locations:
