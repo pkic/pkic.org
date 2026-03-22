@@ -15,6 +15,10 @@ import {
 import type { PagesContext } from "../../../../../../../_lib/types";
 import { adminBulkAttendeeInvitesSchema } from "../../../../../../../../assets/shared/schemas/api";
 
+// Outcome buckets returned to the admin UI.
+type BulkItemResult = { email: string; inviteToken?: string };
+
+
 export async function onRequestPost(
   context: PagesContext<{ eventSlug: string }>,
 ): Promise<Response> {
@@ -43,41 +47,61 @@ export async function onRequestPost(
     throw new AppError(400, "INVITE_PREVIEW_INVALID", "Invalid invite preview token. Render preview before sending.");
   }
 
-  const created: Array<{ email: string; inviteToken: string }> = [];
+  const created: BulkItemResult[] = [];
+  const endorsed: BulkItemResult[] = [];
+  const skipped: BulkItemResult[] = [];
+
   for (const item of body.invites) {
-    const { invite, token } = await createInvite(context.env.DB, {
-      eventId: event.id,
-      inviteeEmail: item.email,
-      inviteeFirstName: item.firstName,
-      inviteeLastName: item.lastName,
-      inviteType: "attendee",
-      sourceType: item.sourceType,
-      ttlHours: 24 * 14,
-    });
+    try {
+      const { invite, token, isNew } = await createInvite(context.env.DB, {
+        eventId: event.id,
+        inviteeEmail: item.email,
+        inviteeFirstName: item.firstName,
+        inviteeLastName: item.lastName,
+        inviteType: "attendee",
+        sourceType: item.sourceType,
+        ttlHours: 24 * 14,
+      });
 
-    const registrationUrl = registrationPageUrl(appBaseUrl, event, {
-      invite: token,
-      source: "invite",
-    });
-    const declineUrl = inviteDeclineUrl(appBaseUrl, event, token);
-    const outboxId = await queueEmail(context.env.DB, {
-      eventId: event.id,
-      templateKey: "attendee_invite",
-      recipientEmail: invite.invitee_email,
-      messageType: "transactional",
-      subject: `Invitation: ${event.name}`,
-      data: {
-        ...buildEventEmailVariables(event, appBaseUrl),
-        registrationUrl,
-        declineUrl,
-      },
-    });
-
-    context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
-    created.push({ email: invite.invitee_email, inviteToken: token });
+      if (isNew) {
+        const registrationUrl = registrationPageUrl(appBaseUrl, event, {
+          invite: token,
+          source: "invite",
+        });
+        const declineUrl = inviteDeclineUrl(appBaseUrl, event, token);
+        const outboxId = await queueEmail(context.env.DB, {
+          eventId: event.id,
+          templateKey: "attendee_invite",
+          recipientEmail: invite.invitee_email,
+          messageType: "transactional",
+          subject: `Invitation: ${event.name}`,
+          data: {
+            ...buildEventEmailVariables(event, appBaseUrl),
+            registrationUrl,
+            declineUrl,
+          },
+        });
+        context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+        created.push({ email: invite.invitee_email, inviteToken: token });
+      } else {
+        // Invitee already has an active invite — admin's intent was noted but no
+        // duplicate email is sent.
+        endorsed.push({ email: invite.invitee_email });
+      }
+    } catch (err) {
+      if (err instanceof AppError && (
+        err.code === "INVITEE_ALREADY_REGISTERED"
+        || err.code === "INVITEE_ALREADY_PROPOSED"
+        || err.code === "INVITEE_UNSUBSCRIBED"
+      )) {
+        skipped.push({ email: item.email });
+      } else {
+        throw err;
+      }
+    }
   }
 
-  return json({ success: true, created });
+  return json({ success: true, created, endorsed, skipped });
 }
 
 export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
