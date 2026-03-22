@@ -1,0 +1,50 @@
+{{/*
+  event-countdown.html — Countdown timer to a conference start date/time.
+
+  Parameters:
+    target    — ISO 8601 date-time string for the countdown target (required)
+    label     — Text above the counter (default: "Conference begins in")
+    cta_text  — Primary button label (default: "Register now")
+    cta_link  — Primary button href   (default: "register/")
+    secondary_text — Secondary link label (optional)
+    secondary_link — Secondary link href  (optional)
+*/}}
+{{- $target        := .Get "target" -}}
+{{- $label         := .Get "label"         | default "Conference begins in" -}}
+{{- $ctaText       := .Get "cta_text"      | default "Register now" -}}
+{{- $ctaLink       := .Get "cta_link"      | default "register/" -}}
+{{- $secText       := .Get "secondary_text" -}}
+{{- $secLink       := .Get "secondary_link" -}}
+
+<div class="event-countdown my-5">
+  <p class="countdown-label">{{ $label }}</p>
+  <div class="countdown-units" data-countdown="{{ $target }}">
+    <div class="countdown-unit">
+      <span class="countdown-value" data-unit="days">--</span>
+      <span class="countdown-text">days</span>
+    </div>
+    <div class="countdown-sep">:</div>
+    <div class="countdown-unit">
+      <span class="countdown-value" data-unit="hours">--</span>
+      <span class="countdown-text">hours</span>
+    </div>
+    <div class="countdown-sep">:</div>
+    <div class="countdown-unit">
+      <span class="countdown-value" data-unit="minutes">--</span>
+      <span class="countdown-text">min</span>
+    </div>
+    <div class="countdown-sep">:</div>
+    <div class="countdown-unit">
+      <span class="countdown-value" data-unit="seconds">--</span>
+      <span class="countdown-text">sec</span>
+    </div>
+  </div>
+  <div class="countdown-cta mt-4">
+    <a href="{{ $ctaLink }}" class="btn btn-page-accent btn-lg px-5">{{ $ctaText }}</a>
+    {{ with $secText }}
+    <a href="{{ $secLink }}" class="btn btn-outline-light btn-lg px-4 ms-2">{{ . }}</a>
+    {{ end }}
+  </div>
+</div>
+
+{{ partial "script.html" (dict "path" "js/modules/event-countdown.js" "build" true "defer" true) }}

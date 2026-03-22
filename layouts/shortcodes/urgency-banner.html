@@ -1,0 +1,26 @@
+{{/*
+  urgency-banner — contextual urgency / scarcity callout.
+
+  Use {{% %}} syntax so inner content is rendered as Markdown.
+
+  Parameters (all optional):
+    icon    — emoji or text icon on the left (default: "⚡")
+    icon_name - name of svg icon from partials/icon.html
+    variant — "danger" | "warning" | "info"  (default: "danger")
+*/}}
+{{- $icon    := .Get "icon"    | default "" -}}
+{{- $iconName := .Get "icon_name" | default "" -}}
+{{- $variant := .Get "variant" | default "danger" -}}
+
+<div class="urgency-banner urgency-banner--{{ $variant }}">
+  <div class="urgency-banner-icon" aria-hidden="true">
+    {{- if ne $iconName "" -}}
+      {{ partial "icon" (dict "name" $iconName "size" "1.5rem") }}
+    {{- else if ne $icon "" -}}
+      {{ $icon }}
+    {{- else -}}
+      ⚡
+    {{- end -}}
+  </div>
+  <div class="urgency-banner-body">{{ .Inner | markdownify }}</div>
+</div>

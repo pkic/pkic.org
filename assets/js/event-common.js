@@ -320,8 +320,9 @@ export function getSessionsForTime({ day, time, location, startOffsetSeconds = 0
             }
 
             const startSeconds = parseTime(agendaSlot.time) ?? 0;
-            const nextAgendaSlot = dayAgenda[index + 1];
-            const endSeconds = nextAgendaSlot ? (parseTime(nextAgendaSlot.time) ?? 0) : startSeconds + 3600;
+            const endSeconds = agendaSlot.endTime
+                ? (parseTime(agendaSlot.endTime) ?? 0)
+                : (dayAgenda[index + 1] ? (parseTime(dayAgenda[index + 1].time) ?? 0) : startSeconds + 3600);
             const matchesTime = isWithinTimeWindow(currentSeconds, startSeconds, endSeconds, startOffsetSeconds, endOffsetSeconds);
 
             if (!matchesTime) {
@@ -480,8 +481,9 @@ export function getSessionSpeakerGroups({ day, time, location, startOffsetSecond
             }
 
             const startSeconds = parseTime(agendaSlot.time) ?? 0;
-            const nextAgendaSlot = dayAgenda[index + 1];
-            const endSeconds = nextAgendaSlot ? (parseTime(nextAgendaSlot.time) ?? 0) : startSeconds + 3600;
+            const endSeconds = agendaSlot.endTime
+                ? (parseTime(agendaSlot.endTime) ?? 0)
+                : (dayAgenda[index + 1] ? (parseTime(dayAgenda[index + 1].time) ?? 0) : startSeconds + 3600);
             const matchesTime = isWithinTimeWindow(currentSeconds, startSeconds, endSeconds, startOffsetSeconds, endOffsetSeconds);
 
             if (!matchesTime) {

@@ -9,7 +9,7 @@ params:
   heroDescription: December 1 - 3, 2026 - Amsterdam, The Netherlands | Hybrid
 ---
 
-> This is a **preliminary** agenda framework. Session titles and confirmed speakers will be updated progressively as the programme is finalised.
+This is a **preliminary** agenda framework. Session titles and confirmed speakers will be updated progressively as the programme is finalised.
 {.callout-warning}
 
 {{< agenda default="2026-12-01" >}}

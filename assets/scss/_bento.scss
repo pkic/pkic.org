@@ -66,46 +66,83 @@
 // --- Bento Card ---
 
 .bento-card {
-  border-radius: 1.25rem;
-  padding: 1.5rem;
+  border-radius: 1.5rem;
+  padding: 1.75rem;
   overflow: hidden;
   position: relative;
-  transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease;
-  min-height: 140px;
+  transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+  min-height: 160px;
   display: flex;
   flex-direction: column;
+  z-index: 1;
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: inherit;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
 
   &:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15) !important;
+    transform: translateY(-4px);
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.12) !important;
+  }
+
+  .bento-hero-image-wrapper {
+    margin: -1.75rem -1.75rem 1.75rem -1.75rem;
+    overflow: hidden;
+    position: relative;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+
+    .bento-hero-image {
+      width: 100%;
+      height: 240px;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+  }
+
+  &:hover .bento-hero-image {
+    transform: scale(1.05);
   }
 
   // Default (light)
-  background: #fff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  color: #0f172a;
 
   // Icon accent
   .bento-icon {
-    font-size: 2rem;
-    margin-bottom: 0.75rem;
+    font-size: 2.25rem;
+    margin-bottom: 1rem;
     display: block;
     line-height: 1;
+    color: #1e293b;
   }
 
   .bento-title {
-    font-size: 1.1rem;
+    font-size: 1.25rem;
     font-weight: 700;
-    margin-bottom: 0.4rem;
-    line-height: 1.3;
+    margin-bottom: 0.5rem;
+    line-height: 1.35;
+    letter-spacing: -0.01em;
+    color: inherit;
   }
 
   .bento-text {
-    font-size: 0.9rem;
-    opacity: 0.85;
+    font-size: 0.95rem;
+    color: #475569;
     flex: 1;
-    line-height: 1.5;
+    line-height: 1.6;
+
+    p, ul, ol, li {
+      color: inherit;
+    }
   }
 
   .bento-badge {
@@ -138,17 +175,59 @@
 // --- Colour Variants (solid fill — bunq style) ---
 
 @mixin bento-solid($bg, $text: #fff) {
-  background: $bg;
+  background: linear-gradient(135deg, lighten($bg, 8%), darken($bg, 6%));
   color: $text;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 4px 16px rgba($bg, 0.25), inset 0 1px 0 rgba(255,255,255,0.2);
 
   .bento-badge {
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(8px);
     color: $text;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
   }
 
   .bento-text {
-    color: rgba($text, 0.9);
+    color: rgba($text, 0.95);
     opacity: 1;
+  }
+
+  .bento-icon {
+    background: rgba(255, 255, 255, 0.15);
+    backdrop-filter: blur(4px);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 8px rgba(0,0,0,0.1);
+    color: inherit;
+  }
+
+  &:hover {
+    box-shadow: 0 8px 24px rgba($bg, 0.35), inset 0 1px 0 rgba(255,255,255,0.3) !important;
+  }
+}
+
+@mixin bento-pale($bg) {
+  background: linear-gradient(145deg, #ffffff 0%, rgba($bg, 0.08) 100%);
+  color: $body-color;
+  border: 1px solid rgba($bg, 0.15);
+  box-shadow: 0 4px 12px rgba($bg, 0.05), inset 0 1px 0 rgba(255,255,255,0.5);
+
+  .bento-badge {
+    background: rgba($bg, 0.1);
+    color: darken($bg, 15%);
+    border: 1px solid rgba($bg, 0.1);
+  }
+
+  .bento-text {
+    color: tint-color($body-color, 20%);
+  }
+
+  .bento-icon {
+    background: linear-gradient(135deg, lighten($bg, 5%), $bg);
+    color: #fff;
+    box-shadow: 0 4px 12px rgba($bg, 0.3), inset 0 1px 2px rgba(255,255,255,0.3);
+  }
+
+  &:hover {
+    box-shadow: 0 8px 24px rgba($bg, 0.12), inset 0 1px 0 rgba(255,255,255,0.8) !important;
   }
 }
 
@@ -188,22 +267,25 @@
 
 // Pale/pastel variants (good for text-heavy cards)
 .bento-green-pale {
-  @include bento-solid($green-pale, $green-deep);
+  @include bento-pale($green);
 }
 .bento-blue-pale {
-  @include bento-solid($blue-pale, $blue-deep);
+  @include bento-pale($blue);
 }
 .bento-orange-pale {
-  @include bento-solid($orange-pale, $orange-deep);
+  @include bento-pale($orange);
 }
 .bento-yellow-pale {
-  @include bento-solid($yellow-pale, $yellow-deep);
+  @include bento-pale($yellow);
 }
 .bento-red-pale {
-  @include bento-solid($red-pale, $red-deep);
+  @include bento-pale($red);
 }
 .bento-purple-pale {
-  @include bento-solid($purple-pale, $purple-deep);
+  @include bento-pale($purple);
+}
+.bento-teal-pale {
+  @include bento-pale($teal);
 }
 
 // Dark variants

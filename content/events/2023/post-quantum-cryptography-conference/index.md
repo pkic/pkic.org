@@ -13,6 +13,7 @@ params:
 
 data:
   timezone: America/Toronto
+  transitionMinutes: 0
 
   locations:
     order: [plenary]

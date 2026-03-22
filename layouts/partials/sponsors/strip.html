@@ -1,0 +1,48 @@
+{{- $site := .site -}}
+{{- $level := .level | default "all" -}}
+{{- $sponsoring := .sponsoring | default $site.Params.name -}}
+{{- $minWeight := int (.minWeight | default 5) -}}
+{{- $containerClass := .containerClass | default "d-flex justify-content-center align-items-center flex-wrap gap-4 hero-sponsors-container" -}}
+{{- $linkClass := .linkClass | default "hero-sponsor-link d-flex align-items-center justify-content-center" -}}
+{{- $logoClass := .logoClass | default "hero-sponsor-logo" -}}
+{{- $label := .label | default "" -}}
+
+{{- $eventSponsors := partial "sponsors/collect.html" (dict "site" $site "sponsoring" $sponsoring "level" $level "minWeight" $minWeight) -}}
+{{- if gt (len $eventSponsors) 0 -}}
+  {{- if $label -}}
+  <div class="w-100 text-center mb-3 text-white text-uppercase" style="font-size: 0.7rem; letter-spacing: 0.1em; opacity: 0.6;">
+    {{ $label }}
+  </div>
+  {{- end -}}
+  <div class="{{ $containerClass }}">
+    {{- $sponsorItems := slice -}}
+    {{- range (shuffle $eventSponsors) -}}
+      {{- $sponsorLevel := .sponsor.level | default "" -}}
+      {{- with index .sponsor.sponsoring $sponsoring -}}
+        {{- $sponsorLevel = .level | default $sponsorLevel -}}
+      {{- end -}}
+      {{- $weight := index hugo.Data.sponsorlevels $sponsorLevel | default 2 -}}
+      {{- $sponsorItems = $sponsorItems | append (dict "data" . "weight" $weight) -}}
+    {{- end -}}
+    {{- $sortedSponsors := sort $sponsorItems "weight" "desc" -}}
+    {{- range $i, $item := $sortedSponsors -}}
+      {{- $s := $item.data -}}
+      {{- $weight := $item.weight -}}
+      {{- $title := printf "%s is a sponsor for %s" $s.name $sponsoring -}}
+      
+      {{- /* Center-out ordering logic */ -}}
+      {{- $order := 0 -}}
+      {{- if eq (mod $i 2) 0 -}}{{- $order = sub 0 (div $i 2) -}}{{- else -}}{{- $order = div (add $i 1) 2 -}}{{- end -}}
+      
+      <a href="{{ $s.website }}" title="{{ $title }}" target="_blank"{{ if $linkClass }} class="{{ $linkClass }}"{{ end }} style="--sponsor-weight: {{ $weight }}; order: {{ $order }};">
+        {{- $img := resources.GetMatch (printf "/images/**/%s/%s.*" $s.id $s.id) -}}
+        {{- if $s.logo -}}
+          {{- $img = resources.GetMatch (printf "/images/sponsors/**/%s" $s.logo) -}}
+        {{- end -}}
+        {{- with $img -}}
+          <img{{ if $logoClass }} class="{{ $logoClass }}"{{ end }} alt="{{ $title }}" src="{{ .RelPermalink }}">
+        {{- end -}}
+      </a>
+    {{- end -}}
+  </div>
+{{- end -}}

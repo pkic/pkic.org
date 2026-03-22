@@ -1,0 +1,27 @@
+{{/*
+  testimonials — quote card grid.
+
+  Use {{< >}} syntax (raw inner content processed as YAML).
+
+  Inner YAML:
+    cols: 3           (optional, default 3 — determines Bootstrap col width)
+    items:
+      - quote:  "…"
+        author: "Name"
+        role:   "Title — Organisation"
+*/}}
+{{- $yaml     := .Inner | transform.Unmarshal -}}
+{{- $colClass := div 12 ($yaml.cols | default 3 | int) -}}
+
+<div class="testimonials-grid row g-4">
+  {{- range $yaml.items }}
+  <div class="col-md-{{ $colClass }}">
+    <div class="testimonial-card">
+      <p class="testimonial-quote">{{ .quote }}</p>
+      <div class="testimonial-author">{{ .author }}
+        {{- with .role }}<span class="testimonial-role">{{ . }}</span>{{ end }}
+      </div>
+    </div>
+  </div>
+  {{- end }}
+</div>

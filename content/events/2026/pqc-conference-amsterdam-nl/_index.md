@@ -23,20 +23,25 @@ cascade:
   params:
     heroImage: amsterdam-nl.png
     heroDescription: December 1 - 3, 2026 - Amsterdam, The Netherlands | Hybrid
+    heroHeight: 65vh
+    heroSponsorLevel: 5
     sectionNav: true
+    sponsoring: "Post-Quantum Cryptography Conference Amsterdam 2026"
 
 params:
   eventType: conference
   eventDate: 2026-12-01T00:00:00Z
   eventDuration: 3
   heroButton:
-    label: Register now
+    label: "Secure your seat →"
     link: register/
   heroTitle: Post-Quantum Cryptography Conference
 
 data:
   name: Post-Quantum Cryptography Conference
   timezone: Europe/Amsterdam
+  draft: true
+
   # Locations with sessions in parallel ---------------------------------------
   # Notes:
   # - Plenary runs in the main red hall (~800 capacity). LIVE STREAMED.
@@ -69,7 +74,7 @@ data:
     - name: Paul van Brouwershaven
       title: Chair PKI Consortium
       bio: |
-        Paul van Brouwershaven is a distinguished leader in cybersecurity with over two decades of experience specializing in Public Key Infrastructure (PKI). He chairs the PKI Consortium and leads its Post-Quantum Cryptography (PQC) Working Group, driving collaboration and innovation in digital trust and cryptographic agility.
+        Paul van Brouwershaven is a distinguished leader in cybersecurity with over two decades of experience specializing in Public Key Infrastructure (PKI). He is the owner and CEO of Digitorus and chairs the PKI Consortium and leads its Post-Quantum Cryptography (PQC) Working Group, driving collaboration and innovation in digital trust and cryptographic agility.
       social:
         linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
         x: https://x.com/vanbroup
@@ -78,12 +83,12 @@ data:
     - name: Albert de Ruiter
       title: Vice Chair PKI Consortium and Policy Authority PKI Dutch Government (Logius)
       bio: |
-        Albert de Ruiter operates the Policy Authority at Logius, the digital government service organization of the Netherlands. He is also a member of the QvC (Quantum Secure Cryptography) working group of the Dutch government, a board member of HAPKIDO, and a member of the PKI Consortium.
+        Albert de Ruiter operates the Policy Authority at Logius, the digital government service organization of the Netherlands. He is also a member of the QvC (Quantum Secure Cryptography) working group of the Dutch government, a board member of HAPKIDO, and the Vice Chair of the PKI Consortium.
 
-    - name: NIST Representative (TBD)
-      title: Keynote speaker (invited)
+    - name: NIST Representative (TBC)
+      title: Invited Speaker
       bio: |
-        We are aiming to host a keynote on the current state of quantum computing and post-quantum cryptography standardization, ideally delivered by a representative from NIST.
+        A frequent contributor to the PKI Consortium’s PQC conferences, NIST remains instrumental in shaping the cryptographic landscape. We are pleased to invite representatives from their Standardization and NCCoE programs to discuss the next phases of PQC development and deployment (pending final confirmation).
 
   # Agenda --------------------------------------------------------------------
   # Design rationale:
@@ -98,7 +103,7 @@ data:
   # - During the breakout hour Rooms A-E run small-group SME-led sessions; Blue hall runs
   #   a larger featured workshop on the same theme for attendees who prefer a bigger-room format.
   # - Post-lunch uses high-interactivity formats (fishbowl, workshop) to counter the energy dip.
-  # - 45-min breaks are intentional networking windows; do not shorten them.
+  # - 30-min breaks are intentional networking windows; do not shorten them.
   # - Session blocks: 45 min (30 talk + 10 Q&A + 5 changeover). Panels: 60 min (55 + 5).
   # - Lunch: 90 min.
   agenda:
@@ -107,153 +112,137 @@ data:
         title: Registration
 
       - time: "09:00"
+        noTransition: true
         sessions:
           - title: Opening
             description: |
               Welcome to the 2026 PQC Conference. The chairs open the conference, set
-              the agenda for the three days ahead, and invite attending sponsors for
-              a one-minute introduction.
+              the agenda for the three days ahead, and invite some attending sponsors for
+              a one-minute pitch (the only commercial message allowed at this conference).
             speakers:
               - Paul van Brouwershaven
               - Albert de Ruiter
             locations:
               - plenary
 
-      - time: "09:45"
+      - time: "09:30"
         sessions:
-          - title: "Keynote: The state of quantum computing and PQC standardisation"
+          - title: "The state of quantum computing and cryptographic threats"
             description: |
-              Where does the quantum threat stand today, and what does the completion
-              of NIST standardisation actually mean for your organisation? This keynote
-              cuts through the noise and sets the scene for the three days ahead.
-
-              _Target speaker: a NIST representative (TBD)._
+              An overview of where quantum computing stands today and what it means
+              for cryptographic security. Speaker to be confirmed.
             track: Keynote
-            speakers:
-              - NIST Representative (TBD)
             locations:
               - plenary
 
-      - time: "10:30"
+      - time: "10:15"
         title: Break
 
-      - time: "11:15"
+      - time: "11:00"
         sessions:
-          - title: "Are you actually ready? The honest PQC migration readiness check"
+          - title: "NIST PQC standardization: status update"
             description: |
-              A candid look at where organisations really stand: what is working, what is
-              stalling, and what the most advanced adopters have in common. Not a roadmap
-              slide deck — an honest conversation about the gap between planning and doing.
+              A status update from NIST on the post-quantum cryptography
+              standardization process. Speaker to be confirmed.
+            speakers:
+              - NIST Representative (TBC)
             locations:
               - plenary
 
-          - title: "Cryptographic discovery: how do you find what you don't know you have?"
+          - title: To be announced
             description: |
-              You cannot migrate what you have not inventoried. This session covers the
-              practical realities of cryptographic discovery — the tooling, the surprises,
-              the gaps, and what a meaningful inventory actually looks like in production.
+              Session details will be announced soon.
             locations:
               - blue_hall
 
-      - time: "12:00"
+      - time: "11:45"
         sessions:
-          - title: "Migration planning: where to start, what to prioritise, and how to avoid common pitfalls"
+          - title: To be announced
             description: |
-              You know you need to migrate — but where do you actually start? This session
-              covers how to build a realistic migration plan, how to prioritise across
-              your inventory, and the common pitfalls that can stall or derail your progress.
+              Session details will be announced soon.
             locations:
               - plenary
 
-          - title: "Hybrid and composite signatures: what to deploy now and what to wait for"
+          - title: To be announced
             description: |
-              The standards are here — but which hybrid and composite approaches are actually
-              interoperable and safe to deploy today? A practical, opinionated session on
-              navigating the current landscape without painting yourself into a corner.
-            track: Workshop
+              Session details will be announced soon.
             locations:
               - blue_hall
 
-          - title: "Breakout A: Migration planning — governance, ownership, and accountability"
+      - time: "12:45"
+        title: Lunch
+
+      - time: "13:45"
+        sessions:
+          - title: To be announced
             description: |
-              Who owns PQC migration in your organisation, and how do you hold progress
-              accountable across teams, vendors, and timelines?
+              Session details will be announced soon.
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - blue_hall
+
+      - time: "14:45"
+        sessions:
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - blue_hall
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
             locations:
               - room_a
 
-          - title: "Breakout B: Inventories and discovery — keeping them current"
+          - title: To be announced
             description: |
-              Building a cryptographic inventory is one challenge; keeping it accurate
-              as systems evolve is another. This session focuses on the operational side.
+              Session details will be announced soon.
             locations:
               - room_b
 
-          - title: "Breakout C: PKI migration — certificates, CAs, and trust anchors"
+          - title: To be announced
             description: |
-              Certificate lifecycle, CA migration paths, trust store changes, and the
-              awkward question of what to do with long-lived certificates.
+              Session details will be announced soon.
             locations:
               - room_c
 
-          - title: "Breakout D: Crypto agility — architecture that doesn't lock you in"
+          - title: To be announced
             description: |
-              Designing systems that can swap algorithms without a full rebuild. Lessons
-              from teams that got it right — and teams that didn't.
+              Session details will be announced soon.
             locations:
               - room_d
-
-          - title: "Breakout E: Sector perspectives — regulated industries and critical infrastructure"
-            description: |
-              Banking, energy, healthcare, aviation: every sector has its own migration
-              constraints. Share your sector's specific challenges and learn from peers.
-            locations:
-              - room_e
-
-      - time: "13:00"
-        title: Lunch
-
-      - time: "14:30"
-        sessions:
-          - title: "Migration planning under pressure — a fishbowl debate"
-            description: |
-              A small group of practitioners debate migration strategy in the centre of
-              the room. Audience members can swap in at any point. Expect disagreement,
-              hard questions, and more honesty than a standard panel.
-            track: Panel discussion
-            locations:
-              - plenary
-
-          - title: "Crypto agility in practice: building systems ready for the next algorithm change"
-            description: |
-              Hands-on workshop exploring real architectures: what crypto agility actually
-              requires at the code, infrastructure, and process level — and where the
-              shortcuts come back to bite you.
-            track: Workshop
-            locations:
-              - blue_hall
 
       - time: "15:30"
         title: Break
 
-      - time: "16:15"
+      - time: "16:00"
         sessions:
-          - title: "Three migrations, three lessons: rapid-fire case studies"
+          - title: To be announced
             description: |
-              Three organisations present their PQC migration experience in 12 minutes
-              each — no slides beyond a single diagram, no marketing, just what happened.
-              Followed by a joint Q&A.
-            track: Case studies
+              Session details will be announced soon.
             locations:
               - plenary
 
-          - title: "PQC tooling showcase: live demos from migration and testing tools"
+          - title: To be announced
             description: |
-              Side-by-side live demonstrations of leading PQC migration, discovery, and
-              testing tools. See what they can and cannot do — then ask the hard questions.
+              Session details will be announced soon.
             locations:
               - blue_hall
 
       - time: "17:00"
+        noTransition: true
         sessions:
           - title: Closing (Day 1)
             description: |
@@ -271,14 +260,15 @@ data:
             locations:
               - blue_hall
 
-      - time: "17:15"
-        title: "Networking & drinks"
+      - time: "17:05"
+        title: End of day one
 
     2026-12-02:
       - time: "08:00"
         title: Registration
 
       - time: "09:00"
+        noTransition: true
         sessions:
           - title: "Welcome back — Day 2"
             description: |
@@ -298,153 +288,127 @@ data:
 
       - time: "09:15"
         sessions:
-          - title: "The supply chain blind spot: why most organisations don't know what they depend on"
+          - title: "Cryptographic module vendors"
             description: |
-              Vendor-provided libraries, hardware chips, cloud services, open-source
-              components — your cryptography is distributed across a supply chain you
-              probably cannot fully see yet. This session frames why that matters and
-              what the most exposed organisations are doing about it.
-            locations:
-              - plenary
-
-          - title: "CBOM: building and using your Cryptographic Bill of Materials"
-            description: |
-              What is a CBOM, how does it relate to an SBOM, and what do you actually
-              do with one? A technical session on structure, tooling, and integration
-              into existing security and procurement workflows.
-            locations:
-              - blue_hall
-
-      - time: "10:00"
-        sessions:
-          - title: "Vendor readiness reality check: separating marketing from product"
-            description: |
-              A frank panel with enterprise buyers and vendors. Which products are
-              genuinely PQC-ready, which are shipping promises, and what contractual
-              and technical levers do buyers have?
+              The famous HSM panel — a panel discussion with leading cryptographic
+              module vendors covering the current state of PQC support in hardware
+              security modules and related products. Moderators and panellists to
+              be confirmed.
             track: Panel discussion
             locations:
               - plenary
 
-          - title: "Automated crypto discovery: tools, methods, and the things they miss"
+          - title: To be announced
             description: |
-              A comparative look at automated discovery approaches — SAST, DAST,
-              network scanning, agent-based monitoring — covering what each finds,
-              what each misses, and how to combine them effectively.
+              Session details will be announced soon.
             locations:
               - blue_hall
 
-      - time: "10:45"
+      - time: "10:15"
         title: Break
 
-      - time: "11:30"
+      - time: "11:00"
         sessions:
-          - title: "Supply chain readiness & crypto discovery: setting the scene"
+          - title: To be announced
             description: |
-              Framing of the day's theme for the afternoon breakout sessions: the key
-              tensions, open questions, and what good looks like for each topic.
+              Session details will be announced soon.
             locations:
               - plenary
 
-          - title: "From inventory to action: prioritising your cryptographic findings"
+          - title: To be announced
             description: |
-              Having a complete inventory is only useful if you know what to fix first.
-              This session covers risk-based prioritisation, dependency mapping, and
-              turning discovery output into a credible remediation plan.
+              Session details will be announced soon.
             locations:
               - blue_hall
 
-      - time: "12:15"
+      - time: "11:45"
         sessions:
-          - title: "Continuous crypto monitoring: treating cryptography as a first-class security control"
+          - title: To be announced
             description: |
-              Cryptographic posture drifts the moment you stop watching. This workshop
-              covers monitoring architecture, alerting strategies, and how to integrate
-              crypto visibility into your existing security operations.
-            track: Workshop
+              Session details will be announced soon.
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
             locations:
               - blue_hall
 
-          - title: "Breakout A: Vendor constraints and procurement timelines"
-            description: |
-              How do you negotiate PQC readiness into vendor contracts? What timelines
-              are realistic, and what happens when a critical supplier is not ready?
-            locations:
-              - room_a
-
-          - title: "Breakout B: Crypto discovery — methods, tooling, and pitfalls"
-            description: |
-              Hands-on discussion of what works (and what doesn't) for discovery
-              at scale — from small teams to large enterprises.
-            locations:
-              - room_b
-
-          - title: "Breakout C: Crypto agility — architecture and phased rollout"
-            description: |
-              Moving from monolithic cryptographic dependencies to agile, swappable
-              implementations. Patterns, anti-patterns, and hard-won lessons.
-            locations:
-              - room_c
-
-          - title: "Breakout D: Sector deep dive (TBA)"
-            description: |
-              An in-depth discussion focused on the supply chain and discovery challenges
-              specific to one industry sector. Sector and facilitator to be announced.
-            locations:
-              - room_d
-
-          - title: "Breakout E: Implementation clinic — bring your challenges"
-            description: |
-              Stuck on something? Bring your real implementation problem and work through
-              it with a small group of peers and an experienced facilitator.
-            locations:
-              - room_e
-
-      - time: "13:15"
+      - time: "12:45"
         title: Lunch
+
+      - time: "13:45"
+        sessions:
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - blue_hall
 
       - time: "14:45"
         sessions:
-          - title: "What have we learned? Supply chain and discovery synthesis"
+          - title: To be announced
             description: |
-              A fishbowl-format synthesis panel drawing on the morning sessions and
-              breakout discussions. What are the common patterns? Where do people
-              disagree? What should you take back to your organisation this week?
-            track: Panel discussion
+              Session details will be announced soon.
             locations:
               - plenary
 
-          - title: "Securing the delivery pipeline: PQC for code signing, containers, and CI/CD"
+          - title: To be announced
             description: |
-              Software supply chain security meets post-quantum cryptography. This
-              workshop covers code signing migration, container image trust, pipeline
-              integrity, and the intersection with SBOM and CBOM requirements.
-            track: Workshop
+              Session details will be announced soon.
             locations:
               - blue_hall
 
-      - time: "15:45"
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_a
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_b
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_c
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_d
+
+      - time: "15:30"
         title: Break
 
-      - time: "16:30"
+      - time: "16:00"
         sessions:
-          - title: "When your vendor isn't ready: alternative strategies and contractual levers"
+          - title: To be announced
             description: |
-              What do you do when a critical supplier cannot give you a credible PQC
-              roadmap? This session covers compensating controls, risk acceptance
-              frameworks, and how to use procurement as a forcing function.
+              Session details will be announced soon.
             locations:
               - plenary
 
-          - title: "Post-quantum TLS in practice: deployment, interoperability, and what breaks"
+          - title: To be announced
             description: |
-              Real deployment experience with PQC-enabled TLS: which stacks are ready,
-              which middleboxes fail, how to test at scale, and what hybrid configurations
-              are safe to run in production today.
+              Session details will be announced soon.
             locations:
               - blue_hall
 
-      - time: "17:15"
+      - time: "17:00"
+        noTransition: true
         sessions:
           - title: Closing (Day 2)
             description: |
@@ -462,14 +426,18 @@ data:
             locations:
               - blue_hall
 
-      - time: "17:30"
+      - time: "17:05"
         title: "Networking & drinks"
+
+      - time: "18:30"
+        title: "End of day two"
 
     2026-12-03:
       - time: "08:00"
         title: Registration
 
       - time: "09:00"
+        noTransition: true
         sessions:
           - title: "Welcome back — Day 3"
             description: |
@@ -490,154 +458,129 @@ data:
 
       - time: "09:15"
         sessions:
-          - title: "National mandates lightning round: six countries, six updates, 45 minutes"
+          - title: To be announced
             description: |
-              Brief structured updates from national programme representatives: what
-              is mandated, what is funded, where progress has stalled, and what the
-              rest of the world can learn from each experience.
-            track: Lightning talks
+              Session details will be announced soon.
             locations:
               - plenary
 
-          - title: "PQC in hardware: HSMs, TPMs, secure enclaves, and legacy appliances"
+          - title: "Cryptographic module interoperability"
             description: |
-              Not everything runs on software you can patch. This session covers the
-              practical realities of PQC migration in hardware-bound environments —
-              support matrices, firmware update realities, and long-lifecycle strategies.
+              A technical panel exploring PQC interoperability across cryptographic
+              modules — covering HSMs, smartcards, tokens, and related hardware.
+              Moderators and panellists to be confirmed.
+            track: Panel discussion
             locations:
               - blue_hall
 
-      - time: "10:00"
-        sessions:
-          - title: "Coordinating across borders: EU, ETSI, ISO, and the standards maze"
-            description: |
-              When national mandates, EU regulations, and international standards pull
-              in different directions, which requirements take precedence? A practical
-              guide to navigating the overlapping landscape without losing your mind.
-            locations:
-              - plenary
-
-          - title: "Open-source PQC libraries: what is production-ready and what needs maturity"
-            description: |
-              liboqs, the NIST reference implementations, language-native libraries —
-              a frank assessment of what is ready to deploy, what still lacks audit
-              coverage or performance, and where contributions are most needed.
-            locations:
-              - blue_hall
-
-      - time: "10:45"
+      - time: "10:15"
         title: Break
 
-      - time: "11:30"
+      - time: "11:00"
         sessions:
-          - title: "National approaches to PQC: updates and lessons from the front line"
+          - title: To be announced
             description: |
-              Representatives from national cybersecurity agencies and government
-              programmes share their latest updates, practical lessons, and the
-              challenges that no one quite anticipated.
+              Session details will be announced soon.
             locations:
               - plenary
 
-          - title: "Regulatory obligations for PQC: DORA, NIS2, and sector-specific requirements"
+          - title: To be announced
             description: |
-              Which regulations create binding PQC obligations, on what timeline, and
-              for whom? A practical session on compliance gaps, regulatory expectations,
-              and how to document your migration progress for auditors and regulators.
+              Session details will be announced soon.
             locations:
               - blue_hall
 
-      - time: "12:15"
+      - time: "11:45"
         sessions:
-          - title: "National programme leads open forum: ask us anything"
+          - title: To be announced
             description: |
-              An open Q&A with national programme representatives. Submit questions
-              in advance or ask live. The conversation that doesn't happen in the
-              formal session — direct, frank, and on the record.
-            track: Open forum
+              Session details will be announced soon.
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
             locations:
               - blue_hall
 
-          - title: "Roundtable A: Policy coordination and cross-agency alignment"
-            description: |
-              How do national programmes align standards, timelines, and mandates
-              across departments, agencies, and regulated sectors?
-            locations:
-              - room_a
-
-          - title: "Roundtable B: Critical infrastructure — the hardest migration challenges"
-            description: |
-              Long-lived systems, safety-critical environments, and the specific
-              constraints that make PQC migration in critical infrastructure uniquely difficult.
-            locations:
-              - room_b
-
-          - title: "Roundtable C: Finance and payments — regulatory pressure and migration timelines"
-            description: |
-              How are financial institutions approaching PQC under overlapping regulatory
-              timelines? Where is the industry aligned, and where is it fragmented?
-            locations:
-              - room_c
-
-          - title: "Roundtable D: Telecom and IoT — scale, devices, and long lifecycle systems"
-            description: |
-              Billions of devices, multi-decade lifespans, distributed update mechanisms.
-              The particular challenges of PQC at telecom and IoT scale.
-            locations:
-              - room_d
-
-          - title: "Roundtable E: Implementation realities — staffing, procurement, and measuring progress"
-            description: |
-              The operational realities of running a PQC programme: building internal
-              expertise, engaging the right vendors, and demonstrating progress to leadership.
-            locations:
-              - room_e
-
-      - time: "13:15"
+      - time: "12:45"
         title: Lunch
 
-      - time: "14:45"
+      - time: "13:45"
         sessions:
-          - title: "What would it take to get every organisation on track? A synthesis"
+          - title: To be announced
             description: |
-              Pulling together the threads from all three days and from the national
-              roundtables: what are the systemic blockers, who needs to move first,
-              and what commitments can this community make before we leave Amsterdam?
+              Session details will be announced soon.
+            locations:
+              - blue_hall
+
+      - time: "14:30"
+        sessions:
+          - title: "Government representatives and regulators"
+            description: |
+              A panel discussion with government representatives and regulators from
+              around the world on PQC policy, mandates, and migration timelines.
+              Panellists to be confirmed.
             track: Panel discussion
             locations:
               - plenary
 
-          - title: "War stories: real implementation failures and what we learned"
+          - title: To be announced
             description: |
-              An unfiltered session from practitioners who have been through it.
-              No vendor content. No success theatre. Just what went wrong, why,
-              and what they would do differently — so you don't have to repeat it.
+              Session details will be announced soon.
             locations:
               - blue_hall
 
-      - time: "15:45"
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_a
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_b
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_c
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_d
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_e
+
+      - time: "15:30"
         title: Break
 
-      - time: "16:30"
+      - time: "16:00"
         sessions:
-          - title: "The road ahead: from migration to crypto-agile operations"
+          - title: To be announced
             description: |
-              After the migration sprint is over, what does sustainable cryptographic
-              agility look like? A forward-looking session on where the field is heading
-              — new threats, new standards, and the organisational capability you will
-              need to stay ahead.
+              Session details will be announced soon.
             locations:
               - plenary
 
-          - title: "What does the PQC community need next?"
+          - title: To be announced
             description: |
-              An open community discussion: what is missing from the ecosystem in terms
-              of standards, tooling, education, guidance, or coordination — and what
-              can this community commit to building together?
-            track: Open forum
+              Session details will be announced soon.
             locations:
               - blue_hall
 
-      - time: "17:15"
+      - time: "16:45"
+        noTransition: true
         sessions:
           - title: Conference closing
             description: |
@@ -649,310 +592,205 @@ data:
             locations:
               - plenary
 
-      - time: "17:30"
-        title: "Farewell networking & drinks"
+      - time: "17:00"
+        title: "End of day three — thank you for joining us!"
 ---
 
-The post-quantum cryptography transition has entered its deployment phase. NIST's first standards — ML-KEM, ML-DSA, and SLH-DSA — are final. National programmes are moving from guidance to mandates. And adversaries are already collecting encrypted data today, waiting for the moment they can decrypt it.
+Quantum computers will soon break the cryptographic foundation of the modern enterprise. This is no longer a theoretical risk for cryptography experts to debate—it is an imminent business continuity crisis that every digital organisation must solve.
 
-**This is where the migration community gathers.** Three days of unfiltered practitioner experience, regulatory clarity, and the connections that accelerate real-world PQC deployment — in the city that hosted one of the world's first major PQC conferences.
+The **PQC Conference Amsterdam 2026** is the definitive global gathering for the post-quantum transition. The rules from NIST are finalized. The deployment phase is here. The question is no longer *if* you should migrate, but *how fast* and *what breaks* along the way.
 
-> The conference is open to anyone working on post-quantum cryptography and is **not limited** to members of the PKI Consortium.
+This isn't an awareness event. This is where the organisations leading the transition share **exactly how they are doing it**. Three days of practitioner-level experience: actionable migration blueprints, off-the-record discussions, and the connections that will cut months off your delivery timeline.
+
+{{< stat-grid class="my-5" >}}
+stats:
+  - number: "2,600+"
+    label: "Prior Attendees"
+  - number: "40+"
+    label: "Speakers"
+  - number: "25+"
+    label: "Sessions"
+  - number: "6"
+    label: "Editions"
+{{< /stat-grid >}}
+
+> **Join the community.** The conference is open to every organization preparing for the quantum transition and is completely free to attend. It is not limited to members of the PKI Consortium.
 {.callout-info}
 
-{{< photo-grid >}}
-cols: 3
-gap: "0.375rem"
+## A Conference Designed for the Entire Enterprise
+
+Migrating an enterprise to post-quantum cryptography requires more than just engineers writing code. It requires budget, risk mandates, policy alignment, and technology procurement.
+
+We have structured the 2026 agenda to serve the two distinct halves of a successful migration:
+
+{{< cards >}}
+card_style: bento
+cards:
+  - color: "bento-dark"
+    image: "photos/ANN04967.jpg"
+    icon: compass
+    title: "The Strategic Track"
+    text: |
+      For the C-Suite, Risk Officers, and PMOs. The Strategic Track focuses entirely on the *business* of migration.
+      
+      - **Regulatory Compliance:** Navigate NIS2, DORA, and evolving mandates.
+      - **Budget & Scoping:** Estimate the true cost of a multi-year migration.
+      - **Vendor Assessments:** Which platforms and HSMs are actually ready?
+      - **Timeline Strategy:** Sequencing without breaking legacy applications.
+      
+      **Plenary / Red Hall**
+  - color: "bento-darker"
+    image: "photos/ANN06210.jpg"
+    icon: terminal
+    title: "The Technical Track"
+    text: |
+      For Architects, DevOps, and Implementers. Deep-dive sessions on the actual implementation of the new NIST standards.
+      
+      - **Crypto-Agility in CI/CD:** Pipelines that allow algorithm swapping.
+      - **Hybrid Key Exchange:** Classical/PQC TLS handshakes.
+      - **Certificate Automation:** Managing the collision of PQC sizes with 47-day limits.
+      - **Hands-on Tooling:** Libraries ready for use today.
+      
+      **Parallel / Blue Hall**
+{{< /cards >}}
+
+{{< photo-grid class="my-5 shadow-sm rounded overflow-hidden" >}}
+cols: 4
+gap: "0.25rem"
 height: 240
 photos:
   - src: "photos/ANN04967.jpg"
-    alt: "Packed auditorium at PQC Conference 2025, Kuala Lumpur"
+    alt: "Packed auditorium at PQC Conference 2025"
     span: 2
     rowspan: 2
   - src: "photos/ASP_1760.jpg"
-    alt: "Keynote address: Navigating National Cyber Resilience in the Quantum Era"
-    caption: "PQC Conference 2025 — Kuala Lumpur"
+    alt: "Keynote address at PQC Conference 2025"
+    rowspan: 2
   - src: "photos/ANN05834.jpg"
     alt: "Panel discussion at PQC Conference 2025"
-    caption: "PQC Conference 2025 — Kuala Lumpur"
+  - src: "photos/ANN06210.jpg"
+    alt: "Networking at PQC Conference 2025"
+    span: 2
+  - src: "photos/IMG_1977.JPEG"
+    alt: "Audience and presentation at PQC Conference 2025"
+    rowspan: 2
+  - src: "photos/IMG_2025.JPEG"
+    alt: "Conference audience at PQC Conference 2023"
+    span: 2
 {{< /photo-grid >}}
 
-## Why now
-
-The threat is no longer theoretical — and the window to act is narrower than most organisations assume.
-
-{{% bento cols="3" gap="1.5rem" %}}
-{{% bento-cell %}}
-
-**NIST standards are final**
-
-ML-KEM, ML-DSA, and SLH-DSA are published standards. The deployment phase has begun — the question is how fast your organisation can move.
-
-{{% /bento-cell %}}
-{{% bento-cell %}}
-
-**Harvest now, decrypt later**
-
-Adversaries are already collecting encrypted traffic today. Anything protected by classical cryptography now may be readable once sufficiently capable quantum computers exist.
-
-{{% /bento-cell %}}
-{{% bento-cell img="photos/ANN06210.jpg" alt="Networking at PQC Conference 2025" rowspan="2" caption="Networking — PQC Conference 2025" %}}{{% /bento-cell %}}
-{{% bento-cell %}}
-
-**Regulatory pressure is accelerating**
-
-NIS2, DORA, and national cybersecurity mandates are beginning to require demonstrable cryptographic agility. Enforcement timelines are shorter than most migration programmes assume.
-
-{{% /bento-cell %}}
-{{% bento-cell %}}
-
-**TLS certificate lifetimes shrinking to 47 days**
-
-The CA/Browser Forum is moving toward 47-day maximum certificate lifetimes. Organisations not yet automating will find PQC migration compound an already urgent challenge.
-
-{{% /bento-cell %}}
-{{% /bento %}}
-
-Organisations that move first build institutional capability that compounds. Those that wait accumulate technical debt — and exposure — with every month of delay.
-
-## What you will gain
-
-This is a working conference for practitioners at the execution stage, not an awareness event.
+## Why You Cannot Afford to Wait
 
 {{< cards >}}
 card_style: bento
 cards:
-  - icon: "compass"
-    color: bento-blue
-    title: "A practical migration roadmap"
-    width: "col-md-4"
-    text: "Leave with a structured, prioritised approach to PQC migration — built from real deployment experience, not theoretical frameworks."
-  - icon: "gavel"
-    color: bento-purple
-    title: "Regulatory clarity"
-    width: "col-md-4"
-    text: "Understand what NIS2, DORA, and national mandates actually require, on what timelines, and how to document progress for auditors and regulators."
-  - icon: "telescope"
-    color: bento-teal
-    title: "Vendor and technology landscape"
-    width: "col-md-4"
-    text: "Separate credible PQC readiness from marketing claims. Understand which products, libraries, and protocols are genuinely ready to deploy today."
-  - icon: "bar-chart"
-    color: bento-green
-    title: "Peer benchmarking"
-    width: "col-md-6"
-    text: "Find out where your organisation stands relative to peers in your sector — and what separates those making progress from those that are stalling."
-  - icon: "lightbulb"
-    color: bento-orange
-    title: "Lessons from early adopters"
-    width: "col-md-3"
-    text: "Hear directly from organisations that have been through it: what failed, what they would do differently, and what genuinely accelerated their migration."
-  - icon: "users"
-    color: bento-blue
-    title: "Connections that move things forward"
-    width: "col-md-3"
-    text: "Meet the government contacts, standards contributors, and architects you cannot reach through marketing channels — and leave with relationships that deliver."
+  - color: bento-orange-pale
+    icon: alert-triangle
+    title: "The rules are finalized"
+    text: "NIST has officially published ML-KEM, ML-DSA, and SLH-DSA. The deployment phase has begun. The blueprint is set."
+  - color: bento-teal-pale
+    icon: cloud
+    title: "Harvest now, decrypt later"
+    text: "Adversaries are collecting your encrypted traffic today. Every day you delay is another day of sensitive data permanently exposed to future quantum attacks."
+  - color: bento-red-pale
+    icon: gavel
+    title: "Regulatory countdowns"
+    text: "Auditors and regulators are turning guidance into mandates. Failing to demonstrate a cryptographic agility plan risks severe penalties."
+  - color: bento-purple-pale
+    icon: cpu
+    title: "The automation collision"
+    text: "Moving to 47-day certificate lifespans while manually handling complex PQC migrations is a recipe for catastrophic infrastructure outages."
 {{< /cards >}}
 
-{{< button label="Register now" link="/events/2026/pqc-conference-amsterdam-nl/register/" type="primary" >}}
+## Free to Attend, Supported by the Community
 
-## Sponsors
+The PKI Consortium believes that securing the world's digital infrastructure against quantum threats shouldn't be hidden behind expensive paywalls. 
 
-Sponsoring the 2026 PQC Conference places your organisation in front of the most concentrated audience of post-quantum cryptography decision-makers in the world.
+**Attendance to the PQC Conference—whether in-person in Amsterdam or virtual—is 100% free.**
 
-{{% row gap="4" align="start" %}}
-{{% col size="4" %}}
+{{< cards >}}
+card_style: bento
+cards:
+  - title: "Support the Mission"
+    color: bento-green-pale
+    image: "photos/ASP_1760.jpg"
+    icon: landmark
+    text: |
+      While tickets are free, running a global technical conference is not. While our main room can hold 800 attendees and the total venue many more, our total attendee capacity will depend on the available budget. If your organization finds value in our work, please consider making a voluntary donation or sponsoring the PKI Consortium.
 
-**Direct access to buyers**
+      *Please note: Donations are entirely voluntary and are strictly separated from event attendance. A donation is a contribution to our ongoing mission, not a fee or payment for conference access.*
+    links:
+      - text: "Donate to the Consortium →"
+        url: "/donate/"
+        class: "btn-primary shadow-sm"
+{{< /cards >}}
 
-Enterprise architects, CISOs, and government programme leads attending this conference are actively specifying and procuring PQC-ready solutions.
+## Registration and Format
 
-{{% /col %}}
-{{% col size="4" %}}
+We offer two ways to experience PQC Amsterdam 2026. Register early, as our in-person capacity is strictly capped to the venue limits.
 
-**Credibility in a growing market**
+{{< cards >}}
+card_style: bento
+cards:
+  - color: bento-blue-pale
+    image: "photos/ANN05834.jpg"
+    icon: users
+    title: "In-Person (Amsterdam)"
+    text: |
+      Join us at the Meervaart. **For three days, the entire venue is ours.**
+      
+      - **Full 3-day venue access**
+      - **7 capped breakout rooms** for off-the-record discussions
+      - Direct, 1:1 networking sessions with regulators and peers
+      - Catered lunches, coffee, and networking drinks
+      - *Registration is Free. Seats are strictly limited.*
+    links:
+      - text: "Reserve In-Person Seat →"
+        url: "register/"
+        class: "btn-primary shadow-sm"
+  - color: bento-blue-pale
+    image: "photos/album-photo-2.jpg"
+    icon: globe
+    title: "Virtual / On-Demand"
+    text: |
+      Can't make it to Amsterdam? Follow the transition globally.
+      
+      - **Live global livestreams** of Plenary and Technical tracks
+      - Participate in real-time chat and Q&A
+      - Post-event access to all recorded main-stage sessions
+      - Download shared presentation decks and resources
+      - *Registration is Free. Global access.*
+    links:
+      - text: "Register for Virtual Access →"
+        url: "register/"
+        class: "btn-outline-primary"
+{{< /cards >}}
 
-Association with the PKI Consortium's neutral, vendor-agnostic platform signals genuine technical commitment — a distinction that matters to buyers evaluating competing claims.
-
-{{% /col %}}
-{{% col size="4" %}}
-
-**Global reach**
-
-Plenary sessions are live streamed internationally. Conference recordings and coverage reach an audience far beyond the attendees in the room.
-
-{{% /col %}}
-{{% /row %}}
+## Supported By
 
 {{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
 
-{{< button label="View sponsorship opportunities" link="/sponsors/" type="outline-primary" >}}
+## Programme & Speakers
 
-## Who should attend
-
-Whether you are setting strategic direction or building the migration in production, this conference is for people actively working on the transition — not watching from the sidelines.
+We don't select speakers based on marketing budgets. We select based on **depth of implementation experience**. You will hear directly from national cybersecurity agencies, NIST/ETSI members, enterprise architects running hybrid setups, and cloud security teams.
 
 {{< cards >}}
 card_style: bento
 cards:
-  - icon: "shield-check"
-    color: bento-blue-pale
-    title: "Security and risk leadership"
-    width: "col-md-3"
-    text: "CISOs, CROs, and security executives navigating PQC strategy, board-level reporting, and organisational investment decisions."
-  - icon: "building"
-    color: bento-teal
-    title: "PKI and cryptography architects"
-    width: "col-md-6"
-    text: "Engineers and architects designing migration paths, evaluating hybrid strategies, and building crypto-agile infrastructure."
-  - icon: "cloud"
-    color: bento-green-pale
-    title: "Cloud and infrastructure engineers"
-    width: "col-md-3"
-    text: "The teams implementing PQC in TLS stacks, certificate pipelines, HSMs, and cloud-native environments."
-  - icon: "landmark"
-    color: bento-purple-pale
-    title: "Government and policy professionals"
-    width: "col-md-4"
-    text: "National programme leads, regulatory staff, and policy architects coordinating mandates, timelines, and cross-agency alignment."
-  - icon: "terminal"
-    color: bento-blue
-    title: "DevSecOps and platform teams"
-    width: "col-md-4"
-    text: "Teams managing the software supply chain, code signing, container trust, and CI/CD pipeline integrity facing the PQC transition."
-  - icon: "layers"
-    color: bento-orange-pale
-    title: "Technology vendors"
-    width: "col-md-4"
-    text: "Companies building PQC-ready products who want to understand enterprise buyer requirements directly from the people making procurement decisions."
+  - color: bento-teal-pale
+    icon: calendar
+    title: "The Agenda"
+    text: "Our three-day agenda follows a deliberate arc: framing keynote → parallel workshops → synthesis panel. Session titles and confirmed speakers are updated progressively as the programme is finalised."
+    links:
+      - text: "View the full agenda →"
+        url: "/events/2026/pqc-conference-amsterdam-nl/agenda/"
+        class: "btn-primary shadow-sm"
+  - color: bento-orange-pale
+    icon: mic
+    title: "Call for Speakers"
+    text: "Early proposals have a significantly higher chance of selection. All speakers are subject to our strict **Zero Product Promotion Guarantee**—ensuring authentic insights, not sales pitches."
+    links:
+      - text: "Submit a proposal →"
+        url: "/events/2026/pqc-conference-amsterdam-nl/propose/"
+        class: "btn-outline-primary"
 {{< /cards >}}
-
-## Conference themes
-
-Each day is structured around a focused theme, with keynotes and panels in the main hall and technical workshops and expert-led breakouts running in parallel.
-
-{{< cards >}}
-card_style: bento
-cards:
-  - icon: "building"
-    color: bento-blue
-    title: "Enterprise PQC Migration"
-    width: "col-md-8"
-    text: "Where to start, how to prioritise, and how to sustain progress across complex, multi-system environments."
-  - icon: "search"
-    color: bento-teal
-    title: "Cryptographic Discovery and Inventory"
-    width: "col-md-4"
-    text: "Finding what you have, keeping inventories current, and turning discovery output into a credible remediation plan."
-  - icon: "settings"
-    color: bento-green
-    title: "Crypto-Agility and Automation"
-    width: "col-md-4"
-    text: "Designing systems that can swap algorithms without a full rebuild — and the tooling to maintain cryptographic posture continuously."
-  - icon: "link"
-    color: bento-orange
-    title: "Supply Chain and Vendor Readiness"
-    width: "col-md-4"
-    text: "The PQC readiness of the libraries, hardware, cloud services, and open-source components your organisation depends on."
-  - icon: "landmark"
-    color: bento-purple
-    title: "Government and Regulatory Direction"
-    width: "col-md-4"
-    text: "National mandates, EU regulations, ETSI, ISO, and what the overlapping landscape means for compliance timelines in practice."
-  - icon: "award"
-    color: bento-blue
-    title: "Real-World Deployment Case Studies"
-    width: "col-md-6"
-    text: "Unfiltered accounts from organisations that have deployed: what worked, what broke, and what they would do differently."
-  - icon: "refresh"
-    color: bento-teal
-    title: "Vendor Ecosystem and Interoperability"
-    width: "col-md-6"
-    text: "Which products and protocols are genuinely interoperable today — and how to test claims before committing to a migration path."
-{{< /cards >}}
-
-> Full agenda and confirmed speakers will be published progressively as the programme is finalised. [Subscribe for updates.](/events/2026/pqc-conference-amsterdam-nl/register/)
-{.callout-info}
-
-## Venue and format
-
-**Venue:** [Meervaart](https://www.meervaart.nl/), Amsterdam, the Netherlands  
-**Date:** Tuesday, December 1 to Thursday, December 3, 2026
-
-The 2026 conference returns to the Meervaart in Amsterdam — the venue that hosted one of the world's first major PQC conferences in November 2023 — but at a scale that reflects how much the field has grown. For three days, **the entire venue is ours**.
-
-{{% bento cols="4" gap="1.5rem" %}}
-{{% bento-cell %}}
-
-**Plenary hall**
-
-Up to 800 attendees — three times the capacity of 2023 — live streamed globally.
-
-{{% /bento-cell %}}
-{{% bento-cell %}}
-
-**Parallel technical track**
-
-The former main hall (270 capacity) dedicated to deep-dive sessions, also live streamed.
-
-{{% /bento-cell %}}
-{{% bento-cell %}}
-
-**7 breakout rooms**
-
-Expert-led small-group sessions capped at 25–100 participants, where the real conversations happen.
-
-{{% /bento-cell %}}
-{{% bento-cell img="photos/IMG_2025.JPEG" alt="Audience at PQC Conference 2023, Amsterdam" caption="Amsterdam 2023 — the conference returns" %}}{{% /bento-cell %}}
-{{% /bento %}}
-
-**Session formats:**
-
-- **45-minute session blocks** — 30-minute presentation, 10-minute Q&A, 5-minute changeover
-- **60-minute panel discussions** — 55 minutes of structured conversation, 5-minute changeover
-- **90-minute lunch** — designed as a networking window, not just a break
-- **45-minute coffee breaks** — long enough for the conversations that matter
-
-Each day follows a structured experience arc: framing keynote → expert workshops and breakouts → synthesis panel. Every attendee leaves each day with concrete, actionable insight — not just a stack of slides to read later.
-
-## Expected speakers
-
-Speakers are selected for depth of experience and willingness to speak candidly, not seniority or marketing budget. You will hear from:
-
-- National cybersecurity agencies and government programme leads
-- Standards bodies, NIST contributors, and ETSI working group members
-- Enterprise security and PKI architects who have run real migrations
-- Open-source project maintainers and cryptographic library authors
-- Cloud provider security teams
-- Certificate authorities and PKI service providers
-- Researchers from academia and national laboratories
-
-> **No product promotion.** Speakers at PKI Consortium events do not promote products or commercial services from the stage — a policy that applies without exception.
-{.callout-warning}
-
-Confirmed speakers will be announced progressively. [Subscribe for updates.](/events/2026/pqc-conference-amsterdam-nl/register/)
-
-## Call for speakers
-
-The programme committee is reviewing speaker submissions now. We are looking for practitioners who are:
-
-- Leading PQC migration initiatives at scale in enterprise or government
-- Deploying crypto-agility in production environments
-- Contributing to standards processes or national programmes
-- Building cryptographic tooling, libraries, or infrastructure
-- Willing to share what has not worked — without commercial messaging
-
-Preference is given to case studies, technical depth, and honest accounts. We do not accept general awareness content or sessions structured around product positioning.
-
-{{< button label="Submit a speaker proposal" link="/events/2026/pqc-conference-amsterdam-nl/propose/" type="primary" >}}
-
-## Agenda
-
-The full three-day agenda — searchable by day, location, and track — is on the [agenda page](/events/2026/pqc-conference-amsterdam-nl/agenda/).
-
-> This is a **preliminary** agenda framework. Session titles and confirmed speakers will be updated progressively as the programme is finalised.
-{.callout-warning}
-
-{{< button label="View the full agenda" link="/events/2026/pqc-conference-amsterdam-nl/agenda/" type="outline-primary" >}}
-
-For further information, contact the PKI Consortium at contact (at) pkic.org.

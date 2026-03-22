@@ -1,0 +1,4 @@
+- Do NOT include HTML in Markdown files.
+- Create reusable shortcoddes (but check for any existing ones first).
+- Do not use the "style" attribute in HTML, use classes and define styles in the SCSS files.
+- Do not use inlince scripts, the CSP is strict and will block them. Use typescript and let Hugo handle the bundling.
