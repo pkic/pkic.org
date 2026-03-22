@@ -1,7 +1,7 @@
 import { all, run } from "../db/queries";
 import { queueEmail } from "../email/outbox";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl, speakerManagePageUrl } from "./frontend-links";
-import { markInviteReminderSent, refreshInviteToken } from "./invites";
+import { formatInviterList, getInviteInviters, markInviteReminderSent, refreshInviteToken } from "./invites";
 import { refreshSpeakerManageToken } from "./proposals";
 import { buildEventEmailVariables } from "./events";
 import { nowIso } from "../utils/time";
@@ -211,6 +211,11 @@ export async function runReminderCycle(
     const subject = inviteReminderSubject(event.name, reminderNumber, daysToExpiry);
 
     if (!payload.dryRun) {
+      // Build social-proof inviter string — at reminder time we may have more
+      // co-inviters than were known when the original email was sent.
+      const inviters = await getInviteInviters(db, invite.id);
+      const inviterName = formatInviterList(inviters);
+
       await queueEmail(db, {
         eventId: event.id,
         templateKey: isAttendee ? "attendee_invite" : "speaker_invite",
@@ -221,6 +226,7 @@ export async function runReminderCycle(
           ...buildEventEmailVariables(event, payload.appBaseUrl),
           firstName: invite.invitee_first_name ?? "",
           lastName: invite.invitee_last_name ?? "",
+          inviterName,
           registrationUrl: isAttendee ? actionUrl : undefined,
           proposalUrl: isAttendee ? undefined : actionUrl,
           declineUrl,

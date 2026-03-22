@@ -328,7 +328,7 @@ This is a friendly reminder that your registration for **{{eventName}}** is not 
 
   // ─────────────────────────────────────────────────────────────────────────
   // 4. Attendee invite
-  // Variables: eventName, firstName, lastName, registrationUrl, declineUrl,
+  // Variables: eventName, firstName, lastName, inviterName, registrationUrl, declineUrl,
   //            sponsorsImageUrl, heroImageUrl
   // Partials:  {{> about_pkic}}, {{> sponsors_block}}
   // ─────────────────────────────────────────────────────────────────────────
@@ -341,7 +341,7 @@ This is a friendly reminder that your registration for **{{eventName}}** is not 
 <div class="notice notice-warning">A quick follow-up on your personal invitation to <strong>{{eventName}}</strong>.{{#if daysUntilExpiry}}{{#if lte daysUntilExpiry "2"}} Access closes in {{daysUntilExpiry}} day(s).{{else}} We'd love to have you in the room for this one.{{/if}}{{/if}}</div>
 {{/if}}
 
-You have been personally invited to attend **{{eventName}}**, an event organized by the [PKI Consortium](https://pkic.org).
+{{#if inviterName}}You have been personally invited by **{{inviterName}}** to attend **{{eventName}}**, an event organized by the [PKI Consortium](https://pkic.org).{{else}}You have been personally invited to attend **{{eventName}}**, an event organized by the [PKI Consortium](https://pkic.org).{{/if}}
 
 Join security experts, researchers, and industry leaders to explore the latest developments in public key infrastructure and post-quantum cryptography.
 
@@ -363,7 +363,7 @@ Join security experts, researchers, and industry leaders to explore the latest d
 
   // ─────────────────────────────────────────────────────────────────────────
   // 5. Speaker invite
-  // Variables: eventName, firstName, lastName, proposalUrl, declineUrl,
+  // Variables: eventName, firstName, lastName, inviterName, proposalUrl, declineUrl,
   //            sponsorsImageUrl, heroImageUrl
   // Partials:  {{> about_pkic}}, {{> sponsors_block}}
   // ─────────────────────────────────────────────────────────────────────────
@@ -376,7 +376,7 @@ Join security experts, researchers, and industry leaders to explore the latest d
 <div class="notice notice-warning">A quick follow-up on your speaker invitation for <strong>{{eventName}}</strong>.{{#if daysUntilExpiry}}{{#if lte daysUntilExpiry "2"}} This opportunity closes in {{daysUntilExpiry}} day(s).{{else}} We'd be excited to feature your perspective in this programme.{{/if}}{{/if}}</div>
 {{/if}}
 
-We would be honoured to have you present at **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).
+{{#if inviterName}}You have been personally nominated by **{{inviterName}}** to speak at **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).{{else}}We would be honoured to have you present at **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).{{/if}}
 
 We believe your expertise would be a valuable contribution to the programme. We invite you to submit a proposal for a session, workshop, or roundtable.
 

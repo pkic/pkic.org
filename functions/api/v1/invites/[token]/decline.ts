@@ -47,16 +47,18 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
     if (event) {
       for (const contact of body.forwards) {
         try {
-          const { invite: newInvite, token: inviteToken } = await createInvite(context.env.DB, {
-            eventId: invite.event_id,
-            inviteeEmail: contact.email,
-            inviteeFirstName: contact.firstName ?? null,
-            inviteeLastName: contact.lastName ?? null,
-            inviteType: invite.invite_type,
-            sourceType: "declined-forward",
-            ttlHours: invite.invite_type === "speaker" ? 24 * 21 : 24 * 14,
-          });
+            const { invite: newInvite, token: inviteToken, isNew } = await createInvite(context.env.DB, {
+              eventId: invite.event_id,
+              inviteeEmail: contact.email,
+              inviteeFirstName: contact.firstName ?? null,
+              inviteeLastName: contact.lastName ?? null,
+              inviteType: invite.invite_type,
+              sourceType: "declined-forward",
+              ttlHours: invite.invite_type === "speaker" ? 24 * 21 : 24 * 14,
+            });
 
+            // Do not send a new email if the contact already has an active invite.
+            if (!isNew) continue;
           const registrationUrl = invite.invite_type === "attendee"
             ? registrationPageUrl(appBaseUrl, event, {
               invite: inviteToken,
