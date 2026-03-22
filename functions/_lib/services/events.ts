@@ -21,6 +21,7 @@ export interface EventRecord {
   capacity_in_person: number | null;
   registration_mode: string;
   invite_limit_attendee: number;
+  invite_limit_speaker_nomination: number;
   settings_json: string;
 }
 
@@ -339,6 +340,7 @@ export async function upsertEventFromHugo(
     endsAt?: string | null;
     registrationMode?: string;
     inviteLimitAttendee?: number;
+    inviteLimitSpeakerNomination?: number;
     settings?: Record<string, unknown>;
   },
 ): Promise<EventRecord> {
@@ -357,7 +359,8 @@ export async function upsertEventFromHugo(
       base_path: null, // Set on first frontend submission via updateEventBasePath
       capacity_in_person: null,
       registration_mode: payload.registrationMode ?? "invite_or_open",
-      invite_limit_attendee: payload.inviteLimitAttendee ?? 5,
+      invite_limit_attendee: payload.inviteLimitAttendee ?? 50,
+      invite_limit_speaker_nomination: payload.inviteLimitSpeakerNomination ?? 10,
       settings_json: stringifyJson(payload.settings ?? {}),
     };
 
@@ -365,8 +368,8 @@ export async function upsertEventFromHugo(
       db,
       `INSERT INTO events (
         id, slug, name, timezone, starts_at, ends_at, source_path, base_path, capacity_in_person,
-        registration_mode, invite_limit_attendee, settings_json, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        registration_mode, invite_limit_attendee, invite_limit_speaker_nomination, settings_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         event.id,
         event.slug,
@@ -379,6 +382,7 @@ export async function upsertEventFromHugo(
         event.capacity_in_person,
         event.registration_mode,
         event.invite_limit_attendee,
+        event.invite_limit_speaker_nomination,
         event.settings_json,
         now,
         now,
@@ -393,7 +397,7 @@ export async function upsertEventFromHugo(
     `UPDATE events
      SET name = ?, timezone = ?, starts_at = ?, ends_at = ?,
          capacity_in_person = ?, registration_mode = ?, invite_limit_attendee = ?,
-         settings_json = ?, updated_at = ?
+         invite_limit_speaker_nomination = ?, settings_json = ?, updated_at = ?
      WHERE id = ?`,
     [
       payload.name,
@@ -403,6 +407,7 @@ export async function upsertEventFromHugo(
       null,
       payload.registrationMode ?? existing.registration_mode,
       payload.inviteLimitAttendee ?? existing.invite_limit_attendee,
+      payload.inviteLimitSpeakerNomination ?? existing.invite_limit_speaker_nomination,
       stringifyJson({
         ...parseJsonSafe<Record<string, unknown>>(existing.settings_json, {}),
         ...(payload.settings ?? {}),

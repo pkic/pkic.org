@@ -34,17 +34,54 @@ export interface InviteRecord {
   created_at: string;
 }
 
+export interface InviteInviterInfo {
+  userId: string;
+  firstName: string | null;
+  lastName: string | null;
+  organizationName: string | null;
+}
+
+/**
+ * Formats a list of inviters into a human-readable social-proof string.
+ *
+ * Examples:
+ *   [] → ""
+ *   1 person  → "Paul van Brouwershaven (Digitorus)"
+ *   2 people  → "Paul van Brouwershaven (Digitorus) and Sven Rajala (Keyfactor)"
+ *   5 people  → "Paul van Brouwershaven (Digitorus), Sven Rajala (Keyfactor) and 3 others"
+ *
+ * At most 2 names are shown explicitly; the rest collapse into "N others".
+ */
+export function formatInviterList(inviters: InviteInviterInfo[]): string {
+  if (inviters.length === 0) return "";
+
+  const label = (i: InviteInviterInfo) => {
+    const name = [i.firstName, i.lastName].filter(Boolean).join(" ") || "A colleague";
+    return i.organizationName ? `${name} (${i.organizationName})` : name;
+  };
+
+  if (inviters.length === 1) return label(inviters[0]);
+  if (inviters.length === 2) return `${label(inviters[0])} and ${label(inviters[1])}`;
+
+  const others = inviters.length - 2;
+  return `${label(inviters[0])}, ${label(inviters[1])} and ${others} ${others === 1 ? "other" : "others"}`;
+}
+
 export async function countInvitesByInviter(
   db: DatabaseLike,
   eventId: string,
   inviterUserId: string,
+  inviteType: "attendee" | "speaker" = "attendee",
 ): Promise<number> {
+  // Count only primary invites (invite rows where this user is the original inviter).
+  // Co-invites (endorsements of someone already invited) do not consume invite quota
+  // since they do not trigger new emails.
   const row = await first<{ total: number }>(
     db,
     `SELECT COUNT(*) AS total
      FROM invites
-     WHERE event_id = ? AND inviter_user_id = ? AND invite_type = 'attendee'`,
-    [eventId, inviterUserId],
+     WHERE event_id = ? AND inviter_user_id = ? AND invite_type = ?`,
+    [eventId, inviterUserId, inviteType],
   );
 
   return Number(row?.total ?? 0);
@@ -82,15 +119,95 @@ export async function createInvite(
     sourceType?: string;
     ttlHours: number;
   },
-): Promise<{ invite: InviteRecord; token: string }> {
+  // isNew: true  → fresh invite row created, caller must send the invite email.
+  // isNew: false → invitee already has an active invite; this inviter was recorded
+  //                as a co-inviter (social proof) but NO new email should be sent.
+): Promise<{ invite: InviteRecord; token: string; isNew: boolean }> {
   const inviteeEmail = normalizeEmail(payload.inviteeEmail);
+
   if (await isUnsubscribed(db, inviteeEmail, payload.eventId)) {
     throw new AppError(409, "INVITEE_UNSUBSCRIBED", "Invitee has unsubscribed from future invitations");
   }
 
+  // Guard: do not invite someone who is already registered for the event.
+  const alreadyRegistered = await first<{ id: string }>(
+    db,
+    `SELECT r.id
+     FROM registrations r
+     JOIN users u ON u.id = r.user_id
+     WHERE u.normalized_email = ? AND r.event_id = ? AND r.status NOT IN ('cancelled')
+     LIMIT 1`,
+    [inviteeEmail, payload.eventId],
+  );
+  if (alreadyRegistered) {
+    throw new AppError(409, "INVITEE_ALREADY_REGISTERED", "Invitee is already registered for this event");
+  }
+
+  // Guard: do not invite a speaker who already has an active proposal for this event.
+  if (payload.inviteType === "speaker") {
+    const alreadyProposed = await first<{ id: string }>(
+      db,
+      `SELECT ps.id
+       FROM proposal_speakers ps
+       JOIN session_proposals sp ON sp.id = ps.proposal_id
+       JOIN users u ON u.id = ps.user_id
+       WHERE u.normalized_email = ? AND sp.event_id = ?
+         AND sp.status NOT IN ('rejected', 'withdrawn')
+         AND ps.status NOT IN ('declined')
+       LIMIT 1`,
+      [inviteeEmail, payload.eventId],
+    );
+    if (alreadyProposed) {
+      throw new AppError(409, "INVITEE_ALREADY_PROPOSED", "Invitee already has an active proposal for this event");
+    }
+  }
+
+  const now = nowIso();
+
+  // Deduplication: if an active (sent, non-expired) invite already exists for this
+  // invitee+event+type, record the new inviter as a co-inviter for social proof
+  // and return without creating a second invite or sending a second email.
+  const existingInvite = await first<InviteRecord>(
+    db,
+    `SELECT * FROM invites
+     WHERE event_id = ? AND invitee_email = ? AND invite_type = ? AND status = 'sent'
+       AND (expires_at IS NULL OR expires_at > ?)
+     LIMIT 1`,
+    [payload.eventId, inviteeEmail, payload.inviteType, now],
+  );
+
+  if (existingInvite) {
+    if (payload.inviterUserId) {
+      await run(
+        db,
+        `INSERT OR IGNORE INTO invite_inviters
+           (id, invite_id, inviter_user_id, inviter_registration_id, source_type, invited_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          uuid(),
+          existingInvite.id,
+          payload.inviterUserId,
+          payload.inviterRegistrationId ?? null,
+          payload.sourceType ?? "direct",
+          now,
+        ],
+      );
+      await recordEngagement(db, {
+        userId: payload.inviterUserId,
+        eventId: payload.eventId,
+        subjectType: "invite",
+        subjectRef: existingInvite.id,
+        actionType: "invite_sent",
+        points: 1,
+        sourceType: "invite",
+        sourceRef: existingInvite.id,
+      });
+    }
+    return { invite: existingInvite, token: "", isNew: false };
+  }
+
   const token = randomToken(24);
   const tokenHash = await sha256Hex(token);
-  const now = nowIso();
   let expiresAt = addHours(now, payload.ttlHours);
 
   const event = await first<{
@@ -194,6 +311,21 @@ export async function createInvite(
   );
 
   if (invite.inviter_user_id) {
+    // Record the primary inviter in invite_inviters for social-proof tracking.
+    await run(
+      db,
+      `INSERT OR IGNORE INTO invite_inviters
+         (id, invite_id, inviter_user_id, inviter_registration_id, source_type, invited_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        uuid(),
+        invite.id,
+        invite.inviter_user_id,
+        invite.inviter_registration_id,
+        invite.source_type,
+        now,
+      ],
+    );
     await recordEngagement(db, {
       userId: invite.inviter_user_id,
       eventId: invite.event_id,
@@ -206,7 +338,31 @@ export async function createInvite(
     });
   }
 
-  return { invite, token };
+  return { invite, token, isNew: true };
+}
+
+/**
+ * Returns all named users who have invited (or co-invited) the given invitee,
+ * ordered by the time they sent their invitation.  Used to build social-proof
+ * copy such as "You've been invited by Paul, Sven, Chris and 4 others."
+ */
+export async function getInviteInviters(
+  db: DatabaseLike,
+  inviteId: string,
+): Promise<InviteInviterInfo[]> {
+  return all<InviteInviterInfo>(
+    db,
+    `SELECT ii.inviter_user_id  AS userId,
+            u.first_name         AS firstName,
+            u.last_name          AS lastName,
+            u.organization_name  AS organizationName
+     FROM invite_inviters ii
+     JOIN users u ON u.id = ii.inviter_user_id
+     WHERE ii.invite_id = ?
+     ORDER BY ii.invited_at ASC`,
+
+    [inviteId],
+  );
 }
 
 export async function findInviteByToken(db: DatabaseLike, token: string): Promise<InviteRecord> {

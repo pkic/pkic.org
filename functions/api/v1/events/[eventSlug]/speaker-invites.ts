@@ -3,11 +3,10 @@ import { json, markSensitive } from "../../../../_lib/http";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../_lib/services/events";
 import { getRegistrationByManageToken } from "../../../../_lib/services/registrations";
 import { countInvitesByInviter, createInvite } from "../../../../_lib/services/invites";
-import { createReferralCode } from "../../../../_lib/services/referrals";
 import { first } from "../../../../_lib/db/queries";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
-import { registrationPageUrl, inviteDeclineUrl } from "../../../../_lib/services/frontend-links";
+import { proposalPageUrl, inviteDeclineUrl } from "../../../../_lib/services/frontend-links";
 import { AppError } from "../../../../_lib/errors";
 import type { PagesContext } from "../../../../_lib/types";
 import { registrationInviteCreateSchema } from "../../../../../assets/shared/schemas/api";
@@ -18,6 +17,20 @@ function getManageTokenFromRequest(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
+/**
+ * POST /api/v1/events/:eventSlug/speaker-invites
+ *
+ * Allows a registered attendee (authenticated via their manage token) to
+ * nominate speakers for the event.  The nominator's name appears in the
+ * speaker invite email — "Paul van Brouwershaven has personally nominated you
+ * to speak at …" — which leverages the same social-proof psychology as the
+ * attendee peer-invite flow.
+ *
+ * Duplicate invites are handled by createInvite: if the nominee already has an
+ * active invite the nominator is recorded as a co-inviter and no second email
+ * is sent.  If the nominee is already registered or has an active proposal the
+ * invite is silently skipped.
+ */
 export async function onRequestPost(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
   const token = getManageTokenFromRequest(context.request);
   if (!token) {
@@ -34,53 +47,34 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
 
   const config = getConfig(context.env, context.request);
   const appBaseUrl = resolveAppBaseUrl(context.env);
-  const maxAllowed = event.invite_limit_attendee ?? config.inviteLimitPerAttendee;
+  const maxAllowed = event.invite_limit_speaker_nomination ?? config.inviteLimitSpeakerNomination;
 
-  // Look up inviter name once — used to personalise invite emails.
-  const inviterUser = await first<{ first_name: string | null; last_name: string | null; organization_name: string | null }>(
+  // Look up nominator's full name — the key social-proof ingredient.
+  const nominatorUser = await first<{ first_name: string | null; last_name: string | null; organization_name: string | null }>(
     context.env.DB,
     "SELECT first_name, last_name, organization_name FROM users WHERE id = ?",
     [registration.user_id],
   );
-  const inviterBaseName = inviterUser
-    ? [inviterUser.first_name, inviterUser.last_name].filter(Boolean).join(" ")
+  const nominatorBaseName = nominatorUser
+    ? [nominatorUser.first_name, nominatorUser.last_name].filter(Boolean).join(" ")
     : "";
-  const inviterName = inviterBaseName && inviterUser?.organization_name
-    ? `${inviterBaseName} (${inviterUser.organization_name})`
-    : inviterBaseName;
+  const inviterName = nominatorBaseName && nominatorUser?.organization_name
+    ? `${nominatorBaseName} (${nominatorUser.organization_name})`
+    : nominatorBaseName;
 
-  let referralCode = await first<{ code: string }>(
+  let nominationCount = await countInvitesByInviter(
     context.env.DB,
-    "SELECT code FROM referral_codes WHERE owner_type = 'registration' AND owner_id = ? LIMIT 1",
-    [registration.id],
+    event.id,
+    registration.user_id,
+    "speaker",
   );
 
-  if (!referralCode) {
-    referralCode = {
-      code: await createReferralCode(context.env.DB, {
-        eventId: event.id,
-        ownerType: "registration",
-        ownerId: registration.id,
-        createdByUserId: registration.user_id,
-        length: config.referralCodeLength,
-      }),
-    };
-  }
-
-  // Count only primary (new) invites against the per-attendee quota.
-  // Co-invites (endorsements of someone already invited) are free.
-  let inviteCount = await countInvitesByInviter(context.env.DB, event.id, registration.user_id);
-
   const created: Array<{ email: string }> = [];
-  // endorsed: invitee was already invited; this user's endorsement was recorded
-  //           for social proof but no new email was sent.
   const endorsed: Array<{ email: string }> = [];
-  // skipped: could not create invite (already registered, unsubscribed, etc.).
   const skipped: Array<{ email: string; reason: string }> = [];
 
   for (const item of body.invites) {
-    // Enforce the per-attendee quota only for new (primary) invites.
-    if (inviteCount + 1 > maxAllowed) {
+    if (nominationCount + 1 > maxAllowed) {
       skipped.push({ email: item.email, reason: "invite_limit_exceeded" });
       continue;
     }
@@ -93,31 +87,30 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
         inviteeEmail: item.email,
         inviteeFirstName: item.firstName,
         inviteeLastName: item.lastName,
-        inviteType: "attendee",
-        sourceType: "peer-invite",
-        ttlHours: 24 * 14,
+        inviteType: "speaker",
+        sourceType: "peer-nomination",
+        ttlHours: 24 * 21,
       });
 
       if (isNew) {
-        inviteCount++;
-        const registrationUrl = registrationPageUrl(appBaseUrl, event, {
+        nominationCount++;
+        const proposalUrl = proposalPageUrl(appBaseUrl, event, {
           invite: inviteToken,
-          ref: referralCode.code,
-          source: "invite",
+          source: "speaker_peer_nomination",
         });
         const declineUrl = inviteDeclineUrl(appBaseUrl, event, inviteToken);
         const outboxId = await queueEmail(context.env.DB, {
           eventId: event.id,
-          templateKey: "attendee_invite",
+          templateKey: "speaker_invite",
           recipientEmail: invite.invitee_email,
           messageType: "transactional",
-          subject: `Invitation: ${event.name}`,
+          subject: `Invitation to speak at ${event.name}`,
           data: {
             ...buildEventEmailVariables(event, appBaseUrl),
             firstName: invite.invitee_first_name ?? "",
             lastName: invite.invitee_last_name ?? "",
             inviterName,
-            registrationUrl,
+            proposalUrl,
             declineUrl,
           },
         });
@@ -139,7 +132,7 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
     }
   }
 
-  return json({ success: true, created, endorsed, skipped, referralCode: referralCode.code });
+  return json({ success: true, created, endorsed, skipped });
 }
 
 export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
@@ -149,4 +142,3 @@ export async function onRequest(context: PagesContext<{ eventSlug: string }>): P
   }
   return onRequestPost(context);
 }
-
