@@ -34,6 +34,9 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
   const speakers = await all<{
     user_id: string;
     role: string;
+    status: string;
+    confirmed_at: string | null;
+    declined_at: string | null;
     email: string;
     first_name: string | null;
     last_name: string | null;
@@ -43,7 +46,8 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
     links_json: string | null;
   }>(
     context.env.DB,
-    `SELECT ps.user_id, ps.role, u.email, u.first_name, u.last_name, u.organization_name, u.job_title, u.biography, u.links_json
+        `SELECT ps.user_id, ps.role, ps.status, ps.confirmed_at, ps.declined_at,
+          u.email, u.first_name, u.last_name, u.organization_name, u.job_title, u.biography, u.links_json
      FROM proposal_speakers ps
      JOIN users u ON u.id = ps.user_id
      WHERE ps.proposal_id = ?
@@ -60,6 +64,9 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
     speakers: speakers.map((entry) => ({
       userId: entry.user_id,
       role: entry.role,
+      status: entry.status,
+      confirmedAt: entry.confirmed_at,
+      declinedAt: entry.declined_at,
       email: entry.email,
       firstName: entry.first_name,
       lastName: entry.last_name,

@@ -1,0 +1,138 @@
+{{- $eventSlug := partial "events/flow/slug.html" . -}}
+{{- $eventPagePath := partial "events/flow/page-path.html" . -}}
+<div class="event-flow" data-event-speaker-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
+
+  {{/* ── Resend manage link fallback (missing/invalid token) ─────────── */}}
+  <div data-resend-speaker-manage-section class="d-none">
+    <p class="form-text mb-3">Enter the email address used for your speaker invitation and we&rsquo;ll send a fresh speaker management link.</p>
+    <div class="row g-2 align-items-end mb-2">
+      <div class="col-12 col-sm-6">
+        <label class="form-label" for="resend-speaker-manage-email">Your email address</label>
+        <input id="resend-speaker-manage-email" type="email" class="form-control" autocomplete="email" placeholder="you@example.com" data-resend-speaker-manage-email>
+      </div>
+    </div>
+    <button type="button" class="btn btn-primary" data-resend-speaker-manage-btn>Send my speaker link</button>
+    <p data-resend-speaker-manage-status class="mt-2 small"></p>
+  </div>
+
+  {{/* ── Loading ───────────────────────────────────────────────────────── */}}
+  <p data-speaker-loading class="form-text">Loading your speaker details…</p>
+
+  {{/* ── Main content (shown after data loads) ────────────────────────── */}}
+  <div data-speaker-content class="d-none">
+
+    {{/* ── Proposal summary ──────────────────────────────────────────── */}}
+    <div class="mb-4" data-proposal-summary>
+      <h3 class="h5 mb-1" data-proposal-title></h3>
+      <p class="small text-muted mb-1">
+        Session type: <span data-proposal-type></span> &middot;
+        Status: <span class="badge" data-proposal-status-badge></span>
+      </p>
+      <p class="small text-muted" data-presentation-deadline-row></p>
+    </div>
+
+    {{/* ── Participation status + confirm/decline ─────────────────────── */}}
+    <div class="mb-4" data-participation-section>
+      <h4 class="h6 fw-bold mb-2">Your participation</h4>
+      <p class="mb-2">
+        Status: <span class="badge" data-speaker-status-badge></span>
+      </p>
+
+      {{/* -- Confirm panel (shown when status = invited) -- */}}
+      <div data-confirm-panel class="d-none">
+        <p class="small text-muted mb-3">
+          Please confirm whether you would like to participate in this session.
+          Once the programme committee accepts the proposal, you&rsquo;ll be asked to upload
+          a bio, headshot, and your presentation.
+        </p>
+        <form data-confirm-form class="row g-2" novalidate>
+          <div class="col-12">
+            <h5 class="h6 mb-2">Speaker terms and conditions</h5>
+            <div data-speaker-consents>
+              <p class="form-text mb-0">Loading required terms…</p>
+            </div>
+          </div>
+          <div class="col-12 d-flex gap-2">
+            <button type="submit" class="btn btn-success">Confirm participation</button>
+            <button type="button" data-decline-open class="btn btn-outline-danger">Decline</button>
+          </div>
+        </form>
+      </div>
+
+      {{/* -- Decline panel -- */}}
+      <div data-decline-panel class="d-none">
+        <label class="form-label" for="decline-reason">Reason (optional)</label>
+        <textarea id="decline-reason" class="form-control form-control-sm mb-2" rows="3" maxlength="2000" placeholder="Let the proposer know why you cannot participate…"></textarea>
+        <div class="d-flex gap-2">
+          <button type="button" data-decline-confirm class="btn btn-danger btn-sm">Confirm — I cannot participate</button>
+          <button type="button" data-decline-cancel class="btn btn-outline-secondary btn-sm">Go back</button>
+        </div>
+      </div>
+
+      {{/* -- Already responded messages -- */}}
+      <div data-confirmed-msg class="d-none">
+        <p class="text-success small mb-0">You have confirmed your participation. Thank you!</p>
+      </div>
+      <div data-declined-msg class="d-none">
+        <p class="text-danger small mb-0">You have declined participation in this session.</p>
+      </div>
+    </div>
+
+    {{/* ── Your photo ─────────────────────────────────────────────────── */}}
+    <div class="mb-4 d-none" data-headshot-section>
+      <h4 class="h6 fw-bold mb-2">Your photo</h4>
+      <p class="small text-muted mb-2">Upload a professional headshot photo. It will appear on the event website alongside your session.</p>
+      <div data-headshot-preview class="pkic-speaker-headshot-preview mb-2"></div>
+      <p data-headshot-status class="form-text mb-2"></p>
+      <div class="d-flex gap-2 align-items-center flex-wrap">
+        <label class="btn btn-sm btn-outline-secondary mb-0" for="speaker-headshot-file">Upload photo</label>
+        <input type="file" id="speaker-headshot-file" accept="image/jpeg,image/png,image/webp" class="visually-hidden" data-headshot-file>
+        <button type="button" class="btn btn-sm btn-outline-danger d-none" data-headshot-delete>Remove photo</button>
+      </div>
+    </div>
+
+    {{/* ── Bio & links ─────────────────────────────────────────────────── */}}
+    <div class="mb-4 d-none" data-profile-section>
+      <h4 class="h6 fw-bold mb-2">Bio &amp; links</h4>
+      <div data-profile-saved-state class="alert alert-success d-none mb-3">
+        <div class="d-flex flex-column flex-sm-row align-items-sm-center justify-content-between gap-2">
+          <p class="mb-0">Profile saved.</p>
+          <button type="button" class="btn btn-sm btn-outline-success" data-profile-edit>Edit profile</button>
+        </div>
+      </div>
+      <div data-profile-form-wrap>
+        <form data-profile-form class="row g-3" novalidate>
+          <div class="col-12">
+            <label for="speaker-bio" class="form-label">Biography</label>
+            <textarea id="speaker-bio" name="biography" rows="5" maxlength="10000" class="form-control" placeholder="A short professional bio for the programme and website…"></textarea>
+            <div class="form-text">Visible to attendees on the event programme.</div>
+          </div>
+          <div class="col-12" data-profile-links-container>
+            {{/* Profile links widget injected by JS */}}
+          </div>
+          <div class="col-12">
+            <button type="submit" class="btn btn-success btn-sm">Save profile</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    {{/* ── Presentation upload (shown only after proposal is accepted) ── */}}
+    <div class="mb-4 d-none" data-presentation-section>
+      <h4 class="h6 fw-bold mb-2">Presentation upload</h4>
+      <p class="small text-muted mb-2" data-presentation-status-msg></p>
+      <div class="d-flex gap-2 align-items-center flex-wrap" data-presentation-upload-controls>
+        <label class="btn btn-sm btn-outline-secondary mb-0" for="speaker-presentation-file">Upload presentation</label>
+        <input type="file" id="speaker-presentation-file"
+          accept="application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.oasis.opendocument.presentation"
+          class="visually-hidden" data-presentation-file>
+      </div>
+      <p data-presentation-upload-status class="form-text mt-1"></p>
+    </div>
+
+    {{/* ── Status message ─────────────────────────────────────────────── */}}
+    <p data-flow-status class="alert visually-hidden mt-3 mb-0" role="status" aria-live="polite"></p>
+
+  </div>
+</div>
+{{ partial "script.html" (dict "path" "ts/event-flows/speaker-manage-page.ts") }}

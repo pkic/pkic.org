@@ -6,7 +6,18 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
   const audience = new URL(context.request.url).searchParams.get("audience") === "speaker" ? "speaker" : "attendee";
   const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
   const terms = await getRequiredTerms(context.env.DB, event.id, audience);
-  return json({ event: { id: event.id, slug: event.slug, name: event.name }, audience, terms });
+  return json({
+    event: { id: event.id, slug: event.slug, name: event.name },
+    audience,
+    terms: terms.map((term) => ({
+      termKey: term.term_key,
+      version: term.version,
+      required: term.required === 1,
+      contentRef: term.content_ref,
+      displayText: term.display_text,
+      helpText: term.help_text ?? null,
+    })),
+  });
 }
 
 export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {

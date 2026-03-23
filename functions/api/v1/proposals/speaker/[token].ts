@@ -22,14 +22,20 @@ import {
   declineSpeakerParticipation,
   updateSpeakerProfile,
 } from "../../../../_lib/services/proposals";
+import { getRequiredTerms } from "../../../../_lib/services/events";
+import { persistConsents, validateRequiredConsents } from "../../../../_lib/services/consent";
 import { parseJsonBody } from "../../../../_lib/validation";
+import { requireInternalSecret } from "../../../../_lib/request";
 import type { PagesContext } from "../../../../_lib/types";
 import { z } from "zod";
 
 const speakerActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("confirm"),
-    termsAccepted: z.literal(true),
+    consents: z.array(z.object({
+      termKey: z.string().trim().min(1).max(128),
+      version: z.string().trim().min(1).max(64),
+    })).min(1).max(20),
   }),
   z.object({
     action: z.literal("decline"),
@@ -82,6 +88,9 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
       links: user.links_json ? JSON.parse(user.links_json) : [],
       headshotUploaded: Boolean(user.headshot_r2_key),
       headshotUpdatedAt: user.headshot_updated_at,
+      headshotUrl: user.headshot_r2_key
+        ? `${new URL(context.request.url).origin}/api/v1/proposals/speaker/${encodeURIComponent(context.params.token)}/headshot?v=${encodeURIComponent(user.headshot_updated_at ?? "")}`
+        : null,
     },
   });
 }
@@ -90,8 +99,28 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
   const body = await parseJsonBody(context.request, speakerActionSchema);
 
   if (body.action === "confirm") {
+    const info = await getSpeakerByManageToken(context.env.DB, context.params.token);
+
+    // Already confirmed is treated as success and does not require resubmission.
+    if (info.speaker.status !== "confirmed") {
+      const requiredTerms = await getRequiredTerms(context.env.DB, info.proposal.event_id, "speaker");
+      await validateRequiredConsents(requiredTerms, body.consents);
+
+      const signingSecret = requireInternalSecret(context.env);
+      await persistConsents(context.env.DB, {
+        proposalId: info.proposal.id,
+        eventId: info.proposal.event_id,
+        userId: info.speaker.user_id,
+        audienceType: "speaker",
+        accepted: body.consents,
+        ip: context.request.headers.get("cf-connecting-ip"),
+        userAgent: context.request.headers.get("user-agent"),
+        secret: signingSecret,
+      });
+    }
+
     await confirmSpeakerParticipation(context.env.DB, context.params.token, {
-      termsAccepted: body.termsAccepted,
+      termsAccepted: true,
     });
     return json({ success: true, status: "confirmed" });
   }

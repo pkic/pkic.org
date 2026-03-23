@@ -24,6 +24,34 @@ import type { PagesContext } from "../../../../../_lib/types";
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_HEADSHOT_BYTES = 20 * 1024 * 1024; // 20 MB
 
+async function onRequestGet(context: PagesContext<{ token: string }>): Promise<Response> {
+  const { user } = await getSpeakerByManageToken(context.env.DB, context.params.token);
+
+  if (!user.headshot_r2_key) {
+    return json({ error: { code: "NOT_FOUND", message: "No headshot on file" } }, 404);
+  }
+
+  const bucket = context.env.SPEAKER_UPLOADS_BUCKET;
+  if (!bucket) {
+    throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured on this instance.");
+  }
+
+  const obj = await bucket.get(user.headshot_r2_key);
+  if (!obj) {
+    return json({ error: { code: "NOT_FOUND", message: "Headshot file missing from storage" } }, 404);
+  }
+
+  const ext = user.headshot_r2_key.split(".").pop()?.toLowerCase() ?? "";
+  const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
+
+  return new Response(await obj.arrayBuffer(), {
+    headers: {
+      "Content-Type": mime,
+      "Cache-Control": "private, max-age=3600",
+    },
+  });
+}
+
 export async function onRequestPut(context: PagesContext<{ token: string }>): Promise<Response> {
   const { speaker, user } = await getSpeakerByManageToken(context.env.DB, context.params.token);
 
@@ -88,11 +116,16 @@ export async function onRequestPut(context: PagesContext<{ token: string }>): Pr
   const origin = resolveAppBaseUrl(context.env);
   context.waitUntil(invalidateAndRerender(user.id, context.env, origin));
 
-  return json({ success: true, r2Key });
+  return json({
+    success: true,
+    r2Key,
+    headshotUrl: `${new URL(context.request.url).origin}/api/v1/proposals/speaker/${encodeURIComponent(context.params.token)}/headshot?v=${encodeURIComponent(String(Date.now()))}`,
+  });
 }
 
 export async function onRequest(context: PagesContext<{ token: string }>): Promise<Response> {
   markSensitive(context);
+  if (context.request.method === "GET") return onRequestGet(context);
   if (context.request.method === "PUT") return onRequestPut(context);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }
