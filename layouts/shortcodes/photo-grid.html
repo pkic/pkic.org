@@ -24,26 +24,77 @@
       rowspan   — row span (default: 1)
       caption   — optional visible overlay text
 */}}
-{{- $yaml   := .Inner | transform.Unmarshal -}}
-{{- $cols   := $yaml.cols   | default "3" -}}
-{{- $gap    := $yaml.gap    | default "0.5rem" -}}
-{{- $height := $yaml.height | default 220 -}}
-{{- $style  := printf "grid-template-columns:repeat(%s,1fr);gap:%s;grid-auto-rows:%dpx" $cols $gap $height -}}
+{{- $yaml := .Inner | transform.Unmarshal -}}
+{{- $outerClass := .Get "class" | default "" -}}
 
-<div class="pkic-photo-grid" style="{{ $style }}">
+{{- $cols := int ($yaml.cols | default 3) -}}
+{{- $colsSafe := cond (and (ge $cols 1) (le $cols 6)) $cols 3 -}}
+
+{{- $gapRaw := printf "%v" ($yaml.gap | default "0.5rem") -}}
+{{- $gapMap := dict
+  "0.25rem" "025"
+  "0.25" "025"
+  "0.5rem" "050"
+  ".5rem" "050"
+  "0.5" "050"
+  "0.75rem" "075"
+  "0.75" "075"
+  "1rem" "100"
+  "1" "100"
+-}}
+{{- $gapSafe := index $gapMap $gapRaw | default "050" -}}
+
+{{- $height := int ($yaml.height | default 220) -}}
+{{- $allowedHeights := slice 160 180 200 220 240 260 280 300 -}}
+{{- $heightSafe := cond (in $allowedHeights $height) $height 220 -}}
+
+{{- $allImages := slice -}}
+{{- if $yaml.folder -}}
+  {{- $allImages = shuffle ($.Page.Resources.Match $yaml.folder) -}}
+{{- end -}}
+{{- $imgIndex := 0 -}}
+{{- $imagesPerCell := int ($yaml.imagesPerCell | default 3) -}}
+
+<div class="pkic-photo-grid pkic-photo-grid--cols-{{ $colsSafe }} pkic-photo-grid--gap-{{ $gapSafe }} pkic-photo-grid--row-{{ $heightSafe }} {{ $outerClass }}">
   {{- range $yaml.photos -}}
-  {{- $span    := .span    | default 1 -}}
-  {{- $rowspan := .rowspan | default 1 -}}
-  {{- $cellStyle := printf "grid-column:span %d;grid-row:span %d" $span $rowspan -}}
-  {{- $img := $.Page.Resources.GetMatch .src -}}
-  {{- if $img -}}
-  {{- $w := mul $span 700 -}}
-  {{- $h := mul $rowspan (add $height 10) -}}
-  {{- $processed := $img.Fill (printf "%dx%d q80" $w $h) -}}
-  <div class="pkic-photo-cell" style="{{ $cellStyle }}">
-    <img src="{{ $processed.RelPermalink }}" alt="{{ .alt | default "" }}" loading="lazy">
-    {{- with .caption -}}<span class="pkic-photo-caption">{{ . }}</span>{{- end -}}
+  {{- $rawAlt := .alt | default "" -}}
+  {{- $caption := .caption -}}
+  {{- $span := int (.span | default 1) -}}
+  {{- $rowspan := int (.rowspan | default 1) -}}
+  {{- $spanSafe := cond (and (ge $span 1) (le $span 6)) $span 1 -}}
+  {{- $rowspanSafe := cond (and (ge $rowspan 1) (le $rowspan 6)) $rowspan 1 -}}
+  
+  {{- $cellImages := slice -}}
+  {{- if .src -}}
+    {{- if reflect.IsSlice .src -}}
+      {{- range .src -}}
+        {{- $m := $.Page.Resources.GetMatch . -}}
+        {{- if $m }}{{ $cellImages = $cellImages | append $m }}{{ end -}}
+      {{- end -}}
+    {{- else -}}
+      {{- $m := $.Page.Resources.GetMatch .src -}}
+      {{- if $m }}{{ $cellImages = $cellImages | append $m }}{{ end -}}
+    {{- end -}}
+  {{- else if and $yaml.folder (gt (len $allImages) 0) -}}
+    {{- range seq $imagesPerCell -}}
+      {{- if lt $imgIndex (len $allImages) -}}
+        {{- $cellImages = $cellImages | append (index $allImages $imgIndex) -}}
+        {{- $imgIndex = add $imgIndex 1 -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+
+  {{- if gt (len $cellImages) 0 -}}
+  <div class="pkic-photo-cell pkic-photo-cell--col-span-{{ $spanSafe }} pkic-photo-cell--row-span-{{ $rowspanSafe }}">
+    {{- $w := mul $spanSafe 700 -}}
+    {{- $h := mul $rowspanSafe (add $heightSafe 10) -}}
+    {{- range $idx, $img := $cellImages -}}
+      {{- $processed := $img.Fill (printf "%dx%d webp q90 Smart" $w $h) -}}
+      <img src="{{ $processed.RelPermalink }}" alt="{{ $rawAlt }}" class="pkic-photo-img {{ if gt (len $cellImages) 1 }}pkic-photo-transition{{ end }} {{ if eq $idx 0 }}active{{ end }}" loading="lazy">
+    {{- end -}}
+    {{- with $caption -}}<span class="pkic-photo-caption">{{ . }}</span>{{- end -}}
   </div>
   {{- end -}}
   {{- end -}}
 </div>
+{{ partial "script.html" (dict "path" "ts/modules/photo-grid.ts" "build" true "defer" true) }}
