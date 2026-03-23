@@ -1,6 +1,6 @@
 ---
 title: Submit a Session Proposal
-linkTitle: Call for Speakers
+linkTitle: Call for Proposals (CFP)
 weight: 30
 aliases: 
   - /call

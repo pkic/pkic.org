@@ -787,10 +787,10 @@ cards:
         class: "btn-primary shadow-sm"
   - color: bento-orange-pale
     icon: mic
-    title: "Call for Speakers"
-    text: "Early proposals have a significantly higher chance of selection. All speakers are subject to our strict **Zero Product Promotion Guarantee**—ensuring authentic insights, not sales pitches."
+    title: "Call for Proposals (CFP)"
+    text: "Share practical migration experience, implementation lessons, and real-world outcomes. Early submissions have a significantly higher chance of selection. All accepted speakers are subject to our strict **Zero Product Promotion Guarantee**—ensuring authentic insights, not sales pitches."
     links:
-      - text: "Submit a proposal →"
+      - text: "Submit your proposal →"
         url: "/events/2026/pqc-conference-amsterdam-nl/propose/"
         class: "btn-outline-primary"
 {{< /cards >}}
