@@ -600,18 +600,18 @@ Quantum computers will soon break the cryptographic foundation of the modern ent
 
 The **PQC Conference Amsterdam 2026** is the definitive global gathering for the post-quantum transition. The rules from NIST are finalized. The deployment phase is here. The question is no longer *if* you should migrate, but *how fast* and *what breaks* along the way.
 
-This isn't an awareness event. This is where the organisations leading the transition share **exactly how they are doing it**. Three days of practitioner-level experience: actionable migration blueprints, off-the-record discussions, and the connections that will cut months off your delivery timeline.
+This isn't just an awareness event. This is where the organisations leading the transition share **exactly how they are doing it**, what problem they have run into, and how they have addressed them. Three days of practitioner-level experience: actionable migration blueprints, off-the-record discussions, and the connections that will cut months off your delivery timeline.
 
 {{< stat-grid class="my-5" >}}
 stats:
   - number: "2,600+"
     label: "Prior Attendees"
-  - number: "40+"
+  - number: "~75"
     label: "Speakers"
-  - number: "25+"
+  - number: "50+"
     label: "Sessions"
-  - number: "6"
-    label: "Editions"
+  - number: "5th"
+    label: "Edition"
 {{< /stat-grid >}}
 
 > **Join the community.** The conference is open to every organization preparing for the quantum transition and is completely free to attend. It is not limited to members of the PKI Consortium.

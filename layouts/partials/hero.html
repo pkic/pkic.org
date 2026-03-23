@@ -49,9 +49,13 @@
 {{- $heroTitleText := default $.Title $.Params.heroTitle -}}
 {{- $heroTitleLen  := len $heroTitleText -}}
 {{- $heroTitleClass := "hero-title" -}}
+{{- $heroSponsorHostClass := " hero-sponsor-host--title-short" -}}
 {{- if gt $heroTitleLen 100 -}}{{- $heroTitleClass = "hero-title hero-title-xl" -}}
+  {{- $heroSponsorHostClass = " hero-sponsor-host--title-xl" -}}
 {{- else if gt $heroTitleLen 65 -}}{{- $heroTitleClass = "hero-title hero-title-long" -}}
+  {{- $heroSponsorHostClass = " hero-sponsor-host--title-long" -}}
 {{- else if gt $heroTitleLen 38 -}}{{- $heroTitleClass = "hero-title hero-title-medium" -}}
+  {{- $heroSponsorHostClass = " hero-sponsor-host--title-medium" -}}
 {{- end -}}
 {{ with $heroImgResource }}
   {{ $img := . }}
@@ -64,7 +68,8 @@
 
   {{ $heroHeight := $.Params.heroHeight | default "60vh" }}
   {{ $heroMaxHeight := $.Params.heroMaxHeight | default "50vh" }}
-  <div class="position-relative w-100" style="height: {{ $heroHeight }}; min-height: {{ $heroMaxHeight }};">
+  {{ $minSponsorLevel := $.Params.heroSponsorLevel }}
+  <div class="position-relative w-100{{ if $minSponsorLevel }} hero-sponsor-host{{ $heroSponsorHostClass }}{{ end }}" style="height: {{ $heroHeight }}; min-height: {{ $heroMaxHeight }};">
     <picture>
       <source
         media="(min-width:1200px)"
@@ -122,10 +127,8 @@
       </div>
     </div>
 
-    
-    {{ $minSponsorLevel := $.Params.heroSponsorLevel }}
     {{ if $minSponsorLevel }}
-      <div class="hero-sponsors-overlay position-absolute bottom-0 start-50 translate-middle-x w-100 d-none d-md-block pb-4 pt-5" style="z-index: 10;">
+      <div class="hero-sponsors-overlay position-absolute bottom-0 start-50 translate-middle-x w-100 d-none d-md-block pb-4 pt-5">
         {{ partial "sponsors/strip.html" (dict "site" $.Site "sponsoring" ($.Params.sponsoring | default $.Site.Params.name) "minWeight" $minSponsorLevel "label" "Our Diamond & Titanium Sponsors") }}
       </div>
     {{ end }}
