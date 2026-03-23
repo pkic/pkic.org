@@ -23,7 +23,6 @@ cascade:
   params:
     heroImage: amsterdam-nl.png
     heroDescription: December 1 - 3, 2026 - Amsterdam, The Netherlands | Hybrid
-    heroHeight: 65vh
     heroSponsorLevel: 5
     sectionNav: true
     sponsoring: "Post-Quantum Cryptography Conference Amsterdam 2026"
@@ -32,6 +31,7 @@ params:
   eventType: conference
   eventDate: 2026-12-01T00:00:00Z
   eventDuration: 3
+  heroHeight: 65vh
   heroButton:
     label: "Secure your seat →"
     link: register/
@@ -640,7 +640,7 @@ cards:
       
       **Plenary / Red Hall**
   - color: "bento-darker"
-    image: "photos/ANN06210.jpg"
+    image: "photos/AME_0934.jpg"
     icon: terminal
     title: "The Technical Track"
     text: |
