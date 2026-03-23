@@ -29,6 +29,32 @@ function q<T extends Element = Element>(selector: string, root: ParentNode = doc
   return root.querySelector<T>(selector);
 }
 
+function formatStatusLabel(status: string): string {
+  return status
+    .replace(/_/g, " ")
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function statusBadgeClass(status: string): string {
+  switch (status) {
+    case "invited":
+      return "bg-warning text-dark";
+    case "confirmed":
+    case "accepted":
+      return "bg-success";
+    case "declined":
+    case "rejected":
+      return "bg-danger";
+    case "submitted":
+      return "bg-info text-dark";
+    default:
+      return "bg-secondary";
+  }
+}
+
 function renderSpeakerList(speakers: ProposalManageResponse["speakers"]): void {
   const list = q("[data-cospeaker-list]");
   if (!list) return;
@@ -40,10 +66,14 @@ function renderSpeakerList(speakers: ProposalManageResponse["speakers"]): void {
     .map((s) => {
       const name = [s.firstName, s.lastName].filter(Boolean).join(" ") || s.email;
       const roleLabel = s.role.replace(/_/g, " ");
+      const statusLabel = formatStatusLabel(s.status);
+      const canRemind = s.status === "invited";
       return `<div class="d-flex align-items-center gap-2 mb-1 small">
         <span class="badge bg-secondary text-capitalize">${roleLabel}</span>
         <span>${name}</span>
         <span class="text-muted">&lt;${s.email}&gt;</span>
+        <span class="badge rounded-pill px-2 py-1 ${statusBadgeClass(s.status)}">${statusLabel}</span>
+        ${canRemind ? `<button type="button" class="btn btn-outline-secondary btn-sm" data-remind-user-id="${s.userId}">Send reminder</button>` : ""}
       </div>`;
     })
     .join("");
@@ -159,6 +189,35 @@ async function main(): Promise<void> {
     } finally {
       resetButton(inviteBtn);
     }
+  });
+
+  boot.root.addEventListener("click", (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const button = target.closest<HTMLButtonElement>("[data-remind-user-id]");
+    if (!button) return;
+
+    const userId = button.dataset.remindUserId;
+    if (!userId) return;
+
+    void (async () => {
+      setButtonLoading(button);
+      try {
+        await postJson(`${boot.apiBase}/proposals/manage/${encodeURIComponent(token)}/speakers/remind`, { userId });
+        if (csStatus) {
+          csStatus.textContent = "Reminder sent.";
+          csStatus.className = "mt-2 small text-success";
+        }
+      } catch (error) {
+        const normalized = normalizeValidation(error);
+        if (csStatus) {
+          csStatus.textContent = normalized.globalMessage;
+          csStatus.className = "mt-2 small text-danger";
+        }
+      } finally {
+        resetButton(button);
+      }
+    })();
   });
 }
 

@@ -71,6 +71,15 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
   // Co-invites (endorsements of someone already invited) are free.
   let inviteCount = await countInvitesByInviter(context.env.DB, event.id, registration.user_id);
 
+  if (inviteCount + body.invites.length > maxAllowed) {
+    return json({
+      error: {
+        code: "INVITE_LIMIT_EXCEEDED",
+        message: `Invite limit reached. You can send up to ${maxAllowed} invitations for this event.`,
+      },
+    }, 429);
+  }
+
   const created: Array<{ email: string }> = [];
   // endorsed: invitee was already invited; this user's endorsement was recorded
   //           for social proof but no new email was sent.

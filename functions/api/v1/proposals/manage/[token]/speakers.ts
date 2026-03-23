@@ -13,6 +13,7 @@ import { parseJsonBody } from "../../../../../_lib/validation";
 import {
   getProposalByManageToken,
   addProposalSpeaker,
+  buildProposalInviteEmailContext,
 } from "../../../../../_lib/services/proposals";
 import { findOrCreateUser } from "../../../../../_lib/services/users";
 import { buildEventEmailVariables } from "../../../../../_lib/services/events";
@@ -77,6 +78,11 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
     [proposal.proposer_user_id],
   );
 
+  const inviteContext = await buildProposalInviteEmailContext(context.env.DB, {
+    proposalId: proposal.id,
+    inviterUserId: proposal.proposer_user_id,
+  });
+
   const outboxId = await queueEmail(context.env.DB, {
     eventId: event.id,
     templateKey: "co_speaker_invite",
@@ -89,7 +95,10 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
       firstName: speakerUser.first_name ?? "",
       lastName: speakerUser.last_name ?? "",
       proposerFirstName: proposer?.first_name ?? "",
-      proposalTitle: proposal.title,
+      invitedByDisplay: inviteContext.invitedByDisplay,
+      proposalTitle: inviteContext.proposalTitle,
+      proposalAbstract: inviteContext.proposalAbstract,
+      speakerLineupText: inviteContext.speakerLineupText,
       manageUrl: speakerManageUrl,
     },
   });
