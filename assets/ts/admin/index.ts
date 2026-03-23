@@ -453,7 +453,7 @@ function badge(status: string): string {
     // Email template version statuses
     active: "success", draft: "warning",
     // Donation statuses
-    pending: "warning", completed: "success", expired: "secondary", failed: "danger",
+    pending: "warning", completed: "success",
     // Event/registration mode
     invite_only: "warning", invite_or_open: "primary", open: "success",
     // Proposal statuses / outcomes

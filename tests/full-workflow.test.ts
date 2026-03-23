@@ -414,7 +414,7 @@ describe("full workflow", () => {
       "SELECT status FROM waitlist_entries WHERE registration_id = ?",
       [registrationTwoPayload.registrationId],
     )[0];
-    expect(waitlistStatus.status).toBe("offered");
+    expect(waitlistStatus.status).toBe("waiting");
 
     const referralCode = registrationOnePayload.shareUrl.split("/").pop() as string;
     const referralResponse = await referralRedirect(

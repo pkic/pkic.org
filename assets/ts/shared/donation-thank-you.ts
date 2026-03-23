@@ -110,7 +110,7 @@ async function fetchPromoterCode(sessionId: string): Promise<PromoterResult | nu
 function formattedAmountFor(session: DonationSession): string {
   const info = currencyInfo(session.currency);
   const majorAmount = toMajorUnit(session.grossAmount, session.currency);
-  return formatCurrency(majorAmount, info.code.toUpperCase(), info.zeroDecimal);
+  return formatCurrency(majorAmount, info.code.toUpperCase(), info.zeroDecimal ?? false);
 }
 
 /** Swap the generic donate URL in the share buttons for the personalized /donate/r/:code URL. */
@@ -147,7 +147,7 @@ function updateShareLinks(container: HTMLElement, shareUrl: string, session: Don
 function renderBadge(container: HTMLElement, session: DonationSession, sessionId: string): void {
   const info = currencyInfo(session.currency);
   const majorAmount = toMajorUnit(session.grossAmount, session.currency);
-  const formattedAmount = formatCurrency(majorAmount, info.code.toUpperCase(), info.zeroDecimal);
+  const formattedAmount = formatCurrency(majorAmount, info.code.toUpperCase(), info.zeroDecimal ?? false);
   const greeting = session.donorFirstName ? `${session.donorFirstName}, thank` : "Thank";
 
   // Initial share URL is the generic donate page; it gets swapped for the
