@@ -66,7 +66,7 @@
   {{ $2k := $img.Resize "2560x" }}
   {{ $4k := $img.Resize "3840x" }}
 
-  {{ $heroHeight := $.Params.heroHeight | default "60vh" }}
+  {{ $heroHeight := $.Params.heroHeight | default "20vh" }}
   {{ $heroMaxHeight := $.Params.heroMaxHeight | default "50vh" }}
   {{ $minSponsorLevel := $.Params.heroSponsorLevel }}
   <div class="position-relative w-100{{ if $minSponsorLevel }} hero-sponsor-host{{ $heroSponsorHostClass }}{{ end }}" style="height: {{ $heroHeight }}; min-height: {{ $heroMaxHeight }};">
