@@ -233,8 +233,10 @@ async function initForm(root: HTMLElement): Promise<void> {
     root.hidden = false;
     if (checkoutContainer) checkoutContainer.hidden = true;
     if (checkoutMount) checkoutMount.innerHTML = "";
-    donateBtn.disabled = false;
-    donateBtn.textContent = "Donate";
+    if (donateBtn) {
+      donateBtn.disabled = false;
+      donateBtn.textContent = "Donate";
+    }
   }
 
   function showCheckout(): void {

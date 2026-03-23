@@ -207,16 +207,16 @@ export async function onRequestGet(context: PagesContext<{ code: string }>): Pro
     ? registrationPageUrl(appBaseUrl, eventRow, { ref: code, source: "referral_link" })
     : `${appBaseUrl}/events/`;
 
-  // ── Always serve the OG HTML page ─────────────────────────────────────────
-  // Using a meta-refresh (and JS fallback) instead of a 302 redirect means
-  // every crawler — not just the ones in the UA whitelist — can read the
-  // personalised Open Graph tags before being sent to the destination.
-  return new Response(buildOgHtml(code, appBaseUrl, redirectUrl, person), {
-    headers: {
-      "Content-Type": "text/html; charset=utf-8",
-      "Cache-Control": "public, max-age=300, s-maxage=300",
-    },
-  });
+  if (isSocialScraper(userAgent)) {
+    return new Response(buildOgHtml(code, appBaseUrl, redirectUrl, person), {
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "public, max-age=300, s-maxage=300",
+      },
+    });
+  }
+
+  return Response.redirect(redirectUrl, 302);
 }
 
 export async function onRequest(context: PagesContext<{ code: string }>): Promise<Response> {
