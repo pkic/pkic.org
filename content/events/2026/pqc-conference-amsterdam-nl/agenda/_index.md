@@ -1,6 +1,7 @@
 ---
 title: Agenda – Post-Quantum Cryptography Conference – December 1–3, 2026 – Amsterdam
 linkTitle: Agenda
+weight: 10
 description: Full three-day agenda for the 2026 Post-Quantum Cryptography Conference in Amsterdam, The Netherlands.
 summary: Explore the full agenda for the 2026 PQC Conference in Amsterdam.
 
