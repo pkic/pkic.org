@@ -43,8 +43,34 @@ export async function confirmRegistrationByToken(
   });
   const hasPerDayAttendance = dayEventIds.length > 0;
   let newStatus = "registered";
-  void capacityExemptReason;
-  void hasPerDayAttendance;
+  if (
+    registration.attendance_type === "in_person"
+    && !hasPerDayAttendance
+    && !capacityExemptReason
+  ) {
+    const event = await first<{ capacity_in_person: number | null }>(
+      db,
+      "SELECT capacity_in_person FROM events WHERE id = ?",
+      [registration.event_id],
+    );
+    const capacity = Number(event?.capacity_in_person ?? 0);
+    if (capacity > 0) {
+      const row = await first<{ total: number }>(
+        db,
+        `SELECT COUNT(*) AS total
+         FROM registrations
+         WHERE event_id = ?
+           AND status = 'registered'
+           AND attendance_type = 'in_person'
+           AND capacity_exempt_in_person = 0`,
+        [registration.event_id],
+      );
+      if (Number(row?.total ?? 0) >= capacity) {
+        newStatus = "waitlisted";
+      }
+    }
+  }
+
   await run(
     db,
     `UPDATE registrations
