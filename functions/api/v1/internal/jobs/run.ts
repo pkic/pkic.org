@@ -22,7 +22,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
       limit: body.reminderLimit,
       dryRun: body.dryRun,
     })
-    : { inviteRemindersQueued: 0, presentationRemindersQueued: 0, processed: 0 };
+    : { inviteRemindersQueued: 0, speakerInviteRemindersQueued: 0, presentationRemindersQueued: 0, processed: 0 };
 
   const currentHourUtc = new Date().getUTCHours();
   const shouldRunRetention = body.runRetention

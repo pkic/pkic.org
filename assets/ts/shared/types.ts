@@ -115,6 +115,9 @@ export interface ProposalManageResponse {
   speakers: Array<{
     userId: string;
     role: string;
+    status: string;
+    confirmedAt: string | null;
+    declinedAt: string | null;
     email: string;
     firstName: string | null;
     lastName: string | null;

@@ -1,7 +1,7 @@
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json, markSensitive } from "../../../../_lib/http";
 import { buildEventEmailVariables, getEventBySlug, getRequiredTerms, updateEventBasePath } from "../../../../_lib/services/events";
-import { createProposal, addProposalSpeaker } from "../../../../_lib/services/proposals";
+import { createProposal, addProposalSpeaker, buildProposalInviteEmailContext } from "../../../../_lib/services/proposals";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
 import { createReferralCode } from "../../../../_lib/services/referrals";
 import { trySeedGravatarThenPrerender } from "../../../../_lib/services/og-badge-prerender";
@@ -99,6 +99,10 @@ export async function onRequestPost(
 
     if (speakerToken) {
       const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, speakerToken);
+      const inviteContext = await buildProposalInviteEmailContext(context.env.DB, {
+        proposalId: created.proposal.id,
+        inviterUserId: proposer.id,
+      });
       const id = await queueEmail(context.env.DB, {
         eventId: event.id,
         templateKey: "co_speaker_invite",
@@ -111,7 +115,10 @@ export async function onRequestPost(
           firstName: speakerUser.first_name ?? "",
           lastName: speakerUser.last_name ?? "",
           proposerFirstName: proposer.first_name ?? "",
-          proposalTitle: created.proposal.title,
+          invitedByDisplay: inviteContext.invitedByDisplay,
+          proposalTitle: inviteContext.proposalTitle,
+          proposalAbstract: inviteContext.proposalAbstract,
+          speakerLineupText: inviteContext.speakerLineupText,
           manageUrl: speakerManageUrl,
         },
       });

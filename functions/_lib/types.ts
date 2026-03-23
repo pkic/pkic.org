@@ -15,6 +15,9 @@ export interface R2ObjectLike {
   text(): Promise<string>;
   arrayBuffer(): Promise<ArrayBuffer>;
   body: ReadableStream;
+  httpMetadata?: {
+    contentType?: string;
+  };
 }
 
 /**
@@ -52,6 +55,7 @@ export interface Env {
   DEFAULT_MIN_PROPOSAL_REVIEWS: string;
   DEFAULT_REFERRAL_CODE_LENGTH: string;
   DEFAULT_INVITE_LIMIT_PER_ATTENDEE: string;
+  DEFAULT_INVITE_LIMIT_SPEAKER_NOMINATION?: string;
   WAITLIST_CLAIM_WINDOW_HOURS: string;
   MAGIC_LINK_TTL_MINUTES: string;
   MANAGE_TOKEN_TTL_HOURS: string;

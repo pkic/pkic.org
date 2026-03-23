@@ -215,7 +215,19 @@ export async function addProposalSpeaker(
        role             = excluded.role,
        status           = CASE WHEN proposal_speakers.status = 'declined' THEN 'invited' ELSE proposal_speakers.status END,
        manage_token_hash = COALESCE(proposal_speakers.manage_token_hash, excluded.manage_token_hash),
-       confirmed_at     = COALESCE(proposal_speakers.confirmed_at, excluded.confirmed_at)`,
+       confirmed_at     = COALESCE(proposal_speakers.confirmed_at, excluded.confirmed_at),
+       speaker_invite_reminder_count = CASE
+         WHEN proposal_speakers.status = 'declined' THEN 0
+         ELSE proposal_speakers.speaker_invite_reminder_count
+       END,
+       speaker_invite_last_communication_at = CASE
+         WHEN proposal_speakers.status = 'declined' THEN excluded.created_at
+         ELSE proposal_speakers.speaker_invite_last_communication_at
+       END,
+       speaker_invite_reminders_paused_until = CASE
+         WHEN proposal_speakers.status = 'declined' THEN NULL
+         ELSE proposal_speakers.speaker_invite_reminders_paused_until
+       END`,
     [uuid(), payload.proposalId, payload.userId, payload.role, status, manageTokenHash, confirmedAt, now],
   );
 
@@ -535,6 +547,87 @@ export interface ProposalSpeakerWithUser {
   biography: string | null;
   headshot_r2_key: string | null;
   headshot_updated_at: string | null;
+}
+
+function formatInvitePerson(firstName: string | null, lastName: string | null, organizationName: string | null, fallback: string): string {
+  const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
+  if (fullName && organizationName?.trim()) {
+    return `${fullName} (${organizationName.trim()})`;
+  }
+  if (fullName) {
+    return fullName;
+  }
+  return fallback;
+}
+
+export interface ProposalInviteEmailContext {
+  invitedByDisplay: string;
+  proposalTitle: string;
+  proposalAbstract: string;
+  speakerLineupText: string;
+}
+
+export async function buildProposalInviteEmailContext(
+  db: DatabaseLike,
+  payload: {
+    proposalId: string;
+    inviterUserId?: string | null;
+  },
+): Promise<ProposalInviteEmailContext> {
+  const proposal = await first<{
+    id: string;
+    title: string;
+    abstract: string;
+    proposer_user_id: string;
+  }>(
+    db,
+    "SELECT id, title, abstract, proposer_user_id FROM session_proposals WHERE id = ?",
+    [payload.proposalId],
+  );
+
+  if (!proposal) {
+    throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
+  }
+
+  const inviterUserId = payload.inviterUserId ?? proposal.proposer_user_id;
+  const inviter = await first<{
+    email: string;
+    first_name: string | null;
+    last_name: string | null;
+    organization_name: string | null;
+  }>(
+    db,
+    "SELECT email, first_name, last_name, organization_name FROM users WHERE id = ?",
+    [inviterUserId],
+  );
+
+  const speakers = await all<{
+    email: string;
+    first_name: string | null;
+    last_name: string | null;
+    organization_name: string | null;
+  }>(
+    db,
+    `SELECT u.email, u.first_name, u.last_name, u.organization_name
+     FROM proposal_speakers ps
+     JOIN users u ON u.id = ps.user_id
+     WHERE ps.proposal_id = ?
+     ORDER BY ps.created_at ASC`,
+    [proposal.id],
+  );
+
+  const speakerLineupText = speakers
+    .map((entry) => `- ${formatInvitePerson(entry.first_name, entry.last_name, entry.organization_name, entry.email)}`)
+    .join("\n");
+
+  return {
+    invitedByDisplay: inviter
+      ? formatInvitePerson(inviter.first_name, inviter.last_name, inviter.organization_name, inviter.email)
+      : "The proposer",
+    proposalTitle: proposal.title,
+    proposalAbstract: proposal.abstract,
+    speakerLineupText,
+  };
 }
 
 export async function listProposalSpeakersWithStatus(

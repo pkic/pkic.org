@@ -2,7 +2,7 @@ import { all, run } from "../db/queries";
 import { queueEmail } from "../email/outbox";
 import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl, speakerManagePageUrl } from "./frontend-links";
 import { formatInviterList, getInviteInviters, markInviteReminderSent, refreshInviteToken } from "./invites";
-import { refreshSpeakerManageToken } from "./proposals";
+import { buildProposalInviteEmailContext, refreshSpeakerManageToken } from "./proposals";
 import { buildEventEmailVariables } from "./events";
 import { nowIso } from "../utils/time";
 import { parseJsonSafe } from "../utils/json";
@@ -60,6 +60,26 @@ interface DuePresentationRow {
   event_starts_at: string | null;
   event_settings_json: string;
   presentation_deadline: string | null;
+  reminder_count: number;
+}
+
+interface DueSpeakerInviteRow {
+  speaker_id: string;
+  proposal_id: string;
+  user_id: string;
+  role: string;
+  speaker_status: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  proposal_title: string;
+  proposer_first_name: string | null;
+  event_id: string;
+  event_name: string;
+  event_slug: string;
+  event_base_path: string | null;
+  event_starts_at: string | null;
+  event_settings_json: string;
   reminder_count: number;
 }
 
@@ -149,6 +169,7 @@ export async function runReminderCycle(
   },
 ): Promise<{
   inviteRemindersQueued: number;
+  speakerInviteRemindersQueued: number;
   presentationRemindersQueued: number;
   processed: number;
 }> {
@@ -243,7 +264,104 @@ export async function runReminderCycle(
     inviteRemindersQueued += 1;
   }
 
-  const remainingLimit = Math.max(0, payload.limit - inviteRemindersQueued);
+  const remainingAfterInvites = Math.max(0, payload.limit - inviteRemindersQueued);
+
+  const dueSpeakerInvites = remainingAfterInvites > 0
+    ? await all<DueSpeakerInviteRow>(
+      db,
+      `SELECT
+         ps.id                     AS speaker_id,
+         ps.proposal_id            AS proposal_id,
+         ps.user_id                AS user_id,
+         ps.role                   AS role,
+         ps.status                 AS speaker_status,
+         u.email                   AS email,
+         u.first_name              AS first_name,
+         u.last_name               AS last_name,
+         sp.title                  AS proposal_title,
+         pu.first_name             AS proposer_first_name,
+         sp.event_id               AS event_id,
+         e.name                    AS event_name,
+         e.slug                    AS event_slug,
+         e.base_path               AS event_base_path,
+         e.starts_at               AS event_starts_at,
+         e.settings_json           AS event_settings_json,
+         ps.speaker_invite_reminder_count AS reminder_count
+       FROM proposal_speakers ps
+       JOIN users u ON u.id = ps.user_id
+       JOIN session_proposals sp ON sp.id = ps.proposal_id
+       JOIN events e ON e.id = sp.event_id
+       LEFT JOIN users pu ON pu.id = sp.proposer_user_id
+       WHERE ps.status = 'invited'
+         AND ps.role <> 'proposer'
+         AND sp.status NOT IN ('rejected', 'withdrawn')
+         AND (e.starts_at IS NULL OR e.starts_at > ?)
+         AND ps.speaker_invite_reminder_count < ?
+         AND (ps.speaker_invite_reminders_paused_until IS NULL OR ps.speaker_invite_reminders_paused_until <= ?)
+         AND COALESCE(ps.speaker_invite_last_communication_at, ps.created_at) <= ?
+       ORDER BY COALESCE(ps.speaker_invite_last_communication_at, ps.created_at) ASC
+       LIMIT ?`,
+      [now, payload.maxInviteReminders, now, cutoff, remainingAfterInvites],
+    )
+    : [];
+
+  let speakerInviteRemindersQueued = 0;
+
+  for (const row of dueSpeakerInvites) {
+    const event: EventRouteRow = {
+      id: row.event_id,
+      name: row.event_name,
+      slug: row.event_slug,
+      base_path: row.event_base_path,
+      starts_at: row.event_starts_at,
+      settings_json: row.event_settings_json,
+    };
+
+    const manageToken = await refreshSpeakerManageToken(db, row.proposal_id, row.user_id);
+    const manageUrl = speakerManagePageUrl(payload.appBaseUrl, event, manageToken);
+    const inviteContext = await buildProposalInviteEmailContext(db, {
+      proposalId: row.proposal_id,
+      inviterUserId: null,
+    });
+
+    if (!payload.dryRun) {
+      await queueEmail(db, {
+        eventId: row.event_id,
+        templateKey: "co_speaker_invite",
+        recipientEmail: row.email,
+        recipientUserId: row.user_id,
+        messageType: "transactional",
+        subject: `Reminder: please confirm speaker participation — ${event.name}`,
+        data: {
+          ...buildEventEmailVariables(event, payload.appBaseUrl),
+          firstName: row.first_name ?? "",
+          lastName: row.last_name ?? "",
+          proposerFirstName: row.proposer_first_name ?? "",
+          invitedByDisplay: inviteContext.invitedByDisplay,
+          proposalTitle: inviteContext.proposalTitle,
+          proposalAbstract: inviteContext.proposalAbstract,
+          speakerLineupText: inviteContext.speakerLineupText,
+          manageUrl,
+          isReminder: true,
+          reminderCount: String(Number(row.reminder_count ?? 0) + 1),
+        },
+      });
+
+      await run(
+        db,
+        `UPDATE proposal_speakers
+         SET speaker_invite_reminder_count = speaker_invite_reminder_count + 1,
+             speaker_invite_last_communication_at = ?,
+             speaker_invite_reminders_paused_until = NULL
+         WHERE id = ?`,
+        [now, row.speaker_id],
+      );
+    }
+
+    speakerInviteRemindersQueued += 1;
+  }
+
+  const remainingLimit = Math.max(0, payload.limit - inviteRemindersQueued - speakerInviteRemindersQueued);
 
   const duePresentation = remainingLimit > 0
     ? await all<DuePresentationRow>(
@@ -337,7 +455,8 @@ export async function runReminderCycle(
 
   return {
     inviteRemindersQueued,
+    speakerInviteRemindersQueued,
     presentationRemindersQueued,
-    processed: inviteRemindersQueued + presentationRemindersQueued,
+    processed: inviteRemindersQueued + speakerInviteRemindersQueued + presentationRemindersQueued,
   };
 }

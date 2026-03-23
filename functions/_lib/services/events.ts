@@ -122,7 +122,7 @@ function defaultFrontendPaths(event: Pick<EventRecord, "slug" | "base_path" | "s
     proposalPath: `${base}propose/`,
     registrationManagePath: `${base}register/manage/`,
     proposalManagePath: `${base}propose-manage/`,
-    speakerManagePath: `${base}speaker-manage/`,
+    speakerManagePath: `${base}propose/speaker/`,
     inviteDeclinePath: `${base}invite/decline/`,
   };
 }

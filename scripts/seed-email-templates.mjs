@@ -503,12 +503,32 @@ Thank you for your interest in contributing to **{{eventName}}**.
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "co_speaker_invite",
-    subjectTemplate: "You have been added as a speaker — {{eventName}}",
+    subjectTemplate: `{{#if isReminder}}Reminder: please confirm speaker participation — {{eventName}}{{else}}You have been added as a speaker — {{eventName}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
 
+{{#if isReminder}}
+<div class="notice notice-warning">A quick follow-up: we still need your confirmation for this speaker invitation.</div>
+{{/if}}
+
+{{#if invitedByDisplay}}
+**{{invitedByDisplay}}** invited you as a speaker for **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).
+{{else}}
 {{proposerFirstName}} has listed you as a speaker on their proposal for **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).
+{{/if}}
 
 > **Proposal:** {{proposalTitle}}
+
+{{#if proposalAbstract}}
+## Proposal abstract
+
+{{proposalAbstract}}
+{{/if}}
+
+{{#if speakerLineupText}}
+## Speakers on this proposal
+
+{{speakerLineupText}}
+{{/if}}
 
 Please review the proposal and **confirm or decline your participation**. You will also be prompted to review your speaker profile (bio and headshot) so we can promote the session.
 
