@@ -627,7 +627,7 @@ We have structured the 2026 agenda to serve the two distinct halves of a success
 card_style: bento
 cards:
   - color: "bento-dark"
-    image: "photos/ANN04967.jpg"
+    image: "photos/ASP_1760.jpg"
     icon: compass
     title: "The Strategic Track"
     text: |
@@ -653,31 +653,6 @@ cards:
       
       **Parallel / Blue Hall**
 {{< /cards >}}
-
-{{< photo-grid class="my-5 shadow-sm rounded overflow-hidden" >}}
-cols: 4
-gap: "0.25rem"
-height: 240
-photos:
-  - src: "photos/ANN04967.jpg"
-    alt: "Packed auditorium at PQC Conference 2025"
-    span: 2
-    rowspan: 2
-  - src: "photos/ASP_1760.jpg"
-    alt: "Keynote address at PQC Conference 2025"
-    rowspan: 2
-  - src: "photos/ANN05834.jpg"
-    alt: "Panel discussion at PQC Conference 2025"
-  - src: "photos/ANN06210.jpg"
-    alt: "Networking at PQC Conference 2025"
-    span: 2
-  - src: "photos/IMG_1977.JPEG"
-    alt: "Audience and presentation at PQC Conference 2025"
-    rowspan: 2
-  - src: "photos/IMG_2025.JPEG"
-    alt: "Conference audience at PQC Conference 2023"
-    span: 2
-{{< /photo-grid >}}
 
 ## Why You Cannot Afford to Wait
 
@@ -713,7 +688,7 @@ card_style: bento
 cards:
   - title: "Support the Mission"
     color: bento-green-pale
-    image: "photos/ASP_1760.jpg"
+    image: "photos/ANN04967.jpg"
     icon: landmark
     text: |
       While tickets are free, running a global technical conference is not. While our main room can hold 800 attendees and the total venue many more, our total attendee capacity will depend on the available budget. If your organization finds value in our work, please consider making a voluntary donation or sponsoring the PKI Consortium.
@@ -749,7 +724,7 @@ cards:
         url: "register/"
         class: "btn-primary shadow-sm"
   - color: bento-blue-pale
-    image: "photos/album-photo-2.jpg"
+    image: "photos/AME_0009.jpg"
     icon: globe
     title: "Virtual / On-Demand"
     text: |
