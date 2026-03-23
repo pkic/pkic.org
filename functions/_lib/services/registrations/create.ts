@@ -29,10 +29,29 @@ async function initialRegistrationStatus(
   if (attendanceType !== "in_person") {
     return "registered";
   }
-  // Event-level capacity is deprecated; only per-day capacities are enforced.
-  void db;
-  void eventId;
-  return "registered";
+
+  const event = await first<{ capacity_in_person: number | null }>(
+    db,
+    "SELECT capacity_in_person FROM events WHERE id = ?",
+    [eventId],
+  );
+  const capacity = Number(event?.capacity_in_person ?? 0);
+  if (capacity <= 0) {
+    return "registered";
+  }
+
+  const row = await first<{ total: number }>(
+    db,
+    `SELECT COUNT(*) AS total
+     FROM registrations
+     WHERE event_id = ?
+       AND status = 'registered'
+       AND attendance_type = 'in_person'
+       AND capacity_exempt_in_person = 0`,
+    [eventId],
+  );
+
+  return Number(row?.total ?? 0) >= capacity ? "waitlisted" : "registered";
 }
 
 export async function createRegistration(

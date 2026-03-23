@@ -13,6 +13,7 @@ interface ConfirmResponse {
   success: true;
   status: string;
   shareUrl?: string | null;
+  manageUrl?: string | null;
   manageToken?: string | null;
 }
 
@@ -69,6 +70,7 @@ function showConfirmedPanel(
   email: string,
   organizationName: string,
   shareUrl: string | null | undefined,
+  manageUrl: string | null | undefined,
   manageToken: string | null | undefined,
   eventSlug: string,
 ): void {
@@ -98,6 +100,24 @@ function showConfirmedPanel(
 
   // Share panel: highest-intent moment — the user just committed by confirming
   // their email, making this the optimal time to ask them to spread the word.
+  if (manageUrl || manageToken) {
+    const fallbackManageUrl = manageToken
+      ? `/events/${encodeURIComponent(eventSlug)}/register/manage/?event=${encodeURIComponent(eventSlug)}&token=${encodeURIComponent(manageToken)}`
+      : null;
+    const effectiveManageUrl = manageUrl ?? fallbackManageUrl;
+
+    const quickActions = document.createElement("div");
+    quickActions.className = "alert alert-light mt-3";
+    quickActions.innerHTML = `
+      <p class="mb-2"><strong>Next steps</strong></p>
+      <div class="d-flex gap-2 flex-wrap">
+        <a class="btn btn-sm btn-outline-primary" href="${escapeHtml(effectiveManageUrl ?? "")}">Manage registration</a>
+        <a class="btn btn-sm btn-outline-secondary" href="${escapeHtml(effectiveManageUrl ?? "")}#manage-headshot-file">Upload headshot</a>
+      </div>
+    `;
+    panel.appendChild(quickActions);
+  }
+
   if (shareUrl) {
     const shareContainer = document.createElement("div");
     renderSharePanel(shareContainer, {
@@ -259,7 +279,7 @@ async function main(): Promise<void> {
         `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-email`,
         { token },
       );
-      showConfirmedPanel(boot.root, boot.form, result, firstName, lastName, eventName, email, organizationName, result.shareUrl, result.manageToken, boot.eventSlug);
+      showConfirmedPanel(boot.root, boot.form, result, firstName, lastName, eventName, email, organizationName, result.shareUrl, result.manageUrl, result.manageToken, boot.eventSlug);
     } catch (error) {
       // If the link expired between page load and click, replace form with
       // the resend panel rather than just showing an error alert.
