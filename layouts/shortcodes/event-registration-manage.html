@@ -2,6 +2,19 @@
 {{- $eventPagePath := partial "events/flow/page-path.html" . -}}
 <div class="event-flow" data-event-registration-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
 
+  {{/* ── Resend manage link (shown when no token is in the URL) ───────── */}}
+  <div data-resend-manage-section class="d-none">
+    <p class="form-text mb-3">Enter the email address you used to register and we&rsquo;ll send you a new management link.</p>
+    <div class="row g-2 align-items-end mb-2">
+      <div class="col-12 col-sm-6">
+        <label class="form-label" for="resend-manage-email">Your email address</label>
+        <input id="resend-manage-email" type="email" class="form-control" autocomplete="email" placeholder="you@example.com" data-resend-manage-email>
+      </div>
+    </div>
+    <button type="button" class="btn btn-primary" data-resend-manage-btn>Send my management link</button>
+    <p data-resend-manage-status class="mt-2 small"></p>
+  </div>
+
   {{/* ── Greeting / status banner ──────────────────────────────────────── */}}
   <div data-manage-greeting class="mb-3 d-none">
     <p class="lead mb-1" data-manage-greeting-text></p>

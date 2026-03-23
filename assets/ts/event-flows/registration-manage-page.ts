@@ -1,4 +1,4 @@
-import { getJson, patchJson } from "../shared/api-client";
+import { getJson, patchJson, postJson } from "../shared/api-client";
 import { setButtonLoading, resetButton } from "../shared/button-loading";
 import type { EventFormsResponse, RegistrationManageResponse } from "../shared/types";
 import { applyFieldErrors, normalizeValidation } from "../shared/validation-map";
@@ -10,205 +10,11 @@ import {
 } from "../shared/render-custom-fields";
 import { readDayAttendance, renderDayAttendance, writeDayAttendance } from "../shared/render-day-attendance";
 import { renderSharePanel, refreshSharePanelBadge } from "../shared/render-share-panel";
+import { cropHeadshot } from "../shared/crop-headshot";
+import { showManageLinkRecoveryForm } from "../shared/manage-link-recovery";
+import { prepareHeadshotUploadBlob, showHeadshotDisclaimer } from "../shared/headshot-upload";
+import { renderHeadshotPreview } from "../shared/headshot-preview";
 import { bootstrap, setStatus } from "./boot";
-
-// ── Headshot disclaimer ─────────────────────────────────────────────────────
-
-const HEADSHOT_DISCLAIMER_TEXT = [
-  "This is a photograph of myself.",
-  "I hold the copyright to this image, or I have an unrestricted, royalty-free licence to use and publish it.",
-  "The image does not infringe any third-party intellectual property rights, privacy rights, or applicable laws.",
-  "I grant PKI Consortium a non-exclusive, worldwide licence to display this image alongside my name and professional details on this website and related materials.",
-  "I accept full responsibility for any claims arising from this upload.",
-];
-
-function showHeadshotDisclaimer(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.style.cssText =
-      "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;display:flex;align-items:center;justify-content:center;padding:1rem";
-    const card = document.createElement("div");
-    card.style.cssText =
-      "background:#fff;border-radius:.5rem;max-width:520px;width:100%;padding:1.5rem;box-shadow:0 8px 32px rgba(0,0,0,.25)";
-    card.innerHTML = `
-      <h4 style="margin:0 0 .75rem;font-size:1.1rem">Before you upload a photo</h4>
-      <p style="font-size:.875rem;margin:0 0 1rem">Please confirm all of the following:</p>
-      <form>
-        ${HEADSHOT_DISCLAIMER_TEXT.map((text, i) => `
-          <div style="display:flex;gap:.5rem;margin-bottom:.5rem;align-items:flex-start">
-            <input type="checkbox" id="hsd-${i}" style="margin-top:.2rem;flex-shrink:0">
-            <label for="hsd-${i}" style="font-size:.875rem">${text}</label>
-          </div>`).join("")}
-        <div style="display:flex;gap:.5rem;margin-top:1rem">
-          <button type="submit" id="hsd-confirm" class="btn btn-success btn-sm" disabled>Continue to crop →</button>
-          <button type="button" id="hsd-cancel" class="btn btn-outline-secondary btn-sm">Cancel</button>
-        </div>
-      </form>`;
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-
-    const confirmBtn = card.querySelector<HTMLButtonElement>("#hsd-confirm")!;
-    const cancelBtn = card.querySelector<HTMLButtonElement>("#hsd-cancel")!;
-    const checkboxes = Array.from(card.querySelectorAll<HTMLInputElement>("input[type='checkbox']"));
-
-    function updateConfirm(): void {
-      confirmBtn.disabled = !checkboxes.every((cb) => cb.checked);
-    }
-    for (const cb of checkboxes) cb.addEventListener("change", updateConfirm);
-
-    card.querySelector("form")!.addEventListener("submit", (e) => {
-      e.preventDefault();
-      if (checkboxes.every((cb) => cb.checked)) { overlay.remove(); resolve(true); }
-    });
-    cancelBtn.addEventListener("click", () => { overlay.remove(); resolve(false); });
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
-  });
-}
-
-// ── Headshot cropper ─────────────────────────────────────────────────────────
-
-/**
- * Opens a canvas-based crop modal.  The user can drag to reposition the image
- * and zoom via a slider.  Resolves with a square 600 × 600 PNG File, or null
- * if the user cancels.
- */
-function showHeadshotCropper(file: File): Promise<File | null> {
-  const CROP_PX  = 280;  // visible crop-circle diameter (CSS px)
-  const OUTPUT_PX = 1200; // exported PNG dimension — large enough for livestream / slide use
-
-  return new Promise((resolve) => {
-    // ── Shell ──────────────────────────────────────────────────────────────
-    const overlay = document.createElement("div");
-    overlay.style.cssText =
-      "position:fixed;inset:0;background:rgba(0,0,0,.65);z-index:9100;display:flex;" +
-      "align-items:center;justify-content:center;padding:1rem;overflow-y:auto";
-
-    const card = document.createElement("div");
-    card.style.cssText =
-      "background:#fff;border-radius:.5rem;max-width:380px;width:100%;padding:1.25rem;" +
-      "box-shadow:0 8px 32px rgba(0,0,0,.3);display:flex;flex-direction:column;gap:.75rem";
-    card.innerHTML = `
-      <h4 style="margin:0;font-size:1rem">Crop your photo</h4>
-      <p style="margin:0;font-size:.8rem;color:#6c757d">
-        Drag the image to reposition it inside the circle. Use the slider to zoom.
-      </p>
-      <div data-crop-wrap
-        style="position:relative;width:${CROP_PX}px;height:${CROP_PX}px;margin:0 auto;
-               border-radius:50%;overflow:hidden;border:2px solid #dee2e6;
-               cursor:grab;touch-action:none;flex-shrink:0;background:#f8f9fa">
-        <canvas data-crop-canvas width="${CROP_PX}" height="${CROP_PX}" style="display:block"></canvas>
-      </div>
-      <div style="display:flex;align-items:center;gap:.5rem">
-        <span style="font-size:1rem;line-height:1;user-select:none">&#x2212;</span>
-        <input type="range" data-crop-zoom min="100" max="300" value="100" step="1" style="flex:1">
-        <span style="font-size:1rem;line-height:1;user-select:none">+</span>
-      </div>
-      <div style="display:flex;gap:.5rem;justify-content:flex-end">
-        <button type="button" data-crop-cancel class="btn btn-outline-secondary btn-sm">Cancel</button>
-        <button type="button" data-crop-confirm class="btn btn-success btn-sm">Use this crop</button>
-      </div>`;
-
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-
-    const canvas    = card.querySelector<HTMLCanvasElement>("[data-crop-canvas]")!;
-    const ctx       = canvas.getContext("2d")!;
-    const zoomSlider = card.querySelector<HTMLInputElement>("[data-crop-zoom]")!;
-    const cancelBtn = card.querySelector<HTMLButtonElement>("[data-crop-cancel]")!;
-    const confirmBtn = card.querySelector<HTMLButtonElement>("[data-crop-confirm]")!;
-    const wrap      = card.querySelector<HTMLElement>("[data-crop-wrap]")!;
-
-    const img = new Image();
-    let scale = 1;  // current zoom (1 = short-side fills CROP_PX)
-    let ox = 0;     // image draw origin x within canvas
-    let oy = 0;     // image draw origin y within canvas
-    let imgW = 0;   // image display width at scale 1
-    let imgH = 0;   // image display height at scale 1
-
-    function draw(): void {
-      ctx.clearRect(0, 0, CROP_PX, CROP_PX);
-      ctx.drawImage(img, ox, oy, imgW * scale, imgH * scale);
-    }
-
-    // Ensure the image always covers the full circle
-    function clamp(): void {
-      const w = imgW * scale;
-      const h = imgH * scale;
-      if (ox > 0) ox = 0;
-      if (oy > 0) oy = 0;
-      if (ox + w < CROP_PX) ox = CROP_PX - w;
-      if (oy + h < CROP_PX) oy = CROP_PX - h;
-    }
-
-    img.onload = () => {
-      // Scale so the shorter side exactly covers CROP_PX
-      const r = img.naturalWidth / img.naturalHeight;
-      if (r >= 1) { imgH = CROP_PX; imgW = CROP_PX * r; }
-      else         { imgW = CROP_PX; imgH = CROP_PX / r; }
-      scale = 1;
-      ox = (CROP_PX - imgW) / 2;
-      oy = (CROP_PX - imgH) / 2;
-      clamp();
-      draw();
-    };
-    img.src = URL.createObjectURL(file);
-
-    // ── Zoom slider ────────────────────────────────────────────────────────
-    zoomSlider.addEventListener("input", () => {
-      const newScale = Number(zoomSlider.value) / 100;
-      // Keep the crop centre fixed during zoom
-      const cx = CROP_PX / 2, cy = CROP_PX / 2;
-      ox = cx - (cx - ox) * (newScale / scale);
-      oy = cy - (cy - oy) * (newScale / scale);
-      scale = newScale;
-      clamp();
-      draw();
-    });
-
-    // ── Drag (mouse + touch via Pointer Events) ────────────────────────────
-    let dragging = false, lastX = 0, lastY = 0;
-    wrap.addEventListener("pointerdown", (e: PointerEvent) => {
-      dragging = true; lastX = e.clientX; lastY = e.clientY;
-      wrap.style.cursor = "grabbing";
-      wrap.setPointerCapture(e.pointerId);
-    });
-    wrap.addEventListener("pointermove", (e: PointerEvent) => {
-      if (!dragging) return;
-      ox += e.clientX - lastX; oy += e.clientY - lastY;
-      lastX = e.clientX; lastY = e.clientY;
-      clamp(); draw();
-    });
-    const endDrag = (): void => { dragging = false; wrap.style.cursor = "grab"; };
-    wrap.addEventListener("pointerup",     endDrag);
-    wrap.addEventListener("pointercancel", endDrag);
-
-    // ── Confirm: render to offscreen canvas and export JPEG ──────────────────
-    confirmBtn.addEventListener("click", () => {
-      // Never upscale beyond the source — use min of desired max and natural size.
-      const naturalMin = Math.min(img.naturalWidth, img.naturalHeight);
-      const outPx = Math.min(OUTPUT_PX, naturalMin);
-      const off = Object.assign(document.createElement("canvas"),
-        { width: outPx, height: outPx });
-      const offCtx = off.getContext("2d")!;
-      const ratio = outPx / CROP_PX;
-      offCtx.drawImage(img, ox * ratio, oy * ratio, imgW * scale * ratio, imgH * scale * ratio);
-      // JPEG at 0.92 quality: photos are 100–400 KB vs several MB for PNG.
-      off.toBlob((blob) => {
-        overlay.remove();
-        URL.revokeObjectURL(img.src);
-        resolve(blob ? new File([blob], "headshot.jpg", { type: "image/jpeg" }) : null);
-      }, "image/jpeg", 0.92);
-    });
-
-    // ── Cancel ─────────────────────────────────────────────────────────────
-    cancelBtn.addEventListener("click", () => {
-      overlay.remove(); URL.revokeObjectURL(img.src); resolve(null);
-    });
-    overlay.addEventListener("click", (e) => {
-      if (e.target === overlay) { overlay.remove(); URL.revokeObjectURL(img.src); resolve(null); }
-    });
-  });
-}
 
 // ── Headshot section wiring ──────────────────────────────────────────────────
 
@@ -229,14 +35,8 @@ function wireHeadshotSection(
   const deleteBtn = section.querySelector<HTMLButtonElement>("[data-headshot-delete]");
 
   function setPreview(url: string | null | undefined): void {
-    if (!preview) return;
-    if (url) {
-      preview.innerHTML = `<img src="${url}" alt="Your headshot" style="width:80px;height:80px;object-fit:cover;border-radius:50%;border:2px solid #dee2e6">`;
-      if (deleteBtn) deleteBtn.style.display = "";
-    } else {
-      preview.innerHTML = `<div style="width:80px;height:80px;border-radius:50%;border:2px dashed #dee2e6;display:flex;align-items:center;justify-content:center;color:#adb5bd;font-size:.75rem">No photo</div>`;
-      if (deleteBtn) deleteBtn.style.display = "none";
-    }
+    renderHeadshotPreview(preview, url, { alt: "Your headshot", emptyLabel: "No photo" });
+    if (deleteBtn) deleteBtn.style.display = url ? "" : "none";
   }
 
   setPreview(initialHeadshotUrl);
@@ -246,22 +46,19 @@ function wireHeadshotSection(
     if (!file) return;
     fileInput.value = "";
 
-    const MAX_RAW_MB = 1;
-    if (file.size > MAX_RAW_MB * 1024 * 1024) {
-      if (headshotStatus) headshotStatus.textContent = `Please choose an image under ${MAX_RAW_MB} MB.`;
-      return;
-    }
-
     void (async () => {
       const accepted = await showHeadshotDisclaimer();
       if (!accepted) return;
 
-      const croppedFile = await showHeadshotCropper(file);
-      if (!croppedFile) return;
+      const croppedBlob = await cropHeadshot(file);
+      if (!croppedBlob) return;
+
+      const uploadBlob = await prepareHeadshotUploadBlob(croppedBlob, 1024 * 1024);
+      const uploadFile = new File([uploadBlob], "headshot.jpg", { type: "image/jpeg" });
 
       if (headshotStatus) headshotStatus.textContent = "Uploading…";
       const form = new FormData();
-      form.append("file", croppedFile);
+      form.append("file", uploadFile);
       form.append("consent", "true");
 
       try {
@@ -408,6 +205,25 @@ function showPostAction(
   postAction.classList.remove("d-none");
 }
 
+function showResendManageLinkForm(
+  root: HTMLElement,
+  apiBase: string,
+  eventSlug: string,
+  introMessage?: string,
+): void {
+  showManageLinkRecoveryForm({
+    root,
+    loadingSelector: "[data-manage-loading]",
+    sectionSelector: "[data-resend-manage-section]",
+    buttonSelector: "[data-resend-manage-btn]",
+    statusSelector: "[data-resend-manage-status]",
+    emailSelector: "[data-resend-manage-email]",
+    endpoint: `${apiBase}/events/${eventSlug}/registrations/resend-manage-link`,
+    successMessage: "If the details match a registration, you will receive an email shortly. Please check your inbox (and spam folder).",
+    introMessage,
+  });
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -422,8 +238,7 @@ async function main(): Promise<void> {
     ?? null;
 
   if (!token) {
-    const loadingEl = root.querySelector<HTMLElement>("[data-manage-loading]");
-    if (loadingEl) loadingEl.textContent = "Missing registration token. Please open this page from your confirmation email.";
+    showResendManageLinkForm(root, apiBase, eventSlug);
     return;
   }
 
@@ -454,7 +269,12 @@ async function main(): Promise<void> {
     ]);
   } catch (error) {
     const normalized = normalizeValidation(error);
-    if (loadingEl) loadingEl.textContent = normalized.globalMessage;
+    showResendManageLinkForm(
+      root,
+      apiBase,
+      eventSlug,
+      `${normalized.globalMessage} You can request a fresh management link below.`,
+    );
     return;
   }
 
