@@ -15,6 +15,7 @@ import { buildRegistrationIcs } from "../../../../_lib/utils/calendar";
 import { getClientIp, getUserAgent, requireInternalSecret } from "../../../../_lib/request";
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import { deriveEventAttendanceType, getRegistrationDayAttendance } from "../../../../_lib/services/event-days";
+import { listDayWaitlistForRegistration } from "../../../../_lib/services/registrations/day-waitlist";
 import { buildAttendanceEmailData } from "../../../../_lib/utils/attendance";
 import { buildAcceptedTermsText, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
 import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../_lib/services/frontend-links";
@@ -123,9 +124,11 @@ export async function onRequestPost(
   const shareUrl = `${appBaseUrl}/r/${referralCode}`;
 
   const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, created.registration.id);
+  const dayWaitlist = await listDayWaitlistForRegistration(context.env.DB, created.registration.id);
   const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
     created.registration.attendance_type,
     dayAttendanceRaw,
+    dayWaitlist,
   );
   const customAnswerRows = await getCustomAnswerRows(context.env.DB, event.id, created.registration.custom_answers_json);
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
@@ -150,6 +153,7 @@ export async function onRequestPost(
         // Registration
         attendanceLabel,
         dayAttendance,
+        dayWaitlist,
         customAnswerRows,
         acceptedTermsText: acceptedTermsText || undefined,
         status: created.registration.status,
@@ -190,6 +194,7 @@ export async function onRequestPost(
         attendanceType: created.registration.attendance_type,
         attendanceLabel,
         dayAttendance,
+        dayWaitlist,
         customAnswerRows,
         acceptedTermsText: acceptedTermsText || undefined,
         status: created.registration.status,

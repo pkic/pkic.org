@@ -84,7 +84,8 @@ export async function onRequestPatch(context: PagesContext<{ token: string }>): 
     const manageUrl = registrationManagePageUrl(appBaseUrl, event, context.params.token);
     const templateKey = body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated";
     const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, updated.id);
-    const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw);
+    const dayWaitlist = await listDayWaitlistForRegistration(context.env.DB, updated.id);
+    const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
     const customAnswerRows = body.action !== "report_unauthorized"
       ? await getCustomAnswerRows(context.env.DB, event.id, updated.custom_answers_json)
       : [];
@@ -110,6 +111,7 @@ export async function onRequestPatch(context: PagesContext<{ token: string }>): 
         attendanceType: updated.attendance_type,
         attendanceLabel,
         dayAttendance,
+        dayWaitlist,
         customAnswerRows,
         acceptedTermsText: acceptedTermsText || undefined,
         status: updated.status,
