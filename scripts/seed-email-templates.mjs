@@ -195,7 +195,7 @@ Thank you for registering for **{{eventName}}**! Please confirm your email addre
 
 {{> reg_details}}
 
-Once confirmed you can [manage your registration]({{manageUrl}}) at any time.
+Use your [registration management link]({{manageUrl}}) to review, update, or cancel this registration at any time.
 
 Know someone who should attend? Share your personal referral link: [{{shareUrl}}]({{shareUrl}})
 
@@ -214,10 +214,14 @@ Know someone who should attend? Share your personal referral link: [{{shareUrl}}
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_confirmed",
-    subjectTemplate: "Your registration is confirmed — {{eventName}}",
+    subjectTemplate: `{{#if eq status "waitlisted"}}Your registration is waitlisted — {{eventName}}{{else}}Your registration is confirmed — {{eventName}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
+{{#if eq status "waitlisted"}}
+Your registration for **{{eventName}}** has been received, but you are currently **on the waitlist** and do not yet have a confirmed seat.
+{{else}}
 We are delighted to confirm that **your registration for {{eventName}} has been successfully processed**.
+{{/if}}
 
 {{#if eq attendanceType "in_person"}}
 <div class="notice notice-success">&#128197; A <strong>calendar invitation</strong> is attached to this email — please add it to your calendar.</div>
@@ -258,10 +262,14 @@ We look forward to seeing you at the *{{eventName}}**!
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_updated",
-    subjectTemplate: "Registration updated — {{eventName}}",
+    subjectTemplate: `{{#if eq status "waitlisted"}}Registration updated and waitlisted — {{eventName}}{{else}}Registration updated — {{eventName}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
 This email confirms that your registration for **{{eventName}}** has been successfully updated.
+
+{{#if eq status "waitlisted"}}
+Your registration is **currently waitlisted**, which means your attendance is not yet confirmed.
+{{/if}}
 
 ---
 
@@ -284,7 +292,7 @@ This email confirms that your registration for **{{eventName}}** has been succes
 <div class="notice notice-danger">Your registration has been <strong>cancelled</strong>. If this was a mistake, please re-register through the event page.</div>
 {{/if}}
 
-If the details above don't look right, [edit your registration &rarr;]({{manageUrl}})
+If the details above don't look right, use your [registration management link]({{manageUrl}}) to review or edit your registration.
 `,
   },
 
