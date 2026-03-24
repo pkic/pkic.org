@@ -170,6 +170,56 @@ function deriveEventAttendanceType(
 
 const CANCELLED_STATUSES = new Set(["cancelled", "cancelled_unauthorized"]);
 
+function attendanceTypeLabel(attendanceType: string): string {
+  switch (attendanceType) {
+    case "in_person":
+      return "In-person attendance";
+    case "virtual":
+      return "Virtual attendance";
+    case "on_demand":
+      return "On-demand attendance";
+    default:
+      return attendanceType;
+  }
+}
+
+function buildRegistrationStatusBanner(
+  registrationStatus: string,
+  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>,
+  dayWaitlist: Array<{ dayDate: string; status: string }>,
+): string {
+  const waitlistByDay = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry.status] as const));
+  const isRegistrationWaitlisted = registrationStatus === "waitlisted";
+
+  const rows = dayAttendance.map((day) => {
+    const dayLabel = day.label ?? day.dayDate;
+    const attendanceLabel = attendanceTypeLabel(day.attendanceType);
+    const waitlistStatus = waitlistByDay.get(day.dayDate);
+    const confirmationLabel = waitlistStatus === "waiting" || waitlistStatus === "offered"
+      ? "Waitlisted"
+      : "Confirmed";
+    const statusClass = waitlistStatus === "waiting" || waitlistStatus === "offered"
+      ? "text-bg-warning"
+      : "text-bg-success";
+
+    return `<li class="d-flex flex-wrap align-items-center gap-2 mb-1"><span><strong>${dayLabel}:</strong> ${attendanceLabel}</span><span class="badge ${statusClass}">${confirmationLabel}</span></li>`;
+  }).join("");
+
+  const bannerLead = isRegistrationWaitlisted
+    ? `<strong>Registration status:</strong> <span class="badge text-bg-warning">Waitlisted</span> Your registration is active, but one or more seats are still pending confirmation.`
+    : `<strong>Registration status:</strong> <span class="badge text-bg-success">Confirmed</span> Your registration is active and confirmed.`;
+
+  const daySummary = rows
+    ? `<div class="mt-2"><div class="small text-uppercase fw-semibold text-muted mb-1">How you are attending each day</div><ul class="list-unstyled mb-0">${rows}</ul></div>`
+    : "";
+
+  const waitlistSummary = !isRegistrationWaitlisted && dayWaitlist.length > 0
+    ? `<div class="mt-2 small">Some day-specific entries are still pending, so those days are marked <strong>waitlisted</strong> below.</div>`
+    : "";
+
+  return `${bannerLead}${daySummary}${waitlistSummary}`;
+}
+
 function statusLabel(status: string): { label: string; cssClass: string } {
   switch (status) {
     case "registered":
@@ -285,11 +335,8 @@ async function main(): Promise<void> {
   const firstName = user?.first_name ?? "";
 
   if (statusBanner) {
-    const isWaitlisted = registration.status === "waitlisted";
-    if (isWaitlisted || (dayWaitlist && dayWaitlist.length > 0)) {
-      statusBanner.innerHTML = isWaitlisted
-        ? `You are currently on the <strong>waitlist</strong> for in-person attendance. Your registration is active, but a seat has not been confirmed yet. Use this page to review, update, or cancel your registration.`
-        : `Some of your selected days are currently on the <strong>waitlist</strong>. Those entries are shown further down on this page, where you can review what is still pending.`;
+    if (registration.status === "waitlisted" || (dayWaitlist && dayWaitlist.length > 0)) {
+      statusBanner.innerHTML = buildRegistrationStatusBanner(registration.status, dayAttendance, dayWaitlist ?? []);
       statusBanner.classList.remove("d-none");
     }
   }

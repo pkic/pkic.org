@@ -20,6 +20,7 @@ import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_l
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { updateRegistrationById } from "../../../../../../../_lib/services/registrations";
 import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
+import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
 import { validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
 import { buildAttendanceEmailData, STATUS_LABELS } from "../../../../../../../_lib/utils/attendance";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../../../_lib/utils/registration-email";
@@ -75,7 +76,13 @@ export async function onRequestGet(
   if (!registration) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
-  return json({ registration });
+
+  const [dayAttendance, dayWaitlist] = await Promise.all([
+    getRegistrationDayAttendance(context.env.DB, registration.id),
+    listDayWaitlistForRegistration(context.env.DB, registration.id),
+  ]);
+
+  return json({ registration, dayAttendance, dayWaitlist });
 }
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
@@ -169,7 +176,8 @@ export async function onRequestPatch(
   if (user && body.action !== "report_unauthorized") {
     const appBaseUrl = resolveAppBaseUrl(context.env);
     const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, updated.id);
-    const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw);
+    const dayWaitlist = await listDayWaitlistForRegistration(context.env.DB, updated.id);
+    const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
     const customAnswerRows = await getCustomAnswerRows(context.env.DB, event.id, updated.custom_answers_json);
     const acceptedTermsText = await getAcceptedTermsTextForRegistration(context.env.DB, updated.id);
     const outboxId = await queueEmail(context.env.DB, {
@@ -189,6 +197,7 @@ export async function onRequestPatch(
         attendanceType: updated.attendance_type,
         attendanceLabel,
         dayAttendance,
+        dayWaitlist,
         customAnswerRows,
         acceptedTermsText: acceptedTermsText || undefined,
         status: updated.status,

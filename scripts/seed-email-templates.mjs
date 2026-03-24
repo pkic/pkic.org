@@ -214,11 +214,11 @@ Know someone who should attend? Share your personal referral link: [{{shareUrl}}
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_confirmed",
-    subjectTemplate: `{{#if eq status "waitlisted"}}Your registration is waitlisted — {{eventName}}{{else}}Your registration is confirmed — {{eventName}}{{/if}}`,
+    subjectTemplate: `{{#if eq status "waitlisted"}}Waitlisted: registration received — {{eventName}}{{else}}Your registration is confirmed — {{eventName}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
 {{#if eq status "waitlisted"}}
-Your registration for **{{eventName}}** has been received, but you are currently **on the waitlist** and do not yet have a confirmed seat.
+<div class="notice notice-warning"><strong>Waitlisted:</strong> your registration for <strong>{{eventName}}</strong> has been received. {{#if dayAttendance}}Your overall registration is still pending, and the day-by-day details below show which days are confirmed and which are waitlisted.{{else}}Your entire registration is waitlisted, so no seat has been confirmed yet.{{/if}}</div>
 {{else}}
 We are delighted to confirm that **your registration for {{eventName}} has been successfully processed**.
 {{/if}}
@@ -234,7 +234,7 @@ We are delighted to confirm that **your registration for {{eventName}} has been 
 <div class="notice notice-info">&#128187; You are registered for <strong>virtual / online</strong> attendance. Livestream access details will be shared closer to the event.</div>
 {{/if}}
 {{#if eq status "waitlisted"}}
-<div class="notice notice-warning">&#9203; You are currently on the <strong>waitlist</strong> for in-person attendance. One of the limiting factors for in-person capacity is the event budget — we will be able to admit more attendees as sponsors commit to the conference. If {{#if organizationName}}<strong>{{organizationName}}</strong>{{else}}your organization{{/if}} is willing and able to sponsor this conference, please <a href="mailto:contact@pkic.org">contact us</a>. We will notify you as soon as a seat becomes available.</div>
+<div class="notice notice-warning">&#9203; Your registration is currently <strong>waitlisted</strong>, which means the event has not yet fully confirmed your attendance. One of the limiting factors for in-person capacity is the event budget — we will be able to admit more attendees as sponsors commit to the conference. If {{#if organizationName}}<strong>{{organizationName}}</strong>{{else}}your organization{{/if}} is willing and able to sponsor this conference, please <a href="mailto:contact@pkic.org">contact us</a>. We will notify you as soon as the remaining seats become available.</div>
 {{/if}}
 
 ---
@@ -262,13 +262,13 @@ We look forward to seeing you at the *{{eventName}}**!
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_updated",
-    subjectTemplate: `{{#if eq status "waitlisted"}}Registration updated and waitlisted — {{eventName}}{{else}}Registration updated — {{eventName}}{{/if}}`,
+    subjectTemplate: `{{#if eq status "waitlisted"}}Waitlisted registration updated — {{eventName}}{{else}}Registration updated — {{eventName}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
 This email confirms that your registration for **{{eventName}}** has been successfully updated.
 
 {{#if eq status "waitlisted"}}
-Your registration is **currently waitlisted**, which means your attendance is not yet confirmed.
+  <div class="notice notice-warning"><strong>Waitlisted:</strong> your attendance is not yet confirmed. You can use your registration management link to review, update, or cancel this registration.</div>
 {{/if}}
 
 ---
