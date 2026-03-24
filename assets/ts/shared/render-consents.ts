@@ -51,6 +51,9 @@ function buildConsentCard(term: RequiredTerm): HTMLElement {
   if (hasNote) {
     const card = document.createElement("div");
     card.className = "event-flow-consent-card event-flow-consent-card--featured";
+    card.dataset.termKey = term.termKey;
+    card.dataset.termVersion = term.version;
+    card.dataset.termRequired = String(Boolean(term.required));
     card.setAttribute("role", "checkbox");
     card.setAttribute("aria-checked", "false");
     card.setAttribute("tabindex", "0");
@@ -141,6 +144,9 @@ function buildConsentCard(term: RequiredTerm): HTMLElement {
   // ── Standard card (no explanatory context) ───────────────────────────────
   const card = document.createElement("div");
   card.className = "event-flow-consent-card";
+  card.dataset.termKey = term.termKey;
+  card.dataset.termVersion = term.version;
+  card.dataset.termRequired = String(Boolean(term.required));
   card.setAttribute("role", "checkbox");
   card.setAttribute("aria-checked", "false");
   card.setAttribute("tabindex", "0");

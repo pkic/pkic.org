@@ -14,6 +14,7 @@ import { nowIso, addHours } from "../../../../../../../_lib/utils/time";
 import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
+import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
 import { buildAttendanceEmailData } from "../../../../../../../_lib/utils/attendance";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../../../_lib/utils/registration-email";
 import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../../../../_lib/services/frontend-links";
@@ -54,7 +55,8 @@ export async function onRequestPost(
   }
 
   const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, registration.id);
-  const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(registration.attendance_type, dayAttendanceRaw);
+  const dayWaitlist = await listDayWaitlistForRegistration(context.env.DB, registration.id);
+  const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(registration.attendance_type, dayAttendanceRaw, dayWaitlist);
   const customAnswerRows = await getCustomAnswerRows(context.env.DB, event.id, registration.custom_answers_json);
   const acceptedTermsText = await getAcceptedTermsTextForRegistration(context.env.DB, registration.id);
 
@@ -102,6 +104,7 @@ export async function onRequestPost(
         attendanceLabel,
         dayAttendance,
         customAnswerRows,
+        dayWaitlist,
         acceptedTermsText: acceptedTermsText || undefined,
         status: registration.status,
         registrationId: registration.id,
@@ -142,6 +145,7 @@ export async function onRequestPost(
         attendanceLabel,
         dayAttendance,
         customAnswerRows,
+        dayWaitlist,
         acceptedTermsText: acceptedTermsText || undefined,
         status: registration.status,
         registrationId: registration.id,

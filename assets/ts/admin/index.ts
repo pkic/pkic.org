@@ -147,6 +147,8 @@ interface Registration {
   source_type?: string;
   created_at: string;
   referral_code?: string | null;
+  dayAttendance?: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+  dayWaitlist?: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
 }
 
 interface ProposalSummary {
@@ -445,7 +447,7 @@ function badge(status: string): string {
   const map: Record<string, string> = {
     // Registration statuses
     registered: "success", pending_email_confirmation: "warning",
-    waitlisted: "info", cancelled: "danger",
+    waitlisted: "info", cancelled: "danger", waiting: "warning", offered: "info",
     // Invite statuses
     sent: "primary", accepted: "success", declined: "danger", expired: "secondary", revoked: "secondary",
     // Email outbox statuses
@@ -459,9 +461,42 @@ function badge(status: string): string {
     // Proposal statuses / outcomes
     submitted: "primary", under_review: "info", rejected: "danger", needs_work: "warning", withdrawn: "secondary",
     // Review recommendation
-    accept: "success", reject: "danger", "needs-work": "warning",
+    accept: "success", reject: "danger", "needs-work": "warning", waiting: "warning", offered: "info",
   };
-  return `<span class="badge text-bg-${map[status] ?? "secondary"}">${esc(status || "—")}</span>`;
+  const labels: Record<string, string> = {
+    registered: "Confirmed",
+    pending_email_confirmation: "Pending confirmation",
+    waitlisted: "Waitlisted",
+    cancelled: "Cancelled",
+    sent: "Sent",
+    accepted: "Accepted",
+    declined: "Declined",
+    expired: "Expired",
+    revoked: "Revoked",
+    queued: "Queued",
+    retrying: "Retrying",
+    failed: "Failed",
+    sending: "Sending",
+    active: "Active",
+    draft: "Draft",
+    pending: "Pending",
+    completed: "Completed",
+    invite_only: "Invite only",
+    invite_or_open: "Invite or open",
+    open: "Open",
+    submitted: "Submitted",
+    under_review: "Under review",
+    rejected: "Rejected",
+    needs_work: "Needs work",
+    withdrawn: "Withdrawn",
+    accept: "Accept",
+    reject: "Reject",
+    "needs-work": "Needs work",
+    waiting: "Waiting",
+    offered: "Offered",
+  };
+  const label = labels[status] ?? (status || "—");
+  return `<span class="badge text-bg-${map[status] ?? "secondary"}">${esc(label)}</span>`;
 }
 
 function tbl(heads: string[], rows: string[], empty = "No data"): string {
@@ -476,6 +511,34 @@ function tbl(heads: string[], rows: string[], empty = "No data"): string {
     rows.join("") +
     "</tbody></table></div>"
   );
+}
+
+function attendanceTypeLabel(attendanceType: string): string {
+  switch (attendanceType) {
+    case "in_person":
+      return "In-person";
+    case "virtual":
+      return "Virtual";
+    case "on_demand":
+      return "On-demand";
+    default:
+      return attendanceType;
+  }
+}
+
+function waitlistStatusBadge(status: string): string {
+  switch (status) {
+    case "waiting":
+      return '<span class="badge text-bg-warning">Waiting</span>';
+    case "offered":
+      return '<span class="badge text-bg-info">Offer sent</span>';
+    case "accepted":
+      return '<span class="badge text-bg-success">Claimed</span>';
+    case "expired":
+      return '<span class="badge text-bg-secondary">Expired</span>';
+    default:
+      return `<span class="badge text-bg-secondary">${esc(status)}</span>`;
+  }
 }
 
 // ── Navigation ─────────────────────────────────────────────────────────────────
@@ -1261,6 +1324,42 @@ function regDetailHtml(r: Registration, slug: string): string {
   const appBase = window.location.origin;
   const shareUrl = r.referral_code ? `${appBase}/r/${esc(r.referral_code)}` : null;
   const ogBadgeUrl = r.referral_code ? `${appBase}/api/v1/og/${esc(r.referral_code)}` : null;
+  const waitlistAlert = r.status === "waitlisted"
+    ? `<div class="alert alert-warning mb-0 mt-2"><strong>Waitlisted:</strong> this attendee does not yet have a confirmed in-person seat. The registration is active, but the seat is still pending availability.</div>`
+    : "";
+
+  const dayStatusMap = new Map<string, { attendanceType?: string; attendanceLabel?: string | null; waitlist?: { status: string; priorityLane: string; offerExpiresAt: string | null } }>();
+  for (const entry of r.dayAttendance ?? []) {
+    dayStatusMap.set(entry.dayDate, {
+      attendanceType: entry.attendanceType,
+      attendanceLabel: entry.label,
+    });
+  }
+  for (const entry of r.dayWaitlist ?? []) {
+    const current = dayStatusMap.get(entry.dayDate) ?? {};
+    current.waitlist = {
+      status: entry.status,
+      priorityLane: entry.priorityLane,
+      offerExpiresAt: entry.offerExpiresAt,
+    };
+    dayStatusMap.set(entry.dayDate, current);
+  }
+
+  const dayStatusRows = Array.from(dayStatusMap.entries())
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([dayDate, day]) => {
+      const attendanceHtml = day.attendanceType
+        ? `<div>${esc(attendanceTypeLabel(day.attendanceType))}</div>${day.attendanceLabel ? `<div class="text-body-secondary small">${esc(day.attendanceLabel)}</div>` : ""}`
+        : `<span class="text-body-secondary">Not set</span>`;
+      const waitlistHtml = day.waitlist
+        ? `<div>${waitlistStatusBadge(day.waitlist.status)}</div><div class="text-body-secondary small">Lane: ${esc(day.waitlist.priorityLane)}</div>${day.waitlist.offerExpiresAt ? `<div class="text-body-secondary small">Offer expires ${esc(day.waitlist.offerExpiresAt)}</div>` : ""}`
+        : `<span class="text-body-secondary">None</span>`;
+      return `<tr><td>${esc(dayDate)}</td><td>${attendanceHtml}</td><td>${waitlistHtml}</td></tr>`;
+    })
+    .join("");
+  const dayStatusBlock = dayStatusMap.size > 0
+    ? `<div class="mt-3"><h6 class="small fw-semibold text-uppercase text-muted mb-2">Day status</h6><p class="small text-body-secondary mb-2">Per-day waitlist offers can be admitted directly here; the attendee does not need to claim them first.</p><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Day</th><th>Attendance</th><th>Waitlist</th></tr></thead><tbody>${dayStatusRows}</tbody></table></div></div>`
+    : `<div class="mt-3"><h6 class="small fw-semibold text-uppercase text-muted mb-2">Day status</h6><p class="small text-body-secondary mb-0">No day-level attendance or waitlist records were returned for this registration.</p></div>`;
 
   void slug; // used by wiring functions via data-reg-id
 
@@ -1272,6 +1371,8 @@ function regDetailHtml(r: Registration, slug: string): string {
     `<h6 class="small fw-semibold text-uppercase text-muted mb-2">Manage Registration</h6>` +
     `<p class="small text-muted mb-2">Opens the registrant-facing manage page in a new tab. Requires your admin session — the link cannot be forwarded to or used by an attendee.</p>` +
     `<button class="btn btn-sm btn-primary" data-open-manage="${esc(r.id)}">Open Manage Page &#8599;</button>` +
+    `<button class="btn btn-sm btn-outline-success ms-2" data-admit-reg="${esc(r.id)}">Admit In-Person</button>` +
+    waitlistAlert +
     `</div>` +
 
     // ── Resend email ──────────────────────────────────────────────────────
@@ -1315,7 +1416,9 @@ function regDetailHtml(r: Registration, slug: string): string {
     `<span class="text-muted small fst-italic">Loading…</span>` +
     `</div>` +
     `</div>` +
-    `</div>`
+    `</div>` +
+
+    dayStatusBlock
   );
 }
 
@@ -1356,6 +1459,10 @@ function wireRegsTable(slug: string, regs: Registration[]): void {
         // Wire badge regeneration
         document.querySelector<HTMLButtonElement>(`[data-regen-badge="${regId}"]`)?.addEventListener("click", () =>
           void doRegenerateBadge(slug, regId),
+        );
+        // Wire admit
+        document.querySelector<HTMLButtonElement>(`[data-admit-reg="${regId}"]`)?.addEventListener("click", () =>
+          void doAdmitRegistration(slug, regId, reg),
         );
         // Wire copy
         document.querySelector<HTMLButtonElement>(`[data-copy-ref="${regId}"]`)?.addEventListener("click", () => {
@@ -1421,6 +1528,49 @@ async function doResendConfirmation(slug: string, regId: string): Promise<void> 
     if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "mt-2 small text-danger"; }
   } finally {
     if (resendBtn) resetButton(resendBtn);
+  }
+}
+
+async function doAdmitRegistration(slug: string, regId: string, reg: Registration): Promise<void> {
+  const btn = document.querySelector<HTMLButtonElement>(`[data-admit-reg="${regId}"]`);
+  if (btn) setButtonLoading(btn);
+
+  try {
+    const reason = window.prompt(
+      "Reason for admission",
+      reg.status === "waitlisted"
+        ? "Capacity exemption approved by admin"
+        : "Admin approved in-person admission",
+    );
+    if (!reason) return;
+
+    const waitlistedDays = (reg.dayWaitlist ?? [])
+      .filter((entry) => entry.status === "waiting" || entry.status === "offered")
+      .map((entry) => entry.dayDate);
+    const suggestedDays = waitlistedDays.length > 0 ? waitlistedDays.join(", ") : (reg.dayAttendance ?? []).filter((entry) => entry.attendanceType === "in_person").map((entry) => entry.dayDate).join(", ");
+    const dayDatesInput = window.prompt(
+      "Day dates to admit, separated by commas. Leave blank to admit all configured days.",
+      suggestedDays,
+    );
+    const dayDates = dayDatesInput
+      ? dayDatesInput.split(",").map((value) => value.trim()).filter(Boolean)
+      : [];
+
+    await api(`/api/v1/admin/events/${slug}/registrations/${regId}/admit`, {
+      method: "POST",
+      body: JSON.stringify({
+        mode: "capacity_exempt",
+        reason,
+        ...(dayDates.length > 0 ? { dayDates } : {}),
+      }),
+    });
+
+    toast("Registration admitted", "success");
+    await loadEventRegistrations(slug);
+  } catch (err) {
+    toast((err as Error).message, "error");
+  } finally {
+    if (btn) resetButton(btn);
   }
 }
 

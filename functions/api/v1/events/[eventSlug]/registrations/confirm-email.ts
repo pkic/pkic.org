@@ -4,6 +4,7 @@ import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
 import { confirmRegistrationByToken } from "../../../../../_lib/services/registrations";
 import { getRegistrationDayAttendance } from "../../../../../_lib/services/event-days";
+import { listDayWaitlistForRegistration } from "../../../../../_lib/services/registrations/day-waitlist";
 import { buildAttendanceEmailData } from "../../../../../_lib/utils/attendance";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../_lib/utils/registration-email";
 import { first } from "../../../../../_lib/db/queries";
@@ -41,9 +42,11 @@ async function confirmRegistration(
   if (user) {
     if (registration.status === "registered" || registration.status === "waitlisted") {
       const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, registration.id);
+      const dayWaitlist = await listDayWaitlistForRegistration(context.env.DB, registration.id);
       const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
         registration.attendance_type,
         dayAttendanceRaw,
+        dayWaitlist,
       );
       const customAnswerRows = await getCustomAnswerRows(context.env.DB, event.id, registration.custom_answers_json);
       const acceptedTermsText = await getAcceptedTermsTextForRegistration(context.env.DB, registration.id);
@@ -67,6 +70,7 @@ async function confirmRegistration(
           attendanceType: registration.attendance_type,
           attendanceLabel,
           dayAttendance,
+          dayWaitlist,
           customAnswerRows,
           acceptedTermsText: acceptedTermsText || undefined,
           status: registration.status,

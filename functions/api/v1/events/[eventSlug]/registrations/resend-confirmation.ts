@@ -21,6 +21,7 @@ import { randomToken, sha256Hex } from "../../../../../_lib/utils/crypto";
 import { nowIso, addHours } from "../../../../../_lib/utils/time";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../_lib/email/outbox";
 import { getRegistrationDayAttendance } from "../../../../../_lib/services/event-days";
+import { listDayWaitlistForRegistration } from "../../../../../_lib/services/registrations/day-waitlist";
 import { buildAttendanceEmailData } from "../../../../../_lib/utils/attendance";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../_lib/utils/registration-email";
 import { registrationConfirmPageUrl } from "../../../../../_lib/services/frontend-links";
@@ -98,9 +99,11 @@ export async function onRequestPost(
 
   const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, newToken);
   const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, registration.id);
+  const dayWaitlist = await listDayWaitlistForRegistration(context.env.DB, registration.id);
   const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
     registration.attendance_type,
     dayAttendanceRaw,
+    dayWaitlist,
   );
   const customAnswerRows = await getCustomAnswerRows(context.env.DB, event.id, registration.custom_answers_json);
   const acceptedTermsText = await getAcceptedTermsTextForRegistration(context.env.DB, registration.id);
@@ -125,6 +128,7 @@ export async function onRequestPost(
       dayAttendance,
       customAnswerRows,
       acceptedTermsText: acceptedTermsText || undefined,
+      dayWaitlist,
       status: registration.status,
       registrationId: registration.id,
       // URLs
