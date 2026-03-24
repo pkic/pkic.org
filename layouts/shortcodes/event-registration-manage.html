@@ -2,6 +2,9 @@
 {{- $eventPagePath := partial "events/flow/page-path.html" . -}}
 <div class="event-flow" data-event-registration-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
 
+  {{/* ── Prominent registration status banner ───────────────────────── */}}
+  <div data-manage-status-banner class="alert alert-warning d-none mb-4" role="status" aria-live="polite"></div>
+
   {{/* ── Resend manage link (shown when no token is in the URL) ───────── */}}
   <div data-resend-manage-section class="d-none">
     <p class="form-text mb-3">Enter the email address you used to register and we&rsquo;ll send you a new management link.</p>

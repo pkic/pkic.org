@@ -244,6 +244,7 @@ async function main(): Promise<void> {
 
   // UI handles
   const loadingEl = root.querySelector<HTMLElement>("[data-manage-loading]");
+  const statusBanner = root.querySelector<HTMLElement>("[data-manage-status-banner]");
   const manageFormEl = root.querySelector<HTMLElement>("[data-manage-form]");
   const greetingEl = root.querySelector<HTMLElement>("[data-manage-greeting]");
   const greetingText = root.querySelector<HTMLElement>("[data-manage-greeting-text]");
@@ -282,6 +283,16 @@ async function main(): Promise<void> {
   const isCancelled = CANCELLED_STATUSES.has(registration.status);
   const eventName = event?.name ?? eventSlug;
   const firstName = user?.first_name ?? "";
+
+  if (statusBanner) {
+    const isWaitlisted = registration.status === "waitlisted";
+    if (isWaitlisted || (dayWaitlist && dayWaitlist.length > 0)) {
+      statusBanner.innerHTML = isWaitlisted
+        ? `You are currently on the <strong>waitlist</strong> for in-person attendance. Your registration is active, but a seat has not been confirmed yet. Use this page to review, update, or cancel your registration.`
+        : `Some of your selected days are currently on the <strong>waitlist</strong>. Those entries are shown further down on this page, where you can review what is still pending.`;
+      statusBanner.classList.remove("d-none");
+    }
+  }
 
   // ── Greeting ──────────────────────────────────────────────────────────────
   if (greetingEl && greetingText && statusBadge) {
