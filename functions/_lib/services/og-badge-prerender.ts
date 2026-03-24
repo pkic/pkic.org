@@ -205,6 +205,15 @@ export async function generateBadgePng(
                   AND  ep2.user_id  = r.user_id
                   AND  ep2.role    != 'attendee'
                   AND  ep2.status   = 'active'
+                  AND (
+                    ep2.source_type != 'proposal'
+                    OR EXISTS (
+                      SELECT 1
+                      FROM session_proposals sp2
+                      WHERE sp2.id = ep2.source_ref
+                        AND sp2.status = 'accepted'
+                    )
+                  )
                 ORDER BY CASE ep2.role
                   WHEN 'speaker'   THEN 1
                   WHEN 'moderator' THEN 2
