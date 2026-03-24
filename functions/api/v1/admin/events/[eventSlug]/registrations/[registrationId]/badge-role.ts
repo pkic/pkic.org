@@ -54,6 +54,7 @@ interface ParticipantRow {
   role: string;
   source_type: string | null;
   status: string;
+  source_ref: string | null;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -76,7 +77,16 @@ async function fetchData(db: DatabaseLike, eventId: string, registrationId: stri
 
   const participantRows = await all<ParticipantRow>(
     db,
-    "SELECT id, role, source_type, status FROM event_participants WHERE event_id = ? AND user_id = ?",
+    `SELECT ep.id, ep.role, ep.source_type, ep.status, ep.source_ref
+     FROM event_participants ep
+     LEFT JOIN session_proposals sp
+       ON ep.source_type = 'proposal'
+      AND ep.source_ref = sp.id
+     WHERE ep.event_id = ?
+       AND ep.user_id = ?
+       AND ep.role != 'attendee'
+       AND ep.status = 'active'
+       AND (ep.source_type != 'proposal' OR sp.status = 'accepted')`,
     [eventId, registration.user_id],
   );
 
