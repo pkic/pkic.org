@@ -205,6 +205,11 @@ export async function addProposalSpeaker(
   const status = isProposer ? "confirmed" : "invited";
   const confirmedAt = isProposer ? nowIso() : null;
   const now = nowIso();
+  const proposal = await first<{ event_id: string; status: string }>(
+    db,
+    "SELECT event_id, status FROM session_proposals WHERE id = ?",
+    [payload.proposalId],
+  );
 
   await run(
     db,
@@ -231,13 +236,13 @@ export async function addProposalSpeaker(
     [uuid(), payload.proposalId, payload.userId, payload.role, status, manageTokenHash, confirmedAt, now],
   );
 
-  const proposal = await first<{ event_id: string }>(db, "SELECT event_id FROM session_proposals WHERE id = ?", [payload.proposalId]);
   if (proposal) {
     await upsertProposalParticipant(db, {
       eventId: proposal.event_id,
       userId: payload.userId,
       proposalRole: payload.role,
       sourceRef: payload.proposalId,
+      status: proposal.status === "accepted" ? "active" : "inactive",
     });
   }
 
@@ -905,6 +910,8 @@ export async function finalizeProposalDecision(
     throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
   }
 
+  const now = nowIso();
+
   await run(
     db,
     `INSERT INTO proposal_decisions (
@@ -927,7 +934,23 @@ export async function finalizeProposalDecision(
   await run(
     db,
     "UPDATE session_proposals SET status = ?, updated_at = ? WHERE id = ?",
-    [mappedStatus, nowIso(), payload.proposalId],
+    [mappedStatus, now, payload.proposalId],
+  );
+
+  await run(
+    db,
+    `UPDATE event_participants
+     SET status = ?, updated_at = ?
+     WHERE event_id = ?
+       AND source_type = 'proposal'
+       AND source_ref = ?
+       AND user_id IN (
+         SELECT user_id
+         FROM proposal_speakers
+         WHERE proposal_id = ?
+           AND status != 'declined'
+       )`,
+    [payload.finalStatus === "accepted" ? "active" : "inactive", now, proposal.event_id, payload.proposalId, payload.proposalId],
   );
 
   return { reviewCount };
