@@ -708,7 +708,7 @@ We offer two ways to experience PQC Amsterdam 2026. Register early, as our in-pe
 card_style: bento
 cards:
   - color: bento-blue-pale
-    image: "photos/ANN05834.jpg"
+    image: "photos/AME_0009.jpg"
     icon: users
     title: "In-Person (Amsterdam)"
     text: |
@@ -724,7 +724,7 @@ cards:
         url: "register/"
         class: "btn-primary shadow-sm"
   - color: bento-blue-pale
-    image: "photos/AME_0009.jpg"
+    image: "photos/ANN05834.jpg"
     icon: globe
     title: "Virtual / On-Demand"
     text: |
