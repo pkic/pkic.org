@@ -149,6 +149,13 @@ interface Registration {
   referral_code?: string | null;
   dayAttendance?: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
   dayWaitlist?: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
+  dayWaitlistSummary?: string | null;
+  dayWaitlistCount?: number;
+}
+
+interface AdminRegistrationDay {
+  dayDate: string;
+  label: string | null;
 }
 
 interface ProposalSummary {
@@ -1292,16 +1299,20 @@ function regsTable(regs: Registration[]): string {
       r.user_email && r.display_name && r.display_name !== r.user_email
         ? `<br><span class="mono text-muted">${esc(r.user_email)}</span>`
         : "";
+    const waitlistCell = r.dayWaitlistCount && r.dayWaitlistCount > 0
+      ? `<div class="d-flex flex-column gap-1">${badge("waiting")}${r.dayWaitlistSummary ? `<span class="text-body-secondary small">${esc(r.dayWaitlistSummary)}</span>` : ""}</div>`
+      : `<span class="text-body-secondary small">None</span>`;
     return (
       `<tr data-reg-id="${esc(r.id)}">` +
       `<td>${esc(name)}${sub}</td>` +
       `<td>${badge(r.status)}</td>` +
       `<td>${esc(r.attendance_type ?? "—")}</td>` +
+      `<td>${waitlistCell}</td>` +
       `<td class="text-muted small">${esc(r.source_type ?? "—")}</td>` +
       `<td class="mono">${fmt(r.created_at)}</td>` +
       `<td><button class="btn btn-sm btn-outline-secondary" data-manage-reg="${esc(r.id)}">Manage →</button></td>` +
       `</tr>` +
-      `<tr id="reg-detail-${esc(r.id)}" class="d-none"><td colspan="6" class="p-0">` +
+      `<tr id="reg-detail-${esc(r.id)}" class="d-none"><td colspan="7" class="p-0">` +
       `<div class="p-3 bg-light border-top"></div>` +
       `</td></tr>`
     );
@@ -1313,17 +1324,24 @@ function regsTable(regs: Registration[]): string {
   return (
     '<div class="tbl-wrap"><table class="table table-sm table-hover mb-0">' +
     '<thead class="table-light"><tr>' +
-    ["Name / Email", "Status", "Attendance", "Source", "Registered", ""].map((h) => `<th>${esc(h)}</th>`).join("") +
+    ["Name / Email", "Status", "Attendance", "Day waitlist", "Source", "Registered", ""].map((h) => `<th>${esc(h)}</th>`).join("") +
     "</tr></thead><tbody>" +
     rows.join("") +
     "</tbody></table></div>"
   );
 }
 
-function regDetailHtml(r: Registration, slug: string): string {
+function regDetailHtml(r: Registration, slug: string, eventDays: AdminRegistrationDay[]): string {
   const appBase = window.location.origin;
   const shareUrl = r.referral_code ? `${appBase}/r/${esc(r.referral_code)}` : null;
   const ogBadgeUrl = r.referral_code ? `${appBase}/api/v1/og/${esc(r.referral_code)}` : null;
+  const waitlistEntries = (r.dayWaitlist ?? []).filter((entry) => entry.status === "waiting" || entry.status === "offered");
+  const admitDays = waitlistEntries.length > 0
+    ? waitlistEntries.map((entry) => ({ dayDate: entry.dayDate, label: entry.offerExpiresAt ? `${entry.status}, offer expires ${entry.offerExpiresAt}` : entry.status }))
+    : r.status === "waitlisted"
+      ? eventDays.map((day) => ({ dayDate: day.dayDate, label: day.label }))
+      : [];
+  const canAdmitDays = admitDays.length > 0;
   const waitlistAlert = r.status === "waitlisted"
     ? `<div class="alert alert-warning mb-0 mt-2"><strong>Waitlisted:</strong> this attendee does not yet have a confirmed in-person seat. The registration is active, but the seat is still pending availability.</div>`
     : "";
@@ -1371,7 +1389,7 @@ function regDetailHtml(r: Registration, slug: string): string {
     `<h6 class="small fw-semibold text-uppercase text-muted mb-2">Manage Registration</h6>` +
     `<p class="small text-muted mb-2">Opens the registrant-facing manage page in a new tab. Requires your admin session — the link cannot be forwarded to or used by an attendee.</p>` +
     `<button class="btn btn-sm btn-primary" data-open-manage="${esc(r.id)}">Open Manage Page &#8599;</button>` +
-    `<button class="btn btn-sm btn-outline-success ms-2" data-admit-reg="${esc(r.id)}">Admit In-Person</button>` +
+    (canAdmitDays ? `<button class="btn btn-sm btn-outline-success ms-2" data-admit-selected-days="${esc(r.id)}">Admit Selected Days</button>` : "") +
     waitlistAlert +
     `</div>` +
 
@@ -1418,6 +1436,14 @@ function regDetailHtml(r: Registration, slug: string): string {
     `</div>` +
     `</div>` +
 
+    (canAdmitDays
+      ? `<div class="row g-3 mt-0 border-top pt-3"><div class="col-12"><h6 class="small fw-semibold text-uppercase text-muted mb-2">Admit selected days</h6><p class="small text-body-secondary mb-2">Tick the days to convert to in-person attendance. The attendee does not need to claim an offer first.</p><div class="admit-days-list d-flex flex-column gap-2">${admitDays.map((entry, index) => {
+          const checked = index === 0 || admitDays.length === 1 ? "checked" : "";
+          const suffix = entry.label ? ` - ${entry.label}` : "";
+          return `<label class="form-check border rounded px-3 py-2 mb-0 bg-white"><input class="form-check-input me-2" type="checkbox" data-admit-day-checkbox="${esc(r.id)}" value="${esc(entry.dayDate)}" ${checked}><span class="form-check-label">${esc(entry.dayDate)}${esc(suffix)}</span></label>`;
+        }).join("")}</div><div class="d-flex gap-2 mt-2"><button class="btn btn-sm btn-success" data-admit-selected-days="${esc(r.id)}">Admit Selected Days</button><button class="btn btn-sm btn-outline-secondary" data-select-all-admit-days="${esc(r.id)}">Select All</button><button class="btn btn-sm btn-outline-secondary" data-clear-admit-days="${esc(r.id)}">Clear</button></div></div></div>`
+      : "") +
+
     dayStatusBlock
   );
 }
@@ -1441,39 +1467,73 @@ function wireRegsTable(slug: string, regs: Registration[]): void {
       });
 
       if (!isOpen) {
-        const reg = regMap.get(regId);
-        if (!reg) return;
         const container = detailRow.querySelector("div");
-        if (container) container.innerHTML = regDetailHtml(reg, slug);
+        if (container) container.innerHTML = spinner();
         detailRow.classList.remove("d-none");
         btn.textContent = "Close ↑";
 
-        // Wire open manage page
-        document.querySelector<HTMLButtonElement>(`[data-open-manage="${regId}"]`)?.addEventListener("click", () =>
-          void doOpenManagePage(slug, regId),
-        );
-        // Wire resend
-        document.querySelector<HTMLButtonElement>(`[data-resend-reg="${regId}"]`)?.addEventListener("click", () =>
-          void doResendConfirmation(slug, regId),
-        );
-        // Wire badge regeneration
-        document.querySelector<HTMLButtonElement>(`[data-regen-badge="${regId}"]`)?.addEventListener("click", () =>
-          void doRegenerateBadge(slug, regId),
-        );
-        // Wire admit
-        document.querySelector<HTMLButtonElement>(`[data-admit-reg="${regId}"]`)?.addEventListener("click", () =>
-          void doAdmitRegistration(slug, regId, reg),
-        );
-        // Wire copy
-        document.querySelector<HTMLButtonElement>(`[data-copy-ref="${regId}"]`)?.addEventListener("click", () => {
-          const inp = document.getElementById(`rd-reflink-${regId}`) as HTMLInputElement | null;
-          if (inp) {
-            void navigator.clipboard.writeText(inp.value);
-            toast("Referral link copied!", "success");
+        void (async () => {
+          try {
+            const reg = regMap.get(regId);
+            if (!reg) return;
+
+            const detail = await api<{
+              registration: Registration;
+              dayAttendance?: Registration["dayAttendance"];
+              dayWaitlist?: Registration["dayWaitlist"];
+              eventDays?: AdminRegistrationDay[];
+            }>(`/api/v1/admin/events/${slug}/registrations/${regId}`);
+
+            const detailedReg: Registration = {
+              ...reg,
+              ...detail.registration,
+              dayAttendance: detail.dayAttendance ?? reg.dayAttendance,
+              dayWaitlist: detail.dayWaitlist ?? reg.dayWaitlist,
+            };
+            regMap.set(regId, detailedReg);
+
+            if (container) container.innerHTML = regDetailHtml(detailedReg, slug, detail.eventDays ?? []);
+
+            // Wire open manage page
+            document.querySelector<HTMLButtonElement>(`[data-open-manage="${regId}"]`)?.addEventListener("click", () =>
+              void doOpenManagePage(slug, regId),
+            );
+            // Wire resend
+            document.querySelector<HTMLButtonElement>(`[data-resend-reg="${regId}"]`)?.addEventListener("click", () =>
+              void doResendConfirmation(slug, regId),
+            );
+            // Wire badge regeneration
+            document.querySelector<HTMLButtonElement>(`[data-regen-badge="${regId}"]`)?.addEventListener("click", () =>
+              void doRegenerateBadge(slug, regId),
+            );
+            // Wire admit
+            document.querySelector<HTMLButtonElement>(`[data-admit-selected-days="${regId}"]`)?.addEventListener("click", () =>
+              void doAdmitRegistration(slug, regId, detailedReg),
+            );
+            document.querySelector<HTMLButtonElement>(`[data-select-all-admit-days="${regId}"]`)?.addEventListener("click", () => {
+              document.querySelectorAll<HTMLInputElement>(`[data-admit-day-checkbox="${regId}"]`).forEach((checkbox) => {
+                checkbox.checked = true;
+              });
+            });
+            document.querySelector<HTMLButtonElement>(`[data-clear-admit-days="${regId}"]`)?.addEventListener("click", () => {
+              document.querySelectorAll<HTMLInputElement>(`[data-admit-day-checkbox="${regId}"]`).forEach((checkbox) => {
+                checkbox.checked = false;
+              });
+            });
+            // Wire copy
+            document.querySelector<HTMLButtonElement>(`[data-copy-ref="${regId}"]`)?.addEventListener("click", () => {
+              const inp = document.getElementById(`rd-reflink-${regId}`) as HTMLInputElement | null;
+              if (inp) {
+                void navigator.clipboard.writeText(inp.value);
+                toast("Referral link copied!", "success");
+              }
+            });
+            // Load badge role info
+            void doLoadBadgeRoleInfo(slug, regId);
+          } catch (err) {
+            if (container) container.innerHTML = `<div class="alert alert-danger mb-0">${esc((err as Error).message)}</div>`;
           }
-        });
-        // Load badge role info
-        void doLoadBadgeRoleInfo(slug, regId);
+        })();
       }
     });
   });
@@ -1532,29 +1592,19 @@ async function doResendConfirmation(slug: string, regId: string): Promise<void> 
 }
 
 async function doAdmitRegistration(slug: string, regId: string, reg: Registration): Promise<void> {
-  const btn = document.querySelector<HTMLButtonElement>(`[data-admit-reg="${regId}"]`);
+  const btn = document.querySelector<HTMLButtonElement>(`[data-admit-selected-days="${regId}"]`);
   if (btn) setButtonLoading(btn);
 
   try {
-    const reason = window.prompt(
-      "Reason for admission",
-      reg.status === "waitlisted"
-        ? "Capacity exemption approved by admin"
-        : "Admin approved in-person admission",
-    );
-    if (!reason) return;
+    const reason = reg.status === "waitlisted"
+      ? "Capacity exemption approved by admin"
+      : "Admin approved in-person admission";
+    const dayDates = Array.from(document.querySelectorAll<HTMLInputElement>(`[data-admit-day-checkbox="${regId}"]:checked`)).map((checkbox) => checkbox.value);
 
-    const waitlistedDays = (reg.dayWaitlist ?? [])
-      .filter((entry) => entry.status === "waiting" || entry.status === "offered")
-      .map((entry) => entry.dayDate);
-    const suggestedDays = waitlistedDays.length > 0 ? waitlistedDays.join(", ") : (reg.dayAttendance ?? []).filter((entry) => entry.attendanceType === "in_person").map((entry) => entry.dayDate).join(", ");
-    const dayDatesInput = window.prompt(
-      "Day dates to admit, separated by commas. Leave blank to admit all configured days.",
-      suggestedDays,
-    );
-    const dayDates = dayDatesInput
-      ? dayDatesInput.split(",").map((value) => value.trim()).filter(Boolean)
-      : [];
+    if (dayDates.length === 0) {
+      toast("Select at least one day to admit", "error");
+      return;
+    }
 
     await api(`/api/v1/admin/events/${slug}/registrations/${regId}/admit`, {
       method: "POST",
