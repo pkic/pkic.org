@@ -12,22 +12,19 @@
  */
 import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
-import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
+import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { first } from "../../../../../../../_lib/db/queries";
 import { parseJsonBody } from "../../../../../../../_lib/validation";
 import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
-import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
+import { processOutboxByIdBackground } from "../../../../../../../_lib/email/outbox";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { updateRegistrationById } from "../../../../../../../_lib/services/registrations";
-import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
-import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
 import { validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
-import { buildAttendanceEmailData, STATUS_LABELS } from "../../../../../../../_lib/utils/attendance";
-import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../../../_lib/utils/registration-email";
 import { nowIso } from "../../../../../../../_lib/utils/time";
 import type { DatabaseLike, PagesContext } from "../../../../../../../_lib/types";
 import { registrationManageSchema } from "../../../../../../../../assets/shared/schemas/api";
 import { z } from "zod";
+import { queueRegistrationStatusEmail } from "../../../../../../../_lib/services/registrations/status-notifications";
 
 // ── Shared query ──────────────────────────────────────────────────────────────
 
@@ -121,6 +118,21 @@ export async function onRequestPatch(
       from: current.status,
       to: body.status,
     });
+
+    if (current.status !== body.status) {
+      const appBaseUrl = resolveAppBaseUrl(context.env);
+      const outbox = await queueRegistrationStatusEmail(context.env.DB, {
+        event,
+        registrationId: context.params.registrationId,
+        appBaseUrl,
+        templateKey: body.status === "cancelled" ? "registration_unauthorized" : "registration_updated",
+        subject: body.status === "cancelled"
+          ? `Registration cancelled and data removed — ${event.name}`
+          : `Registration updated for ${event.name}`,
+      });
+      context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outbox.outboxId));
+    }
+
     const updated = await fetchRegistrationWithDetails(context.env.DB, event.id, context.params.registrationId);
     return json({ success: true, registration: updated });
   }
@@ -164,49 +176,17 @@ export async function onRequestPatch(
     }
   }
 
-  // Send registration_updated email to the registrant.
-  const user = await first<{
-    email: string;
-    first_name: string | null;
-    last_name: string | null;
-    organization_name: string | null;
-    job_title: string | null;
-  }>(context.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [updated.user_id]);
-
-  if (user && body.action !== "report_unauthorized") {
-    const appBaseUrl = resolveAppBaseUrl(context.env);
-    const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, updated.id);
-    const dayWaitlist = await listDayWaitlistForRegistration(context.env.DB, updated.id);
-    const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
-    const customAnswerRows = await getCustomAnswerRows(context.env.DB, event.id, updated.custom_answers_json);
-    const acceptedTermsText = await getAcceptedTermsTextForRegistration(context.env.DB, updated.id);
-    const outboxId = await queueEmail(context.env.DB, {
-      eventId: event.id,
-      templateKey: "registration_updated",
-      recipientEmail: user.email,
-      recipientUserId: updated.user_id,
-      messageType: "transactional",
-      subject: `Registration updated for ${event.name}`,
-      data: {
-        ...buildEventEmailVariables(event, appBaseUrl),
-        firstName: user.first_name ?? "",
-        lastName: user.last_name ?? "",
-        email: user.email,
-        organizationName: user.organization_name ?? "",
-        jobTitle: user.job_title ?? "",
-        attendanceType: updated.attendance_type,
-        attendanceLabel,
-        dayAttendance,
-        dayWaitlist,
-        customAnswerRows,
-        acceptedTermsText: acceptedTermsText || undefined,
-        status: updated.status,
-        statusLabel: STATUS_LABELS[updated.status] ?? updated.status,
-        manageUrl: "",
-      },
-    });
-    context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
-  }
+  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const outbox = await queueRegistrationStatusEmail(context.env.DB, {
+    event,
+    registrationId: updated.id,
+    appBaseUrl,
+    templateKey: body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated",
+    subject: body.action === "report_unauthorized"
+      ? `Registration cancelled and data removed — ${event.name}`
+      : `Registration updated for ${event.name}`,
+  });
+  context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outbox.outboxId));
 
   await writeAuditLog(context.env.DB, "admin", admin.id, "admin_registration_updated", "registration", updated.id, {
     eventId: event.id,

@@ -7,7 +7,7 @@
     {{ $sass := resources.Get "scss/main.scss" }}
     {{ $style := $sass | css.Sass | resources.Fingerprint }}
     <link rel="stylesheet" href="{{ $style.RelPermalink }}" {{ if hugo.IsProduction }}integrity="{{ $style.Data.Integrity }}"{{ end }}>
-    
+    {{ block "head_extra" . }}{{ end }}
   </head>
   <body style="{{ $themeVars | safeCSS }}">
     {{ partial "navbar.html" . }}

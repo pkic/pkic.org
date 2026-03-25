@@ -58,7 +58,11 @@ export function buildAttendanceEmailData(
 }
 
 function buildDayAttendanceStatusLabel(attendanceType: string, waitlistStatus: string | undefined): string {
-  if (waitlistStatus === "waiting" || waitlistStatus === "offered") {
+  if (waitlistStatus === "offered") {
+    return "Waitlist offer sent";
+  }
+
+  if (waitlistStatus === "waiting") {
     return "Waitlisted for in-person attendance";
   }
 

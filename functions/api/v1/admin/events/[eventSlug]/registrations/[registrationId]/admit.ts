@@ -10,6 +10,9 @@ import { nowIso } from "../../../../../../../_lib/utils/time";
 import { uuid } from "../../../../../../../_lib/utils/ids";
 import type { PagesContext } from "../../../../../../../_lib/types";
 import { adminRegistrationAdmitSchema } from "../../../../../../../../assets/shared/schemas/api";
+import { resolveAppBaseUrl } from "../../../../../_lib/config";
+import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
+import { queueRegistrationStatusEmail } from "../../../../../_lib/services/registrations/status-notifications";
 
 interface RegistrationRow {
   id: string;
@@ -114,6 +117,16 @@ export async function onRequestPost(
       capacityExemptReason: reason,
     },
   );
+
+  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const outbox = await queueRegistrationStatusEmail(context.env.DB, {
+    event,
+    registrationId: registration.id,
+    appBaseUrl,
+    templateKey: "registration_updated",
+    subject: `Registration updated for ${event.name}`,
+  });
+  context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outbox.outboxId));
 
   const updated = await first<Record<string, unknown>>(
     context.env.DB,

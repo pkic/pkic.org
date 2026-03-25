@@ -780,7 +780,17 @@ async function loadDashboard(): Promise<void> {
             "No events",
           ) +
         "</div></div></div>" +
-      "</div>";
+      "</div>" +
+      '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+        '<h6 class="text-uppercase small fw-bold text-muted mb-3">Activity — last 30 days</h6>' +
+        svgLineChart(
+          [
+            { label: "Registrations", values: s.recentActivity.map((d) => d.registrations), stroke: "#198754", area: "rgba(25,135,84,.07)" },
+            { label: "Invites",       values: s.recentActivity.map((d) => d.invites),       stroke: "#fd7e14", area: "rgba(253,126,20,.07)" },
+          ],
+          s.recentActivity.map((d) => d.date.slice(5)),
+        ) +
+      "</div></div>";
     // Wire up top-events buttons using event delegation (no inline onclick)
     el.querySelectorAll<HTMLButtonElement>("[data-nav-event]").forEach((btn) => {
       btn.addEventListener("click", () => {
@@ -824,6 +834,91 @@ function fmtMoney(cents: number, currency: string): string {
     currency: currency.toUpperCase(),
     minimumFractionDigits: 2,
   });
+}
+
+// ── SVG chart helpers ──────────────────────────────────────────────────────────
+
+function svgBarChart(
+  labels: string[],
+  values: number[],
+  opts: { color?: string } = {}
+): string {
+  const n = labels.length;
+  if (!n) return '<p class="text-muted fst-italic small">No data</p>';
+  const W = 460, H = 140;
+  const pL = 26, pR = 8, pT = 18, pB = 24;
+  const chartW = W - pL - pR, chartH = H - pT - pB;
+  const maxVal = Math.max(...values, 1);
+  const slotW = chartW / n;
+  const barW = Math.max(2, slotW - 3);
+  const color = opts.color ?? "#198754";
+  const step = Math.max(1, Math.ceil(n / 10));
+  const gridSteps = 3;
+  let out = "";
+  for (let g = 1; g <= gridSteps; g++) {
+    const gy = pT + chartH - (g / gridSteps) * chartH;
+    out += `<line x1="${pL}" y1="${gy.toFixed(1)}" x2="${(W - pR).toFixed(1)}" y2="${gy.toFixed(1)}" stroke="#e9ecef" stroke-width="1"/>`;
+    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="8" fill="#6c757d" font-family="inherit">${Math.round((g / gridSteps) * maxVal)}</text>`;
+  }
+  for (let i = 0; i < n; i++) {
+    const x = pL + i * slotW + 1.5;
+    const barH = values[i] === 0 ? 0 : Math.max(2, (values[i] / maxVal) * chartH);
+    const y = pT + chartH - barH;
+    out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${color}" rx="2"/>`;
+    if (values[i] > 0 && barH > 14) {
+      out += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="#212529" font-family="inherit">${values[i]}</text>`;
+    }
+    if (i % step === 0 || i === n - 1) {
+      out += `<text x="${(x + barW / 2).toFixed(1)}" y="${(pT + chartH + 14).toFixed(1)}" text-anchor="middle" font-size="9" fill="#6c757d" font-family="inherit">${esc(labels[i])}</text>`;
+    }
+  }
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${out}</svg>`;
+}
+
+function svgLineChart(
+  series: Array<{ label: string; values: number[]; stroke: string; area: string }>,
+  xLabels: string[]
+): string {
+  const n = xLabels.length;
+  if (!n || series.every((s) => s.values.every((v) => v === 0)))
+    return '<p class="text-muted fst-italic small">No data</p>';
+  const W = 460, H = 120;
+  const pL = 28, pR = 8, pT = 12, pB = 24;
+  const chartW = W - pL - pR, chartH = H - pT - pB;
+  const maxVal = Math.max(...series.flatMap((s) => s.values), 1);
+  const step = Math.max(1, Math.ceil(n / 12));
+  const px = (i: number) => pL + (i / Math.max(1, n - 1)) * chartW;
+  const py = (v: number) => pT + chartH - (v / maxVal) * chartH;
+  const gridSteps = 3;
+  let out = "";
+  for (let g = 1; g <= gridSteps; g++) {
+    const gy = pT + chartH - (g / gridSteps) * chartH;
+    out += `<line x1="${pL}" y1="${gy.toFixed(1)}" x2="${(W - pR).toFixed(1)}" y2="${gy.toFixed(1)}" stroke="#e9ecef" stroke-width="1"/>`;
+    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="8" fill="#6c757d" font-family="inherit">${Math.round((g / gridSteps) * maxVal)}</text>`;
+  }
+  for (let i = 0; i < n; i++) {
+    if (i % step === 0 || i === n - 1) {
+      out += `<text x="${px(i).toFixed(1)}" y="${(pT + chartH + 14).toFixed(1)}" text-anchor="middle" font-size="9" fill="#6c757d" font-family="inherit">${esc(xLabels[i])}</text>`;
+    }
+  }
+  for (const s of series) {
+    const areaPath =
+      `M ${px(0).toFixed(1)},${(pT + chartH).toFixed(1)} ` +
+      s.values.map((v, i) => `L ${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(" ") +
+      ` L ${px(n - 1).toFixed(1)},${(pT + chartH).toFixed(1)} Z`;
+    out += `<path d="${areaPath}" fill="${s.area}"/>`;
+    out += `<polyline points="${s.values.map((v, i) => `${px(i).toFixed(1)},${py(v).toFixed(1)}`).join(" ")}" fill="none" stroke="${s.stroke}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+  }
+  const legend = series
+    .map(
+      (s) =>
+        `<span class="adm-chart-legend-item"><svg width="14" height="4" viewBox="0 0 14 4" aria-hidden="true"><line x1="0" y1="2" x2="14" y2="2" stroke="${s.stroke}" stroke-width="2.5" stroke-linecap="round"/></svg>${esc(s.label)}</span>`,
+    )
+    .join("");
+  return (
+    `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${out}</svg>` +
+    `<div class="adm-chart-legend">${legend}</div>`
+  );
 }
 
 // ── Events ─────────────────────────────────────────────────────────────────────
@@ -6573,16 +6668,19 @@ async function loadStats(): Promise<void> {
         "</div>" +
         '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
           '<h6 class="text-uppercase small fw-bold text-muted mb-3">Activity — last 30 days</h6>' +
-          tbl(
-            ["Date", "Registrations", "Invites"],
-            s.recentActivity.map((d) => `<tr><td class="mono">${esc(d.date)}</td><td>${d.registrations}</td><td>${d.invites}</td></tr>`),
-            "No data",
+          svgLineChart(
+            [
+              { label: "Registrations", values: s.recentActivity.map((d) => d.registrations), stroke: "#198754", area: "rgba(25,135,84,.07)" },
+              { label: "Invites",       values: s.recentActivity.map((d) => d.invites),       stroke: "#fd7e14", area: "rgba(253,126,20,.07)" },
+            ],
+            s.recentActivity.map((d) => d.date.slice(5)),
           ) +
         "</div></div>",
 
       registrations:
         '<div class="card border-0 shadow-sm"><div class="card-body">' +
           '<h6 class="text-uppercase small fw-bold text-muted mb-3">Registrations — Weekly (last 12 weeks)</h6>' +
+          svgBarChart(s.registrations.weekly.map((d) => d.week.slice(5)), s.registrations.weekly.map((d) => d.count)) +
           tbl(
             ["Week", "Count"],
             s.registrations.weekly.map((d) => `<tr><td class="mono">${esc(d.week)}</td><td>${d.count}</td></tr>`),
@@ -6591,6 +6689,7 @@ async function loadStats(): Promise<void> {
         "</div></div>" +
         '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
           '<h6 class="text-uppercase small fw-bold text-muted mb-3">Registrations — Monthly (last 12 months)</h6>' +
+          svgBarChart(s.registrations.monthly.map((d) => d.month.slice(0, 7)), s.registrations.monthly.map((d) => d.count)) +
           tbl(
             ["Month", "Count"],
             s.registrations.monthly.map((d) => `<tr><td class="mono">${esc(d.month)}</td><td>${d.count}</td></tr>`),
@@ -6632,6 +6731,7 @@ async function loadStats(): Promise<void> {
         "</div></div>" +
         '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
           '<h6 class="text-uppercase small fw-bold text-muted mb-3">Donations — Monthly (last 12 months)</h6>' +
+          svgBarChart(s.donations.monthly.map((d) => d.month.slice(0, 7)), s.donations.monthly.map((d) => d.completed), { color: "#0d6efd" }) +
           tbl(
             ["Month", "Total", "Compl.", "Pend.", "Failed", "Expd.", `Gross (${primaryCurrency.toUpperCase()})`],
             donationPeriodRows(s.donations.monthly, "month", (d) => (d as { month: string } & DonationPeriod).month),
@@ -6715,6 +6815,10 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   q("#btn-logout")?.addEventListener("click", () => { clearAuth(); location.reload(); });
+  q("#btn-dashboard-refresh")?.addEventListener("click", () => void loadDashboard());
+  q("#btn-events-refresh")?.addEventListener("click", () => void loadEvents());
+  q("#btn-email-refresh")?.addEventListener("click", () => void loadEmail());
+  q("#btn-stats-refresh")?.addEventListener("click", () => void loadStats());
   q("#btn-t-refresh")?.addEventListener("click", () => void loadTemplates());
   q("#btn-don-refresh")?.addEventListener("click", () => void loadDonations());
   q("#btn-duework-refresh")?.addEventListener("click", () => void loadDueWork());

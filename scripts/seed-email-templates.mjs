@@ -262,13 +262,16 @@ We look forward to seeing you at the *{{eventName}}**!
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_updated",
-    subjectTemplate: `{{#if eq status "waitlisted"}}Waitlisted registration updated — {{eventName}}{{else}}Registration updated — {{eventName}}{{/if}}`,
+    subjectTemplate: `{{#if waitlistOfferNotice}}Waitlist availability update — {{eventName}}{{else}}{{#if eq status "waitlisted"}}Waitlisted registration updated — {{eventName}}{{else}}Registration updated — {{eventName}}{{/if}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
 This email confirms that your registration for **{{eventName}}** has been successfully updated.
 
 {{#if eq status "waitlisted"}}
   <div class="notice notice-warning"><strong>Waitlisted:</strong> your attendance is not yet confirmed. You can use your registration management link to review, update, or cancel this registration.</div>
+{{/if}}
+{{#if waitlistOfferNotice}}
+<div class="notice notice-info"><strong>A seat is available:</strong> we have sent a waitlist availability notification for your registration. Please open your management link below to review the latest status and take the next step.</div>
 {{/if}}
 
 ---
