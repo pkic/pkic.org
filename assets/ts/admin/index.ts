@@ -244,6 +244,160 @@ interface StatsResponse {
   };
 }
 
+interface AdminEmailOutboxRow {
+  id: string;
+  eventSlug: string | null;
+  eventName: string | null;
+  templateKey: string;
+  templateVersion: number | null;
+  recipientEmail: string;
+  recipientName: string | null;
+  subject: string;
+  messageType: "transactional" | "promotional";
+  provider: string;
+  providerMessageId: string | null;
+  status: "queued" | "sending" | "sent" | "failed" | "retrying";
+  attempts: number;
+  sendAfter: string;
+  lastError: string | null;
+  createdAt: string;
+  updatedAt: string;
+  sentAt: string | null;
+  bccRecipientCount: number;
+  hasCalendarInvite: boolean;
+  hasBadgeAttachment: boolean;
+  usesDirectBody: boolean;
+  hasCustomText: boolean;
+}
+
+interface AdminEmailOutboxResponse {
+  outbox: AdminEmailOutboxRow[];
+  summary: {
+    total: number;
+    byStatus: Record<string, number>;
+    byMessageType: Record<string, number>;
+    topTemplates: Array<{ template_key: string; count: number }>;
+    dueNow: number;
+    dueByStatus: Record<string, number>;
+    nextSendAfter: string | null;
+  };
+  page: { limit: number; offset: number; total: number; hasMore: boolean };
+}
+
+interface AdminJobsRunResponse {
+  dryRun: boolean;
+  reminders: {
+    processed: number;
+    inviteRemindersQueued: number;
+    speakerInviteRemindersQueued: number;
+    presentationRemindersQueued: number;
+    preview: {
+      attendeeInvites: Array<{
+        category: "attendee_invite";
+        templateKey: string;
+        eventName: string;
+        eventSlug: string;
+        recipientEmail: string;
+        recipientName: string | null;
+        proposalTitle: string | null;
+        reminderNumber: number;
+        dueAt: string | null;
+        subject: string;
+      }>;
+      speakerInvites: Array<{
+        category: "speaker_invite";
+        templateKey: string;
+        eventName: string;
+        eventSlug: string;
+        recipientEmail: string;
+        recipientName: string | null;
+        proposalTitle: string | null;
+        reminderNumber: number;
+        dueAt: string | null;
+        subject: string;
+      }>;
+      coSpeakerInvites: Array<{
+        category: "co_speaker_invite";
+        templateKey: string;
+        eventName: string;
+        eventSlug: string;
+        recipientEmail: string;
+        recipientName: string | null;
+        proposalTitle: string | null;
+        reminderNumber: number;
+        dueAt: string | null;
+        subject: string;
+      }>;
+      presentationUploads: Array<{
+        category: "presentation_upload_request";
+        templateKey: string;
+        eventName: string;
+        eventSlug: string;
+        recipientEmail: string;
+        recipientName: string | null;
+        proposalTitle: string | null;
+        reminderNumber: number;
+        dueAt: string | null;
+        subject: string;
+      }>;
+    };
+  };
+  shouldRunRetention: boolean;
+  retention: {
+    redactedRegistrations: number;
+    redactedUsers: number;
+    affectedEvents: number;
+    preview: {
+      dueEvents: Array<{
+        eventId: string;
+        eventName: string;
+        eventSlug: string;
+        endsAt: string | null;
+        retentionDays: number;
+        eligibleRegistrations: number;
+        eligibleUsers: number;
+      }>;
+      totalEvents: number;
+      totalRegistrations: number;
+      totalUsers: number;
+    };
+  };
+  outbox: {
+    processed: number;
+    failed: number;
+    dueNow: number;
+    dueByStatus: Record<string, number>;
+    nextSendAfter: string | null;
+  };
+}
+
+type AdminReminderPreviewRow = {
+  category: "attendee_invite" | "speaker_invite" | "co_speaker_invite" | "presentation_upload_request";
+  templateKey: string;
+  eventName: string;
+  eventSlug: string;
+  recipientEmail: string;
+  recipientName: string | null;
+  proposalTitle: string | null;
+  reminderNumber: number;
+  dueAt: string | null;
+  subject: string;
+};
+
+type AdminDueWorkTab = "all" | "outbox" | "reminders" | "cleanup";
+
+interface AdminDueWorkRow {
+  bucket: Exclude<AdminDueWorkTab, "all">;
+  typeLabel: string;
+  title: string;
+  subtitle: string | null;
+  context: string;
+  detail: string | null;
+  dueAt: string | null;
+  statusKey: string;
+  statusLabel: string;
+}
+
 interface InviteRecord {
   id: string;
   invitee_email: string;
@@ -459,6 +613,7 @@ function badge(status: string): string {
     sent: "primary", accepted: "success", declined: "danger", expired: "secondary", revoked: "secondary",
     // Email outbox statuses
     queued: "primary", retrying: "warning", failed: "danger", sending: "primary",
+    transactional: "primary", promotional: "info",
     // Email template version statuses
     active: "success", draft: "warning",
     // Donation statuses
@@ -468,7 +623,7 @@ function badge(status: string): string {
     // Proposal statuses / outcomes
     submitted: "primary", under_review: "info", rejected: "danger", needs_work: "warning", withdrawn: "secondary",
     // Review recommendation
-    accept: "success", reject: "danger", "needs-work": "warning", waiting: "warning", offered: "info",
+    accept: "success", reject: "danger", "needs-work": "warning",
   };
   const labels: Record<string, string> = {
     registered: "Confirmed",
@@ -484,6 +639,8 @@ function badge(status: string): string {
     retrying: "Retrying",
     failed: "Failed",
     sending: "Sending",
+    transactional: "Transactional",
+    promotional: "Promotional",
     active: "Active",
     draft: "Draft",
     pending: "Pending",
@@ -560,6 +717,7 @@ function nav(sec: string): void {
     dashboard: loadDashboard,
     events: loadEvents,
     email: loadEmail,
+    duework: loadDueWork,
     templates: loadTemplates,
     stats: loadStats,
     donations: loadDonations,
@@ -822,6 +980,9 @@ function wireRegistrationsGroupTabs(slug: string): void {
 function registrationsListHtml(slug: string): string {
   void slug;
   return (
+    '<div class="d-flex justify-content-end mb-2">' +
+      `<button class="btn btn-sm btn-outline-warning" data-run-waitlist-promotions="${esc(slug)}">Run waitlist promotions</button>` +
+    '</div>' +
     '<div id="regs-list-body">' + spinner() + '</div>' +
     '<div id="regs-list-pager" class="mt-2"></div>'
   );
@@ -855,6 +1016,10 @@ async function loadEventRegistrations(slug: string): Promise<void> {
       const hasMore = d.page?.hasMore ?? false;
       const pageTotal = d.page?.total ?? 0;
       const currentPage = Math.floor(pageOffset / Math.max(1, pageLimit)) + 1;
+
+      document.querySelector<HTMLButtonElement>(`[data-run-waitlist-promotions="${slug}"]`)?.addEventListener("click", () => {
+        void doRunWaitlistPromotions(slug);
+      });
 
       if (pager) {
         pager.innerHTML = pagerHtml(currentPage, hasMore, pageLimit, pageOffset, regs.length, pageTotal);
@@ -894,6 +1059,23 @@ async function loadEventRegistrations(slug: string): Promise<void> {
   }
 
   await doLoad();
+}
+
+async function doRunWaitlistPromotions(slug: string): Promise<void> {
+  const btn = document.querySelector<HTMLButtonElement>(`[data-run-waitlist-promotions="${slug}"]`);
+  if (btn) setButtonLoading(btn);
+  try {
+    const result = await api<{ wholeRegistrationOffers: number; dayRegistrationOffers: number }>(
+      `/api/v1/admin/events/${slug}/waitlist/promote`,
+      { method: "POST", body: "{}" },
+    );
+    toast(`Waitlist promotions sent: ${result.wholeRegistrationOffers} registration offers, ${result.dayRegistrationOffers} day offers`, "success");
+    await loadEventRegistrations(slug);
+  } catch (err) {
+    toast((err as Error).message, "error");
+  } finally {
+    if (btn) resetButton(btn);
+  }
 }
 
 function proposalsGroupTabHtml(): string {
@@ -1299,9 +1481,13 @@ function regsTable(regs: Registration[]): string {
       r.user_email && r.display_name && r.display_name !== r.user_email
         ? `<br><span class="mono text-muted">${esc(r.user_email)}</span>`
         : "";
-    const waitlistCell = r.dayWaitlistCount && r.dayWaitlistCount > 0
-      ? `<div class="d-flex flex-column gap-1">${badge("waiting")}${r.dayWaitlistSummary ? `<span class="text-body-secondary small">${esc(r.dayWaitlistSummary)}</span>` : ""}</div>`
-      : `<span class="text-body-secondary small">None</span>`;
+    const hasDayWaitlist = Boolean(r.dayWaitlistCount && r.dayWaitlistCount > 0);
+    const waitlistBadgeStatus = hasDayWaitlist && r.dayWaitlistSummary?.includes("(offered)") ? "offered" : "waiting";
+    const waitlistCell = r.status === "waitlisted" && !hasDayWaitlist
+      ? `<div class="d-flex flex-column gap-1"><span>${badge("waitlisted")}</span><span class="text-body-secondary small">Whole registration</span></div>`
+      : hasDayWaitlist
+        ? `<div class="d-flex flex-column gap-1">${badge(waitlistBadgeStatus)}${r.dayWaitlistSummary ? `<span class="text-body-secondary small">${esc(r.dayWaitlistSummary)}</span>` : ""}</div>`
+        : `<span class="text-body-secondary small">None</span>`;
     return (
       `<tr data-reg-id="${esc(r.id)}">` +
       `<td>${esc(name)}${sub}</td>` +
@@ -3226,7 +3412,27 @@ function inviteBadge(status: string): string {
 
 const ADMIN_LIST_PAGE_SIZE_DEFAULT = 50;
 const ADMIN_LIST_PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
-const QUICK_PAGE_JUMPS = [1, 2, 3, 4, 5, 10, 20];
+let _adminEmailOutboxState = {
+  status: "",
+  messageType: "",
+  q: "",
+  offset: 0,
+  pageSize: ADMIN_LIST_PAGE_SIZE_DEFAULT,
+};
+const _adminEmailOutboxSelectedIds = new Set<string>();
+let _adminJobsPreview: AdminJobsRunResponse | null = null;
+let _adminJobsLastRun: AdminJobsRunResponse | null = null;
+let _adminJobsState = {
+  reminderLimit: 120,
+  outboxLimit: 120,
+  runRetention: false,
+};
+let _adminDueOutboxRows: AdminEmailOutboxRow[] = [];
+let _adminDueWorkViewState: { tab: AdminDueWorkTab; pageSize: number; offset: number } = {
+  tab: "all",
+  pageSize: 25,
+  offset: 0,
+};
 
 function pagerRangeText(offset: number, rowCount: number, total: number): string {
   if (total <= 0 || rowCount <= 0) {
@@ -3237,13 +3443,52 @@ function pagerRangeText(offset: number, rowCount: number, total: number): string
   return `Records ${start}-${end} of ${total}`;
 }
 
+function visiblePagerItems(currentPage: number, maxPage: number): Array<number | "ellipsis"> {
+  if (maxPage <= 7) {
+    return Array.from({ length: maxPage }, (_, index) => index + 1);
+  }
+
+  const pages = new Set<number>([1, maxPage, currentPage - 1, currentPage, currentPage + 1]);
+
+  if (currentPage <= 3) {
+    pages.add(2);
+    pages.add(3);
+    pages.add(4);
+  }
+
+  if (currentPage >= maxPage - 2) {
+    pages.add(maxPage - 1);
+    pages.add(maxPage - 2);
+    pages.add(maxPage - 3);
+  }
+
+  const sortedPages = Array.from(pages)
+    .filter((page) => page >= 1 && page <= maxPage)
+    .sort((left, right) => left - right);
+
+  const items: Array<number | "ellipsis"> = [];
+  for (let index = 0; index < sortedPages.length; index += 1) {
+    const page = sortedPages[index];
+    const previous = sortedPages[index - 1];
+    if (previous && page - previous > 1) {
+      items.push("ellipsis");
+    }
+    items.push(page);
+  }
+
+  return items;
+}
+
 function pagerHtml(currentPage: number, hasMore: boolean, pageSize: number, offset: number, rowCount: number, total: number): string {
   const maxPage = total > 0 ? Math.max(1, Math.ceil(total / Math.max(1, pageSize))) : 1;
-  const jumpButtons = QUICK_PAGE_JUMPS
-    .map((page) => {
-      const active = page === currentPage;
-      const unavailable = page > maxPage;
-      return `<button type="button" class="btn btn-sm ${active ? "btn-primary" : "btn-outline-secondary"}" data-page-jump="${page}"${active || unavailable ? " disabled" : ""}>${page}</button>`;
+  const pageButtons = visiblePagerItems(currentPage, maxPage)
+    .map((item) => {
+      if (item === "ellipsis") {
+        return '<span class="btn btn-sm btn-link text-muted disabled" aria-hidden="true">...</span>';
+      }
+
+      const active = item === currentPage;
+      return `<button type="button" class="btn btn-sm ${active ? "btn-primary" : "btn-outline-secondary"}" data-page-jump="${item}"${active ? " disabled" : ""}>${item}</button>`;
     })
     .join("");
 
@@ -3254,7 +3499,7 @@ function pagerHtml(currentPage: number, hasMore: boolean, pageSize: number, offs
   return (
     '<div class="d-flex flex-wrap gap-2 align-items-center justify-content-center">' +
       `<button type="button" class="btn btn-sm btn-outline-secondary" data-page-prev${currentPage <= 1 ? " disabled" : ""}>Prev</button>` +
-      jumpButtons +
+      pageButtons +
       `<button type="button" class="btn btn-sm btn-outline-secondary" data-page-next${!hasMore ? " disabled" : ""}>Next</button>` +
       '<span class="small text-muted ms-1">Rows</span>' +
       `<select class="form-select form-select-sm" data-page-size style="width:auto">${pageSizeOptions}</select>` +
@@ -5337,13 +5582,460 @@ function groupTemplates(templates: EmailTemplateVersion[]): Map<string, EmailTem
 
 // ── Email ──────────────────────────────────────────────────────────────────────
 
+function emailOutboxSummaryBadges(items: Record<string, number>): string {
+  const order = ["failed", "retrying", "queued", "sending", "sent", "transactional", "promotional"];
+  const ordered = Object.entries(items).sort(([left], [right]) => {
+    const leftIndex = order.indexOf(left);
+    const rightIndex = order.indexOf(right);
+    const leftRank = leftIndex === -1 ? order.length : leftIndex;
+    const rightRank = rightIndex === -1 ? order.length : rightIndex;
+    return leftRank - rightRank || left.localeCompare(right);
+  });
+
+  if (!ordered.length) {
+    return '<span class="text-muted small">No matching rows</span>';
+  }
+
+  return ordered
+    .map(([key, value]) => `${badge(key)} <span class="small text-muted me-3">${value}</span>`)
+    .join("");
+}
+
+function isOutboxDueNow(row: AdminEmailOutboxRow): boolean {
+  if (row.status !== "queued" && row.status !== "retrying") {
+    return false;
+  }
+  return new Date(row.sendAfter).getTime() <= Date.now();
+}
+
+function renderJobsRunSummary(title: string, result: AdminJobsRunResponse | null, empty: string): string {
+  if (!result) {
+    return `<div class="small text-muted">${esc(empty)}</div>`;
+  }
+
+  const reminderVerb = result.dryRun ? "Queue" : "Queued";
+  const outboxVerb = result.dryRun ? "Process" : "Processed";
+  const cleanupVerb = result.dryRun ? "Cleanup" : "Cleanup";
+  const retentionCounts = result.shouldRunRetention
+    ? `${cleanupVerb}: ${result.retention.redactedUsers} users, ${result.retention.redactedRegistrations} registrations, ${result.retention.affectedEvents} event(s).`
+    : "Cleanup not included.";
+  const retentionDetails = result.retention.preview.dueEvents.length > 0
+    ? (
+      `<details class="mt-3">` +
+        `<summary class="small fw-semibold">Cleanup candidates (${result.retention.preview.totalEvents})</summary>` +
+        `<div class="mt-2">` +
+          tbl(
+            ["Event", "Ended", "Retention", "Registrations", "Users"],
+            result.retention.preview.dueEvents.slice(0, 5).map((item) => (
+              `<tr>` +
+                `<td><div class="fw-semibold">${esc(item.eventName)}</div><div class="small text-muted">${esc(item.eventSlug)}</div></td>` +
+                `<td class="small">${esc(fmt(item.endsAt))}</td>` +
+                `<td class="small">${item.retentionDays} day(s)</td>` +
+                `<td class="small">${item.eligibleRegistrations}</td>` +
+                `<td class="small">${item.eligibleUsers}</td>` +
+              `</tr>`
+            )),
+            "No cleanup candidates",
+          ) +
+        `</div>` +
+        (result.retention.preview.dueEvents.length > 5
+          ? `<div class="small text-muted mt-2">${result.retention.preview.dueEvents.length - 5} more event(s) eligible for cleanup.</div>`
+          : "") +
+      `</details>`
+    )
+    : (result.shouldRunRetention
+      ? '<div class="small text-muted mt-2">No events are currently past their retention window.</div>'
+      : "");
+  const reminderSections: Array<{ title: string; rows: AdminReminderPreviewRow[] }> = [
+    { title: "Attendee Invites", rows: result.reminders.preview.attendeeInvites },
+    { title: "Speaker Invites", rows: result.reminders.preview.speakerInvites },
+    { title: "Co-speaker Invites", rows: result.reminders.preview.coSpeakerInvites },
+    { title: "Presentation Uploads", rows: result.reminders.preview.presentationUploads },
+  ];
+  const reminderDetails = reminderSections
+    .filter((section) => section.rows.length > 0)
+    .map((section) => {
+      const sampleRows = section.rows.slice(0, 5).map((row) => {
+          const summaryBits = [row.templateKey, `${row.eventName} (${row.eventSlug})`, `#${row.reminderNumber}`];
+          if (row.proposalTitle) summaryBits.push(row.proposalTitle);
+          return (
+            `<tr>` +
+              `<td><div class="fw-semibold">${esc(row.recipientName || row.recipientEmail)}</div><div class="mono small text-muted">${esc(row.recipientEmail)}</div></td>` +
+              `<td><div class="small">${esc(summaryBits.join(" | "))}</div><div class="small text-muted">Due ${esc(fmt(row.dueAt))}</div></td>` +
+              `<td class="small">${esc(row.subject)}</td>` +
+            `</tr>`
+          );
+        });
+      const extra = section.rows.length > 5
+        ? `<div class="small text-muted mt-2">${section.rows.length - 5} more candidate(s) in this category.</div>`
+        : "";
+      return (
+        `<details class="mt-3">` +
+          `<summary class="small fw-semibold">${esc(section.title)} (${section.rows.length})</summary>` +
+          `<div class="mt-2">${tbl(["Recipient", "Event / Template", "Subject"], sampleRows, "No candidates")}</div>` +
+          extra +
+        `</details>`
+      );
+    })
+    .join("");
+
+  return (
+    `<div class="border rounded p-3">` +
+      `<div class="fw-semibold mb-2">${esc(title)}</div>` +
+      `<div class="small mb-2">${reminderVerb}: ${result.reminders.processed} reminders ` +
+        `(${result.reminders.inviteRemindersQueued} attendee, ${result.reminders.speakerInviteRemindersQueued} speaker, ${result.reminders.presentationRemindersQueued} presentation).</div>` +
+      `<div class="small mb-2">${outboxVerb}: ${result.outbox.processed} outbox rows, ${result.outbox.failed} failed.</div>` +
+      `<div class="small mb-2">${retentionCounts}</div>` +
+      `<div class="small text-muted">Queue mix: ${emailOutboxSummaryBadges(result.outbox.dueByStatus)}</div>` +
+      retentionDetails +
+      reminderDetails +
+    `</div>`
+  );
+}
+
+function dueWorkTypeBadge(typeLabel: string, bucket: AdminDueWorkRow["bucket"]): string {
+  const color = bucket === "outbox" ? "primary" : bucket === "reminders" ? "info" : "warning";
+  return `<span class="badge text-bg-${color}">${esc(typeLabel)}</span>`;
+}
+
+function collectDueWorkRows(result: AdminJobsRunResponse | null, dueOutboxRows: AdminEmailOutboxRow[]): AdminDueWorkRow[] {
+  const rows: AdminDueWorkRow[] = dueOutboxRows.map((row) => ({
+    bucket: "outbox",
+    typeLabel: "Email Queue",
+    title: row.recipientName || row.recipientEmail,
+    subtitle: row.recipientName ? row.recipientEmail : null,
+    context: [row.eventName, row.templateKey, `Attempts ${row.attempts}`].filter(Boolean).join(" | "),
+    detail: row.subject,
+    dueAt: row.sendAfter,
+    statusKey: row.status,
+    statusLabel: row.status,
+  }));
+
+  const reminderSections: Array<{ label: string; rows: AdminReminderPreviewRow[] }> = result
+    ? [
+      { label: "Attendee Invite", rows: result.reminders.preview.attendeeInvites },
+      { label: "Speaker Invite", rows: result.reminders.preview.speakerInvites },
+      { label: "Co-speaker Invite", rows: result.reminders.preview.coSpeakerInvites },
+      { label: "Presentation Upload", rows: result.reminders.preview.presentationUploads },
+    ]
+    : [];
+
+  for (const section of reminderSections) {
+    for (const row of section.rows) {
+      rows.push({
+        bucket: "reminders",
+        typeLabel: section.label,
+        title: row.recipientName || row.recipientEmail,
+        subtitle: row.recipientName ? row.recipientEmail : null,
+        context: [row.eventName, row.eventSlug, row.templateKey, `#${row.reminderNumber}`].filter(Boolean).join(" | "),
+        detail: row.proposalTitle ? `${row.subject} | ${row.proposalTitle}` : row.subject,
+        dueAt: row.dueAt,
+        statusKey: "pending",
+        statusLabel: "Preview",
+      });
+    }
+  }
+
+  if (result) {
+    for (const item of result.retention.preview.dueEvents) {
+      rows.push({
+        bucket: "cleanup",
+        typeLabel: "Cleanup",
+        title: item.eventName,
+        subtitle: item.eventSlug,
+        context: `${item.eligibleRegistrations} registrations | ${item.eligibleUsers} users | ${item.retentionDays} day retention`,
+        detail: item.endsAt ? `Event ended ${fmt(item.endsAt)}` : "Event end date unknown",
+        dueAt: item.endsAt,
+        statusKey: result.shouldRunRetention ? "waiting" : "secondary",
+        statusLabel: result.shouldRunRetention ? "Eligible" : "Disabled",
+      });
+    }
+  }
+
+  return rows.sort((left, right) => {
+    const leftTime = left.dueAt ? new Date(left.dueAt).getTime() : Number.POSITIVE_INFINITY;
+    const rightTime = right.dueAt ? new Date(right.dueAt).getTime() : Number.POSITIVE_INFINITY;
+    if (leftTime !== rightTime) return leftTime - rightTime;
+    return left.title.localeCompare(right.title);
+  });
+}
+
+function renderDueWorkMergedTable(result: AdminJobsRunResponse | null, dueOutboxRows: AdminEmailOutboxRow[]): string {
+  const allRows = collectDueWorkRows(result, dueOutboxRows);
+  const counts = {
+    all: allRows.length,
+    outbox: allRows.filter((row) => row.bucket === "outbox").length,
+    reminders: allRows.filter((row) => row.bucket === "reminders").length,
+    cleanup: allRows.filter((row) => row.bucket === "cleanup").length,
+  };
+  const tab = _adminDueWorkViewState.tab;
+  const filteredRows = tab === "all" ? allRows : allRows.filter((row) => row.bucket === tab);
+  const offset = Math.min(_adminDueWorkViewState.offset, Math.max(0, filteredRows.length - 1));
+  const pageSize = Math.max(1, _adminDueWorkViewState.pageSize);
+  const pagedRows = filteredRows.slice(offset, offset + pageSize);
+  const currentPage = Math.floor(offset / pageSize) + 1;
+  const tabs: Array<{ key: AdminDueWorkTab; label: string; count: number }> = [
+    { key: "all", label: "All", count: counts.all },
+    { key: "outbox", label: "Outbox", count: counts.outbox },
+    { key: "reminders", label: "Reminders", count: counts.reminders },
+    { key: "cleanup", label: "Cleanup", count: counts.cleanup },
+  ];
+
+  return (
+    '<div class="mt-4">' +
+      '<div class="d-flex flex-wrap gap-2 mb-3" id="duework-tabs">' +
+        tabs.map((item) => (
+          `<button type="button" class="btn btn-sm ${item.key === tab ? "btn-primary" : "btn-outline-secondary"}" data-duework-tab="${item.key}">` +
+            `${esc(item.label)} <span class="badge ${item.key === tab ? "text-bg-light text-dark" : "text-bg-secondary"}">${item.count}</span>` +
+          `</button>`
+        )).join("") +
+      '</div>' +
+      '<div class="border rounded p-3">' +
+        tbl(
+          ["Type", "Target", "Context", "Due", "Status"],
+          pagedRows.map((row) => (
+            `<tr>` +
+              `<td>${dueWorkTypeBadge(row.typeLabel, row.bucket)}</td>` +
+              `<td><div class="fw-semibold">${esc(row.title)}</div>${row.subtitle ? `<div class="mono small text-muted">${esc(row.subtitle)}</div>` : ""}</td>` +
+              `<td><div class="small">${esc(row.context)}</div>${row.detail ? `<div class="small text-muted mt-1">${esc(row.detail)}</div>` : ""}</td>` +
+              `<td class="small">${esc(fmt(row.dueAt))}</td>` +
+              `<td><div>${row.bucket === "outbox" ? badge(row.statusKey) : `<span class="badge text-bg-light border text-dark">${esc(row.statusLabel)}</span>`}</div></td>` +
+            `</tr>`
+          )),
+          tab === "cleanup"
+            ? (result?.shouldRunRetention ? "No cleanup candidates right now." : "Enable cleanup to preview retention candidates.")
+            : tab === "reminders"
+              ? "No reminder candidates due right now."
+              : tab === "outbox"
+                ? "No due outbox rows right now."
+                : "No due work items right now.",
+        ) +
+        `<div class="mt-3" id="duework-pager">${pagerHtml(currentPage, offset + pagedRows.length < filteredRows.length, pageSize, offset, pagedRows.length, filteredRows.length)}</div>` +
+      '</div>' +
+    '</div>'
+  );
+}
+
+function syncJobsStateFromInputs(): void {
+  const reminderLimit = parseInt(q<HTMLInputElement>("#jobs-reminder-limit")?.value ?? String(_adminJobsState.reminderLimit), 10) || 120;
+  const outboxLimit = parseInt(q<HTMLInputElement>("#jobs-outbox-limit")?.value ?? String(_adminJobsState.outboxLimit), 10) || 120;
+  const runRetention = Boolean(q<HTMLInputElement>("#jobs-include-retention")?.checked ?? _adminJobsState.runRetention);
+  _adminJobsState = { reminderLimit, outboxLimit, runRetention };
+}
+
+async function fetchDueWorkPreview(): Promise<AdminJobsRunResponse> {
+  return api<AdminJobsRunResponse>("/api/v1/internal/jobs/run", {
+    method: "POST",
+    body: JSON.stringify({
+      reminderLimit: _adminJobsState.reminderLimit,
+      outboxLimit: _adminJobsState.outboxLimit,
+      runReminders: true,
+      runRetention: _adminJobsState.runRetention,
+      runOutbox: true,
+      runRetentionMode: "always",
+      retentionHourUtc: 0,
+      dryRun: true,
+    }),
+  });
+}
+
+function renderDueWorkControl(
+  summary: Pick<AdminEmailOutboxResponse["summary"], "dueNow" | "dueByStatus" | "nextSendAfter">,
+  dueOutboxRows: AdminEmailOutboxRow[],
+): string {
+  const lastRunBlock = _adminJobsLastRun
+    ? (
+      '<details class="mt-3">' +
+        '<summary class="small fw-semibold">Last run summary</summary>' +
+        `<div class="mt-2">${renderJobsRunSummary("Last Run", _adminJobsLastRun, "")}</div>` +
+      '</details>'
+    )
+    : '<div class="small text-muted mt-3">No due-work run has been executed in this session yet.</div>';
+
+  return (
+    '<div class="action-card">' +
+      '<div class="d-flex flex-wrap justify-content-between gap-2 align-items-center mb-3">' +
+        '<strong>Due Work</strong>' +
+        '<div class="d-flex gap-2 flex-wrap">' +
+          '<button class="btn btn-sm btn-outline-primary" id="btn-preview-jobs">Refresh Preview</button>' +
+          '<button class="btn btn-sm btn-primary" id="btn-run-jobs">Process Due Work Now</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="border rounded p-2 mb-3 bg-light-subtle">' +
+        '<div class="d-flex flex-wrap align-items-center gap-3 small">' +
+          '<label class="d-inline-flex align-items-center gap-2 mb-0">' +
+            '<span class="text-muted">Reminders</span>' +
+            `<input type="number" class="form-control form-control-sm" id="jobs-reminder-limit" value="${_adminJobsState.reminderLimit}" min="1" max="500" style="width:78px">` +
+          '</label>' +
+          '<label class="d-inline-flex align-items-center gap-2 mb-0">' +
+            '<span class="text-muted">Outbox</span>' +
+            `<input type="number" class="form-control form-control-sm" id="jobs-outbox-limit" value="${_adminJobsState.outboxLimit}" min="1" max="500" style="width:78px">` +
+          '</label>' +
+          '<label class="d-inline-flex align-items-center gap-2 mb-0">' +
+            `<input class="form-check-input mt-0" type="checkbox" id="jobs-include-retention"${_adminJobsState.runRetention ? " checked" : ""}>` +
+            '<span class="text-muted">Cleanup</span>' +
+          '</label>' +
+        '</div>' +
+      '</div>' +
+      `<div id="duework-items-panel">${renderDueWorkMergedTable(_adminJobsPreview, dueOutboxRows)}</div>` +
+      '<div class="small text-muted mt-3" id="jobs-run-status"></div>' +
+      lastRunBlock +
+    '</div>'
+  );
+}
+
+function wireDueWorkItemsControls(): void {
+  document.querySelectorAll<HTMLButtonElement>("#duework-tabs [data-duework-tab]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = (btn.dataset.dueworkTab ?? "all") as AdminDueWorkTab;
+      _adminDueWorkViewState.tab = tab;
+      _adminDueWorkViewState.offset = 0;
+      const panel = q("#duework-items-panel");
+      if (panel) panel.innerHTML = renderDueWorkMergedTable(_adminJobsPreview, _adminDueOutboxRows);
+      wireDueWorkItemsControls();
+    });
+  });
+
+  q("#duework-pager [data-page-prev]")?.addEventListener("click", () => {
+    _adminDueWorkViewState.offset = Math.max(0, _adminDueWorkViewState.offset - _adminDueWorkViewState.pageSize);
+    const panel = q("#duework-items-panel");
+    if (panel) panel.innerHTML = renderDueWorkMergedTable(_adminJobsPreview, _adminDueOutboxRows);
+    wireDueWorkItemsControls();
+  });
+  q("#duework-pager [data-page-next]")?.addEventListener("click", () => {
+    _adminDueWorkViewState.offset += _adminDueWorkViewState.pageSize;
+    const panel = q("#duework-items-panel");
+    if (panel) panel.innerHTML = renderDueWorkMergedTable(_adminJobsPreview, _adminDueOutboxRows);
+    wireDueWorkItemsControls();
+  });
+  document.querySelectorAll<HTMLButtonElement>("#duework-pager [data-page-jump]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const page = Number(btn.dataset.pageJump || "1");
+      if (!Number.isFinite(page) || page < 1) return;
+      _adminDueWorkViewState.offset = (page - 1) * _adminDueWorkViewState.pageSize;
+      const panel = q("#duework-items-panel");
+      if (panel) panel.innerHTML = renderDueWorkMergedTable(_adminJobsPreview, _adminDueOutboxRows);
+      wireDueWorkItemsControls();
+    });
+  });
+  q<HTMLSelectElement>("#duework-pager [data-page-size]")?.addEventListener("change", (event) => {
+    const nextSize = Number((event.currentTarget as HTMLSelectElement).value);
+    if (!Number.isFinite(nextSize) || nextSize < 1) return;
+    _adminDueWorkViewState.pageSize = nextSize;
+    _adminDueWorkViewState.offset = 0;
+    const panel = q("#duework-items-panel");
+    if (panel) panel.innerHTML = renderDueWorkMergedTable(_adminJobsPreview, _adminDueOutboxRows);
+    wireDueWorkItemsControls();
+  });
+}
+
+function wireDueWorkControls(): void {
+  q("#jobs-reminder-limit")?.addEventListener("change", syncJobsStateFromInputs);
+  q("#jobs-outbox-limit")?.addEventListener("change", syncJobsStateFromInputs);
+  q("#jobs-include-retention")?.addEventListener("change", syncJobsStateFromInputs);
+  q("#btn-preview-jobs")?.addEventListener("click", () => void doRunJobs(true));
+  q("#btn-run-jobs")?.addEventListener("click", () => void doRunJobs(false));
+  wireDueWorkItemsControls();
+}
+
+async function loadDueWork(): Promise<void> {
+  const el = q("#w-body");
+  if (!el) return;
+  syncJobsStateFromInputs();
+  el.innerHTML = spinner();
+  try {
+    const [outboxData, dueOutboxData, preview] = await Promise.all([
+      api<AdminEmailOutboxResponse>("/api/v1/admin/email/outbox?limit=1&offset=0"),
+      api<AdminEmailOutboxResponse>(`/api/v1/admin/email/outbox?dueNow=true&limit=${Math.max(25, Math.min(_adminJobsState.outboxLimit, 100))}&offset=0`),
+      fetchDueWorkPreview(),
+    ]);
+    _adminJobsPreview = preview;
+    _adminDueOutboxRows = dueOutboxData.outbox;
+    el.innerHTML = renderDueWorkControl(outboxData.summary, dueOutboxData.outbox);
+    wireDueWorkControls();
+  } catch (err) {
+    el.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+  }
+}
+
+function renderEmailOutboxTable(rows: AdminEmailOutboxRow[]): string {
+  return tbl(
+    ["", "Recipient", "Message", "Queue", "Timing", "Details"],
+    rows.map((row) => {
+      const showFailureDetails = Boolean(row.lastError) && row.status !== "sent";
+      const eventBits = [row.eventName, row.eventSlug ? `/${row.eventSlug}` : null].filter(Boolean);
+      const subjectMeta = [
+        `<span class="small text-muted">${esc(row.templateKey)}${row.templateVersion !== null ? ` v${row.templateVersion}` : ""}</span>`,
+        badge(row.messageType),
+        row.usesDirectBody ? '<span class="badge text-bg-light border text-dark">Direct body</span>' : "",
+        row.hasCustomText ? '<span class="badge text-bg-light border text-dark">Custom text</span>' : "",
+        row.bccRecipientCount > 0 ? `<span class="badge text-bg-light border text-dark">BCC ${row.bccRecipientCount}</span>` : "",
+        row.hasCalendarInvite ? '<span class="badge text-bg-light border text-dark">Calendar</span>' : "",
+        row.hasBadgeAttachment ? '<span class="badge text-bg-light border text-dark">Badge</span>' : "",
+      ].filter(Boolean).join(" ");
+
+      const queueMeta = [
+        badge(row.status),
+        `<span class="small text-muted">Attempts ${row.attempts}</span>`,
+        `<span class="small text-muted">${esc(row.provider)}</span>`,
+      ].join(" ");
+
+      const timingLines = [
+        `<div><span class="small text-muted">Queued</span><div class="mono small">${fmt(row.createdAt)}</div></div>`,
+        `<div><span class="small text-muted">Due</span><div class="mono small">${fmt(row.sendAfter)}</div></div>`,
+        `<div><span class="small text-muted">Sent</span><div class="mono small">${fmt(row.sentAt)}</div></div>`,
+      ].join("");
+
+      const detailLines = [
+        `<div class="small text-muted">Outbox</div><div class="mono small">${esc(row.id)}</div>`,
+        row.providerMessageId
+          ? `<div class="small text-muted mt-2">Provider Message</div><div class="mono small">${esc(row.providerMessageId)}</div>`
+          : "",
+        showFailureDetails
+          ? `<details class="mt-2"><summary class="small text-danger">Failure details</summary><div class="small text-danger mt-2">${esc(row.lastError)}</div></details>`
+          : '<div class="small text-muted mt-2">No delivery error recorded.</div>',
+      ].join("");
+
+      return (
+        "<tr>" +
+          `<td><input class="form-check-input" type="checkbox" data-outbox-select="${esc(row.id)}"></td>` +
+          `<td><div class="fw-semibold">${esc(row.recipientName || row.recipientEmail)}</div>` +
+          `<div class="mono small text-muted">${esc(row.recipientEmail)}</div>` +
+          (eventBits.length ? `<div class="small text-muted mt-1">${esc(eventBits.join(" | "))}</div>` : "") +
+          "</td>" +
+          `<td><div class="fw-semibold">${esc(row.subject || "PKI Consortium Update")}</div>` +
+          `<div class="d-flex flex-wrap gap-1 mt-1">${subjectMeta}</div></td>` +
+          `<td><div class="d-flex flex-wrap gap-1 align-items-center">${queueMeta}</div>` +
+          `<div class="small text-muted mt-2">Updated ${esc(fmt(row.updatedAt))}</div></td>` +
+          `<td>${timingLines}</td>` +
+          `<td>${detailLines}</td>` +
+        "</tr>"
+      );
+    }),
+    "No outbox rows match the current filters",
+  );
+}
+
 async function loadEmail(): Promise<void> {
   const el = q("#m-body");
   if (!el) return;
   el.innerHTML = spinner();
+  _adminEmailOutboxSelectedIds.clear();
   try {
-    const s = await api<StatsResponse>("/api/v1/admin/stats");
+    const outboxQuery = new URLSearchParams({
+      limit: String(_adminEmailOutboxState.pageSize),
+      offset: String(_adminEmailOutboxState.offset),
+    });
+    if (_adminEmailOutboxState.status) outboxQuery.set("status", _adminEmailOutboxState.status);
+    if (_adminEmailOutboxState.messageType) outboxQuery.set("messageType", _adminEmailOutboxState.messageType);
+    if (_adminEmailOutboxState.q) outboxQuery.set("q", _adminEmailOutboxState.q);
+
+    const [s, outboxData] = await Promise.all([
+      api<StatsResponse>("/api/v1/admin/stats"),
+      api<AdminEmailOutboxResponse>(`/api/v1/admin/email/outbox?${outboxQuery.toString()}`),
+    ]);
     const ob = s.email.outboxByStatus;
+    const currentPage = Math.floor(outboxData.page.offset / Math.max(1, outboxData.page.limit)) + 1;
     el.innerHTML =
       '<div class="stat-grid mb-4">' +
         Object.entries(ob)
@@ -5354,71 +6046,204 @@ async function loadEmail(): Promise<void> {
           )
           .join("") +
       "</div>" +
-      '<div class="row g-3">' +
-        '<div class="col-md-6"><div class="action-card">' +
-          "<strong>Retry Queued / Retrying</strong>" +
-          "<p>Process emails in queue or retry state. Use after fixing a configuration issue.</p>" +
-          '<div class="d-flex gap-2 align-items-end">' +
-            '<div><label class="form-label small fw-semibold mb-1">Batch limit</label>' +
-            '<input type="number" class="form-control form-control-sm" id="retry-limit" value="20" min="1" max="100" style="width:90px"></div>' +
-            '<button class="btn btn-sm btn-success" id="btn-do-retry">Run Retry</button>' +
-          "</div></div></div>" +
-        '<div class="col-md-6"><div class="action-card">' +
-          "<strong>Reset Failed Emails</strong>" +
-          "<p>Reset all <code>failed</code> records back to <code>retrying</code> so they are re-sent on the next cycle.</p>" +
-          '<button class="btn btn-sm btn-danger" id="btn-do-reset-failed">Reset All Failed</button>' +
-        "</div></div>" +
-        '<div class="col-12"><div class="action-card">' +
-          "<strong>Process Due Work Now</strong>" +
-          "<p>Processes everything currently due or pending: reminder candidates and queued emails. Use this when you want the system to catch up now.</p>" +
-          '<div class="row g-2 align-items-end">' +
-            '<div class="col-auto"><label class="form-label small fw-semibold mb-1">Reminder limit</label>' +
-            '<input type="number" class="form-control form-control-sm" id="jobs-reminder-limit" value="120" min="1" max="500" style="width:110px">' +
-            '<div class="small text-muted mt-1" style="max-width:220px">Maximum reminder records to process in this run.</div></div>' +
-            '<div class="col-auto"><label class="form-label small fw-semibold mb-1">Outbox limit</label>' +
-            '<input type="number" class="form-control form-control-sm" id="jobs-outbox-limit" value="120" min="1" max="500" style="width:110px">' +
-            '<div class="small text-muted mt-1" style="max-width:220px">Maximum queued emails to send now.</div></div>' +
+      '<div class="action-card mb-4">' +
+        '<div class="d-flex flex-wrap justify-content-between gap-2 align-items-start mb-3">' +
+          '<div>' +
+            '<strong>Email Outbox</strong>' +
+            '<p class="mb-0 text-muted small">Inspect queued, retrying, sent, and failed email rows with recipient, subject, and delivery context.</p>' +
           '</div>' +
-          '<div class="d-flex gap-3 mt-2 flex-wrap">' +
-            '<label class="form-check-label small" title="Retention redacts old personal data after event-specific retention periods. It does not send reminders or process queued emails."><input class="form-check-input me-1" type="checkbox" id="jobs-include-retention">Also run cleanup (retention)</label>' +
-            '<label class="form-check-label small"><input class="form-check-input me-1" type="checkbox" id="jobs-dry-run">Dry run</label>' +
+          '<div class="d-flex gap-2 flex-wrap">' +
+            '<button class="btn btn-sm btn-outline-secondary" id="email-outbox-refresh">Refresh</button>' +
+            '<button class="btn btn-sm btn-outline-secondary" id="email-outbox-clear">Clear filters</button>' +
           '</div>' +
-          '<div class="small text-muted mt-1">Dry run previews what would be processed without writing data or sending emails.</div>' +
-          '<div class="d-flex gap-2 align-items-center mt-2">' +
-            '<button class="btn btn-sm btn-primary" id="btn-run-jobs">Process Now</button>' +
-            '<span class="small text-muted" id="jobs-run-status"></span>' +
+        '</div>' +
+        '<div class="row g-2 align-items-end mb-3">' +
+          '<div class="col-md-3"><label class="form-label small fw-semibold mb-1">Status</label>' +
+          `<select class="form-select form-select-sm" id="email-outbox-status">` +
+            `<option value="">All statuses</option>` +
+            `<option value="queued"${_adminEmailOutboxState.status === "queued" ? " selected" : ""}>Queued</option>` +
+            `<option value="retrying"${_adminEmailOutboxState.status === "retrying" ? " selected" : ""}>Retrying</option>` +
+            `<option value="sending"${_adminEmailOutboxState.status === "sending" ? " selected" : ""}>Sending</option>` +
+            `<option value="sent"${_adminEmailOutboxState.status === "sent" ? " selected" : ""}>Sent</option>` +
+            `<option value="failed"${_adminEmailOutboxState.status === "failed" ? " selected" : ""}>Failed</option>` +
+          '</select></div>' +
+          '<div class="col-md-3"><label class="form-label small fw-semibold mb-1">Message type</label>' +
+          `<select class="form-select form-select-sm" id="email-outbox-type">` +
+            `<option value="">All message types</option>` +
+            `<option value="transactional"${_adminEmailOutboxState.messageType === "transactional" ? " selected" : ""}>Transactional</option>` +
+            `<option value="promotional"${_adminEmailOutboxState.messageType === "promotional" ? " selected" : ""}>Promotional</option>` +
+          '</select></div>' +
+          '<div class="col-md-4"><label class="form-label small fw-semibold mb-1">Search</label>' +
+          `<input type="search" class="form-control form-control-sm" id="email-outbox-search" value="${esc(_adminEmailOutboxState.q)}" placeholder="Recipient, subject, template, event, or error">` +
           '</div>' +
-        "</div></div>" +
-      "</div>";
-    q("#btn-do-retry")?.addEventListener("click", doRetry);
-    q("#btn-do-reset-failed")?.addEventListener("click", doResetFailed);
-    q("#btn-run-jobs")?.addEventListener("click", () => void doRunJobs());
+          '<div class="col-md-2 d-grid"><button class="btn btn-sm btn-primary" id="email-outbox-apply">Apply</button></div>' +
+        '</div>' +
+        '<div class="row g-3 mb-3">' +
+          '<div class="col-md-6"><div class="border rounded p-3 h-100">' +
+            '<div class="small text-muted mb-2">Status mix in current view</div>' +
+            `<div class="d-flex flex-wrap gap-2">${emailOutboxSummaryBadges(outboxData.summary.byStatus)}</div>` +
+          '</div></div>' +
+          '<div class="col-md-6"><div class="border rounded p-3 h-100">' +
+            '<div class="small text-muted mb-2">Message types, top templates, and due queue</div>' +
+            `<div class="d-flex flex-wrap gap-2 mb-2">${emailOutboxSummaryBadges(outboxData.summary.byMessageType)}</div>` +
+            '<div class="d-flex flex-wrap gap-2">' +
+              (outboxData.summary.topTemplates.length
+                ? outboxData.summary.topTemplates.map((item) => `<span class="badge text-bg-light border text-dark">${esc(item.template_key)}: ${item.count}</span>`).join("")
+                : '<span class="text-muted small">No template usage in this view</span>') +
+            '</div>' +
+            `<div class="small text-muted mt-2">${emailOutboxSummaryBadges(outboxData.summary.dueByStatus)}</div>` +
+          '</div></div>' +
+        '</div>' +
+        '<div class="border rounded p-3 mb-3 bg-light-subtle">' +
+          '<div class="d-flex flex-wrap justify-content-between gap-2 align-items-start">' +
+            '<div>' +
+              '<div class="small text-muted mb-1">Queue actions</div>' +
+              `<div class="small" id="email-outbox-selection-status">Due now: ${outboxData.summary.dueNow}. Select visible rows to process due queued/retrying emails or reset failed ones.</div>` +
+            '</div>' +
+            '<div class="d-flex flex-wrap gap-2 align-items-end">' +
+              '<div><label class="form-label small fw-semibold mb-1">Queue batch limit</label>' +
+              '<input type="number" class="form-control form-control-sm" id="retry-limit" value="20" min="1" max="100" style="width:90px"></div>' +
+              '<div class="form-check mt-4"><input class="form-check-input" type="checkbox" id="email-outbox-select-visible"><label class="form-check-label small" for="email-outbox-select-visible">Select visible</label></div>' +
+              '<button class="btn btn-sm btn-success" id="btn-do-retry">Process due queue</button>' +
+              '<button class="btn btn-sm btn-outline-success" id="btn-do-retry-selected" disabled>Process selected</button>' +
+              '<button class="btn btn-sm btn-outline-danger" id="btn-do-reset-selected" disabled>Reset selected failed</button>' +
+              '<button class="btn btn-sm btn-danger" id="btn-do-reset-failed">Reset all failed</button>' +
+            '</div>' +
+          '</div>' +
+        '</div>' +
+        `<div id="email-outbox-table">${renderEmailOutboxTable(outboxData.outbox)}</div>` +
+        `<div id="email-outbox-pager" class="mt-3">${pagerHtml(currentPage, outboxData.page.hasMore, outboxData.page.limit, outboxData.page.offset, outboxData.outbox.length, outboxData.page.total)}</div>` +
+      '</div>';
+      const applyOutboxFilters = (): void => {
+        _adminEmailOutboxState.status = q<HTMLSelectElement>("#email-outbox-status")?.value ?? "";
+        _adminEmailOutboxState.messageType = q<HTMLSelectElement>("#email-outbox-type")?.value ?? "";
+        _adminEmailOutboxState.q = q<HTMLInputElement>("#email-outbox-search")?.value.trim() ?? "";
+        _adminEmailOutboxState.offset = 0;
+        void loadEmail();
+      };
+
+      const syncSelectionUi = (): void => {
+        const visibleSelected = outboxData.outbox.filter((row) => _adminEmailOutboxSelectedIds.has(row.id));
+        const processableSelected = visibleSelected.filter((row) => isOutboxDueNow(row));
+        const failedSelected = visibleSelected.filter((row) => row.status === "failed");
+        const selectVisible = q<HTMLInputElement>("#email-outbox-select-visible");
+        if (selectVisible) {
+          selectVisible.checked = visibleSelected.length > 0 && visibleSelected.length === outboxData.outbox.length;
+          selectVisible.indeterminate = visibleSelected.length > 0 && visibleSelected.length < outboxData.outbox.length;
+        }
+        const selectionStatus = q("#email-outbox-selection-status");
+        if (selectionStatus) {
+          selectionStatus.textContent =
+            `${visibleSelected.length} visible row(s) selected. ` +
+            `${processableSelected.length} can be processed now, ${failedSelected.length} can be reset from failed.`;
+        }
+        const retrySelectedBtn = q<HTMLButtonElement>("#btn-do-retry-selected");
+        if (retrySelectedBtn) retrySelectedBtn.disabled = processableSelected.length === 0;
+        const resetSelectedBtn = q<HTMLButtonElement>("#btn-do-reset-selected");
+        if (resetSelectedBtn) resetSelectedBtn.disabled = failedSelected.length === 0;
+      };
+
+      q("#email-outbox-select-visible")?.addEventListener("change", (event) => {
+        const checked = (event.currentTarget as HTMLInputElement).checked;
+        outboxData.outbox.forEach((row) => {
+          if (checked) {
+            _adminEmailOutboxSelectedIds.add(row.id);
+          } else {
+            _adminEmailOutboxSelectedIds.delete(row.id);
+          }
+        });
+        document.querySelectorAll<HTMLInputElement>("[data-outbox-select]").forEach((input) => {
+          input.checked = checked;
+        });
+        syncSelectionUi();
+      });
+      document.querySelectorAll<HTMLInputElement>("[data-outbox-select]").forEach((input) => {
+        input.addEventListener("change", () => {
+          const id = input.dataset.outboxSelect ?? "";
+          if (!id) return;
+          if (input.checked) {
+            _adminEmailOutboxSelectedIds.add(id);
+          } else {
+            _adminEmailOutboxSelectedIds.delete(id);
+          }
+          syncSelectionUi();
+        });
+      });
+      syncSelectionUi();
+
+      q("#email-outbox-refresh")?.addEventListener("click", () => void loadEmail());
+      q("#email-outbox-clear")?.addEventListener("click", () => {
+        _adminEmailOutboxState = {
+          status: "",
+          messageType: "",
+          q: "",
+          offset: 0,
+          pageSize: ADMIN_LIST_PAGE_SIZE_DEFAULT,
+        };
+        void loadEmail();
+      });
+      q("#email-outbox-apply")?.addEventListener("click", applyOutboxFilters);
+      q("#email-outbox-status")?.addEventListener("change", applyOutboxFilters);
+      q("#email-outbox-type")?.addEventListener("change", applyOutboxFilters);
+      q<HTMLInputElement>("#email-outbox-search")?.addEventListener("keydown", (event) => {
+        if (event.key !== "Enter") return;
+        event.preventDefault();
+        applyOutboxFilters();
+      });
+      q("#email-outbox-pager [data-page-prev]")?.addEventListener("click", () => {
+        _adminEmailOutboxState.offset = Math.max(0, outboxData.page.offset - outboxData.page.limit);
+        void loadEmail();
+      });
+      q("#email-outbox-pager [data-page-next]")?.addEventListener("click", () => {
+        _adminEmailOutboxState.offset = outboxData.page.offset + outboxData.page.limit;
+        void loadEmail();
+      });
+      document.querySelectorAll<HTMLButtonElement>("#email-outbox-pager [data-page-jump]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const page = Number(btn.dataset.pageJump || "1");
+          if (!Number.isFinite(page) || page < 1) return;
+          _adminEmailOutboxState.offset = (page - 1) * outboxData.page.limit;
+          void loadEmail();
+        });
+      });
+      q<HTMLSelectElement>("#email-outbox-pager [data-page-size]")?.addEventListener("change", (event) => {
+        const nextSize = Number((event.currentTarget as HTMLSelectElement).value);
+        if (!Number.isFinite(nextSize) || nextSize < 1) return;
+        _adminEmailOutboxState.pageSize = nextSize;
+        _adminEmailOutboxState.offset = 0;
+        void loadEmail();
+      });
+      q("#btn-do-retry")?.addEventListener("click", () => void doRetry());
+      q("#btn-do-retry-selected")?.addEventListener("click", () => {
+        const ids = outboxData.outbox.filter((row) => _adminEmailOutboxSelectedIds.has(row.id) && isOutboxDueNow(row)).map((row) => row.id);
+        void doRetry(ids);
+      });
+      q("#btn-do-reset-selected")?.addEventListener("click", () => {
+        const ids = outboxData.outbox.filter((row) => _adminEmailOutboxSelectedIds.has(row.id) && row.status === "failed").map((row) => row.id);
+        void doResetFailed(ids);
+      });
+      q("#btn-do-reset-failed")?.addEventListener("click", () => void doResetFailed());
   } catch (err) {
     el.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
   }
 }
 
-async function doRunJobs(): Promise<void> {
-  const btn = q<HTMLButtonElement>("#btn-run-jobs");
+async function doRunJobs(dryRun: boolean): Promise<void> {
+  const btn = q<HTMLButtonElement>(dryRun ? "#btn-preview-jobs" : "#btn-run-jobs");
   const statusEl = q("#jobs-run-status");
 
-  const reminderLimit = parseInt(q<HTMLInputElement>("#jobs-reminder-limit")?.value ?? "120", 10) || 120;
-  const outboxLimit = parseInt(q<HTMLInputElement>("#jobs-outbox-limit")?.value ?? "120", 10) || 120;
+  syncJobsStateFromInputs();
+  const reminderLimit = _adminJobsState.reminderLimit;
+  const outboxLimit = _adminJobsState.outboxLimit;
   const runReminders = true;
   const runOutbox = true;
-  const runRetention = Boolean(q<HTMLInputElement>("#jobs-include-retention")?.checked);
-  const dryRun = Boolean(q<HTMLInputElement>("#jobs-dry-run")?.checked);
+  const runRetention = _adminJobsState.runRetention;
 
-  if (btn) { btn.disabled = true; btn.textContent = "Processing…"; }
-  if (statusEl) statusEl.textContent = "Processing due reminders and outbox...";
+  if (btn) { btn.disabled = true; btn.textContent = dryRun ? "Refreshing..." : "Processing..."; }
+  if (statusEl) statusEl.textContent = dryRun ? "Previewing due work..." : "Processing due reminders and outbox...";
 
   try {
-    const result = await api<{
-      reminders: { processed: number; inviteRemindersQueued: number; presentationRemindersQueued: number };
-      shouldRunRetention: boolean;
-      retention: { anonymizedUsers: number; deletedRegistrations: number; deletedInvites: number; deletedClicks: number; deletedAuditLogs: number };
-      outbox: { processed: number; failed: number };
-    }>("/api/v1/internal/jobs/run", {
+    const result = await api<AdminJobsRunResponse>("/api/v1/internal/jobs/run", {
       method: "POST",
       body: JSON.stringify({
         reminderLimit,
@@ -5432,45 +6257,49 @@ async function doRunJobs(): Promise<void> {
       }),
     });
 
+    if (dryRun) {
+      _adminJobsPreview = result;
+    } else {
+      _adminJobsLastRun = result;
+    }
     const retentionState = runRetention
-      ? (result.shouldRunRetention ? "ran" : "skipped")
+      ? (result.shouldRunRetention ? (dryRun ? "would run" : "ran") : (dryRun ? "would skip" : "skipped"))
       : "not requested";
-    const msg =
-      `Reminders: ${result.reminders.processed}, ` +
-      `Outbox processed: ${result.outbox.processed}, ` +
-      `Outbox failed: ${result.outbox.failed}, ` +
-      `Cleanup: ${retentionState}`;
+    const msg = dryRun
+      ? `Preview: ${result.reminders.processed} reminders, ${result.outbox.dueNow} outbox rows due now, cleanup ${retentionState}.`
+      : `Processed ${result.reminders.processed} reminders, ${result.outbox.processed} outbox rows, ${result.outbox.failed} outbox failures, cleanup ${retentionState}.`;
     toast(msg, "success");
     if (statusEl) statusEl.textContent = msg;
-    await loadEmail();
+    await Promise.all([loadDueWork(), loadEmail()]);
   } catch (err) {
     const msg = (err as Error).message;
     toast(msg, "error");
     if (statusEl) statusEl.textContent = msg;
   } finally {
-    if (btn) { btn.disabled = false; btn.textContent = "Process Now"; }
+    if (btn) { btn.disabled = false; btn.textContent = dryRun ? "Refresh Preview" : "Process Due Work Now"; }
   }
 }
 
-async function doRetry(): Promise<void> {
+async function doRetry(ids?: string[]): Promise<void> {
   const lim = parseInt(q<HTMLInputElement>("#retry-limit")?.value ?? "20") || 20;
   try {
-    const r = await api<{ processed?: number; failed?: number }>("/api/v1/internal/email/retry", {
+    const r = await api<{ processed?: number; failed?: number; skipped?: number }>("/api/v1/internal/email/retry", {
       method: "POST",
-      body: JSON.stringify({ limit: lim }),
+      body: JSON.stringify(ids?.length ? { limit: ids.length, ids } : { limit: lim }),
     });
-    toast(`Processed ${r.processed ?? 0}, failed ${r.failed ?? 0}`, "success");
+    const extra = ids?.length ? `, skipped ${r.skipped ?? 0}` : "";
+    toast(`Processed ${r.processed ?? 0}, failed ${r.failed ?? 0}${extra}`, "success");
     await loadEmail();
   } catch (err) {
     toast((err as Error).message, "error");
   }
 }
 
-async function doResetFailed(): Promise<void> {
+async function doResetFailed(ids?: string[]): Promise<void> {
   try {
     const r = await api<{ reset?: number; processed?: number }>("/api/v1/internal/email/reset-failed", {
       method: "POST",
-      body: "{}",
+      body: JSON.stringify(ids?.length ? { ids } : {}),
     });
     toast(`Reset ${r.reset ?? 0} failed, sent ${r.processed ?? 0}`, "success");
     await loadEmail();
@@ -5888,6 +6717,7 @@ document.addEventListener("DOMContentLoaded", () => {
   q("#btn-logout")?.addEventListener("click", () => { clearAuth(); location.reload(); });
   q("#btn-t-refresh")?.addEventListener("click", () => void loadTemplates());
   q("#btn-don-refresh")?.addEventListener("click", () => void loadDonations());
+  q("#btn-duework-refresh")?.addEventListener("click", () => void loadDueWork());
 
   q<HTMLFormElement>("#form-magic")?.addEventListener("submit", (evt) => {
     evt.preventDefault();

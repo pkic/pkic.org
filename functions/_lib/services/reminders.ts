@@ -83,6 +83,19 @@ interface DueSpeakerInviteRow {
   reminder_count: number;
 }
 
+interface ReminderCandidatePreview {
+  category: "attendee_invite" | "speaker_invite" | "co_speaker_invite" | "presentation_upload_request";
+  templateKey: string;
+  eventName: string;
+  eventSlug: string;
+  recipientEmail: string;
+  recipientName: string | null;
+  proposalTitle: string | null;
+  reminderNumber: number;
+  dueAt: string | null;
+  subject: string;
+}
+
 function daysUntil(iso: string | null, now = Date.now()): number | null {
   if (!iso) return null;
   const diff = new Date(iso).getTime() - now;
@@ -172,6 +185,12 @@ export async function runReminderCycle(
   speakerInviteRemindersQueued: number;
   presentationRemindersQueued: number;
   processed: number;
+  preview: {
+    attendeeInvites: ReminderCandidatePreview[];
+    speakerInvites: ReminderCandidatePreview[];
+    coSpeakerInvites: ReminderCandidatePreview[];
+    presentationUploads: ReminderCandidatePreview[];
+  };
 }> {
   const now = nowIso();
   const cutoff = new Date(Date.now() - payload.reminderIntervalDays * 86_400_000).toISOString();
@@ -205,6 +224,8 @@ export async function runReminderCycle(
   );
 
   let inviteRemindersQueued = 0;
+  const attendeeInvites: ReminderCandidatePreview[] = [];
+  const speakerInvites: ReminderCandidatePreview[] = [];
 
   for (const invite of dueInvites) {
     if (invite.invite_type === "attendee" && !isAttendeeInviteReminderAllowed(invite)) {
@@ -230,6 +251,24 @@ export async function runReminderCycle(
     const daysToExpiry = daysUntil(deadlineForUrgency);
     const reminderNumber = Number(invite.reminder_count ?? 0) + 1;
     const subject = inviteReminderSubject(event.name, reminderNumber, daysToExpiry);
+    const previewCandidate: ReminderCandidatePreview = {
+      category: isAttendee ? "attendee_invite" : "speaker_invite",
+      templateKey: isAttendee ? "attendee_invite" : "speaker_invite",
+      eventName: event.name,
+      eventSlug: event.slug,
+      recipientEmail: invite.invitee_email,
+      recipientName: [invite.invitee_first_name, invite.invitee_last_name].filter(Boolean).join(" ") || null,
+      proposalTitle: null,
+      reminderNumber,
+      dueAt: deadlineForUrgency,
+      subject,
+    };
+
+    if (isAttendee) {
+      attendeeInvites.push(previewCandidate);
+    } else {
+      speakerInvites.push(previewCandidate);
+    }
 
     if (!payload.dryRun) {
       // Build social-proof inviter string — at reminder time we may have more
@@ -306,6 +345,7 @@ export async function runReminderCycle(
     : [];
 
   let speakerInviteRemindersQueued = 0;
+  const coSpeakerInvites: ReminderCandidatePreview[] = [];
 
   for (const row of dueSpeakerInvites) {
     const event: EventRouteRow = {
@@ -323,6 +363,21 @@ export async function runReminderCycle(
       proposalId: row.proposal_id,
       inviterUserId: null,
     });
+    const reminderNumber = Number(row.reminder_count ?? 0) + 1;
+    const subject = `Reminder: please confirm speaker participation — ${event.name}`;
+
+    coSpeakerInvites.push({
+      category: "co_speaker_invite",
+      templateKey: "co_speaker_invite",
+      eventName: event.name,
+      eventSlug: event.slug,
+      recipientEmail: row.email,
+      recipientName: [row.first_name, row.last_name].filter(Boolean).join(" ") || null,
+      proposalTitle: inviteContext.proposalTitle,
+      reminderNumber,
+      dueAt: event.starts_at,
+      subject,
+    });
 
     if (!payload.dryRun) {
       await queueEmail(db, {
@@ -331,7 +386,7 @@ export async function runReminderCycle(
         recipientEmail: row.email,
         recipientUserId: row.user_id,
         messageType: "transactional",
-        subject: `Reminder: please confirm speaker participation — ${event.name}`,
+        subject,
         data: {
           ...buildEventEmailVariables(event, payload.appBaseUrl),
           firstName: row.first_name ?? "",
@@ -343,7 +398,7 @@ export async function runReminderCycle(
           speakerLineupText: inviteContext.speakerLineupText,
           manageUrl,
           isReminder: true,
-          reminderCount: String(Number(row.reminder_count ?? 0) + 1),
+          reminderCount: String(reminderNumber),
         },
       });
 
@@ -400,6 +455,7 @@ export async function runReminderCycle(
     : [];
 
   let presentationRemindersQueued = 0;
+  const presentationUploads: ReminderCandidatePreview[] = [];
 
   for (const row of duePresentation) {
     const event: EventRouteRow = {
@@ -417,6 +473,19 @@ export async function runReminderCycle(
     const daysToDeadline = daysUntil(row.presentation_deadline);
     const reminderNumber = Number(row.reminder_count ?? 0) + 1;
     const subject = presentationReminderSubject(event.name, reminderNumber, daysToDeadline);
+
+    presentationUploads.push({
+      category: "presentation_upload_request",
+      templateKey: "presentation_upload_request",
+      eventName: event.name,
+      eventSlug: event.slug,
+      recipientEmail: row.email,
+      recipientName: [row.first_name, row.last_name].filter(Boolean).join(" ") || null,
+      proposalTitle: row.proposal_title,
+      reminderNumber,
+      dueAt: row.presentation_deadline,
+      subject,
+    });
 
     if (!payload.dryRun) {
       await queueEmail(db, {
@@ -458,5 +527,11 @@ export async function runReminderCycle(
     speakerInviteRemindersQueued,
     presentationRemindersQueued,
     processed: inviteRemindersQueued + speakerInviteRemindersQueued + presentationRemindersQueued,
+    preview: {
+      attendeeInvites,
+      speakerInvites,
+      coSpeakerInvites,
+      presentationUploads,
+    },
   };
 }

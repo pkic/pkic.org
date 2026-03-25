@@ -2,9 +2,9 @@ import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
-import { processPendingOutbox } from "../../../../_lib/email/outbox";
+import { processPendingOutbox, summarizePendingOutbox } from "../../../../_lib/email/outbox";
 import { runReminderCycle } from "../../../../_lib/services/reminders";
-import { runRetentionJob } from "../../../../_lib/services/retention";
+import { runRetentionJob, summarizeRetentionJob } from "../../../../_lib/services/retention";
 import type { PagesContext } from "../../../../_lib/types";
 import { adminRunJobsSchema } from "../../../../../assets/shared/schemas/api";
 
@@ -12,6 +12,12 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
   await requireAdminFromRequest(context.env.DB, context.request, context.env);
   const body = await parseJsonBody(context.request, adminRunJobsSchema);
   const config = getConfig(context.env, context.request);
+  const emptyReminderPreview = {
+    attendeeInvites: [],
+    speakerInvites: [],
+    coSpeakerInvites: [],
+    presentationUploads: [],
+  };
 
   const reminders = body.runReminders
     ? await runReminderCycle(context.env.DB, {
@@ -22,17 +28,25 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
       limit: body.reminderLimit,
       dryRun: body.dryRun,
     })
-    : { inviteRemindersQueued: 0, speakerInviteRemindersQueued: 0, presentationRemindersQueued: 0, processed: 0 };
+    : { inviteRemindersQueued: 0, speakerInviteRemindersQueued: 0, presentationRemindersQueued: 0, processed: 0, preview: emptyReminderPreview };
 
   const currentHourUtc = new Date().getUTCHours();
   const shouldRunRetention = body.runRetention
     && (body.runRetentionMode === "always" || currentHourUtc === body.retentionHourUtc);
 
+  const retentionPreview = shouldRunRetention
+    ? await summarizeRetentionJob(context.env.DB)
+    : { dueEvents: [], totalEvents: 0, totalRegistrations: 0, totalUsers: 0 };
+
   const retention = shouldRunRetention && !body.dryRun
     ? await runRetentionJob(context.env.DB)
-    : { anonymizedUsers: 0, deletedRegistrations: 0, deletedInvites: 0, deletedClicks: 0, deletedAuditLogs: 0 };
+    : { redactedRegistrations: 0, redactedUsers: 0, affectedEvents: 0 };
 
-  const outbox = body.runOutbox && !body.dryRun
+  const outboxPreview = body.runOutbox
+    ? await summarizePendingOutbox(context.env.DB)
+    : { dueNow: 0, dueByStatus: {}, nextSendAfter: null };
+
+  const outboxResult = body.runOutbox && !body.dryRun
     ? await processPendingOutbox(context.env.DB, context.env, body.outboxLimit)
     : { processed: 0, failed: 0 };
 
@@ -41,8 +55,16 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     dryRun: body.dryRun,
     reminders,
     shouldRunRetention,
-    retention,
-    outbox,
+    retention: {
+      ...retention,
+      preview: retentionPreview,
+    },
+    outbox: {
+      ...outboxResult,
+      dueNow: outboxPreview.dueNow,
+      dueByStatus: outboxPreview.dueByStatus,
+      nextSendAfter: outboxPreview.nextSendAfter,
+    },
   });
 }
 

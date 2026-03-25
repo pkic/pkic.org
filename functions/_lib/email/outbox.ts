@@ -108,7 +108,7 @@ async function markOutboxSent(
   await run(
     db,
     `UPDATE email_outbox
-     SET status = 'sent', template_version = ?, provider_message_id = ?, sent_at = ?, updated_at = ?
+     SET status = 'sent', template_version = ?, provider_message_id = ?, sent_at = ?, last_error = NULL, updated_at = ?
      WHERE id = ?`,
     [templateVersion, messageId, nowIso(), nowIso(), row.id],
   );
@@ -283,6 +283,72 @@ export async function processPendingOutbox(
   }
 
   return { processed, failed };
+}
+
+export async function summarizePendingOutbox(
+  db: DatabaseLike,
+): Promise<{ dueNow: number; dueByStatus: Record<string, number>; nextSendAfter: string | null }> {
+  const rows = await all<{ status: string; count: number }>(
+    db,
+    `SELECT status, COUNT(*) AS count
+     FROM email_outbox
+     WHERE status IN ('queued', 'retrying') AND send_after <= ?
+     GROUP BY status`,
+    [nowIso()],
+  );
+
+  const nextRow = await first<{ send_after: string | null }>(
+    db,
+    `SELECT MIN(send_after) AS send_after
+     FROM email_outbox
+     WHERE status IN ('queued', 'retrying')`,
+    [],
+  );
+
+  return {
+    dueNow: rows.reduce((sum, row) => sum + Number(row.count ?? 0), 0),
+    dueByStatus: Object.fromEntries(rows.map((row) => [row.status, Number(row.count ?? 0)])),
+    nextSendAfter: nextRow?.send_after ?? null,
+  };
+}
+
+export async function processSelectedOutbox(
+  db: DatabaseLike,
+  env: Env,
+  ids: string[],
+): Promise<{ processed: number; failed: number; skipped: number }> {
+  if (!ids.length) {
+    return { processed: 0, failed: 0, skipped: 0 };
+  }
+
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = await all<OutboxRow>(
+    db,
+    `SELECT * FROM email_outbox
+     WHERE id IN (${placeholders})
+       AND status IN ('queued', 'retrying')
+       AND send_after <= ?
+     ORDER BY created_at ASC`,
+    [...ids, nowIso()],
+  );
+
+  let processed = 0;
+  let failed = 0;
+
+  for (const row of rows) {
+    processed += 1;
+    try {
+      await processOutboxById(db, env, row.id);
+    } catch {
+      failed += 1;
+    }
+  }
+
+  return {
+    processed,
+    failed,
+    skipped: Math.max(0, ids.length - rows.length),
+  };
 }
 
 export async function processPendingOutboxBackground(
