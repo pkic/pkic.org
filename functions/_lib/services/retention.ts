@@ -9,7 +9,19 @@ interface RetentionPolicyRow {
 
 interface EventEndRow {
   id: string;
+  name: string;
+  slug: string;
   ends_at: string | null;
+}
+
+export interface RetentionPreviewEvent {
+  eventId: string;
+  eventName: string;
+  eventSlug: string;
+  endsAt: string | null;
+  retentionDays: number;
+  eligibleRegistrations: number;
+  eligibleUsers: number;
 }
 
 function olderThanDays(isoDate: string, days: number): boolean {
@@ -23,15 +35,15 @@ function olderThanDays(isoDate: string, days: number): boolean {
  * The `donations` table is explicitly excluded from all retention processing.
  * Donor PII and financial data must be retained for ≥7 years per IRS §6001.
  */
-export async function runRetentionJob(db: DatabaseLike): Promise<{ redactedRegistrations: number }> {
+async function getRetentionPreviewEvents(db: DatabaseLike): Promise<RetentionPreviewEvent[]> {
   const policies = await all<RetentionPolicyRow>(db, "SELECT * FROM retention_policies");
   if (policies.length === 0) {
-    return { redactedRegistrations: 0 };
+    return [];
   }
 
-  let redacted = 0;
+  const dueEvents: RetentionPreviewEvent[] = [];
   for (const policy of policies) {
-    const event = await all<EventEndRow>(db, "SELECT id, ends_at FROM events WHERE id = ?", [policy.event_id]);
+    const event = await all<EventEndRow>(db, "SELECT id, name, slug, ends_at FROM events WHERE id = ?", [policy.event_id]);
     if (event.length === 0 || !event[0].ends_at) {
       continue;
     }
@@ -40,6 +52,62 @@ export async function runRetentionJob(db: DatabaseLike): Promise<{ redactedRegis
       continue;
     }
 
+    const counts = await all<{ registrations: number; users: number }>(
+      db,
+      `SELECT
+         COUNT(*) AS registrations,
+         COUNT(DISTINCT user_id) AS users
+       FROM registrations
+       WHERE event_id = ?`,
+      [policy.event_id],
+    );
+
+    dueEvents.push({
+      eventId: policy.event_id,
+      eventName: event[0].name,
+      eventSlug: event[0].slug,
+      endsAt: event[0].ends_at,
+      retentionDays: policy.user_retention_days,
+      eligibleRegistrations: Number(counts[0]?.registrations ?? 0),
+      eligibleUsers: Number(counts[0]?.users ?? 0),
+    });
+  }
+
+  return dueEvents;
+}
+
+export async function summarizeRetentionJob(db: DatabaseLike): Promise<{
+  dueEvents: RetentionPreviewEvent[];
+  totalEvents: number;
+  totalRegistrations: number;
+  totalUsers: number;
+}> {
+  const dueEvents = await getRetentionPreviewEvents(db);
+  return {
+    dueEvents,
+    totalEvents: dueEvents.length,
+    totalRegistrations: dueEvents.reduce((sum, item) => sum + item.eligibleRegistrations, 0),
+    totalUsers: dueEvents.reduce((sum, item) => sum + item.eligibleUsers, 0),
+  };
+}
+
+export async function runRetentionJob(db: DatabaseLike): Promise<{
+  redactedRegistrations: number;
+  redactedUsers: number;
+  affectedEvents: number;
+}> {
+  const dueEvents = await getRetentionPreviewEvents(db);
+  if (dueEvents.length === 0) {
+    return { redactedRegistrations: 0, redactedUsers: 0, affectedEvents: 0 };
+  }
+
+  let redactedRegistrations = 0;
+  let redactedUsers = 0;
+  let affectedEvents = 0;
+
+  for (const dueEvent of dueEvents) {
+    affectedEvents += 1;
+
     await run(
       db,
       `UPDATE registrations
@@ -47,7 +115,7 @@ export async function runRetentionJob(db: DatabaseLike): Promise<{ redactedRegis
            source_ref = NULL,
            updated_at = ?
        WHERE event_id = ?`,
-      [nowIso(), policy.event_id],
+      [nowIso(), dueEvent.eventId],
     );
 
     await run(
@@ -66,17 +134,12 @@ export async function runRetentionJob(db: DatabaseLike): Promise<{ redactedRegis
        WHERE id IN (
          SELECT user_id FROM registrations WHERE event_id = ?
        )`,
-      [nowIso(), nowIso(), policy.event_id],
+      [nowIso(), nowIso(), dueEvent.eventId],
     );
 
-    const row = await all<{ total: number }>(
-      db,
-      "SELECT COUNT(*) AS total FROM registrations WHERE event_id = ?",
-      [policy.event_id],
-    );
-
-    redacted += Number(row[0]?.total ?? 0);
+    redactedRegistrations += dueEvent.eligibleRegistrations;
+    redactedUsers += dueEvent.eligibleUsers;
   }
 
-  return { redactedRegistrations: redacted };
+  return { redactedRegistrations, redactedUsers, affectedEvents };
 }
