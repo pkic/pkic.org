@@ -345,6 +345,7 @@ export const adminAuthVerifySchema = z.object({
 
 export const adminRetryOutboxSchema = z.object({
   limit: z.number().int().positive().max(100).default(20),
+  ids: z.array(z.string().uuid()).max(100).optional(),
 });
 
 export const adminResetFailedOutboxSchema = z.object({
