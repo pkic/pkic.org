@@ -1,70 +1,9 @@
+{{ define "head_extra" }}
+{{ $adminCss := resources.Get "scss/admin.scss" | css.Sass | resources.Fingerprint }}
+<link rel="stylesheet" href="{{ $adminCss.RelPermalink }}" {{ if hugo.IsProduction }}integrity="{{ $adminCss.Data.Integrity }}"{{ end }}>
+{{ end }}
+
 {{ define "main" }}
-<style>
-  /* ── Admin shell layout ───────────────────────────────────────────────── */
-  #admin-root { display: flex; min-height: calc(100vh - 56px); }
-  #admin-sidebar {
-    width: 220px; min-width: 220px; background: #f8f9fa;
-    border-right: 1px solid #dee2e6; display: flex; flex-direction: column;
-    position: sticky; top: 56px; height: calc(100vh - 56px); overflow-y: auto;
-  }
-  #admin-main { flex: 1; overflow-y: auto; padding: 1.5rem; }
-  .sidebar-link {
-    display: flex; align-items: center; gap: 8px;
-    padding: .55rem 1rem; font-size: .875rem; font-weight: 500;
-    color: #495057; border-radius: .375rem; cursor: pointer;
-    border: none; background: transparent; width: 100%; text-align: left;
-    transition: background .12s, color .12s; margin-bottom: 2px;
-  }
-  .sidebar-link:hover { background: #e9ecef; color: #212529; }
-  .sidebar-link.active { background: rgba(25,135,84,.1); color: #198754; font-weight: 600; }
-  .sidebar-link .icon { font-size: 1rem; width: 20px; text-align: center; flex-shrink: 0; }
-
-  /* ── Login page ───────────────────────────────────────────────────────── */
-  #login-wrap { min-height: calc(100vh - 56px); display: flex; align-items: center; justify-content: center; background: #f8f9fa; }
-  #login-card { background: #fff; border: 1px solid #dee2e6; border-radius: .75rem; padding: 2.5rem; width: min(420px, 92vw); box-shadow: 0 2px 16px rgba(0,0,0,.07); }
-  #login-card h2 { font-size: 1.4rem; font-weight: 700; margin-bottom: .25rem; }
-  #login-card .sub { color: #6c757d; font-size: .875rem; margin-bottom: 1.5rem; }
-
-  /* ── Sections ─────────────────────────────────────────────────────────── */
-  .adm-section { display: none; }
-  .adm-section.active { display: block; }
-  .page-heading { font-size: 1.25rem; font-weight: 700; margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .5rem; }
-
-  /* ── Stat cards ───────────────────────────────────────────────────────── */
-  .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: .75rem; margin-bottom: 1.25rem; }
-  .stat-card { background: #fff; border: 1px solid #dee2e6; border-radius: .5rem; padding: 1rem; }
-  .stat-card .val { font-size: 2rem; font-weight: 700; line-height: 1; color: #212529; }
-  .stat-card .lbl { font-size: .7rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #6c757d; margin-top: .3rem; }
-  .stat-card .note { font-size: .75rem; color: #adb5bd; margin-top: .15rem; }
-  .stat-card.danger { border-color: #f5c2c7; background: #fff5f5; }
-  .stat-card.danger .val { color: #842029; }
-
-  /* ── Bar charts ───────────────────────────────────────────────────────── */
-  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
-  .bar-lbl { width: 110px; font-size: .78rem; color: #6c757d; flex-shrink: 0; }
-  .bar-track { flex: 1; height: 6px; background: #e9ecef; border-radius: 3px; overflow: hidden; }
-  .bar-fill { height: 100%; border-radius: 3px; background: #198754; }
-  .bar-fill.CONFIRMED, .bar-fill.sent { background: #198754; }
-  .bar-fill.PENDING, .bar-fill.retrying, .bar-fill.queued { background: #fd7e14; }
-  .bar-fill.CANCELLED, .bar-fill.failed { background: #dc3545; }
-  .bar-fill.WAITLISTED { background: #ffc107; }
-  .bar-cnt { width: 30px; font-size: .75rem; color: #6c757d; text-align: right; flex-shrink: 0; font-family: monospace; }
-
-  /* ── Action cards ─────────────────────────────────────────────────────── */
-  .action-card { background: #fff; border: 1px solid #dee2e6; border-radius: .5rem; padding: 1.25rem; display: flex; flex-direction: column; gap: .75rem; }
-  .action-card strong { font-size: .9rem; }
-  .action-card p { font-size: .8rem; color: #6c757d; margin: 0; }
-
-  /* ── Misc ─────────────────────────────────────────────────────────────── */
-  .mono { font-family: 'Courier New', monospace; font-size: .8rem; }
-  .tbl-wrap { border-radius: .375rem; overflow: hidden; border: 1px solid #dee2e6; }
-  .tbl-wrap table { margin: 0; }
-  pre.json-out { background: #f8f9fa; border: 1px solid #dee2e6; border-radius: .375rem; padding: .75rem; font-size: .75rem; overflow: auto; max-height: 400px; white-space: pre-wrap; word-break: break-all; }
-  #toast-area { position: fixed; bottom: 1.25rem; right: 1.25rem; z-index: 9999; display: flex; flex-direction: column; gap: .5rem; pointer-events: none; }
-  #verify-overlay { display: flex; }
-  .my-toast { pointer-events: auto; padding: .6rem 1rem; border-radius: .5rem; font-size: .85rem; font-weight: 500; box-shadow: 0 4px 16px rgba(0,0,0,.12); animation: toastin .2s ease; max-width: 320px; }
-  @keyframes toastin { from { transform: translateX(20px); opacity: 0; } to { transform: none; opacity: 1; } }
-</style>
 
 {{/* ── Login ────────────────────────────────────────────────────────── */}}
 <div id="login-wrap">
@@ -86,7 +25,7 @@
 </div>
 
 {{/* ── Verifying overlay ────────────────────────────────────────────── */}}
-<div id="verify-overlay" class="d-none" style="position:fixed;inset:0;z-index:200;background:#f8f9fa;align-items:center;justify-content:center;flex-direction:column;gap:1rem">
+<div id="verify-overlay" class="d-none">
   <div class="spinner-border text-success" role="status"></div>
   <p class="text-muted mb-0">Verifying your sign-in link…</p>
 </div>
@@ -95,34 +34,34 @@
 <div id="admin-root" class="d-none">
   <aside id="admin-sidebar" class="p-2">
     <div class="px-2 py-3 mb-1">
-      <div class="fw-bold text-success" style="font-size:.95rem">Admin Console</div>
-      <div class="text-muted mono" id="sb-user" style="font-size:.7rem;word-break:break-all;margin-top:.2rem"></div>
+      <div class="adm-brand">Admin Console</div>
+      <div id="sb-user"></div>
     </div>
-    <button class="sidebar-link active" data-sec="dashboard"><span class="icon">▦</span> Dashboard</button>
-    <button class="sidebar-link" data-sec="events"><span class="icon">◈</span> Events</button>
-    <button class="sidebar-link" data-sec="email"><span class="icon">✉</span> Email</button>
-    <button class="sidebar-link" data-sec="duework"><span class="icon">⟳</span> Due Work</button>
-    <button class="sidebar-link" data-sec="templates"><span class="icon">✏</span> Templates</button>
-    <button class="sidebar-link" data-sec="stats"><span class="icon">≋</span> Stats</button>
-    <button class="sidebar-link" data-sec="donations"><span class="icon">💳</span> Donations</button>
-    <button class="sidebar-link" data-sec="users"><span class="icon">👥</span> Users</button>
-    <div style="margin-top:auto" class="px-1 pt-3">
+    <button class="sidebar-link active" data-sec="dashboard"><span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 4a.5.5 0 0 1 .5.5V6a.5.5 0 0 1-1 0V4.5A.5.5 0 0 1 8 4M3.732 5.732a.5.5 0 0 1 .707 0l.915.914a.5.5 0 1 1-.708.708l-.914-.915a.5.5 0 0 1 0-.707M2 10a.5.5 0 0 1 .5-.5h1.586a.5.5 0 0 1 0 1H2.5A.5.5 0 0 1 2 10m9.5 0a.5.5 0 0 1 .5-.5h1.5a.5.5 0 0 1 0 1H12a.5.5 0 0 1-.5-.5m.754-4.246a.39.39 0 0 0-.527-.02L7.547 9.31a.91.91 0 1 0 1.302 1.258l3.434-4.297a.39.39 0 0 0-.029-.518z"/><path fill-rule="evenodd" d="M0 10a8 8 0 1 1 15.547 2.661c-.442 1.253-1.845 1.602-2.932 1.25C11.309 13.488 9.475 13 8 13c-1.474 0-3.31.488-4.615.911-1.087.352-2.49.003-2.932-1.25A8 8 0 0 1 0 10"/></svg></span> Dashboard</button>
+    <button class="sidebar-link" data-sec="events"><span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5M2 2a1 1 0 0 0-1 1v1h14V3a1 1 0 0 0-1-1zm13 3H1v9a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1z"/></svg></span> Events</button>
+    <button class="sidebar-link" data-sec="email"><span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm2-1a1 1 0 0 0-1 1v.217l7 4.2 7-4.2V4a1 1 0 0 0-1-1zm13 2.383-4.708 2.825L15 11.105zm-.034 6.876-5.64-3.471L8 9.583l-1.326-.795-5.64 3.47A1 1 0 0 0 2 13h12a1 1 0 0 0 .966-.741M1 11.105l4.708-2.897L1 5.383z"/></svg></span> Email</button>
+    <button class="sidebar-link" data-sec="duework"><span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg></span> Due Work</button>
+    <button class="sidebar-link" data-sec="templates"><span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M14.5 3a.5.5 0 0 1 .5.5v9a.5.5 0 0 1-.5.5h-13a.5.5 0 0 1-.5-.5v-9a.5.5 0 0 1 .5-.5zm-13-1A1.5 1.5 0 0 0 0 3.5v9A1.5 1.5 0 0 0 1.5 14h13a1.5 1.5 0 0 0 1.5-1.5v-9A1.5 1.5 0 0 0 14.5 2z"/><path d="M3 5.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5M3 8a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9A.5.5 0 0 1 3 8m0 2.5a.5.5 0 0 1 .5-.5h6a.5.5 0 0 1 0 1h-6a.5.5 0 0 1-.5-.5"/></svg></span> Templates</button>
+    <button class="sidebar-link" data-sec="stats"><span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M4 11H2v3h2zm5-4H7v7h2zm5-5v12h-2V2zm-2-1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h2a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1zM6 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1zm-5 4a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v3a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1z"/></svg></span> Stats</button>
+    <button class="sidebar-link" data-sec="donations"><span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M0 4a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2zm2.5 1a.5.5 0 0 0-.5.5v1a.5.5 0 0 0 .5.5h2a.5.5 0 0 0 .5-.5v-1a.5.5 0 0 0-.5-.5zm0 3a.5.5 0 0 0 0 1h5a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm3 0a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm3 0a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm3-2a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zm0 2a.5.5 0 0 0 0 1h1a.5.5 0 0 0 0-1zM12 5a.5.5 0 0 0 0 1h1.5a.5.5 0 0 0 0-1z"/></svg></span> Donations</button>
+    <button class="sidebar-link" data-sec="users"><span class="icon"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16"><path d="M15 14s1 0 1-1-1-4-5-4-5 3-5 4 1 1 1 1zm-7.978-1L7 12.996c.001-.264.167-1.03.76-1.72C8.312 10.629 9.282 10 11 10c1.717 0 2.687.63 3.24 1.276.593.69.758 1.457.76 1.72l-.008.002-.014.002zM11 7a2 2 0 1 0 0-4 2 2 0 0 0 0 4m3-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0M6.936 9.28a6 6 0 0 0-1.23-.247A7 7 0 0 0 5 9c-4 0-5 3-5 4q0 1 1 1h4.216A2.24 2.24 0 0 1 5 13c0-1.01.377-2.042 1.09-2.904.243-.294.526-.569.846-.816M4.92 10A5.5 5.5 0 0 0 4 13H1c0-.26.164-1.03.76-1.724.545-.636 1.492-1.256 3.16-1.275ZM1.5 5.5a3 3 0 1 1 6 0 3 3 0 0 1-6 0m3-2a2 2 0 1 0 0 4 2 2 0 0 0 0-4"/></svg></span> Users</button>
+    <div class="adm-sidebar-footer px-1 pt-3">
       <button id="btn-logout" class="btn btn-sm btn-outline-secondary w-100">Sign out</button>
     </div>
   </aside>
 
   <main id="admin-main">
     <div id="s-dashboard" class="adm-section active">
-      <div class="page-heading">Dashboard <button class="btn btn-sm btn-outline-secondary" onclick="loadDashboard()">↺ Refresh</button></div>
+      <div class="page-heading">Dashboard <button class="btn btn-sm btn-outline-secondary" id="btn-dashboard-refresh">↺ Refresh</button></div>
       <div id="d-body"></div>
     </div>
     <div id="s-events" class="adm-section">
-      <div class="page-heading">Events <button class="btn btn-sm btn-outline-secondary" onclick="loadEvents()">↺ Refresh</button></div>
+      <div class="page-heading">Events <button class="btn btn-sm btn-outline-secondary" id="btn-events-refresh">↺ Refresh</button></div>
       <div id="e-body"></div>
       <div id="e-detail" class="d-none"></div>
     </div>
     <div id="s-email" class="adm-section">
-      <div class="page-heading">Email Outbox <button class="btn btn-sm btn-outline-secondary" onclick="loadEmail()">↺ Refresh</button></div>
+      <div class="page-heading">Email Outbox <button class="btn btn-sm btn-outline-secondary" id="btn-email-refresh">↺ Refresh</button></div>
       <div id="m-body"></div>
     </div>
     <div id="s-duework" class="adm-section">
@@ -135,7 +74,7 @@
       <div id="t-editor" class="d-none"></div>
     </div>
     <div id="s-stats" class="adm-section">
-      <div class="page-heading">Statistics <button class="btn btn-sm btn-outline-secondary" onclick="loadStats()">↺ Refresh</button></div>
+      <div class="page-heading">Statistics <button class="btn btn-sm btn-outline-secondary" id="btn-stats-refresh">↺ Refresh</button></div>
       <div id="r-body"></div>
     </div>
     <div id="s-donations" class="adm-section">
@@ -153,14 +92,14 @@
         <div class="row g-4">
           <div class="col-md-4 text-center">
             <div id="u-headshot-area" class="mb-3">
-              <div id="u-headshot-preview" class="mb-2" style="min-height:120px"></div>
+              <div id="u-headshot-preview" class="mb-2"></div>
               <div class="d-flex flex-column gap-2 align-items-center">
-                <label class="btn btn-sm btn-outline-primary w-100" style="max-width:220px">
+                <label class="btn btn-sm btn-outline-primary w-100 adm-headshot-btn">
                   📷 Upload headshot
                   <input type="file" id="u-headshot-file" accept="image/jpeg,image/png,image/webp" class="d-none">
                 </label>
-                <button class="btn btn-sm btn-outline-secondary w-100" style="max-width:220px" id="btn-u-gravatar">🌐 Fetch from Gravatar</button>
-                <button class="btn btn-sm btn-outline-danger w-100" style="max-width:220px;display:none" id="btn-u-headshot-delete">🗑 Remove headshot</button>
+                <button class="btn btn-sm btn-outline-secondary w-100 adm-headshot-btn" id="btn-u-gravatar">🌐 Fetch from Gravatar</button>
+                <button class="btn btn-sm btn-outline-danger w-100 adm-headshot-btn" style="display:none" id="btn-u-headshot-delete">🗑 Remove headshot</button>
               </div>
               <div id="u-headshot-status" class="mt-2 small"></div>
             </div>
