@@ -561,6 +561,12 @@ function q<T extends Element = Element>(sel: string, ctx: ParentNode = document)
 function show(el: Element | null): void { el?.classList.remove("d-none"); }
 function hide(el: Element | null): void { el?.classList.add("d-none"); }
 
+function closeSidebar(): void {
+  q("#admin-sidebar")?.classList.remove("open");
+  q("#sidebar-backdrop")?.classList.remove("active");
+  q("#sidebar-toggle")?.setAttribute("aria-expanded", "false");
+}
+
 function toast(msg: string, type: "success" | "error" | "info" = "info"): void {
   const el = document.createElement("div");
   const cls = { success: "alert-success", error: "alert-danger", info: "alert-info" }[type];
@@ -6811,10 +6817,25 @@ document.addEventListener("DOMContentLoaded", () => {
   loadAuth();
 
   document.querySelectorAll<HTMLButtonElement>(".sidebar-link[data-sec]").forEach((btn) => {
-    btn.addEventListener("click", () => nav(btn.dataset.sec!));
+    btn.addEventListener("click", () => {
+      nav(btn.dataset.sec!);
+      closeSidebar();
+    });
   });
 
   q("#btn-logout")?.addEventListener("click", () => { clearAuth(); location.reload(); });
+
+  // Mobile sidebar toggle
+  q("#sidebar-toggle")?.addEventListener("click", () => {
+    const sidebar = q("#admin-sidebar");
+    const backdrop = q("#sidebar-backdrop");
+    const toggle = q("#sidebar-toggle");
+    const isOpen = sidebar?.classList.toggle("open");
+    backdrop?.classList.toggle("active", isOpen);
+    toggle?.setAttribute("aria-expanded", String(isOpen));
+  });
+
+  q("#sidebar-backdrop")?.addEventListener("click", () => closeSidebar());
   q("#btn-dashboard-refresh")?.addEventListener("click", () => void loadDashboard());
   q("#btn-events-refresh")?.addEventListener("click", () => void loadEvents());
   q("#btn-email-refresh")?.addEventListener("click", () => void loadEmail());
