@@ -1,10 +1,10 @@
 id: i2km
 name: i2km, inc
-slogan:
+slogan: Intelligence in Key Management
 website: https://i2km.com
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Dedicated to providing real-time cryptographic visibility and intelligence to secure your key management infrastructure across all environments.
 
 # membership
 memberSince: 2026-03-17
