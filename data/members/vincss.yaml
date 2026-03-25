@@ -4,7 +4,7 @@ slogan:
 website: https://vincss.net/
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: VinCSS Internet Security Services JSC, established in 2018, is a leading company in the cybersecurity industry, driven by its mission to Pioneer For A Better Digital World.
 
 # membership
 memberSince: 2026-03-17
@@ -19,7 +19,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://blog.vincss.net/category/vincss-news-en/
   feed: 
   language: en_US
 
@@ -37,11 +37,11 @@ careers:
 
 # Social media
 social:
-  x: 
-  facebook: 
+  x: https://twitter.com/VinCSSCyber
+  facebook: https://www.facebook.com/vincss.net
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/company/vincss/
+  youtube: https://www.youtube.com/@vincssofficial
 
 # Here you can list those who represent or have represented the member.
 #
