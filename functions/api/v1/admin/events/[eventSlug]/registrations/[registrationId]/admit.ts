@@ -10,9 +10,9 @@ import { nowIso } from "../../../../../../../_lib/utils/time";
 import { uuid } from "../../../../../../../_lib/utils/ids";
 import type { PagesContext } from "../../../../../../../_lib/types";
 import { adminRegistrationAdmitSchema } from "../../../../../../../../assets/shared/schemas/api";
-import { resolveAppBaseUrl } from "../../../../../_lib/config";
-import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
-import { queueRegistrationStatusEmail } from "../../../../../_lib/services/registrations/status-notifications";
+import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
+import { processOutboxByIdBackground } from "../../../../../../../_lib/email/outbox";
+import { queueRegistrationStatusEmail } from "../../../../../../../_lib/services/registrations/status-notifications";
 
 interface RegistrationRow {
   id: string;
