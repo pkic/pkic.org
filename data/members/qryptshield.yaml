@@ -4,7 +4,7 @@ slogan:
 website: https://www.qryptshield.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: Protect your digital infrastructure against quantum computing threats with our NIST-approved post-quantum cryptographic solutions. Enterprise-grade security for the quantum era.
+description: Provides post-quantum cryptographic solutions, compliant with NIST standards, to protect digital infrastructure from quantum computing threats.
 
 # membership
 memberSince: 2026-03-17
@@ -36,10 +36,10 @@ careers:
 
 # Social media
 social:
-  x: 
+  x: https://www.qryptshield.com/
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/qryptshield-technologies-pvt-ltd/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
