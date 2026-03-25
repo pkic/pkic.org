@@ -1,13 +1,13 @@
-import { json } from "../../../../../_lib/http";
-import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { getEventBySlug } from "../../../../../_lib/services/events";
-import { listEventDays } from "../../../../../_lib/services/event-days";
-import { promoteWaitlistIfCapacity } from "../../../../../_lib/services/registrations/waitlist";
-import { promoteDayWaitlistIfCapacity } from "../../../../../_lib/services/registrations/day-waitlist";
-import { queueRegistrationStatusEmail } from "../../../../../_lib/services/registrations/status-notifications";
-import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
-import { writeAuditLog } from "../../../../../_lib/services/audit";
-import { resolveAppBaseUrl, getConfig } from "../../../../../_lib/config";
+import { json } from "../../../../../../_lib/http";
+import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
+import { getEventBySlug } from "../../../../../../_lib/services/events";
+import { listEventDays } from "../../../../../../_lib/services/event-days";
+import { promoteWaitlistIfCapacity } from "../../../../../../_lib/services/registrations/waitlist";
+import { promoteDayWaitlistIfCapacity } from "../../../../../../_lib/services/registrations/day-waitlist";
+import { queueRegistrationStatusEmail } from "../../../../../../_lib/services/registrations/status-notifications";
+import { processOutboxByIdBackground } from "../../../../../../_lib/email/outbox";
+import { writeAuditLog } from "../../../../../../_lib/services/audit";
+import { resolveAppBaseUrl, getConfig } from "../../../../../../_lib/config";
 import type { PagesContext } from "../../../../../_lib/types";
 
 export async function onRequestPost(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
