@@ -1,10 +1,10 @@
 id: ci-tech
 name: CI TECH SOLUTIONS SDN. BHD.
 slogan:
-website: https://www.ci-tech.io
+website: https://citechsolutions.com.my
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Delivering end-to-end cybersecurity solutions and strategic advisory to strengthen cyber resilience, supported by mature SecOps and a dedicated Security Operations Centre (SOC). We also provide Post-Quantum Cryptography (PQC) solutions to protect critical systems and enable a secure transition to quantum-resilient standards.
 
 # membership
 memberSince: 2026-03-25
@@ -49,12 +49,13 @@ social:
 # Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Ahmad Zakwan Mohd Yusoff
-    role: Principal Consultant
+  - name: A. Zakwan
+    id: ahmad-zakwan
+    role: Principal Security Consultant & Co-Founder
     social:
       x: 
-      linkedin: www.linkedin.com/in/zakwanmy
-    description: Ahmad Zakwan is the Principal Consultant at CI TECH SOLUTIONS SDN. BHD. and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/zakwanmy
+    description: A. Zakwan is the Principal Security Consultant and Co-Founder at CI Tech Solutions, representing the organization at the PKI Consortium. He brings over 15 years of experience in cybersecurity, with a focus on enterprise security solutions, SecOps, cybersecurity assessments, and encryption.
 
 # Long-form content (markdown)
 content: |
