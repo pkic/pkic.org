@@ -1,9 +1,26 @@
-import { createEvents, type EventAttributes } from "ics";
 import { AppError } from "../errors";
 import type { EventRecord } from "../services/events";
 import { resolveEventVenue, resolveEventVirtualUrl } from "../services/events";
 
 type IcsDateTuple = [number, number, number, number, number];
+
+interface CalendarAlarm {
+  action: "display";
+  description: string;
+  trigger: { hours: number; before: boolean };
+}
+
+interface CalendarEvent {
+  uid: string;
+  title: string;
+  description: string;
+  url?: string;
+  location?: string;
+  start: IcsDateTuple;
+  end: IcsDateTuple;
+  status: "CONFIRMED";
+  alarms: CalendarAlarm[];
+}
 
 /** Attendance types that represent a scheduled live attendance (in-person or livestream). */
 const LIVE_ATTENDANCE_TYPES = new Set(["in_person", "virtual", "live"]);
@@ -64,32 +81,84 @@ function toEventWindow(event: EventRecord): { start: IcsDateTuple; end: IcsDateT
   };
 }
 
-function buildIcsContent(eventAttribs: EventAttributes[]): string {
-  const { error, value } = createEvents(eventAttribs);
-  if (error || !value) {
-    throw new AppError(500, "CALENDAR_GENERATION_FAILED", "Unable to generate calendar invite", { error });
+function pad(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function formatUtc(tuple: IcsDateTuple): string {
+  const [year, month, day, hour, minute] = tuple;
+  return `${year}${pad(month)}${pad(day)}T${pad(hour)}${pad(minute)}00Z`;
+}
+
+function escapeIcsText(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\r?\n/g, "\\n")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,");
+}
+
+function buildAlarm(alarm: CalendarAlarm): string {
+  const prefix = alarm.trigger.before ? "-" : "";
+  return [
+    "BEGIN:VALARM",
+    `ACTION:${alarm.action.toUpperCase()}`,
+    `DESCRIPTION:${escapeIcsText(alarm.description)}`,
+    `TRIGGER:${prefix}PT${alarm.trigger.hours}H`,
+    "END:VALARM",
+  ].join("\r\n");
+}
+
+function buildEvent(event: CalendarEvent): string {
+  const lines = [
+    "BEGIN:VEVENT",
+    `UID:${escapeIcsText(event.uid)}`,
+    `DTSTAMP:${formatUtc(toUtcTuple(new Date().toISOString()))}`,
+    `DTSTART:${formatUtc(event.start)}`,
+    `DTEND:${formatUtc(event.end)}`,
+    `SUMMARY:${escapeIcsText(event.title)}`,
+    `DESCRIPTION:${escapeIcsText(event.description)}`,
+    `STATUS:${event.status}`,
+  ];
+
+  if (event.url) {
+    lines.push(`URL:${escapeIcsText(event.url)}`);
+  }
+  if (event.location) {
+    lines.push(`LOCATION:${escapeIcsText(event.location)}`);
   }
 
-  return value;
+  for (const alarm of event.alarms) {
+    lines.push(buildAlarm(alarm));
+  }
+
+  lines.push("END:VEVENT");
+  return lines.join("\r\n");
+}
+
+function buildIcsContent(events: CalendarEvent[]): string {
+  if (events.length === 0) {
+    throw new AppError(500, "CALENDAR_GENERATION_FAILED", "Unable to generate calendar invite");
+  }
+
+  return [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    "PRODID:-//PKI Consortium//Event Registration//EN",
+    "X-WR-CALNAME:PKI Consortium Events",
+    ...events.map(buildEvent),
+    "END:VCALENDAR",
+    "",
+  ].join("\r\n");
 }
 
 /** Standard calendar reminder alarms — 1 day and 1 hour before each event. */
-const STANDARD_ALARMS: EventAttributes["alarms"] = [
+const STANDARD_ALARMS: CalendarAlarm[] = [
   { action: "display", description: "Reminder", trigger: { hours: 24, before: true } },
   { action: "display", description: "Reminder", trigger: { hours: 1, before: true } },
 ];
-
-/** Shared VCALENDAR-level properties applied to every generated event. */
-const CALENDAR_DEFAULTS: Partial<EventAttributes> = {
-  productId: "-//PKI Consortium//Event Registration//EN",
-  calName: "PKI Consortium Events",
-  startInputType: "utc" as const,
-  startOutputType: "utc" as const,
-  endInputType: "utc" as const,
-  endOutputType: "utc" as const,
-  status: "CONFIRMED" as const,
-  alarms: STANDARD_ALARMS,
-};
 
 export interface DayAttendanceEntry {
   dayDate: string;
@@ -125,30 +194,21 @@ export function buildRegistrationIcs(
   const venueAddress = resolveEventVenue(event);
   const virtualUrl = resolveEventVirtualUrl(event, baseUrl);
 
-  // Collect only days where the attendee has a live time commitment.
   const liveDays = dayAttendance.filter((d) => LIVE_ATTENDANCE_TYPES.has(d.attendanceType));
 
   if (liveDays.length > 0) {
     const isMultiDay = liveDays.length > 1;
 
-    const eventAttribs: EventAttributes[] = liveDays.map((day) => {
+    const events: CalendarEvent[] = liveDays.map((day) => {
       const window = toDayWindow(day.dayDate, event.starts_at, event.ends_at);
       const isInPerson = day.attendanceType === "in_person";
-
       const location = isInPerson ? (venueAddress ?? undefined) : (virtualUrl ?? undefined);
       const url = isInPerson ? manageUrl : (virtualUrl ?? manageUrl);
-
-      // For multi-day events, suffix the title with the day label so that calendar
-      // apps display distinct entries (e.g. "PQC Conference – Tuesday 1 December 2026").
       const dayLabel = day.label ?? day.dayDate;
       const title = isMultiDay ? `${event.name} – ${dayLabel}` : event.name;
-
-      // Stable per-day UID so calendar apps can update individual days if the
-      // ICS is resent (e.g. after a registration update).
       const eventUid = isMultiDay ? `${registrationId}-${day.dayDate}@pkic.org` : uid;
 
       return {
-        ...CALENDAR_DEFAULTS,
         uid: eventUid,
         title,
         description: `Manage your registration at ${manageUrl}`,
@@ -156,24 +216,25 @@ export function buildRegistrationIcs(
         location,
         start: window.start,
         end: window.end,
-      } as EventAttributes;
+        status: "CONFIRMED",
+        alarms: STANDARD_ALARMS,
+      };
     });
 
-    return { uid, content: buildIcsContent(eventAttribs) };
+    return { uid, content: buildIcsContent(events) };
   }
 
-  // Fallback: single event spanning the full event duration.
-  // Used for on_demand-only registrations or when no day attendance is recorded.
   const window = toEventWindow(event);
-  const fallbackAttribs: EventAttributes = {
-    ...CALENDAR_DEFAULTS,
+  const fallbackEvent: CalendarEvent = {
     uid,
     title: event.name,
     description: `Manage your registration at ${manageUrl}`,
     url: manageUrl,
     start: window.start,
     end: window.end,
-  } as EventAttributes;
+    status: "CONFIRMED",
+    alarms: STANDARD_ALARMS,
+  };
 
-  return { uid, content: buildIcsContent([fallbackAttribs]) };
+  return { uid, content: buildIcsContent([fallbackEvent]) };
 }

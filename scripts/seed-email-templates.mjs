@@ -320,7 +320,25 @@ We apologise for any inconvenience.
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 10. Confirmation reminder (for unconfirmed registrations)
+  // 10. Management link resend
+  // Sent when a registrant requests a fresh management link.
+  // Variables: eventName, firstName, manageUrl
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "registration_manage_link",
+    subjectTemplate: "Your management link for {{eventName}}",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+
+Here is your management link for **{{eventName}}**. Use it to review, update, or cancel your registration at any time.
+
+<div class="cta"><a href="{{manageUrl}}">Manage your registration &rarr;</a></div>
+
+If you did not request this email, you can safely ignore it.
+`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 11. Confirmation reminder (for unconfirmed registrations)
   // Sent automatically when a registration remains pending confirmation.
   // Variables: eventName, firstName, confirmationUrl, manageUrl
   // ─────────────────────────────────────────────────────────────────────────
@@ -780,6 +798,7 @@ function parseArgs(argv) {
     mode: "local",
     database: process.env.D1_DATABASE_NAME ?? "pkic-db",
     wranglerEnv: null,
+    persistTo: null,
     configPath: DEFAULT_CONFIG_PATH,
     bucket: DEFAULT_BUCKET,
     adminEmail: DEFAULT_ADMIN_EMAIL,
@@ -824,6 +843,12 @@ function parseArgs(argv) {
 
     if (arg === "--admin-email" && next) {
       parsed.adminEmail = next;
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--persist-to" && next) {
+      parsed.persistTo = next;
       index += 1;
       continue;
     }
@@ -895,6 +920,7 @@ function ensureAdminExists(cli) {
     cli.database,
     ...(cli.wranglerEnv ? ["--env", cli.wranglerEnv] : []),
     cli.mode === "remote" ? "--remote" : "--local",
+    ...(cli.persistTo ? [`--persist-to=${cli.persistTo}`] : []),
     "--command",
     `SELECT id FROM users WHERE normalized_email = ${sqlString(cli.adminEmail.trim().toLowerCase())} LIMIT 1;`,
     "--json",
@@ -974,6 +1000,7 @@ function main() {
     cli.database,
     ...(cli.wranglerEnv ? ["--env", cli.wranglerEnv] : []),
     cli.mode === "remote" ? "--remote" : "--local",
+    ...(cli.persistTo ? [`--persist-to=${cli.persistTo}`] : []),
     "--command",
     sql,
   ];
