@@ -8,7 +8,7 @@ import { queueRegistrationStatusEmail } from "../../../../../../_lib/services/re
 import { processOutboxByIdBackground } from "../../../../../../_lib/email/outbox";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { resolveAppBaseUrl, getConfig } from "../../../../../../_lib/config";
-import type { PagesContext } from "../../../../../_lib/types";
+import type { PagesContext } from "../../../../../../_lib/types";
 
 export async function onRequestPost(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
   const admin = await requireAdminFromRequest(context.env.DB, context.request);

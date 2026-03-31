@@ -9,7 +9,7 @@ Some basic git knowledge is required, please check https://guides.github.com/ to
 2. [Create a fork](https://guides.github.com/activities/forking/#fork) of this repository
 3. [Clone your fork](https://guides.github.com/activities/forking/#clone)
 4. Create local worker secrets for Wrangler by copying `.dev.vars.example` to `.dev.vars` and setting at least `INTERNAL_SIGNING_SECRET`.
-5. Run `npm run dev` in the root directory of your fork (uses `hugo serve --renderToMemory` behind Wrangler dev)
+5. Run `npm run dev` in the root directory of your fork (uses `hugo serve --renderToDisk` behind Wrangler Workers dev)
 6. Open `http://localhost:8788/` in your browser to preview your local version
 7. Make changes until you are satisfied; the preview will update automatically
 8. [Commit and push your changes](https://guides.github.com/activities/forking/#making-changes)
