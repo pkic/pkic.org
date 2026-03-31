@@ -1,12 +1,14 @@
-import { describe, it, expect } from "vitest";
-import { D1DatabaseShim } from "./helpers/d1-shim";
-import { createContext, createEnv, seedEventAndAdmin } from "./helpers/context";
+import { describe, it, expect, beforeEach } from "vitest";
+import { resetDb } from "./helpers/reset-db";
+import { env } from "cloudflare:workers";
+import { createContext, seedEventAndAdmin } from "./helpers/context";
 import { createReferralCode } from "../functions/_lib/services/referrals";
 import { resolveEventFrontendRoutes } from "../functions/_lib/services/events";
 import { onRequestGet as referralRedirect } from "../functions/r/[code]";
 import { onRequestGet as getForms } from "../functions/api/v1/events/[eventSlug]/forms";
 
 describe("event frontend routes and hydration contracts", () => {
+  beforeEach(async () => { await resetDb(); });
   it("resolves configured frontend routes and fallback defaults", () => {
     const configured = resolveEventFrontendRoutes({
       slug: "pqc-2026",
@@ -94,18 +96,15 @@ describe("event frontend routes and hydration contracts", () => {
   });
 
   it("redirects referral links to configured event registration route", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    const { eventId } = await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    const { eventId } = await seedEventAndAdmin(env.DB);
 
-    await db.exec?.(`
+    await env.DB.prepare(`
       UPDATE events
       SET settings_json = '{"frontend":{"routes":{"registration":"/events/pilot/register/"}}}'
       WHERE id = '${eventId}';
-    `);
+    `).run();
 
-    const code = await createReferralCode(db, {
+    const code = await createReferralCode(env.DB, {
       eventId,
       ownerType: "registration",
       ownerId: crypto.randomUUID(),
@@ -114,18 +113,16 @@ describe("event frontend routes and hydration contracts", () => {
 
     const response = await referralRedirect(createContext(env, new Request(`https://app.test/r/${code}`), { code }));
     const location = response.headers.get("location") ?? "";
+    const redirectUrl = new URL(location);
 
     expect(response.status).toBe(302);
-    expect(location.startsWith("https://app.test/events/pilot/register/")).toBe(true);
-    expect(location.includes(`ref=${code}`)).toBe(true);
-    expect(location.includes("source=referral_link")).toBe(true);
+    expect(redirectUrl.pathname).toBe("/events/pilot/register/");
+    expect(redirectUrl.searchParams.get("ref")).toBe(code);
+    expect(redirectUrl.searchParams.get("source")).toBe("referral_link");
   });
 
   it("returns required terms in forms hydration response", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    await seedEventAndAdmin(env.DB);
 
     const response = await getForms(
       createContext(

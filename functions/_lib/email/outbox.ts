@@ -182,7 +182,7 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
       attachments = [
         {
           filename: "event.ics",
-          contentType: "text/calendar",
+          contentType: "text/calendar; method=PUBLISH; charset=UTF-8; name=event.ics",
           base64Content: btoa(
             Array.from(new TextEncoder().encode(calendar.icsContent), (b) =>
               String.fromCharCode(b)
@@ -231,6 +231,8 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
       subject,
       html: rendered.html,
       text: rendered.text,
+      calendarIcsContent: calendar?.icsContent,
+      calendarMethod: "PUBLISH",
       categories: [row.template_key, row.message_type],
       attachments,
     });

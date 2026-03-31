@@ -1,16 +1,15 @@
-import { describe, it, expect } from "vitest";
-import { D1DatabaseShim } from "./helpers/d1-shim";
-import { createContext, createEnv, seedEventAndAdmin } from "./helpers/context";
+import { describe, it, expect, beforeEach} from "vitest";
+import { resetDb } from "./helpers/reset-db";
+import { env } from "cloudflare:workers";
+import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequestGet as confirmRegistration } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
 import { recordEngagement } from "../functions/_lib/services/engagement";
 
 describe("engagement events", () => {
+  beforeEach(async () => { await resetDb(); });
   it("records registration lifecycle points", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    await seedEventAndAdmin(env.DB);
 
     const createResponse = await createRegistration(
       createContext(
@@ -36,14 +35,14 @@ describe("engagement events", () => {
 
     expect(createResponse.status).toBe(200);
 
-    const createdActions = db.raw<{ action_type: string }>(
+    const createdActions = await queryAll<{ action_type: string }>(env.DB, 
       "SELECT action_type FROM engagement_events WHERE action_type = 'registration_created'",
     );
     expect(createdActions.length).toBe(1);
 
-    const payload = db.raw<{ payload_json: string }>(
+    const payload = ((await queryAll<{ payload_json: string }>(env.DB, 
       "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
-    )[0];
+    )))[0];
 
     const confirmationUrl = (JSON.parse(payload.payload_json) as { confirmationUrl: string }).confirmationUrl;
     const token = new URL(confirmationUrl).searchParams.get("token");
@@ -59,19 +58,17 @@ describe("engagement events", () => {
 
     expect(confirmResponse.status).toBe(200);
 
-    const confirmedActions = db.raw<{ action_type: string }>(
+    const confirmedActions = await queryAll<{ action_type: string }>(env.DB, 
       "SELECT action_type FROM engagement_events WHERE action_type = 'registration_confirmed'",
     );
     expect(confirmedActions.length).toBe(1);
   });
 
   it("supports community engagement without event scope", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    await seedEventAndAdmin(db);
+    await seedEventAndAdmin(env.DB);
 
-    const admin = db.raw<{ id: string }>("SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")[0];
-    await recordEngagement(db, {
+    const admin = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")))[0];
+    await recordEngagement(env.DB, {
       userId: admin.id,
       subjectType: "community",
       subjectRef: "profile_completion",
@@ -82,12 +79,12 @@ describe("engagement events", () => {
       data: { step: "links" },
     });
 
-    const rows = db.raw<{
+    const rows = await queryAll<{
       event_id: string | null;
       subject_type: string;
       subject_ref: string | null;
       action_type: string;
-    }>(
+    }>(env.DB, 
       "SELECT event_id, subject_type, subject_ref, action_type FROM engagement_events WHERE action_type = 'profile_completed' LIMIT 1",
     );
 
