@@ -7,6 +7,8 @@ export interface SendgridMessage {
   subject: string;
   html: string;
   text: string;
+  calendarIcsContent?: string;
+  calendarMethod?: "PUBLISH" | "REQUEST";
   categories?: string[];
   attachments?: Array<{ filename: string; contentType: string; base64Content: string }>;
 }
@@ -31,6 +33,12 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
     content: [
       { type: "text/plain", value: message.text },
       { type: "text/html", value: message.html },
+      ...(message.calendarIcsContent
+        ? [{
+          type: `text/calendar; method=${message.calendarMethod ?? "PUBLISH"}; charset=UTF-8`,
+          value: message.calendarIcsContent,
+        }]
+        : []),
     ],
     categories: message.categories ?? [],
   };

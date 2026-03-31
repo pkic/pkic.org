@@ -1,6 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { D1DatabaseShim } from "./helpers/d1-shim";
-import { createEnv, createContext, seedEventAndAdmin } from "./helpers/context";
+import { describe, it, expect, beforeEach} from "vitest";
+import { resetDb } from "./helpers/reset-db";
+import { env } from "cloudflare:workers";
+import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createInvite } from "../functions/_lib/services/invites";
 import { onRequestGet as declineInfoGet } from "../functions/api/v1/invites/[token]/decline-info";
 import {
@@ -8,13 +9,11 @@ import {
 } from "../functions/api/v1/invites/[token]/decline";
 
 describe("invite decline-info", () => {
+  beforeEach(async () => { await resetDb(); });
   it("returns valid status with event name and first name for an active invite", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    const { eventId } = await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    const { eventId } = await seedEventAndAdmin(env.DB);
 
-    const { token } = await createInvite(db, {
+    const { token } = await createInvite(env.DB, {
       eventId,
       inviteeEmail: "info-valid@example.test",
       inviteeFirstName: "Alice",
@@ -33,12 +32,9 @@ describe("invite decline-info", () => {
   });
 
   it("returns already_processed when the invite was declined", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    const { eventId } = await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    const { eventId } = await seedEventAndAdmin(env.DB);
 
-    const { token } = await createInvite(db, {
+    const { token } = await createInvite(env.DB, {
       eventId,
       inviteeEmail: "info-declined@example.test",
       inviteType: "attendee",
@@ -67,10 +63,7 @@ describe("invite decline-info", () => {
   });
 
   it("returns invalid for an unknown token", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    await seedEventAndAdmin(env.DB);
 
     const response = await declineInfoGet(
       createContext(
@@ -86,12 +79,9 @@ describe("invite decline-info", () => {
   });
 
   it("stores npsScore when included in POST", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    const { eventId } = await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    const { eventId } = await seedEventAndAdmin(env.DB);
 
-    const { token } = await createInvite(db, {
+    const { token } = await createInvite(env.DB, {
       eventId,
       inviteeEmail: "nps-test@example.test",
       inviteType: "attendee",
@@ -115,10 +105,10 @@ describe("invite decline-info", () => {
 
     expect(response.status).toBe(200);
 
-    const row = db.raw<{ nps_score: number }>(
+    const row = ((await queryAll<{ nps_score: number }>(env.DB, 
       "SELECT nps_score FROM invites WHERE invitee_email = ?",
       ["nps-test@example.test"],
-    )[0];
+    )))[0];
 
     expect(row.nps_score).toBe(8);
   });

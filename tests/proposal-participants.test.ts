@@ -1,17 +1,16 @@
-import { describe, it, expect } from "vitest";
-import { D1DatabaseShim } from "./helpers/d1-shim";
-import { createContext, createEnv, seedEventAndAdmin } from "./helpers/context";
+import { describe, it, expect, beforeEach} from "vitest";
+import { resetDb } from "./helpers/reset-db";
+import { env } from "cloudflare:workers";
+import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
 import { onRequestGet as getBadgeRole } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/badge-role";
 import { addProposalSpeaker, createProposal, finalizeProposalDecision } from "../functions/_lib/services/proposals";
 
 describe("proposal participants", () => {
+  beforeEach(async () => { await resetDb(); });
   it("supports panel participants and stores user links", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    await seedEventAndAdmin(env.DB);
 
     const response = await submitProposal(
       createContext(
@@ -68,21 +67,21 @@ describe("proposal participants", () => {
     expect(response.status).toBe(200);
     const payload = await response.json() as { proposalId: string };
 
-    const roles = db.raw<{ role: string }>(
+    const roles = await queryAll<{ role: string }>(env.DB, 
       "SELECT role FROM proposal_speakers WHERE proposal_id = ? ORDER BY role",
       [payload.proposalId],
     );
     expect(roles.map((entry) => entry.role)).toContain("panelist");
     expect(roles.map((entry) => entry.role)).toContain("moderator");
 
-    const participantRoles = db.raw<{ role: string }>(
+    const participantRoles = await queryAll<{ role: string }>(env.DB, 
       "SELECT role FROM event_participants WHERE event_id = (SELECT event_id FROM session_proposals WHERE id = ?) ORDER BY role",
       [payload.proposalId],
     );
     expect(participantRoles.map((entry) => entry.role)).toContain("panelist");
     expect(participantRoles.map((entry) => entry.role)).toContain("moderator");
 
-    const linkRows = db.raw<{ links_json: string | null }>(
+    const linkRows = await queryAll<{ links_json: string | null }>(env.DB, 
       "SELECT links_json FROM users WHERE id IN (SELECT user_id FROM proposal_speakers WHERE proposal_id = ?)",
       [payload.proposalId],
     );
@@ -90,35 +89,35 @@ describe("proposal participants", () => {
   });
 
   it("keeps pending proposal speakers off the badge until acceptance", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    const { eventId } = await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    const { eventId } = await seedEventAndAdmin(env.DB);
 
     const proposerId = crypto.randomUUID();
     const speakerId = crypto.randomUUID();
     const registrationId = crypto.randomUUID();
-    const adminRow = db.raw<{ id: string }>("SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")[0];
+    const adminRow = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")))[0];
 
-    await db.exec?.(`
-      INSERT INTO users (
-        id, email, normalized_email, first_name, last_name, organization_name, job_title,
-        data_json, created_at, updated_at
-      ) VALUES
-        ('${proposerId}', 'proposer@example.test', 'proposer@example.test', 'Proposer', 'One', 'Org', 'Role', NULL, datetime('now'), datetime('now')),
-        ('${speakerId}', 'speaker@example.test', 'speaker@example.test', 'Speaker', 'One', 'Org', 'Role', NULL, datetime('now'), datetime('now'));
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO users (
+          id, email, normalized_email, first_name, last_name, organization_name, job_title,
+          data_json, created_at, updated_at
+        ) VALUES
+          ('${proposerId}', 'proposer@example.test', 'proposer@example.test', 'Proposer', 'One', 'Org', 'Role', NULL, datetime('now'), datetime('now')),
+          ('${speakerId}', 'speaker@example.test', 'speaker@example.test', 'Speaker', 'One', 'Org', 'Role', NULL, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO registrations (
+          id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
+          custom_answers_json, referred_by_code, confirmation_token_hash, confirmation_token_expires_at,
+          manage_token_hash, confirmed_at, cancelled_at, created_at, updated_at
+        ) VALUES (
+          '${registrationId}', '${eventId}', '${speakerId}', NULL, 'registered', 'virtual',
+          'direct', NULL, NULL, NULL, NULL, NULL, 'manage-token-hash', datetime('now'), NULL, datetime('now'), datetime('now')
+        )
+      `),
+    ]);
 
-      INSERT INTO registrations (
-        id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
-        custom_answers_json, referred_by_code, confirmation_token_hash, confirmation_token_expires_at,
-        manage_token_hash, confirmed_at, cancelled_at, created_at, updated_at
-      ) VALUES (
-        '${registrationId}', '${eventId}', '${speakerId}', NULL, 'registered', 'virtual',
-        'direct', NULL, NULL, NULL, NULL, NULL, 'manage-token-hash', datetime('now'), NULL, datetime('now'), datetime('now')
-      );
-    `);
-
-    const { proposal } = await createProposal(db, {
+    const { proposal } = await createProposal(env.DB, {
       eventId,
       proposerUserId: proposerId,
       proposalType: "talk",
@@ -126,19 +125,19 @@ describe("proposal participants", () => {
       abstract: "A talk that should not affect badge autodetection until it is accepted.",
     });
 
-    await addProposalSpeaker(db, {
+    await addProposalSpeaker(env.DB, {
       proposalId: proposal.id,
       userId: speakerId,
       role: "speaker",
     });
 
-    const pendingParticipant = db.raw<{ status: string }>(
+    const pendingParticipant = ((await queryAll<{ status: string }>(env.DB, 
       "SELECT status FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND role = 'speaker'",
       [eventId, speakerId],
-    )[0];
+    )))[0];
     expect(pendingParticipant.status).toBe("inactive");
 
-    await createAdminSession(db, adminRow.id, "token-admin-badge-role");
+    await createAdminSession(env.DB, adminRow.id, "token-admin-badge-role");
 
     const pendingResponse = await getBadgeRole(
       createContext(
@@ -158,17 +157,17 @@ describe("proposal participants", () => {
     expect(pendingPayload.auto_detected).toBe("attendee");
     expect(pendingPayload.effective_role).toBe("attendee");
 
-    await finalizeProposalDecision(db, {
+    await finalizeProposalDecision(env.DB, {
       proposalId: proposal.id,
       decidedByUserId: adminRow.id,
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
 
-    const acceptedParticipant = db.raw<{ status: string }>(
+    const acceptedParticipant = ((await queryAll<{ status: string }>(env.DB, 
       "SELECT status FROM event_participants WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND role = 'speaker'",
       [eventId, speakerId],
-    )[0];
+    )))[0];
     expect(acceptedParticipant.status).toBe("active");
 
     const acceptedResponse = await getBadgeRole(

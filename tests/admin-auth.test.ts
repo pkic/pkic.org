@@ -1,8 +1,9 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach} from "vitest";
+import { resetDb } from "./helpers/reset-db";
+import { env } from "cloudflare:workers";
 import { onRequestPost as requestLink } from "../functions/api/v1/admin/auth/request-link";
 import { onRequestPost as verifyLink } from "../functions/api/v1/admin/auth/verify-link";
-import { createContext, createEnv, seedEventAndAdmin } from "./helpers/context";
-import { D1DatabaseShim } from "./helpers/d1-shim";
+import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 
 function extractTokenFromMagicLinkPayload(payloadJson: string): string {
   const payload = JSON.parse(payloadJson) as { magicLinkUrl: string };
@@ -11,11 +12,9 @@ function extractTokenFromMagicLinkPayload(payloadJson: string): string {
 }
 
 describe("admin magic-link auth", () => {
+  beforeEach(async () => { await resetDb(); });
   it("allows allowlisted admin and blocks replay", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    await seedEventAndAdmin(env.DB);
 
     await requestLink(
       createContext(
@@ -29,7 +28,7 @@ describe("admin magic-link auth", () => {
       ),
     );
 
-    const outboxRows = db.raw<{ payload_json: string }>("SELECT payload_json FROM email_outbox");
+    const outboxRows = await queryAll<{ payload_json: string }>(env.DB, "SELECT payload_json FROM email_outbox");
     expect(outboxRows).toHaveLength(1);
 
     const token = extractTokenFromMagicLinkPayload(outboxRows[0].payload_json);
@@ -64,10 +63,7 @@ describe("admin magic-link auth", () => {
   });
 
   it("returns success for non-allowlisted email without creating token", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    await seedEventAndAdmin(env.DB);
 
     const response = await requestLink(
       createContext(
@@ -83,7 +79,7 @@ describe("admin magic-link auth", () => {
 
     expect(response.status).toBe(200);
 
-    const rows = db.raw<{ total: number }>("SELECT COUNT(*) AS total FROM auth_magic_links");
+    const rows = await queryAll<{ total: number }>(env.DB, "SELECT COUNT(*) AS total FROM auth_magic_links");
     expect(Number(rows[0].total)).toBe(0);
   });
 });

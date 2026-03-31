@@ -21,6 +21,17 @@ DTSTAMP:{{ now.Format "20060102T150405Z" }}
 DTSTART:{{ ( time.AsTime (printf "%sT%s:00" $date $slot.time) $data.timezone ).UTC | time.Format "20060102T150405Z" }}
 {{- with $slot.endTime }}
 DTEND:{{ ( time.AsTime (printf "%sT%s:00" $date .) $data.timezone ).UTC | time.Format "20060102T150405Z" }}
+{{- else -}}
+    {{- if $slot.durationMinutes -}}
+        {{- $parts := split $slot.time ":" -}}
+        {{- $startHour := int (default "0" (index $parts 0 | strings.TrimLeft "0")) -}}
+        {{- $startMinute := int (default "0" (index $parts 1 | strings.TrimLeft "0")) -}}
+        {{- $endTotalMinutes := add (add (mul $startHour 60) $startMinute) (int $slot.durationMinutes) -}}
+        {{- $endHour := mod (div $endTotalMinutes 60) 24 -}}
+        {{- $endMinute := mod $endTotalMinutes 60 -}}
+        {{- $computedEndTime := printf "%02d:%02d" $endHour $endMinute -}}
+DTEND:{{ ( time.AsTime (printf "%sT%s:00" $date $computedEndTime) $data.timezone ).UTC | time.Format "20060102T150405Z" }}
+    {{- end -}}
 {{- end }}
 SUMMARY:{{ strings.TrimSpace (replaceRE "(.{70})" "${1}\n    " $session.title | default "No title available") }}
 DESCRIPTION: 

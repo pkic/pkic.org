@@ -1,9 +1,10 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach} from "vitest";
+import { resetDb } from "./helpers/reset-db";
+import { env } from "cloudflare:workers";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequestPost as confirmEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
 import { onRequestPost as createInvites } from "../functions/api/v1/events/[eventSlug]/invites";
-import { createContext, createEnv, seedEventAndAdmin } from "./helpers/context";
-import { D1DatabaseShim } from "./helpers/d1-shim";
+import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 
 function extractConfirmationToken(payloadJson: string): string {
@@ -13,11 +14,9 @@ function extractConfirmationToken(payloadJson: string): string {
 }
 
 describe("registration workflows", () => {
+  beforeEach(async () => { await resetDb(); });
   it("enforces consent and supports double opt-in", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    await seedEventAndAdmin(env.DB);
 
     await expect(
       createRegistration(
@@ -66,7 +65,7 @@ describe("registration workflows", () => {
     const createdPayload = await createResponse.json() as { status: string };
     expect(createdPayload.status).toBe("pending_email_confirmation");
 
-    const outbox = db.raw<{ payload_json: string }>(
+    const outbox = await queryAll<{ payload_json: string }>(env.DB, 
       "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
     );
     const token = extractConfirmationToken(outbox[0].payload_json);
@@ -89,29 +88,29 @@ describe("registration workflows", () => {
   });
 
   it("enforces attendee invite abuse limits per attendee", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    const { eventId } = await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    const { eventId } = await seedEventAndAdmin(env.DB);
 
     const userId = crypto.randomUUID();
     const registrationId = crypto.randomUUID();
     const manageToken = "manage-token-123";
     const manageHash = await sha256Hex(manageToken);
 
-    await db.exec?.(`
-      INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
-      VALUES ('${userId}', 'inviter@pkic.org', 'inviter@pkic.org', 'Inviter', NULL, NULL, NULL, NULL, datetime('now'), datetime('now'));
-
-      INSERT INTO registrations (
-        id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
-        custom_answers_json, referred_by_code, confirmation_token_hash, confirmation_token_expires_at,
-        manage_token_hash, confirmed_at, cancelled_at, created_at, updated_at
-      ) VALUES (
-        '${registrationId}', '${eventId}', '${userId}', NULL, 'registered', 'virtual',
-        'direct', NULL, NULL, NULL, NULL, NULL, '${manageHash}', datetime('now'), NULL, datetime('now'), datetime('now')
-      );
-    `);
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
+        VALUES ('${userId}', 'inviter@pkic.org', 'inviter@pkic.org', 'Inviter', NULL, NULL, NULL, NULL, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO registrations (
+          id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
+          custom_answers_json, referred_by_code, confirmation_token_hash, confirmation_token_expires_at,
+          manage_token_hash, confirmed_at, cancelled_at, created_at, updated_at
+        ) VALUES (
+          '${registrationId}', '${eventId}', '${userId}', NULL, 'registered', 'virtual',
+          'direct', NULL, NULL, NULL, NULL, NULL, '${manageHash}', datetime('now'), NULL, datetime('now'), datetime('now')
+        )
+      `),
+    ]);
 
     const invites = Array.from({ length: 6 }).map((_, index) => ({
       email: `target${index}@example.test`,

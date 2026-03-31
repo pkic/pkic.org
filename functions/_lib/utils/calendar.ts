@@ -1,14 +1,9 @@
 import { AppError } from "../errors";
+import ICAL from "ical.js";
 import type { EventRecord } from "../services/events";
 import { resolveEventVenue, resolveEventVirtualUrl } from "../services/events";
 
 type IcsDateTuple = [number, number, number, number, number];
-
-interface CalendarAlarm {
-  action: "display";
-  description: string;
-  trigger: { hours: number; before: boolean };
-}
 
 interface CalendarEvent {
   uid: string;
@@ -20,6 +15,12 @@ interface CalendarEvent {
   end: IcsDateTuple;
   status: "CONFIRMED";
   alarms: CalendarAlarm[];
+}
+
+interface CalendarAlarm {
+  action: "display";
+  description: string;
+  trigger: { hours: number; before: boolean };
 }
 
 /** Attendance types that represent a scheduled live attendance (in-person or livestream). */
@@ -81,59 +82,47 @@ function toEventWindow(event: EventRecord): { start: IcsDateTuple; end: IcsDateT
   };
 }
 
-function pad(value: number): string {
-  return String(value).padStart(2, "0");
-}
-
-function formatUtc(tuple: IcsDateTuple): string {
+function toIcalTime(tuple: IcsDateTuple): InstanceType<typeof ICAL.Time> {
   const [year, month, day, hour, minute] = tuple;
-  return `${year}${pad(month)}${pad(day)}T${pad(hour)}${pad(minute)}00Z`;
+  return ICAL.Time.fromJSDate(new Date(Date.UTC(year, month - 1, day, hour, minute, 0)), true);
 }
 
-function escapeIcsText(value: string): string {
-  return value
-    .replace(/\\/g, "\\\\")
-    .replace(/\r?\n/g, "\\n")
-    .replace(/;/g, "\\;")
-    .replace(/,/g, "\\,");
+function buildAlarm(alarm: CalendarAlarm): InstanceType<typeof ICAL.Component> {
+  const component = new ICAL.Component("valarm");
+  component.addPropertyWithValue("action", alarm.action.toUpperCase());
+  component.addPropertyWithValue("description", alarm.description);
+  component.addPropertyWithValue(
+    "trigger",
+    ICAL.Duration.fromData({
+      hours: alarm.trigger.hours,
+      isNegative: alarm.trigger.before,
+    }),
+  );
+  return component;
 }
 
-function buildAlarm(alarm: CalendarAlarm): string {
-  const prefix = alarm.trigger.before ? "-" : "";
-  return [
-    "BEGIN:VALARM",
-    `ACTION:${alarm.action.toUpperCase()}`,
-    `DESCRIPTION:${escapeIcsText(alarm.description)}`,
-    `TRIGGER:${prefix}PT${alarm.trigger.hours}H`,
-    "END:VALARM",
-  ].join("\r\n");
-}
-
-function buildEvent(event: CalendarEvent): string {
-  const lines = [
-    "BEGIN:VEVENT",
-    `UID:${escapeIcsText(event.uid)}`,
-    `DTSTAMP:${formatUtc(toUtcTuple(new Date().toISOString()))}`,
-    `DTSTART:${formatUtc(event.start)}`,
-    `DTEND:${formatUtc(event.end)}`,
-    `SUMMARY:${escapeIcsText(event.title)}`,
-    `DESCRIPTION:${escapeIcsText(event.description)}`,
-    `STATUS:${event.status}`,
-  ];
+function buildEventComponent(event: CalendarEvent): InstanceType<typeof ICAL.Component> {
+  const component = new ICAL.Component("vevent");
+  component.addPropertyWithValue("uid", event.uid);
+  component.addPropertyWithValue("dtstamp", ICAL.Time.now());
+  component.addPropertyWithValue("dtstart", toIcalTime(event.start));
+  component.addPropertyWithValue("dtend", toIcalTime(event.end));
+  component.addPropertyWithValue("summary", event.title);
+  component.addPropertyWithValue("description", event.description);
+  component.addPropertyWithValue("status", event.status);
 
   if (event.url) {
-    lines.push(`URL:${escapeIcsText(event.url)}`);
+    component.addPropertyWithValue("url", event.url);
   }
   if (event.location) {
-    lines.push(`LOCATION:${escapeIcsText(event.location)}`);
+    component.addPropertyWithValue("location", event.location);
   }
 
   for (const alarm of event.alarms) {
-    lines.push(buildAlarm(alarm));
+    component.addSubcomponent(buildAlarm(alarm));
   }
 
-  lines.push("END:VEVENT");
-  return lines.join("\r\n");
+  return component;
 }
 
 function buildIcsContent(events: CalendarEvent[]): string {
@@ -141,17 +130,23 @@ function buildIcsContent(events: CalendarEvent[]): string {
     throw new AppError(500, "CALENDAR_GENERATION_FAILED", "Unable to generate calendar invite");
   }
 
-  return [
-    "BEGIN:VCALENDAR",
-    "VERSION:2.0",
-    "CALSCALE:GREGORIAN",
-    "METHOD:PUBLISH",
-    "PRODID:-//PKI Consortium//Event Registration//EN",
-    "X-WR-CALNAME:PKI Consortium Events",
-    ...events.map(buildEvent),
-    "END:VCALENDAR",
-    "",
-  ].join("\r\n");
+  try {
+    const calendar = new ICAL.Component("vcalendar");
+    calendar.addPropertyWithValue("version", "2.0");
+    calendar.addPropertyWithValue("calscale", "GREGORIAN");
+    calendar.addPropertyWithValue("method", "PUBLISH");
+    calendar.addPropertyWithValue("prodid", "-//PKI Consortium//Event Registration//EN");
+    calendar.addPropertyWithValue("x-wr-calname", "PKI Consortium Events");
+
+    for (const event of events) {
+      calendar.addSubcomponent(buildEventComponent(event));
+    }
+
+    const content = calendar.toString();
+    return content.endsWith("\r\n") ? content : `${content}\r\n`;
+  } catch {
+    throw new AppError(500, "CALENDAR_GENERATION_FAILED", "Unable to generate calendar invite");
+  }
 }
 
 /** Standard calendar reminder alarms — 1 day and 1 hour before each event. */
