@@ -180,8 +180,11 @@ export async function onRequestPost(
       recipientUserId: user.id,
       messageType: "transactional",
       subject: `Registration confirmed for ${event.name}`,
-      // Delay 90 s so the OG badge has time to render before we try to attach it.
-      sendAfterSeconds: 90,
+      // Delay so the OG badge has time to render before we try to attach it.
+      // EMAIL_BADGE_DELAY_SECONDS=0 in .dev.vars skips the delay for local/e2e.
+      sendAfterSeconds: context.env.ASSETS_BUCKET
+        ? Number(context.env.EMAIL_BADGE_DELAY_SECONDS ?? 90)
+        : 0,
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
         // User

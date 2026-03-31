@@ -71,11 +71,10 @@ export async function onRequestPost(
 
     const outboxId = await queueEmail(context.env.DB, {
       eventId: event.id,
-      templateKey: "registration_updated",
+      templateKey: "registration_manage_link",
       recipientEmail: body.email,
       recipientUserId: row.user_id,
       messageType: "transactional",
-      subject: `Your management link for ${event.name}`,
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
         firstName: row.first_name ?? "",

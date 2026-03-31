@@ -59,6 +59,5 @@ export function getConfig(env: Env, request?: Request) {
     maxInviteReminders: parseIntOrDefault(env.MAX_INVITE_REMINDERS, 12),
     maxPresentationReminders: parseIntOrDefault(env.MAX_PRESENTATION_REMINDERS, 12),
     sendgridApiBase: env.SENDGRID_API_BASE,
-    emailLayoutR2Key: env.EMAIL_LAYOUT_R2_KEY ?? "layouts/email/default.html",
   };
 }

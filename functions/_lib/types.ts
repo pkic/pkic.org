@@ -68,7 +68,6 @@ export interface Env {
   FROM_NAME?: string;
   SENDGRID_FROM_EMAIL?: string;
   SENDGRID_FROM_NAME?: string;
-  EMAIL_LAYOUT_R2_KEY?: string;
   INTERNAL_SIGNING_SECRET?: string;
   FEEDBACK_IDENTITY_SECRET_V1?: string;
   /**
@@ -83,6 +82,12 @@ export interface Env {
   STRIPE_PUBLISHABLE_KEY?: string;
   /** Stripe webhook signing secret for verifying checkout.session.completed events. */
   STRIPE_WEBHOOK_SECRET?: string;
+  /**
+   * Seconds to delay sending the registration-confirmed email so the OG badge has
+   * time to render and can be attached. Defaults to 90 in production. Set to 0 in
+   * local dev / e2e to avoid artificial waits.
+   */
+  EMAIL_BADGE_DELAY_SECONDS?: string;
   /**
    * BCC address for donation thank-you emails. When set, every donor
    * thank-you email is BCC'd here so the team has an internal record.
