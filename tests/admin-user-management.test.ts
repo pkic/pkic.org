@@ -1,7 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { D1DatabaseShim } from "./helpers/d1-shim";
-import { createContext, createEnv, seedEventAndAdmin } from "./helpers/context";
+import { describe, it, expect, beforeEach } from "vitest";
+import type { DatabaseLike } from "../functions/_lib/types";
+import { env } from "cloudflare:workers";
+import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
+import { resetDb } from "./helpers/reset-db";
 import {
   onRequestPatch as patchUser,
 } from "../functions/api/v1/admin/users/[userId]/index";
@@ -12,13 +14,10 @@ import {
 const ADMIN_TOKEN = "admin-session-token";
 
 async function setup() {
-  const db = new D1DatabaseShim();
-  db.runMigrations();
-  await seedEventAndAdmin(db);
-  const env = createEnv(db);
-  const adminId = db.raw<{ id: string }>("SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")[0].id;
-  await createAdminSession(db, adminId, ADMIN_TOKEN);
-  return { db, env, adminId };
+  await seedEventAndAdmin(env.DB);
+  const adminId = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")))[0].id;
+  await createAdminSession(env.DB, adminId, ADMIN_TOKEN);
+  return { adminId, env };
 }
 
 function adminRequest(path: string, method: string, body?: unknown): Request {
@@ -32,21 +31,23 @@ function adminRequest(path: string, method: string, body?: unknown): Request {
   });
 }
 
-async function seedUser(db: D1DatabaseShim, email: string): Promise<string> {
+async function seedUser(_db: DatabaseLike, email: string): Promise<string> {
   const userId = crypto.randomUUID();
-  await db.exec?.(`
+  await env.DB.prepare(`
     INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
     VALUES ('${userId}', '${email}', '${email}', 'Test', 'User', 'user', 1, datetime('now'), datetime('now'));
-  `);
+  `).run();
   return userId;
 }
 
 // ── Deactivation / reactivation ────────────────────────────────────────────
 
 describe("admin user deactivation", () => {
+  beforeEach(async () => { await resetDb(); });
+
   it("deactivates an active user", async () => {
-    const { db, env, adminId } = await setup();
-    const userId = await seedUser(db, "target@example.test");
+    const { adminId } = await setup();
+    const userId = await seedUser(env.DB, "target@example.test");
 
     const response = await patchUser(
       createContext(
@@ -61,14 +62,14 @@ describe("admin user deactivation", () => {
     expect(data.success).toBe(true);
     expect(data.user.active).toBe(false);
 
-    const row = db.raw<{ active: number }>("SELECT active FROM users WHERE id = ?", [userId])[0];
+    const row = ((await queryAll<{ active: number }>(env.DB, "SELECT active FROM users WHERE id = ?", [userId])))[0];
     expect(row.active).toBe(0);
   });
 
   it("reactivates a deactivated user", async () => {
-    const { db, env } = await setup();
-    const userId = await seedUser(db, "inactive@example.test");
-    await db.exec?.(`UPDATE users SET active = 0 WHERE id = '${userId}'`);
+    const { } = await setup();
+    const userId = await seedUser(env.DB, "inactive@example.test");
+    await env.DB.prepare(`UPDATE users SET active = 0 WHERE id = '${userId}'`).run();
 
     const response = await patchUser(
       createContext(
@@ -84,8 +85,8 @@ describe("admin user deactivation", () => {
   });
 
   it("can update role and active together", async () => {
-    const { db, env } = await setup();
-    const userId = await seedUser(db, "combo@example.test");
+    const { } = await setup();
+    const userId = await seedUser(env.DB, "combo@example.test");
 
     const response = await patchUser(
       createContext(
@@ -116,8 +117,8 @@ describe("admin user deactivation", () => {
   });
 
   it("writes an audit log entry on deactivation", async () => {
-    const { db, env } = await setup();
-    const userId = await seedUser(db, "audit-deact@example.test");
+    const { } = await setup();
+    const userId = await seedUser(env.DB, "audit-deact@example.test");
 
     await patchUser(
       createContext(
@@ -127,7 +128,7 @@ describe("admin user deactivation", () => {
       ),
     );
 
-    const entry = db.raw<{ action: string }>("SELECT action FROM audit_log WHERE entity_id = ? ORDER BY created_at DESC LIMIT 1", [userId])[0];
+    const entry = ((await queryAll<{ action: string }>(env.DB, "SELECT action FROM audit_log WHERE entity_id = ? ORDER BY created_at DESC LIMIT 1", [userId])))[0];
     expect(entry.action).toBe("user_updated");
   });
 
@@ -150,9 +151,11 @@ describe("admin user deactivation", () => {
 // ── Anonymization ──────────────────────────────────────────────────────────
 
 describe("admin user anonymization", () => {
+  beforeEach(async () => { await resetDb(); });
+
   it("removes PII and deactivates the user", async () => {
-    const { db, env } = await setup();
-    const userId = await seedUser(db, "pii-person@example.test");
+    const { } = await setup();
+    const userId = await seedUser(env.DB, "pii-person@example.test");
 
     const response = await anonymizeUser(
       createContext(
@@ -167,13 +170,13 @@ describe("admin user anonymization", () => {
     expect(data.success).toBe(true);
     expect(data.userId).toBe(userId);
 
-    const row = db.raw<{
+    const row = ((await queryAll<{
       email: string;
       first_name: string | null;
       last_name: string | null;
       active: number;
       pii_redacted_at: string | null;
-    }>("SELECT email, first_name, last_name, active, pii_redacted_at FROM users WHERE id = ?", [userId])[0];
+    }>(env.DB, "SELECT email, first_name, last_name, active, pii_redacted_at FROM users WHERE id = ?", [userId])))[0];
 
     expect(row.email).toMatch(/^redacted-/);
     expect(row.first_name).toBeNull();
@@ -183,11 +186,11 @@ describe("admin user anonymization", () => {
   });
 
   it("revokes all active sessions for the anonymized user", async () => {
-    const { db, env } = await setup();
-    const userId = await seedUser(db, "session-holder@example.test");
+    const { } = await setup();
+    const userId = await seedUser(env.DB, "session-holder@example.test");
 
     // Give the target user an active session
-    await createAdminSession(db, userId, "target-user-token");
+    await createAdminSession(env.DB, userId, "target-user-token");
 
     await anonymizeUser(
       createContext(
@@ -197,13 +200,13 @@ describe("admin user anonymization", () => {
       ),
     );
 
-    const sessions = db.raw<{ revoked_at: string | null }>("SELECT revoked_at FROM sessions WHERE user_id = ?", [userId]);
+    const sessions = await queryAll<{ revoked_at: string | null }>(env.DB, "SELECT revoked_at FROM sessions WHERE user_id = ?", [userId]);
     expect(sessions.every((s) => s.revoked_at !== null)).toBe(true);
   });
 
   it("refuses to anonymize an already-anonymized user", async () => {
-    const { db, env } = await setup();
-    const userId = await seedUser(db, "already-anon@example.test");
+    const { } = await setup();
+    const userId = await seedUser(env.DB, "already-anon@example.test");
 
     // Anonymize once
     await anonymizeUser(
@@ -256,8 +259,8 @@ describe("admin user anonymization", () => {
   });
 
   it("writes an audit log entry on anonymization", async () => {
-    const { db, env } = await setup();
-    const userId = await seedUser(db, "audit-anon@example.test");
+    const { } = await setup();
+    const userId = await seedUser(env.DB, "audit-anon@example.test");
 
     await anonymizeUser(
       createContext(
@@ -267,10 +270,10 @@ describe("admin user anonymization", () => {
       ),
     );
 
-    const entry = db.raw<{ action: string; details_json: string }>(
+    const entry = ((await queryAll<{ action: string; details_json: string }>(env.DB, 
       "SELECT action, details_json FROM audit_log WHERE entity_id = ? ORDER BY created_at DESC LIMIT 1",
       [userId],
-    )[0];
+    )))[0];
     expect(entry.action).toBe("user_anonymized");
     const details = JSON.parse(entry.details_json) as { previousEmail: string };
     expect(details.previousEmail).toBe("audit-anon@example.test");

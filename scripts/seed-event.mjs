@@ -7,7 +7,6 @@ import YAML from "yaml";
 
 const DEFAULT_CONFIG_PATH = path.join(process.cwd(), "scripts", "seed-event.yaml");
 const DEFAULT_BUCKET = process.env.ASSETS_BUCKET_NAME ?? "pkic-assets";
-const DEFAULT_LAYOUT_KEY = process.env.EMAIL_LAYOUT_R2_KEY ?? "layouts/email/default.html";
 const DEFAULT_ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "admin@pkic.org";
 
 function sqlString(value) {
@@ -34,10 +33,10 @@ function parseArgs(argv) {
     mode: "local",
     database: process.env.D1_DATABASE_NAME ?? "pkic-db",
     wranglerEnv: null,
+    persistTo: null,
     configPath: DEFAULT_CONFIG_PATH,
     bucket: DEFAULT_BUCKET,
     adminEmail: DEFAULT_ADMIN_EMAIL,
-    layoutKey: DEFAULT_LAYOUT_KEY,
     skipEmailTemplates: false,
   };
 
@@ -79,12 +78,6 @@ function parseArgs(argv) {
       continue;
     }
 
-    if (arg === "--layout-key" && next) {
-      parsed.layoutKey = next;
-      index += 1;
-      continue;
-    }
-
     if (arg === "--env" && next) {
       parsed.wranglerEnv = next;
       index += 1;
@@ -93,6 +86,13 @@ function parseArgs(argv) {
 
     if (arg === "--skip-email-templates") {
       parsed.skipEmailTemplates = true;
+      continue;
+    }
+
+    if (arg === "--persist-to" && next) {
+      parsed.persistTo = next;
+      index += 1;
+      continue;
     }
   }
 
@@ -424,8 +424,7 @@ function runEmailTemplateSeed(cli) {
     cli.bucket,
     "--admin-email",
     cli.adminEmail,
-    "--layout-key",
-    cli.layoutKey,
+    ...(cli.persistTo ? ["--persist-to", cli.persistTo] : []),
   ];
 
   execFileSync("node", args, {
@@ -446,6 +445,7 @@ function main() {
     cli.database,
     ...(cli.wranglerEnv ? ["--env", cli.wranglerEnv] : []),
     cli.mode === "remote" ? "--remote" : "--local",
+    ...(cli.persistTo ? [`--persist-to=${cli.persistTo}`] : []),
   ];
 
   runWranglerSql(args, sql);

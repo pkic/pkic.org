@@ -5,6 +5,7 @@ function parseArgs(argv) {
   let mode = "local";
   let database = process.env.D1_DATABASE_NAME ?? "pkic-db";
   let wranglerEnv = null;
+  let persistTo = null;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -27,13 +28,19 @@ function parseArgs(argv) {
     if (arg === "--env" && argv[index + 1]) {
       wranglerEnv = argv[index + 1];
       index += 1;
+      continue;
+    }
+
+    if (arg === "--persist-to" && argv[index + 1]) {
+      persistTo = argv[index + 1];
+      index += 1;
     }
   }
 
-  return { mode, database, wranglerEnv };
+  return { mode, database, wranglerEnv, persistTo };
 }
 
-function runSeed(mode, database, wranglerEnv) {
+function runSeed(mode, database, wranglerEnv, persistTo) {
   const userId = randomUUID();
   const sql =
     "INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at) " +
@@ -47,6 +54,7 @@ function runSeed(mode, database, wranglerEnv) {
     database,
     ...(wranglerEnv ? ["--env", wranglerEnv] : []),
     mode === "remote" ? "--remote" : "--local",
+    ...(persistTo ? [`--persist-to=${persistTo}`] : []),
     "--command",
     sql,
   ];
@@ -57,5 +65,5 @@ function runSeed(mode, database, wranglerEnv) {
   });
 }
 
-const { mode, database, wranglerEnv } = parseArgs(process.argv.slice(2));
-runSeed(mode, database, wranglerEnv);
+const { mode, database, wranglerEnv, persistTo } = parseArgs(process.argv.slice(2));
+runSeed(mode, database, wranglerEnv, persistTo);

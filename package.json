@@ -11,9 +11,10 @@
     "typecheck:backend": "tsc --noEmit -p tsconfig.json",
     "typecheck:frontend": "tsc --noEmit -p tsconfig.frontend.json",
     "test": "npm run test:backend && npm run test:frontend",
-    "test:backend": "vitest run tests --exclude='tests/frontend/**' --exclude='**/tests/frontend/**'",
-    "test:frontend": "vitest run tests/frontend",
-    "test:workflows": "vitest run tests/full-workflow.test.ts",
+    "test:backend": "vitest run --config vitest.config.ts",
+    "test:frontend": "vitest run --config vitest.config.frontend.ts",
+    "test:workflows": "vitest run --config vitest.config.ts tests/full-workflow.test.ts",
+    "test:e2e": "playwright test",
     "test:watch": "vitest",
     "check:max-lines": "node scripts/check-max-lines.mjs",
     "check": "npm run typecheck && npm run test && npm run check:max-lines",
@@ -25,17 +26,18 @@
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",
     "handlebars": "^4.7.8",
-    "ics": "^3.8.1",
+    "ical.js": "^2.2.1",
     "marked": "^17.0.3",
     "yaml": "^2.8.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.13",
+    "@cloudflare/vitest-pool-workers": "^0.13.5",
+    "@playwright/test": "^1.58.2",
     "@types/node": "^24.6.1",
-    "better-sqlite3": "^12.4.1",
     "jsdom": "^27.0.0",
     "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "vitest": "^4.1.2",
+    "wrangler": "^4.78.0"
   }
 }

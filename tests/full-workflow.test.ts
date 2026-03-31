@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { D1DatabaseShim } from "./helpers/d1-shim";
-import { createContext, createEnv, seedEventAndAdmin } from "./helpers/context";
+import { env } from "cloudflare:workers";
+import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import { onRequestPost as requestAdminLink } from "../functions/api/v1/admin/auth/request-link";
@@ -33,77 +33,67 @@ interface ProposalPayload {
 }
 
 async function seedTemplate(
-  db: D1DatabaseShim,
-  env: ReturnType<typeof createEnv>,
   adminId: string,
   key: string,
   content: string,
   subjectTemplate?: string,
 ): Promise<void> {
-  const version = await createTemplateVersion(db, {
+  const version = await createTemplateVersion(env.DB, {
     templateKey: key,
     content,
     subjectTemplate: subjectTemplate ?? null,
     createdByUserId: adminId,
   });
 
-  await activateTemplateVersion(db, {
+  await activateTemplateVersion(env.DB, {
     templateKey: key,
     version: version.version,
   });
 }
 
 async function seedRequiredEmailTemplates(
-  db: D1DatabaseShim,
-  env: ReturnType<typeof createEnv>,
   adminId: string,
 ): Promise<void> {
-  // Email templates are now stored in the database. Layout templates are no longer used.
+  await seedTemplate(adminId, "email_layout", "{{{body_html}}}", "Email layout");
+  await seedTemplate(adminId, "partial_reg_details", "Registration details", "Partial: registration details");
+  await seedTemplate(adminId, "partial_sponsors_block", "Sponsors block", "Partial: sponsors block");
+  await seedTemplate(adminId, "partial_about_pkic", "About PKIC", "Partial: about PKIC");
+  await seedTemplate(adminId, "partial_donation_request", "Donation request", "Partial: donation request");
   await seedTemplate(
-    db,
-    env,
     adminId,
     "admin_magic_link",
     "Click [sign in]({{magicLinkUrl}}). Expires in {{expiresInMinutes}} minutes.",
     "Admin sign-in link",
   );
-  await seedTemplate(db, env, adminId, "speaker_invite", "Submit your talk: {{proposalUrl}}", "Speaker invitation");
   await seedTemplate(
-    db,
-    env,
+    adminId, "speaker_invite", "Submit your talk: {{proposalUrl}}", "Speaker invitation");
+  await seedTemplate(
     adminId,
     "proposal_submitted",
     "Proposal **{{proposalTitle}}** submitted. Manage: {{manageUrl}}",
     "Proposal submitted",
   );
   await seedTemplate(
-    db,
-    env,
     adminId,
     "proposal_decision",
     "Decision for **{{proposalTitle}}**: {{finalStatus}}. {{decisionNote}}",
     "Proposal decision",
   );
   await seedTemplate(
-    db,
-    env,
     adminId,
     "registration_confirm_email",
     "Confirm registration: {{confirmationUrl}}",
     "Confirm registration",
   );
   await seedTemplate(
-    db,
-    env,
     adminId,
     "registration_confirmed",
     "Registration confirmed for {{eventName}}. Manage: {{manageUrl}}",
     "Registration confirmed",
   );
-  await seedTemplate(db, env, adminId, "attendee_invite", "Join event: {{registrationUrl}}", "Attendee invite");
   await seedTemplate(
-    db,
-    env,
+    adminId, "attendee_invite", "Join event: {{registrationUrl}}", "Attendee invite");
+  await seedTemplate(
     adminId,
     "registration_updated",
     "Registration updated for {{eventName}}. Status: {{status}}",
@@ -123,13 +113,10 @@ function extractTokenFromOutboxUrl(payloadJson: string, fieldName: string): stri
 
 describe("full workflow", () => {
   it("runs end-to-end attendee and speaker workflows", async () => {
-    const db = new D1DatabaseShim();
-    db.runMigrations();
-    const { eventId } = await seedEventAndAdmin(db);
-    const env = createEnv(db);
+    const { eventId } = await seedEventAndAdmin(env.DB);
 
-    const adminUser = db.raw<{ id: string }>("SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")[0];
-    await seedRequiredEmailTemplates(db, env, adminUser.id);
+    const adminUser = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")))[0];
+    await seedRequiredEmailTemplates(adminUser.id);
 
     const fetchMock = vi.fn().mockResolvedValue(
       new Response(null, {
@@ -152,9 +139,9 @@ describe("full workflow", () => {
       );
       expect(requestLinkResponse.status).toBe(200);
 
-    const magicLinkOutbox = db.raw<{ payload_json: string }>(
+    const magicLinkOutbox = ((await queryAll<{ payload_json: string }>(env.DB, 
       "SELECT payload_json FROM email_outbox WHERE template_key = 'admin_magic_link' ORDER BY created_at DESC LIMIT 1",
-    )[0];
+    )))[0];
     const magicToken = extractTokenFromOutboxUrl(magicLinkOutbox.payload_json, "magicLinkUrl");
 
     const verifyResponse = await verifyAdminLink(
@@ -173,11 +160,11 @@ describe("full workflow", () => {
     const adminSessionToken = verifyPayload.token;
 
     const reviewerUserId = crypto.randomUUID();
-    await db.exec?.(`
+    await env.DB.prepare(`
       INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
       VALUES ('${reviewerUserId}', 'reviewer2@pkic.org', 'reviewer2@pkic.org', 'admin', 1, datetime('now'), datetime('now'));
-    `);
-    await createAdminSession(db, reviewerUserId, "reviewer-2-token");
+    `).run();
+    await createAdminSession(env.DB, reviewerUserId, "reviewer-2-token");
 
     const speakerInviteResponse = await inviteSpeakersBulk(
       createContext(
@@ -314,9 +301,9 @@ describe("full workflow", () => {
     const registrationOnePayload = await registrationOneResponse.json() as CreateRegistrationPayload;
     expect(registrationOnePayload.status).toBe("pending_email_confirmation");
 
-    const firstConfirmationPayload = db.raw<{ payload_json: string }>(
+    const firstConfirmationPayload = ((await queryAll<{ payload_json: string }>(env.DB, 
       "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = 'attendee1@example.test' ORDER BY created_at DESC LIMIT 1",
-    )[0];
+    )))[0];
     const firstConfirmationToken = extractTokenFromOutboxUrl(firstConfirmationPayload.payload_json, "confirmationUrl");
 
     const firstConfirmResponse = await confirmRegistrationEmail(
@@ -377,9 +364,9 @@ describe("full workflow", () => {
     );
     const registrationTwoPayload = await registrationTwoResponse.json() as CreateRegistrationPayload;
 
-    const secondConfirmationPayload = db.raw<{ payload_json: string }>(
+    const secondConfirmationPayload = ((await queryAll<{ payload_json: string }>(env.DB, 
       "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = 'attendee2@example.test' ORDER BY created_at DESC LIMIT 1",
-    )[0];
+    )))[0];
     const secondConfirmationToken = extractTokenFromOutboxUrl(secondConfirmationPayload.payload_json, "confirmationUrl");
 
     const secondConfirmResponse = await confirmRegistrationEmail(
@@ -410,10 +397,10 @@ describe("full workflow", () => {
     );
     expect(cancelRegistrationResponse.status).toBe(200);
 
-    const waitlistStatus = db.raw<{ status: string }>(
+    const waitlistStatus = ((await queryAll<{ status: string }>(env.DB, 
       "SELECT status FROM waitlist_entries WHERE registration_id = ?",
       [registrationTwoPayload.registrationId],
-    )[0];
+    )))[0];
     expect(waitlistStatus.status).toBe("waiting");
 
     const referralCode = registrationOnePayload.shareUrl.split("/").pop() as string;
@@ -422,7 +409,7 @@ describe("full workflow", () => {
     );
     expect(referralResponse.status).toBe(302);
 
-    await queueEmail(db, {
+    await queueEmail(env.DB, {
       eventId,
       templateKey: "registration_updated",
       recipientEmail: "ops@pkic.org",
@@ -454,19 +441,19 @@ describe("full workflow", () => {
       expect(retryPayload.processed).toBeGreaterThan(0);
       expect(fetchMock).toHaveBeenCalled();
 
-      const proposalStatus = db.raw<{ status: string }>(
+      const proposalStatus = ((await queryAll<{ status: string }>(env.DB, 
         "SELECT status FROM session_proposals WHERE id = ?",
         [createdProposal.proposalId],
-      )[0];
+      )))[0];
       expect(proposalStatus.status).toBe("accepted");
 
-      const referralClicks = db.raw<{ clicks: number }>("SELECT clicks FROM referral_codes WHERE code = ?", [referralCode])[0];
+      const referralClicks = ((await queryAll<{ clicks: number }>(env.DB, "SELECT clicks FROM referral_codes WHERE code = ?", [referralCode])))[0];
       expect(Number(referralClicks.clicks)).toBeGreaterThan(0);
 
-      const eventRegistrations = db.raw<{ total: number }>(
+      const eventRegistrations = ((await queryAll<{ total: number }>(env.DB, 
         "SELECT COUNT(*) AS total FROM registrations WHERE event_id = ?",
         [eventId],
-      )[0];
+      )))[0];
       expect(Number(eventRegistrations.total)).toBeGreaterThanOrEqual(2);
     } finally {
       vi.unstubAllGlobals();

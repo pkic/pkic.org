@@ -368,6 +368,31 @@ export const adminRunJobsSchema = z.object({
   dryRun: z.boolean().default(false),
 });
 
+export const internalCalendarRsvpIngestSchema = z.object({
+  provider: z.string().trim().min(2).max(80).default("cloudflare_email_route"),
+  sourceMessageId: z.string().trim().min(1).max(500).optional(),
+  receivedAt: z.string().datetime().optional(),
+  fromEmail: normalizedEmailSchema.optional(),
+  toEmail: normalizedEmailSchema.optional(),
+  subject: z.string().trim().min(1).max(500).optional(),
+  uid: z.string().trim().min(1).max(500).optional(),
+  partstat: z.string().trim().min(1).max(64).optional(),
+  attendeeEmail: normalizedEmailSchema.optional(),
+  method: z.string().trim().min(1).max(40).optional(),
+  sequence: z.number().int().min(0).max(100_000).optional(),
+  calendarIcs: z.string().min(1).max(300_000).optional(),
+  rawPayload: z.unknown().optional(),
+}).superRefine((value, ctx) => {
+  const hasDirectRsvp = Boolean(value.uid && value.partstat);
+  if (!hasDirectRsvp && !value.calendarIcs) {
+    ctx.addIssue({
+      code: "custom",
+      message: "Either uid+partstat or calendarIcs is required",
+      path: ["uid"],
+    });
+  }
+});
+
 export const inviteReminderPreferenceSchema = z.object({
   action: z.enum(["postpone_7d", "pause_30d", "resume", "unsubscribe"]),
 });

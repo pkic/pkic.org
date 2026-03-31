@@ -16,12 +16,13 @@
  */
 
 import { describe, it, expect, beforeEach } from "vitest";
-import { D1DatabaseShim } from "./helpers/d1-shim";
-import { createContext, createEnv, seedEventAndAdmin } from "./helpers/context";
+import { resetDb } from "./helpers/reset-db";
+import { env } from "cloudflare:workers";
+import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { nowIso } from "../functions/_lib/utils/time";
-import type { PagesContext } from "../functions/_lib/types";
+import type { DatabaseLike, PagesContext } from "../functions/_lib/types";
 
 // ── Admin endpoint handlers ───────────────────────────────────────────────────
 import { onRequestGet as adminUsersGet, onRequest as adminUsersRequest } from "../functions/api/v1/admin/users";
@@ -116,7 +117,7 @@ function anonDelete(url: string): Request {
 
 /** Inserts a session directly, allowing control over expires_at and revoked_at. */
 async function insertSession(
-  db: D1DatabaseShim,
+  _db: DatabaseLike,
   userId: string,
   rawToken: string,
   opts: { expiresAt?: string; revokedAt?: string } = {},
@@ -124,11 +125,11 @@ async function insertSession(
   const tokenHash = await sha256Hex(rawToken);
   const expiresAt = opts.expiresAt ?? new Date(Date.now() + 8 * 3600 * 1000).toISOString();
   const revokedAt = opts.revokedAt ?? null;
-  await db.exec?.(`
+  await env.DB.prepare(`
     INSERT INTO sessions (id, user_id, token_hash, expires_at, revoked_at, created_at)
     VALUES ('${crypto.randomUUID()}', '${userId}', '${tokenHash}',
             '${expiresAt}', ${revokedAt ? `'${revokedAt}'` : "NULL"}, '${nowIso()}');
-  `);
+  `).run();
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -136,8 +137,7 @@ async function insertSession(
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("protected endpoint — rejects unauthenticated requests", () => {
-  let db: D1DatabaseShim;
-  let env: ReturnType<typeof createEnv>;
+  beforeEach(async () => { await resetDb(); });
   let eventSlug: string;
   const userId = crypto.randomUUID();
   const registrationId = crypto.randomUUID();
@@ -149,10 +149,7 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
   const reviewId = crypto.randomUUID();
 
   beforeEach(async () => {
-    db = new D1DatabaseShim();
-    db.runMigrations();
-    await seedEventAndAdmin(db);
-    env = createEnv(db);
+    await seedEventAndAdmin(env.DB);
     eventSlug = "pqc-2026";
   });
 
@@ -426,17 +423,13 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("session-token validation", () => {
-  let db: D1DatabaseShim;
-  let env: ReturnType<typeof createEnv>;
+  beforeEach(async () => { await resetDb(); });
   let adminId: string;
 
   beforeEach(async () => {
-    db = new D1DatabaseShim();
-    db.runMigrations();
-    await seedEventAndAdmin(db);
-    env = createEnv(db);
+    await seedEventAndAdmin(env.DB);
     // Retrieve the admin user id that seedEventAndAdmin created
-    const row = db.raw<{ id: string }>("SELECT id FROM users WHERE role = 'admin' LIMIT 1")[0];
+    const row = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1")))[0];
     adminId = row.id;
   });
 
@@ -452,41 +445,41 @@ describe("session-token validation", () => {
 
   it("rejects a well-formed but wrong token → AUTH_INVALID", async () => {
     // Create a session with known token, then query with a different one
-    await createAdminSession(db, adminId, "real-token");
+    await createAdminSession(env.DB, adminId, "real-token");
     await expect(callUsers("wrong-token")).rejects.toMatchObject({ code: "AUTH_INVALID" });
   });
 
   it("rejects an expired session → AUTH_EXPIRED", async () => {
     const expiredAt = new Date(Date.now() - 1000).toISOString(); // 1 s in the past
-    await insertSession(db, adminId, "expired-token", { expiresAt: expiredAt });
+    await insertSession(env.DB, adminId, "expired-token", { expiresAt: expiredAt });
     await expect(callUsers("expired-token")).rejects.toMatchObject({ code: "AUTH_EXPIRED" });
   });
 
   it("rejects a revoked session → AUTH_REVOKED", async () => {
-    await insertSession(db, adminId, "revoked-token", { revokedAt: nowIso() });
+    await insertSession(env.DB, adminId, "revoked-token", { revokedAt: nowIso() });
     await expect(callUsers("revoked-token")).rejects.toMatchObject({ code: "AUTH_REVOKED" });
   });
 
   it("rejects a token belonging to a non-admin user (role='user') → AUTH_INVALID", async () => {
     const regularUserId = crypto.randomUUID();
-    await db.exec?.(`
+    await env.DB.prepare(`
       INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
       VALUES ('${regularUserId}', 'regular@example.test', 'regular@example.test',
               'user', 1, datetime('now'), datetime('now'));
-    `);
-    await insertSession(db, regularUserId, "user-token");
+    `).run();
+    await insertSession(env.DB, regularUserId, "user-token");
     // A regular user's session must not grant admin access
     await expect(callUsers("user-token")).rejects.toMatchObject({ code: "AUTH_INVALID" });
   });
 
   it("rejects a token belonging to an inactive admin (active=0) → AUTH_INVALID", async () => {
     const inactiveAdminId = crypto.randomUUID();
-    await db.exec?.(`
+    await env.DB.prepare(`
       INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
       VALUES ('${inactiveAdminId}', 'inactive@example.test', 'inactive@example.test',
               'admin', 0, datetime('now'), datetime('now'));
-    `);
-    await insertSession(db, inactiveAdminId, "inactive-admin-token");
+    `).run();
+    await insertSession(env.DB, inactiveAdminId, "inactive-admin-token");
     await expect(callUsers("inactive-admin-token")).rejects.toMatchObject({ code: "AUTH_INVALID" });
   });
 
@@ -503,7 +496,7 @@ describe("session-token validation", () => {
   });
 
   it("accepts a valid active admin session token", async () => {
-    await createAdminSession(db, adminId, "valid-admin-token");
+    await createAdminSession(env.DB, adminId, "valid-admin-token");
     const response = await callUsers("valid-admin-token");
     expect(response.status).toBe(200);
   });
@@ -514,14 +507,10 @@ describe("session-token validation", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("HTTP method enforcement", () => {
-  let db: D1DatabaseShim;
-  let env: ReturnType<typeof createEnv>;
+  beforeEach(async () => { await resetDb(); });
 
   beforeEach(async () => {
-    db = new D1DatabaseShim();
-    db.runMigrations();
-    await seedEventAndAdmin(db);
-    env = createEnv(db);
+    await seedEventAndAdmin(env.DB);
   });
 
   it("rejects POST to GET-only /api/v1/admin/users → 405", async () => {
@@ -579,14 +568,10 @@ describe("HTTP method enforcement", () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe("public endpoints — accessible without credentials", () => {
-  let db: D1DatabaseShim;
-  let env: ReturnType<typeof createEnv>;
+  beforeEach(async () => { await resetDb(); });
 
   beforeEach(async () => {
-    db = new D1DatabaseShim();
-    db.runMigrations();
-    await seedEventAndAdmin(db);
-    env = createEnv(db);
+    await seedEventAndAdmin(env.DB);
   });
 
   it("GET /api/v1/events/:slug/terms returns 200 without Authorization header", async () => {
