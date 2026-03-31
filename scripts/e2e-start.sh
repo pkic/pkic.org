@@ -29,7 +29,8 @@ INTERCEPTOR_PID=$!
 
 trap 'kill "$INTERCEPTOR_PID" 2>/dev/null; rm -rf "$STATE_DIR"' EXIT INT TERM
 
-npx wrangler pages dev public/ \
+npx wrangler dev \
+  --port=8788 \
   --persist-to="$STATE_DIR" \
   --env-file=.dev.vars \
   -b "SENDGRID_API_BASE=http://127.0.0.1:${INTERCEPT_PORT}" \

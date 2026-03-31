@@ -3,7 +3,16 @@
   "name": "pkic-org",
   "compatibility_date": "2026-02-28",
   "compatibility_flags": ["nodejs_compat"],
-  "pages_build_output_dir": "public",
+  "main": "functions/_worker/index.ts",
+  "build": {
+    "command": "node scripts/generate-worker-routes.mjs"
+  },
+  "assets": {
+    "directory": "public",
+    "binding": "ASSETS",
+    "not_found_handling": "404-page",
+    "run_worker_first": true
+  },
   "dev": {
     "port": 8788,
     "local_protocol": "http"

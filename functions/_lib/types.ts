@@ -33,6 +33,10 @@ export interface ImagesBinding {
   };
 }
 
+export interface StaticAssetsBinding {
+  fetch(request: Request): Promise<Response>;
+}
+
 export interface R2BucketLike {
   get(key: string): Promise<R2ObjectLike | null>;
   put(key: string, value: string | ArrayBuffer | ReadableStream, options?: Record<string, unknown>): Promise<void>;
@@ -40,6 +44,8 @@ export interface R2BucketLike {
 
 export interface Env {
   DB: DatabaseLike;
+  /** Static assets binding served from the `public` directory in Workers mode. */
+  ASSETS?: StaticAssetsBinding;
   /** R2 bucket for general assets (OG badges, layout HTML, etc.). */
   ASSETS_BUCKET?: R2BucketLike;
   /** R2 bucket for speaker headshots and presentation uploads. */

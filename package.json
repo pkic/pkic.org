@@ -4,9 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "sh -c 'hugo serve -w -e development --port 1313 & HUGO_PID=$!; trap \"kill $HUGO_PID\" EXIT INT TERM; npx wrangler pages dev --ip 0.0.0.0 --proxy 1313'",
+    "dev": "sh -c 'hugo serve -w -e development --renderToDisk --port 1313 & HUGO_PID=$!; trap \"kill $HUGO_PID\" EXIT INT TERM; npx wrangler dev --ip 0.0.0.0 --port 8788'",
     "dev:hugo": "hugo serve -w -e development",
-    "dev:wrangler": "npx wrangler pages dev --ip 0.0.0.0 --proxy 1313",
+    "dev:wrangler": "npx wrangler dev --ip 0.0.0.0 --port 8788",
+    "routes:generate": "node scripts/generate-worker-routes.mjs",
     "typecheck": "npm run typecheck:backend && npm run typecheck:frontend",
     "typecheck:backend": "tsc --noEmit -p tsconfig.json",
     "typecheck:frontend": "tsc --noEmit -p tsconfig.frontend.json",
@@ -26,6 +27,7 @@
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",
     "handlebars": "^4.7.8",
+    "hono": "^4.10.6",
     "ical.js": "^2.2.1",
     "marked": "^17.0.3",
     "yaml": "^2.8.1",

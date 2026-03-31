@@ -20,6 +20,8 @@ import { processOutboxByIdBackground } from "../../../../../../../_lib/email/out
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { updateRegistrationById } from "../../../../../../../_lib/services/registrations";
 import { validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
+import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
+import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
 import { nowIso } from "../../../../../../../_lib/utils/time";
 import type { DatabaseLike, PagesContext } from "../../../../../../../_lib/types";
 import { registrationManageSchema } from "../../../../../../../../assets/shared/schemas/api";
