@@ -682,8 +682,8 @@ If the button above does not work, copy and paste the following URL into your br
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "donation_thank_you",
-    subjectTemplate: "You just helped secure the internet — thank you, {{firstName}}",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear supporter,{{/if}}
+    subjectTemplate: "You just helped secure the internet — thank you{{#if firstName}}, {{firstName}}{{else}}{{#if name}}, {{name}}{{/if}}{{/if}}",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}{{#if name}}Dear {{name}},{{else}}Dear Supporter,{{/if}}{{/if}}
 
 Your **{{formattedAmount}}** donation just landed — and it means more than you might think.
 
@@ -696,8 +696,8 @@ Every dollar we raise lets us keep our conferences **free and open** to security
 ### Your donation details
 
 > **Name:** {{name}}
-> {{#if organizationName}}**Organisation:** {{organizationName}}
-> {{/if}}**Amount:** {{formattedAmount}}
+> {{#if organizationName}}**Organisation:** {{organizationName}}  
+> {{/if}}**Amount:** {{formattedAmount}}   
 
 <div class="notice notice-success">&#10003; Payment confirmed. A receipt from our payment processor will be sent separately to <strong>{{email}}</strong>.</div>
 
@@ -732,7 +732,7 @@ The PKI Consortium team
   {
     key: "donation_expired",
     subjectTemplate: "Your donation checkout expired — PKI Consortium",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Donor,{{/if}}
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}{{#if name}}Dear {{name}},{{else}}Dear Supporter,{{/if}}{{/if}}
 
 It looks like your checkout for a **{{formattedAmount}}** donation to the **PKI Consortium** was not completed — this can happen if you closed the page, navigated away, or the session expired.
 
@@ -760,7 +760,7 @@ The PKI Consortium team
   {
     key: "donation_payment_failed",
     subjectTemplate: "Your donation payment failed — PKI Consortium",
-    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Donor,{{/if}}
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}{{#if name}}Dear {{name}},{{else}}Dear Supporter,{{/if}}{{/if}}
 
 We wanted to let you know that the payment for your **{{formattedAmount}}** donation to the **PKI Consortium** unfortunately did not go through.
 
