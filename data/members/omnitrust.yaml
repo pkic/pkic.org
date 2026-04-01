@@ -1,0 +1,76 @@
+id: omnitrust
+name: OmniTrust
+slogan: Securing What Matters From Silicon to AI
+website: https://omnitrust.com/
+
+# Short description
+description: OmniTrust secures the connected world from silicon to AI through unified Trust Lifecycle Management across devices, identities, and cryptography.
+
+# membership
+memberSince: 2021-08-27
+memberType: F
+workingGroups:
+  - PKIMM
+  - TCWG
+  - CM
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog: 
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press: 
+  url: https://omnitrust.com/media-press/
+  feed: 
+  language: en_US
+
+# Careers
+careers: 
+  url: https://omnitrust.com/careers/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: https://www.instagram.com/omnitrust_tlm/
+  linkedin: https://www.linkedin.com/company/omnitrustsecurity
+  youtube: https://www.youtube.com/@OmniTrustTLM
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Roman Cinkais
+    role: SVP of Enterprise Products
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/roman-cinkais
+    description:
+      Roman Cinkais has master degree from mathematical method of information security from Charles University in Prague. Roman has over 15 years of professional experience with a focus on information security IT projects across various industries (financial, retail, banking, telco, postal). Roman has profound knowledge of cyber security and risk management framework, regulation, and standards like GDPR, ISO, NIST, ANSI, PCI, ETSI, Common Criteria, and practical experience with integrated management system minimizing efforts for security controls and compliance.
+
+# Long-form content (markdown)
+content: |
+  # About OmniTrust
+  
+  OmniTrust's Trust Lifecycle Management (TLM) platform unifies Device Lifecycle Management (DLM) and Identity Lifecycle Management (ILM) into a single framework that secures trust everywhere it lives — across devices, identities, cryptographic assets, and AI agents. Global customers, including many Fortune 100 companies, rely on OmniTrust to protect more than 2 billion devices and secure more than 3 billion software updates annually across safety-critical, regulated industries.
+  
+  # Main Capabilities
+  
+  - **Trust Lifecycle Management (TLM)** — End-to-end visibility, policy-driven enforcement, and lifecycle governance from design and provisioning through operation, update, and retirement.
+  - **PKI & Certificate Lifecycle Management** — Automated discovery, issuance, renewal, and revocation of digital certificates across enterprise and device ecosystems.
+  - **Post-Quantum & Crypto Agility** — Cryptographic inventory, CBOM generation, posture analytics, and migration planning aligned with NIST PQC standards.
+  - **Secure Software & Firmware Signing** — Centralized signing and policy enforcement for CI/CD pipelines, OTA updates, and runtime environments.
+  - **AI & Agent Identity Assurance** — Cryptographic identities and verifiable credentials for AI models and autonomous agents.
+  
+  # Industries served
+  
+  Automotive & transportation, aerospace & defense, financial services, healthcare & MedTech, energy & utilities, industrial manufacturing & OT, telecom & cloud, semiconductors & hi-tech.
