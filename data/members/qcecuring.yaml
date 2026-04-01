@@ -1,10 +1,10 @@
 id: qcecuring
 name: QCecuring Technologies
-slogan:
+slogan: Modern Machine Identity & Cryptographic Operations Platform
 website: https://qcecuring.com
 
 # Short description, longer content can be placed in `content/members/`
-description: Securely automate certificate lifecycle management, code signing, SSH keys, PKI, and machine identities with QCecuring’s modern cryptographic operations platform.
+description: QCecuring Technologies provides a modern platform for automating machine identity management, certificate lifecycle management (CLM), code signing, SSH key management, and enterprise PKI operations across hybrid and multi-cloud environments.
 
 # membership
 memberSince: 2026-03-25
@@ -21,7 +21,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://qcecuring.com/blog
   feed: 
   language: en_US
 
@@ -39,24 +39,51 @@ careers:
 
 # Social media
 social:
-  x: 
+  x: https://x.com/qcecuring
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/qcecuring/
-  youtube: https://www.qcecuring.com/assets/icons/svg/youtube.svg
+  youtube: https://www.youtube.com/@qcecuring
   github: https://github.com/qcecuring
 
-# Here you can list those who represent or have represented the member.
-#
-# Those who no longer represent an organization might have written blog posts,
-# to keep the attribution a from/till data range can be included.
+# Representatives
 representatives:
   - name: Shivam Sharma
     role: Director
     social:
-      x: 
       linkedin: https://www.linkedin.com/in/shivam111sharma/
-    description: Shivam is the Director at QCecuring Technologies and represents the organization at the PKI Consortium.
+    description: Shivam Sharma is the Director of QCecuring Technologies, leading product innovation in machine identity management, cryptographic automation, and post-quantum readiness. He represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
+  QCecuring Technologies is a next-generation cybersecurity platform focused on solving the growing complexity of machine identities and cryptographic operations in modern enterprises.
+
+  As organizations scale across cloud-native, hybrid, and distributed infrastructures, the number of machine identities—TLS certificates, SSH keys, code-signing keys, and secrets—has grown exponentially. QCecuring provides a unified platform to automate discovery, governance, issuance, renewal, and revocation of these identities.
+
+  ## Core Capabilities
+
+  - **Certificate Lifecycle Management (CLM)**  
+    Automate end-to-end lifecycle of TLS/SSL certificates across internal and external Certificate Authorities, eliminating outages and ensuring continuous compliance.
+
+  - **SSH Key Management (SSH KLM)**  
+    Discover, rotate, and govern SSH keys across servers, containers, and developer environments to prevent unauthorized access.
+
+  - **Code Signing Security**  
+    Secure software supply chains by managing code-signing keys, enforcing signing policies, and integrating with CI/CD pipelines.
+
+  - **Enterprise PKI Automation**  
+    Integrate with enterprise PKI environments, including Microsoft ADCS and cloud-native CAs, to streamline certificate issuance and policy enforcement.
+
+  - **Post-Quantum Cryptography (PQC) Readiness**  
+    Prepare organizations for quantum threats with crypto-agility, algorithm inventory, and migration strategies aligned with emerging standards.
+
+  ## Platform Approach
+
+  QCecuring is built as an API-first, automation-driven platform designed for DevOps and security teams. It integrates seamlessly with cloud providers, CI/CD pipelines, and enterprise infrastructure, enabling organizations to shift from reactive certificate management to proactive cryptographic governance.
+
+  ## Why QCecuring
+
+  - Unified platform across CLM, SSH, PKI, and code signing  
+  - Automation-first approach reducing manual overhead  
+  - Designed for scale in cloud-native environments  
+  - Strong focus on crypto-agility and future-proof security  
