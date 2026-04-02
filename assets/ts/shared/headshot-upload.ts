@@ -37,7 +37,19 @@ function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob>
   });
 }
 
-export function showHeadshotDisclaimer(): Promise<boolean> {
+export interface HeadshotDisclaimerOptions {
+  title?: string;
+  texts?: string[];
+  confirmText?: string;
+}
+
+export function showHeadshotDisclaimer(opts: HeadshotDisclaimerOptions = {}): Promise<boolean> {
+  const {
+    title = "Before you upload a photo",
+    texts = HEADSHOT_DISCLAIMER_TEXT,
+    confirmText = "Upload photo"
+  } = opts;
+
   return new Promise((resolve) => {
     const overlay = document.createElement("div");
     overlay.style.cssText =
@@ -46,16 +58,17 @@ export function showHeadshotDisclaimer(): Promise<boolean> {
     card.style.cssText =
       "background:#fff;border-radius:.5rem;max-width:520px;width:100%;padding:1.5rem;box-shadow:0 8px 32px rgba(0,0,0,.25)";
     card.innerHTML = `
-      <h4 style="margin:0 0 .75rem;font-size:1.1rem">Before you upload a photo</h4>
-      <p style="font-size:.875rem;margin:0 0 1rem">Please confirm all of the following:</p>
+      <h4 style="margin:0 0 .75rem;font-size:1.1rem">${title}</h4>
+      <ul style="font-size:.875rem;margin:0 0 1rem;padding-left:1.25rem">
+        ${texts.map((text) => `<li style="margin-bottom:.25rem">${text}</li>`).join("")}
+      </ul>
       <form>
-        ${HEADSHOT_DISCLAIMER_TEXT.map((text, i) => `
-          <div style="display:flex;gap:.5rem;margin-bottom:.5rem;align-items:flex-start">
-            <input type="checkbox" id="hsd-${i}" style="margin-top:.2rem;flex-shrink:0">
-            <label for="hsd-${i}" style="font-size:.875rem">${text}</label>
-          </div>`).join("")}
-        <div style="display:flex;gap:.5rem;margin-top:1rem">
-          <button type="submit" id="hsd-confirm" class="btn btn-success btn-sm" disabled>Continue to crop →</button>
+        <div style="display:flex;gap:.5rem;margin-bottom:1rem;align-items:flex-start">
+          <input type="checkbox" id="hsd-agree" style="margin-top:.2rem;flex-shrink:0">
+          <label for="hsd-agree" style="font-size:.875rem">I confirm all of the above.</label>
+        </div>
+        <div style="display:flex;gap:.5rem">
+          <button type="submit" id="hsd-confirm" class="btn btn-success btn-sm" disabled>${confirmText}</button>
           <button type="button" id="hsd-cancel" class="btn btn-outline-secondary btn-sm">Cancel</button>
         </div>
       </form>`;
@@ -64,16 +77,15 @@ export function showHeadshotDisclaimer(): Promise<boolean> {
 
     const confirmBtn = card.querySelector<HTMLButtonElement>("#hsd-confirm")!;
     const cancelBtn = card.querySelector<HTMLButtonElement>("#hsd-cancel")!;
-    const checkboxes = Array.from(card.querySelectorAll<HTMLInputElement>("input[type='checkbox']"));
+    const checkbox = card.querySelector<HTMLInputElement>("#hsd-agree")!;
 
-    function updateConfirm(): void {
-      confirmBtn.disabled = !checkboxes.every((cb) => cb.checked);
-    }
-    for (const cb of checkboxes) cb.addEventListener("change", updateConfirm);
+    checkbox.addEventListener("change", () => {
+      confirmBtn.disabled = !checkbox.checked;
+    });
 
     card.querySelector("form")!.addEventListener("submit", (e) => {
       e.preventDefault();
-      if (checkboxes.every((cb) => cb.checked)) { overlay.remove(); resolve(true); }
+      if (checkbox.checked) { overlay.remove(); resolve(true); }
     });
     cancelBtn.addEventListener("click", () => { overlay.remove(); resolve(false); });
     overlay.addEventListener("click", (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } });

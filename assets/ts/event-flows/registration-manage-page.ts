@@ -10,9 +10,9 @@ import {
 } from "../shared/render-custom-fields";
 import { readDayAttendance, renderDayAttendance, writeDayAttendance } from "../shared/render-day-attendance";
 import { renderSharePanel, refreshSharePanelBadge } from "../shared/render-share-panel";
-import { cropHeadshot } from "../shared/crop-headshot";
 import { showManageLinkRecoveryForm } from "../shared/manage-link-recovery";
-import { prepareHeadshotUploadBlob, showHeadshotDisclaimer } from "../shared/headshot-upload";
+import { showHeadshotDisclaimer } from "../shared/headshot-upload";
+import { cropHeadshot } from "../shared/crop-headshot";
 import { renderHeadshotPreview } from "../shared/headshot-preview";
 import { bootstrap, setStatus } from "./boot";
 
@@ -44,24 +44,27 @@ function wireHeadshotSection(
   fileInput?.addEventListener("change", () => {
     const file = fileInput.files?.[0];
     if (!file) return;
-    fileInput.value = "";
 
     void (async () => {
       const accepted = await showHeadshotDisclaimer();
-      if (!accepted) return;
+      if (!accepted) {
+        fileInput.value = "";
+        return;
+      }
 
-      const croppedBlob = await cropHeadshot(file);
-      if (!croppedBlob) return;
-
-      const uploadBlob = await prepareHeadshotUploadBlob(croppedBlob, 1024 * 1024);
-      const uploadFile = new File([uploadBlob], "headshot.jpg", { type: "image/jpeg" });
+      const cropped = await cropHeadshot(file);
+      if (!cropped) {
+        fileInput.value = "";
+        return;
+      }
 
       if (headshotStatus) headshotStatus.textContent = "Uploading…";
-      const form = new FormData();
-      form.append("file", uploadFile);
-      form.append("consent", "true");
+      fileInput.value = "";
 
       try {
+        const form = new FormData();
+        form.append("file", cropped, "headshot.jpg");
+        form.append("consent", "true");
         const res = await fetch(`${apiBase}/registrations/manage/${encodeURIComponent(token)}/headshot`, {
           method: "PUT",
           body: form,
