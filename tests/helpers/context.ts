@@ -22,13 +22,32 @@ export function createContext<P extends Record<string, string>>(
   request: Request,
   params: P,
 ): PagesContext<P> {
+  const data: Record<string, unknown> = {};
+  const waitUntil = (promise: Promise<unknown>) => {
+    void promise.catch(() => undefined);
+  };
+
   return {
     env,
     request,
     params,
-    waitUntil(promise: Promise<unknown>) {
-      void promise.catch(() => undefined);
+    data,
+    req: {
+      raw: request,
+      param(name: string) {
+        return params[name];
+      },
     },
+    executionCtx: {
+      waitUntil,
+    },
+    set(key: string, value: unknown) {
+      data[key] = value;
+    },
+    get(key: string) {
+      return data[key];
+    },
+    waitUntil,
   };
 }
 

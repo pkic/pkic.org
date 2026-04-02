@@ -19,9 +19,9 @@ async function listResettableTables(): Promise<string[]> {
     .all<TableNameRow>();
 
   return results
-    .map((row) => row.name)
-    .filter((name) => !name.startsWith("_cf_"))
-    .filter((name) => !EXCLUDED_TABLES.has(name));
+    .map((row: TableNameRow) => row.name)
+    .filter((name: string) => !name.startsWith("_cf_"))
+    .filter((name: string) => !EXCLUDED_TABLES.has(name));
 }
 
 async function clearTablesWithRetry(tableNames: string[]): Promise<void> {

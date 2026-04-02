@@ -5,7 +5,7 @@ import { createContext, seedEventAndAdmin } from "./helpers/context";
 import { createReferralCode } from "../functions/_lib/services/referrals";
 import { resolveEventFrontendRoutes } from "../functions/_lib/services/events";
 import { onRequestGet as referralRedirect } from "../functions/r/[code]";
-import { onRequestGet as getForms } from "../functions/api/v1/events/[eventSlug]/forms";
+import app from "../functions/router";
 
 describe("event frontend routes and hydration contracts", () => {
   beforeEach(async () => { await resetDb(); });
@@ -124,13 +124,7 @@ describe("event frontend routes and hydration contracts", () => {
   it("returns required terms in forms hydration response", async () => {
     await seedEventAndAdmin(env.DB);
 
-    const response = await getForms(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=event_registration"),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const response = await app.fetch(new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=event_registration"), env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {

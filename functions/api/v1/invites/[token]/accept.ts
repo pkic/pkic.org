@@ -12,17 +12,16 @@ import { createReferralCode } from "../../../../_lib/services/referrals";
 import { trySeedGravatarThenPrerender } from "../../../../_lib/services/og-badge-prerender";
 import { proposalPageUrl } from "../../../../_lib/services/frontend-links";
 import { deriveEventAttendanceType } from "../../../../_lib/services/event-days";
-import type { PagesContext } from "../../../../_lib/types";
 import { inviteAcceptAttendeeSchema } from "../../../../../assets/shared/schemas/api";
 import { requireInternalSecret } from "../../../../_lib/request";
 
-export async function onRequestPost(context: PagesContext<{ token: string }>): Promise<Response> {
-  const config = getConfig(context.env, context.request);
-  const signingSecret = requireInternalSecret(context.env);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
-  const invite = await findInviteByToken(context.env.DB, context.params.token);
+export async function onRequestPost(c: any): Promise<Response> {
+  const config = getConfig(c.env, c.req.raw);
+  const signingSecret = requireInternalSecret(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const invite = await findInviteByToken(c.env.DB, c.req.param("token"));
   const event = await first<{ id: string; slug: string; base_path: string | null; starts_at: string | null; name: string; settings_json: string }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, slug, base_path, starts_at, name, settings_json FROM events WHERE id = ?",
     [invite.event_id],
   );
@@ -32,7 +31,7 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
   }
 
   if (invite.invite_type === "speaker") {
-    await acceptInvite(context.env.DB, invite.id);
+    await acceptInvite(c.env.DB, invite.id);
     return json({
       success: true,
       inviteType: "speaker",
@@ -40,13 +39,13 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
     });
   }
 
-  const body = await parseJsonBody(context.request, inviteAcceptAttendeeSchema);
+  const body = await parseJsonBody(c.req, inviteAcceptAttendeeSchema);
 
   if (invite.invitee_email !== body.email) {
     return json({ error: { code: "EMAIL_MISMATCH", message: "Invite email must match registration email" } }, 400);
   }
 
-  const user = await findOrCreateUser(context.env.DB, {
+  const user = await findOrCreateUser(c.env.DB, {
     email: body.email,
     firstName: body.firstName,
     lastName: body.lastName,
@@ -54,15 +53,15 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
     jobTitle: body.jobTitle,
   });
 
-  const requiredTerms = await getRequiredTerms(context.env.DB, event.id, "attendee");
+  const requiredTerms = await getRequiredTerms(c.env.DB, event.id, "attendee");
   await validateRequiredConsents(requiredTerms, body.consents);
-  const customAnswers = await validateCustomAnswersByPurpose(context.env.DB, {
+  const customAnswers = await validateCustomAnswersByPurpose(c.env.DB, {
     eventId: event.id,
     purpose: "event_registration",
     customAnswers: body.customAnswers,
   });
 
-  const created = await createRegistration(context.env.DB, {
+  const created = await createRegistration(c.env.DB, {
     event: {
       id: event.id,
     },
@@ -75,19 +74,19 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
     confirmationTtlHours: config.manageTokenTtlHours,
   });
 
-  await acceptInvite(context.env.DB, invite.id);
-  await persistConsents(context.env.DB, {
+  await acceptInvite(c.env.DB, invite.id);
+  await persistConsents(c.env.DB, {
     registrationId: created.registration.id,
     eventId: event.id,
     userId: user.id,
     audienceType: "attendee",
     accepted: body.consents,
-    ip: context.request.headers.get("cf-connecting-ip"),
-    userAgent: context.request.headers.get("user-agent"),
+    ip: c.req.raw.headers.get("cf-connecting-ip"),
+    userAgent: c.req.raw.headers.get("user-agent"),
     secret: signingSecret,
   });
 
-  const referralCode = await createReferralCode(context.env.DB, {
+  const referralCode = await createReferralCode(c.env.DB, {
     eventId: event.id,
     ownerType: "registration",
     ownerId: created.registration.id,
@@ -95,7 +94,7 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
     length: config.referralCodeLength,
   });
 
-  context.waitUntil(trySeedGravatarThenPrerender(user.id, user.email, referralCode, context.env, appBaseUrl));
+  c.executionCtx.waitUntil(trySeedGravatarThenPrerender(user.id, user.email, referralCode, c.env, appBaseUrl));
 
   return json({
     success: true,
@@ -106,10 +105,10 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
   });
 }
 
-export async function onRequest(context: PagesContext<{ token: string }>): Promise<Response> {
-  markSensitive(context);
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  c.set("sensitive", true);
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

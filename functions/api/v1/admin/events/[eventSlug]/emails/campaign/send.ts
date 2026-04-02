@@ -15,19 +15,18 @@ import {
   listCampaignRecipients,
   verifyCampaignPreviewToken,
 } from "../../../../../../../_lib/services/admin-email-campaign";
-import type { PagesContext } from "../../../../../../../_lib/types";
 import { adminEventCampaignSendSchema } from "../../../../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const body = await parseJsonBody(context.request, adminEventCampaignSendSchema);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const secret = requireInternalSecret(context.env);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const body = await parseJsonBody(c.req, adminEventCampaignSendSchema);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const secret = requireInternalSecret(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
 
-  const recipients = await listCampaignRecipients(context.env.DB, event.id, {
+  const recipients = await listCampaignRecipients(c.env.DB, event.id, {
     audience: body.filter.audience,
     attendeeStatus: body.filter.attendeeStatus,
     attendanceType: body.filter.attendanceType,
@@ -84,7 +83,7 @@ export async function onRequestPost(
 
   // Validate template exists only when not using a direct body override
   const templateKey = body.bodyContent ? (body.templateKey || "__direct__") : (body.templateKey as string);
-  const template = !body.bodyContent ? await resolveTemplate(context.env.DB, templateKey) : null;
+  const template = !body.bodyContent ? await resolveTemplate(c.env.DB, templateKey) : null;
 
   if (body.sendMode === "bcc_batch") {
     const unsafeRefs = findBroadcastOnlyTemplateRefs(uniqueRecipients, [
@@ -111,7 +110,7 @@ export async function onRequestPost(
 
   if (body.sendMode === "personal") {
     for (const recipient of uniqueRecipients) {
-      const outboxId = await queueEmail(context.env.DB, {
+      const outboxId = await queueEmail(c.env.DB, {
         eventId: event.id,
         templateKey,
         recipientEmail: recipient.email,
@@ -129,7 +128,7 @@ export async function onRequestPost(
         },
       });
       queued += 1;
-      context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+      c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
     }
     batches = uniqueRecipients.length;
   } else {
@@ -138,7 +137,7 @@ export async function onRequestPost(
       const to = chunk[0];
       if (!to) continue;
       const bcc = chunk.slice(1).map((recipient) => recipient.email);
-      const outboxId = await queueEmail(context.env.DB, {
+      const outboxId = await queueEmail(c.env.DB, {
         eventId: event.id,
         templateKey,
         recipientEmail: to.email,
@@ -157,7 +156,7 @@ export async function onRequestPost(
       });
       queued += chunk.length;
       batches += 1;
-      context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+      c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
     }
   }
 
@@ -169,10 +168,10 @@ export async function onRequestPost(
   });
 }
 
-export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

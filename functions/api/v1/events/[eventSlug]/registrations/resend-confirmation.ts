@@ -10,9 +10,10 @@
  * the endpoint itself enforces only that the registration is unconfirmed.
  */
 
+import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import { parseJsonBody } from "../../../../../_lib/validation";
-import { json, markSensitive } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { AppError } from "../../../../../_lib/errors";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
@@ -27,28 +28,24 @@ import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../
 import { registrationConfirmPageUrl } from "../../../../../_lib/services/frontend-links";
 import type { UserRecord } from "../../../../../_lib/services/users";
 import type { RegistrationRecord } from "../../../../../_lib/services/registrations/types";
-import type { PagesContext } from "../../../../../_lib/types";
-
 const resendConfirmationSchema = z.object({
   token: z.string().min(1),
 });
 
-export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string }>,
-): Promise<Response> {
-  markSensitive(context);
+export async function onRequestPost(c: any): Promise<Response> {
+  c.set("sensitive", true);
 
-  const config = getConfig(context.env, context.request);
-  const body = await parseJsonBody(context.request, resendConfirmationSchema);
+  const config = getConfig(c.env, c.req.raw);
+  const body = await parseJsonBody(c.req, resendConfirmationSchema);
 
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const appBaseUrl = resolveAppBaseUrl(c.env);
 
   // Look up the registration by the (possibly-expired) confirmation token.
   // The token hash is cleared when confirmed, so a used token naturally returns 404.
   const tokenHash = await sha256Hex(body.token);
   const registration = await first<RegistrationRecord>(
-    context.env.DB,
+    c.env.DB,
     `SELECT r.*
      FROM   registrations r
      WHERE  r.confirmation_token_hash = ?
@@ -73,7 +70,7 @@ export async function onRequestPost(
   const newExpiresAt = addHours(now, config.manageTokenTtlHours);
 
   await run(
-    context.env.DB,
+    c.env.DB,
     `UPDATE registrations
      SET    confirmation_token_hash = ?,
             confirmation_token_expires_at = ?,
@@ -84,7 +81,7 @@ export async function onRequestPost(
 
   // Retrieve the attendee so we can personalise the email.
   const user = await first<UserRecord>(
-    context.env.DB,
+    c.env.DB,
     "SELECT * FROM users WHERE id = ?",
     [registration.user_id],
   );
@@ -98,17 +95,17 @@ export async function onRequestPost(
   const manageUrl = `${appBaseUrl}/events/${event.slug}/manage`;
 
   const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, newToken);
-  const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, registration.id);
-  const dayWaitlist = await listDayWaitlistForRegistration(context.env.DB, registration.id);
+  const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, registration.id);
+  const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
   const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
     registration.attendance_type,
     dayAttendanceRaw,
     dayWaitlist,
   );
-  const customAnswerRows = await getCustomAnswerRows(context.env.DB, event.id, registration.custom_answers_json);
-  const acceptedTermsText = await getAcceptedTermsTextForRegistration(context.env.DB, registration.id);
+  const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, registration.custom_answers_json);
+  const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, registration.id);
 
-  const outboxId = await queueEmail(context.env.DB, {
+  const outboxId = await queueEmail(c.env.DB, {
     eventId: event.id,
     templateKey: "registration_confirm_email",
     recipientEmail: user.email,
@@ -138,7 +135,15 @@ export async function onRequestPost(
     },
   });
 
-  context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+  c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
 
   return json({ ok: true });
+}
+
+export class EventsEventSlugRegistrationsResendConfirmationPost extends OpenAPIRoute {
+  schema = {};
+
+  async handle(c: any) {
+    return onRequestPost(c);
+  }
 }

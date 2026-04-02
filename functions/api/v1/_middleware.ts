@@ -1,6 +1,3 @@
-import { handleError } from "../../_lib/http";
-import type { PagesContext } from "../../_lib/types";
-
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 const NO_STORE_CACHE_CONTROL = "no-store, max-age=0";
 
@@ -24,17 +21,17 @@ function isAdminPath(pathname: string): boolean {
 function applyCachePolicy(
   request: Request,
   response: Response,
-  contextData?: Record<string, unknown>,
+  sensitive?: boolean,
 ): void {
   const pathname = new URL(request.url).pathname.replace(/\/+$/, "") || "/";
   const method = request.method.toUpperCase();
   const hasAuthHeader = Boolean(request.headers.get("authorization"));
-  const sensitive =
+  const isSensitive =
     hasAuthHeader ||
     isAdminPath(pathname) ||
-    contextData?.["sensitive"] === true;
+    sensitive === true;
 
-  if (sensitive || !["GET", "HEAD"].includes(method)) {
+  if (isSensitive || !["GET", "HEAD"].includes(method)) {
     response.headers.set("cache-control", NO_STORE_CACHE_CONTROL);
     return;
   }
@@ -44,22 +41,52 @@ function applyCachePolicy(
   }
 }
 
-export async function onRequest(context: PagesContext): Promise<Response> {
-  const requestId = context.request.headers.get("x-request-id") ?? crypto.randomUUID();
-
+function ensureMutableResponse(response: Response): Response {
   try {
-    if (!context.next) {
-      return new Response("Middleware misconfiguration", { status: 500 });
-    }
-
-    const response = await context.next();
-    applyCachePolicy(context.request, response, context.data);
-    response.headers.set("x-request-id", requestId);
+    response.headers.set("x-response-mutable-check", "1");
+    response.headers.delete("x-response-mutable-check");
     return response;
-  } catch (error) {
-    const response = handleError(error);
-    applyCachePolicy(context.request, response, context.data);
-    response.headers.set("x-request-id", requestId);
-    return response;
+  } catch {
+    return new Response(response.body, response);
   }
+}
+
+export function finalizeApiResponse(
+  request: Request,
+  response: Response,
+  sensitive = false,
+  requestId?: string,
+): Response {
+  const mutableResponse = ensureMutableResponse(response);
+  applyCachePolicy(request, mutableResponse, sensitive);
+  if (requestId) {
+    mutableResponse.headers.set("x-request-id", requestId);
+  }
+  return mutableResponse;
+}
+
+export async function onRequest(c: any, next?: () => Promise<void>): Promise<Response> {
+  const isHonoContext = Boolean(c?.req?.raw);
+  const request = (isHonoContext ? c.req.raw : c.request) as Request;
+  const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
+  if (isHonoContext) {
+    c.set("requestId", requestId);
+  } else {
+    c.data = c.data ?? {};
+    c.data.requestId = requestId;
+  }
+  const runNext = next ?? (async () => {
+    const response = await c.next?.();
+    if (isHonoContext && response) {
+      c.res = response;
+    }
+  });
+
+  await runNext();
+  return finalizeApiResponse(
+    request,
+    isHonoContext ? c.res : await c.next(),
+    isHonoContext ? c.get("sensitive") === true : c.data?.sensitive === true,
+    requestId,
+  );
 }

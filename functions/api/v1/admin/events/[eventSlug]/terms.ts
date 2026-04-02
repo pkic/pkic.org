@@ -14,7 +14,7 @@ import { all, run } from "../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { uuid } from "../../../../../_lib/utils/ids";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
-import type { DatabaseLike, PagesContext } from "../../../../../_lib/types";
+import type { DatabaseLike } from "../../../../../_lib/types";
 import { adminEventTermsReplaceSchema } from "../../../../../../assets/shared/schemas/api";
 
 interface TermRow {
@@ -45,27 +45,27 @@ async function listTerms(db: DatabaseLike, eventId: string): Promise<{ attendee:
 }
 
 export async function onRequestGet(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const terms = await listTerms(context.env.DB, event.id);
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const terms = await listTerms(c.env.DB, event.id);
   return json({ terms });
 }
 
 export async function onRequestPut(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const body = await parseJsonBody(context.request, adminEventTermsReplaceSchema);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const body = await parseJsonBody(c.req, adminEventTermsReplaceSchema);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
   // Replace attendee terms preserving help_text (not in the base replaceEventTerms service)
   for (const audienceType of ["attendee", "speaker"] as const) {
     const termList = audienceType === "attendee" ? body.attendee : body.speaker;
 
     await run(
-      context.env.DB,
+      c.env.DB,
       "UPDATE event_terms SET active = 0 WHERE event_id = ? AND audience_type = ?",
       [event.id, audienceType],
     );
@@ -73,7 +73,7 @@ export async function onRequestPut(
     const now = nowIso();
     for (const term of termList) {
       await run(
-        context.env.DB,
+        c.env.DB,
         `INSERT INTO event_terms (
           id, event_id, audience_type, term_key, version, required, content_ref, display_text, help_text, active, created_at
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
@@ -101,7 +101,7 @@ export async function onRequestPut(
   }
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "admin",
     admin.id,
     "event_terms_replaced",
@@ -110,14 +110,14 @@ export async function onRequestPut(
     { attendeeCount: body.attendee.length, speakerCount: body.speaker.length },
   );
 
-  const updatedTerms = await listTerms(context.env.DB, event.id);
+  const updatedTerms = await listTerms(c.env.DB, event.id);
   return json({ success: true, terms: updatedTerms });
 }
 
 export async function onRequest(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method === "GET") return onRequestGet(context);
-  if (context.request.method === "PUT") return onRequestPut(context);
+  if (c.req.raw.method === "GET") return onRequestGet(c);
+  if (c.req.raw.method === "PUT") return onRequestPut(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

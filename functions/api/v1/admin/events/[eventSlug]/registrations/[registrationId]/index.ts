@@ -23,7 +23,7 @@ import { validateCustomAnswersByPurpose } from "../../../../../../../_lib/servic
 import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
 import { nowIso } from "../../../../../../../_lib/utils/time";
-import type { DatabaseLike, PagesContext } from "../../../../../../../_lib/types";
+import type { DatabaseLike } from "../../../../../../../_lib/types";
 import { registrationManageSchema } from "../../../../../../../../assets/shared/schemas/api";
 import { z } from "zod";
 import { queueRegistrationStatusEmail } from "../../../../../../../_lib/services/registrations/status-notifications";
@@ -67,18 +67,18 @@ async function fetchRegistrationWithDetails(
 // ── GET ───────────────────────────────────────────────────────────────────────
 
 export async function onRequestGet(
-  context: PagesContext<{ eventSlug: string; registrationId: string }>,
+  c: any,
 ): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const registration = await fetchRegistrationWithDetails(context.env.DB, event.id, context.params.registrationId);
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const registration = await fetchRegistrationWithDetails(c.env.DB, event.id, c.req.param("registrationId"));
   if (!registration) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
 
   const [dayAttendance, dayWaitlist] = await Promise.all([
-    getRegistrationDayAttendance(context.env.DB, registration.id),
-    listDayWaitlistForRegistration(context.env.DB, registration.id),
+    getRegistrationDayAttendance(c.env.DB, registration.id),
+    listDayWaitlistForRegistration(c.env.DB, registration.id),
   ]);
 
   return json({ registration, dayAttendance, dayWaitlist });
@@ -95,53 +95,54 @@ const adminRegistrationUpdateSchema = registrationManageSchema
   });
 
 export async function onRequestPatch(
-  context: PagesContext<{ eventSlug: string; registrationId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const config = getConfig(context.env, context.request);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const config = getConfig(c.env, c.req.raw);
+  const registrationId = c.req.param("registrationId");
 
-  const body = await parseJsonBody(context.request, adminRegistrationUpdateSchema);
+  const body = await parseJsonBody(c.req, adminRegistrationUpdateSchema);
 
   // ── force_status: directly override status without touching waitlist logic ──
   if (body.action === "force_status") {
     if (!body.status) {
       return json({ error: { code: "MISSING_STATUS", message: "status is required for force_status action" } }, 400);
     }
-    const current = await fetchRegistrationWithDetails(context.env.DB, event.id, context.params.registrationId);
+    const current = await fetchRegistrationWithDetails(c.env.DB, event.id, registrationId);
     if (!current) {
       return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
     }
-    await context.env.DB.prepare(
+    await c.env.DB.prepare(
       "UPDATE registrations SET status = ?, updated_at = ? WHERE id = ?",
-    ).bind(body.status, nowIso(), context.params.registrationId).run();
-    await writeAuditLog(context.env.DB, "admin", admin.id, "admin_registration_force_status", "registration", context.params.registrationId, {
+    ).bind(body.status, nowIso(), registrationId).run();
+    await writeAuditLog(c.env.DB, "admin", admin.id, "admin_registration_force_status", "registration", registrationId, {
       eventId: event.id,
       from: current.status,
       to: body.status,
     });
 
     if (current.status !== body.status) {
-      const appBaseUrl = resolveAppBaseUrl(context.env);
-      const outbox = await queueRegistrationStatusEmail(context.env.DB, {
+      const appBaseUrl = resolveAppBaseUrl(c.env);
+      const outbox = await queueRegistrationStatusEmail(c.env.DB, {
         event,
-        registrationId: context.params.registrationId,
+        registrationId,
         appBaseUrl,
         templateKey: body.status === "cancelled" ? "registration_unauthorized" : "registration_updated",
         subject: body.status === "cancelled"
           ? `Registration cancelled and data removed — ${event.name}`
           : `Registration updated for ${event.name}`,
       });
-      context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outbox.outboxId));
+      c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outbox.outboxId));
     }
 
-    const updated = await fetchRegistrationWithDetails(context.env.DB, event.id, context.params.registrationId);
+    const updated = await fetchRegistrationWithDetails(c.env.DB, event.id, registrationId);
     return json({ success: true, registration: updated });
   }
 
   // ── update / cancel / report_unauthorized — full shared service logic ──────
   const customAnswers = body.customAnswers
-    ? await validateCustomAnswersByPurpose(context.env.DB, {
+    ? await validateCustomAnswersByPurpose(c.env.DB, {
         eventId: event.id,
         purpose: "event_registration",
         customAnswers: body.customAnswers,
@@ -149,9 +150,9 @@ export async function onRequestPatch(
     : {};
 
   const updated = await updateRegistrationById(
-    context.env.DB,
+    c.env.DB,
     {
-      registrationId: context.params.registrationId,
+      registrationId,
       action: body.action as "update" | "cancel" | "report_unauthorized",
       attendanceType: body.attendanceType,
       dayAttendance: body.dayAttendance,
@@ -172,14 +173,14 @@ export async function onRequestPatch(
     if (body.jobTitle !== undefined) { setParts.push("job_title = ?"); setValues.push(body.jobTitle); }
     if (setParts.length > 0) {
       setValues.push(updated.user_id);
-      await context.env.DB.prepare(
+      await c.env.DB.prepare(
         `UPDATE users SET ${setParts.join(", ")} WHERE id = ?`,
       ).bind(...setValues).run();
     }
   }
 
-  const appBaseUrl = resolveAppBaseUrl(context.env);
-  const outbox = await queueRegistrationStatusEmail(context.env.DB, {
+  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const outbox = await queueRegistrationStatusEmail(c.env.DB, {
     event,
     registrationId: updated.id,
     appBaseUrl,
@@ -188,23 +189,23 @@ export async function onRequestPatch(
       ? `Registration cancelled and data removed — ${event.name}`
       : `Registration updated for ${event.name}`,
   });
-  context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outbox.outboxId));
+  c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outbox.outboxId));
 
-  await writeAuditLog(context.env.DB, "admin", admin.id, "admin_registration_updated", "registration", updated.id, {
+  await writeAuditLog(c.env.DB, "admin", admin.id, "admin_registration_updated", "registration", updated.id, {
     eventId: event.id,
     action: body.action,
   });
 
-  const result = await fetchRegistrationWithDetails(context.env.DB, event.id, updated.id);
+  const result = await fetchRegistrationWithDetails(c.env.DB, event.id, updated.id);
   return json({ success: true, registration: result });
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
 
 export async function onRequest(
-  context: PagesContext<{ eventSlug: string; registrationId: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method === "GET") return onRequestGet(context);
-  if (context.request.method === "PATCH") return onRequestPatch(context);
+  if (c.req.raw.method === "GET") return onRequestGet(c);
+  if (c.req.raw.method === "PATCH") return onRequestPatch(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

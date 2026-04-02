@@ -11,17 +11,15 @@
  * edge caches can serve repeated requests without hitting R2.
  */
 import { json } from "../../../../_lib/http";
-import type { PagesContext } from "../../../../_lib/types";
 
 const CACHE_CONTROL = "public, max-age=31536000, immutable";
 
-export async function onRequestGet(
-  context: PagesContext<{ userId: string; file: string }>,
-): Promise<Response> {
-  const { userId, file } = context.params;
+export async function onRequestGet(c: any): Promise<Response> {
+  const userId = c.req.param("userId");
+  const file = c.req.param("file");
   const r2Key = `headshots/${userId}/${file}`;
 
-  const bucket = context.env.SPEAKER_UPLOADS_BUCKET;
+  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
   if (!bucket) {
     return json({ error: { code: "NOT_CONFIGURED", message: "Storage not configured" } }, 503);
   }
@@ -42,11 +40,9 @@ export async function onRequestGet(
   });
 }
 
-export async function onRequest(
-  context: PagesContext<{ userId: string; file: string }>,
-): Promise<Response> {
-  if (context.request.method !== "GET") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

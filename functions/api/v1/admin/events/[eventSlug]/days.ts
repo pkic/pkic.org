@@ -19,7 +19,7 @@ import { uuid } from "../../../../../_lib/utils/ids";
 import { stringifyJson } from "../../../../../_lib/utils/json";
 import { localDateTimeInTimeZoneToIso } from "../../../../../_lib/utils/timezone";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
-import type { DatabaseLike, PagesContext } from "../../../../../_lib/types";
+import type { DatabaseLike } from "../../../../../_lib/types";
 import { adminEventDaysReplaceSchema } from "../../../../../../assets/shared/schemas/api";
 
 interface DayCountRow {
@@ -62,22 +62,22 @@ async function getDaysWithCounts(db: DatabaseLike, eventId: string) {
 }
 
 export async function onRequestGet(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const days = await getDaysWithCounts(context.env.DB, event.id);
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const days = await getDaysWithCounts(c.env.DB, event.id);
   return json({ days });
 }
 
 export async function onRequestPut(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const body = await parseJsonBody(context.request, adminEventDaysReplaceSchema);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const body = await parseJsonBody(c.req, adminEventDaysReplaceSchema);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
-  const existing = await listEventDays(context.env.DB, event.id);
+  const existing = await listEventDays(c.env.DB, event.id);
   const existingByDate = new Map(existing.map((d) => [d.day_date, d]));
   const incomingDates = new Set(body.days.map((d) => d.date));
 
@@ -88,14 +88,14 @@ export async function onRequestPut(
   for (const day of existing) {
     if (!incomingDates.has(day.day_date)) {
       const reg = await first<{ n: number }>(
-        context.env.DB,
+        c.env.DB,
         "SELECT COUNT(*) AS n FROM registration_day_attendance WHERE event_day_id = ?",
         [day.id],
       );
       if ((reg?.n ?? 0) > 0) {
         skipped.push(day.day_date);
       } else {
-        await run(context.env.DB, "DELETE FROM event_days WHERE id = ?", [day.id]);
+        await run(c.env.DB, "DELETE FROM event_days WHERE id = ?", [day.id]);
       }
     }
   }
@@ -122,7 +122,7 @@ export async function onRequestPut(
     const existing_day = existingByDate.get(day.date);
     if (existing_day) {
       await run(
-        context.env.DB,
+        c.env.DB,
         `UPDATE event_days
          SET label = ?, starts_at = ?, ends_at = ?, in_person_capacity = ?, attendance_options_json = ?, sort_order = ?, updated_at = ?
          WHERE id = ?`,
@@ -130,7 +130,7 @@ export async function onRequestPut(
       );
     } else {
       await run(
-        context.env.DB,
+        c.env.DB,
         `INSERT INTO event_days
            (id, event_id, day_date, label, starts_at, ends_at, in_person_capacity, attendance_options_json, sort_order, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -140,7 +140,7 @@ export async function onRequestPut(
   }
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "admin",
     admin.id,
     "event_days_updated",
@@ -149,14 +149,14 @@ export async function onRequestPut(
     { dayCount: body.days.length, skipped },
   );
 
-  const updatedDays = await getDaysWithCounts(context.env.DB, event.id);
+  const updatedDays = await getDaysWithCounts(c.env.DB, event.id);
   return json({ success: true, days: updatedDays, skipped });
 }
 
 export async function onRequest(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method === "GET") return onRequestGet(context);
-  if (context.request.method === "PUT") return onRequestPut(context);
+  if (c.req.raw.method === "GET") return onRequestGet(c);
+  if (c.req.raw.method === "PUT") return onRequestPut(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

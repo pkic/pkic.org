@@ -15,6 +15,7 @@
     "verbatimModuleSyntax": true
   },
   "include": [
+    "worker-configuration.d.ts",
     "functions/**/*.ts",
     "tests/**/*.ts",
     "shared/**/*.ts"

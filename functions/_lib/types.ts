@@ -109,6 +109,17 @@ export interface PagesContext<P extends Record<string, string> = Record<string, 
   waitUntil(promise: Promise<unknown>): void;
   data?: Record<string, unknown>;
   next?: () => Promise<Response>;
+  req?: {
+    raw?: Request;
+    param?: (name: string) => string;
+    parseBody?: () => Promise<Record<string, unknown>>;
+  };
+  executionCtx?: {
+    waitUntil(promise: Promise<unknown>): void;
+  };
+  set?: (key: string, value: unknown) => void;
+  get?: (key: string) => unknown;
+  res?: Response;
 }
 
 export type JsonValue = string | number | boolean | null | JsonObject | JsonArray;

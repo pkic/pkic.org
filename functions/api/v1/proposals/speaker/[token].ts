@@ -15,7 +15,7 @@
  *   PUT /api/v1/proposals/speaker/[token]/headshot
  *   PUT /api/v1/proposals/speaker/[token]/presentation
  */
-import { json, markSensitive } from "../../../../_lib/http";
+import { handleError, json } from "../../../../_lib/http";
 import {
   getSpeakerByManageToken,
   confirmSpeakerParticipation,
@@ -26,7 +26,6 @@ import { getRequiredTerms } from "../../../../_lib/services/events";
 import { persistConsents, validateRequiredConsents } from "../../../../_lib/services/consent";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { requireInternalSecret } from "../../../../_lib/request";
-import type { PagesContext } from "../../../../_lib/types";
 import { z } from "zod";
 
 const speakerActionSchema = z.discriminatedUnion("action", [
@@ -56,106 +55,118 @@ const speakerProfileSchema = z.object({
     .optional(),
 });
 
-export async function onRequestGet(context: PagesContext<{ token: string }>): Promise<Response> {
-  const { speaker, proposal, user } = await getSpeakerByManageToken(
-    context.env.DB,
-    context.params.token,
-  );
+export async function onRequestGet(c: any): Promise<Response> {
+  try {
+    const { speaker, proposal, user } = await getSpeakerByManageToken(
+      c.env.DB,
+      c.req.param("token"),
+    );
 
-  return json({
-    speaker: {
-      role: speaker.role,
-      status: speaker.status,
-      confirmedAt: speaker.confirmed_at,
-      declinedAt: speaker.declined_at,
-      termsAcceptedAt: speaker.terms_accepted_at,
-    },
-    proposal: {
-      id: proposal.id,
-      title: proposal.title,
-      proposalType: proposal.proposal_type,
-      status: proposal.status,
-      presentationDeadline: proposal.presentation_deadline ?? null,
-      presentationUploaded: Boolean(proposal.presentation_uploaded_at),
-    },
-    profile: {
-      firstName: user.first_name,
-      lastName: user.last_name,
-      email: user.email,
-      organizationName: user.organization_name,
-      jobTitle: user.job_title,
-      biography: user.biography,
-      links: user.links_json ? JSON.parse(user.links_json) : [],
-      headshotUploaded: Boolean(user.headshot_r2_key),
-      headshotUpdatedAt: user.headshot_updated_at,
-      headshotUrl: user.headshot_r2_key
-        ? `${new URL(context.request.url).origin}/api/v1/proposals/speaker/${encodeURIComponent(context.params.token)}/headshot?v=${encodeURIComponent(user.headshot_updated_at ?? "")}`
-        : null,
-    },
-  });
+    return json({
+      speaker: {
+        role: speaker.role,
+        status: speaker.status,
+        confirmedAt: speaker.confirmed_at,
+        declinedAt: speaker.declined_at,
+        termsAcceptedAt: speaker.terms_accepted_at,
+      },
+      proposal: {
+        id: proposal.id,
+        title: proposal.title,
+        proposalType: proposal.proposal_type,
+        status: proposal.status,
+        presentationDeadline: proposal.presentation_deadline ?? null,
+        presentationUploaded: Boolean(proposal.presentation_uploaded_at),
+      },
+      profile: {
+        firstName: user.first_name,
+        lastName: user.last_name,
+        email: user.email,
+        organizationName: user.organization_name,
+        jobTitle: user.job_title,
+        biography: user.biography,
+        links: user.links_json ? JSON.parse(user.links_json) : [],
+        headshotUploaded: Boolean(user.headshot_r2_key),
+        headshotUpdatedAt: user.headshot_updated_at,
+        headshotUrl: user.headshot_r2_key
+          ? `${new URL(c.req.raw.url).origin}/api/v1/proposals/speaker/${encodeURIComponent(c.req.param("token"))}/headshot?v=${encodeURIComponent(user.headshot_updated_at ?? "")}`
+          : null,
+      },
+    });
+  } catch (error) {
+    return handleError(error);
+  }
 }
 
-export async function onRequestPost(context: PagesContext<{ token: string }>): Promise<Response> {
-  const body = await parseJsonBody(context.request, speakerActionSchema);
+export async function onRequestPost(c: any): Promise<Response> {
+  try {
+    const body = await parseJsonBody(c.req, speakerActionSchema);
 
-  if (body.action === "confirm") {
-    const info = await getSpeakerByManageToken(context.env.DB, context.params.token);
+    if (body.action === "confirm") {
+      const info = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
 
-    // Already confirmed is treated as success and does not require resubmission.
-    if (info.speaker.status !== "confirmed") {
-      const requiredTerms = await getRequiredTerms(context.env.DB, info.proposal.event_id, "speaker");
-      await validateRequiredConsents(requiredTerms, body.consents);
+      // Already confirmed is treated as success and does not require resubmission.
+      if (info.speaker.status !== "confirmed") {
+        const requiredTerms = await getRequiredTerms(c.env.DB, info.proposal.event_id, "speaker");
+        await validateRequiredConsents(requiredTerms, body.consents);
 
-      const signingSecret = requireInternalSecret(context.env);
-      await persistConsents(context.env.DB, {
-        proposalId: info.proposal.id,
-        eventId: info.proposal.event_id,
-        userId: info.speaker.user_id,
-        audienceType: "speaker",
-        accepted: body.consents,
-        ip: context.request.headers.get("cf-connecting-ip"),
-        userAgent: context.request.headers.get("user-agent"),
-        secret: signingSecret,
+        const signingSecret = requireInternalSecret(c.env);
+        await persistConsents(c.env.DB, {
+          proposalId: info.proposal.id,
+          eventId: info.proposal.event_id,
+          userId: info.speaker.user_id,
+          audienceType: "speaker",
+          accepted: body.consents,
+          ip: c.req.raw.headers.get("cf-connecting-ip"),
+          userAgent: c.req.raw.headers.get("user-agent"),
+          secret: signingSecret,
+        });
+      }
+
+      await confirmSpeakerParticipation(c.env.DB, c.req.param("token"), {
+        termsAccepted: true,
       });
+      return json({ success: true, status: "confirmed" });
     }
 
-    await confirmSpeakerParticipation(context.env.DB, context.params.token, {
-      termsAccepted: true,
+    await declineSpeakerParticipation(c.env.DB, c.req.param("token"), {
+      reason: body.reason ?? null,
     });
-    return json({ success: true, status: "confirmed" });
+    return json({ success: true, status: "declined" });
+  } catch (error) {
+    return handleError(error);
   }
-
-  await declineSpeakerParticipation(context.env.DB, context.params.token, {
-    reason: body.reason ?? null,
-  });
-  return json({ success: true, status: "declined" });
 }
 
-export async function onRequestPatch(context: PagesContext<{ token: string }>): Promise<Response> {
-  const body = await parseJsonBody(context.request, speakerProfileSchema);
-  const { speaker, user } = await getSpeakerByManageToken(context.env.DB, context.params.token);
+export async function onRequestPatch(c: any): Promise<Response> {
+  try {
+    const body = await parseJsonBody(c.req, speakerProfileSchema);
+    const { speaker, user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
 
-  if (speaker.status === "declined") {
-    return json(
-      { error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } },
-      403,
-    );
+    if (speaker.status === "declined") {
+      return json(
+        { error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } },
+        403,
+      );
+    }
+
+    await updateSpeakerProfile(c.env.DB, user.id, {
+      biography: body.biography ?? null,
+      linksJson: body.links ? JSON.stringify(body.links) : null,
+    });
+
+    return json({ success: true });
+  } catch (error) {
+    return handleError(error);
   }
-
-  await updateSpeakerProfile(context.env.DB, user.id, {
-    biography: body.biography ?? null,
-    linksJson: body.links ? JSON.stringify(body.links) : null,
-  });
-
-  return json({ success: true });
 }
 
-export async function onRequest(context: PagesContext<{ token: string }>): Promise<Response> {
-  markSensitive(context);
+export async function onRequest(c: any): Promise<Response> {
+  c.set("sensitive", true);
 
-  if (context.request.method === "GET") return onRequestGet(context);
-  if (context.request.method === "POST") return onRequestPost(context);
-  if (context.request.method === "PATCH") return onRequestPatch(context);
+  if (c.req.raw.method === "GET") return onRequestGet(c);
+  if (c.req.raw.method === "POST") return onRequestPost(c);
+  if (c.req.raw.method === "PATCH") return onRequestPatch(c);
 
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

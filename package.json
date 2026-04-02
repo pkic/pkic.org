@@ -4,10 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "sh -c 'hugo serve -w -e development --renderToDisk --port 1313 & HUGO_PID=$!; trap \"kill $HUGO_PID\" EXIT INT TERM; npx wrangler dev --ip 0.0.0.0 --port 8788'",
-    "dev:hugo": "hugo serve -w -e development",
+    "dev": "npx wrangler dev --ip 0.0.0.0 --port 8788",
+    "dev:hugo": "HUGO_VERSION=0.158.0 bash ./scripts/build.sh",
+    "dev:static": "python3 -m http.server 13131 --bind 127.0.0.1 --directory public",
     "dev:wrangler": "npx wrangler dev --ip 0.0.0.0 --port 8788",
-    "routes:generate": "node scripts/generate-worker-routes.mjs",
+    "deploy": "npx wrangler deploy -c wrangler.deploy.jsonc",
+    "deploy:preview": "npx wrangler deploy -c wrangler.deploy.jsonc --env preview",
     "typecheck": "npm run typecheck:backend && npm run typecheck:frontend",
     "typecheck:backend": "tsc --noEmit -p tsconfig.json",
     "typecheck:frontend": "tsc --noEmit -p tsconfig.frontend.json",
@@ -26,6 +28,7 @@
   },
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",
+    "chanfana": "^3.3.0",
     "handlebars": "^4.7.8",
     "hono": "^4.10.6",
     "ical.js": "^2.2.1",
@@ -40,6 +43,12 @@
     "jsdom": "^27.0.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.2",
-    "wrangler": "^4.78.0"
+    "wrangler": "^4.80.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild",
+      "workerd"
+    ]
   }
 }

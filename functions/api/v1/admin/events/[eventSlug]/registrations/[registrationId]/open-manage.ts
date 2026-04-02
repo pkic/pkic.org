@@ -17,52 +17,52 @@ import { sha256Hex } from "../../../../../../../_lib/utils/crypto";
 import { registrationManagePageUrl } from "../../../../../../../_lib/services/frontend-links";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { signAdminManageJwt } from "../../../../../../../_lib/utils/jwt";
-import type { PagesContext } from "../../../../../../../_lib/types";
 import { json } from "../../../../../../../_lib/http";
 
 const ADMIN_MANAGE_SESSION_MINUTES = 15;
 
 export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string; registrationId: string }>,
+  c: any,
 ): Promise<Response> {
-  const secret = context.env.INTERNAL_SIGNING_SECRET;
+  const secret = c.env.INTERNAL_SIGNING_SECRET;
   if (!secret) {
     return json({ error: { code: "SERVER_ERROR", message: "Signing secret not configured" } }, 500);
   }
 
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const registrationId = c.req.param("registrationId");
 
   const registration = await first<{ id: string }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id FROM registrations WHERE id = ? AND event_id = ?",
-    [context.params.registrationId, event.id],
+    [registrationId, event.id],
   );
   if (!registration) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
 
   const ip =
-    context.request.headers.get("cf-connecting-ip") ??
-    context.request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
+    c.req.raw.headers.get("cf-connecting-ip") ??
+    c.req.raw.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
     "";
-  const ua = context.request.headers.get("user-agent") ?? "";
+  const ua = c.req.raw.headers.get("user-agent") ?? "";
   const [iphash, uahash] = await Promise.all([sha256Hex(ip), sha256Hex(ua)]);
 
   const jwtToken = await signAdminManageJwt(secret, {
-    sub: context.params.registrationId,
+    sub: registrationId,
     event: event.slug,
     iphash,
     uahash,
     ttlSeconds: ADMIN_MANAGE_SESSION_MINUTES * 60,
   });
 
-  await writeAuditLog(context.env.DB, "admin", admin.id, "admin_opened_manage_page", "registration", context.params.registrationId, {
+  await writeAuditLog(c.env.DB, "admin", admin.id, "admin_opened_manage_page", "registration", registrationId, {
     adminEmail: admin.email,
     eventSlug: event.slug,
   });
 
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
   const manageUrl = registrationManagePageUrl(appBaseUrl, event, jwtToken);
 
   return json({ manageUrl });

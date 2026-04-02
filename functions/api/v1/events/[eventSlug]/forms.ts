@@ -4,7 +4,6 @@ import { getEventBySlug, getRequiredTerms } from "../../../../_lib/services/even
 import { countRegisteredByEventDay, listEventDays, resolveAttendanceOptions } from "../../../../_lib/services/event-days";
 import { parseJsonSafe } from "../../../../_lib/utils/json";
 import { logError } from "../../../../_lib/logging";
-import type { PagesContext } from "../../../../_lib/types";
 
 type FormsPurpose = "event_registration" | "proposal_submission";
 
@@ -25,8 +24,8 @@ function isMissingTableError(error: unknown): boolean {
   return message.includes("no such table");
 }
 
-export async function onRequestGet(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  const purpose = resolvePurpose(new URL(context.request.url).searchParams.get("purpose"));
+export async function onRequestGet(c: any): Promise<Response> {
+  const purpose = resolvePurpose(new URL(c.req.raw.url).searchParams.get("purpose"));
   if (!purpose) {
     return json(
       { error: { code: "VALIDATION_ERROR", message: "purpose must be event_registration or proposal_submission" } },
@@ -34,7 +33,7 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
     );
   }
 
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const audience = purpose === "proposal_submission" ? "speaker" : "attendee";
 
   let form = null;
@@ -42,7 +41,7 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
   let eventDays = [] as Awaited<ReturnType<typeof listEventDays>>;
 
   try {
-    form = await getActiveFormByPurpose(context.env.DB, event.id, purpose);
+    form = await getActiveFormByPurpose(c.env.DB, event.id, purpose);
   } catch (error) {
     if (isMissingTableError(error)) {
       logError("EVENT_FORMS_TABLE_MISSING", { eventSlug: event.slug, purpose });
@@ -60,7 +59,7 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
   }
 
   try {
-    requiredTerms = await getRequiredTerms(context.env.DB, event.id, audience);
+    requiredTerms = await getRequiredTerms(c.env.DB, event.id, audience);
   } catch (error) {
     if (isMissingTableError(error)) {
       logError("EVENT_TERMS_TABLE_MISSING", { eventSlug: event.slug, purpose });
@@ -78,7 +77,7 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
   }
 
   try {
-    eventDays = await listEventDays(context.env.DB, event.id);
+    eventDays = await listEventDays(c.env.DB, event.id);
   } catch (error) {
     if (isMissingTableError(error)) {
       logError("EVENT_DAYS_TABLE_MISSING", { eventSlug: event.slug, purpose });
@@ -95,7 +94,7 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
     throw error;
   }
 
-  const registeredCounts = await countRegisteredByEventDay(context.env.DB, event.id);
+  const registeredCounts = await countRegisteredByEventDay(c.env.DB, event.id);
 
   const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: string[] } }>(event.settings_json, {});
   const allowedSessionTypes: string[] =
@@ -134,10 +133,10 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
   });
 }
 
-export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  if (context.request.method !== "GET") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

@@ -184,15 +184,13 @@ describe("referral, waitlist, and calendar flows", () => {
     const calendarContent = (sendgridPayload.content ?? []).find((item) =>
       (item.type ?? "").toLowerCase().includes("text/calendar")
     );
-    expect(calendarContent?.type).toContain("method=PUBLISH");
-    expect(calendarContent?.type).toContain("charset=UTF-8");
+    expect(calendarContent?.type).toBe("text/calendar");
     expect(calendarContent?.value).toContain("BEGIN:VCALENDAR");
 
     const calendarAttachment = (sendgridPayload.attachments ?? []).find((item) =>
       item.filename === "event.ics"
     );
-    expect(calendarAttachment?.type?.toLowerCase()).toContain("text/calendar");
-    expect(calendarAttachment?.type).toContain("method=PUBLISH");
+    expect(calendarAttachment?.type).toBe("text/calendar");
 
     const outboxRows = await queryAll<{ status: string; provider_message_id: string | null }>(env.DB, 
       "SELECT status, provider_message_id FROM email_outbox WHERE id = ?",

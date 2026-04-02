@@ -16,9 +16,8 @@
 
 import { resolveAppBaseUrl } from "../../../_lib/config";
 import { AppError } from "../../../_lib/errors";
-import { json, markSensitive } from "../../../_lib/http";
+import { json } from "../../../_lib/http";
 import { logError } from "../../../_lib/logging";
-import type { PagesContext } from "../../../_lib/types";
 import { donationCheckoutSchema } from "../../../../assets/shared/schemas/donation";
 
 const DISCLAIMER =
@@ -40,10 +39,11 @@ function isAllowedOrigin(origin: string, appBaseUrl: string): boolean {
   return origin === appBaseUrl;
 }
 
-export async function onRequestPost(context: PagesContext): Promise<Response> {
-  markSensitive(context);
+export async function onRequestPost(c: any): Promise<Response> {
+  c.set("sensitive", true);
 
-  const { request, env } = context;
+  const request = c.req.raw;
+  const env = c.env;
   const appBaseUrl = resolveAppBaseUrl(env);
 
   // ── Origin guard ─────────────────────────────────────────────────────────
@@ -131,9 +131,13 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
 
   // Store donor identity and attribution in Stripe metadata for reconciliation
   params.set("metadata[donor_name]", name);
+  params.set("payment_intent_data[metadata][donor_name]", name);
   if (email) params.set("metadata[donor_email]", email);
+  if (email) params.set("payment_intent_data[metadata][donor_email]", email);
   if (organizationName) params.set("metadata[donor_organization]", organizationName);
+  if (organizationName) params.set("payment_intent_data[metadata][donor_organization]", organizationName);
   if (metadata?.source) params.set("metadata[source]", metadata.source);
+  if (metadata?.source) params.set("payment_intent_data[metadata][source]", metadata.source);
 
   // ── Call Stripe API ──────────────────────────────────────────────────────
   const stripeResponse = await fetch(STRIPE_API, {

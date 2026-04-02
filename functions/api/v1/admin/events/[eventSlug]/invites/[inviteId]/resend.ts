@@ -8,7 +8,6 @@ import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_l
 import { proposalPageUrl, registrationPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
 import { refreshInviteToken } from "../../../../../../../_lib/services/invites";
 import { addHours, nowIso } from "../../../../../../../_lib/utils/time";
-import type { PagesContext } from "../../../../../../../_lib/types";
 
 type InviteRow = {
   id: string;
@@ -22,13 +21,13 @@ type InviteRow = {
 };
 
 export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string; inviteId: string }>,
+  c: any,
 ): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const invite = await first<InviteRow>(
-    context.env.DB,
+    c.env.DB,
     `SELECT
        id,
        event_id,
@@ -41,7 +40,7 @@ export async function onRequestPost(
      FROM invites
      WHERE id = ? AND event_id = ?
      LIMIT 1`,
-    [context.params.inviteId, event.id],
+    [c.req.param("inviteId"), event.id],
   );
 
   if (!invite) {
@@ -56,15 +55,15 @@ export async function onRequestPost(
     throw new AppError(409, "INVITE_REVOKED", "Cannot resend a revoked invite");
   }
 
-  const appBaseUrl = resolveAppBaseUrl(context.env);
-  const token = await refreshInviteToken(context.env.DB, invite.id);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const token = await refreshInviteToken(c.env.DB, invite.id);
   const declineUrl = inviteDeclineUrl(appBaseUrl, event, token);
 
   const now = nowIso();
   const ttlHours = invite.invite_type === "attendee" ? 24 * 14 : 24 * 21;
   const freshExpiry = addHours(now, ttlHours);
   await run(
-    context.env.DB,
+    c.env.DB,
     `UPDATE invites
      SET
        status = 'sent',
@@ -86,7 +85,7 @@ export async function onRequestPost(
     ? `Invitation: ${event.name}`
     : `Speaker invitation: ${event.name}`;
 
-  const outboxId = await queueEmail(context.env.DB, {
+  const outboxId = await queueEmail(c.env.DB, {
     eventId: event.id,
     templateKey,
     recipientEmail: invite.invitee_email,
@@ -104,17 +103,17 @@ export async function onRequestPost(
     },
   });
 
-  context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+  c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
 
   return json({ success: true, inviteId: invite.id, resentAt: now, inviteType: invite.invite_type });
 }
 
 export async function onRequest(
-  context: PagesContext<{ eventSlug: string; inviteId: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method !== "POST") {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

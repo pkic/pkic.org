@@ -21,7 +21,6 @@ import { queueEmail, processOutboxByIdBackground } from "../../../../../_lib/ema
 import { speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { first } from "../../../../../_lib/db/queries";
-import type { PagesContext } from "../../../../../_lib/types";
 import type { EventRecord } from "../../../../../_lib/services/events";
 import { z } from "zod";
 import {
@@ -37,9 +36,9 @@ const coSpeakerInviteSchema = z.object({
   role: z.enum(["speaker", "co_speaker", "moderator", "panelist"]).default("speaker"),
 });
 
-export async function onRequestPost(context: PagesContext<{ token: string }>): Promise<Response> {
-  const body = await parseJsonBody(context.request, coSpeakerInviteSchema);
-  const proposal = await getProposalByManageToken(context.env.DB, context.params.token);
+export async function onRequestPost(c: any): Promise<Response> {
+  const body = await parseJsonBody(c.req, coSpeakerInviteSchema);
+  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"));
 
   if (proposal.status === "withdrawn" || proposal.status === "rejected") {
     return json(
@@ -49,22 +48,22 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
   }
 
   const event = await first<EventRecord>(
-    context.env.DB,
+    c.env.DB,
     "SELECT * FROM events WHERE id = ?",
     [proposal.event_id],
   );
   if (!event) {
     return json({ error: { code: "EVENT_NOT_FOUND", message: "Event not found" } }, 404);
   }
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
 
-  const speakerUser = await findOrCreateUser(context.env.DB, {
+  const speakerUser = await findOrCreateUser(c.env.DB, {
     email: body.email,
     firstName: body.firstName,
     lastName: body.lastName,
   });
 
-  const { manageToken: speakerToken } = await addProposalSpeaker(context.env.DB, {
+  const { manageToken: speakerToken } = await addProposalSpeaker(c.env.DB, {
     proposalId: proposal.id,
     userId: speakerUser.id,
     role: body.role,
@@ -73,17 +72,17 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
   const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, speakerToken);
 
   const proposer = await first<{ first_name: string | null }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT first_name FROM users WHERE id = ?",
     [proposal.proposer_user_id],
   );
 
-  const inviteContext = await buildProposalInviteEmailContext(context.env.DB, {
+  const inviteContext = await buildProposalInviteEmailContext(c.env.DB, {
     proposalId: proposal.id,
     inviterUserId: proposal.proposer_user_id,
   });
 
-  const outboxId = await queueEmail(context.env.DB, {
+  const outboxId = await queueEmail(c.env.DB, {
     eventId: event.id,
     templateKey: "co_speaker_invite",
     recipientEmail: speakerUser.email,
@@ -103,15 +102,15 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
     },
   });
 
-  context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+  c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
 
   return json({ success: true, email: speakerUser.email, role: body.role });
 }
 
-export async function onRequest(context: PagesContext<{ token: string }>): Promise<Response> {
-  markSensitive(context);
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  c.set("sensitive", true);
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

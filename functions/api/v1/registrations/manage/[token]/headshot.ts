@@ -14,6 +14,7 @@
  *  - They accept full liability
  */
 
+import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../../../_lib/http";
 import { resolveManageToken } from "../../../../../_lib/services/manage-token";
 import { first, run } from "../../../../../_lib/db/queries";
@@ -23,22 +24,20 @@ import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
 import { AppError } from "../../../../../_lib/errors";
-import type { PagesContext } from "../../../../../_lib/types";
-
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_HEADSHOT_BYTES = 2 * 1024 * 1024; // 2 MB — cropped JPEG from the client crop UI should be well under 500 KB
 
 // ── PUT — upload / replace headshot ──────────────────────────────────────────
 
-async function onPut(context: PagesContext<{ token: string }>): Promise<Response> {
-  const resolved = await resolveManageToken(context.request, context.env, context.params.token);
+async function onPut(c: any): Promise<Response> {
+  const resolved = await resolveManageToken(c.req.raw, c.env, c.req.param("token"));
   if (resolved instanceof Response) return resolved;
   const { registration } = resolved;
 
-  const bucket = context.env.SPEAKER_UPLOADS_BUCKET;
+  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
   if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
 
-  const contentType = context.request.headers.get("content-type") ?? "";
+  const contentType = c.req.raw.headers.get("content-type") ?? "";
   if (!contentType.includes("multipart/form-data")) {
     return json(
       { error: { code: "INVALID_CONTENT_TYPE", message: "Request must be multipart/form-data" } },
@@ -46,7 +45,7 @@ async function onPut(context: PagesContext<{ token: string }>): Promise<Response
     );
   }
 
-  const formData = await context.request.formData();
+  const formData = await c.req.raw.formData();
   const consentValue = formData.get("consent");
   if (consentValue !== "true") {
     return json(
@@ -88,7 +87,7 @@ async function onPut(context: PagesContext<{ token: string }>): Promise<Response
 
   // Look up the user
   const user = await first<{ id: string; headshot_r2_key: string | null }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, headshot_r2_key FROM users WHERE id = ?",
     [registration.user_id],
   );
@@ -114,13 +113,13 @@ async function onPut(context: PagesContext<{ token: string }>): Promise<Response
   });
 
   await run(
-    context.env.DB,
+    c.env.DB,
     "UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ? WHERE id = ?",
     [r2Key, nowIso(), nowIso(), user.id],
   );
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "user",
     user.id,
     "headshot_uploaded_by_attendee",
@@ -129,31 +128,31 @@ async function onPut(context: PagesContext<{ token: string }>): Promise<Response
     { r2Key, registrationId: registration.id },
   );
 
-  const appOrigin = resolveAppBaseUrl(context.env);
-  context.waitUntil(invalidateAndRerender(user.id, context.env, appOrigin));
+  const appOrigin = resolveAppBaseUrl(c.env);
+  c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, appOrigin));
 
   const parts = r2Key.split("/");
   const pubFilename = parts.slice(2).join("/");
-  const headshotUrl = `${new URL(context.request.url).origin}/api/v1/headshots/${user.id}/${pubFilename}`;
+  const headshotUrl = `${new URL(c.req.raw.url).origin}/api/v1/headshots/${user.id}/${pubFilename}`;
 
   return json({ success: true, headshotUrl });
 }
 
 // ── DELETE — remove headshot ──────────────────────────────────────────────────
 
-async function onDelete(context: PagesContext<{ token: string }>): Promise<Response> {
-  const resolved = await resolveManageToken(context.request, context.env, context.params.token);
+async function onDelete(c: any): Promise<Response> {
+  const resolved = await resolveManageToken(c.req.raw, c.env, c.req.param("token"));
   if (resolved instanceof Response) return resolved;
   const { registration } = resolved;
 
   const user = await first<{ id: string; headshot_r2_key: string | null }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, headshot_r2_key FROM users WHERE id = ?",
     [registration.user_id],
   );
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
 
-  const bucket = context.env.SPEAKER_UPLOADS_BUCKET;
+  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
   if (bucket && user.headshot_r2_key) {
     try {
       await (bucket as unknown as { delete(key: string): Promise<void> }).delete(user.headshot_r2_key);
@@ -163,13 +162,13 @@ async function onDelete(context: PagesContext<{ token: string }>): Promise<Respo
   }
 
   await run(
-    context.env.DB,
+    c.env.DB,
     "UPDATE users SET headshot_r2_key = NULL, headshot_updated_at = NULL, updated_at = ? WHERE id = ?",
     [nowIso(), user.id],
   );
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "user",
     user.id,
     "headshot_deleted_by_attendee",
@@ -178,16 +177,32 @@ async function onDelete(context: PagesContext<{ token: string }>): Promise<Respo
     { registrationId: registration.id },
   );
 
-  const origin = resolveAppBaseUrl(context.env);
-  context.waitUntil(invalidateAndRerender(user.id, context.env, origin));
+  const origin = resolveAppBaseUrl(c.env);
+  c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, origin));
 
   return json({ success: true });
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
 
-export async function onRequest(context: PagesContext<{ token: string }>): Promise<Response> {
-  if (context.request.method === "PUT") return onPut(context);
-  if (context.request.method === "DELETE") return onDelete(context);
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method === "PUT") return onPut(c);
+  if (c.req.raw.method === "DELETE") return onDelete(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+}
+
+export class RegistrationsManageTokenHeadshotPut extends OpenAPIRoute {
+  schema = {};
+
+  async handle(c: any) {
+    return onPut(c as any);
+  }
+}
+
+export class RegistrationsManageTokenHeadshotDelete extends OpenAPIRoute {
+  schema = {};
+
+  async handle(c: any) {
+    return onDelete(c as any);
+  }
 }

@@ -22,15 +22,14 @@ import { speakerManagePageUrl } from "../../../../../../_lib/services/frontend-l
 import { resolveAppBaseUrl } from "../../../../../../_lib/config";
 import { AppError } from "../../../../../../_lib/errors";
 import { first, run } from "../../../../../../_lib/db/queries";
-import type { PagesContext } from "../../../../../../_lib/types";
 import type { EventRecord } from "../../../../../../_lib/services/events";
 import { nowIso } from "../../../../../../_lib/utils/time";
 
 const schema = z.object({ userId: z.string().min(1) });
 
-export async function onRequestPost(context: PagesContext<{ token: string }>): Promise<Response> {
-  const body = await parseJsonBody(context.request, schema);
-  const proposal = await getProposalByManageToken(context.env.DB, context.params.token);
+export async function onRequestPost(c: any): Promise<Response> {
+  const body = await parseJsonBody(c.req, schema);
+  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"));
 
   if (proposal.status === "withdrawn" || proposal.status === "rejected") {
     return json(
@@ -40,7 +39,7 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
   }
 
   const event = await first<EventRecord>(
-    context.env.DB,
+    c.env.DB,
     "SELECT * FROM events WHERE id = ?",
     [proposal.event_id],
   );
@@ -54,7 +53,7 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
     first_name: string | null;
     last_name: string | null;
   }>(
-    context.env.DB,
+    c.env.DB,
     `SELECT ps.user_id, ps.role, ps.status, u.email, u.first_name, u.last_name
      FROM   proposal_speakers ps
      JOIN   users u ON u.id = ps.user_id
@@ -74,9 +73,9 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
   }
 
   // Rotate the manage token — we cannot reconstruct the original from its hash.
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
   const newToken = await refreshSpeakerManageToken(
-    context.env.DB,
+    c.env.DB,
     proposal.id,
     speakerRow.user_id,
   );
@@ -84,17 +83,17 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
   const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, newToken);
 
   const proposer = await first<{ first_name: string | null }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT first_name FROM users WHERE id = ?",
     [proposal.proposer_user_id],
   );
 
-  const inviteContext = await buildProposalInviteEmailContext(context.env.DB, {
+  const inviteContext = await buildProposalInviteEmailContext(c.env.DB, {
     proposalId: proposal.id,
     inviterUserId: proposal.proposer_user_id,
   });
 
-  const outboxId = await queueEmail(context.env.DB, {
+  const outboxId = await queueEmail(c.env.DB, {
     eventId: event.id,
     templateKey: "co_speaker_invite",
     recipientEmail: speakerRow.email,
@@ -115,10 +114,10 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
     },
   });
 
-  context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+  c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
 
   await run(
-    context.env.DB,
+    c.env.DB,
     `UPDATE proposal_speakers
      SET speaker_invite_reminder_count = speaker_invite_reminder_count + 1,
          speaker_invite_last_communication_at = ?,
@@ -130,10 +129,10 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
   return json({ success: true });
 }
 
-export async function onRequest(context: PagesContext<{ token: string }>): Promise<Response> {
-  markSensitive(context);
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  c.set("sensitive", true);
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

@@ -16,14 +16,13 @@
  * vanity share link — no PII is exposed.
  */
 
+import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../_lib/http";
 import { first, run } from "../../../_lib/db/queries";
 import { randomBase62 } from "../../../_lib/utils/ids";
 import { resolveAppBaseUrl } from "../../../_lib/config";
 import { nowIso } from "../../../_lib/utils/time";
 import type { DatabaseLike } from "../../../_lib/types";
-import type { PagesContext } from "../../../_lib/types";
-
 interface DonationRow {
   id: string;
   name: string;
@@ -34,8 +33,9 @@ interface ExistingPromoter {
   code: string;
 }
 
-export async function onRequestPost(context: PagesContext): Promise<Response> {
-  const { env, request } = context;
+export async function onRequestPost(c: any): Promise<Response> {
+  const env = c.env;
+  const request = c.req.raw;
   const db = env.DB;
 
   let body: { session_id?: unknown };
@@ -143,9 +143,10 @@ export async function getOrCreatePromoterCode(
   return null;
 }
 
-export async function onRequest(context: PagesContext): Promise<Response> {
-  if (context.request.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+export class DonationsPromoterPost extends OpenAPIRoute {
+  schema = {};
+
+  async handle(c: any) {
+    return onRequestPost(c as any);
   }
-  return onRequestPost(context);
 }

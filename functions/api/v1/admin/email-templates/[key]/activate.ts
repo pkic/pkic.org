@@ -1,26 +1,30 @@
+import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../../_lib/validation";
-import { json } from "../../../../../_lib/http";
+import { handleError, json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { activateTemplateVersion } from "../../../../../_lib/email/templates";
-import type { PagesContext } from "../../../../../_lib/types";
 import { adminEmailTemplateActivateSchema } from "../../../../../../assets/shared/schemas/api";
 
-export async function onRequestPost(context: PagesContext<{ key: string }>): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request);
-  const body = await parseJsonBody(context.request, adminEmailTemplateActivateSchema);
+export async function onRequestPost(c: any): Promise<Response> {
+  await requireAdminFromRequest(c.env.DB, c.req.raw);
+  const body = await parseJsonBody(c.req, adminEmailTemplateActivateSchema);
 
-  await activateTemplateVersion(context.env.DB, {
-    templateKey: context.params.key,
+  await activateTemplateVersion(c.env.DB, {
+    templateKey: c.req.param("key"),
     version: body.version,
   });
 
   return json({ success: true });
 }
 
-export async function onRequest(context: PagesContext<{ key: string }>): Promise<Response> {
-  if (context.request.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
+export class AdminEmailTemplatesKeyActivatePost extends OpenAPIRoute {
+  schema = {};
 
-  return onRequestPost(context);
+  async handle(c: any) {
+    try {
+      return await onRequestPost(c as any);
+    } catch (error) {
+      return handleError(error);
+    }
+  }
 }

@@ -1,5 +1,6 @@
+import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json, markSensitive } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../_lib/services/events";
 import { getRegistrationByManageToken } from "../../../../_lib/services/registrations";
 import { countInvitesByInviter, createInvite } from "../../../../_lib/services/invites";
@@ -9,7 +10,6 @@ import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { registrationPageUrl, inviteDeclineUrl } from "../../../../_lib/services/frontend-links";
 import { AppError } from "../../../../_lib/errors";
-import type { PagesContext } from "../../../../_lib/types";
 import { registrationInviteCreateSchema } from "../../../../../assets/shared/schemas/api";
 
 function getManageTokenFromRequest(request: Request): string | null {
@@ -18,27 +18,27 @@ function getManageTokenFromRequest(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
-export async function onRequestPost(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  const token = getManageTokenFromRequest(context.request);
+export async function onRequestPost(c: any): Promise<Response> {
+  const token = getManageTokenFromRequest(c.req.raw);
   if (!token) {
     return json({ error: { code: "AUTH_REQUIRED", message: "Registration manage token required" } }, 401);
   }
 
-  const body = await parseJsonBody(context.request, registrationInviteCreateSchema);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const registration = await getRegistrationByManageToken(context.env.DB, token);
+  const body = await parseJsonBody(c.req, registrationInviteCreateSchema);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const registration = await getRegistrationByManageToken(c.env.DB, token);
 
   if (registration.event_id !== event.id) {
     return json({ error: { code: "EVENT_MISMATCH", message: "Token is not valid for this event" } }, 403);
   }
 
-  const config = getConfig(context.env, context.request);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const config = getConfig(c.env, c.req.raw);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
   const maxAllowed = event.invite_limit_attendee ?? config.inviteLimitPerAttendee;
 
   // Look up inviter name once — used to personalise invite emails.
   const inviterUser = await first<{ first_name: string | null; last_name: string | null; organization_name: string | null }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT first_name, last_name, organization_name FROM users WHERE id = ?",
     [registration.user_id],
   );
@@ -50,14 +50,14 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
     : inviterBaseName;
 
   let referralCode = await first<{ code: string }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT code FROM referral_codes WHERE owner_type = 'registration' AND owner_id = ? LIMIT 1",
     [registration.id],
   );
 
   if (!referralCode) {
     referralCode = {
-      code: await createReferralCode(context.env.DB, {
+      code: await createReferralCode(c.env.DB, {
         eventId: event.id,
         ownerType: "registration",
         ownerId: registration.id,
@@ -69,7 +69,7 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
 
   // Count only primary (new) invites against the per-attendee quota.
   // Co-invites (endorsements of someone already invited) are free.
-  let inviteCount = await countInvitesByInviter(context.env.DB, event.id, registration.user_id);
+  let inviteCount = await countInvitesByInviter(c.env.DB, event.id, registration.user_id);
 
   if (inviteCount + body.invites.length > maxAllowed) {
     return json({
@@ -95,7 +95,7 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
     }
 
     try {
-      const { invite, token: inviteToken, isNew } = await createInvite(context.env.DB, {
+      const { invite, token: inviteToken, isNew } = await createInvite(c.env.DB, {
         eventId: event.id,
         inviterUserId: registration.user_id,
         inviterRegistrationId: registration.id,
@@ -115,7 +115,7 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
           source: "invite",
         });
         const declineUrl = inviteDeclineUrl(appBaseUrl, event, inviteToken);
-        const outboxId = await queueEmail(context.env.DB, {
+        const outboxId = await queueEmail(c.env.DB, {
           eventId: event.id,
           templateKey: "attendee_invite",
           recipientEmail: invite.invitee_email,
@@ -130,7 +130,7 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
             declineUrl,
           },
         });
-        context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+        c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
         created.push({ email: invite.invitee_email });
       } else {
         endorsed.push({ email: invite.invitee_email });
@@ -151,11 +151,10 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
   return json({ success: true, created, endorsed, skipped, referralCode: referralCode.code });
 }
 
-export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  markSensitive(context);
-  if (context.request.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(context);
-}
+export class EventsEventSlugInvitesPost extends OpenAPIRoute {
+  schema = {};
 
+  async handle(c: any) {
+    return onRequestPost(c);
+  }
+}

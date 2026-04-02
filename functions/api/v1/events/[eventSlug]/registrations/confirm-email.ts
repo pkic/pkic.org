@@ -1,5 +1,6 @@
+import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../../_lib/validation";
-import { json, markSensitive } from "../../../../../_lib/http";
+import { handleError, json } from "../../../../../_lib/http";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
 import { confirmRegistrationByToken } from "../../../../../_lib/services/registrations";
@@ -12,18 +13,17 @@ import { processOutboxByIdBackground, queueEmail } from "../../../../../_lib/ema
 import { buildRegistrationIcs } from "../../../../../_lib/utils/calendar";
 import { registrationManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import type { UserRecord } from "../../../../../_lib/services/users";
-import type { PagesContext } from "../../../../../_lib/types";
 import { registrationConfirmSchema } from "../../../../../../assets/shared/schemas/api";
 
 async function confirmRegistration(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
   token: string,
 ): Promise<Response> {
-  const config = getConfig(context.env, context.request);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const config = getConfig(c.env, c.req.raw);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const appBaseUrl = resolveAppBaseUrl(c.env);
 
-  const { registration, manageToken } = await confirmRegistrationByToken(context.env.DB, {
+  const { registration, manageToken } = await confirmRegistrationByToken(c.env.DB, {
     token,
     waitlistClaimWindowHours: config.waitlistClaimWindowHours,
   });
@@ -31,27 +31,27 @@ async function confirmRegistration(
   // Look up the attendee's referral (share) code so the confirmation page can
   // present it as a sharing prompt — the Peak-End moment for engagement.
   const referralRow = await first<{ code: string }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT code FROM referral_codes WHERE owner_type = 'registration' AND owner_id = ? LIMIT 1",
     [registration.id],
   );
   const shareUrl = referralRow ? `${appBaseUrl}/r/${referralRow.code}` : null;
   const manageUrl = registrationManagePageUrl(appBaseUrl, event, manageToken);
 
-  const user = await first<UserRecord>(context.env.DB, "SELECT * FROM users WHERE id = ?", [registration.user_id]);
+  const user = await first<UserRecord>(c.env.DB, "SELECT * FROM users WHERE id = ?", [registration.user_id]);
   if (user) {
     if (registration.status === "registered" || registration.status === "waitlisted") {
-      const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, registration.id);
-      const dayWaitlist = await listDayWaitlistForRegistration(context.env.DB, registration.id);
+      const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, registration.id);
+      const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
       const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
         registration.attendance_type,
         dayAttendanceRaw,
         dayWaitlist,
       );
-      const customAnswerRows = await getCustomAnswerRows(context.env.DB, event.id, registration.custom_answers_json);
-      const acceptedTermsText = await getAcceptedTermsTextForRegistration(context.env.DB, registration.id);
+      const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, registration.custom_answers_json);
+      const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, registration.id);
       const calendar = buildRegistrationIcs(event, registration.id, manageUrl, dayAttendanceRaw, appBaseUrl);
-      const outboxId = await queueEmail(context.env.DB, {
+      const outboxId = await queueEmail(c.env.DB, {
         eventId: event.id,
         templateKey: "registration_confirmed",
         recipientEmail: user.email,
@@ -94,24 +94,20 @@ async function confirmRegistration(
           icsContent: calendar.content,
         },
       });
-      context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+      c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
     }
   }
 
   return json({ success: true, status: registration.status, shareUrl, manageUrl, manageToken });
 }
 
-export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string }>,
-): Promise<Response> {
-  const body = await parseJsonBody(context.request, registrationConfirmSchema);
-  return confirmRegistration(context, body.token);
+export async function onRequestPost(c: any): Promise<Response> {
+  const body = await parseJsonBody(c.req, registrationConfirmSchema);
+  return confirmRegistration(c, body.token);
 }
 
-export async function onRequestGet(
-  context: PagesContext<{ eventSlug: string }>,
-): Promise<Response> {
-  const token = new URL(context.request.url).searchParams.get("token");
+export async function onRequestGet(c: any): Promise<Response> {
+  const token = new URL(c.req.raw.url).searchParams.get("token");
   if (!token) {
     return json({ error: { code: "TOKEN_REQUIRED", message: "token query parameter is required" } }, 400);
   }
@@ -121,18 +117,39 @@ export async function onRequestGet(
     return json({ error: { code: "VALIDATION_ERROR", message: "Invalid token" } }, 400);
   }
 
-  return confirmRegistration(context, parsed.data.token);
+  return confirmRegistration(c, parsed.data.token);
 }
 
-export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  markSensitive(context);
-  if (context.request.method === "POST") {
-    return onRequestPost(context);
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method === "GET") {
+    return onRequestGet(c);
   }
-
-  if (context.request.method === "GET") {
-    return onRequestGet(context);
+  if (c.req.raw.method === "POST") {
+    return onRequestPost(c);
   }
-
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+}
+
+export class EventsEventSlugRegistrationsConfirmEmailGet extends OpenAPIRoute {
+  schema = {};
+
+  async handle(c: any) {
+    try {
+      return await onRequestGet(c);
+    } catch (error) {
+      return handleError(error);
+    }
+  }
+}
+
+export class EventsEventSlugRegistrationsConfirmEmailPost extends OpenAPIRoute {
+  schema = {};
+
+  async handle(c: any) {
+    try {
+      return await onRequestPost(c);
+    } catch (error) {
+      return handleError(error);
+    }
+  }
 }

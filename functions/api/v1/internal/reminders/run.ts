@@ -4,16 +4,15 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { processPendingOutbox } from "../../../../_lib/email/outbox";
 import { runReminderCycle } from "../../../../_lib/services/reminders";
-import type { PagesContext } from "../../../../_lib/types";
 import { adminRunRemindersSchema } from "../../../../../assets/shared/schemas/api";
 
-export async function onRequestPost(context: PagesContext): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const body = await parseJsonBody(context.request, adminRunRemindersSchema);
-  const config = getConfig(context.env, context.request);
+export async function onRequestPost(c: any): Promise<Response> {
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const body = await parseJsonBody(c.req, adminRunRemindersSchema);
+  const config = getConfig(c.env, c.req.raw);
 
-  const cycle = await runReminderCycle(context.env.DB, {
-    appBaseUrl: resolveAppBaseUrl(context.env),
+  const cycle = await runReminderCycle(c.env.DB, {
+    appBaseUrl: resolveAppBaseUrl(c.env),
     reminderIntervalDays: config.reminderIntervalDays,
     maxInviteReminders: config.maxInviteReminders,
     maxPresentationReminders: config.maxPresentationReminders,
@@ -23,14 +22,14 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
 
   const outbox = body.dryRun
     ? { processed: 0, failed: 0 }
-    : await processPendingOutbox(context.env.DB, context.env, Math.min(body.limit, 200));
+    : await processPendingOutbox(c.env.DB, c.env, Math.min(body.limit, 200));
 
   return json({ success: true, ...cycle, outbox, dryRun: body.dryRun });
 }
 
-export async function onRequest(context: PagesContext): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

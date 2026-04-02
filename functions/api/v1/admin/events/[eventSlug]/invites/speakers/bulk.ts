@@ -7,17 +7,16 @@ import { createInvite } from "../../../../../../../_lib/services/invites";
 import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { proposalPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
-import type { PagesContext } from "../../../../../../../_lib/types";
 import { adminBulkSpeakerInvitesSchema } from "../../../../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request);
-  const body = await parseJsonBody(context.request, adminBulkSpeakerInvitesSchema);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const config = getConfig(context.env, context.request);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  await requireAdminFromRequest(c.env.DB, c.req.raw);
+  const body = await parseJsonBody(c.req, adminBulkSpeakerInvitesSchema);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const config = getConfig(c.env, c.req.raw);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
 
   const created: Array<{ email: string; inviteToken: string }> = [];
   const endorsed: Array<{ email: string }> = [];
@@ -25,7 +24,7 @@ export async function onRequestPost(
 
   for (const item of body.invites) {
     try {
-      const { invite, token, isNew } = await createInvite(context.env.DB, {
+      const { invite, token, isNew } = await createInvite(c.env.DB, {
         eventId: event.id,
         inviteeEmail: item.email,
         inviteeFirstName: item.firstName,
@@ -41,7 +40,7 @@ export async function onRequestPost(
           source: "speaker_invite",
         });
         const declineUrl = inviteDeclineUrl(appBaseUrl, event, token);
-        const outboxId = await queueEmail(context.env.DB, {
+        const outboxId = await queueEmail(c.env.DB, {
           eventId: event.id,
           templateKey: "speaker_invite",
           recipientEmail: invite.invitee_email,
@@ -55,7 +54,7 @@ export async function onRequestPost(
             declineUrl,
           },
         });
-        context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+        c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
         created.push({ email: invite.invitee_email, inviteToken: token });
       } else {
         endorsed.push({ email: invite.invitee_email });
@@ -76,10 +75,10 @@ export async function onRequestPost(
   return json({ success: true, created, endorsed, skipped });
 }
 
-export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

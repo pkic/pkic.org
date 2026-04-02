@@ -1,5 +1,5 @@
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json, markSensitive } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { AppError } from "../../../../_lib/errors";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { buildEventEmailVariables, getEventBySlug, getRequiredTerms, updateEventBasePath } from "../../../../_lib/services/events";
@@ -19,30 +19,27 @@ import { listDayWaitlistForRegistration } from "../../../../_lib/services/regist
 import { buildAttendanceEmailData } from "../../../../_lib/utils/attendance";
 import { buildAcceptedTermsText, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
 import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../_lib/services/frontend-links";
-import type { PagesContext } from "../../../../_lib/types";
 import { registrationCreateSchema } from "../../../../../assets/shared/schemas/api";
 
-export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string }>,
-): Promise<Response> {
-  const config = getConfig(context.env, context.request);
-  const signingSecret = requireInternalSecret(context.env);
-  const body = await parseJsonBody(context.request, registrationCreateSchema);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+export async function onRequestPost(c: any): Promise<Response> {
+  const config = getConfig(c.env, c.req.raw);
+  const signingSecret = requireInternalSecret(c.env);
+  const body = await parseJsonBody(c.req, registrationCreateSchema);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
   // Record the Hugo page URL sent by the browser so base_path is always the
   // real event page location, not a hardcoded pattern.
   await updateEventBasePath(
-    context.env.DB,
+    c.env.DB,
     event.id,
-    context.request.headers.get("x-event-base-path"),
+    c.req.raw.headers.get("x-event-base-path"),
   );
 
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
 
   let inviteId: string | null = null;
   if (body.inviteToken) {
-    const invite = await findInviteByToken(context.env.DB, body.inviteToken);
+    const invite = await findInviteByToken(c.env.DB, body.inviteToken);
     if (invite.event_id !== event.id || invite.invite_type !== "attendee") {
       throw new AppError(400, "INVITE_INVALID", "Invite token is not valid for attendee registration for this event");
     }
@@ -66,7 +63,7 @@ export async function onRequestPost(
     profileFromCustom.jobTitle = (body.customAnswers.job_title as string).trim();
   }
 
-  const user = await findOrCreateUser(context.env.DB, {
+  const user = await findOrCreateUser(c.env.DB, {
     email: body.email,
     firstName: body.firstName,
     lastName: body.lastName,
@@ -74,15 +71,15 @@ export async function onRequestPost(
     jobTitle: body.jobTitle ?? profileFromCustom.jobTitle,
   });
 
-  const requiredTerms = await getRequiredTerms(context.env.DB, event.id, "attendee");
+  const requiredTerms = await getRequiredTerms(c.env.DB, event.id, "attendee");
   await validateRequiredConsents(requiredTerms, body.consents);
-  const customAnswers = await validateCustomAnswersByPurpose(context.env.DB, {
+  const customAnswers = await validateCustomAnswersByPurpose(c.env.DB, {
     eventId: event.id,
     purpose: "event_registration",
     customAnswers: body.customAnswers,
   });
 
-  const created = await createRegistration(context.env.DB, {
+  const created = await createRegistration(c.env.DB, {
     event,
     userId: user.id,
     attendanceType: (body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance)) as "in_person" | "virtual" | "on_demand",
@@ -95,22 +92,22 @@ export async function onRequestPost(
     confirmationTtlHours: config.manageTokenTtlHours,
   });
 
-  await persistConsents(context.env.DB, {
+  await persistConsents(c.env.DB, {
     registrationId: created.registration.id,
     eventId: event.id,
     userId: user.id,
     audienceType: "attendee",
     accepted: body.consents,
-    ip: getClientIp(context.request),
-    userAgent: getUserAgent(context.request),
+    ip: getClientIp(c.req.raw),
+    userAgent: getUserAgent(c.req.raw),
     secret: signingSecret,
   });
 
   if (inviteId) {
-    await acceptInvite(context.env.DB, inviteId);
+    await acceptInvite(c.env.DB, inviteId);
   }
 
-  const referralCode = await createReferralCode(context.env.DB, {
+  const referralCode = await createReferralCode(c.env.DB, {
     eventId: event.id,
     ownerType: "registration",
     ownerId: created.registration.id,
@@ -118,24 +115,24 @@ export async function onRequestPost(
     length: config.referralCodeLength,
   });
 
-  context.waitUntil(trySeedGravatarThenPrerender(user.id, user.email, referralCode, context.env, appBaseUrl));
+  c.executionCtx.waitUntil(trySeedGravatarThenPrerender(user.id, user.email, referralCode, c.env, appBaseUrl));
 
   const manageUrl = registrationManagePageUrl(appBaseUrl, event, created.manageToken);
   const shareUrl = `${appBaseUrl}/r/${referralCode}`;
 
-  const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, created.registration.id);
-  const dayWaitlist = await listDayWaitlistForRegistration(context.env.DB, created.registration.id);
+  const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, created.registration.id);
+  const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, created.registration.id);
   const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
     created.registration.attendance_type,
     dayAttendanceRaw,
     dayWaitlist,
   );
-  const customAnswerRows = await getCustomAnswerRows(context.env.DB, event.id, created.registration.custom_answers_json);
+  const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, created.registration.custom_answers_json);
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
 
   if (created.registration.status === "pending_email_confirmation") {
     const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, created.confirmationToken as string);
-    const outboxId = await queueEmail(context.env.DB, {
+    const outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
       templateKey: "registration_confirm_email",
       recipientEmail: user.email,
@@ -170,10 +167,10 @@ export async function onRequestPost(
       },
     });
 
-    context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
   } else {
     const calendar = buildRegistrationIcs(event, created.registration.id, manageUrl, dayAttendanceRaw, appBaseUrl);
-    const outboxId = await queueEmail(context.env.DB, {
+    const outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
       templateKey: "registration_confirmed",
       recipientEmail: user.email,
@@ -182,8 +179,8 @@ export async function onRequestPost(
       subject: `Registration confirmed for ${event.name}`,
       // Delay so the OG badge has time to render before we try to attach it.
       // EMAIL_BADGE_DELAY_SECONDS=0 in .dev.vars skips the delay for local/e2e.
-      sendAfterSeconds: context.env.ASSETS_BUCKET
-        ? Number(context.env.EMAIL_BADGE_DELAY_SECONDS ?? 90)
+      sendAfterSeconds: c.env.ASSETS_BUCKET
+        ? Number(c.env.EMAIL_BADGE_DELAY_SECONDS ?? 90)
         : 0,
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
@@ -220,11 +217,11 @@ export async function onRequestPost(
       },
     });
 
-    context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
   }
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "user",
     user.id,
     "registration_created",
@@ -243,11 +240,11 @@ export async function onRequestPost(
   });
 }
 
-export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  markSensitive(context);
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  c.set("sensitive", true);
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

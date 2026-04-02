@@ -3,15 +3,10 @@
   "name": "pkic-org",
   "compatibility_date": "2026-02-28",
   "compatibility_flags": ["nodejs_compat"],
-  "main": "functions/_worker/index.ts",
+  "main": "functions/router.ts",
   "build": {
-    "command": "node scripts/generate-worker-routes.mjs"
-  },
-  "assets": {
-    "directory": "public",
-    "binding": "ASSETS",
-    "not_found_handling": "404-page",
-    "run_worker_first": true
+    "command": "HUGO_VERSION=0.158.0 DEV_STATIC_PORT=13131 bash ./scripts/dev-build.sh",
+    "watch_dir": ["archetypes", "assets/icons", "assets/images", "assets/js", "assets/scss", "assets/shared", "assets/ts", "config", "content", "data", "i18n", "layouts", "static"]
   },
   "dev": {
     "port": 8788,
@@ -88,6 +83,7 @@
     }
   },
   "vars": {
+    "DEV_STATIC_ORIGIN": "http://127.0.0.1:13131",
     "HUGO_VERSION": "0.158.0",
     "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
     "DEFAULT_REFERRAL_CODE_LENGTH": "7",

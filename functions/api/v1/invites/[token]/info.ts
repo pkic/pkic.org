@@ -1,11 +1,10 @@
-import { json, markSensitive } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { sha256Hex } from "../../../../_lib/utils/crypto";
 import { first } from "../../../../_lib/db/queries";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { isPast } from "../../../../_lib/utils/time";
 import { getInviteInviters } from "../../../../_lib/services/invites";
 import { proposalPageUrl, registrationPageUrl } from "../../../../_lib/services/frontend-links";
-import type { PagesContext } from "../../../../_lib/types";
 
 interface InviteRow {
   id: string;
@@ -36,12 +35,12 @@ interface EventRow {
  *
  * Only first/last names are returned – no email addresses or internal IDs.
  */
-export async function onRequestGet(context: PagesContext<{ token: string }>): Promise<Response> {
-  markSensitive(context);
+export async function onRequestGet(c: any): Promise<Response> {
+  c.set("sensitive", true);
 
-  const tokenHash = await sha256Hex(context.params.token);
+  const tokenHash = await sha256Hex(c.req.param("token"));
   const invite = await first<InviteRow>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, event_id, invitee_first_name, invite_type, status, expires_at FROM invites WHERE token_hash = ?",
     [tokenHash],
   );
@@ -63,22 +62,22 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
   }
 
   // Valid invite — build URLs and social-proof inviter list.
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
   const event = await first<EventRow>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, name, slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
     [invite.event_id],
   );
 
   const registrationUrl = event && invite.invite_type === "attendee"
-    ? registrationPageUrl(appBaseUrl, event, { invite: context.params.token, source: "invite" })
+    ? registrationPageUrl(appBaseUrl, event, { invite: c.req.param("token"), source: "invite" })
     : null;
   const proposalUrl = event && invite.invite_type === "speaker"
-    ? proposalPageUrl(appBaseUrl, event, { invite: context.params.token, source: "speaker_invite" })
+    ? proposalPageUrl(appBaseUrl, event, { invite: c.req.param("token"), source: "speaker_invite" })
     : null;
 
   // Fetch all named inviters for social proof.  Only expose first/last name.
-  const allInviters = await getInviteInviters(context.env.DB, invite.id);
+  const allInviters = await getInviteInviters(c.env.DB, invite.id);
   const totalInviters = allInviters.length;
 
   // Return at most 5 names to keep the payload small; the frontend can say
@@ -101,9 +100,9 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
   });
 }
 
-export async function onRequest(context: PagesContext<{ token: string }>): Promise<Response> {
-  if (context.request.method !== "GET") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

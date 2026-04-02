@@ -26,7 +26,6 @@ import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
-import type { PagesContext } from "../../../../../_lib/types";
 
 interface UserEmailRow {
   id: string;
@@ -37,22 +36,23 @@ interface UserEmailRow {
 // ── Handler ─────────────────────────────────────────────────────────────────
 
 export async function onRequestPost(
-  context: PagesContext<{ userId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const userId = c.req.param("userId");
 
   const user = await first<UserEmailRow>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, email, headshot_r2_key FROM users WHERE id = ?",
-    [context.params.userId],
+    [userId],
   );
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
 
-  const bucket = context.env.SPEAKER_UPLOADS_BUCKET;
+  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
   if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured");
 
   const emailHash = await gravatarHash(user.email); // for audit log
-  const r2Key = await fetchGravatar(user.id, user.email, context.env, { force: true });
+  const r2Key = await fetchGravatar(user.id, user.email, c.env, { force: true });
 
   if (!r2Key) {
     return json(
@@ -62,7 +62,7 @@ export async function onRequestPost(
   }
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "admin",
     admin.id,
     "headshot_imported_gravatar",
@@ -71,15 +71,15 @@ export async function onRequestPost(
     { r2Key, gravatarHash: emailHash },
   );
 
-  const origin = resolveAppBaseUrl(context.env);
-  context.waitUntil(invalidateAndRerender(user.id, context.env, origin));
+  const origin = resolveAppBaseUrl(c.env);
+  c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, origin));
 
   return json({ success: true, r2Key, source: "gravatar" });
 }
 
-export async function onRequest(context: PagesContext<{ userId: string }>): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

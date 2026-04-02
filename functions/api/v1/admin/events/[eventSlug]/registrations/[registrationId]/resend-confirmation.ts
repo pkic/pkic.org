@@ -22,20 +22,20 @@ import { buildRegistrationIcs } from "../../../../../../../_lib/utils/calendar";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import type { RegistrationRecord } from "../../../../../../../_lib/services/registrations/types";
 import type { UserRecord } from "../../../../../../../_lib/services/users";
-import type { PagesContext } from "../../../../../../../_lib/types";
 
 export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string; registrationId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const config = getConfig(context.env, context.request);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const config = getConfig(c.env, c.req.raw);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const registrationId = c.req.param("registrationId");
 
   const registration = await first<RegistrationRecord>(
-    context.env.DB,
+    c.env.DB,
     "SELECT * FROM registrations WHERE id = ? AND event_id = ?",
-    [context.params.registrationId, event.id],
+    [registrationId, event.id],
   );
   if (!registration) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
@@ -46,7 +46,7 @@ export async function onRequestPost(
   }
 
   const user = await first<UserRecord>(
-    context.env.DB,
+    c.env.DB,
     "SELECT * FROM users WHERE id = ?",
     [registration.user_id],
   );
@@ -54,15 +54,15 @@ export async function onRequestPost(
     return json({ error: { code: "USER_NOT_FOUND", message: "Associated user not found" } }, 500);
   }
 
-  const dayAttendanceRaw = await getRegistrationDayAttendance(context.env.DB, registration.id);
-  const dayWaitlist = await listDayWaitlistForRegistration(context.env.DB, registration.id);
+  const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, registration.id);
+  const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
   const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(registration.attendance_type, dayAttendanceRaw, dayWaitlist);
-  const customAnswerRows = await getCustomAnswerRows(context.env.DB, event.id, registration.custom_answers_json);
-  const acceptedTermsText = await getAcceptedTermsTextForRegistration(context.env.DB, registration.id);
+  const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, registration.custom_answers_json);
+  const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, registration.id);
 
   // Look up referral code for share URL
   const referralRow = await first<{ code: string }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT code FROM referral_codes WHERE owner_type = 'registration' AND owner_id = ?",
     [registration.id],
   );
@@ -78,7 +78,7 @@ export async function onRequestPost(
     const newExpiresAt = addHours(now, config.manageTokenTtlHours);
 
     await run(
-      context.env.DB,
+      c.env.DB,
       `UPDATE registrations
        SET confirmation_token_hash = ?, confirmation_token_expires_at = ?, updated_at = ?
        WHERE id = ?`,
@@ -87,7 +87,7 @@ export async function onRequestPost(
 
     const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, newToken);
 
-    outboxId = await queueEmail(context.env.DB, {
+    outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
       templateKey: "registration_confirm_email",
       recipientEmail: user.email,
@@ -119,7 +119,7 @@ export async function onRequestPost(
     const freshManageHash = await sha256Hex(freshManageToken);
 
     await run(
-      context.env.DB,
+      c.env.DB,
       "UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?",
       [freshManageHash, now, registration.id],
     );
@@ -127,7 +127,7 @@ export async function onRequestPost(
     const manageUrl = registrationManagePageUrl(appBaseUrl, event, freshManageToken);
     const calendar = buildRegistrationIcs(event, registration.id, manageUrl, dayAttendanceRaw, appBaseUrl);
 
-    outboxId = await queueEmail(context.env.DB, {
+    outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
       templateKey: "registration_confirmed",
       recipientEmail: user.email,
@@ -169,10 +169,10 @@ export async function onRequestPost(
     });
   }
 
-  context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+  c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "admin",
     admin.id,
     "admin_registration_email_resent",
@@ -184,11 +184,9 @@ export async function onRequestPost(
   return json({ success: true, message: "Email queued" });
 }
 
-export async function onRequest(
-  context: PagesContext<{ eventSlug: string; registrationId: string }>,
-): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

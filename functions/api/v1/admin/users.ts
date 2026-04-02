@@ -13,7 +13,6 @@
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { all } from "../../../_lib/db/queries";
-import type { PagesContext } from "../../../_lib/types";
 
 interface UserRow {
   id: string;
@@ -26,10 +25,10 @@ interface UserRow {
   created_at: string;
 }
 
-export async function onRequestGet(context: PagesContext): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
+export async function onRequestGet(c: any): Promise<Response> {
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
-  const url = new URL(context.request.url);
+  const url = new URL(c.req.raw.url);
   const role   = url.searchParams.get("role")   ?? "";
   const search = (url.searchParams.get("search") ?? "").trim();
   const limit  = Math.min(parseInt(url.searchParams.get("limit") ?? "100") || 100, 500);
@@ -52,7 +51,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const users = await all<UserRow>(
-    context.env.DB,
+    c.env.DB,
     `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at
      FROM users u
      ${where}
@@ -64,9 +63,9 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
   return json({ users, limit, offset });
 }
 
-export async function onRequest(context: PagesContext): Promise<Response> {
-  if (context.request.method !== "GET") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

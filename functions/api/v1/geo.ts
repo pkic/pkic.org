@@ -18,7 +18,6 @@
  */
 
 import { json } from "../../_lib/http";
-import type { PagesContext } from "../../_lib/types";
 
 /**
  * Allowed origins. Must exactly match the site origin (scheme + host + optional
@@ -48,8 +47,8 @@ function isAllowedOrigin(origin: string): boolean {
   }
 }
 
-export async function onRequest(context: PagesContext): Promise<Response> {
-  const request = context.request;
+export async function onRequest(c: any): Promise<Response> {
+  const request = c.req.raw as Request;
 
   // ── Origin guard ─────────────────────────────────────────────────────────
   // Reject cross-site requests. Modern browsers always send Sec-Fetch-Site on

@@ -16,12 +16,12 @@ import {
   listProposalSpeakersWithStatus,
 } from "../../../../../_lib/services/proposals";
 import { first } from "../../../../../_lib/db/queries";
-import type { PagesContext } from "../../../../../_lib/types";
 
 export async function onRequestGet(
-  context: PagesContext<{ proposalId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+  const proposalId = c.req.param("proposalId");
 
   const proposal = await first<{
     id: string;
@@ -32,23 +32,23 @@ export async function onRequestGet(
     presentation_r2_key: string | null;
     presentation_uploaded_at: string | null;
   }>(
-    context.env.DB,
+    c.env.DB,
     `SELECT id, title, status, event_id,
             presentation_deadline, presentation_r2_key, presentation_uploaded_at
      FROM session_proposals WHERE id = ?`,
-    [context.params.proposalId],
+    [proposalId],
   );
 
   if (!proposal) {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(context.env.DB, proposal.event_id, admin);
+  const access = await getProposalAccessForEvent(c.env.DB, proposal.event_id, admin);
   if (!access.canReview) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to review proposals" } }, 403);
   }
 
-  const speakers = await listProposalSpeakersWithStatus(context.env.DB, context.params.proposalId);
+  const speakers = await listProposalSpeakersWithStatus(c.env.DB, proposalId);
 
   // Summarise participation completeness for the admin overview.
   const summary = {
@@ -93,10 +93,10 @@ export async function onRequestGet(
 }
 
 export async function onRequest(
-  context: PagesContext<{ proposalId: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method !== "GET") {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

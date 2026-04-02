@@ -62,9 +62,18 @@ export async function resizeHeadshot(
   }
   
   try {
+    const stream = new ReadableStream<Uint8Array>({
+      start(controller) {
+        controller.enqueue(new Uint8Array(buffer));
+        controller.close();
+      },
+    });
+    const result = await envImages.input(stream)
+      .transform({ width: 1024, height: 1024, fit: "cover" })
+      .output({ format: "image/jpeg", quality: 85 });
     // We resize it to 1024x1024 JPEG for safety, same as client side.
     return {
-      buffer: await envImages.input(buffer).transform({ width: 1024, height: 1024, fit: "cover" }).output({ format: "image/jpeg", quality: 85 }),
+      buffer: await (await result.response()).arrayBuffer(),
       contentType: "image/jpeg"
     };
   } catch (err) {

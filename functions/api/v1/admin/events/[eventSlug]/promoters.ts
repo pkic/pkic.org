@@ -2,7 +2,6 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { all } from "../../../../../_lib/db/queries";
-import type { PagesContext } from "../../../../../_lib/types";
 
 /**
  * GET /api/v1/admin/events/:eventSlug/promoters
@@ -14,11 +13,11 @@ import type { PagesContext } from "../../../../../_lib/types";
  * Sorted by overall effectiveness: conversions desc, then acceptances desc, then invites sent desc.
  */
 export async function onRequestGet(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
   // ── 1. Per-inviter invite stats ──────────────────────────────────────────
   const inviterStats = await all<{
@@ -32,7 +31,7 @@ export async function onRequestGet(
     invites_expired: number;
     last_invite_at: string | null;
   }>(
-    context.env.DB,
+    c.env.DB,
     `SELECT
        i.inviter_user_id,
        u.email             AS inviter_email,
@@ -69,7 +68,7 @@ export async function onRequestGet(
     total_clicks: number;
     total_conversions: number;
   }>(
-    context.env.DB,
+    c.env.DB,
     `SELECT
        COALESCE(rc.created_by_user_id, reg.user_id) AS effective_user_id,
        COALESCE(u1.email,      u2.email)      AS referrer_email,
@@ -109,7 +108,7 @@ export async function onRequestGet(
     conversions: number;
     created_at: string;
   }>(
-    context.env.DB,
+    c.env.DB,
     `SELECT
        rc.code,
        rc.owner_type,
@@ -134,7 +133,7 @@ export async function onRequestGet(
 
   // ── 4. Recent referral click timeline (last 30 days, by day) ─────────────
   const clickTimeline = await all<{ date: string; clicks: number }>(
-    context.env.DB,
+    c.env.DB,
     `SELECT
        date(created_at) AS date,
        COUNT(*)         AS clicks
@@ -240,10 +239,10 @@ export async function onRequestGet(
 }
 
 export async function onRequest(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method !== "GET") {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

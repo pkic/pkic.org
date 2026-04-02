@@ -13,19 +13,18 @@ import {
   computeAttendeeInviteDigest,
   signAttendeeInvitePreviewToken,
 } from "../../../../../../../_lib/services/admin-invite-preview";
-import type { PagesContext } from "../../../../../../../_lib/types";
 import { adminBulkAttendeeInvitesPreviewSchema } from "../../../../../../../../assets/shared/schemas/api";
 
 const PREVIEW_TTL_SECONDS = 10 * 60;
 
 export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const body = await parseJsonBody(context.request, adminBulkAttendeeInvitesPreviewSchema);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
-  const secret = requireInternalSecret(context.env);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const body = await parseJsonBody(c.req, adminBulkAttendeeInvitesPreviewSchema);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const secret = requireInternalSecret(c.env);
 
   const firstInvite = body.invites[0];
   if (!firstInvite) {
@@ -38,8 +37,8 @@ export async function onRequestPost(
   });
   const declineUrl = inviteDeclineUrl(appBaseUrl, event, "preview-token");
 
-  const template = await resolveTemplate(context.env.DB, "attendee_invite");
-  const layoutHtml = await loadEmailLayout(context.env.DB);
+  const template = await resolveTemplate(c.env.DB, "attendee_invite");
+  const layoutHtml = await loadEmailLayout(c.env.DB);
   const digest = await computeAttendeeInviteDigest(body.invites);
   const preview = await signAttendeeInvitePreviewToken({
     secret,
@@ -78,10 +77,10 @@ export async function onRequestPost(
   });
 }
 
-export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

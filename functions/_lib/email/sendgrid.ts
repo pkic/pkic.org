@@ -13,6 +13,10 @@ export interface SendgridMessage {
   attachments?: Array<{ filename: string; contentType: string; base64Content: string }>;
 }
 
+function toSendgridMimeType(contentType: string): string {
+  return contentType.split(";")[0]?.trim() || "application/octet-stream";
+}
+
 export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promise<string | null> {
   if (!env.SENDGRID_API_KEY) {
     throw new AppError(500, "SENDGRID_NOT_CONFIGURED", "SENDGRID_API_KEY is not configured");
@@ -35,7 +39,7 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
       { type: "text/html", value: message.html },
       ...(message.calendarIcsContent
         ? [{
-          type: `text/calendar; method=${message.calendarMethod ?? "PUBLISH"}; charset=UTF-8`,
+          type: "text/calendar",
           value: message.calendarIcsContent,
         }]
         : []),
@@ -47,7 +51,7 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
     payload.attachments = message.attachments.map((attachment) => ({
       content: attachment.base64Content,
       filename: attachment.filename,
-      type: attachment.contentType,
+      type: toSendgridMimeType(attachment.contentType),
       disposition: "attachment",
     }));
   }

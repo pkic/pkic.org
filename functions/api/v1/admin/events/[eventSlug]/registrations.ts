@@ -2,7 +2,6 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { all, first } from "../../../../../_lib/db/queries";
-import type { PagesContext } from "../../../../../_lib/types";
 
 interface RegistrationRow {
   id: string;
@@ -23,16 +22,16 @@ interface WaitlistSummaryRow {
   count: number;
 }
 
-export async function onRequestGet(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+export async function onRequestGet(c: any): Promise<Response> {
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
-  const url = new URL(context.request.url);
+  const url = new URL(c.req.raw.url);
   const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10) || 50));
   const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
 
   const registrationRows = await all<RegistrationRow>(
-    context.env.DB,
+    c.env.DB,
     `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
@@ -52,7 +51,7 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
   const registrationIds = rows.map((row) => row.id);
   const waitlistSummaries = registrationIds.length > 0
     ? await all<WaitlistSummaryRow>(
-      context.env.DB,
+      c.env.DB,
       `SELECT
          w.registration_id,
          GROUP_CONCAT(CASE
@@ -83,7 +82,7 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
   });
 
   const totalRow = await first<{ total: number }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT COUNT(*) AS total FROM registrations WHERE event_id = ?",
     [event.id],
   );
@@ -101,10 +100,10 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
   });
 }
 
-export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  if (context.request.method !== "GET") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

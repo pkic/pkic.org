@@ -9,6 +9,7 @@ export default defineConfig(async () => {
   return {
     plugins: [
       cloudflareTest({
+        main: "./functions/router.ts",
         wrangler: { configPath: "./wrangler.jsonc" },
         miniflare: {
           // Test-only bindings: secrets not in wrangler.jsonc, plus

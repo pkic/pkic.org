@@ -27,7 +27,7 @@ import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { invalidateAndRerender } from "../../../../../../../_lib/services/og-badge-prerender";
 import { nowIso } from "../../../../../../../_lib/utils/time";
 import { uuid } from "../../../../../../../_lib/utils/ids";
-import type { DatabaseLike, PagesContext } from "../../../../../../../_lib/types";
+import type { DatabaseLike } from "../../../../../../../_lib/types";
 import { z } from "zod";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -96,11 +96,11 @@ async function fetchData(db: DatabaseLike, eventId: string, registrationId: stri
 // ── GET ───────────────────────────────────────────────────────────────────────
 
 export async function onRequestGet(
-  context: PagesContext<{ eventSlug: string; registrationId: string }>,
+  c: any,
 ): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const data  = await fetchData(context.env.DB, event.id, context.params.registrationId);
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const data  = await fetchData(c.env.DB, event.id, c.req.param("registrationId"));
 
   if (!data) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
@@ -130,19 +130,19 @@ export async function onRequestGet(
 // ── PATCH ─────────────────────────────────────────────────────────────────────
 
 export async function onRequestPatch(
-  context: PagesContext<{ eventSlug: string; registrationId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const body  = await parseJsonBody(context.request, patchSchema);
-  const data  = await fetchData(context.env.DB, event.id, context.params.registrationId);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const body  = await parseJsonBody(c.req, patchSchema);
+  const data  = await fetchData(c.env.DB, event.id, c.req.param("registrationId"));
 
   if (!data) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
 
   const { registration, participantRows } = data;
-  const db  = context.env.DB;
+  const db  = c.env.DB;
   const now = nowIso();
 
   // Remove any existing admin-sourced non-attendee participant row
@@ -187,8 +187,8 @@ export async function onRequestPatch(
   );
 
   // Re-render cached badge PNGs with the new role
-  const origin = new URL(context.request.url).origin;
-  context.waitUntil(invalidateAndRerender(registration.user_id, context.env, origin));
+  const origin = new URL(c.req.raw.url).origin;
+  c.executionCtx.waitUntil(invalidateAndRerender(registration.user_id, c.env, origin));
 
   // Re-fetch to compute the fresh effective role
   const refreshed     = await fetchData(db, event.id, registration.id);
@@ -209,9 +209,9 @@ export async function onRequestPatch(
 // ── Catch-all ─────────────────────────────────────────────────────────────────
 
 export async function onRequest(
-  context: PagesContext<{ eventSlug: string; registrationId: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method === "GET")   return onRequestGet(context);
-  if (context.request.method === "PATCH") return onRequestPatch(context);
+  if (c.req.raw.method === "GET")   return onRequestGet(c);
+  if (c.req.raw.method === "PATCH") return onRequestPatch(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

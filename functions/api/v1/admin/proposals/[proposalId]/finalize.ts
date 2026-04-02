@@ -12,35 +12,35 @@ import { processPendingOutboxBackground, queueEmail } from "../../../../../_lib/
 import { first, run } from "../../../../../_lib/db/queries";
 import { speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { buildEventEmailVariables } from "../../../../../_lib/services/events";
-import type { PagesContext } from "../../../../../_lib/types";
 import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(
-  context: PagesContext<{ proposalId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+  const proposalId = c.req.param("proposalId");
 
   const accessCheckProposal = await first<{ event_id: string }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT event_id FROM session_proposals WHERE id = ?",
-    [context.params.proposalId],
+    [proposalId],
   );
   if (!accessCheckProposal) {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(context.env.DB, accessCheckProposal.event_id, admin);
+  const access = await getProposalAccessForEvent(c.env.DB, accessCheckProposal.event_id, admin);
   if (!access.canFinalize) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to finalize proposals" } }, 403);
   }
 
-  const body = await parseJsonBody(context.request, finalizeProposalSchema);
-  const config = getConfig(context.env, context.request);
+  const body = await parseJsonBody(c.req, finalizeProposalSchema);
+  const config = getConfig(c.env, c.req.raw);
 
   const minReviewsRequired = config.minProposalReviews;
 
-  const finalized = await finalizeProposalDecision(context.env.DB, {
-    proposalId: context.params.proposalId,
+  const finalized = await finalizeProposalDecision(c.env.DB, {
+    proposalId,
     decidedByUserId: admin.id,
     finalStatus: body.finalStatus,
     decisionNote: body.decisionNote,
@@ -50,9 +50,9 @@ export async function onRequestPost(
   // Store the presentation deadline on the proposal when accepting.
   if (body.finalStatus === "accepted" && body.presentationDeadline) {
     await run(
-      context.env.DB,
+      c.env.DB,
       "UPDATE session_proposals SET presentation_deadline = ?, updated_at = datetime('now') WHERE id = ?",
-      [body.presentationDeadline, context.params.proposalId],
+      [body.presentationDeadline, proposalId],
     );
   }
 
@@ -62,27 +62,27 @@ export async function onRequestPost(
     proposer_user_id: string;
     presentation_deadline: string | null;
   }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT title, event_id, proposer_user_id, presentation_deadline FROM session_proposals WHERE id = ?",
-    [context.params.proposalId],
+    [proposalId],
   );
 
   if (proposal) {
     const [event, speakers] = await Promise.all([
       first<{ id: string; name: string; slug: string; base_path: string | null; starts_at: string | null; settings_json: string }>(
-        context.env.DB,
+        c.env.DB,
         "SELECT id, name, slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
         [proposal.event_id],
       ),
-      listProposalSpeakersWithStatus(context.env.DB, context.params.proposalId),
+      listProposalSpeakersWithStatus(c.env.DB, proposalId),
     ]);
 
-    const appBaseUrl = resolveAppBaseUrl(context.env);
+    const appBaseUrl = resolveAppBaseUrl(c.env);
 
     for (const speaker of speakers) {
       // Decision email to the proposer only.
       if (speaker.user_id === proposal.proposer_user_id) {
-        await queueEmail(context.env.DB, {
+        await queueEmail(c.env.DB, {
           eventId: proposal.event_id,
           templateKey: "proposal_decision",
           recipientEmail: speaker.email,
@@ -109,13 +109,13 @@ export async function onRequestPost(
         if (isActive) {
           // Refresh the speaker's manage token so the acceptance emails contain valid links.
           const freshToken = await refreshSpeakerManageToken(
-            context.env.DB,
-            context.params.proposalId,
+            c.env.DB,
+            proposalId,
             speaker.user_id,
           );
           const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, freshToken);
 
-          await queueEmail(context.env.DB, {
+          await queueEmail(c.env.DB, {
             eventId: proposal.event_id,
             templateKey: "speaker_profile_request",
             recipientEmail: speaker.email,
@@ -132,7 +132,7 @@ export async function onRequestPost(
             },
           });
 
-          await queueEmail(context.env.DB, {
+          await queueEmail(c.env.DB, {
             eventId: proposal.event_id,
             templateKey: "presentation_upload_request",
             recipientEmail: speaker.email,
@@ -149,26 +149,26 @@ export async function onRequestPost(
           });
 
           await run(
-            context.env.DB,
+            c.env.DB,
             `UPDATE proposal_speakers
              SET presentation_last_communication_at = ?,
                  presentation_reminders_paused_until = NULL
              WHERE proposal_id = ? AND user_id = ?`,
-            [new Date().toISOString(), context.params.proposalId, speaker.user_id],
+            [new Date().toISOString(), proposalId, speaker.user_id],
           );
         }
       }
     }
 
-    context.waitUntil(processPendingOutboxBackground(context.env.DB, context.env, 5));
+    c.executionCtx.waitUntil(processPendingOutboxBackground(c.env.DB, c.env, 5));
   }
 
   return json({ success: true, ...finalized, minReviewsRequired });
 }
 
-export async function onRequest(context: PagesContext<{ proposalId: string }>): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestPost(context);
+  return onRequestPost(c);
 }
