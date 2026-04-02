@@ -4,6 +4,9 @@
  * All event handlers are wired via addEventListener — no inline onclick attributes.
  */
 
+import { showHeadshotDisclaimer } from "../shared/headshot-upload";
+import { cropHeadshot } from "../shared/crop-headshot";
+
 // ── Type declarations ──────────────────────────────────────────────────────────
 
 interface ApiOpts extends RequestInit {
@@ -4870,66 +4873,43 @@ const ADMIN_HEADSHOT_DISCLAIMER_TEXT = [
 ];
 
 function showAdminHeadshotDisclaimer(): Promise<boolean> {
-  return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.style.cssText =
-      "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;display:flex;align-items:center;justify-content:center;padding:1rem";
-    const card = document.createElement("div");
-    card.style.cssText =
-      "background:#fff;border-radius:.5rem;max-width:520px;width:100%;padding:1.5rem;box-shadow:0 8px 32px rgba(0,0,0,.25)";
-    card.innerHTML = `
-      <h4 style="margin:0 0 .75rem;font-size:1.1rem">Before uploading a photo</h4>
-      <p style="font-size:.875rem;margin:0 0 1rem">Please confirm all of the following:</p>
-      <form>
-        ${ADMIN_HEADSHOT_DISCLAIMER_TEXT.map((text, i) => `
-          <div style="display:flex;gap:.5rem;margin-bottom:.5rem;align-items:flex-start">
-            <input type="checkbox" id="ahsd-${i}" style="margin-top:.2rem;flex-shrink:0">
-            <label for="ahsd-${i}" style="font-size:.875rem">${text}</label>
-          </div>`).join("")}
-        <div style="display:flex;gap:.5rem;margin-top:1rem">
-          <button type="submit" id="ahsd-confirm" class="btn btn-success btn-sm" disabled>Proceed</button>
-          <button type="button" id="ahsd-cancel" class="btn btn-outline-secondary btn-sm">Cancel</button>
-        </div>
-      </form>`;
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
-
-    const confirmBtn = card.querySelector<HTMLButtonElement>("#ahsd-confirm")!;
-    const cancelBtn = card.querySelector<HTMLButtonElement>("#ahsd-cancel")!;
-    const checkboxes = Array.from(card.querySelectorAll<HTMLInputElement>("input[type='checkbox']"));
-
-    function updateConfirm(): void {
-      confirmBtn.disabled = !checkboxes.every((cb) => cb.checked);
-    }
-    for (const cb of checkboxes) cb.addEventListener("change", updateConfirm);
-
-    card.querySelector("form")!.addEventListener("submit", (e) => {
-      e.preventDefault();
-      if (checkboxes.every((cb) => cb.checked)) { overlay.remove(); resolve(true); }
-    });
-    cancelBtn.addEventListener("click", () => { overlay.remove(); resolve(false); });
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
+  return showHeadshotDisclaimer({
+    title: "Before uploading a photo",
+    texts: ADMIN_HEADSHOT_DISCLAIMER_TEXT,
+    confirmText: "Proceed"
   });
 }
 
 function wireHeadshotControls(u: UserDetail): void {
-  // File upload — opens crop UI before uploading
+  // File upload
   const fileInput = q<HTMLInputElement>("#u-headshot-file");
   if (fileInput) {
     const newInput = fileInput.cloneNode(true) as HTMLInputElement;
     fileInput.replaceWith(newInput);
     newInput.addEventListener("change", () => {
       const file = newInput.files?.[0];
-      newInput.value = "";
       if (!file) return;
-      const MAX_RAW_MB = 5;
+      const MAX_RAW_MB = 20;
       if (file.size > MAX_RAW_MB * 1024 * 1024) {
         toast(`Please choose an image under ${MAX_RAW_MB} MB.`, "error");
+        newInput.value = "";
         return;
       }
       void (async () => {
         const accepted = await showAdminHeadshotDisclaimer();
-        if (accepted) void openCropUI(file, u.id);
+        if (!accepted) {
+          newInput.value = "";
+          return;
+        }
+        try {
+          const cropped = await cropHeadshot(file); if (!cropped) { newInput.value = ""; return; } await uploadHeadshotFile(u.id, cropped);
+          newInput.value = "";
+          toast("Headshot uploaded", "success");
+          await openUserDetail(u.id);
+        } catch (err) {
+          newInput.value = "";
+          toast((err as Error).message ?? "Failed to upload headshot", "error");
+        }
       })();
     });
   }
@@ -4957,215 +4937,15 @@ function wireHeadshotControls(u: UserDetail): void {
   }
 }
 
-// ── Headshot Crop UI ──────────────────────────────────────────────────────────
-
-const CROP_OUTPUT_SIZE = 512; // px — square output
-
-function openCropUI(file: File, userId: string): Promise<void> {
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const img = new Image();
-      img.onload = () => {
-        showCropModal(img, userId, resolve);
-      };
-      img.src = reader.result as string;
-    };
-    reader.readAsDataURL(file);
-  });
-}
-
-function showCropModal(img: HTMLImageElement, userId: string, done: () => void): void {
-  // Create modal overlay
-  const overlay = document.createElement("div");
-  overlay.style.cssText =
-    "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);" +
-    "display:flex;align-items:center;justify-content:center;flex-direction:column";
-
-  const card = document.createElement("div");
-  card.style.cssText =
-    "background:#fff;border-radius:12px;padding:24px;max-width:480px;width:90vw;" +
-    "box-shadow:0 8px 32px rgba(0,0,0,.3);display:flex;flex-direction:column;align-items:center;gap:16px";
-
-  card.innerHTML = '<h6 class="mb-0">Crop headshot</h6>';
-
-  // Viewport — circular mask over the image
-  const viewportSize = 300;
-  const viewport = document.createElement("div");
-  viewport.style.cssText =
-    `width:${viewportSize}px;height:${viewportSize}px;border-radius:50%;overflow:hidden;` +
-    "position:relative;cursor:grab;border:3px solid #198754;background:#eee;touch-action:none;flex-shrink:0";
-
-  const imgEl = document.createElement("img");
-  imgEl.src = img.src;
-  imgEl.draggable = false;
-  imgEl.style.cssText = "position:absolute;top:0;left:0;transform-origin:0 0;user-select:none;pointer-events:none";
-
-  viewport.appendChild(imgEl);
-  card.appendChild(viewport);
-
-  // Compute initial scale so the image fits the viewport (cover)
-  const naturalW = img.naturalWidth;
-  const naturalH = img.naturalHeight;
-  const minDim = Math.min(naturalW, naturalH);
-  const fitScale = viewportSize / minDim;
-  const minScale = fitScale * 0.5;
-  const maxScale = fitScale * 4;
-
-  let scale = fitScale;
-  let panX = -(naturalW * scale - viewportSize) / 2;
-  let panY = -(naturalH * scale - viewportSize) / 2;
-
-  function clampPan(): void {
-    const imgW = naturalW * scale;
-    const imgH = naturalH * scale;
-    panX = Math.min(0, Math.max(viewportSize - imgW, panX));
-    panY = Math.min(0, Math.max(viewportSize - imgH, panY));
-  }
-
-  function applyTransform(): void {
-    imgEl.style.width = `${naturalW * scale}px`;
-    imgEl.style.height = `${naturalH * scale}px`;
-    imgEl.style.left = `${panX}px`;
-    imgEl.style.top = `${panY}px`;
-  }
-
-  clampPan();
-  applyTransform();
-
-  // Drag to pan
-  let dragging = false;
-  let dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0;
-
-  viewport.addEventListener("pointerdown", (e) => {
-    dragging = true;
-    dragStartX = e.clientX; dragStartY = e.clientY;
-    panStartX = panX; panStartY = panY;
-    viewport.style.cursor = "grabbing";
-    viewport.setPointerCapture(e.pointerId);
-  });
-  viewport.addEventListener("pointermove", (e) => {
-    if (!dragging) return;
-    panX = panStartX + (e.clientX - dragStartX);
-    panY = panStartY + (e.clientY - dragStartY);
-    clampPan();
-    applyTransform();
-  });
-  viewport.addEventListener("pointerup", () => { dragging = false; viewport.style.cursor = "grab"; });
-
-  // Zoom slider
-  const zoomRow = document.createElement("div");
-  zoomRow.style.cssText = "display:flex;align-items:center;gap:8px;width:100%";
-  zoomRow.innerHTML = '<span class="small text-muted">−</span>';
-  const slider = document.createElement("input");
-  slider.type = "range";
-  slider.min = "0";
-  slider.max = "100";
-  slider.value = String(((fitScale - minScale) / (maxScale - minScale)) * 100);
-  slider.className = "form-range";
-  slider.style.flex = "1";
-  zoomRow.appendChild(slider);
-  const plusLabel = document.createElement("span");
-  plusLabel.className = "small text-muted";
-  plusLabel.textContent = "+";
-  zoomRow.appendChild(plusLabel);
-  card.appendChild(zoomRow);
-
-  slider.addEventListener("input", () => {
-    const newScale = minScale + (parseFloat(slider.value) / 100) * (maxScale - minScale);
-    // Zoom towards centre of viewport
-    const cx = viewportSize / 2;
-    const cy = viewportSize / 2;
-    panX = cx - ((cx - panX) / scale) * newScale;
-    panY = cy - ((cy - panY) / scale) * newScale;
-    scale = newScale;
-    clampPan();
-    applyTransform();
-  });
-
-  // Mouse wheel zoom
-  viewport.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.05 : 0.05;
-    const newScale = Math.min(maxScale, Math.max(minScale, scale * (1 + delta)));
-    const rect = viewport.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    panX = cx - ((cx - panX) / scale) * newScale;
-    panY = cy - ((cy - panY) / scale) * newScale;
-    scale = newScale;
-    clampPan();
-    applyTransform();
-    slider.value = String(((scale - minScale) / (maxScale - minScale)) * 100);
-  }, { passive: false });
-
-  // Buttons
-  const btnRow = document.createElement("div");
-  btnRow.style.cssText = "display:flex;gap:8px";
-  const cancelBtn = document.createElement("button");
-  cancelBtn.className = "btn btn-sm btn-outline-secondary";
-  cancelBtn.textContent = "Cancel";
-  const confirmBtn = document.createElement("button");
-  confirmBtn.className = "btn btn-sm btn-success";
-  confirmBtn.textContent = "Crop & Upload";
-  btnRow.appendChild(cancelBtn);
-  btnRow.appendChild(confirmBtn);
-  card.appendChild(btnRow);
-
-  overlay.appendChild(card);
-  document.body.appendChild(overlay);
-
-  cancelBtn.addEventListener("click", () => {
-    overlay.remove();
-    done();
-  });
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) { overlay.remove(); done(); }
-  });
-
-  confirmBtn.addEventListener("click", async () => {
-    confirmBtn.disabled = true;
-    confirmBtn.textContent = "Uploading…";
-
-    // Render cropped image via canvas
-    const canvas = document.createElement("canvas");
-    canvas.width = CROP_OUTPUT_SIZE;
-    canvas.height = CROP_OUTPUT_SIZE;
-    const ctx = canvas.getContext("2d")!;
-
-    // Map viewport coords back to source image coords
-    const srcX = -panX / scale;
-    const srcY = -panY / scale;
-    const srcSize = viewportSize / scale;
-
-    ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, CROP_OUTPUT_SIZE, CROP_OUTPUT_SIZE);
-
-    canvas.toBlob(async (blob) => {
-      if (!blob) { overlay.remove(); done(); return; }
-      try {
-        await uploadCroppedHeadshot(userId, blob);
-        toast("Headshot uploaded", "success");
-      } catch (err) {
-        toast((err as Error).message, "error");
-      }
-      overlay.remove();
-      await openUserDetail(userId);
-      done();
-    }, "image/jpeg", 0.92);
-  });
-}
-
-async function uploadCroppedHeadshot(userId: string, blob: Blob): Promise<void> {
-  const form = new FormData();
-  form.append("file", blob, "headshot.jpg");
-
+async function uploadHeadshotFile(userId: string, file: Blob): Promise<void> {
   const headers: Record<string, string> = {};
   if (_token) headers["Authorization"] = `Bearer ${_token}`;
+  headers["Content-Type"] = file.type || "application/octet-stream";
 
   const res = await fetch(`/api/v1/admin/users/${userId}/headshot`, {
     method: "PUT",
     headers,
-    body: form,
+    body: file,
   });
   const data = await res.json().catch(() => ({})) as { error?: { message?: string } };
   if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`);

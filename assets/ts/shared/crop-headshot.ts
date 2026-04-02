@@ -8,7 +8,7 @@
  * Returns a JPEG Blob if the user confirmed, or null if they cancelled.
  */
 
-const CROP_OUTPUT_SIZE = 512; // px — square output
+const CROP_OUTPUT_SIZE = 1024; // px — square output
 
 /**
  * Opens the image in a full-screen crop modal.

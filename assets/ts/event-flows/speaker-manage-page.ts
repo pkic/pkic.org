@@ -3,8 +3,8 @@ import { setButtonLoading, resetButton } from "../shared/button-loading";
 import { normalizeValidation } from "../shared/validation-map";
 import { renderProfileLinks, type ProfileLinksWidget } from "../shared/render-profile-links";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/render-consents";
+import { showHeadshotDisclaimer } from "../shared/headshot-upload";
 import { cropHeadshot } from "../shared/crop-headshot";
-import { prepareHeadshotUploadBlob, showHeadshotDisclaimer } from "../shared/headshot-upload";
 import { showManageLinkRecoveryForm } from "../shared/manage-link-recovery";
 import { renderHeadshotPreview } from "../shared/headshot-preview";
 import { bootstrap, setStatus } from "./boot";
@@ -317,30 +317,35 @@ async function main(): Promise<void> {
     headshotFile?.addEventListener("change", () => {
       const file = headshotFile.files?.[0];
       if (!file) return;
-      headshotFile.value = "";
+
       void (async () => {
         const accepted = await showHeadshotDisclaimer();
-        if (!accepted) return;
-        if (headshotStatus) headshotStatus.textContent = "Preparing image…";
+        if (!accepted) {
+          headshotFile.value = "";
+          return;
+        }
+        
         const cropped = await cropHeadshot(file);
-        if (!cropped) return;
-        const uploadBlob = await prepareHeadshotUploadBlob(cropped, 1024 * 1024);
-        const uploadFile = new File([uploadBlob], "headshot.jpg", { type: "image/jpeg" });
-        if (headshotStatus) headshotStatus.textContent = "Uploading…";
+        if (!cropped) {
+          headshotFile.value = "";
+          return;
+        }
 
-        const formData = new FormData();
-        formData.append("file", uploadFile);
-        formData.append("consent", "true");
+        if (headshotStatus) headshotStatus.textContent = "Uploading…";
+        headshotFile.value = "";
 
         try {
+          const form = new FormData();
+          form.append("file", cropped, "headshot.jpg");
+          form.append("consent", "true");
           const response = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/headshot`, {
             method: "PUT",
-            body: formData,
+            body: form,
           });
           const json = await response.json() as { success?: boolean; headshotUrl?: string; error?: { message?: string } };
           if (!response.ok) throw new Error(json.error?.message ?? `HTTP ${response.status}`);
           if (headshotStatus) headshotStatus.textContent = "Headshot uploaded successfully.";
-          renderHeadshotPreview(headshotPreview, json.headshotUrl ?? `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/headshot?v=${Date.now()}`, { alt: "Your headshot", emptyLabel: "No headshot uploaded yet." });
+          renderHeadshotPreview(headshotPreview, json.headshotUrl, { alt: "Your headshot", emptyLabel: "No headshot uploaded yet." });
         } catch (error) {
           if (headshotStatus) headshotStatus.textContent = `Upload failed: ${(error as Error).message}`;
         }
