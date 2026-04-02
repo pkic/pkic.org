@@ -1,24 +1,23 @@
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json, markSensitive } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { all } from "../../../../_lib/db/queries";
 import { getProposalByManageToken, updateProposalByManageToken } from "../../../../_lib/services/proposals";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
-import type { PagesContext } from "../../../../_lib/types";
 import { proposalManageSchema } from "../../../../../assets/shared/schemas/api";
 
-export async function onRequestPatch(context: PagesContext<{ token: string }>): Promise<Response> {
-  const body = await parseJsonBody(context.request, proposalManageSchema);
-  const existing = await getProposalByManageToken(context.env.DB, context.params.token);
+export async function onRequestPatch(c: any): Promise<Response> {
+  const body = await parseJsonBody(c.req, proposalManageSchema);
+  const existing = await getProposalByManageToken(c.env.DB, c.req.param("token"));
   const proposalDetails = body.details
-    ? await validateCustomAnswersByPurpose(context.env.DB, {
+    ? await validateCustomAnswersByPurpose(c.env.DB, {
       eventId: existing.event_id,
       purpose: "proposal_submission",
       customAnswers: body.details,
     })
     : {};
 
-  const proposal = await updateProposalByManageToken(context.env.DB, {
-    manageToken: context.params.token,
+  const proposal = await updateProposalByManageToken(c.env.DB, {
+    manageToken: c.req.param("token"),
     action: body.action,
     proposalType: body.proposalType,
     title: body.title,
@@ -29,8 +28,8 @@ export async function onRequestPatch(context: PagesContext<{ token: string }>): 
   return json({ success: true, proposal });
 }
 
-export async function onRequestGet(context: PagesContext<{ token: string }>): Promise<Response> {
-  const proposal = await getProposalByManageToken(context.env.DB, context.params.token);
+export async function onRequestGet(c: any): Promise<Response> {
+  const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"));
   const speakers = await all<{
     user_id: string;
     role: string;
@@ -45,7 +44,7 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
     biography: string | null;
     links_json: string | null;
   }>(
-    context.env.DB,
+    c.env.DB,
         `SELECT ps.user_id, ps.role, ps.status, ps.confirmed_at, ps.declined_at,
           u.email, u.first_name, u.last_name, u.organization_name, u.job_title, u.biography, u.links_json
      FROM proposal_speakers ps
@@ -78,14 +77,14 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
   });
 }
 
-export async function onRequest(context: PagesContext<{ token: string }>): Promise<Response> {
-  markSensitive(context);
-  if (context.request.method === "PATCH") {
-    return onRequestPatch(context);
+export async function onRequest(c: any): Promise<Response> {
+  c.set("sensitive", true);
+  if (c.req.raw.method === "PATCH") {
+    return onRequestPatch(c);
   }
 
-  if (context.request.method === "GET") {
-    return onRequestGet(context);
+  if (c.req.raw.method === "GET") {
+    return onRequestGet(c);
   }
 
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

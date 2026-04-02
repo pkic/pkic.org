@@ -18,26 +18,26 @@ import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { first } from "../../../../../../../_lib/db/queries";
 import { prerenderAndCache } from "../../../../../../../_lib/services/og-badge-prerender";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
-import type { PagesContext } from "../../../../../../../_lib/types";
 
 const R2_KEY_PREFIX = "og-badges/";
 
 export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string; registrationId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const registrationId = c.req.param("registrationId");
 
   // Look up the referral code owned by this registration
   const row = await first<{ code: string }>(
-    context.env.DB,
+    c.env.DB,
     `SELECT code FROM referral_codes
      WHERE owner_type = 'registration'
        AND owner_id   = ?
        AND event_id   = ?
      LIMIT 1`,
-    [context.params.registrationId, event.id],
+    [registrationId, event.id],
   );
 
   if (!row) {
@@ -48,22 +48,22 @@ export async function onRequestPost(
   }
 
   // Purge the cached OG badge from R2 so it will be re-rendered fresh.
-  if (context.env.ASSETS_BUCKET) {
-    const bucket = context.env.ASSETS_BUCKET as unknown as { delete(key: string): Promise<void> };
+  if (c.env.ASSETS_BUCKET) {
+    const bucket = c.env.ASSETS_BUCKET as unknown as { delete(key: string): Promise<void> };
     await bucket.delete(`${R2_KEY_PREFIX}${row.code}`);
   }
 
   // Await synchronously so the badge is ready before we respond — the admin UI
   // opens the badge URL immediately on success, so background-queue isn't safe here.
-  await prerenderAndCache(row.code, context.env, appBaseUrl);
+  await prerenderAndCache(row.code, c.env, appBaseUrl);
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "admin",
     admin.id,
     "og_badge_regenerated",
     "registration",
-    context.params.registrationId,
+    registrationId,
     { referralCode: row.code },
   );
 

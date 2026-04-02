@@ -10,7 +10,6 @@ import { all, first, run } from "../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { uuid } from "../../../../../_lib/utils/ids";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
-import type { PagesContext } from "../../../../../_lib/types";
 import { adminEventPermissionSchema } from "../../../../../../assets/shared/schemas/api";
 
 interface PermissionRow {
@@ -28,13 +27,13 @@ interface ExistingPermRow {
 }
 
 export async function onRequestGet(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
   const permissions = await all<PermissionRow>(
-    context.env.DB,
+    c.env.DB,
     `SELECT ep.id, ep.user_email, ep.user_id, ep.permission,
             ep.granted_by_id, ep.created_at,
             u.email AS granter_email
@@ -49,17 +48,17 @@ export async function onRequestGet(
 }
 
 export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const body = await parseJsonBody(context.request, adminEventPermissionSchema);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const body = await parseJsonBody(c.req, adminEventPermissionSchema);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
   const normalizedEmail = normalizeEmail(body.userEmail);
 
   // Check for duplicate
   const existing = await first<ExistingPermRow>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id FROM event_permissions WHERE event_id = ? AND user_email = ? AND permission = ?",
     [event.id, normalizedEmail, body.permission],
   );
@@ -70,7 +69,7 @@ export async function onRequestPost(
 
   // Resolve user_id if the person has an account
   const userRow = await first<{ id: string }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id FROM users WHERE normalized_email = ?",
     [normalizedEmail],
   );
@@ -79,14 +78,14 @@ export async function onRequestPost(
   const now = nowIso();
 
   await run(
-    context.env.DB,
+    c.env.DB,
     `INSERT INTO event_permissions (id, event_id, user_email, user_id, permission, granted_by_id, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [id, event.id, normalizedEmail, userRow?.id ?? null, body.permission, admin.id, now],
   );
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "admin",
     admin.id,
     "event_permission_granted",
@@ -99,9 +98,9 @@ export async function onRequestPost(
 }
 
 export async function onRequest(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method === "GET") return onRequestGet(context);
-  if (context.request.method === "POST") return onRequestPost(context);
+  if (c.req.raw.method === "GET") return onRequestGet(c);
+  if (c.req.raw.method === "POST") return onRequestPost(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

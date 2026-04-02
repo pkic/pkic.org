@@ -13,14 +13,13 @@
  *   offset       - pagination offset (default 0)
  */
 
+import { OpenAPIRoute } from "chanfana";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { all, first } from "../../../../_lib/db/queries";
 import { renderSubject } from "../../../../_lib/email/render";
 import { resolveTemplate } from "../../../../_lib/email/templates";
 import { json } from "../../../../_lib/http";
 import { parseJsonSafe } from "../../../../_lib/utils/json";
-import type { PagesContext } from "../../../../_lib/types";
-
 interface OutboxListRow {
   id: string;
   event_id: string | null;
@@ -114,7 +113,7 @@ function buildWhereClause(
 }
 
 async function resolveSubjectTemplate(
-  context: PagesContext,
+  c: any,
   row: OutboxListRow,
   cache: Map<string, string | null>,
 ): Promise<string | null> {
@@ -125,7 +124,7 @@ async function resolveSubjectTemplate(
     }
 
     const versionRow = await first<TemplateSubjectRow>(
-      context.env.DB,
+      c.env.DB,
       "SELECT subject_template FROM email_template_versions WHERE template_key = ? AND version = ?",
       [row.template_key, row.template_version],
     );
@@ -140,7 +139,7 @@ async function resolveSubjectTemplate(
   }
 
   try {
-    const active = await resolveTemplate(context.env.DB, row.template_key);
+    const active = await resolveTemplate(c.env.DB, row.template_key);
     cache.set(cacheKey, active.subjectTemplate ?? null);
     return active.subjectTemplate ?? null;
   } catch {
@@ -150,7 +149,7 @@ async function resolveSubjectTemplate(
 }
 
 async function buildPreviewSubject(
-  context: PagesContext,
+  c: any,
   row: OutboxListRow,
   payload: Record<string, unknown>,
   cache: Map<string, string | null>,
@@ -162,14 +161,14 @@ async function buildPreviewSubject(
     return renderSubject(row.subject, fallbackSubject, payload);
   }
 
-  const subjectTemplate = await resolveSubjectTemplate(context, row, cache);
+  const subjectTemplate = await resolveSubjectTemplate(c, row, cache);
   return renderSubject(subjectTemplate, fallbackSubject, payload);
 }
 
-export async function onRequestGet(context: PagesContext): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
+export async function onRequestGet(c: any): Promise<Response> {
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
-  const url = new URL(context.request.url);
+  const url = new URL(c.req.raw.url);
   const status = (url.searchParams.get("status") ?? "").trim().toLowerCase();
   const messageType = (url.searchParams.get("messageType") ?? "").trim().toLowerCase();
   const dueNow = ["1", "true", "yes"].includes((url.searchParams.get("dueNow") ?? "").trim().toLowerCase());
@@ -181,7 +180,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
 
   const [rows, totalRow, statusCounts, messageTypeCounts, templateCounts, dueCounts, dueNextRow] = await Promise.all([
     all<OutboxListRow>(
-      context.env.DB,
+      c.env.DB,
       `SELECT
          o.id,
          o.event_id,
@@ -218,7 +217,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
       [...params, limit, offset],
     ),
     first<{ total: number }>(
-      context.env.DB,
+      c.env.DB,
       `SELECT COUNT(*) AS total
        FROM email_outbox o
        LEFT JOIN events e ON e.id = o.event_id
@@ -226,7 +225,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
       params,
     ),
     all<CountRow>(
-      context.env.DB,
+      c.env.DB,
       `SELECT o.status, COUNT(*) AS count
        FROM email_outbox o
        LEFT JOIN events e ON e.id = o.event_id
@@ -235,7 +234,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
       params,
     ),
     all<MessageTypeCountRow>(
-      context.env.DB,
+      c.env.DB,
       `SELECT o.message_type, COUNT(*) AS count
        FROM email_outbox o
        LEFT JOIN events e ON e.id = o.event_id
@@ -244,7 +243,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
       params,
     ),
     all<TemplateCountRow>(
-      context.env.DB,
+      c.env.DB,
       `SELECT o.template_key, COUNT(*) AS count
        FROM email_outbox o
        LEFT JOIN events e ON e.id = o.event_id
@@ -255,7 +254,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
       params,
     ),
     all<DueCountRow>(
-      context.env.DB,
+      c.env.DB,
       `SELECT status, COUNT(*) AS count
        FROM email_outbox
        WHERE status IN ('queued', 'retrying')
@@ -264,7 +263,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
       [new Date().toISOString()],
     ),
     first<{ send_after: string | null }>(
-      context.env.DB,
+      c.env.DB,
       `SELECT MIN(send_after) AS send_after
        FROM email_outbox
        WHERE status IN ('queued', 'retrying')`,
@@ -281,7 +280,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
     const bccRecipients = Array.isArray(payload.__bccRecipients)
       ? payload.__bccRecipients.filter((item): item is string => typeof item === "string" && item.includes("@"))
       : [];
-    const previewSubject = await buildPreviewSubject(context, row, payload, subjectTemplateCache);
+    const previewSubject = await buildPreviewSubject(c, row, payload, subjectTemplateCache);
     const directBody = typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent.length > 0;
     const customText = typeof payload.__adminCampaignCustomText === "string" && payload.__adminCampaignCustomText.trim().length > 0;
     const payloadEventName = typeof payload.eventName === "string" ? payload.eventName : null;
@@ -333,9 +332,10 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
   });
 }
 
-export async function onRequest(context: PagesContext): Promise<Response> {
-  if (context.request.method !== "GET") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+export class AdminEmailOutboxGet extends OpenAPIRoute {
+  schema = {};
+
+  async handle(c: any) {
+    return onRequestGet(c as any);
   }
-  return onRequestGet(context);
 }

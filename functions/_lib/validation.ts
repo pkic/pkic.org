@@ -7,10 +7,13 @@ import {
   sourceTypeSchema,
 } from "../../assets/shared/schemas/api";
 
-export async function parseJsonBody<T>(request: Request, schema: z.ZodSchema<T>): Promise<T> {
+type JsonRequestLike = Request | { raw?: Request; json?: () => Promise<unknown> };
+
+export async function parseJsonBody<T>(request: JsonRequestLike, schema: z.ZodSchema<T>): Promise<T> {
+  const source = request instanceof Request ? request : (request.raw ?? request);
   let body: unknown;
   try {
-    body = await request.json();
+    body = await source.json();
   } catch {
     throw new AppError(400, "INVALID_JSON", "Request body must be valid JSON");
   }

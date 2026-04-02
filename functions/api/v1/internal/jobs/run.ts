@@ -5,13 +5,12 @@ import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { processPendingOutbox, summarizePendingOutbox } from "../../../../_lib/email/outbox";
 import { runReminderCycle } from "../../../../_lib/services/reminders";
 import { runRetentionJob, summarizeRetentionJob } from "../../../../_lib/services/retention";
-import type { PagesContext } from "../../../../_lib/types";
 import { adminRunJobsSchema } from "../../../../../assets/shared/schemas/api";
 
-export async function onRequestPost(context: PagesContext): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const body = await parseJsonBody(context.request, adminRunJobsSchema);
-  const config = getConfig(context.env, context.request);
+export async function onRequestPost(c: any): Promise<Response> {
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const body = await parseJsonBody(c.req, adminRunJobsSchema);
+  const config = getConfig(c.env, c.req.raw);
   const emptyReminderPreview = {
     attendeeInvites: [],
     speakerInvites: [],
@@ -20,8 +19,8 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
   };
 
   const reminders = body.runReminders
-    ? await runReminderCycle(context.env.DB, {
-      appBaseUrl: resolveAppBaseUrl(context.env),
+    ? await runReminderCycle(c.env.DB, {
+      appBaseUrl: resolveAppBaseUrl(c.env),
       reminderIntervalDays: config.reminderIntervalDays,
       maxInviteReminders: config.maxInviteReminders,
       maxPresentationReminders: config.maxPresentationReminders,
@@ -35,19 +34,19 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     && (body.runRetentionMode === "always" || currentHourUtc === body.retentionHourUtc);
 
   const retentionPreview = shouldRunRetention
-    ? await summarizeRetentionJob(context.env.DB)
+    ? await summarizeRetentionJob(c.env.DB)
     : { dueEvents: [], totalEvents: 0, totalRegistrations: 0, totalUsers: 0 };
 
   const retention = shouldRunRetention && !body.dryRun
-    ? await runRetentionJob(context.env.DB)
+    ? await runRetentionJob(c.env.DB)
     : { redactedRegistrations: 0, redactedUsers: 0, affectedEvents: 0 };
 
   const outboxPreview = body.runOutbox
-    ? await summarizePendingOutbox(context.env.DB)
+    ? await summarizePendingOutbox(c.env.DB)
     : { dueNow: 0, dueByStatus: {}, nextSendAfter: null };
 
   const outboxResult = body.runOutbox && !body.dryRun
-    ? await processPendingOutbox(context.env.DB, context.env, body.outboxLimit)
+    ? await processPendingOutbox(c.env.DB, c.env, body.outboxLimit)
     : { processed: 0, failed: 0 };
 
   return json({
@@ -68,9 +67,9 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
   });
 }
 
-export async function onRequest(context: PagesContext): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

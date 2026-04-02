@@ -1,10 +1,9 @@
-import { json, markSensitive } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { sha256Hex } from "../../../../_lib/utils/crypto";
 import { first } from "../../../../_lib/db/queries";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { isPast } from "../../../../_lib/utils/time";
 import { proposalPageUrl, registrationPageUrl } from "../../../../_lib/services/frontend-links";
-import type { PagesContext } from "../../../../_lib/types";
 
 interface InviteRow {
   id: string;
@@ -30,12 +29,12 @@ interface EventRow {
  * Returns JSON describing the invite state so the Hugo decline page can render
  * the correct UI without ever serving raw HTML from the backend.
  */
-export async function onRequestGet(context: PagesContext<{ token: string }>): Promise<Response> {
-  markSensitive(context);
+export async function onRequestGet(c: any): Promise<Response> {
+  c.set("sensitive", true);
 
-  const tokenHash = await sha256Hex(context.params.token);
+  const tokenHash = await sha256Hex(c.req.param("token"));
   const invite = await first<InviteRow>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, event_id, invitee_first_name, invite_type, status, expires_at FROM invites WHERE token_hash = ?",
     [tokenHash],
   );
@@ -58,9 +57,9 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
   }
 
   // Valid invite — fetch event details to build the registration URL
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
   const event = await first<EventRow>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, name, slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
     [invite.event_id],
   );
@@ -82,9 +81,9 @@ export async function onRequestGet(context: PagesContext<{ token: string }>): Pr
   });
 }
 
-export async function onRequest(context: PagesContext<{ token: string }>): Promise<Response> {
-  if (context.request.method !== "GET") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

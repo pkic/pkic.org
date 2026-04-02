@@ -9,7 +9,6 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { all, first } from "../../../../../_lib/db/queries";
 import { parseJsonSafe } from "../../../../../_lib/utils/json";
 import { AppError } from "../../../../../_lib/errors";
-import type { PagesContext } from "../../../../../_lib/types";
 
 interface FormRow { id: string; key: string; title: string; purpose: string; }
 interface SubmissionRow {
@@ -32,18 +31,20 @@ interface AnswerRow {
 }
 
 export async function onRequestGet(
-  context: PagesContext<{ formKey: string }>,
+  c: any,
 ): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+
+  const formKey = c.req.param("formKey");
 
   const form = await first<FormRow>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, key, title, purpose FROM forms WHERE key = ?",
-    [context.params.formKey],
+    [formKey],
   );
-  if (!form) throw new AppError(404, "FORM_NOT_FOUND", `Form '${context.params.formKey}' not found`);
+  if (!form) throw new AppError(404, "FORM_NOT_FOUND", `Form '${formKey}' not found`);
 
-  const url = new URL(context.request.url);
+  const url = new URL(c.req.raw.url);
   const statusFilter = url.searchParams.get("status") ?? "";
   const limit = Math.min(500, parseInt(url.searchParams.get("limit") ?? "200", 10) || 200);
   const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
@@ -54,7 +55,7 @@ export async function onRequestGet(
   params.push(limit, offset);
 
   const submissions = await all<SubmissionRow>(
-    context.env.DB,
+    c.env.DB,
     `SELECT
        fs.id, fs.form_id, fs.submitted_by_user_id, fs.context_type, fs.context_ref,
        fs.status, fs.submitted_at,
@@ -76,7 +77,7 @@ export async function onRequestGet(
   const submissionIds = submissions.map((s) => s.id);
   const placeholders = submissionIds.map(() => "?").join(",");
   const answers = await all<AnswerRow>(
-    context.env.DB,
+    c.env.DB,
     `SELECT submission_id, field_key, data_json
      FROM form_submission_answers
      WHERE submission_id IN (${placeholders})
@@ -120,8 +121,8 @@ export async function onRequestGet(
 }
 
 export async function onRequest(
-  context: PagesContext<{ formKey: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method === "GET") return onRequestGet(context);
+  if (c.req.raw.method === "GET") return onRequestGet(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

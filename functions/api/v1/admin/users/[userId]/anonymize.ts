@@ -21,7 +21,6 @@ import { first, run } from "../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
-import type { PagesContext } from "../../../../../_lib/types";
 
 interface UserRow {
   id: string;
@@ -32,18 +31,19 @@ interface UserRow {
 }
 
 export async function onRequestPost(
-  context: PagesContext<{ userId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const userId = c.req.param("userId");
 
-  if (context.params.userId === admin.id) {
+  if (userId === admin.id) {
     throw new AppError(403, "FORBIDDEN", "You cannot anonymize your own account");
   }
 
   const user = await first<UserRow>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, email, role, active, pii_redacted_at FROM users WHERE id = ?",
-    [context.params.userId],
+    [userId],
   );
 
   if (!user) {
@@ -61,7 +61,7 @@ export async function onRequestPost(
   const redactedNormalized = redactedEmail;
 
   await run(
-    context.env.DB,
+    c.env.DB,
     `UPDATE users
      SET email             = ?,
          normalized_email  = ?,
@@ -84,13 +84,13 @@ export async function onRequestPost(
 
   // Revoke all non-expired sessions so the user is signed out immediately.
   await run(
-    context.env.DB,
+    c.env.DB,
     "UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?",
     [now, user.id, now],
   );
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "admin",
     admin.id,
     "user_anonymized",
@@ -103,10 +103,10 @@ export async function onRequestPost(
 }
 
 export async function onRequest(
-  context: PagesContext<{ userId: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method !== "POST") {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

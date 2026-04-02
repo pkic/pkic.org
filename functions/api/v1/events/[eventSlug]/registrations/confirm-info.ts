@@ -1,8 +1,7 @@
-import { json, markSensitive } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { sha256Hex } from "../../../../../_lib/utils/crypto";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { first } from "../../../../../_lib/db/queries";
-import type { PagesContext } from "../../../../../_lib/types";
 
 interface ConfirmInfoRow {
   first_name: string | null;
@@ -35,11 +34,9 @@ interface ConfirmInfoResponse {
  * or not found; the page degrades gracefully and the POST confirm step will
  * surface any real validation errors.
  */
-export async function onRequestGet(
-  context: PagesContext<{ eventSlug: string }>,
-): Promise<Response> {
-  markSensitive(context);
-  const token = new URL(context.request.url).searchParams.get("token");
+export async function onRequestGet(c: any): Promise<Response> {
+  c.set("sensitive", true);
+  const token = new URL(c.req.raw.url).searchParams.get("token");
 
   const empty: ConfirmInfoResponse = { firstName: null, lastName: null, email: null, organizationName: null, eventName: null, expired: false };
 
@@ -50,7 +47,7 @@ export async function onRequestGet(
   const tokenHash = await sha256Hex(token.trim());
 
   const row = await first<ConfirmInfoRow>(
-    context.env.DB,
+    c.env.DB,
     `SELECT u.first_name, u.last_name, u.email, u.organization_name, e.name AS event_name, r.confirmation_token_expires_at
      FROM registrations r
      JOIN users u ON u.id = r.user_id

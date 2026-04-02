@@ -11,19 +11,18 @@
 import { json } from "../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../_lib/config";
 import { generateBadgePng } from "../../../_lib/services/og-badge-prerender";
-import type { PagesContext } from "../../../_lib/types";
 
 const JPEG_CONTENT_TYPE = "image/jpeg";
 const PNG_CONTENT_TYPE  = "image/png";  // fallback when IMAGES binding unavailable
 const CACHE_CONTROL     = "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600";
 const R2_KEY_PREFIX     = "og-badges/";
 
-export async function onRequestGet(context: PagesContext<{ code: string }>): Promise<Response> {
-  const { code } = context.params;
+export async function onRequestGet(c: any): Promise<Response> {
+  const code = c.req.param("code");
   const r2Key    = `${R2_KEY_PREFIX}${code}`;
-  const bucket   = context.env.ASSETS_BUCKET;
-  const origin   = resolveAppBaseUrl(context.env);
-  const url      = new URL(context.request.url);
+  const bucket   = c.env.ASSETS_BUCKET;
+  const origin   = resolveAppBaseUrl(c.env);
+  const url      = new URL(c.req.raw.url);
   const isDownload = url.searchParams.get("download") === "1";
 
   const extraHeaders: Record<string, string> = {};
@@ -51,7 +50,7 @@ export async function onRequestGet(context: PagesContext<{ code: string }>): Pro
   // 2. Generate PNG (wasm init + fonts + DB + render, all parallelised)
   let png: Uint8Array | null;
   try {
-    png = await generateBadgePng(code, context.env, origin);
+    png = await generateBadgePng(code, c.env, origin);
   } catch {
     return new Response("SVG rendering unavailable in this environment", {
       status: 503,
@@ -65,14 +64,14 @@ export async function onRequestGet(context: PagesContext<{ code: string }>): Pro
 
   // 3. Convert PNG → JPEG via the Images binding and cache.
   //    If the binding is unavailable (local dev), serve the raw PNG without caching.
-  if (bucket && context.env.IMAGES) {
+  if (bucket && c.env.IMAGES) {
     try {
       const pngStream = new ReadableStream<Uint8Array>({
         start(ctrl) { ctrl.enqueue(png as Uint8Array); ctrl.close(); },
       });
-      const result  = await context.env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 85 });
+      const result  = await c.env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 85 });
       const jpegBuf = await (await result.response()).arrayBuffer();
-      context.waitUntil(
+      c.executionCtx.waitUntil(
         bucket.put(r2Key, jpegBuf, {
           httpMetadata: { contentType: JPEG_CONTENT_TYPE },
           customMetadata: { referralCode: code },
@@ -100,9 +99,9 @@ export async function onRequestGet(context: PagesContext<{ code: string }>): Pro
   });
 }
 
-export async function onRequest(context: PagesContext<{ code: string }>): Promise<Response> {
-  if (context.request.method !== "GET") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

@@ -28,7 +28,6 @@ import { queueEmail, processOutboxByIdBackground } from "../../../../_lib/email/
 import { prerenderDonationBadge } from "../../../../_lib/services/og-badge-prerender";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { getOrCreatePromoterCode } from "../../donations/promoter";
-import type { PagesContext } from "../../../../_lib/types";
 
 interface PendingDonation {
   id: string;
@@ -114,10 +113,10 @@ async function fetchNetAmount(stripeKey: string, paymentIntentId: string): Promi
   return bt.net ?? null;
 }
 
-export async function onRequestPost(context: PagesContext): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
+export async function onRequestPost(c: any): Promise<Response> {
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
-  const { env } = context;
+  const { env } = c;
 
   if (!env.STRIPE_SECRET_KEY) {
     return json({ error: { code: "NOT_CONFIGURED", message: "STRIPE_SECRET_KEY is not configured" } }, 503);
@@ -125,10 +124,10 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
 
   // ── Determine which sessions to sync ─────────────────────────────────────
   let targetIds: string[] | null = null;
-  const contentType = context.request.headers.get("content-type") ?? "";
+  const contentType = c.req.raw.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
     try {
-      const body = await context.request.json() as { sessionIds?: unknown };
+      const body = await c.req.raw.json() as { sessionIds?: unknown };
       if (Array.isArray(body.sessionIds) && body.sessionIds.every((s) => typeof s === "string")) {
         targetIds = body.sessionIds as string[];
       }
@@ -197,7 +196,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
           const donor = await env.DB.prepare(
             `SELECT name, email, organization, currency, gross_amount
              FROM donations WHERE checkout_session_id = ?`,
-          ).bind(sessionId).first<DonorRow>();
+          ).bind(sessionId).first() as DonorRow | null;
           if (donor?.email) {
             const firstName = donor.name !== "Unknown" ? (donor.name.split(" ")[0] ?? "") : "";
             const formattedAmount = formatMajorAmount(donor.gross_amount, donor.currency);
@@ -228,7 +227,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
                 ...(bcc.length > 0 ? { __bccRecipients: bcc } : {}),
               },
             });
-            context.waitUntil(processOutboxByIdBackground(env.DB, env, outboxId));
+            c.executionCtx.waitUntil(processOutboxByIdBackground(env.DB, env, outboxId));
           }
         } catch (err) {
           console.error("Failed to queue donation thank-you email during sync", err);
@@ -247,7 +246,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
           const donor = await env.DB.prepare(
             `SELECT name, email, currency, gross_amount
              FROM donations WHERE checkout_session_id = ?`,
-          ).bind(sessionId).first<DonorRow>();
+          ).bind(sessionId).first() as DonorRow | null;
           if (donor?.email) {
             const firstName = donor.name !== "Unknown" ? (donor.name.split(" ")[0] ?? "") : "";
             const formattedAmount = formatMajorAmount(donor.gross_amount, donor.currency);
@@ -263,7 +262,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
                 currency: donor.currency.toUpperCase(),
               },
             });
-            context.waitUntil(processOutboxByIdBackground(env.DB, env, outboxId));
+            c.executionCtx.waitUntil(processOutboxByIdBackground(env.DB, env, outboxId));
           }
         } catch (err) {
           console.error("Failed to queue donation expired email during sync", err);

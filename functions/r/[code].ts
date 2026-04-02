@@ -1,11 +1,10 @@
-import { json, markSensitive } from "../_lib/http";
+import { json } from "../_lib/http";
 import { recordReferralClick } from "../_lib/services/referrals";
 import { first } from "../_lib/db/queries";
 import { resolveAppBaseUrl } from "../_lib/config";
 import { getClientIp, getUserAgent, requireInternalSecret } from "../_lib/request";
 import { registrationPageUrl } from "../_lib/services/frontend-links";
-import type { PagesContext } from "../_lib/types";
-
+import type { DatabaseLike } from "../_lib/types";
 // ─── Social-scraper detection ─────────────────────────────────────────────────
 
 /**
@@ -48,7 +47,7 @@ interface OgPersonRow {
 }
 
 async function lookupOgPerson(
-  db: PagesContext["env"]["DB"],
+  db: DatabaseLike,
   code: string,
 ): Promise<OgPersonRow | null> {
   // registration owners
@@ -165,15 +164,15 @@ function buildOgHtml(
 
 // ─── Main handler ─────────────────────────────────────────────────────────────
 
-export async function onRequestGet(context: PagesContext<{ code: string }>): Promise<Response> {
-  const signingSecret = requireInternalSecret(context.env);
-  const appBaseUrl   = resolveAppBaseUrl(context.env);
-  const code         = context.params.code;
-  const userAgent    = getUserAgent(context.request);
+export async function onRequestGet(c: any): Promise<Response> {
+  const signingSecret = requireInternalSecret(c.env);
+  const appBaseUrl   = resolveAppBaseUrl(c.env);
+  const code         = c.req.param("code");
+  const userAgent    = getUserAgent(c.req.raw);
 
   // ── Validate the code exists and get its event_id ─────────────────────────
   const refRow = await first<{ event_id: string }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT event_id FROM referral_codes WHERE code = ?",
     [code],
   );
@@ -185,9 +184,9 @@ export async function onRequestGet(context: PagesContext<{ code: string }>): Pro
   // ── For real browsers, record the click (fire-and-forget) ─────────────────
   // Scrapers are excluded so they don't inflate click counts.
   if (!isSocialScraper(userAgent)) {
-    void recordReferralClick(context.env.DB, {
+    void recordReferralClick(c.env.DB, {
       code,
-      ip: getClientIp(context.request),
+      ip: getClientIp(c.req.raw),
       userAgent,
       secret: signingSecret,
     }).catch(() => { /* ignore */ });
@@ -196,11 +195,11 @@ export async function onRequestGet(context: PagesContext<{ code: string }>): Pro
   // ── Resolve redirect URL and person data in parallel ──────────────────────
   const [eventRow, person] = await Promise.all([
     first<{ slug: string; base_path: string | null; starts_at: string | null; settings_json: string }>(
-      context.env.DB,
+      c.env.DB,
       "SELECT slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
       [refRow.event_id],
     ),
-    lookupOgPerson(context.env.DB, code),
+    lookupOgPerson(c.env.DB, code),
   ]);
 
   const redirectUrl = eventRow
@@ -219,10 +218,3 @@ export async function onRequestGet(context: PagesContext<{ code: string }>): Pro
   return Response.redirect(redirectUrl, 302);
 }
 
-export async function onRequest(context: PagesContext<{ code: string }>): Promise<Response> {
-  markSensitive(context);
-  if (context.request.method !== "GET") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestGet(context);
-}

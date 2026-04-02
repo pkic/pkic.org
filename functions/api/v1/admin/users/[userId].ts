@@ -14,7 +14,6 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { first, run } from "../../../../_lib/db/queries";
 import { nowIso } from "../../../../_lib/utils/time";
 import { writeAuditLog } from "../../../../_lib/services/audit";
-import type { PagesContext } from "../../../../_lib/types";
 import { adminUserUpdateSchema } from "../../../../../assets/shared/schemas/api";
 
 interface UserRow {
@@ -26,13 +25,14 @@ interface UserRow {
 }
 
 export async function onRequestPatch(
-  context: PagesContext<{ userId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const body = await parseJsonBody(context.request, adminUserUpdateSchema);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const body = await parseJsonBody(c.req, adminUserUpdateSchema);
+  const userId = c.req.param("userId");
 
   // Prevent self-demotion / self-deactivation
-  if (context.params.userId === admin.id) {
+  if (userId === admin.id) {
     if (body.role !== undefined && body.role !== "admin") {
       return json({ error: { code: "FORBIDDEN", message: "You cannot demote your own account" } }, 403);
     }
@@ -42,9 +42,9 @@ export async function onRequestPatch(
   }
 
   const user = await first<UserRow>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, email, role, active, pii_redacted_at FROM users WHERE id = ?",
-    [context.params.userId],
+    [userId],
   );
 
   if (!user) {
@@ -55,7 +55,7 @@ export async function onRequestPatch(
   const newActive = body.active ?? Boolean(user.active);
 
   await run(
-    context.env.DB,
+    c.env.DB,
     "UPDATE users SET role = ?, active = ?, updated_at = ? WHERE id = ?",
     [newRole, newActive ? 1 : 0, nowIso(), user.id],
   );
@@ -70,7 +70,7 @@ export async function onRequestPatch(
 
   if (Object.keys(changes).length > 0) {
     await writeAuditLog(
-      context.env.DB,
+      c.env.DB,
       "admin",
       admin.id,
       "user_updated",
@@ -87,11 +87,11 @@ export async function onRequestPatch(
 }
 
 export async function onRequest(
-  context: PagesContext<{ userId: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method !== "PATCH") {
+  if (c.req.raw.method !== "PATCH") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestPatch(context);
+  return onRequestPatch(c);
 }
 

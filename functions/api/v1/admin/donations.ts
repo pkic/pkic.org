@@ -1,7 +1,6 @@
 /**
  * GET /api/v1/admin/donations
  *
- * Returns a paginated list of donations for the admin console.
  *
  * Query params:
  *   status  — filter by status: pending | completed | expired  (default: all)
@@ -12,7 +11,6 @@
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { all } from "../../../_lib/db/queries";
-import type { PagesContext } from "../../../_lib/types";
 
 interface DonationRow {
   id: string;
@@ -35,10 +33,10 @@ interface StatusCount {
   count: number;
 }
 
-export async function onRequestGet(context: PagesContext): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
+export async function onRequestGet(c: any): Promise<Response> {
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
-  const url = new URL(context.request.url);
+  const url = new URL(c.req.raw.url);
   const status = url.searchParams.get("status") ?? "";
   const limit  = Math.min(parseInt(url.searchParams.get("limit") ?? "100") || 100, 500);
   const offset = parseInt(url.searchParams.get("offset") ?? "0") || 0;
@@ -55,7 +53,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
 
   const [donations, counts] = await Promise.all([
     all<DonationRow>(
-      context.env.DB,
+      c.env.DB,
       `SELECT id, checkout_session_id, payment_intent_id, name, email,
               organization, currency, gross_amount, net_amount, source,
               status, created_at, completed_at
@@ -66,7 +64,7 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
       [...params, limit, offset],
     ),
     all<StatusCount>(
-      context.env.DB,
+      c.env.DB,
       `SELECT status, COUNT(*) AS count FROM donations GROUP BY status`,
       [],
     ),
@@ -77,9 +75,9 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
   return json({ donations, summary, limit, offset });
 }
 
-export async function onRequest(context: PagesContext): Promise<Response> {
-  if (context.request.method !== "GET") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

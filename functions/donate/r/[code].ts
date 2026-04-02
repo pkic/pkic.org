@@ -18,8 +18,6 @@ import { json } from "../../_lib/http";
 import { first, run } from "../../_lib/db/queries";
 import { resolveAppBaseUrl } from "../../_lib/config";
 import { getClientIp, getUserAgent } from "../../_lib/request";
-import type { PagesContext } from "../../_lib/types";
-
 // ─── Social-scraper detection (same list as /r/[code].ts) ────────────────────
 
 const SCRAPER_UA_PATTERNS = [
@@ -117,8 +115,10 @@ function buildPromoterOgHtml(
 
 // ─── Handler ─────────────────────────────────────────────────────────────────
 
-export async function onRequestGet(context: PagesContext<{ code: string }>): Promise<Response> {
-  const { env, request, params } = context;
+export async function onRequestGet(c: any): Promise<Response> {
+  const env = c.env;
+  const request = c.req.raw;
+  const params = c.req.param();
   const code      = params.code;
   const appBase   = resolveAppBaseUrl(env);
   const userAgent = getUserAgent(request);
@@ -156,9 +156,3 @@ export async function onRequestGet(context: PagesContext<{ code: string }>): Pro
   });
 }
 
-export async function onRequest(context: PagesContext<{ code: string }>): Promise<Response> {
-  if (context.request.method !== "GET") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestGet(context);
-}

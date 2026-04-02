@@ -8,7 +8,6 @@ import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../_lib/services/events";
 import { first, run } from "../../../../../../_lib/db/queries";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
-import type { PagesContext } from "../../../../../../_lib/types";
 
 interface PermRow {
   id: string;
@@ -17,15 +16,15 @@ interface PermRow {
 }
 
 export async function onRequestDelete(
-  context: PagesContext<{ eventSlug: string; permId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
   const perm = await first<PermRow>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, user_email, permission FROM event_permissions WHERE id = ? AND event_id = ?",
-    [context.params.permId, event.id],
+    [c.req.param("permId"), event.id],
   );
 
   if (!perm) {
@@ -33,13 +32,13 @@ export async function onRequestDelete(
   }
 
   await run(
-    context.env.DB,
+    c.env.DB,
     "DELETE FROM event_permissions WHERE id = ?",
     [perm.id],
   );
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "admin",
     admin.id,
     "event_permission_revoked",
@@ -52,10 +51,10 @@ export async function onRequestDelete(
 }
 
 export async function onRequest(
-  context: PagesContext<{ eventSlug: string; permId: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method !== "DELETE") {
+  if (c.req.raw.method !== "DELETE") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestDelete(context);
+  return onRequestDelete(c);
 }

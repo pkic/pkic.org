@@ -20,20 +20,17 @@ import { processOutboxByIdBackground, queueEmail } from "../../../../../_lib/ema
 import { registrationManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { normalizedEmailSchema } from "../../../../../../assets/shared/schemas/api";
-import type { PagesContext } from "../../../../../_lib/types";
 
 const schema = z.object({
   email: normalizedEmailSchema,
 });
 
-export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string }>,
-): Promise<Response> {
-  markSensitive(context);
+export async function onRequestPost(c: any): Promise<Response> {
+  c.set("sensitive", true);
 
-  const body = await parseJsonBody(context.request, schema);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+  const body = await parseJsonBody(c.req, schema);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
   // Look up the user + any active registration for this event by email.
   // Silently no-op when not found to prevent enumeration.
@@ -44,7 +41,7 @@ export async function onRequestPost(
     last_name: string | null;
     reg_status: string;
   }>(
-    context.env.DB,
+    c.env.DB,
     `SELECT r.id AS reg_id, r.user_id, u.first_name, u.last_name, r.status AS reg_status
      FROM   registrations r
      JOIN   users u ON u.id = r.user_id
@@ -62,14 +59,14 @@ export async function onRequestPost(
     const newHash = await sha256Hex(newToken);
 
     await run(
-      context.env.DB,
+      c.env.DB,
       `UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?`,
       [newHash, now, row.reg_id],
     );
 
     const manageUrl = registrationManagePageUrl(appBaseUrl, event, newToken);
 
-    const outboxId = await queueEmail(context.env.DB, {
+    const outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
       templateKey: "registration_manage_link",
       recipientEmail: body.email,
@@ -85,18 +82,16 @@ export async function onRequestPost(
       },
     });
 
-    context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
   }
 
   return json({ success: true });
 }
 
-export async function onRequest(
-  context: PagesContext<{ eventSlug: string }>,
-): Promise<Response> {
-  markSensitive(context);
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  c.set("sensitive", true);
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

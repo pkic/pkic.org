@@ -11,14 +11,13 @@
  * The proposal's presentation_r2_key and presentation_uploaded_at are updated.
  * Speakers can re-upload to replace their submission until the deadline.
  */
-import { json, markSensitive } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import {
   getSpeakerByManageToken,
   recordPresentationUpload,
 } from "../../../../../_lib/services/proposals";
 import { AppError } from "../../../../../_lib/errors";
 import { first } from "../../../../../_lib/db/queries";
-import type { PagesContext } from "../../../../../_lib/types";
 
 const ALLOWED_MIME_TYPES = new Set([
   "application/pdf",
@@ -29,10 +28,10 @@ const ALLOWED_MIME_TYPES = new Set([
 ]);
 const MAX_PRESENTATION_BYTES = 200 * 1024 * 1024; // 200 MB
 
-export async function onRequestPut(context: PagesContext<{ token: string }>): Promise<Response> {
+export async function onRequestPut(c: any): Promise<Response> {
   const { speaker, proposal } = await getSpeakerByManageToken(
-    context.env.DB,
-    context.params.token,
+    c.env.DB,
+    c.req.param("token"),
   );
 
   if (speaker.status === "declined") {
@@ -57,7 +56,7 @@ export async function onRequestPut(context: PagesContext<{ token: string }>): Pr
 
   // Check deadline.
   const deadlineRow = await first<{ presentation_deadline: string | null }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT presentation_deadline FROM session_proposals WHERE id = ?",
     [proposal.id],
   );
@@ -73,13 +72,13 @@ export async function onRequestPut(context: PagesContext<{ token: string }>): Pr
     );
   }
 
-  const bucket = context.env.SPEAKER_UPLOADS_BUCKET;
+  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
 
   if (!bucket) {
     throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured on this instance.");
   }
 
-  const contentType = context.request.headers.get("content-type") ?? "";
+  const contentType = c.req.raw.headers.get("content-type") ?? "";
   if (!contentType.includes("multipart/form-data")) {
     return json(
       { error: { code: "INVALID_CONTENT_TYPE", message: "Request must be multipart/form-data" } },
@@ -87,7 +86,7 @@ export async function onRequestPut(context: PagesContext<{ token: string }>): Pr
     );
   }
 
-  const formData = await context.request.formData();
+  const formData = await c.req.raw.formData();
   const file = formData.get("file");
 
   if (!file || typeof file === "string") {
@@ -125,13 +124,13 @@ export async function onRequestPut(context: PagesContext<{ token: string }>): Pr
     httpMetadata: { contentType: blobType },
   });
 
-  await recordPresentationUpload(context.env.DB, proposal.id, r2Key);
+  await recordPresentationUpload(c.env.DB, proposal.id, r2Key);
 
   return json({ success: true, r2Key });
 }
 
-export async function onRequest(context: PagesContext<{ token: string }>): Promise<Response> {
-  markSensitive(context);
-  if (context.request.method === "PUT") return onRequestPut(context);
+export async function onRequest(c: any): Promise<Response> {
+  c.set("sensitive", true);
+  if (c.req.raw.method === "PUT") return onRequestPut(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

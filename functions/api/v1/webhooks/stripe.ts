@@ -23,13 +23,13 @@
  * Wrangler secret: STRIPE_WEBHOOK_SECRET (whsec_…)
  */
 
+import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../_lib/http";
+import type { Env } from "../../../_lib/types";
 import { queueEmail, processOutboxByIdBackground } from "../../../_lib/email/outbox";
 import { prerenderDonationBadge } from "../../../_lib/services/og-badge-prerender";
 import { resolveAppBaseUrl } from "../../../_lib/config";
 import { getOrCreatePromoterCode } from "../donations/promoter";
-import type { PagesContext } from "../../../_lib/types";
-
 const TOLERANCE_SECONDS = 300;
 
 /**
@@ -92,6 +92,12 @@ interface StripeCheckoutSession {
   amount_total: number | null;
   currency: string;
   customer_email: string | null;
+  payment_status?: string | null;
+  metadata?: Record<string, string> | null;
+  customer_details?: {
+    email?: string | null;
+    name?: string | null;
+  } | null;
 }
 
 interface StripeBalanceTransaction {
@@ -112,8 +118,63 @@ interface StripeCharge {
   balance_transaction: string | null;
 }
 
-export async function onRequestPost(context: PagesContext): Promise<Response> {
-  const { request, env } = context;
+interface StripeDonorIdentity {
+  name: string | null;
+  email: string | null;
+  organization: string | null;
+  source: string | null;
+}
+
+interface DonorRow {
+  name: string;
+  email: string;
+  organization: string | null;
+  currency: string;
+  gross_amount: number;
+}
+
+function firstNonEmpty(...values: Array<string | null | undefined>): string | null {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed.length > 0) return trimmed;
+  }
+  return null;
+}
+
+function getDonorIdentityFromSession(session: StripeCheckoutSession): StripeDonorIdentity {
+  return {
+    name: firstNonEmpty(session.metadata?.donor_name, session.customer_details?.name),
+    email: firstNonEmpty(session.metadata?.donor_email, session.customer_email, session.customer_details?.email),
+    organization: firstNonEmpty(session.metadata?.donor_organization),
+    source: firstNonEmpty(session.metadata?.source),
+  };
+}
+
+function isStripePaymentConfirmed(session: StripeCheckoutSession, eventType: string): boolean {
+  if (eventType !== "checkout.session.completed" && eventType !== "checkout.session.async_payment_succeeded") {
+    return false;
+  }
+
+  return session.payment_status === "paid";
+}
+
+async function loadCompletedDonor(db: Env["DB"], sessionId: string): Promise<DonorRow | null> {
+  return db.prepare(
+    `SELECT name, email, organization, currency, gross_amount
+     FROM donations
+     WHERE checkout_session_id = ?
+       AND status = 'completed'
+       AND completed_at IS NOT NULL
+     LIMIT 1`,
+  )
+    .bind(sessionId)
+    .first<DonorRow>();
+}
+
+export async function onRequestPost(c: any): Promise<Response> {
+  const env: Env = c.env;
+  const request = c.req.raw;
 
   if (!env.STRIPE_WEBHOOK_SECRET) {
     console.error("STRIPE_WEBHOOK_SECRET is not configured");
@@ -174,7 +235,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
             currency: failedDonor.currency.toUpperCase(),
           },
         });
-        context.waitUntil(processOutboxByIdBackground(env.DB, env, outboxId));
+        c.executionCtx.waitUntil(processOutboxByIdBackground(env.DB, env, outboxId));
       } catch (err) {
         console.error("Failed to queue donation payment failed email", err);
       }
@@ -222,7 +283,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
             currency: expiredDonor.currency.toUpperCase(),
           },
         });
-        context.waitUntil(processOutboxByIdBackground(env.DB, env, outboxId));
+        c.executionCtx.waitUntil(processOutboxByIdBackground(env.DB, env, outboxId));
       } catch (err) {
         console.error("Failed to queue donation expired email", err);
       }
@@ -231,14 +292,17 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
     return json({ received: true });
   }
 
-  // checkout.session.async_payment_succeeded is treated identically to
-  // checkout.session.completed — the payment has now been confirmed.
+  // Only send donor follow-up after Stripe reports the session as paid.
   if (event.type !== "checkout.session.completed" && event.type !== "checkout.session.async_payment_succeeded") {
     // Acknowledge other events without processing them
     return json({ received: true });
   }
 
   const session = event.data.object as StripeCheckoutSession;
+  if (!isStripePaymentConfirmed(session, event.type)) {
+    return json({ received: true, pending: true });
+  }
+  const donorIdentity = getDonorIdentityFromSession(session);
 
   // ── Fetch net amount from Stripe ──────────────────────────────────────────
   // Gross amount is stored at checkout time. We look up the balance transaction
@@ -260,34 +324,48 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
      SET payment_intent_id = ?,
          net_amount        = ?,
          completed_at      = ?,
-         status            = 'completed'
+         status            = 'completed',
+         name              = CASE
+                               WHEN ? IS NOT NULL AND (name IS NULL OR TRIM(name) = '' OR name = 'Unknown')
+                               THEN ?
+                               ELSE name
+                             END,
+         email             = CASE
+                               WHEN ? IS NOT NULL AND (email IS NULL OR TRIM(email) = '')
+                               THEN ?
+                               ELSE email
+                             END,
+         organization      = CASE
+                               WHEN ? IS NOT NULL AND (organization IS NULL OR TRIM(organization) = '')
+                               THEN ?
+                               ELSE organization
+                             END,
+         source            = CASE
+                               WHEN ? IS NOT NULL AND (source IS NULL OR TRIM(source) = '')
+                               THEN ?
+                               ELSE source
+                             END
      WHERE checkout_session_id = ?`,
   )
     .bind(
       session.payment_intent ?? null,
       netAmount,
       completedAt,
+      donorIdentity.name,
+      donorIdentity.name,
+      donorIdentity.email,
+      donorIdentity.email,
+      donorIdentity.organization,
+      donorIdentity.organization,
+      donorIdentity.source,
+      donorIdentity.source,
       session.id,
     )
     .run();
 
-  // Read back the donor record so we can address the thank-you email correctly.
-  interface DonorRow {
-    name: string;
-    email: string;
-    organization: string | null;
-    currency: string;
-    gross_amount: number;
-  }
-
   let donor: DonorRow | null = null;
   if (result.meta?.changes !== 0) {
-    donor = await env.DB.prepare(
-      `SELECT name, email, organization, currency, gross_amount
-       FROM donations WHERE checkout_session_id = ?`,
-    )
-      .bind(session.id)
-      .first<DonorRow>();
+    donor = await loadCompletedDonor(env.DB, session.id);
   }
 
   if (!result.meta || result.meta.changes === 0) {
@@ -306,25 +384,17 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
         donationId,
         session.id,
         session.payment_intent ?? null,
-        "Unknown",                          // name unknown for Dashboard-created sessions
-        session.customer_email ?? null,
+        donorIdentity.name ?? "Unknown",
+        donorIdentity.email,
         fallbackCurrency,
         fallbackGross,
         netAmount,
         completedAt,
       )
       .run();
-
-    if (session.customer_email) {
-      donor = {
-        name: "Unknown",
-        email: session.customer_email,
-        organization: null,
-        currency: fallbackCurrency,
-        gross_amount: fallbackGross,
-      };
-    }
   }
+
+  donor = donor ?? await loadCompletedDonor(env.DB, session.id);
 
   // ── Send thank-you email ─────────────────────────────────────────────────
   if (donor?.email) {
@@ -358,7 +428,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
           ...(bcc.length > 0 ? { __bccRecipients: bcc } : {}),
         },
       });
-      context.waitUntil(processOutboxByIdBackground(env.DB, env, outboxId));
+      c.executionCtx.waitUntil(processOutboxByIdBackground(env.DB, env, outboxId));
     } catch (err) {
       // Non-fatal — payment is already recorded; log and continue
       console.error("Failed to queue donation thank-you email", err);
@@ -418,4 +488,12 @@ async function fetchNetAmount(stripeKey: string, paymentIntentId: string): Promi
 
   const bt = (await btRes.json()) as StripeBalanceTransaction;
   return bt.net ?? null;
+}
+
+export class WebhooksStripePost extends OpenAPIRoute {
+  schema = {};
+
+  async handle(c: any) {
+    return onRequestPost(c as any);
+  }
 }

@@ -1,5 +1,6 @@
+import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json, markSensitive } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { buildEventEmailVariables, getEventBySlug, getRequiredTerms, updateEventBasePath } from "../../../../_lib/services/events";
 import { createProposal, addProposalSpeaker, buildProposalInviteEmailContext } from "../../../../_lib/services/proposals";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
@@ -11,30 +12,27 @@ import { persistConsents, validateRequiredConsents } from "../../../../_lib/serv
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../_lib/services/frontend-links";
-import type { PagesContext } from "../../../../_lib/types";
 import { proposalCreateSchema } from "../../../../../assets/shared/schemas/api";
 import { requireInternalSecret } from "../../../../_lib/request";
 
-export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string }>,
-): Promise<Response> {
-  const config = getConfig(context.env, context.request);
-  const signingSecret = requireInternalSecret(context.env);
-  const body = await parseJsonBody(context.request, proposalCreateSchema);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+export async function onRequestPost(c: any): Promise<Response> {
+  const config = getConfig(c.env, c.req.raw);
+  const signingSecret = requireInternalSecret(c.env);
+  const body = await parseJsonBody(c.req, proposalCreateSchema);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const appBaseUrl = resolveAppBaseUrl(c.env);
 
   // Record the Hugo page URL sent by the browser so base_path is always the
   // real event page location, not a hardcoded pattern.
   await updateEventBasePath(
-    context.env.DB,
+    c.env.DB,
     event.id,
-    context.request.headers.get("x-event-base-path"),
+    c.req.raw.headers.get("x-event-base-path"),
   );
 
   let inviteId: string | null = null;
   if (body.inviteToken) {
-    const invite = await findInviteByToken(context.env.DB, body.inviteToken);
+    const invite = await findInviteByToken(c.env.DB, body.inviteToken);
     if (invite.event_id !== event.id || invite.invite_type !== "speaker") {
       return json({ error: { code: "INVITE_INVALID", message: "Invalid speaker invite" } }, 400);
     }
@@ -44,7 +42,7 @@ export async function onRequestPost(
     inviteId = invite.id;
   }
 
-  const proposer = await findOrCreateUser(context.env.DB, {
+  const proposer = await findOrCreateUser(c.env.DB, {
     email: body.proposer.email,
     firstName: body.proposer.firstName,
     lastName: body.proposer.lastName,
@@ -54,15 +52,15 @@ export async function onRequestPost(
     linksJson: body.proposer.links.length > 0 ? JSON.stringify(body.proposer.links) : null,
   });
 
-  const requiredTerms = await getRequiredTerms(context.env.DB, event.id, "speaker");
+  const requiredTerms = await getRequiredTerms(c.env.DB, event.id, "speaker");
   await validateRequiredConsents(requiredTerms, body.consents);
-  const proposalDetails = await validateCustomAnswersByPurpose(context.env.DB, {
+  const proposalDetails = await validateCustomAnswersByPurpose(c.env.DB, {
     eventId: event.id,
     purpose: "proposal_submission",
     customAnswers: body.proposal.details,
   });
 
-  const created = await createProposal(context.env.DB, {
+  const created = await createProposal(c.env.DB, {
     eventId: event.id,
     proposerUserId: proposer.id,
     proposalType: body.proposal.type,
@@ -72,7 +70,7 @@ export async function onRequestPost(
     referredByCode: body.referralCode,
   });
 
-  await addProposalSpeaker(context.env.DB, {
+  await addProposalSpeaker(c.env.DB, {
     proposalId: created.proposal.id,
     userId: proposer.id,
     role: "proposer",
@@ -81,7 +79,7 @@ export async function onRequestPost(
   // Add co-speakers and email each one to confirm participation.
   const outboxIds: string[] = [];
   for (const speaker of body.speakers) {
-    const speakerUser = await findOrCreateUser(context.env.DB, {
+    const speakerUser = await findOrCreateUser(c.env.DB, {
       email: speaker.email,
       firstName: speaker.firstName,
       lastName: speaker.lastName,
@@ -91,7 +89,7 @@ export async function onRequestPost(
       linksJson: speaker.links.length > 0 ? JSON.stringify(speaker.links) : null,
     });
 
-    const { manageToken: speakerToken } = await addProposalSpeaker(context.env.DB, {
+    const { manageToken: speakerToken } = await addProposalSpeaker(c.env.DB, {
       proposalId: created.proposal.id,
       userId: speakerUser.id,
       role: speaker.role,
@@ -99,11 +97,11 @@ export async function onRequestPost(
 
     if (speakerToken) {
       const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, speakerToken);
-      const inviteContext = await buildProposalInviteEmailContext(context.env.DB, {
+      const inviteContext = await buildProposalInviteEmailContext(c.env.DB, {
         proposalId: created.proposal.id,
         inviterUserId: proposer.id,
       });
-      const id = await queueEmail(context.env.DB, {
+      const id = await queueEmail(c.env.DB, {
         eventId: event.id,
         templateKey: "co_speaker_invite",
         recipientEmail: speakerUser.email,
@@ -126,22 +124,22 @@ export async function onRequestPost(
     }
   }
 
-  await persistConsents(context.env.DB, {
+  await persistConsents(c.env.DB, {
     proposalId: created.proposal.id,
     eventId: event.id,
     userId: proposer.id,
     audienceType: "speaker",
     accepted: body.consents,
-    ip: context.request.headers.get("cf-connecting-ip"),
-    userAgent: context.request.headers.get("user-agent"),
+    ip: c.req.raw.headers.get("cf-connecting-ip"),
+    userAgent: c.req.raw.headers.get("user-agent"),
     secret: signingSecret,
   });
 
   if (inviteId) {
-    await acceptInvite(context.env.DB, inviteId);
+    await acceptInvite(c.env.DB, inviteId);
   }
 
-  const referralCode = await createReferralCode(context.env.DB, {
+  const referralCode = await createReferralCode(c.env.DB, {
     eventId: event.id,
     ownerType: "proposal",
     ownerId: created.proposal.id,
@@ -149,11 +147,11 @@ export async function onRequestPost(
     length: config.referralCodeLength,
   });
 
-  context.waitUntil(trySeedGravatarThenPrerender(proposer.id, proposer.email, referralCode, context.env, appBaseUrl));
+  c.executionCtx.waitUntil(trySeedGravatarThenPrerender(proposer.id, proposer.email, referralCode, c.env, appBaseUrl));
 
   const manageUrl = proposalManagePageUrl(appBaseUrl, event, created.manageToken);
 
-  const outboxId = await queueEmail(context.env.DB, {
+  const outboxId = await queueEmail(c.env.DB, {
     eventId: event.id,
     templateKey: "proposal_submitted",
     recipientEmail: proposer.email,
@@ -172,7 +170,7 @@ export async function onRequestPost(
   });
 
   for (const id of [...outboxIds, outboxId]) {
-    context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, id));
+    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, id));
   }
 
   return json({
@@ -185,11 +183,10 @@ export async function onRequestPost(
   });
 }
 
-export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  markSensitive(context);
-  if (context.request.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
+export class EventsEventSlugProposalsPost extends OpenAPIRoute {
+  schema = {};
 
-  return onRequestPost(context);
+  async handle(c: any) {
+    return onRequestPost(c);
+  }
 }

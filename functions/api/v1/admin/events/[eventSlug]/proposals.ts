@@ -4,14 +4,13 @@ import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-acc
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { all, first } from "../../../../../_lib/db/queries";
 import type { ProposalListRecord } from "../../../../../_lib/services/proposals";
-import type { PagesContext } from "../../../../../_lib/types";
 
-export async function onRequestGet(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const access = await getProposalAccessForEvent(context.env.DB, event.id, admin);
+export async function onRequestGet(c: any): Promise<Response> {
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const access = await getProposalAccessForEvent(c.env.DB, event.id, admin);
 
-  const url = new URL(context.request.url);
+  const url = new URL(c.req.raw.url);
   const status = url.searchParams.get("status")?.trim() ?? "";
   const search = url.searchParams.get("search")?.trim().toLowerCase() ?? "";
   const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10) || 50));
@@ -32,7 +31,7 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
   }
 
   const rows = await all<ProposalListRecord>(
-    context.env.DB,
+    c.env.DB,
     `SELECT
        sp.*,
        u.email      AS proposer_email,
@@ -59,7 +58,7 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
   const hasMore = rows.length > limit;
   const proposals = hasMore ? rows.slice(0, limit) : rows;
   const totalRow = await first<{ total: number }>(
-    context.env.DB,
+    c.env.DB,
     `SELECT COUNT(*) AS total
      FROM session_proposals sp
      JOIN users u ON u.id = sp.proposer_user_id
@@ -81,10 +80,10 @@ export async function onRequestGet(context: PagesContext<{ eventSlug: string }>)
   });
 }
 
-export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  if (context.request.method !== "GET") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

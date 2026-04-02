@@ -1,8 +1,9 @@
+import { OpenAPIRoute } from "chanfana";
 import { json } from "../../_lib/http";
 
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 
-export async function onRequest(): Promise<Response> {
+export async function onRequest(_c?: any): Promise<Response> {
   const response = json({
     name: "PKI Consortium API",
     version: "v1",
@@ -11,4 +12,12 @@ export async function onRequest(): Promise<Response> {
   });
   response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
   return response;
+}
+
+export class RouteGet extends OpenAPIRoute {
+  schema = {};
+
+  async handle(c: any) {
+    return onRequest(c as any);
+  }
 }

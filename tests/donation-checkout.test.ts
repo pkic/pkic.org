@@ -86,6 +86,11 @@ describe("donationCheckoutSchema", () => {
     expect(result.success).toBe(false);
   });
 
+  it("rejects whitespace-only name", () => {
+    const result = donationCheckoutSchema.safeParse({ amount: 5000, currency: "usd", name: "   " });
+    expect(result.success).toBe(false);
+  });
+
   it("rejects successPath that doesn't start with /", () => {
     const result = donationCheckoutSchema.safeParse({
       amount: 5000,
@@ -205,7 +210,7 @@ describe("POST /api/v1/donations/checkout", () => {
   }
 
   beforeEach(() => {
-    globalThis.fetch = vi.fn();
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 404 }));
   });
 
   afterEach(() => {
@@ -240,6 +245,106 @@ describe("POST /api/v1/donations/checkout", () => {
     expect(response.status).toBe(400);
     const body = await response.json() as Record<string, unknown>;
     expect((body.error as Record<string, unknown>).code).toBe("VALIDATION_ERROR");
+  });
+
+  it("returns 400 when name is missing and does not call Stripe or D1", async () => {
+    const env = makeEnv();
+    const ctx = makeContext(env, makeRequest({ amount: 5000, currency: "usd" }));
+    const response = await callEndpoint(ctx);
+
+    expect(response.status).toBe(400);
+    const body = await response.json() as {
+      error: { code: string; details?: { fieldErrors?: Record<string, string[]> } };
+    };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(body.error.details?.fieldErrors?.name).toBeTruthy();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    const db = env.DB as ReturnType<typeof makeDbStub>;
+    expect(db.prepare).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when name is blank after trimming and does not call Stripe or D1", async () => {
+    const env = makeEnv();
+    const ctx = makeContext(env, makeRequest({ amount: 5000, currency: "usd", name: "   " }));
+    const response = await callEndpoint(ctx);
+
+    expect(response.status).toBe(400);
+    const body = await response.json() as {
+      error: { code: string; details?: { fieldErrors?: Record<string, string[]> } };
+    };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(body.error.details?.fieldErrors?.name).toEqual(expect.arrayContaining(["Name is required"]));
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    const db = env.DB as ReturnType<typeof makeDbStub>;
+    expect(db.prepare).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when email is invalid and does not call Stripe or D1", async () => {
+    const env = makeEnv();
+    const ctx = makeContext(env, makeRequest({
+      amount: 5000,
+      currency: "usd",
+      name: "Valid Donor",
+      email: "not-an-email",
+    }));
+    const response = await callEndpoint(ctx);
+
+    expect(response.status).toBe(400);
+    const body = await response.json() as {
+      error: { code: string; details?: { fieldErrors?: Record<string, string[]> } };
+    };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(body.error.details?.fieldErrors?.email).toBeTruthy();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    const db = env.DB as ReturnType<typeof makeDbStub>;
+    expect(db.prepare).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when successPath is invalid and does not call Stripe or D1", async () => {
+    const env = makeEnv();
+    const ctx = makeContext(env, makeRequest({
+      amount: 5000,
+      currency: "usd",
+      name: "Valid Donor",
+      successPath: "https://evil.com/steal",
+    }));
+    const response = await callEndpoint(ctx);
+
+    expect(response.status).toBe(400);
+    const body = await response.json() as {
+      error: { code: string; details?: { fieldErrors?: Record<string, string[]> } };
+    };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(body.error.details?.fieldErrors?.successPath).toBeTruthy();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    const db = env.DB as ReturnType<typeof makeDbStub>;
+    expect(db.prepare).not.toHaveBeenCalled();
+  });
+
+  it("returns 400 when cancelPath contains open-redirect pattern and does not call Stripe or D1", async () => {
+    const env = makeEnv();
+    const ctx = makeContext(env, makeRequest({
+      amount: 5000,
+      currency: "usd",
+      name: "Valid Donor",
+      cancelPath: "/foo//bar",
+    }));
+    const response = await callEndpoint(ctx);
+
+    expect(response.status).toBe(400);
+    const body = await response.json() as {
+      error: { code: string; details?: { fieldErrors?: Record<string, string[]> } };
+    };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(body.error.details?.fieldErrors?.cancelPath).toBeTruthy();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    const db = env.DB as ReturnType<typeof makeDbStub>;
+    expect(db.prepare).not.toHaveBeenCalled();
   });
 
   it("returns 403 for cross-origin requests", async () => {
@@ -422,6 +527,30 @@ describe("POST /api/v1/donations/checkout", () => {
     const params = new URLSearchParams(stripeInit.body as string);
     expect(params.get("metadata[donor_organization]")).toBe("ACME Corp");
   });
+
+  it("copies donor metadata onto the payment intent for reconciliation", async () => {
+    (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
+      new Response(JSON.stringify({ id: "cs_test_meta", url: "https://checkout.stripe.com/pay" }), { status: 200 }),
+    );
+
+    const env = makeEnv();
+    const ctx = makeContext(env, makeRequest({
+      amount: 5000,
+      currency: "usd",
+      name: "Dana Donor",
+      email: "dana@example.com",
+      organizationName: "Example Org",
+      metadata: { source: "/donate/" },
+    }));
+    await callEndpoint(ctx);
+
+    const [, stripeInit] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    const params = new URLSearchParams(stripeInit.body as string);
+    expect(params.get("payment_intent_data[metadata][donor_name]")).toBe("Dana Donor");
+    expect(params.get("payment_intent_data[metadata][donor_email]")).toBe("dana@example.com");
+    expect(params.get("payment_intent_data[metadata][donor_organization]")).toBe("Example Org");
+    expect(params.get("payment_intent_data[metadata][source]")).toBe("/donate/");
+  });
 });
 
 // ── Stripe webhook ──────────────────────────────────────────────────────────
@@ -435,6 +564,23 @@ describe("POST /api/v1/webhooks/stripe", () => {
     const mod = await import("../functions/api/v1/webhooks/stripe.js");
     webhookOnRequest = mod.onRequestPost;
   });
+
+  async function signStripePayload(body: string, secret: string): Promise<string> {
+    const timestamp = Math.floor(Date.now() / 1000);
+    const encoder = new TextEncoder();
+    const key = await crypto.subtle.importKey(
+      "raw",
+      encoder.encode(secret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(`${timestamp}.${body}`));
+    const digest = Array.from(new Uint8Array(signature))
+      .map((value) => value.toString(16).padStart(2, "0"))
+      .join("");
+    return `t=${timestamp},v1=${digest}`;
+  }
 
   function makeWebhookEnv(overrides: Partial<Env> = {}): Env {
     const stmt = {
@@ -466,8 +612,10 @@ describe("POST /api/v1/webhooks/stripe", () => {
     };
   }
 
-  beforeEach(() => { globalThis.fetch = vi.fn(); });
-  afterEach(() => { globalThis.fetch = originalFetch; });
+  beforeEach(() => { globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 404 })); });
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
 
   it("returns 503 when STRIPE_WEBHOOK_SECRET is not configured", async () => {
     const env = makeWebhookEnv({ STRIPE_WEBHOOK_SECRET: undefined });
@@ -502,6 +650,127 @@ describe("POST /api/v1/webhooks/stripe", () => {
     const ctx = createContext(env, request, {});
     const response = await webhookOnRequest(ctx);
     expect(response.status).toBe(400);
+  });
+
+  it("does not confirm or email a donation before Stripe marks the payment as paid", async () => {
+    const env = makeWebhookEnv();
+    const body = JSON.stringify({
+      type: "checkout.session.completed",
+      data: {
+        object: {
+          id: "cs_test_pending_confirmation",
+          object: "checkout.session",
+          payment_intent: "pi_test_pending_confirmation",
+          amount_total: 5000,
+          currency: "usd",
+          customer_email: "donor@example.com",
+          payment_status: "unpaid",
+          metadata: { donor_name: "Alice Donor" },
+        },
+      },
+    });
+    const signature = await signStripePayload(body, env.STRIPE_WEBHOOK_SECRET!);
+    const request = new Request("https://pkic.org/api/v1/webhooks/stripe", {
+      method: "POST",
+      headers: { "stripe-signature": signature },
+      body,
+    });
+
+    const response = await webhookOnRequest(createContext(env, request, {}));
+    const payload = await response.json() as { pending?: boolean };
+
+    expect(response.status).toBe(200);
+    expect(payload.pending).toBe(true);
+    const db = env.DB as unknown as { prepare: ReturnType<typeof vi.fn> };
+    expect(db.prepare).not.toHaveBeenCalled();
+  });
+
+  it("does not confirm or email an async payment until Stripe reports it as paid", async () => {
+    const env = makeWebhookEnv();
+    const body = JSON.stringify({
+      type: "checkout.session.async_payment_succeeded",
+      data: {
+        object: {
+          id: "cs_test_async_pending_confirmation",
+          object: "checkout.session",
+          payment_intent: "pi_test_async_pending_confirmation",
+          amount_total: 5000,
+          currency: "usd",
+          customer_email: "donor@example.com",
+          payment_status: "unpaid",
+          metadata: { donor_name: "Alice Donor" },
+        },
+      },
+    });
+    const signature = await signStripePayload(body, env.STRIPE_WEBHOOK_SECRET!);
+    const request = new Request("https://pkic.org/api/v1/webhooks/stripe", {
+      method: "POST",
+      headers: { "stripe-signature": signature },
+      body,
+    });
+
+    const response = await webhookOnRequest(createContext(env, request, {}));
+    const payload = await response.json() as { pending?: boolean };
+
+    expect(response.status).toBe(200);
+    expect(payload.pending).toBe(true);
+    const db = env.DB as unknown as { prepare: ReturnType<typeof vi.fn> };
+    expect(db.prepare).not.toHaveBeenCalled();
+  });
+
+  it("uses donor metadata instead of storing Unknown when the donation row must be created from the webhook", async () => {
+    const stmt = {
+      bind: vi.fn().mockReturnThis(),
+      run: vi.fn()
+        .mockResolvedValueOnce({ success: true, meta: { changes: 0 } })
+        .mockResolvedValueOnce({ success: true, meta: { changes: 1 } })
+        .mockResolvedValue({ success: true, meta: { changes: 1 } }),
+      first: vi.fn().mockResolvedValue(null),
+      all: vi.fn().mockResolvedValue({ results: [] }),
+    };
+    const db = { prepare: vi.fn().mockReturnValue(stmt) } as unknown as Env["DB"];
+    const env = makeWebhookEnv({ DB: db, STRIPE_SECRET_KEY: undefined });
+    const body = JSON.stringify({
+      type: "checkout.session.async_payment_succeeded",
+      data: {
+        object: {
+          id: "cs_test_metadata_fallback",
+          object: "checkout.session",
+          payment_intent: "pi_test_metadata_fallback",
+          amount_total: 7500,
+          currency: "usd",
+          customer_email: "donor@example.com",
+          payment_status: "paid",
+          metadata: {
+            donor_name: "Alice Donor",
+            donor_email: "donor@example.com",
+            donor_organization: "Example Org",
+            source: "/donate/",
+          },
+        },
+      },
+    });
+    const signature = await signStripePayload(body, env.STRIPE_WEBHOOK_SECRET!);
+    const request = new Request("https://pkic.org/api/v1/webhooks/stripe", {
+      method: "POST",
+      headers: { "stripe-signature": signature },
+      body,
+    });
+
+    const response = await webhookOnRequest(createContext(env, request, {}));
+
+    expect(response.status).toBe(200);
+    expect(stmt.bind).toHaveBeenCalledWith(
+      expect.any(String),
+      "cs_test_metadata_fallback",
+      "pi_test_metadata_fallback",
+      "Alice Donor",
+      "donor@example.com",
+      "usd",
+      7500,
+      null,
+      expect.any(String),
+    );
   });
 });
 

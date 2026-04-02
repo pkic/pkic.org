@@ -7,16 +7,15 @@ import {
   findInviteByToken,
   setInviteRemindersPausedUntil,
 } from "../../../../_lib/services/invites";
-import type { PagesContext } from "../../../../_lib/types";
 import { inviteReminderPreferenceSchema } from "../../../../../assets/shared/schemas/api";
 
-export async function onRequestPost(context: PagesContext<{ token: string }>): Promise<Response> {
-  markSensitive(context);
-  const body = await parseJsonBody(context.request, inviteReminderPreferenceSchema);
-  const invite = await findInviteByToken(context.env.DB, context.params.token);
+export async function onRequestPost(c: any): Promise<Response> {
+  c.set("sensitive", true);
+  const body = await parseJsonBody(c.req, inviteReminderPreferenceSchema);
+  const invite = await findInviteByToken(c.env.DB, c.req.param("token"));
 
   if (body.action === "unsubscribe") {
-    await declineInvite(context.env.DB, {
+    await declineInvite(c.env.DB, {
       inviteId: invite.id,
       reasonCode: "not_interested",
       unsubscribeFuture: true,
@@ -25,7 +24,7 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
   }
 
   if (body.action === "resume") {
-    await clearInviteRemindersPause(context.env.DB, invite.id);
+    await clearInviteRemindersPause(c.env.DB, invite.id);
     return json({ success: true, state: "active", pausedUntil: null });
   }
 
@@ -34,7 +33,7 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
     ? addHours(now, 24 * 7)
     : addHours(now, 24 * 30);
 
-  await setInviteRemindersPausedUntil(context.env.DB, invite.id, pausedUntil);
+  await setInviteRemindersPausedUntil(c.env.DB, invite.id, pausedUntil);
 
   return json({
     success: true,
@@ -43,9 +42,9 @@ export async function onRequestPost(context: PagesContext<{ token: string }>): P
   });
 }
 
-export async function onRequest(context: PagesContext<{ token: string }>): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

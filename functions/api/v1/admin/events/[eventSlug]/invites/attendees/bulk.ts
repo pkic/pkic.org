@@ -12,7 +12,6 @@ import {
   computeAttendeeInviteDigest,
   verifyAttendeeInvitePreviewToken,
 } from "../../../../../../../_lib/services/admin-invite-preview";
-import type { PagesContext } from "../../../../../../../_lib/types";
 import { adminBulkAttendeeInvitesSchema } from "../../../../../../../../assets/shared/schemas/api";
 
 // Outcome buckets returned to the admin UI.
@@ -20,13 +19,13 @@ type BulkItemResult = { email: string; inviteToken?: string };
 
 
 export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const body = await parseJsonBody(context.request, adminBulkAttendeeInvitesSchema);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
-  const secret = requireInternalSecret(context.env);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const body = await parseJsonBody(c.req, adminBulkAttendeeInvitesSchema);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const secret = requireInternalSecret(c.env);
 
   const inviteDigest = await computeAttendeeInviteDigest(body.invites);
   const previewValidation = await verifyAttendeeInvitePreviewToken({
@@ -53,7 +52,7 @@ export async function onRequestPost(
 
   for (const item of body.invites) {
     try {
-      const { invite, token, isNew } = await createInvite(context.env.DB, {
+      const { invite, token, isNew } = await createInvite(c.env.DB, {
         eventId: event.id,
         inviteeEmail: item.email,
         inviteeFirstName: item.firstName,
@@ -69,7 +68,7 @@ export async function onRequestPost(
           source: "invite",
         });
         const declineUrl = inviteDeclineUrl(appBaseUrl, event, token);
-        const outboxId = await queueEmail(context.env.DB, {
+        const outboxId = await queueEmail(c.env.DB, {
           eventId: event.id,
           templateKey: "attendee_invite",
           recipientEmail: invite.invitee_email,
@@ -81,7 +80,7 @@ export async function onRequestPost(
             declineUrl,
           },
         });
-        context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+        c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
         created.push({ email: invite.invitee_email, inviteToken: token });
       } else {
         // Invitee already has an active invite — admin's intent was noted but no
@@ -104,10 +103,10 @@ export async function onRequestPost(
   return json({ success: true, created, endorsed, skipped });
 }
 
-export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

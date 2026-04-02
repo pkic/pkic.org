@@ -6,9 +6,10 @@
  *
  * Always responds with { success: true } to prevent account enumeration.
  */
+import { OpenAPIRoute } from "chanfana";
 import { z } from "zod";
 import { parseJsonBody } from "../../../../../_lib/validation";
-import { json, markSensitive } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
 import { first } from "../../../../../_lib/db/queries";
 import { queueEmail, processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
@@ -16,20 +17,16 @@ import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { buildProposalInviteEmailContext, refreshSpeakerManageToken } from "../../../../../_lib/services/proposals";
 import { normalizedEmailSchema } from "../../../../../../assets/shared/schemas/api";
-import type { PagesContext } from "../../../../../_lib/types";
-
 const schema = z.object({
   email: normalizedEmailSchema,
 });
 
-export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string }>,
-): Promise<Response> {
-  markSensitive(context);
+export async function onRequestPost(c: any): Promise<Response> {
+  c.set("sensitive", true);
 
-  const body = await parseJsonBody(context.request, schema);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+  const body = await parseJsonBody(c.req, schema);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const appBaseUrl = resolveAppBaseUrl(c.env);
 
   const row = await first<{
     proposal_id: string;
@@ -39,7 +36,7 @@ export async function onRequestPost(
     first_name: string | null;
     last_name: string | null;
   }>(
-    context.env.DB,
+    c.env.DB,
     `SELECT
        ps.proposal_id,
        ps.user_id,
@@ -61,15 +58,15 @@ export async function onRequestPost(
   );
 
   if (row) {
-    const token = await refreshSpeakerManageToken(context.env.DB, row.proposal_id, row.user_id);
+    const token = await refreshSpeakerManageToken(c.env.DB, row.proposal_id, row.user_id);
     const manageUrl = speakerManagePageUrl(appBaseUrl, event, token);
 
-    const inviteContext = await buildProposalInviteEmailContext(context.env.DB, {
+    const inviteContext = await buildProposalInviteEmailContext(c.env.DB, {
       proposalId: row.proposal_id,
       inviterUserId: row.proposer_user_id,
     });
 
-    const outboxId = await queueEmail(context.env.DB, {
+    const outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
       templateKey: "co_speaker_invite",
       recipientEmail: row.email,
@@ -89,18 +86,16 @@ export async function onRequestPost(
       },
     });
 
-    context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outboxId));
+    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
   }
 
   return json({ success: true });
 }
 
-export async function onRequest(
-  context: PagesContext<{ eventSlug: string }>,
-): Promise<Response> {
-  markSensitive(context);
-  if (context.request.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+export class EventsEventSlugProposalsResendSpeakerManageLinkPost extends OpenAPIRoute {
+  schema = {};
+
+  async handle(c: any) {
+    return onRequestPost(c);
   }
-  return onRequestPost(context);
 }

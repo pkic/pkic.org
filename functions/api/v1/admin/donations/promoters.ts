@@ -8,7 +8,6 @@
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { all } from "../../../../_lib/db/queries";
-import type { PagesContext } from "../../../../_lib/types";
 
 interface PromoterRow {
   code: string;
@@ -22,9 +21,9 @@ interface PromoterRow {
   created_at: string;
 }
 
-export async function onRequestGet(context: PagesContext): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const db = context.env.DB;
+export async function onRequestGet(c: any): Promise<Response> {
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const db = c.env.DB;
 
   const promoters = await all<PromoterRow>(
     db,
@@ -51,9 +50,9 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
   return json({ promoters });
 }
 
-export async function onRequest(context: PagesContext): Promise<Response> {
-  if (context.request.method !== "GET") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

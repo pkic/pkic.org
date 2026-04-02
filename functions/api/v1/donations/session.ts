@@ -10,9 +10,9 @@
  * data needed for the "I just donated X" badge is returned.
  */
 
+import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../_lib/http";
-import type { PagesContext } from "../../../_lib/types";
-
+import type { Env } from "../../../_lib/types";
 interface DonationBadgeRow {
   gross_amount: number;
   currency: string;
@@ -21,8 +21,9 @@ interface DonationBadgeRow {
   completed_at: string | null;
 }
 
-export async function onRequestGet(context: PagesContext): Promise<Response> {
-  const { request, env } = context;
+export async function onRequestGet(c: any): Promise<Response> {
+  const env: Env = c.env;
+  const request = c.req.raw;
 
   const url = new URL(request.url);
   const sessionId = url.searchParams.get("session_id");
@@ -52,4 +53,12 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
     source: row.source,
     completedAt: row.completed_at,
   });
+}
+
+export class DonationsSessionGet extends OpenAPIRoute {
+  schema = {};
+
+  async handle(c: any) {
+    return onRequestGet(c as any);
+  }
 }

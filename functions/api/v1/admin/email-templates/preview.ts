@@ -4,7 +4,6 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { renderEmail, renderSubject } from "../../../../_lib/email/render";
 import { loadEmailLayout, loadEmailPartials } from "../../../../_lib/email/partials";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
-import type { PagesContext } from "../../../../_lib/types";
 import { adminEmailTemplatePreviewSchema } from "../../../../../assets/shared/schemas/api";
 
 function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
@@ -28,17 +27,17 @@ function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
   };
 }
 
-export async function onRequestPost(context: PagesContext): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const body = await parseJsonBody(context.request, adminEmailTemplatePreviewSchema);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+export async function onRequestPost(c: any): Promise<Response> {
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const body = await parseJsonBody(c.req, adminEmailTemplatePreviewSchema);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
 
   const data = {
     ...buildDefaultPreviewData(appBaseUrl),
     ...(body.data ?? {}),
   };
-  const partials = await loadEmailPartials(context.env.DB);
-  const layoutHtml = body.layoutHtml ?? await loadEmailLayout(context.env.DB);
+  const partials = await loadEmailPartials(c.env.DB);
+  const layoutHtml = body.layoutHtml ?? await loadEmailLayout(c.env.DB);
   const dataWithPartials = { ...data, _partials: partials };
 
   const subject = renderSubject(
@@ -64,10 +63,10 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
   });
 }
 
-export async function onRequest(context: PagesContext): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

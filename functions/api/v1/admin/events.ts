@@ -5,7 +5,6 @@ import { all, first } from "../../../_lib/db/queries";
 import { upsertEventFromHugo } from "../../../_lib/services/events";
 import { writeAuditLog } from "../../../_lib/services/audit";
 import { parseJsonSafe } from "../../../_lib/utils/json";
-import type { PagesContext } from "../../../_lib/types";
 import { adminCreateEventSchema } from "../../../../assets/shared/schemas/api";
 
 interface EventWithStats {
@@ -33,11 +32,11 @@ interface EventWithStats {
  * Returns all events with aggregate registration and invite counts.
  * Supports both session-token auth and ADMIN_API_KEY.
  */
-export async function onRequestGet(context: PagesContext): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
+export async function onRequestGet(c: any): Promise<Response> {
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
   const events = await all<EventWithStats>(
-    context.env.DB,
+    c.env.DB,
     `SELECT
        e.id,
        e.slug,
@@ -71,13 +70,13 @@ export async function onRequestGet(context: PagesContext): Promise<Response> {
  *
  * Creates a new event from the admin console. The slug must be unique.
  */
-export async function onRequestPost(context: PagesContext): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request, context.env);
-  const body = await parseJsonBody(context.request, adminCreateEventSchema);
+export async function onRequestPost(c: any): Promise<Response> {
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+  const body = await parseJsonBody(c.req, adminCreateEventSchema);
 
   // Check slug uniqueness before upsert to give a clear error
   const existing = await first<{ id: string }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id FROM events WHERE slug = ?",
     [body.slug],
   );
@@ -89,7 +88,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
   if (body.venue) settings["venue"] = body.venue;
   if (body.virtualUrl) settings["virtualUrl"] = body.virtualUrl;
 
-  const event = await upsertEventFromHugo(context.env.DB, {
+  const event = await upsertEventFromHugo(c.env.DB, {
     slug: body.slug,
     name: body.name,
     timezone: body.timezone,
@@ -101,7 +100,7 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
   });
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "admin",
     admin.id,
     "event_created",
@@ -118,8 +117,8 @@ export async function onRequestPost(context: PagesContext): Promise<Response> {
   }, 201);
 }
 
-export async function onRequest(context: PagesContext): Promise<Response> {
-  if (context.request.method === "GET") return onRequestGet(context);
-  if (context.request.method === "POST") return onRequestPost(context);
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method === "GET") return onRequestGet(c);
+  if (c.req.raw.method === "POST") return onRequestPost(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

@@ -2,15 +2,14 @@ import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { createTemplateVersion } from "../../../../../_lib/email/templates";
-import type { PagesContext } from "../../../../../_lib/types";
 import { adminEmailTemplateVersionSchema } from "../../../../../../assets/shared/schemas/api";
 
-export async function onRequestPost(context: PagesContext<{ key: string }>): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request);
-  const body = await parseJsonBody(context.request, adminEmailTemplateVersionSchema);
+export async function onRequestPost(c: any): Promise<Response> {
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+  const body = await parseJsonBody(c.req, adminEmailTemplateVersionSchema);
 
-  const version = await createTemplateVersion(context.env.DB, {
-    templateKey: context.params.key,
+  const version = await createTemplateVersion(c.env.DB, {
+    templateKey: c.req.param("key"),
     content: body.content,
     subjectTemplate: body.subjectTemplate,
     contentType: body.contentType,
@@ -20,10 +19,10 @@ export async function onRequestPost(context: PagesContext<{ key: string }>): Pro
   return json({ success: true, version });
 }
 
-export async function onRequest(context: PagesContext<{ key: string }>): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

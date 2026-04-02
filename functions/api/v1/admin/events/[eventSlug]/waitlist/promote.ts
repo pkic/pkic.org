@@ -8,13 +8,12 @@ import { queueRegistrationStatusEmail } from "../../../../../../_lib/services/re
 import { processOutboxByIdBackground } from "../../../../../../_lib/email/outbox";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { resolveAppBaseUrl, getConfig } from "../../../../../../_lib/config";
-import type { PagesContext } from "../../../../../../_lib/types";
 
-export async function onRequestPost(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
-  const config = getConfig(context.env, context.request);
-  const appBaseUrl = resolveAppBaseUrl(context.env);
+export async function onRequestPost(c: any): Promise<Response> {
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const config = getConfig(c.env, c.req.raw);
+  const appBaseUrl = resolveAppBaseUrl(c.env);
 
   const affectedRegistrations = new Set<string>();
   let wholeRegistrationOffers = 0;
@@ -23,7 +22,7 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
   if (typeof event.capacity_in_person === "number" && event.capacity_in_person > 0) {
     while (true) {
       const promoted = await promoteWaitlistIfCapacity(
-        context.env.DB,
+        c.env.DB,
         event.id,
         event.capacity_in_person,
         config.waitlistClaimWindowHours,
@@ -36,10 +35,10 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
     }
   }
 
-  const eventDays = await listEventDays(context.env.DB, event.id);
+  const eventDays = await listEventDays(c.env.DB, event.id);
   for (const day of eventDays) {
     while (true) {
-      const promoted = await promoteDayWaitlistIfCapacity(context.env.DB, {
+      const promoted = await promoteDayWaitlistIfCapacity(c.env.DB, {
         eventId: event.id,
         eventDayId: day.id,
         claimWindowHours: config.waitlistClaimWindowHours,
@@ -54,7 +53,7 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
 
   const outboxIds: string[] = [];
   for (const registrationId of affectedRegistrations) {
-    const outbox = await queueRegistrationStatusEmail(context.env.DB, {
+    const outbox = await queueRegistrationStatusEmail(c.env.DB, {
       event,
       registrationId,
       appBaseUrl,
@@ -65,14 +64,14 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
     outboxIds.push(outbox.outboxId);
   }
 
-  await writeAuditLog(context.env.DB, "admin", admin.id, "admin_waitlist_promoted", "event", event.id, {
+  await writeAuditLog(c.env.DB, "admin", admin.id, "admin_waitlist_promoted", "event", event.id, {
     wholeRegistrationOffers,
     dayRegistrationOffers,
     affectedRegistrations: Array.from(affectedRegistrations),
   });
 
-  context.waitUntil(
-    Promise.all(outboxIds.map((outboxId) => processOutboxByIdBackground(context.env.DB, context.env, outboxId))),
+  c.executionCtx.waitUntil(
+    Promise.all(outboxIds.map((outboxId) => processOutboxByIdBackground(c.env.DB, c.env, outboxId))),
   );
 
   return json({
@@ -83,10 +82,10 @@ export async function onRequestPost(context: PagesContext<{ eventSlug: string }>
   });
 }
 
-export async function onRequest(context: PagesContext<{ eventSlug: string }>): Promise<Response> {
-  if (context.request.method !== "POST") {
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

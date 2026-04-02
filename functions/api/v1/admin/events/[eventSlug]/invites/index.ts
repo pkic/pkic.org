@@ -2,7 +2,6 @@ import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../_lib/services/events";
 import { all, first } from "../../../../../../_lib/db/queries";
-import type { PagesContext } from "../../../../../../_lib/types";
 
 /**
  * GET /api/v1/admin/events/:eventSlug/invites
@@ -13,13 +12,13 @@ import type { PagesContext } from "../../../../../../_lib/types";
  *   ?type=attendee|speaker                            (omit for all)
  */
 export async function onRequestGet(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  await requireAdminFromRequest(context.env.DB, context.request, context.env);
+  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
-  const url = new URL(context.request.url);
+  const url = new URL(c.req.raw.url);
   const statusFilter = url.searchParams.get("status");
   const typeFilter = url.searchParams.get("type");
   const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10) || 50));
@@ -42,7 +41,7 @@ export async function onRequestGet(
   }
 
   const rows = await all(
-    context.env.DB,
+    c.env.DB,
     `SELECT
        i.id,
        i.invitee_email,
@@ -74,7 +73,7 @@ export async function onRequestGet(
   const hasMore = rows.length > limit;
   const invites = hasMore ? rows.slice(0, limit) : rows;
   const totalRow = await first<{ total: number }>(
-    context.env.DB,
+    c.env.DB,
     `SELECT COUNT(*) AS total
      FROM invites i
      WHERE ${conditions.join(" AND ")}`,
@@ -94,10 +93,10 @@ export async function onRequestGet(
 }
 
 export async function onRequest(
-  context: PagesContext<{ eventSlug: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method !== "GET") {
+  if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
-  return onRequestGet(context);
+  return onRequestGet(c);
 }

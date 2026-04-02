@@ -8,6 +8,8 @@ export function renderHeadshotPreview(
 ): void {
   if (!preview) return;
 
+  preview.classList.add("pkic-headshot-preview");
+
   const alt = options?.alt ?? "Headshot preview";
   const emptyLabel = options?.emptyLabel ?? "No headshot uploaded yet.";
 

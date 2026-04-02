@@ -8,7 +8,6 @@ import { setRegistrationCapacityExempt, syncRegistrationDayWaitlist } from "../.
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { nowIso } from "../../../../../../../_lib/utils/time";
 import { uuid } from "../../../../../../../_lib/utils/ids";
-import type { PagesContext } from "../../../../../../../_lib/types";
 import { adminRegistrationAdmitSchema } from "../../../../../../../../assets/shared/schemas/api";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground } from "../../../../../../../_lib/email/outbox";
@@ -23,16 +22,17 @@ interface RegistrationRow {
 }
 
 export async function onRequestPost(
-  context: PagesContext<{ eventSlug: string; registrationId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request);
-  const body = await parseJsonBody(context.request, adminRegistrationAdmitSchema);
-  const event = await getEventBySlug(context.env.DB, context.params.eventSlug);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+  const body = await parseJsonBody(c.req, adminRegistrationAdmitSchema);
+  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const registrationId = c.req.param("registrationId");
 
   const registration = await first<RegistrationRow>(
-    context.env.DB,
+    c.env.DB,
     "SELECT id, event_id, user_id, status, attendance_type FROM registrations WHERE id = ? AND event_id = ?",
-    [context.params.registrationId, event.id],
+    [registrationId, event.id],
   );
 
   if (!registration) {
@@ -44,7 +44,7 @@ export async function onRequestPost(
   }
 
   const reason = `${body.mode}:${body.reason}`;
-  await setRegistrationCapacityExempt(context.env.DB, {
+  await setRegistrationCapacityExempt(c.env.DB, {
     registrationId: registration.id,
     exempt: true,
     reason,
@@ -52,12 +52,12 @@ export async function onRequestPost(
 
   if (registration.status === "waitlisted") {
     await run(
-      context.env.DB,
+      c.env.DB,
       "UPDATE registrations SET status = 'registered', updated_at = ? WHERE id = ?",
       [nowIso(), registration.id],
     );
     await run(
-      context.env.DB,
+      c.env.DB,
       `UPDATE waitlist_entries
        SET status = 'removed', updated_at = ?
        WHERE event_id = ? AND registration_id = ? AND status IN ('waiting', 'offered')`,
@@ -65,7 +65,7 @@ export async function onRequestPost(
     );
   }
 
-  const eventDays = await listEventDays(context.env.DB, event.id);
+  const eventDays = await listEventDays(c.env.DB, event.id);
   let admittedDayDates: string[] = [];
 
   if (eventDays.length > 0) {
@@ -79,7 +79,7 @@ export async function onRequestPost(
       }
 
       await run(
-        context.env.DB,
+        c.env.DB,
         `INSERT INTO registration_day_attendance (
           id, registration_id, event_day_id, attendance_type, created_at, updated_at
         ) VALUES (?, ?, ?, 'in_person', ?, ?)
@@ -90,12 +90,12 @@ export async function onRequestPost(
     }
   }
 
-  const selections = (await getRegistrationDayAttendance(context.env.DB, registration.id)).map((entry) => ({
+  const selections = (await getRegistrationDayAttendance(c.env.DB, registration.id)).map((entry) => ({
     dayDate: entry.dayDate,
     attendanceType: entry.attendanceType,
   }));
 
-  await syncRegistrationDayWaitlist(context.env.DB, {
+  await syncRegistrationDayWaitlist(c.env.DB, {
     registrationId: registration.id,
     eventId: event.id,
     userId: registration.user_id,
@@ -104,7 +104,7 @@ export async function onRequestPost(
   });
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "admin",
     admin.id,
     "registration_admitted",
@@ -118,18 +118,18 @@ export async function onRequestPost(
     },
   );
 
-  const appBaseUrl = resolveAppBaseUrl(context.env);
-  const outbox = await queueRegistrationStatusEmail(context.env.DB, {
+  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const outbox = await queueRegistrationStatusEmail(c.env.DB, {
     event,
     registrationId: registration.id,
     appBaseUrl,
     templateKey: "registration_updated",
     subject: `Registration updated for ${event.name}`,
   });
-  context.waitUntil(processOutboxByIdBackground(context.env.DB, context.env, outbox.outboxId));
+  c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outbox.outboxId));
 
   const updated = await first<Record<string, unknown>>(
-    context.env.DB,
+    c.env.DB,
     "SELECT * FROM registrations WHERE id = ?",
     [registration.id],
   );
@@ -142,11 +142,11 @@ export async function onRequestPost(
 }
 
 export async function onRequest(
-  context: PagesContext<{ eventSlug: string; registrationId: string }>,
+  c: any,
 ): Promise<Response> {
-  if (context.request.method !== "POST") {
+  if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
 
-  return onRequestPost(context);
+  return onRequestPost(c);
 }

@@ -5,53 +5,54 @@ import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-acc
 import { listProposalReviews, upsertProposalReview } from "../../../../../_lib/services/proposals";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { first } from "../../../../../_lib/db/queries";
-import type { PagesContext } from "../../../../../_lib/types";
 import { reviewUpsertSchema } from "../../../../../../assets/shared/schemas/api";
 
 export async function onRequestGet(
-  context: PagesContext<{ proposalId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+  const proposalId = c.req.param("proposalId");
   const proposal = await first<{ event_id: string }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT event_id FROM session_proposals WHERE id = ?",
-    [context.params.proposalId],
+    [proposalId],
   );
   if (!proposal) {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(context.env.DB, proposal.event_id, admin);
+  const access = await getProposalAccessForEvent(c.env.DB, proposal.event_id, admin);
   if (!access.canReview) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to review proposals" } }, 403);
   }
 
-  const reviews = await listProposalReviews(context.env.DB, context.params.proposalId);
-  return json({ proposalId: context.params.proposalId, reviews });
+  const reviews = await listProposalReviews(c.env.DB, proposalId);
+  return json({ proposalId, reviews });
 }
 
 export async function onRequestPost(
-  context: PagesContext<{ proposalId: string }>,
+  c: any,
 ): Promise<Response> {
-  const admin = await requireAdminFromRequest(context.env.DB, context.request);
+  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+  const proposalId = c.req.param("proposalId");
   const proposal = await first<{ event_id: string }>(
-    context.env.DB,
+    c.env.DB,
     "SELECT event_id FROM session_proposals WHERE id = ?",
-    [context.params.proposalId],
+    [proposalId],
   );
   if (!proposal) {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(context.env.DB, proposal.event_id, admin);
+  const access = await getProposalAccessForEvent(c.env.DB, proposal.event_id, admin);
   if (!access.canReview) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to review proposals" } }, 403);
   }
 
-  const body = await parseJsonBody(context.request, reviewUpsertSchema);
+  const body = await parseJsonBody(c.req, reviewUpsertSchema);
 
-  const review = await upsertProposalReview(context.env.DB, {
-    proposalId: context.params.proposalId,
+  const review = await upsertProposalReview(c.env.DB, {
+    proposalId,
     reviewerUserId: admin.id,
     recommendation: body.recommendation,
     score: body.score,
@@ -60,25 +61,25 @@ export async function onRequestPost(
   });
 
   await writeAuditLog(
-    context.env.DB,
+    c.env.DB,
     "admin",
     admin.id,
     "proposal_review_upserted",
     "proposal_review",
     review.id,
-    { proposalId: context.params.proposalId },
+    { proposalId },
   );
 
   return json({ success: true, review });
 }
 
-export async function onRequest(context: PagesContext<{ proposalId: string }>): Promise<Response> {
-  if (context.request.method === "GET") {
-    return onRequestGet(context);
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method === "GET") {
+    return onRequestGet(c);
   }
 
-  if (context.request.method === "POST") {
-    return onRequestPost(context);
+  if (c.req.raw.method === "POST") {
+    return onRequestPost(c);
   }
 
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

@@ -277,6 +277,19 @@ function showResendManageLinkForm(
   });
 }
 
+function buildManageLinkRecoveryMessage(message: string): string {
+  const detail = message.trim();
+  if (!detail) {
+    return "Invalid or expired management link. You can request a fresh management link below.";
+  }
+
+  if (/invalid|expired|not found/i.test(detail)) {
+    return `${detail} You can request a fresh management link below.`;
+  }
+
+  return `Invalid or expired management link. ${detail} You can request a fresh management link below.`;
+}
+
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -327,7 +340,7 @@ async function main(): Promise<void> {
       root,
       apiBase,
       eventSlug,
-      `${normalized.globalMessage} You can request a fresh management link below.`,
+      buildManageLinkRecoveryMessage(normalized.globalMessage),
     );
     return;
   }
