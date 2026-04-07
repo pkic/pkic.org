@@ -118,7 +118,7 @@ export async function onRequestPost(
     },
   );
 
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const outbox = await queueRegistrationStatusEmail(c.env.DB, {
     event,
     registrationId: registration.id,

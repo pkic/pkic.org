@@ -5,15 +5,17 @@
   "compatibility_flags": ["nodejs_compat"],
   "main": "functions/router.ts",
   "build": {
-    "command": "HUGO_VERSION=0.158.0 bash ./scripts/build.sh",
+    "command": "git submodule update --init --remote && hugo --minify && npx -y pagefind --site './public/'",
     "watch_dir": ["functions", "assets", "layouts", "content", "static", "data", "i18n"]
   },
   "assets": {
-    "directory": "public",
+    "directory": "./public/",
     "binding": "ASSETS",
     "not_found_handling": "404-page",
-    "run_worker_first": false
+    "run_worker_first": ["/api/*", "/r/*", "/donate/r/*"]
   },
+  "preview_urls": true,
+  "workers_dev": true,
   "dev": {
     "port": 8788,
     "local_protocol": "http"
@@ -69,7 +71,11 @@
         }
       ],
       "vars": {
-        "HUGO_VERSION": "0.158.0",
+        // Required for background jobs and outbox rendering when no request URL exists.
+        // Set this to the canonical preview hostname before relying on email sends in preview.
+        // "APP_BASE_URL": "https://preview.example.com",
+        "APP_BASE_URL": "https://pkic-org-preview.pkic.workers.dev/",
+        "HUGO_VERSION": "0.159.2",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
         "DEFAULT_REFERRAL_CODE_LENGTH": "7",
         "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
@@ -88,7 +94,8 @@
     }
   },
   "vars": {
-    "HUGO_VERSION": "0.158.0",
+    "APP_BASE_URL": "https://pkic.org",
+    "HUGO_VERSION": "0.159.2",
     "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
     "DEFAULT_REFERRAL_CODE_LENGTH": "7",
     "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",

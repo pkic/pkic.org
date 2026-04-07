@@ -15,7 +15,7 @@ import { inviteDeclineSchema } from "../../../../../assets/shared/schemas/api";
 // by inviteDeclineUrl(appBaseUrl, event, token).
 
 export async function onRequestGet(c: any): Promise<Response> {
-  const origin = new URL(c.req.raw.url).origin;
+  const origin = resolveAppBaseUrl(c.env, c.req.raw);
   const url = new URL("/invite/decline/", origin);
   url.searchParams.set("token", c.req.param("token"));
   return Response.redirect(url.toString(), 302);
@@ -30,7 +30,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   // Forward the invite to nominated contacts before declining
   const forwardedEmails: string[] = [];
   if (body.forwards && body.forwards.length > 0) {
-    const appBaseUrl = resolveAppBaseUrl(c.env);
+    const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
     const event = await first<{
       id: string;

@@ -26,6 +26,7 @@
 import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../_lib/http";
 import type { Env } from "../../../_lib/types";
+import { buildBadgeAttachment } from "../../../_lib/email/attachments";
 import { queueEmail, processOutboxByIdBackground } from "../../../_lib/email/outbox";
 import { prerenderDonationBadge } from "../../../_lib/services/og-badge-prerender";
 import { resolveAppBaseUrl } from "../../../_lib/config";
@@ -402,7 +403,7 @@ export async function onRequestPost(c: any): Promise<Response> {
         const formattedAmount = formatMajorAmount(donor.gross_amount, donor.currency);
         const firstName = donor.name !== "Unknown" ? (donor.name.split(" ")[0] ?? "") : "";
         const bcc = env.DONATION_NOTIFICATION_EMAIL ? [env.DONATION_NOTIFICATION_EMAIL] : [];
-        const origin = resolveAppBaseUrl(env);
+        const origin = resolveAppBaseUrl(env, c.req.raw);
 
         // Pre-render the donation badge to R2 so the outbox can attach it
         await prerenderDonationBadge(session.id, env, origin);
@@ -415,6 +416,14 @@ export async function onRequestPost(c: any): Promise<Response> {
         recipientEmail: donor.email,
         messageType: "transactional",
         subject: "Thank you for your donation to the PKI Consortium",
+        attachments: [
+          buildBadgeAttachment({
+            badgeCode: `donation-${session.id}`,
+            badgeType: "donation",
+            firstName,
+            name: donor.name,
+          }),
+        ],
         data: {
           firstName,
           name: donor.name,
@@ -424,7 +433,6 @@ export async function onRequestPost(c: any): Promise<Response> {
           formattedAmount,
           donateUrl: "https://pkic.org/donate/",
           shareUrl: promoter?.shareUrl ?? "https://pkic.org/donate/",
-          __badgeCode: `donation-${session.id}`,
           ...(bcc.length > 0 ? { __bccRecipients: bcc } : {}),
         },
       });

@@ -13,6 +13,7 @@
  */
 
 import { json } from "../../../../_lib/http";
+import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { generateDonationBadgePng } from "../../../../_lib/services/og-badge-prerender";
 
 const JPEG_CONTENT_TYPE = "image/jpeg";
@@ -23,7 +24,7 @@ const R2_KEY_PREFIX     = "og-badges/donation-";
 export async function onRequestGet(c: any): Promise<Response> {
   const session_id = c.req.param("session_id");
   const bucket = c.env.ASSETS_BUCKET;
-  const origin = new URL(c.req.raw.url).origin;
+  const origin = resolveAppBaseUrl(c.env, c.req.raw);
   const url    = new URL(c.req.raw.url);
 
   if (!session_id || !session_id.startsWith("cs_")) {

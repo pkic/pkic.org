@@ -9,6 +9,7 @@ import { acceptInvite, findInviteByToken } from "../../../../_lib/services/invit
 import { createRegistration } from "../../../../_lib/services/registrations";
 import { createReferralCode } from "../../../../_lib/services/referrals";
 import { trySeedGravatarThenPrerender } from "../../../../_lib/services/og-badge-prerender";
+import { buildBadgeAttachment } from "../../../../_lib/email/attachments";
 import { persistConsents, validateRequiredConsents } from "../../../../_lib/services/consent";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { buildRegistrationIcs } from "../../../../_lib/utils/calendar";
@@ -35,7 +36,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     c.req.raw.headers.get("x-event-base-path"),
   );
 
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   let inviteId: string | null = null;
   if (body.inviteToken) {
@@ -134,6 +135,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, created.confirmationToken as string);
     const outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
+      baseUrl: appBaseUrl,
       templateKey: "registration_confirm_email",
       recipientEmail: user.email,
       recipientUserId: user.id,
@@ -172,6 +174,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     const calendar = buildRegistrationIcs(event, created.registration.id, manageUrl, dayAttendanceRaw, appBaseUrl);
     const outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
+      baseUrl: appBaseUrl,
       templateKey: "registration_confirmed",
       recipientEmail: user.email,
       recipientUserId: user.id,
@@ -182,6 +185,14 @@ export async function onRequestPost(c: any): Promise<Response> {
       sendAfterSeconds: c.env.ASSETS_BUCKET
         ? Number(c.env.EMAIL_BADGE_DELAY_SECONDS ?? 90)
         : 0,
+      attachments: [
+        buildBadgeAttachment({
+          badgeCode: referralCode,
+          badgeType: "attendee",
+          firstName: user.first_name ?? "",
+          lastName: user.last_name ?? "",
+        }),
+      ],
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
         // User
@@ -207,7 +218,6 @@ export async function onRequestPost(c: any): Promise<Response> {
         blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${event.name} — join me!\n${shareUrl}`)}`,
         redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
         badgeImageUrl: `${appBaseUrl}/api/v1/og/${referralCode}`,
-        __badgeCode: referralCode,
       },
       calendar: {
         registrationId: created.registration.id,

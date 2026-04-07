@@ -16,6 +16,7 @@
 import { OpenAPIRoute } from "chanfana";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { all, first } from "../../../../_lib/db/queries";
+import { parseQueuedEmailAttachments } from "../../../../_lib/email/attachments";
 import { renderSubject } from "../../../../_lib/email/render";
 import { resolveTemplate } from "../../../../_lib/email/templates";
 import { json } from "../../../../_lib/http";
@@ -284,6 +285,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     const directBody = typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent.length > 0;
     const customText = typeof payload.__adminCampaignCustomText === "string" && payload.__adminCampaignCustomText.trim().length > 0;
     const payloadEventName = typeof payload.eventName === "string" ? payload.eventName : null;
+    const queuedAttachments = parseQueuedEmailAttachments(payload);
 
     return {
       id: row.id,
@@ -306,7 +308,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       sentAt: row.sent_at,
       bccRecipientCount: bccRecipients.length,
       hasCalendarInvite: Boolean(payload.__calendarInvite),
-      hasBadgeAttachment: typeof payload.__badgeCode === "string" && payload.__badgeCode.length > 0,
+      hasBadgeAttachment: queuedAttachments.length > 0,
       usesDirectBody: directBody,
       hasCustomText: customText,
     };

@@ -17,37 +17,39 @@ function toOrigin(value: string | undefined): string | null {
   }
 }
 
-function toBranchAliasOrigin(branch: string | undefined, pagesUrl: string | undefined): string | null {
-  if (!branch || !pagesUrl) {
+function toRequestOrigin(request: Request | undefined): string | null {
+  if (!request) {
     return null;
   }
 
   try {
-    const parsed = new URL(pagesUrl);
-    const hostParts = parsed.hostname.split(".");
-    if (hostParts.length < 3) {
-      return null;
-    }
-
-    return `${parsed.protocol}//${branch}.${hostParts.slice(1).join(".")}`;
+    return new URL(request.url).origin;
   } catch {
     return null;
   }
 }
 
-export function resolveAppBaseUrl(env: Pick<Env, "CF_PAGES_URL" | "CF_PAGES_BRANCH" | "APP_BASE_URL">): string {
-  // APP_BASE_URL takes precedence (set in .dev.vars for local development).
-  // CF_PAGES_BRANCH resolves branch aliases like https://events.pkic.pages.dev.
-  // CF_PAGES_URL is set automatically by Cloudflare Pages in all deployed environments.
-  return toOrigin(env.APP_BASE_URL)
-    ?? toBranchAliasOrigin(env.CF_PAGES_BRANCH, env.CF_PAGES_URL)
-    ?? toOrigin(env.CF_PAGES_URL)
-    ?? "http://localhost";
+function missingAppBaseUrlError(): Error {
+  return new Error("APP_BASE_URL is required when request URL is unavailable");
+}
+
+export function resolveAppBaseUrl(env: Pick<Env, "APP_BASE_URL">, request?: Request): string {
+  const configuredOrigin = toOrigin(env.APP_BASE_URL);
+  if (configuredOrigin) {
+    return configuredOrigin;
+  }
+
+  const requestOrigin = toRequestOrigin(request);
+  if (requestOrigin) {
+    return requestOrigin;
+  }
+
+  throw missingAppBaseUrlError();
 }
 
 export function getConfig(env: Env, request?: Request) {
   return {
-    appBaseUrl: resolveAppBaseUrl(env),
+    appBaseUrl: resolveAppBaseUrl(env, request),
     minProposalReviews: parseIntOrDefault(env.DEFAULT_MIN_PROPOSAL_REVIEWS, 2),
     referralCodeLength: parseIntOrDefault(env.DEFAULT_REFERRAL_CODE_LENGTH, 7),
     inviteLimitPerAttendee: parseIntOrDefault(env.DEFAULT_INVITE_LIMIT_PER_ATTENDEE, 50),

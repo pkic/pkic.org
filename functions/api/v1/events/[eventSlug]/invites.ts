@@ -33,7 +33,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   const config = getConfig(c.env, c.req.raw);
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const maxAllowed = event.invite_limit_attendee ?? config.inviteLimitPerAttendee;
 
   // Look up inviter name once — used to personalise invite emails.

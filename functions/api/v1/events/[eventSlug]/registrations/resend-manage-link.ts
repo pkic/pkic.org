@@ -29,7 +29,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   c.set("sensitive", true);
 
   const body = await parseJsonBody(c.req, schema);
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
   // Look up the user + any active registration for this event by email.

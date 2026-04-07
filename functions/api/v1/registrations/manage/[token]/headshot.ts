@@ -128,12 +128,12 @@ async function onPut(c: any): Promise<Response> {
     { r2Key, registrationId: registration.id },
   );
 
-  const appOrigin = resolveAppBaseUrl(c.env);
+  const appOrigin = resolveAppBaseUrl(c.env, c.req.raw);
   c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, appOrigin));
 
   const parts = r2Key.split("/");
   const pubFilename = parts.slice(2).join("/");
-  const headshotUrl = `${new URL(c.req.raw.url).origin}/api/v1/headshots/${user.id}/${pubFilename}`;
+  const headshotUrl = `${appOrigin}/api/v1/headshots/${user.id}/${pubFilename}`;
 
   return json({ success: true, headshotUrl });
 }
@@ -177,7 +177,7 @@ async function onDelete(c: any): Promise<Response> {
     { registrationId: registration.id },
   );
 
-  const origin = resolveAppBaseUrl(c.env);
+  const origin = resolveAppBaseUrl(c.env, c.req.raw);
   c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, origin));
 
   return json({ success: true });

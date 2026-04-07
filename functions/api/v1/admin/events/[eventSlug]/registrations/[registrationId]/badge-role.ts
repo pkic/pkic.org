@@ -28,6 +28,7 @@ import { invalidateAndRerender } from "../../../../../../../_lib/services/og-bad
 import { nowIso } from "../../../../../../../_lib/utils/time";
 import { uuid } from "../../../../../../../_lib/utils/ids";
 import type { DatabaseLike } from "../../../../../../../_lib/types";
+import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { z } from "zod";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -187,7 +188,7 @@ export async function onRequestPatch(
   );
 
   // Re-render cached badge PNGs with the new role
-  const origin = new URL(c.req.raw.url).origin;
+  const origin = resolveAppBaseUrl(c.env, c.req.raw);
   c.executionCtx.waitUntil(invalidateAndRerender(registration.user_id, c.env, origin));
 
   // Re-fetch to compute the fresh effective role

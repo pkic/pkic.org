@@ -166,7 +166,7 @@ function buildOgHtml(
 
 export async function onRequestGet(c: any): Promise<Response> {
   const signingSecret = requireInternalSecret(c.env);
-  const appBaseUrl   = resolveAppBaseUrl(c.env);
+  const appBaseUrl   = resolveAppBaseUrl(c.env, c.req.raw);
   const code         = c.req.param("code");
   const userAgent    = getUserAgent(c.req.raw);
 

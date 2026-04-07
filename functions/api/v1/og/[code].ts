@@ -21,7 +21,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   const code = c.req.param("code");
   const r2Key    = `${R2_KEY_PREFIX}${code}`;
   const bucket   = c.env.ASSETS_BUCKET;
-  const origin   = resolveAppBaseUrl(c.env);
+  const origin   = resolveAppBaseUrl(c.env, c.req.raw);
   const url      = new URL(c.req.raw.url);
   const isDownload = url.searchParams.get("download") === "1";
 

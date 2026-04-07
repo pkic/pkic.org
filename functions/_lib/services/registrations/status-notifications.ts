@@ -80,6 +80,7 @@ export async function queueRegistrationStatusEmail(
   const manageUrl = registrationManagePageUrl(params.appBaseUrl, params.event, manageToken);
   const outboxId = await queueEmail(db, {
     eventId: params.event.id,
+    baseUrl: params.appBaseUrl,
     templateKey: params.templateKey,
     recipientEmail: user.email,
     recipientUserId: user.id,

@@ -112,13 +112,13 @@ export async function onRequestPut(c: any): Promise<Response> {
 
   await updateSpeakerProfile(c.env.DB, user.id, { headshotR2Key: r2Key });
 
-  const origin = resolveAppBaseUrl(c.env);
+  const origin = resolveAppBaseUrl(c.env, c.req.raw);
   c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, origin));
 
   return json({
     success: true,
     r2Key,
-    headshotUrl: `${new URL(c.req.raw.url).origin}/api/v1/proposals/speaker/${encodeURIComponent(c.req.param("token"))}/headshot?v=${encodeURIComponent(String(Date.now()))}`,
+    headshotUrl: `${origin}/api/v1/proposals/speaker/${encodeURIComponent(c.req.param("token"))}/headshot?v=${encodeURIComponent(String(Date.now()))}`,
   });
 }
 

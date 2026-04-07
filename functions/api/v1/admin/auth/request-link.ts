@@ -11,7 +11,7 @@ import { adminAuthRequestSchema } from "../../../../../assets/shared/schemas/api
 export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, adminAuthRequestSchema);
   const config = getConfig(c.env, c.req.raw);
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   const secret = requireInternalSecret(c.env);
   const ipHash = await hashOptional(getClientIp(c.req.raw), secret);

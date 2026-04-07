@@ -120,7 +120,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   const request = c.req.raw;
   const params = c.req.param();
   const code      = params.code;
-  const appBase   = resolveAppBaseUrl(env);
+  const appBase   = resolveAppBaseUrl(env, request);
   const userAgent = getUserAgent(request);
 
   const promoter = await first<PromoterRow>(

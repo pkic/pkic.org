@@ -127,7 +127,7 @@ async function onPut(c: any): Promise<Response> {
     { r2Key, uploadedBy: "admin" },
   );
 
-  const origin = resolveAppBaseUrl(c.env);
+  const origin = resolveAppBaseUrl(c.env, c.req.raw);
   c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, origin));
 
   return json({ success: true, r2Key });

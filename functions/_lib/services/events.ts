@@ -243,6 +243,38 @@ export function resolveHeroImageUrl(
   return null;
 }
 
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
+}
+
+/**
+ * Normalizes same-site hero image URLs to a site-relative path so event
+ * settings do not persist environment-specific origins such as localhost.
+ */
+export function normalizeEventHeroImageUrl(value: string, siteBaseUrl: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  if (trimmed.startsWith("/")) {
+    return trimmed;
+  }
+
+  try {
+    const url = new URL(trimmed);
+    const siteOrigin = new URL(siteBaseUrl).origin;
+    if (url.origin === siteOrigin || isLoopbackHostname(url.hostname)) {
+      return `${url.pathname}${url.search}${url.hash}`;
+    }
+  } catch {
+    // Keep non-URL values unchanged; validation happens at the request boundary.
+  }
+
+  return trimmed;
+}
+
 /**
  * Returns the physical venue address for in-person attendees, or null if not configured.
  * Reads from settings_json.venue.

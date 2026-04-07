@@ -73,7 +73,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   // Rotate the manage token — we cannot reconstruct the original from its hash.
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const newToken = await refreshSpeakerManageToken(
     c.env.DB,
     proposal.id,

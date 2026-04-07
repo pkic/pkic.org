@@ -9,6 +9,7 @@ import { listDayWaitlistForRegistration } from "../../../../../_lib/services/reg
 import { buildAttendanceEmailData } from "../../../../../_lib/utils/attendance";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../_lib/utils/registration-email";
 import { first } from "../../../../../_lib/db/queries";
+import { buildBadgeAttachment } from "../../../../../_lib/email/attachments";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../_lib/email/outbox";
 import { buildRegistrationIcs } from "../../../../../_lib/utils/calendar";
 import { registrationManagePageUrl } from "../../../../../_lib/services/frontend-links";
@@ -21,7 +22,7 @@ async function confirmRegistration(
 ): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   const { registration, manageToken } = await confirmRegistrationByToken(c.env.DB, {
     token,
@@ -53,11 +54,20 @@ async function confirmRegistration(
       const calendar = buildRegistrationIcs(event, registration.id, manageUrl, dayAttendanceRaw, appBaseUrl);
       const outboxId = await queueEmail(c.env.DB, {
         eventId: event.id,
+        baseUrl: appBaseUrl,
         templateKey: "registration_confirmed",
         recipientEmail: user.email,
         recipientUserId: registration.user_id,
         messageType: "transactional",
         subject: `Registration confirmed for ${event.name}`,
+        attachments: referralRow ? [
+          buildBadgeAttachment({
+            badgeCode: referralRow.code,
+            badgeType: "attendee",
+            firstName: user.first_name ?? "",
+            lastName: user.last_name ?? "",
+          }),
+        ] : undefined,
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
           // User
@@ -79,7 +89,6 @@ async function confirmRegistration(
           manageUrl,
           shareUrl,
           ...(referralRow ? {
-            __badgeCode: referralRow.code,
             badgeImageUrl: `${appBaseUrl}/api/v1/og/${referralRow.code}`,
             linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl as string)}`,
             twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${event.name} — join me! ${shareUrl}`)}`,

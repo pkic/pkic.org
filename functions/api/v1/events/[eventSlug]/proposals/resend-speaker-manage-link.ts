@@ -26,7 +26,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const body = await parseJsonBody(c.req, schema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   const row = await first<{
     proposal_id: string;
