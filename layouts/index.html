@@ -50,18 +50,28 @@
             <p class="pkic-hero-post-label mb-2">Upcoming Events</p>
             <ul class="list-unstyled mb-0">
               {{ range $heroUpcomingEvents }}
+              {{ $eventPage := . }}
               <li class="mb-2">
                 <a href="{{ .RelPermalink }}" class="text-decoration-none d-block">
                   <span class="pkic-hero-post-title d-block mb-1">{{ .Param "heroTitle" | default .Title }}</span>
                 </a>
-                {{ with .Param "eventDate" }}
+                {{ with $eventPage.Param "eventDate" }}
                 {{ $eventDate := time . }}
+                {{ $eventDuration := int (default 1 ($eventPage.Param "eventDuration")) }}
+                {{ $eventLabel := partial "events/date-label.html" $eventPage }}
+                {{ if gt $eventDuration 1 }}
+                <time
+                  class="pkic-hero-post-date mb-0 d-block"
+                  datetime="{{ $eventDate.Format "2006-01-02" }}"
+                >{{ $eventLabel }}</time>
+                {{ else }}
                 <time
                   class="pkic-hero-post-date mb-0 d-block"
                   datetime="{{ $eventDate.Format "2006-01-02T15:04:05Z" }}"
                   data-local-time="{{ $eventDate.Format "2006-01-02T15:04:05Z" }}"
                   data-hour-format="24"
-                >{{ $eventDate.Format "2 Jan 2006, 15:04 UTC" }}</time>
+                >{{ $eventLabel }}</time>
+                {{ end }}
                 {{ end }}
               </li>
               {{ end }}

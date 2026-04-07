@@ -4,12 +4,10 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npx wrangler dev --ip 0.0.0.0 --port 8788",
-    "dev:hugo": "HUGO_VERSION=0.158.0 bash ./scripts/build.sh",
-    "dev:static": "python3 -m http.server 13131 --bind 127.0.0.1 --directory public",
-    "dev:wrangler": "npx wrangler dev --ip 0.0.0.0 --port 8788",
-    "deploy": "npx wrangler deploy -c wrangler.deploy.jsonc",
-    "deploy:preview": "npx wrangler deploy -c wrangler.deploy.jsonc --env preview",
+    "dev": "npx wrangler dev --env local --ip 0.0.0.0 --port 8788",
+    "dev:hugo": "hugo serve",
+    "deploy": "npx wrangler deploy --env production",
+    "deploy:preview": "npx wrangler deploy --env preview",
     "typecheck": "npm run typecheck:backend && npm run typecheck:frontend",
     "typecheck:backend": "tsc --noEmit -p tsconfig.json",
     "typecheck:frontend": "tsc --noEmit -p tsconfig.frontend.json",
@@ -21,7 +19,7 @@
     "test:watch": "vitest",
     "check:max-lines": "node scripts/check-max-lines.mjs",
     "check": "npm run typecheck && npm run test && npm run check:max-lines",
-    "wrangler:types": "npx wrangler types",
+    "wrangler:types": "npx wrangler types --env local",
     "seed:local": "node scripts/seed.mjs --local",
     "seed:preview": "node scripts/seed.mjs --preview",
     "seed:production": "node scripts/seed.mjs --production"
@@ -29,26 +27,26 @@
   "dependencies": {
     "@resvg/resvg-wasm": "^2.6.2",
     "chanfana": "^3.3.0",
-    "handlebars": "^4.7.8",
-    "hono": "^4.10.6",
+    "handlebars": "^4.7.9",
+    "hono": "^4.12.10",
     "ical.js": "^2.2.1",
-    "marked": "^17.0.3",
-    "yaml": "^2.8.1",
+    "marked": "^17.0.5",
+    "yaml": "^2.8.3",
     "zod": "^4.3.6"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.13.5",
-    "@playwright/test": "^1.58.2",
-    "@types/node": "^24.6.1",
-    "jsdom": "^27.0.0",
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^24.12.1",
+    "jsdom": "^27.4.0",
     "typescript": "^5.9.3",
     "vitest": "^4.1.2",
     "wrangler": "^4.80.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
-      "esbuild",
-      "workerd"
+      "better-sqlite3",
+      "sharp"
     ]
   }
 }

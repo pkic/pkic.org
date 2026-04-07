@@ -18,9 +18,14 @@ async function clickConsentCard(page: Page, text: string): Promise<void> {
 }
 
 // ── Error and network monitoring ──────────────────────────────────────────────
+interface ErrorMonitorOptions {
+  ignoreConsoleError?: (text: string) => boolean;
+  ignoreResponse?: (url: string, status: number) => boolean;
+}
+
 interface ErrorMonitor { errors: string[]; assertClean(): void; }
 
-function monitorErrors(page: Page): ErrorMonitor {
+function monitorErrors(page: Page, options: ErrorMonitorOptions = {}): ErrorMonitor {
   const errors: string[] = [];
   page.on("console", (msg) => {
     if (msg.type() === "error") {
@@ -28,7 +33,8 @@ function monitorErrors(page: Page): ErrorMonitor {
       // Ignore benign dev-server noise and expected 4xx API responses; flag everything else
       if (!t.includes("favicon") && !t.includes("net::ERR_ABORTED") &&
           !t.includes("livereload") && !/\[vite\]|\[HMR\]/.test(t) &&
-          !/Failed to load resource: the server responded with a status of 4/.test(t)) {
+          !/Failed to load resource: the server responded with a status of 4/.test(t) &&
+          !options.ignoreConsoleError?.(t)) {
         errors.push(`console:error — ${t}`);
       }
     }
@@ -36,7 +42,7 @@ function monitorErrors(page: Page): ErrorMonitor {
   page.on("pageerror", (err) => errors.push(`pageerror — ${err.message}`));
   page.on("response", (resp) => {
     // Flag unexpected 5xx responses on non-API routes (API errors are exercised intentionally)
-    if (!resp.url().includes("/api/v1/") && resp.status() >= 500) {
+    if (!resp.url().includes("/api/v1/") && resp.status() >= 500 && !options.ignoreResponse?.(resp.url(), resp.status())) {
       errors.push(`HTTP ${resp.status()} — ${resp.url()}`);
     }
   });
@@ -265,7 +271,173 @@ async function fillProposal(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Continue/i }).click();
 }
 
+async function signInAsAdmin(page: Page): Promise<string> {
+  await page.goto("/admin/");
+  await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
+
+  await page.locator("#inp-email").fill("admin@pkic.org");
+  await page.locator("#btn-send").click();
+  await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
+
+  const magicEmail = await waitForEmail("admin@pkic.org", "sign-in");
+  const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
+
+  await page.goto(magicUrl);
+  await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+
+  const adminToken = await page.evaluate(() => window.localStorage.getItem("pkic_at"));
+  expect(adminToken).toBeTruthy();
+
+  return adminToken as string;
+}
+
+async function setEventDayInPersonCapacity(
+  page: Page,
+  adminToken: string,
+  eventSlug: string,
+  dayDate: string,
+  capacity: number,
+): Promise<void> {
+  const result = await page.evaluate(async ({ adminToken: token, eventSlug: slug, dayDate: date, capacity: nextCapacity }) => {
+    const headers = {
+      Authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+    };
+
+    const getResponse = await fetch(`/api/v1/admin/events/${slug}/days`, { headers });
+    const getBody = await getResponse.json() as {
+      days?: Array<{
+        date: string;
+        label: string | null;
+        startsAt: string | null;
+        endsAt: string | null;
+        sortOrder: number;
+        attendanceOptions: Array<{ value: string; label: string; capacity?: number | null }>;
+      }>;
+    };
+
+    if (!getResponse.ok || !getBody.days) {
+      return { ok: false, getStatus: getResponse.status, putStatus: 0, reason: "get_failed" };
+    }
+
+    const days = getBody.days.map((day) => ({
+      date: day.date,
+      label: day.label ?? undefined,
+      startTime: day.startsAt
+        ? new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Europe/Amsterdam",
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        }).format(new Date(day.startsAt))
+        : undefined,
+      endTime: day.endsAt
+        ? new Intl.DateTimeFormat("en-GB", {
+          timeZone: "Europe/Amsterdam",
+          hour: "2-digit",
+          minute: "2-digit",
+          hourCycle: "h23",
+        }).format(new Date(day.endsAt))
+        : undefined,
+      sortOrder: day.sortOrder,
+      attendanceOptions: day.attendanceOptions.map((option) => (
+        option.value === "in_person" && day.date === date
+          ? { ...option, capacity: nextCapacity }
+          : option
+      )),
+    }));
+
+    const putResponse = await fetch(`/api/v1/admin/events/${slug}/days`, {
+      method: "PUT",
+      headers,
+      body: JSON.stringify({ days }),
+    });
+
+    const putBody = await putResponse.json() as {
+      days?: Array<{ date: string; attendanceOptions: Array<{ value: string; capacity?: number | null }> }>;
+    };
+    const updatedCapacity = putBody.days
+      ?.find((day) => day.date === date)
+      ?.attendanceOptions.find((option) => option.value === "in_person")
+      ?.capacity;
+
+    return {
+      ok: putResponse.ok,
+      getStatus: getResponse.status,
+      putStatus: putResponse.status,
+      updatedCapacity: updatedCapacity ?? null,
+      reason: putResponse.ok ? null : "put_failed",
+    };
+  }, { adminToken, eventSlug, dayDate, capacity });
+
+  expect(result.ok, `admin day capacity update failed: ${JSON.stringify(result)}`).toBe(true);
+  expect(result.updatedCapacity).toBe(capacity);
+}
+
 test.describe("browser workflows", () => {
+  test("shows a friendly partial waitlist state when a selected day is full", async ({ page }) => {
+    await setupPage(page);
+    const errorMonitor = monitorErrors(page, {
+      ignoreConsoleError: (text) => text === "Failed to load resource: the server responded with a status of 500 ()",
+      ignoreResponse: (url) => /\/images\/members\/.+\.svg(?:\?|$)/.test(url),
+    });
+    const screenshot = createScreenshotter(page);
+
+    const adminToken = await signInAsAdmin(page);
+    await setEventDayInPersonCapacity(page, adminToken, "pqc-conference-amsterdam-nl", "2026-12-01", 1);
+
+    await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
+    await fillRegistrationStep1(page, {
+      firstName: "Capacity",
+      lastName: "One",
+      email: "capacity-one@example.test",
+    });
+    await fillRegistrationStep2(page);
+    await fillRegistrationStep3(page);
+    await fillRegistrationStep4(page);
+
+    const firstConfirmEmail = await waitForEmail("capacity-one@example.test", "confirm");
+    const firstConfirmationUrl = extractUrlFromEmail(firstConfirmEmail, "/register/confirm");
+    await page.goto(firstConfirmationUrl);
+    await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+    await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
+
+    await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
+    await fillRegistrationStep1(page, {
+      firstName: "Capacity",
+      lastName: "Two",
+      email: "capacity-two@example.test",
+    });
+    await fillRegistrationStep2(page);
+    await fillRegistrationStep3(page);
+    await fillRegistrationStep4(page);
+
+    const secondConfirmEmail = await waitForEmail("capacity-two@example.test", "confirm");
+    const secondConfirmationUrl = extractUrlFromEmail(secondConfirmEmail, "/register/confirm");
+    await page.goto(secondConfirmationUrl);
+    await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+    await expect(page.getByRole("heading", { name: /registration is in place/i })).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText("Your overall registration is confirmed, but one or more selected in-person days are still pending")).toBeVisible();
+    await screenshot("01-partial-capacity-confirmed");
+
+    const secondRegisteredEmail = await waitForEmail("capacity-two@example.test", "confirmed");
+    const secondManageUrl = extractUrlFromEmail(secondRegisteredEmail, "/register/manage/");
+    const secondManageToken = new URL(secondManageUrl).searchParams.get("token") ?? "";
+
+    await page.goto(
+      `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(secondManageToken)}`,
+    );
+
+    await expect(page.locator("[data-manage-status-badge]")).toHaveText(/Confirmed/i);
+    await expect(page.locator("[data-manage-status-banner]")).toContainText(
+      "Some day-specific entries are still pending, so those days are marked waitlisted below.",
+    );
+    await expect(page.locator("[data-day-waitlist-section]")).toContainText("Tuesday 1 December 2026: Waiting for in-person seat");
+    await screenshot("02-partial-capacity-manage-friendly-state");
+
+    errorMonitor.assertClean();
+  });
+
   test("covers registration, invite acceptance, confirmation, manage updates, and invite decline", async ({ page }) => {
     await setupPage(page);
     const errorMonitor = monitorErrors(page);

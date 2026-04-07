@@ -531,7 +531,11 @@ blockquote::after {
 main h2 {
   font-size: 1.5em;
   font-weight: 700 !important;
-  background: linear-gradient(120deg, var(--page-accent), var(--page-accent-2));
+  background: linear-gradient(
+    120deg,
+    var(--page-accent, var(--wg-color, #{$green})),
+    var(--page-accent-2, #{$blue-dark})
+  );
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
@@ -541,7 +545,7 @@ main h2 {
 
   // Fallback for browsers that don't support background-clip: text
   @supports not (-webkit-background-clip: text) {
-    color: var(--page-accent, #{$green});
+    color: var(--page-accent, var(--wg-color, #{$green}));
     background: none;
   }
 }
@@ -550,7 +554,7 @@ main h2 {
 main h3 {
   font-size: 1.15em;
   font-weight: 600 !important;
-  color: var(--page-accent-2, #{$blue-dark});
+  color: var(--page-accent-2, var(--page-accent, var(--wg-color, #{$blue-dark})));
   margin-top: 1.5em;
   margin-bottom: 0.25em;
   padding-top: 0;
@@ -585,7 +589,7 @@ main h6 {
 main .header-link {
   opacity: 0;
   margin-left: 0.3em;
-  color: var(--page-accent, #{$green});
+  color: var(--page-accent, var(--wg-color, #{$green}));
   transition: opacity 0.15s;
   vertical-align: middle;
   text-decoration: none !important;

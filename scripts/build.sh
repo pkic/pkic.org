@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-REQUIRED_HUGO_VERSION="${HUGO_VERSION:-0.158.0}"
+REQUIRED_HUGO_VERSION="${HUGO_VERSION:-0.160.0}"
 
 detect_hugo_platform() {
   local os arch
@@ -33,27 +33,48 @@ detect_hugo_platform() {
   esac
 }
 
+download_hugo() {
+  local version platform archive_url archive_path extract_dir
+
+  version="$1"
+  platform="$2"
+  archive_path="/tmp/hugo_${version}_${platform}"
+  extract_dir="/tmp/hugo_${version}_${platform}_extract"
+
+  case "$platform" in
+    darwin-universal)
+      archive_url="https://github.com/gohugoio/hugo/releases/download/v${version}/hugo_extended_${version}_${platform}.pkg"
+      archive_path="${archive_path}.pkg"
+      curl -fsSL "$archive_url" -o "$archive_path"
+      rm -rf "$extract_dir"
+      pkgutil --expand-full "$archive_path" "$extract_dir"
+      cp "$extract_dir/Payload/hugo" "/tmp/hugo_${version}"
+      chmod +x "/tmp/hugo_${version}"
+      ;;
+    *)
+      archive_url="https://github.com/gohugoio/hugo/releases/download/v${version}/hugo_extended_${version}_${platform}.tar.gz"
+      archive_path="${archive_path}.tar.gz"
+      curl -fsSL "$archive_url" -o "$archive_path"
+      tar xzf "$archive_path" -C /tmp hugo
+      mv /tmp/hugo "/tmp/hugo_${version}"
+      chmod +x "/tmp/hugo_${version}"
+      ;;
+  esac
+}
+
 # ── Ensure correct Hugo version is available ──────────────────────────────────
 if command -v hugo &>/dev/null && hugo version 2>/dev/null | grep -qF "v${REQUIRED_HUGO_VERSION}"; then
   echo "Hugo ${REQUIRED_HUGO_VERSION} already installed."
   HUGO_BIN="hugo"
-elif [[ "$(uname -s)" == "Darwin" ]] && command -v hugo &>/dev/null; then
-  echo "Hugo ${REQUIRED_HUGO_VERSION} not found; using installed macOS Hugo: $(hugo version | head -n 1)"
-  HUGO_BIN="hugo"
 else
   echo "Installing Hugo ${REQUIRED_HUGO_VERSION}..."
   HUGO_PLATFORM="$(detect_hugo_platform)"
-  HUGO_TAR="/tmp/hugo_${REQUIRED_HUGO_VERSION}.tar.gz"
   HUGO_BIN="/tmp/hugo_${REQUIRED_HUGO_VERSION}"
-  curl -fsSL \
-    "https://github.com/gohugoio/hugo/releases/download/v${REQUIRED_HUGO_VERSION}/hugo_extended_${REQUIRED_HUGO_VERSION}_${HUGO_PLATFORM}.tar.gz" \
-    -o "${HUGO_TAR}"
-  tar xzf "${HUGO_TAR}" -C /tmp hugo
-  mv /tmp/hugo "${HUGO_BIN}"
+  download_hugo "${REQUIRED_HUGO_VERSION}" "${HUGO_PLATFORM}"
   echo "Hugo ${REQUIRED_HUGO_VERSION} installed."
 fi
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 git submodule update --init --remote
-"${HUGO_BIN}" --minify --cacheDir "$(pwd)/.cache"
+"${HUGO_BIN}" -e development --minify --cacheDir "$(pwd)/.cache"
 npx -y pagefind --site "public"

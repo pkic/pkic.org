@@ -1,56 +1,82 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "pkic-org",
-  "compatibility_date": "2026-02-28",
+  "name": "pkic-org-base",
+  "compatibility_date": "2026-03-17",
   "compatibility_flags": ["nodejs_compat"],
   "main": "functions/router.ts",
-  "build": {
-    "command": "HUGO_VERSION=0.158.0 DEV_STATIC_PORT=13131 bash ./scripts/dev-build.sh",
-    "watch_dir": ["archetypes", "assets/icons", "assets/images", "assets/js", "assets/scss", "assets/shared", "assets/ts", "config", "content", "data", "i18n", "layouts", "static"]
-  },
   "dev": {
     "port": 8788,
     "local_protocol": "http"
   },
-  "assets": {
-    "directory": "public",
-    "binding": "ASSETS",
-    "not_found_handling": "404-page",
-    "run_worker_first": false
-  },
-  "d1_databases": [
-    {
-      "binding": "DB",
-      "database_name": "pkic-db",
-      "database_id": "705d4a53-c607-4b4f-bf90-74fc1c079d37",
-      "migrations_dir": "migrations"
-    }
-  ],
-  "r2_buckets": [
-    {
-      "binding": "ASSETS_BUCKET",
-      "bucket_name": "pkic-assets"
-    },
-    {
-      "binding": "SPEAKER_UPLOADS_BUCKET",
-      "bucket_name": "pkic-speaker-uploads"
-    }
-  ],
-  "images": {
-    "binding": "IMAGES"
-  },
   "observability": {
     "enabled": true
   },
-  // ── Preview environment (all non-production branches) ────────────────────
+  "build": {
+    "command": "git submodule update --init --remote && hugo --minify && npx -y pagefind --site './public/'",
+    "watch_dir": ["functions", "assets", "archetypes", "config", "content", "data", "i18n", "layouts", "static"]
+  },
   "env": {
-    "preview": {
+    "production": {
+      "name": "pkic-org",
+      "assets": {
+        "directory": "./public/",
+        "binding": "ASSETS_PUBLIC",
+        "not_found_handling": "404-page",
+        "run_worker_first": ["/api/*", "/r/*", "/donate/r/*"]
+      },
+      "preview_urls": true,
+      "workers_dev": true,
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "pkic-db",
+          "database_id": "705d4a53-c607-4b4f-bf90-74fc1c079d37",
+          "preview_database_id": "0647ba62-4bf0-40e5-b547-62f992acbbf0",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ASSETS_BUCKET",
+          "bucket_name": "pkic-assets"
+        },
+        {
+          "binding": "SPEAKER_UPLOADS_BUCKET",
+          "bucket_name": "pkic-speaker-uploads"
+        }
+      ],
       "images": {
         "binding": "IMAGES"
       },
-      "observability": {
-        "enabled": true
+      "vars": {
+        "APP_BASE_URL": "https://pkic.org",
+        "HUGO_VERSION": "0.160.0",
+        "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
+        "DEFAULT_REFERRAL_CODE_LENGTH": "7",
+        "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
+        "WAITLIST_CLAIM_WINDOW_HOURS": "24",
+        "MAGIC_LINK_TTL_MINUTES": "15",
+        "MANAGE_TOKEN_TTL_HOURS": "48",
+        "REMINDER_INTERVAL_DAYS": "7",
+        "MAX_INVITE_REMINDERS": "12",
+        "MAX_PRESENTATION_REMINDERS": "12",
+        "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
+        "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
+        "FROM_EMAIL": "noreply@pkic.org",
+        "FROM_NAME": "PKI Consortium",
+        "STRIPE_PUBLISHABLE_KEY": "pk_live_51TADczLT173BlQwOkLRjg7nIK7sX9gZJj4DAvD30X8mKpP3Zu3ksMmMk6GYE2moavKccbH3VBqCHDF09mAlny3kg00pZN2Ke0d"
+      }
+    },
+    "preview": {
+      "name": "pkic-org-preview",
+      "assets": {
+        "directory": "./public/",
+        "binding": "ASSETS_PUBLIC",
+        "not_found_handling": "404-page",
+        "run_worker_first": ["/api/*", "/r/*", "/donate/r/*"]
       },
+      "preview_urls": true,
+      "workers_dev": true,
       "d1_databases": [
         {
           "binding": "DB",
@@ -69,8 +95,12 @@
           "bucket_name": "pkic-speaker-uploads-preview"
         }
       ],
+      "images": {
+        "binding": "IMAGES"
+      },
       "vars": {
-        "HUGO_VERSION": "0.158.0",
+        "APP_BASE_URL": "https://pkic-org-preview.pkic.workers.dev/",
+        "HUGO_VERSION": "0.160.0",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
         "DEFAULT_REFERRAL_CODE_LENGTH": "7",
         "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
@@ -86,45 +116,54 @@
         "FROM_NAME": "PKI Consortium (Preview)",
         "STRIPE_PUBLISHABLE_KEY": "pk_test_51TADczLT173BlQwOCJAhV0Mf5xxJXJWG9VWkprhXUSJZTaYdqr5vJynipzUfCglU93cIoCBBNOkviwhOqQ3ZFPNk00cxzuEyMH"
       }
+    },
+    "local": {
+      "name": "pkic-org-local",
+      "assets": {
+        "directory": "./public/",
+        "binding": "ASSETS_PUBLIC",
+        "not_found_handling": "404-page",
+        "run_worker_first": ["/api/*", "/r/*", "/donate/r/*"]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "pkic-db-local",
+          "database_id": "705d4a53-c607-4b4f-bf90-74fc1c079d37",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ASSETS_BUCKET",
+          "bucket_name": "pkic-assets"
+        },
+        {
+          "binding": "SPEAKER_UPLOADS_BUCKET",
+          "bucket_name": "pkic-speaker-uploads"
+        }
+      ],
+      "images": {
+        "binding": "IMAGES"
+      },
+      "vars": {
+        "DEV_STATIC_ORIGIN": "http://127.0.0.1:13131",
+        "HUGO_VERSION": "0.160.0",
+        "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
+        "DEFAULT_REFERRAL_CODE_LENGTH": "7",
+        "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
+        "WAITLIST_CLAIM_WINDOW_HOURS": "24",
+        "MAGIC_LINK_TTL_MINUTES": "15",
+        "MANAGE_TOKEN_TTL_HOURS": "48",
+        "REMINDER_INTERVAL_DAYS": "7",
+        "MAX_INVITE_REMINDERS": "12",
+        "MAX_PRESENTATION_REMINDERS": "12",
+        "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
+        "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
+        "FROM_EMAIL": "noreply@pkic.org",
+        "FROM_NAME": "PKI Consortium",
+        "STRIPE_PUBLISHABLE_KEY": "pk_live_51TADczLT173BlQwOkLRjg7nIK7sX9gZJj4DAvD30X8mKpP3Zu3ksMmMk6GYE2moavKccbH3VBqCHDF09mAlny3kg00pZN2Ke0d"
+      }
     }
-  },
-  "vars": {
-    "DEV_STATIC_ORIGIN": "http://127.0.0.1:13131",
-    "HUGO_VERSION": "0.158.0",
-    "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
-    "DEFAULT_REFERRAL_CODE_LENGTH": "7",
-    "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
-    "WAITLIST_CLAIM_WINDOW_HOURS": "24",
-    "MAGIC_LINK_TTL_MINUTES": "15",
-    "MANAGE_TOKEN_TTL_HOURS": "48",
-    "REMINDER_INTERVAL_DAYS": "7",
-    "MAX_INVITE_REMINDERS": "12",
-    "MAX_PRESENTATION_REMINDERS": "12",
-    "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
-    "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
-    "FROM_EMAIL": "noreply@pkic.org",
-    "FROM_NAME": "PKI Consortium",
-    "STRIPE_PUBLISHABLE_KEY": "pk_live_51TADczLT173BlQwOkLRjg7nIK7sX9gZJj4DAvD30X8mKpP3Zu3ksMmMk6GYE2moavKccbH3VBqCHDF09mAlny3kg00pZN2Ke0d"
   }
-  // ── Secrets (set via: wrangler secret put <NAME>) ──────────────────────────
-  // SENDGRID_API_KEY        — SendGrid API key for sending emails
-  // INTERNAL_SIGNING_SECRET — Secret used for hashing IP / user-agent
-  // ADMIN_API_KEY           — Long-lived API key for headless admin access & stats
-  //                           (used by the admin UI and automated reporting)
-  //                           Generate with: openssl rand -hex 32
-  // STRIPE_SECRET_KEY       — Stripe restricted key for the donation flow.
-  //                           Required permissions: Checkout Sessions (write),
-  //                           Payment Intents (read), Charges (read),
-  //                           Balance Transactions (read).
-  //                           Obtain from Stripe Dashboard → Developers → API keys.
-  // STRIPE_PUBLISHABLE_KEY  — Stripe publishable key (pk_live_… / pk_test_…).
-  //                           Set in vars (not secrets) since it is safe to expose publicly.
-  //                           Update the values in vars and env.preview.vars above.
-  // STRIPE_WEBHOOK_SECRET        — Stripe webhook signing secret (whsec_…).
-  //                               Configure the endpoint in Stripe Dashboard →
-  //                               Developers → Webhooks, select event:
-  //                               checkout.session.completed
-  //                               Obtain the signing secret from that webhook config.
-  // DONATION_NOTIFICATION_EMAIL  — BCC recipient for donation thank-you emails.
-  //                               Set to contact@pkic.org for internal records.
 }
