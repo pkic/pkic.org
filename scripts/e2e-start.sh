@@ -26,10 +26,10 @@ EOF
 hugo -e development
 
 # ── 2. Seed a fresh database ────────────────────────────────────────────────
-printf 'y\n' | npx wrangler d1 migrations apply pkic-db --env local --local --persist-to="$STATE_DIR"
-node scripts/seed-initial-admin.mjs  --env local --local --db pkic-db --persist-to "$STATE_DIR"
-node scripts/seed-event.mjs          --env local --local --db pkic-db --persist-to "$STATE_DIR" --skip-email-templates
-node scripts/seed-email-templates.mjs --env local --local --db pkic-db --persist-to "$STATE_DIR"
+printf 'y\n' | npx wrangler d1 migrations apply pkic-db-local --env local --local --persist-to="$STATE_DIR"
+node scripts/seed-initial-admin.mjs  --env local --local --db pkic-db-local --persist-to "$STATE_DIR"
+node scripts/seed-event.mjs          --env local --local --db pkic-db-local --persist-to "$STATE_DIR" --skip-email-templates
+node scripts/seed-email-templates.mjs --env local --local --db pkic-db-local --persist-to "$STATE_DIR"
 
 # ── 3. Start servers ────────────────────────────────────────────────────────
 node scripts/e2e-interceptor.mjs "$INTERCEPT_PORT" &
