@@ -186,12 +186,17 @@ function attendanceTypeLabel(attendanceType: string): string {
   }
 }
 
+function isPendingDayWaitlistStatus(status: string | undefined): boolean {
+  return status === "waiting" || status === "offered";
+}
+
 function buildRegistrationStatusBanner(
   registrationStatus: string,
   dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>,
   dayWaitlist: Array<{ dayDate: string; status: string }>,
 ): string {
-  const waitlistByDay = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry.status] as const));
+  const activeDayWaitlist = dayWaitlist.filter((entry) => isPendingDayWaitlistStatus(entry.status));
+  const waitlistByDay = new Map(activeDayWaitlist.map((entry) => [entry.dayDate, entry.status] as const));
   const isRegistrationWaitlisted = registrationStatus === "waitlisted";
 
   const rows = dayAttendance.map((day) => {
@@ -217,7 +222,7 @@ function buildRegistrationStatusBanner(
     : "";
 
   const waitlistSummary = !isRegistrationWaitlisted && dayWaitlist.length > 0
-    ? `<div class="mt-2 small">Some day-specific entries are still pending, so those days are marked <strong>waitlisted</strong> below.</div>`
+    ? `<div class="mt-2 small">Some day-specific entries are still pending, so those days are marked <strong>waitlisted</strong> below. If that no longer works for you, update the selections below or cancel the registration.</div>`
     : "";
 
   return `${bannerLead}${daySummary}${waitlistSummary}`;
@@ -351,7 +356,8 @@ async function main(): Promise<void> {
   const firstName = user?.first_name ?? "";
 
   if (statusBanner) {
-    if (registration.status === "waitlisted" || (dayWaitlist && dayWaitlist.length > 0)) {
+    const activeDayWaitlist = (dayWaitlist ?? []).filter((entry) => isPendingDayWaitlistStatus(entry.status));
+    if (registration.status === "waitlisted" || activeDayWaitlist.length > 0) {
       statusBanner.innerHTML = buildRegistrationStatusBanner(registration.status, dayAttendance, dayWaitlist ?? []);
       statusBanner.classList.remove("d-none");
     }
@@ -401,16 +407,22 @@ async function main(): Promise<void> {
 
   // ── Day waitlist (only shown when there are active entries) ──────────────
   if (dayWaitlistContainer && dayWaitlistSection) {
-    if (dayWaitlist && dayWaitlist.length > 0) {
+    const activeDayWaitlist = (dayWaitlist ?? []).filter((entry) => isPendingDayWaitlistStatus(entry.status));
+    const labelByDayDate = new Map(eventDays.map((day) => [day.dayDate, day.label ?? day.dayDate] as const));
+    if (activeDayWaitlist.length > 0) {
       const wrap = document.createElement("div");
       wrap.className = "event-flow-day-waitlist d-flex flex-wrap gap-2";
-      for (const entry of dayWaitlist) {
+      for (const entry of activeDayWaitlist) {
         const badge = document.createElement("span");
         const expiry = entry.offerExpiresAt
           ? `, offer expires ${new Date(entry.offerExpiresAt).toLocaleString()}`
           : "";
         badge.className = `badge text-bg-${entry.status === "offered" ? "warning" : entry.status === "accepted" ? "success" : "secondary"}`;
-        badge.textContent = `${entry.dayDate}: ${entry.status} (${entry.priorityLane}${expiry})`;
+        const dayLabel = labelByDayDate.get(entry.dayDate) ?? entry.dayDate;
+        const statusLabel = entry.status === "offered"
+          ? "In-person spot available"
+          : "Waiting for in-person seat";
+        badge.textContent = `${dayLabel}: ${statusLabel} (${entry.priorityLane}${expiry})`;
         wrap.append(badge);
       }
       dayWaitlistContainer.append(wrap);

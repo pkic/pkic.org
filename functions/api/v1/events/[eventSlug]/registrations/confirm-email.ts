@@ -38,12 +38,12 @@ async function confirmRegistration(
   );
   const shareUrl = referralRow ? `${appBaseUrl}/r/${referralRow.code}` : null;
   const manageUrl = registrationManagePageUrl(appBaseUrl, event, manageToken);
+  const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, registration.id);
+  const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
 
   const user = await first<UserRecord>(c.env.DB, "SELECT * FROM users WHERE id = ?", [registration.user_id]);
   if (user) {
     if (registration.status === "registered" || registration.status === "waitlisted") {
-      const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, registration.id);
-      const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
       const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
         registration.attendance_type,
         dayAttendanceRaw,
@@ -107,7 +107,15 @@ async function confirmRegistration(
     }
   }
 
-  return json({ success: true, status: registration.status, shareUrl, manageUrl, manageToken });
+  return json({
+    success: true,
+    status: registration.status,
+    shareUrl,
+    manageUrl,
+    manageToken,
+    dayAttendance: dayAttendanceRaw,
+    dayWaitlist,
+  });
 }
 
 export async function onRequestPost(c: any): Promise<Response> {
