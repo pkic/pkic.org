@@ -745,6 +745,12 @@ cards:
 
 {{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
 
+## Main Organizers
+
+This conference was made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
+
+{{< figure src="organizational-support.jpg" >}}
+
 ## Programme & Speakers
 
 We don't select speakers based on marketing budgets. We select based on **depth of implementation experience**. You will hear directly from national cybersecurity agencies, NIST/ETSI members, enterprise architects running hybrid setups, and cloud security teams.
