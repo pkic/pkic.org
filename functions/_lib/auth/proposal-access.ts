@@ -32,7 +32,6 @@ export async function getProposalAccessForEvent(
   );
 
   const eventPermissions = permissionRows.map((row) => row.permission);
-  const permissionSet = new Set(eventPermissions);
 
   const hasReviewPermission = eventPermissions.some((permission) => REVIEW_PERMISSIONS.has(permission));
   const hasFinalizePermission = eventPermissions.some((permission) => FINALIZE_PERMISSIONS.has(permission));

@@ -54,10 +54,6 @@ function hide(el: HTMLElement | null): void {
   el?.classList.add("d-none");
 }
 
-function getText(selector: string): string {
-  return ($(`[${selector}]`) as HTMLInputElement | null)?.value?.trim() ?? "";
-}
-
 async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
     credentials: "same-origin",

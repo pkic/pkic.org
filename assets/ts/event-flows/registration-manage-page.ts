@@ -1,4 +1,4 @@
-import { getJson, patchJson, postJson } from "../shared/api-client";
+import { getJson, patchJson } from "../shared/api-client";
 import { setButtonLoading, resetButton } from "../shared/button-loading";
 import type { EventFormsResponse, RegistrationManageResponse } from "../shared/types";
 import { applyFieldErrors, normalizeValidation } from "../shared/validation-map";
