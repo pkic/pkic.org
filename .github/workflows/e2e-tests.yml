@@ -72,6 +72,9 @@ jobs:
       - name: Install Playwright browsers
         run: pnpm exec playwright install --with-deps chromium
 
+      - name: Prepare dev vars
+        run: cp .dev.vars.example .dev.vars
+
       - name: Run e2e checks
         id: e2e
         run: pnpm test:e2e

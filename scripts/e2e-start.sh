@@ -20,6 +20,7 @@ cat >> "$E2E_ENV_FILE" <<EOF
 SENDGRID_API_BASE=http://127.0.0.1:${INTERCEPT_PORT}
 SENDGRID_API_KEY=e2e-test-dummy-key
 APP_BASE_URL=http://127.0.0.1:8788
+EMAIL_BADGE_DELAY_SECONDS=0
 EOF
 
 # ── 1. Build static site ────────────────────────────────────────────────────
