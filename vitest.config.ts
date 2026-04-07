@@ -10,7 +10,7 @@ export default defineConfig(async () => {
     plugins: [
       cloudflareTest({
         main: "./functions/router.ts",
-        wrangler: { configPath: "./wrangler.jsonc" },
+        wrangler: { configPath: "./wrangler.jsonc", environment: "local" },
         miniflare: {
           // Test-only bindings: secrets not in wrangler.jsonc, plus
           // the pre-read migrations array for the apply-migrations setup file.
