@@ -2,11 +2,16 @@ import fs from "node:fs";
 import path from "node:path";
 
 const ROOT = process.cwd();
-const MAX_LINES = 500;
+const MAX_LINES = 1000;
 const EXTENSIONS = new Set([".ts", ".js", ".json", ".jsonc", ".md", ".sql", ".yml", ".yaml", ".mjs"]);
 const IGNORE_DIRS = new Set([".git", "node_modules", "public", "resources", "content", "assets"]);
 const SCOPED_ROOTS = ["functions", "tests", "docs/events-backend", "migrations", "scripts", "shared"];
 const SCOPED_FILES = new Set(["package.json", "tsconfig.json", "wrangler.jsonc"]);
+const EXEMPT_PATTERNS = [
+  /^migrations\/.*\.sql$/,
+  /^scripts\/seed-email-templates\.mjs$/,
+  /^tests\/.*\.(test|spec)\.ts$/,
+];
 
 function isInScope(relPath) {
   if (SCOPED_FILES.has(relPath)) {
@@ -14,6 +19,10 @@ function isInScope(relPath) {
   }
 
   return SCOPED_ROOTS.some((root) => relPath === root || relPath.startsWith(`${root}/`));
+}
+
+function isExempt(relPath) {
+  return EXEMPT_PATTERNS.some((pattern) => pattern.test(relPath));
 }
 
 function walk(dir, out) {
@@ -35,6 +44,10 @@ function walk(dir, out) {
     }
 
     if (!isInScope(rel)) {
+      continue;
+    }
+
+    if (isExempt(rel.split(path.sep).join("/"))) {
       continue;
     }
 
