@@ -18,6 +18,12 @@
   "env": {
     "production": {
       "name": "pkic-org",
+      "routes": [
+        {
+          "pattern": "pkic.org",
+          "custom_domain": true
+        }
+      ],
       "assets": {
         "directory": "./public/",
         "binding": "ASSETS_PUBLIC",
