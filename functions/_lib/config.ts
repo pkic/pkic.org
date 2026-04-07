@@ -60,6 +60,8 @@ export function getConfig(env: Env, request?: Request) {
     reminderIntervalDays: parseIntOrDefault(env.REMINDER_INTERVAL_DAYS, 7),
     maxInviteReminders: parseIntOrDefault(env.MAX_INVITE_REMINDERS, 12),
     maxPresentationReminders: parseIntOrDefault(env.MAX_PRESENTATION_REMINDERS, 12),
+    scheduledReminderLimit: parseIntOrDefault(env.SCHEDULED_REMINDER_LIMIT, 120),
+    scheduledOutboxLimit: parseIntOrDefault(env.SCHEDULED_OUTBOX_LIMIT, 120),
     sendgridApiBase: env.SENDGRID_API_BASE,
   };
 }
