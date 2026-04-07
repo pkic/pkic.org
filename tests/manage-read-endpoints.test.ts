@@ -5,6 +5,8 @@ import { createContext, seedEventAndAdmin } from "./helpers/context";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { onRequestGet as getRegistration } from "../functions/api/v1/registrations/manage/[token]";
 import { onRequestGet as getProposal } from "../functions/api/v1/proposals/manage/[token]";
+import { getEventBySlug } from "../functions/_lib/services/events";
+import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 
 describe("manage read endpoints", () => {
   beforeEach(async () => { await resetDb(); });
@@ -39,6 +41,80 @@ describe("manage read endpoints", () => {
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { registration: { id: string } };
     expect(payload.registration.id).toBe(registrationId);
+  });
+
+  it("returns confirmed registrations with day-specific waitlist state", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES ('day-1', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES
+          ('user-1', 'one@example.test', 'one@example.test', 'One', 'Attendee', datetime('now'), datetime('now')),
+          ('user-2', 'two@example.test', 'two@example.test', 'Two', 'Attendee', datetime('now'), datetime('now'))
+      `),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+
+    const first = await createRegistration(env.DB, {
+      event,
+      userId: "user-1",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: first.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+    });
+
+    const second = await createRegistration(env.DB, {
+      event,
+      userId: "user-2",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+    const confirmedSecond = await confirmRegistrationByToken(env.DB, {
+      token: second.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+    });
+
+    const response = await getRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${confirmedSecond.manageToken}`),
+        { token: confirmedSecond.manageToken },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      registration: { status: string };
+      dayWaitlist: Array<{
+        dayDate: string;
+        status: string;
+        priorityLane: string;
+        offerExpiresAt: string | null;
+      }>;
+    };
+
+    expect(payload.registration.status).toBe("registered");
+    expect(payload.dayWaitlist).toEqual([
+      {
+        dayDate: "2026-12-01",
+        status: "waiting",
+        priorityLane: "general",
+        offerExpiresAt: null,
+      },
+    ]);
   });
 
   it("returns proposal state for a valid manage token", async () => {

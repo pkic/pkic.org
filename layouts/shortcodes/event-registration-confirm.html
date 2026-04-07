@@ -6,6 +6,8 @@
 {{- $successBody    := .Get "successBody"    | default "Your calendar invite is on its way. Use the link in your confirmation email to manage your registration." -}}
 {{- $waitlistTitle  := .Get "waitlistTitle"  | default "{firstName}, you're on the waitlist{forEvent}!" -}}
 {{- $waitlistBody   := .Get "waitlistBody"   | default "We have your email confirmed. We'll notify you as soon as an in-person spot becomes available. Check the email we sent you for your manage link." -}}
+{{- $partialWaitlistTitle := .Get "partialWaitlistTitle" | default "{firstName}, your registration is in place{forEvent}!" -}}
+{{- $partialWaitlistBody := .Get "partialWaitlistBody" | default "Your overall registration is confirmed, but one or more selected in-person days are still pending because those rooms are at capacity right now." -}}
 {{- $expiredTitle   := .Get "expiredTitle"   | default "Your confirmation link has expired" -}}
 {{- $expiredBody    := .Get "expiredBody"    | default "The verification link{forEvent} is no longer valid — these links expire after 48 hours for security. Click the button below and we'll send a fresh one to the same email address." -}}
 
@@ -18,6 +20,8 @@
   data-success-body="{{ $successBody }}"
   data-waitlist-title="{{ $waitlistTitle }}"
   data-waitlist-body="{{ $waitlistBody }}"
+  data-partial-waitlist-title="{{ $partialWaitlistTitle }}"
+  data-partial-waitlist-body="{{ $partialWaitlistBody }}"
   data-expired-title="{{ $expiredTitle }}"
   data-expired-body="{{ $expiredBody }}"
 >

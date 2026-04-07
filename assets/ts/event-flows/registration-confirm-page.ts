@@ -15,6 +15,8 @@ interface ConfirmResponse {
   shareUrl?: string | null;
   manageUrl?: string | null;
   manageToken?: string | null;
+  dayAttendance?: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+  dayWaitlist?: Array<{ dayDate: string; status: string }>;
 }
 
 interface ConfirmInfoResponse {
@@ -53,6 +55,52 @@ function fillPlaceholders(root: HTMLElement, values: Record<string, string>): vo
   }
 }
 
+function isPendingDayWaitlistStatus(status: string | undefined): boolean {
+  return status === "waiting" || status === "offered";
+}
+
+function buildDayStatusSummary(
+  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>,
+  dayWaitlist: Array<{ dayDate: string; status: string }>,
+): string {
+  if (dayAttendance.length === 0) {
+    return "";
+  }
+
+  const waitlistByDay = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry.status] as const));
+  const rows = dayAttendance.map((entry) => {
+    const dayLabel = entry.label ?? entry.dayDate;
+    const waitlistStatus = waitlistByDay.get(entry.dayDate);
+
+    let statusLabel = "Confirmed";
+    let statusClass = "text-bg-success";
+
+    if (waitlistStatus === "offered") {
+      statusLabel = "Spot available - review in manage page";
+      statusClass = "text-bg-info";
+    } else if (waitlistStatus === "waiting") {
+      statusLabel = "In-person still pending";
+      statusClass = "text-bg-warning";
+    } else if (entry.attendanceType === "virtual") {
+      statusLabel = "Virtual confirmed";
+    } else if (entry.attendanceType === "on_demand") {
+      statusLabel = "On-demand confirmed";
+    } else {
+      statusLabel = "In-person confirmed";
+    }
+
+    return `<li class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2"><span>${escapeHtml(dayLabel)}</span><span class="badge ${statusClass}">${escapeHtml(statusLabel)}</span></li>`;
+  }).join("");
+
+  return `
+    <div class="alert alert-warning mt-3 mb-0">
+      <p class="fw-semibold mb-2">What is confirmed right now</p>
+      <ul class="list-unstyled mb-2">${rows}</ul>
+      <p class="small mb-0">If this mix of confirmed and pending days no longer works for you, use the manage page to switch days, move to on-demand, or cancel the registration.</p>
+    </div>
+  `;
+}
+
 /**
  * Psychology applied:
  * - Peak-End Rule: the confirmation success is the emotional peak — pairing it
@@ -80,6 +128,10 @@ function showConfirmedPanel(
   const successBody   = root.dataset["successBody"]   ?? "Your calendar invite is on its way. Use the link in your confirmation email to manage your registration.";
   const waitlistTitle = root.dataset["waitlistTitle"] ?? "{firstName}, you're on the waitlist{forEvent}!";
   const waitlistBody  = root.dataset["waitlistBody"]  ?? "We have your email confirmed. We'll notify you as soon as an in-person spot becomes available. Check the email we sent you for your manage link.";
+  const partialWaitlistTitle = root.dataset["partialWaitlistTitle"] ?? "{firstName}, your registration is in place{forEvent}!";
+  const partialWaitlistBody = root.dataset["partialWaitlistBody"] ?? "Your overall registration is confirmed, but one or more selected in-person days are still pending because those rooms are at capacity right now.";
+  const activeDayWaitlist = (result.dayWaitlist ?? []).filter((entry) => isPendingDayWaitlistStatus(entry.status));
+  const hasPartialDayWaitlist = result.status === "registered" && activeDayWaitlist.length > 0;
 
   const panel = document.createElement("div");
   panel.className = "event-flow-success";
@@ -89,6 +141,13 @@ function showConfirmedPanel(
       <div class="event-flow-success-icon" aria-hidden="true">📋</div>
       <h2 class="event-flow-success-title">${escapeHtml(interpolate(waitlistTitle, firstName, eventName))}</h2>
       <p class="event-flow-success-body">${escapeHtml(interpolate(waitlistBody, firstName, eventName))}</p>
+    `;
+  } else if (hasPartialDayWaitlist) {
+    panel.innerHTML = `
+      <div class="event-flow-success-icon" aria-hidden="true">🗓️</div>
+      <h2 class="event-flow-success-title">${escapeHtml(interpolate(partialWaitlistTitle, firstName, eventName))}</h2>
+      <p class="event-flow-success-body">${escapeHtml(interpolate(partialWaitlistBody, firstName, eventName))}</p>
+      ${buildDayStatusSummary(result.dayAttendance ?? [], result.dayWaitlist ?? [])}
     `;
   } else {
     panel.innerHTML = `
@@ -108,13 +167,21 @@ function showConfirmedPanel(
 
     const quickActions = document.createElement("div");
     quickActions.className = "alert alert-light mt-3";
-    quickActions.innerHTML = `
-      <p class="mb-2"><strong>Next steps</strong></p>
-      <div class="d-flex gap-2 flex-wrap">
-        <a class="btn btn-sm btn-outline-primary" href="${escapeHtml(effectiveManageUrl ?? "")}">Manage registration</a>
-        <a class="btn btn-sm btn-outline-secondary" href="${escapeHtml(effectiveManageUrl ?? "")}#manage-headshot-file">Upload headshot</a>
-      </div>
-    `;
+    quickActions.innerHTML = hasPartialDayWaitlist
+      ? `
+        <p class="mb-2"><strong>Next steps</strong></p>
+        <p class="small mb-2">Review your confirmed and pending days, then decide whether to keep this registration, change attendance for a day, or cancel entirely.</p>
+        <div class="d-flex gap-2 flex-wrap">
+          <a class="btn btn-sm btn-outline-primary" href="${escapeHtml(effectiveManageUrl ?? "")}">Review or change registration</a>
+        </div>
+      `
+      : `
+        <p class="mb-2"><strong>Next steps</strong></p>
+        <div class="d-flex gap-2 flex-wrap">
+          <a class="btn btn-sm btn-outline-primary" href="${escapeHtml(effectiveManageUrl ?? "")}">Manage registration</a>
+          <a class="btn btn-sm btn-outline-secondary" href="${escapeHtml(effectiveManageUrl ?? "")}#manage-headshot-file">Upload headshot</a>
+        </div>
+      `;
     panel.appendChild(quickActions);
   }
 

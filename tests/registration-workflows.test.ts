@@ -6,6 +6,8 @@ import { onRequestPost as confirmEmail } from "../functions/api/v1/events/[event
 import { onRequestPost as createInvites } from "../functions/api/v1/events/[eventSlug]/invites";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
+import { getEventBySlug } from "../functions/_lib/services/events";
+import { createRegistration as createRegistrationService, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 
 function extractConfirmationToken(payloadJson: string): string {
   const payload = JSON.parse(payloadJson) as { confirmationUrl: string };
@@ -134,5 +136,85 @@ describe("registration workflows", () => {
     );
 
     expect(response.status).toBe(429);
+  });
+
+  it("returns day confirmation details when only some selected days are confirmed", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES ('day-1', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES
+          ('user-1', 'day-one@example.test', 'day-one@example.test', 'Day', 'One', datetime('now'), datetime('now')),
+          ('user-2', 'day-two@example.test', 'day-two@example.test', 'Day', 'Two', datetime('now'), datetime('now'))
+      `),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+
+    const first = await createRegistrationService(env.DB, {
+      event,
+      userId: "user-1",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: first.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+    });
+
+    const second = await createRegistrationService(env.DB, {
+      event,
+      userId: "user-2",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+
+    const confirmResponse = await confirmEmail(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token: second.confirmationToken }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+
+    expect(confirmResponse.status).toBe(200);
+    const payload = await confirmResponse.json() as {
+      status: string;
+      dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+      dayWaitlist: Array<{
+        dayDate: string;
+        status: string;
+        priorityLane: string;
+        offerExpiresAt: string | null;
+      }>;
+      manageUrl: string;
+    };
+
+    expect(payload.status).toBe("registered");
+    expect(payload.dayAttendance).toEqual([
+      { dayDate: "2026-12-01", attendanceType: "in_person", label: "Day 1" },
+    ]);
+    expect(payload.dayWaitlist).toEqual([
+      {
+        dayDate: "2026-12-01",
+        status: "waiting",
+        priorityLane: "general",
+        offerExpiresAt: null,
+      },
+    ]);
+    expect(payload.manageUrl).toContain("/register/manage/");
   });
 });
