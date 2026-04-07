@@ -39,7 +39,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, resendConfirmationSchema);
 
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   // Look up the registration by the (possibly-expired) confirmation token.
   // The token hash is cleared when confirmed, so a used token naturally returns 404.
@@ -107,6 +107,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const outboxId = await queueEmail(c.env.DB, {
     eventId: event.id,
+    baseUrl: appBaseUrl,
     templateKey: "registration_confirm_email",
     recipientEmail: user.email,
     recipientUserId: user.id,

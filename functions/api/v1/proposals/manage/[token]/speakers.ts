@@ -55,7 +55,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   if (!event) {
     return json({ error: { code: "EVENT_NOT_FOUND", message: "Event not found" } }, 404);
   }
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   const speakerUser = await findOrCreateUser(c.env.DB, {
     email: body.email,

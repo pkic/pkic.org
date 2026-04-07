@@ -81,7 +81,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
       job_title: string | null;
     }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [updated.user_id]);
     if (event && user) {
-      const appBaseUrl = resolveAppBaseUrl(c.env);
+      const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
       const manageUrl = registrationManagePageUrl(appBaseUrl, event, token);
       const templateKey = body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated";
       const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
@@ -157,7 +157,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
 
     // Derive public headshot URL from R2 key (format: headshots/{userId}/{filename})
-    const appBaseUrl = resolveAppBaseUrl(c.env);
+    const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
     let headshotUrl: string | null = null;
     if (user?.headshot_r2_key) {
       const parts = user.headshot_r2_key.split("/");

@@ -46,7 +46,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   const config = getConfig(c.env, c.req.raw);
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const maxAllowed = event.invite_limit_speaker_nomination ?? config.inviteLimitSpeakerNomination;
 
   // Look up nominator's full name — the key social-proof ingredient.

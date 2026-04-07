@@ -165,7 +165,7 @@ describe("POST /api/v1/donations/checkout", () => {
     return {
       DB: makeDbStub(),
       ASSETS_BUCKET: {} as Env["ASSETS_BUCKET"],
-      CF_PAGES_URL: "https://pkic.org",
+      APP_BASE_URL: "https://pkic.org",
       DEFAULT_MIN_PROPOSAL_REVIEWS: "2",
       DEFAULT_REFERRAL_CODE_LENGTH: "7",
       DEFAULT_INVITE_LIMIT_PER_ATTENDEE: "5",
@@ -184,8 +184,12 @@ describe("POST /api/v1/donations/checkout", () => {
     };
   }
 
-  function makeRequest(body: unknown, headers: Record<string, string> = {}): Request {
-    return new Request("https://pkic.org/api/v1/donations/checkout", {
+  function makeRequest(
+    body: unknown,
+    headers: Record<string, string> = {},
+    url = "https://pkic.org/api/v1/donations/checkout",
+  ): Request {
+    return new Request(url, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -434,22 +438,19 @@ describe("POST /api/v1/donations/checkout", () => {
     expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining("checkout_session_id"));
   });
 
-  it("uses the Pages branch alias when CF_PAGES_BRANCH is set", async () => {
+  it("uses the configured app base URL for preview deployments", async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
       new Response(JSON.stringify({ id: "cs_test_branch", url: "https://checkout.stripe.com/c/pay_branch" }), { status: 200 }),
     );
 
-    const env = makeEnv({
-      CF_PAGES_URL: "https://39431008.pkic.pages.dev",
-      CF_PAGES_BRANCH: "events",
-    });
+    const env = makeEnv({ APP_BASE_URL: "https://events.pkic.pages.dev" });
     const ctx = makeContext(env, makeRequest({
       amount: 10000,
       currency: "usd",
       name: "Branch Alias Donor",
     }, {
       origin: "https://events.pkic.pages.dev",
-    }));
+    }, "https://events.pkic.pages.dev/api/v1/donations/checkout"));
 
     const response = await callEndpoint(ctx);
     expect(response.status).toBe(200);
@@ -593,7 +594,6 @@ describe("POST /api/v1/webhooks/stripe", () => {
     return {
       DB: db,
       ASSETS_BUCKET: {} as Env["ASSETS_BUCKET"],
-      CF_PAGES_URL: "https://pkic.org",
       DEFAULT_MIN_PROPOSAL_REVIEWS: "2",
       DEFAULT_REFERRAL_CODE_LENGTH: "7",
       DEFAULT_INVITE_LIMIT_PER_ATTENDEE: "5",
@@ -793,7 +793,6 @@ describe("GET /api/v1/donations/session", () => {
     return {
       DB: db,
       ASSETS_BUCKET: {} as Env["ASSETS_BUCKET"],
-      CF_PAGES_URL: "https://pkic.org",
       DEFAULT_MIN_PROPOSAL_REVIEWS: "2",
       DEFAULT_REFERRAL_CODE_LENGTH: "7",
       DEFAULT_INVITE_LIMIT_PER_ATTENDEE: "5",

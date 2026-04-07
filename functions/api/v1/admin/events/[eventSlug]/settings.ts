@@ -9,12 +9,13 @@
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { getEventBySlug } from "../../../../../_lib/services/events";
+import { getEventBySlug, normalizeEventHeroImageUrl } from "../../../../../_lib/services/events";
 import { run, first } from "../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { parseJsonSafe, stringifyJson } from "../../../../../_lib/utils/json";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { adminEventSettingsSchema } from "../../../../../../assets/shared/schemas/api";
+import { resolveAppBaseUrl } from "../../../../../_lib/config";
 
 export async function onRequestPatch(
   c: any,
@@ -38,7 +39,7 @@ export async function onRequestPatch(
   }
   if (body.heroImageUrl !== undefined) {
     if (body.heroImageUrl === null) { delete updatedSettings["heroImageUrl"]; }
-    else { updatedSettings["heroImageUrl"] = body.heroImageUrl; }
+    else { updatedSettings["heroImageUrl"] = normalizeEventHeroImageUrl(body.heroImageUrl, resolveAppBaseUrl(c.env, c.req.raw)); }
   }
   if (body.location !== undefined) {
     if (body.location === null) { delete updatedSettings["location"]; }

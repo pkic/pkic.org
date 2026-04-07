@@ -71,7 +71,7 @@ export async function onRequestPost(
     { r2Key, gravatarHash: emailHash },
   );
 
-  const origin = resolveAppBaseUrl(c.env);
+  const origin = resolveAppBaseUrl(c.env, c.req.raw);
   c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, origin));
 
   return json({ success: true, r2Key, source: "gravatar" });

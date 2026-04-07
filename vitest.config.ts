@@ -16,7 +16,7 @@ export default defineConfig(async () => {
           // the pre-read migrations array for the apply-migrations setup file.
           bindings: {
             TEST_MIGRATIONS: migrations,
-            CF_PAGES_URL: "https://app.test",
+            APP_BASE_URL: "https://app.test",
             INTERNAL_SIGNING_SECRET: "test-signing-secret",
             SENDGRID_API_KEY: "test-key",
             FEEDBACK_IDENTITY_SECRET_V1: "feedback-secret",

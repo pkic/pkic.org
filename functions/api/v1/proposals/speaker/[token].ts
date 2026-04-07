@@ -26,6 +26,7 @@ import { getRequiredTerms } from "../../../../_lib/services/events";
 import { persistConsents, validateRequiredConsents } from "../../../../_lib/services/consent";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { requireInternalSecret } from "../../../../_lib/request";
+import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { z } from "zod";
 
 const speakerActionSchema = z.discriminatedUnion("action", [
@@ -57,6 +58,7 @@ const speakerProfileSchema = z.object({
 
 export async function onRequestGet(c: any): Promise<Response> {
   try {
+    const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
     const { speaker, proposal, user } = await getSpeakerByManageToken(
       c.env.DB,
       c.req.param("token"),
@@ -89,7 +91,7 @@ export async function onRequestGet(c: any): Promise<Response> {
         headshotUploaded: Boolean(user.headshot_r2_key),
         headshotUpdatedAt: user.headshot_updated_at,
         headshotUrl: user.headshot_r2_key
-          ? `${new URL(c.req.raw.url).origin}/api/v1/proposals/speaker/${encodeURIComponent(c.req.param("token"))}/headshot?v=${encodeURIComponent(user.headshot_updated_at ?? "")}`
+          ? `${appBaseUrl}/api/v1/proposals/speaker/${encodeURIComponent(c.req.param("token"))}/headshot?v=${encodeURIComponent(user.headshot_updated_at ?? "")}`
           : null,
       },
     });

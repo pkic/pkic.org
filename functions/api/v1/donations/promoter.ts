@@ -70,7 +70,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     [donation.id],
   );
   if (existing) {
-    return respondWithCode(existing.code, sessionId, resolveAppBaseUrl(env));
+    return respondWithCode(existing.code, sessionId, resolveAppBaseUrl(env, request));
   }
 
   // Generate a new unique code
@@ -87,7 +87,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       [code, donation.id, sessionId, firstName, nowIso()],
     );
 
-    return respondWithCode(code, sessionId, resolveAppBaseUrl(env));
+    return respondWithCode(code, sessionId, resolveAppBaseUrl(env, request));
   }
 
   return json({ error: { code: "INTERNAL_ERROR", message: "Unable to generate unique share code" } }, 500);

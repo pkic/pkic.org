@@ -57,7 +57,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   // Valid invite — fetch event details to build the registration URL
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const event = await first<EventRow>(
     c.env.DB,
     "SELECT id, name, slug, base_path, starts_at, settings_json FROM events WHERE id = ?",

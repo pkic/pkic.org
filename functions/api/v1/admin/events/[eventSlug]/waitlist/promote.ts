@@ -13,7 +13,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const config = getConfig(c.env, c.req.raw);
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   const affectedRegistrations = new Set<string>();
   let wholeRegistrationOffers = 0;

@@ -30,7 +30,7 @@ function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
 export async function onRequestPost(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEmailTemplatePreviewSchema);
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   const data = {
     ...buildDefaultPreviewData(appBaseUrl),

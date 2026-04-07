@@ -55,7 +55,7 @@ export async function onRequestPost(
     throw new AppError(409, "INVITE_REVOKED", "Cannot resend a revoked invite");
   }
 
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const token = await refreshInviteToken(c.env.DB, invite.id);
   const declineUrl = inviteDeclineUrl(appBaseUrl, event, token);
 

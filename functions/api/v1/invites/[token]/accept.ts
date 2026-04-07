@@ -18,7 +18,7 @@ import { requireInternalSecret } from "../../../../_lib/request";
 export async function onRequestPost(c: any): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
   const signingSecret = requireInternalSecret(c.env);
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const invite = await findInviteByToken(c.env.DB, c.req.param("token"));
   const event = await first<{ id: string; slug: string; base_path: string | null; starts_at: string | null; name: string; settings_json: string }>(
     c.env.DB,

@@ -10,6 +10,7 @@ import { renderEmail, renderSubject } from "./render";
 import { loadEmailLayout, loadEmailPartials } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
+import { parseQueuedEmailAttachments, type QueuedEmailAttachment } from "./attachments";
 import type { DatabaseLike, Env } from "../types";
 
 interface OutboxRow {
@@ -44,10 +45,66 @@ function getOutboxStatusForRetry(attempts: number): "retrying" | "failed" {
   return attempts >= 5 ? "failed" : "retrying";
 }
 
+function resolveEmailBaseUrl(payload: Record<string, unknown>, env: Env): string {
+  if (typeof payload.__baseUrl === "string" && payload.__baseUrl) {
+    const explicitBaseUrl = payload.__baseUrl;
+    return explicitBaseUrl;
+  }
+
+  return resolveAppBaseUrl(env);
+}
+
+function sniffImageAttachmentFormat(contentType: string, bytes: Uint8Array): { contentType: string; ext: string } {
+  const declaredType = contentType.split(";")[0]?.trim().toLowerCase() || "image/jpeg";
+
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return { contentType: "image/jpeg", ext: "jpg" };
+  }
+
+  if (
+    bytes.length >= 8
+    && bytes[0] === 0x89
+    && bytes[1] === 0x50
+    && bytes[2] === 0x4e
+    && bytes[3] === 0x47
+    && bytes[4] === 0x0d
+    && bytes[5] === 0x0a
+    && bytes[6] === 0x1a
+    && bytes[7] === 0x0a
+  ) {
+    return { contentType: "image/png", ext: "png" };
+  }
+
+  if (
+    bytes.length >= 12
+    && bytes[0] === 0x52
+    && bytes[1] === 0x49
+    && bytes[2] === 0x46
+    && bytes[3] === 0x46
+    && bytes[8] === 0x57
+    && bytes[9] === 0x45
+    && bytes[10] === 0x42
+    && bytes[11] === 0x50
+  ) {
+    return { contentType: "image/webp", ext: "webp" };
+  }
+
+  if (declaredType === "image/png") {
+    return { contentType: "image/png", ext: "png" };
+  }
+
+  if (declaredType === "image/webp") {
+    return { contentType: "image/webp", ext: "webp" };
+  }
+
+  return { contentType: "image/jpeg", ext: "jpg" };
+}
+
 export async function queueEmail(
   db: DatabaseLike,
   payload: {
     eventId?: string | null;
+    baseUrl?: string;
     templateKey: string;
     recipientUserId?: string | null;
     recipientEmail: string;
@@ -55,6 +112,7 @@ export async function queueEmail(
     data: Record<string, unknown>;
     messageType: "transactional" | "promotional";
     calendar?: CalendarPayload;
+    attachments?: QueuedEmailAttachment[];
     /** Delay delivery by this many seconds (e.g. to let OG badge rendering finish). */
     sendAfterSeconds?: number;
   },
@@ -62,8 +120,16 @@ export async function queueEmail(
   const id = uuid();
   const data = { ...payload.data } as Record<string, unknown>;
 
+  if (typeof payload.baseUrl === "string" && payload.baseUrl) {
+    data.__baseUrl = payload.baseUrl;
+  }
+
   if (payload.calendar) {
     data.__calendarInvite = payload.calendar;
+  }
+
+  if (payload.attachments && payload.attachments.length > 0) {
+    data.__attachments = payload.attachments;
   }
 
   const sendAfter = payload.sendAfterSeconds && payload.sendAfterSeconds > 0
@@ -147,6 +213,7 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
 
   try {
     const payload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
+    const emailBaseUrl = resolveEmailBaseUrl(payload, env);
     const partials = await loadEmailPartials(db);
     const layoutHtml = await loadEmailLayout(db);
     const dataWithPartials = { ...payload, _partials: partials };
@@ -174,7 +241,7 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
       contentWithCustom = applyCampaignCustomText(template.content, resolvedContentType, customText);
       subject = renderSubject(template.subjectTemplate, row.subject ?? "PKI Consortium Update", dataWithPartials);
     }
-    const rendered = await renderEmail(contentWithCustom, dataWithPartials, layoutHtml, resolvedContentType, resolveAppBaseUrl(env));
+    const rendered = await renderEmail(contentWithCustom, dataWithPartials, layoutHtml, resolvedContentType, emailBaseUrl);
 
     let attachments: Array<{ filename: string; contentType: string; base64Content: string }> | undefined;
     const calendar = payload.__calendarInvite as CalendarPayload | undefined;
@@ -196,24 +263,24 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
     // (same 1200×630 as the OG image, JPEG q85 — ~80–90 % smaller than PNG).
     // In local dev (no IMAGES binding) it may fall back to PNG — we read the
     // content-type from the R2 object's httpMetadata to use the correct extension.
-    const badgeCode = payload.__badgeCode as string | undefined;
-    if (badgeCode && env.ASSETS_BUCKET) {
+    const badgeAttachments = parseQueuedEmailAttachments(payload);
+    if (badgeAttachments.length > 0 && env.ASSETS_BUCKET) {
       try {
-        const firstName = (payload.firstName as string | undefined) ?? "";
-        const lastName  = (payload.lastName  as string | undefined) ?? "";
-        const namePart  = [firstName, lastName].filter(Boolean).join("-").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+        for (const badgeAttachment of badgeAttachments) {
+          const badgeObj = await env.ASSETS_BUCKET.get(badgeAttachment.r2Key);
+          if (!badgeObj) {
+            continue;
+          }
 
-        const badgeObj = await env.ASSETS_BUCKET.get(`og-badges/${badgeCode}`);
-        if (badgeObj) {
-          const contentType   = badgeObj.httpMetadata?.contentType ?? "image/jpeg";
-          const ext           = contentType === "image/png" ? "png" : contentType === "image/webp" ? "webp" : "jpg";
+          const declaredType  = badgeObj.httpMetadata?.contentType ?? "image/jpeg";
           const buf           = await badgeObj.arrayBuffer();
-          const base64        = btoa(Array.from(new Uint8Array(buf), (b) => String.fromCharCode(b)).join(""));
-          const baseName      = namePart ? `attendee-badge-${namePart}` : "attendee-badge";
-          const badgeFilename = `${baseName}.${ext}`;
+          const bytes         = new Uint8Array(buf);
+          const format        = sniffImageAttachmentFormat(declaredType, bytes);
+          const base64        = btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(""));
+          const badgeFilename = `${badgeAttachment.filenameBase}.${format.ext}`;
           attachments = [
             ...(attachments ?? []),
-            { filename: badgeFilename, contentType, base64Content: base64 },
+            { filename: badgeFilename, contentType: format.contentType, base64Content: base64 },
           ];
         }
       } catch {

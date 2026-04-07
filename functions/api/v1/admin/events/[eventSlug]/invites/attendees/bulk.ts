@@ -24,7 +24,7 @@ export async function onRequestPost(
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminBulkAttendeeInvitesSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const secret = requireInternalSecret(c.env);
 
   const inviteDigest = await computeAttendeeInviteDigest(body.invites);

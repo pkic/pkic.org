@@ -1,13 +1,17 @@
 import { describe, it, expect, vi, beforeEach} from "vitest";
 import { resetDb } from "./helpers/reset-db";
-import { env } from "cloudflare:workers";
+import { env as workerEnv } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll, createContext } from "./helpers/context";
 import { createReferralCode } from "../functions/_lib/services/referrals";
 import { onRequestGet as referralRedirect } from "../functions/r/[code]";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { updateRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
+import { buildBadgeAttachment } from "../functions/_lib/email/attachments";
 import { queueEmail, processOutboxById } from "../functions/_lib/email/outbox";
+import type { Env } from "../functions/_lib/types";
+
+const env = workerEnv as unknown as Env;
 
 describe("referral, waitlist, and calendar flows", () => {
   beforeEach(async () => { await resetDb(); });
@@ -200,5 +204,272 @@ describe("referral, waitlist, and calendar flows", () => {
     expect(outboxRows).toHaveLength(1);
     expect(outboxRows[0].status).toBe("sent");
     expect(outboxRows[0].provider_message_id).toBe("msg-123");
+  });
+
+  it("uses the payload URL origin for email layout assets during background send", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    const admin = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users LIMIT 1")))[0];
+
+    const layout = await createTemplateVersion(env.DB, {
+      templateKey: "email_layout",
+      content: '<img src="{{baseUrl}}/img/logo-white.png" alt="PKIC"> {{{body_html}}}',
+      createdByUserId: admin.id,
+      subjectTemplate: "Email layout",
+    });
+    await activateTemplateVersion(env.DB, {
+      templateKey: "email_layout",
+      version: layout.version,
+    });
+
+    for (const [templateKey, content, subjectTemplate] of [
+      ["partial_reg_details", "Registration details", "Partial: registration details"],
+      ["partial_sponsors_block", "Sponsors block", "Partial: sponsors block"],
+      ["partial_about_pkic", "About PKIC", "Partial: about PKIC"],
+      ["partial_donation_request", "Donation request", "Partial: donation request"],
+    ] as const) {
+      const partial = await createTemplateVersion(env.DB, {
+        templateKey,
+        content,
+        createdByUserId: admin.id,
+        subjectTemplate,
+      });
+      await activateTemplateVersion(env.DB, {
+        templateKey,
+        version: partial.version,
+      });
+    }
+
+    const template = await createTemplateVersion(env.DB, {
+      templateKey: "registration_confirm_email",
+      content: "Confirm here: [confirm]({{confirmationUrl}})",
+      createdByUserId: admin.id,
+      subjectTemplate: "Confirm: {{eventName}}",
+    });
+    await activateTemplateVersion(env.DB, {
+      templateKey: "registration_confirm_email",
+      version: template.version,
+    });
+
+    const outboxId = await queueEmail(env.DB, {
+      eventId,
+      baseUrl: "https://preview.pkic.org",
+      templateKey: "registration_confirm_email",
+      recipientEmail: "confirm@example.test",
+       recipientUserId: null,
+      subject: "Confirm",
+      messageType: "transactional",
+      data: {
+        eventName: "PQC Conference 2026",
+        confirmationUrl: "https://preview.pkic.org/events/test/confirm/?token=abc",
+      },
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 202,
+        headers: { "x-message-id": "msg-456" },
+      }),
+    );
+
+    vi.stubGlobal("fetch", fetchMock);
+    await processOutboxById(env.DB, env, outboxId);
+    vi.unstubAllGlobals();
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit | undefined];
+    const sendgridPayload = JSON.parse(String(requestInit?.body ?? "{}")) as {
+      content?: Array<{ type?: string; value?: string }>;
+    };
+    const htmlContent = (sendgridPayload.content ?? []).find((item) => item.type === "text/html")?.value ?? "";
+
+    expect(htmlContent).toContain('https://preview.pkic.org/img/logo-white.png');
+    expect(htmlContent).toContain('https://preview.pkic.org/events/test/confirm/?token=abc');
+    expect(htmlContent).not.toContain('http://localhost/img/logo-white.png');
+  });
+
+  it("attaches donation badges with a donation-specific filename and corrected jpeg extension", async () => {
+    await seedEventAndAdmin(env.DB);
+    const admin = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users LIMIT 1")))[0];
+
+    const layout = await createTemplateVersion(env.DB, {
+      templateKey: "email_layout",
+      content: "{{{body_html}}}",
+      createdByUserId: admin.id,
+      subjectTemplate: "Email layout",
+    });
+    await activateTemplateVersion(env.DB, {
+      templateKey: "email_layout",
+      version: layout.version,
+    });
+
+    for (const [templateKey, content, subjectTemplate] of [
+      ["partial_reg_details", "Registration details", "Partial: registration details"],
+      ["partial_sponsors_block", "Sponsors block", "Partial: sponsors block"],
+      ["partial_about_pkic", "About PKIC", "Partial: about PKIC"],
+      ["partial_donation_request", "Donation request", "Partial: donation request"],
+    ] as const) {
+      const partial = await createTemplateVersion(env.DB, {
+        templateKey,
+        content,
+        createdByUserId: admin.id,
+        subjectTemplate,
+      });
+      await activateTemplateVersion(env.DB, {
+        templateKey,
+        version: partial.version,
+      });
+    }
+
+    const template = await createTemplateVersion(env.DB, {
+      templateKey: "donation_thank_you",
+      content: "Thanks {{name}}",
+      createdByUserId: admin.id,
+      subjectTemplate: "Thanks {{firstName}}",
+    });
+    await activateTemplateVersion(env.DB, {
+      templateKey: "donation_thank_you",
+      version: template.version,
+    });
+
+    const outboxId = await queueEmail(env.DB, {
+      templateKey: "donation_thank_you",
+      recipientEmail: "donor@example.test",
+      recipientUserId: null,
+      subject: "Thanks",
+      messageType: "transactional",
+      attachments: [
+        buildBadgeAttachment({
+          badgeCode: "donation-cs_test_123",
+          badgeType: "donation",
+          firstName: "Ada",
+          name: "Ada Lovelace",
+        }),
+      ],
+      data: {
+        firstName: "Ada",
+        name: "Ada Lovelace",
+      },
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 202,
+        headers: { "x-message-id": "msg-789" },
+      }),
+    );
+
+    const testEnv = {
+      ...env,
+      ASSETS_BUCKET: {
+        get: vi.fn().mockResolvedValue({
+          httpMetadata: { contentType: "image/png" },
+          arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array([0xff, 0xd8, 0xff, 0xe0]).buffer),
+        }),
+      },
+    };
+
+    vi.stubGlobal("fetch", fetchMock);
+    await processOutboxById(env.DB, testEnv as unknown as Env, outboxId);
+    vi.unstubAllGlobals();
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit | undefined];
+    const sendgridPayload = JSON.parse(String(requestInit?.body ?? "{}")) as {
+      attachments?: Array<{ filename?: string; type?: string }>;
+    };
+    const badgeAttachment = (sendgridPayload.attachments ?? []).find((item) => item.type === "image/jpeg");
+
+    expect(badgeAttachment?.filename).toBe("donation-badge-ada.jpg");
+  });
+
+  it("attaches attendee badges from queued attachment descriptors", async () => {
+    await seedEventAndAdmin(env.DB);
+    const admin = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users LIMIT 1")))[0];
+
+    const layout = await createTemplateVersion(env.DB, {
+      templateKey: "email_layout",
+      content: "{{{body_html}}}",
+      createdByUserId: admin.id,
+      subjectTemplate: "Email layout",
+    });
+    await activateTemplateVersion(env.DB, {
+      templateKey: "email_layout",
+      version: layout.version,
+    });
+
+    for (const [templateKey, content, subjectTemplate] of [
+      ["partial_reg_details", "Registration details", "Partial: registration details"],
+      ["partial_sponsors_block", "Sponsors block", "Partial: sponsors block"],
+      ["partial_about_pkic", "About PKIC", "Partial: about PKIC"],
+      ["partial_donation_request", "Donation request", "Partial: donation request"],
+    ] as const) {
+      const partial = await createTemplateVersion(env.DB, {
+        templateKey,
+        content,
+        createdByUserId: admin.id,
+        subjectTemplate,
+      });
+      await activateTemplateVersion(env.DB, {
+        templateKey,
+        version: partial.version,
+      });
+    }
+
+    const template = await createTemplateVersion(env.DB, {
+      templateKey: "registration_confirmed",
+      content: "Thanks {{firstName}}",
+      createdByUserId: admin.id,
+      subjectTemplate: "Welcome {{firstName}}",
+    });
+    await activateTemplateVersion(env.DB, {
+      templateKey: "registration_confirmed",
+      version: template.version,
+    });
+
+    const outboxId = await queueEmail(env.DB, {
+      templateKey: "registration_confirmed",
+      recipientEmail: "attendee@example.test",
+      recipientUserId: null,
+      subject: "Welcome",
+      messageType: "transactional",
+      attachments: [
+        buildBadgeAttachment({
+          badgeCode: "event_ref_123",
+          badgeType: "attendee",
+          firstName: "Paul",
+        }),
+      ],
+      data: {
+        firstName: "Paul",
+      },
+    });
+
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(null, {
+        status: 202,
+        headers: { "x-message-id": "msg-790" },
+      }),
+    );
+
+    const testEnv = {
+      ...env,
+      ASSETS_BUCKET: {
+        get: vi.fn().mockResolvedValue({
+          httpMetadata: { contentType: "image/png" },
+          arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer),
+        }),
+      },
+    };
+
+    vi.stubGlobal("fetch", fetchMock);
+    await processOutboxById(env.DB, testEnv as unknown as Env, outboxId);
+    vi.unstubAllGlobals();
+
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit | undefined];
+    const sendgridPayload = JSON.parse(String(requestInit?.body ?? "{}")) as {
+      attachments?: Array<{ filename?: string; type?: string }>;
+    };
+    const badgeAttachment = (sendgridPayload.attachments ?? []).find((item) => item.type === "image/png");
+
+    expect(badgeAttachment?.filename).toBe("attendee-badge-paul.png");
   });
 });

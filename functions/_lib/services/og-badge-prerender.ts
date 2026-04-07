@@ -18,6 +18,11 @@ import { first, all } from "../db/queries";
 import { fetchGravatar } from "../utils/gravatar";
 import type { Env } from "../types";
 
+type StaticAssetEnv = Pick<Env, "ASSETS" | "ASSETS_PUBLIC">;
+type BadgeRenderEnv = Pick<Env, "DB" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">;
+type BadgeCacheEnv = Pick<Env, "DB" | "ASSETS_BUCKET" | "IMAGES" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC">;
+type DonationRenderEnv = Pick<Env, "DB" | "ASSETS" | "ASSETS_PUBLIC">;
+
 // ─── WASM + font singletons (shared for the lifetime of the worker isolate) ──
 
 let wasmReady: Promise<typeof import("@resvg/resvg-wasm")["Resvg"]> | null = null;
@@ -38,14 +43,60 @@ function ensureWasm(): Promise<typeof import("@resvg/resvg-wasm")["Resvg"]> {
 
 let fontBuffersCache: Promise<Uint8Array[]> | null = null;
 
-function getFontBuffers(origin: string): Promise<Uint8Array[]> {
+function isLoopbackHostname(hostname: string): boolean {
+  const normalized = hostname.toLowerCase();
+  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
+}
+
+function getAssetBinding(env: StaticAssetEnv): Env["ASSETS"] | Env["ASSETS_PUBLIC"] | undefined {
+  return env.ASSETS ?? env.ASSETS_PUBLIC;
+}
+
+async function fetchStaticAsset(env: StaticAssetEnv, origin: string, path: string): Promise<Response> {
+  const request = new Request(new URL(path, origin).toString());
+  const binding = getAssetBinding(env);
+  if (binding) {
+    return binding.fetch(request);
+  }
+  return fetch(request);
+}
+
+function resolveHeroImageSource(raw: string, origin: string): { url: string; assetPath: string | null } {
+  const trimmed = raw.trim();
+  if (trimmed.startsWith("/")) {
+    return {
+      url: new URL(trimmed, origin).toString(),
+      assetPath: trimmed,
+    };
+  }
+
+  try {
+    const url = new URL(trimmed);
+    const appOrigin = new URL(origin).origin;
+    if (url.origin === appOrigin || isLoopbackHostname(url.hostname)) {
+      const assetPath = `${url.pathname}${url.search}${url.hash}`;
+      return {
+        url: new URL(assetPath, origin).toString(),
+        assetPath,
+      };
+    }
+    return { url: url.toString(), assetPath: null };
+  } catch {
+    return {
+      url: new URL(trimmed, origin).toString(),
+      assetPath: trimmed.startsWith("/") ? trimmed : `/${trimmed.replace(/^\/+/, "")}`,
+    };
+  }
+}
+
+function getFontBuffers(origin: string, env: StaticAssetEnv): Promise<Uint8Array[]> {
   if (!fontBuffersCache) {
     const p = Promise.all([
-      fetch(`${origin}/fonts/Roboto-Regular.ttf`)
+      fetchStaticAsset(env, origin, "/fonts/Roboto-Regular.ttf")
         .then((r) => (r.ok ? r.arrayBuffer() : new ArrayBuffer(0)))
         .catch(() => new ArrayBuffer(0))
         .then((b) => new Uint8Array(b)),
-      fetch(`${origin}/fonts/Roboto-Bold.ttf`)
+      fetchStaticAsset(env, origin, "/fonts/Roboto-Bold.ttf")
         .then((r) => (r.ok ? r.arrayBuffer() : new ArrayBuffer(0)))
         .catch(() => new ArrayBuffer(0))
         .then((b) => new Uint8Array(b)),
@@ -90,20 +141,33 @@ function extractHeroImageUrl(settingsJson: string): string | null {
   return null;
 }
 
-async function fetchHeroImage(settingsJson: string, origin: string): Promise<string | null> {
+async function fetchHeroImage(settingsJson: string, origin: string, env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">): Promise<string | null> {
   const raw = extractHeroImageUrl(settingsJson);
   if (!raw) return null;
-  const url = raw.startsWith("/") ? `${origin}${raw}` : raw;
+  const source = resolveHeroImageSource(raw, origin);
   try {
-    // Resize to badge dimensions and convert to JPEG before embedding.
-    // The hero is used as a dark-overlaid full-bleed background so quality 60
-    // is indistinguishable from the original at this display size.
-    // The `cf.image` option is a Cloudflare Worker-specific extension to fetch();
-    // it is silently ignored in non-CF environments (local dev) so no cast needed
-    // at runtime, but TypeScript doesn't know about it — hence the assertion.
-    const res = await fetch(url, {
-      cf: { image: { width: 1200, height: 630, fit: "cover", format: "jpeg", quality: 60 } },
-    } as unknown as RequestInit);
+    let res: Response;
+    if (source.assetPath) {
+      res = await fetchStaticAsset(env, origin, source.assetPath);
+      if (!res.ok) return null;
+
+      if (env.IMAGES && res.body) {
+        const transformed = await env.IMAGES.input(res.body)
+          .transform({ width: 1200, height: 630, fit: "cover" })
+          .output({ format: "jpeg", quality: 60 });
+        res = await transformed.response();
+      }
+    } else {
+      // Resize to badge dimensions and convert to JPEG before embedding.
+      // The hero is used as a dark-overlaid full-bleed background so quality 60
+      // is indistinguishable from the original at this display size.
+      // The `cf.image` option is a Cloudflare Worker-specific extension to fetch();
+      // it is silently ignored in non-CF environments (local dev) so no cast needed
+      // at runtime, but TypeScript doesn't know about it — hence the assertion.
+      res = await fetch(source.url, {
+        cf: { image: { width: 1200, height: 630, fit: "cover", format: "jpeg", quality: 60 } },
+      } as unknown as RequestInit);
+    }
     if (!res.ok) return null;
     const buf  = await res.arrayBuffer();
     const ct   = res.headers.get("content-type") ?? "image/jpeg";
@@ -173,13 +237,13 @@ const R2_KEY_PREFIX = "og-badges/";
  */
 export async function generateBadgePng(
   code: string,
-  env: Pick<Env, "DB" | "SPEAKER_UPLOADS_BUCKET">,
+  env: BadgeRenderEnv,
   origin: string,
 ): Promise<Uint8Array | null> {
   // Kick off wasm init + fonts + referral lookup together.
   const [, fontBuffers, ref] = await Promise.all([
     ensureWasm(),
-    getFontBuffers(origin),
+    getFontBuffers(origin, env),
     first<ReferralCodeRow>(
       env.DB,
       "SELECT event_id, owner_type, owner_id, created_by_user_id FROM referral_codes WHERE code = ?",
@@ -233,7 +297,7 @@ export async function generateBadgePng(
 
     const [headshotDataUrl, heroImageDataUrl] = await Promise.all([
       fetchHeadshot(row.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
-      fetchHeroImage(row.settings_json, origin),
+      fetchHeroImage(row.settings_json, origin, env),
     ]);
 
     svg = renderBadgeSvg({
@@ -273,7 +337,7 @@ export async function generateBadgePng(
 
     const [headshotDataUrl, heroImageDataUrl] = await Promise.all([
       fetchHeadshot(row.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
-      fetchHeroImage(row.settings_json, origin),
+      fetchHeroImage(row.settings_json, origin, env),
     ]);
 
     svg = renderBadgeSvg({
@@ -347,7 +411,7 @@ async function pngToR2(
  */
 export async function prerenderAndCache(
   code: string,
-  env: Pick<Env, "DB" | "ASSETS_BUCKET" | "IMAGES" | "SPEAKER_UPLOADS_BUCKET">,
+  env: BadgeCacheEnv,
   origin: string,
 ): Promise<void> {
   try {
@@ -366,7 +430,7 @@ export async function prerenderAndCache(
  */
 export async function invalidateAndRerender(
   userId: string,
-  env: Pick<Env, "DB" | "ASSETS_BUCKET" | "SPEAKER_UPLOADS_BUCKET">,
+  env: BadgeCacheEnv,
   origin: string,
 ): Promise<void> {
   try {
@@ -389,7 +453,7 @@ export async function trySeedGravatarThenPrerender(
   userId: string,
   email: string,
   referralCode: string,
-  env: Pick<Env, "DB" | "ASSETS_BUCKET" | "SPEAKER_UPLOADS_BUCKET">,
+  env: BadgeCacheEnv,
   origin: string,
 ): Promise<void> {
   try {
@@ -415,12 +479,12 @@ interface DonationRow {
  */
 export async function generateDonationBadgePng(
   sessionId: string,
-  env: Pick<Env, "DB">,
+  env: DonationRenderEnv,
   origin: string,
 ): Promise<Uint8Array | null> {
   const [Resvg, fontBuffers, donationRow] = await Promise.all([
     ensureWasm(),
-    getFontBuffers(origin),
+    getFontBuffers(origin, env),
     first<DonationRow>(
       env.DB,
       `SELECT name, gross_amount, currency
@@ -472,8 +536,8 @@ export async function generateDonationBadgePng(
  * the IMAGES or ASSETS_BUCKET bindings are absent (e.g. local dev without R2).
  *
  * Call this before queueing the thank-you email so the badge is already in R2
- * when `processOutboxById` looks it up. Pass `__badgeCode: `donation-${sessionId}``
- * in the email data so the outbox attaches it automatically.
+ * when `processOutboxById` looks it up. Queue a badge attachment descriptor
+ * pointing at `og-badges/donation-${sessionId}` so the outbox can attach it.
  */
 export async function prerenderDonationBadge(
   sessionId: string,

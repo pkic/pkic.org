@@ -24,7 +24,7 @@ export async function onRequestPost(
   const body = await parseJsonBody(c.req, adminEventCampaignSendSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const secret = requireInternalSecret(c.env);
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   const recipients = await listCampaignRecipients(c.env.DB, event.id, {
     audience: body.filter.audience,

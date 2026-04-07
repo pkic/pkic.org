@@ -12,7 +12,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
 
   const cycle = await runReminderCycle(c.env.DB, {
-    appBaseUrl: resolveAppBaseUrl(c.env),
+    appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
     reminderIntervalDays: config.reminderIntervalDays,
     maxInviteReminders: config.maxInviteReminders,
     maxPresentationReminders: config.maxPresentationReminders,

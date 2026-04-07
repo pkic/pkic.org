@@ -12,6 +12,7 @@ import { first, run } from "../../../../../../../_lib/db/queries";
 import { randomToken, sha256Hex } from "../../../../../../../_lib/utils/crypto";
 import { nowIso, addHours } from "../../../../../../../_lib/utils/time";
 import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
+import { buildBadgeAttachment } from "../../../../../../../_lib/email/attachments";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
@@ -29,7 +30,7 @@ export async function onRequestPost(
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const config = getConfig(c.env, c.req.raw);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const registrationId = c.req.param("registrationId");
 
   const registration = await first<RegistrationRecord>(
@@ -89,6 +90,7 @@ export async function onRequestPost(
 
     outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
+      baseUrl: appBaseUrl,
       templateKey: "registration_confirm_email",
       recipientEmail: user.email,
       recipientUserId: user.id,
@@ -129,11 +131,20 @@ export async function onRequestPost(
 
     outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
+      baseUrl: appBaseUrl,
       templateKey: "registration_confirmed",
       recipientEmail: user.email,
       recipientUserId: user.id,
       messageType: "transactional",
       subject: `Registration confirmed for ${event.name}`,
+      attachments: referralRow ? [
+        buildBadgeAttachment({
+          badgeCode: referralRow.code,
+          badgeType: "attendee",
+          firstName: user.first_name ?? "",
+          lastName: user.last_name ?? "",
+        }),
+      ] : undefined,
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
         firstName: user.first_name ?? "",
@@ -152,7 +163,6 @@ export async function onRequestPost(
         manageUrl,
         shareUrl,
         ...(referralRow ? {
-          __badgeCode: referralRow.code,
           badgeImageUrl: `${appBaseUrl}/api/v1/og/${referralRow.code}`,
           linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${appBaseUrl}/r/${referralRow.code}`)}`,
           twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${event.name} — join me! ${appBaseUrl}/r/${referralRow.code}`)}`,

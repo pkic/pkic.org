@@ -123,7 +123,7 @@ export async function onRequestPatch(
     });
 
     if (current.status !== body.status) {
-      const appBaseUrl = resolveAppBaseUrl(c.env);
+      const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
       const outbox = await queueRegistrationStatusEmail(c.env.DB, {
         event,
         registrationId,
@@ -179,7 +179,7 @@ export async function onRequestPatch(
     }
   }
 
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const outbox = await queueRegistrationStatusEmail(c.env.DB, {
     event,
     registrationId: updated.id,

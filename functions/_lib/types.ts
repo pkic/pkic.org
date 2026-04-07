@@ -46,17 +46,15 @@ export interface Env {
   DB: DatabaseLike;
   /** Static assets binding served from the `public` directory in Workers mode. */
   ASSETS?: StaticAssetsBinding;
+  /** Static assets binding used by local `wrangler dev` preview environments. */
+  ASSETS_PUBLIC?: StaticAssetsBinding;
   /** R2 bucket for general assets (OG badges, layout HTML, etc.). */
   ASSETS_BUCKET?: R2BucketLike;
   /** R2 bucket for speaker headshots and presentation uploads. */
   SPEAKER_UPLOADS_BUCKET?: R2BucketLike;
   /** Cloudflare Images binding — resize/convert images from raw streams without a public URL. */
   IMAGES?: ImagesBinding;
-  /** Cloudflare Pages deployment URL (for example https://branch.project.pages.dev). */
-  CF_PAGES_URL?: string;
-  /** Cloudflare Pages branch name used to build the branch alias origin. */
-  CF_PAGES_BRANCH?: string;
-  /** Set in .dev.vars for local development; takes precedence over CF_PAGES_URL. */
+  /** Optional explicit origin for local dev or background jobs that lack a request URL. */
   APP_BASE_URL?: string;
   DEFAULT_MIN_PROPOSAL_REVIEWS: string;
   DEFAULT_REFERRAL_CODE_LENGTH: string;

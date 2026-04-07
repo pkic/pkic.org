@@ -32,8 +32,8 @@ const STRIPE_API = "https://api.stripe.com/v1/checkout/sessions";
 
 /**
  * Returns true when the request origin matches the configured app base URL.
- * resolveAppBaseUrl covers production (APP_BASE_URL), Cloudflare Pages preview
- * deploys (CF_PAGES_URL → *.pkic.pages.dev), and local dev (localhost:8788).
+ * resolveAppBaseUrl uses the request host in Workers and falls back to
+ * APP_BASE_URL only when no request URL is available.
  */
 function isAllowedOrigin(origin: string, appBaseUrl: string): boolean {
   return origin === appBaseUrl;
@@ -44,7 +44,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const request = c.req.raw;
   const env = c.env;
-  const appBaseUrl = resolveAppBaseUrl(env);
+  const appBaseUrl = resolveAppBaseUrl(env, request);
 
   // ── Origin guard ─────────────────────────────────────────────────────────
   const secFetchSite = request.headers.get("sec-fetch-site");

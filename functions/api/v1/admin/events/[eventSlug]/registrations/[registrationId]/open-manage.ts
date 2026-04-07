@@ -62,7 +62,7 @@ export async function onRequestPost(
     eventSlug: event.slug,
   });
 
-  const appBaseUrl = resolveAppBaseUrl(c.env);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const manageUrl = registrationManagePageUrl(appBaseUrl, event, jwtToken);
 
   return json({ manageUrl });
