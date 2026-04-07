@@ -137,7 +137,7 @@ function extractOgBadgeUrl(shareUrl: string): string | null {
 }
 
 export function renderSharePanel(container: HTMLElement, options: SharePanelOptions): void {
-  const { shareUrl, eventName, firstName, manageToken, eventSlug } = options;
+  const { shareUrl, eventName, manageToken, eventSlug } = options;
 
   const shareText = `I just registered for ${eventName} — join me!`;
   const twitterText = encodeURIComponent(`${shareText} ${shareUrl}`);
