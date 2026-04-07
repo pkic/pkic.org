@@ -114,17 +114,17 @@
     margin-bottom: 0.75rem;
     padding-bottom: 0.4rem;
     border-bottom: 1px solid
-      color-mix(in srgb, var(--page-accent) 20%, transparent);
+      color-mix(in srgb, var(--page-accent, var(--wg-color, #{$green})) 20%, transparent);
     background: linear-gradient(
       120deg,
-      var(--page-accent),
-      var(--page-accent-2)
+      var(--page-accent, var(--wg-color, #{$green})),
+      var(--page-accent-2, #{$blue-dark})
     );
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     @supports not (-webkit-background-clip: text) {
-      color: var(--page-accent, #{$green});
+      color: var(--page-accent, var(--wg-color, #{$green}));
       background: none;
     }
   }
@@ -132,7 +132,7 @@
     font-size: 1.2rem;
     margin-top: 2rem;
     margin-bottom: 0.5rem;
-    color: var(--page-accent-2, #{$blue-dark});
+    color: var(--page-accent-2, var(--page-accent, var(--wg-color, #{$blue-dark})));
   }
   h4 {
     font-size: 1rem;
@@ -155,7 +155,7 @@
 
   // Links: dark mix keeps readability on any accent — vivid accent revealed only on hover
   a:not(.btn):not([class]) {
-    color: color-mix(in srgb, var(--page-accent) 42%, #1a2332);
+    color: color-mix(in srgb, var(--page-accent, var(--wg-color, #{$green})) 42%, #1a2332);
     text-decoration: underline;
     text-underline-offset: 2px;
     text-decoration-color: transparent;
@@ -164,8 +164,8 @@
       text-decoration-color 0.15s;
 
     &:hover {
-      color: var(--page-accent);
-      text-decoration-color: var(--page-accent);
+      color: var(--page-accent, var(--wg-color, #{$green}));
+      text-decoration-color: var(--page-accent, var(--wg-color, #{$green}));
     }
   }
 

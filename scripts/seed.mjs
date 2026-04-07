@@ -19,8 +19,8 @@ import { resolve } from "node:path";
 const ENVS = {
   local: {
     wranglerFlag: "--local",
-    wranglerEnv: null,
-    database: "pkic-db",
+    wranglerEnv: "local",
+    database: "pkic-db-local",
     assetsBucket: "pkic-assets",
     speakerBucket: "pkic-speaker-uploads",
     label: "local",
@@ -35,7 +35,7 @@ const ENVS = {
   },
   production: {
     wranglerFlag: "--remote",
-    wranglerEnv: null,
+    wranglerEnv: "production",
     database: "pkic-db",
     assetsBucket: "pkic-assets",
     speakerBucket: "pkic-speaker-uploads",

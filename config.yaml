@@ -37,6 +37,9 @@ taxonomies:
 ignoreFiles:
   - AGENTS\.md$
 
+build:
+  noJSConfigInAssets: true
+
 # disableKinds:
 #   - RSS
 #   - taxonomyTerm

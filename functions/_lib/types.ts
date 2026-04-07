@@ -48,6 +48,8 @@ export interface Env {
   ASSETS?: StaticAssetsBinding;
   /** Static assets binding used by local `wrangler dev` preview environments. */
   ASSETS_PUBLIC?: StaticAssetsBinding;
+  /** Local static origin used by local dev when avoiding Wrangler assets mode. */
+  DEV_STATIC_ORIGIN?: string;
   /** R2 bucket for general assets (OG badges, layout HTML, etc.). */
   ASSETS_BUCKET?: R2BucketLike;
   /** R2 bucket for speaker headshots and presentation uploads. */

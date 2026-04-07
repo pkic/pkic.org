@@ -1,0 +1,20 @@
+{{- $eventDateParam := .Param "eventDate" -}}
+{{- with $eventDateParam -}}
+  {{- $eventDate := time . -}}
+  {{- $eventDuration := int (default 1 ($.Param "eventDuration")) -}}
+
+  {{- if gt $eventDuration 1 -}}
+    {{- $eventEndDate := $eventDate.AddDate 0 0 (sub $eventDuration 1) -}}
+    {{- if eq ($eventDate.Format "2006") ($eventEndDate.Format "2006") -}}
+      {{- if eq ($eventDate.Format "January") ($eventEndDate.Format "January") -}}
+        {{- printf "%s %s - %s, %s" ($eventDate.Format "January") ($eventDate.Format "2") ($eventEndDate.Format "2") ($eventDate.Format "2006") -}}
+      {{- else -}}
+        {{- printf "%s %s - %s %s, %s" ($eventDate.Format "January") ($eventDate.Format "2") ($eventEndDate.Format "January") ($eventEndDate.Format "2") ($eventDate.Format "2006") -}}
+      {{- end -}}
+    {{- else -}}
+      {{- printf "%s - %s" ($eventDate.Format "January 2, 2006") ($eventEndDate.Format "January 2, 2006") -}}
+    {{- end -}}
+  {{- else -}}
+    {{- $eventDate.Format "2 Jan 2006, 15:04 UTC" -}}
+  {{- end -}}
+{{- end -}}
