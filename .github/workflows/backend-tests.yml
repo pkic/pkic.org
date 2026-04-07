@@ -30,5 +30,8 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Build Hugo site for Workers tests
+        run: bash ./scripts/build.sh
+
       - name: Run backend checks
         run: pnpm run check
