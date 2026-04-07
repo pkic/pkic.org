@@ -9,8 +9,7 @@ import type { DatabaseLike } from "../_lib/types";
 
 /**
  * Known social / link-preview crawlers that request URLs to generate previews.
- * We serve these an HTML page with OG meta tags instead of a 302 redirect so
- * that they see the personalised card image and title.
+ * We still identify them so they do not increment click counts.
  */
 const SCRAPER_UA_PATTERNS = [
   /Twitterbot/i,
@@ -157,7 +156,6 @@ function buildOgHtml(
 </head>
 <body>
   <p>Redirecting…</p>
-  <script>window.location.replace(${JSON.stringify(redirectUrl)});</script>
 </body>
 </html>`;
 }
@@ -206,15 +204,11 @@ export async function onRequestGet(c: any): Promise<Response> {
     ? registrationPageUrl(appBaseUrl, eventRow, { ref: code, source: "referral_link" })
     : `${appBaseUrl}/events/`;
 
-  if (isSocialScraper(userAgent)) {
-    return new Response(buildOgHtml(code, appBaseUrl, redirectUrl, person), {
-      headers: {
-        "Content-Type": "text/html; charset=utf-8",
-        "Cache-Control": "public, max-age=300, s-maxage=300",
-      },
-    });
-  }
-
-  return Response.redirect(redirectUrl, 302);
+  return new Response(buildOgHtml(code, appBaseUrl, redirectUrl, person), {
+    headers: {
+      "Content-Type": "text/html; charset=utf-8",
+      "Cache-Control": "public, max-age=300, s-maxage=300",
+    },
+  });
 }
 
