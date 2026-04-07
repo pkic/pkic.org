@@ -112,13 +112,13 @@ describe("event frontend routes and hydration contracts", () => {
     });
 
     const response = await referralRedirect(createContext(env, new Request(`https://app.test/r/${code}`), { code }));
-    const location = response.headers.get("location") ?? "";
-    const redirectUrl = new URL(location);
+    const html = await response.text();
 
-    expect(response.status).toBe(302);
-    expect(redirectUrl.pathname).toBe("/events/pilot/register/");
-    expect(redirectUrl.searchParams.get("ref")).toBe(code);
-    expect(redirectUrl.searchParams.get("source")).toBe("referral_link");
+    expect(response.status).toBe(200);
+    expect(html).toContain('http-equiv="refresh"');
+    expect(html).toContain("/events/pilot/register/?event=pqc-2026");
+    expect(html).toContain(`ref=${code}`);
+    expect(html).toContain("source=referral_link");
   });
 
   it("returns required terms in forms hydration response", async () => {

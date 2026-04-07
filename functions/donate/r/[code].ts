@@ -5,12 +5,11 @@
  * `donation_promoters` which in turn references a completed donation.
  *
  * Behaviour:
- *  - Social scrapers (LinkedIn, X, Slack, etc.) receive an HTML page with
- *    Open Graph meta tags that embed the donor's badge image as the preview
- *    card.  A <meta http-equiv="refresh"> in the <head> ensures human visitors
- *    who somehow end up here are still redirected.
- *  - Real browsers receive a 302 redirect to /donate/?ref=:code so the
- *    checkout page can carry forward the attribution.
+ *  - All visitors receive an HTML page with Open Graph meta tags that embed
+ *    the donor's badge image as the preview card.
+ *  - A <meta http-equiv="refresh"> in the <head> sends browsers to
+ *    /donate/?ref=:code so the checkout page can carry forward the
+ *    attribution, without relying on an HTTP redirect.
  *  - Every real visit increments `donation_promoters.clicks`.
  */
 
@@ -108,7 +107,6 @@ function buildPromoterOgHtml(
 </head>
 <body>
   <p>Redirecting…</p>
-  <script>window.location.replace(${JSON.stringify(donateUrl)});</script>
 </body>
 </html>`;
 }

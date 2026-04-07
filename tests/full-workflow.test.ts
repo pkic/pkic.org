@@ -407,7 +407,8 @@ describe("full workflow", () => {
     const referralResponse = await referralRedirect(
       createContext(env, new Request(`https://app.test/r/${referralCode}`), { code: referralCode }),
     );
-    expect(referralResponse.status).toBe(302);
+    expect(referralResponse.status).toBe(200);
+    expect(await referralResponse.text()).toContain('http-equiv="refresh"');
 
     await queueEmail(env.DB, {
       eventId,

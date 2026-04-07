@@ -31,8 +31,13 @@ describe("referral, waitlist, and calendar flows", () => {
       createContext(env, new Request(`https://app.test/r/${code}`), { code }),
     );
 
-    expect(response.status).toBe(302);
-    expect(response.headers.get("location")?.includes(`ref=${code}`)).toBe(true);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toContain("text/html");
+    const html = await response.text();
+    expect(html).toContain('http-equiv="refresh"');
+    expect(html).toContain("/events/2026/pqc-2026/register/?event=pqc-2026");
+    expect(html).toContain(`ref=${code}`);
+    expect(html).toContain("source=referral_link");
 
     const stats = await queryAll<{ clicks: number }>(env.DB, "SELECT clicks FROM referral_codes WHERE code = ?", [code]);
     expect(Number(stats[0].clicks)).toBe(1);
