@@ -1,3 +1,5 @@
+import { mountModalTemplate } from "./modal-template";
+
 const HEADSHOT_DISCLAIMER_TEXT = [
   "This is a photograph of myself.",
   "I hold the copyright to this image, or I have an unrestricted, royalty-free licence to use and publish it.",
@@ -51,44 +53,68 @@ export function showHeadshotDisclaimer(opts: HeadshotDisclaimerOptions = {}): Pr
   } = opts;
 
   return new Promise((resolve) => {
-    const overlay = document.createElement("div");
-    overlay.style.cssText =
-      "position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:9000;display:flex;align-items:center;justify-content:center;padding:1rem";
-    const card = document.createElement("div");
-    card.style.cssText =
-      "background:#fff;border-radius:.5rem;max-width:520px;width:100%;padding:1.5rem;box-shadow:0 8px 32px rgba(0,0,0,.25)";
-    card.innerHTML = `
-      <h4 style="margin:0 0 .75rem;font-size:1.1rem">${title}</h4>
-      <ul style="font-size:.875rem;margin:0 0 1rem;padding-left:1.25rem">
-        ${texts.map((text) => `<li style="margin-bottom:.25rem">${text}</li>`).join("")}
-      </ul>
-      <form>
-        <div style="display:flex;gap:.5rem;margin-bottom:1rem;align-items:flex-start">
-          <input type="checkbox" id="hsd-agree" style="margin-top:.2rem;flex-shrink:0">
-          <label for="hsd-agree" style="font-size:.875rem">I confirm all of the above.</label>
-        </div>
-        <div style="display:flex;gap:.5rem">
-          <button type="submit" id="hsd-confirm" class="btn btn-success btn-sm" disabled>${confirmText}</button>
-          <button type="button" id="hsd-cancel" class="btn btn-outline-secondary btn-sm">Cancel</button>
-        </div>
-      </form>`;
-    overlay.appendChild(card);
-    document.body.appendChild(overlay);
+    const modal = mountModalTemplate(
+      "headshot-disclaimer-template",
+      "headshot-disclaimer-modal",
+      "Headshot disclaimer",
+    );
+    if (!modal) {
+      resolve(false);
+      return;
+    }
 
-    const confirmBtn = card.querySelector<HTMLButtonElement>("#hsd-confirm")!;
-    const cancelBtn = card.querySelector<HTMLButtonElement>("#hsd-cancel")!;
-    const checkbox = card.querySelector<HTMLInputElement>("#hsd-agree")!;
+    // Update content
+    const titleEl = modal.querySelector<HTMLElement>(".hsd-title");
+    const listEl = modal.querySelector<HTMLUListElement>(".hsd-list");
+    const confirmBtn = modal.querySelector<HTMLButtonElement>(".hsd-confirm");
+    const checkbox = modal.querySelector<HTMLInputElement>(".hsd-agree");
+    const cancelBtn = modal.querySelector<HTMLButtonElement>(".hsd-cancel");
+    const overlay = modal.querySelector<HTMLElement>(".hsd-overlay");
+    const form = modal.querySelector<HTMLFormElement>(".hsd-form");
+
+    if (!titleEl || !listEl || !confirmBtn || !checkbox || !cancelBtn || !overlay || !form) {
+      console.error("Headshot disclaimer template is incomplete");
+      modal.remove();
+      resolve(false);
+      return;
+    }
+
+    titleEl.textContent = title;
+    listEl.innerHTML = texts.map((text) => `<li>${text}</li>`).join("");
+    confirmBtn.textContent = confirmText;
+    checkbox.checked = false;
+    confirmBtn.disabled = true;
+
+    // Show modal
+    modal.classList.add("hsd-active");
+
+    const cleanup = () => {
+      modal.remove();
+    };
 
     checkbox.addEventListener("change", () => {
       confirmBtn.disabled = !checkbox.checked;
     });
 
-    card.querySelector("form")!.addEventListener("submit", (e) => {
+    form.addEventListener("submit", (e) => {
       e.preventDefault();
-      if (checkbox.checked) { overlay.remove(); resolve(true); }
+      if (checkbox.checked) {
+        cleanup();
+        resolve(true);
+      }
     });
-    cancelBtn.addEventListener("click", () => { overlay.remove(); resolve(false); });
-    overlay.addEventListener("click", (e) => { if (e.target === overlay) { overlay.remove(); resolve(false); } });
+
+    cancelBtn.addEventListener("click", () => {
+      cleanup();
+      resolve(false);
+    });
+
+    overlay.addEventListener("click", (e) => {
+      if (e.target === overlay) {
+        cleanup();
+        resolve(false);
+      }
+    });
   });
 }
 
