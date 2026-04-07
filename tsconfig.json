@@ -19,5 +19,8 @@
     "functions/**/*.ts",
     "tests/**/*.ts",
     "shared/**/*.ts"
+  ],
+  "exclude": [
+    "tests/frontend/**"
   ]
 }

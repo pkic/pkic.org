@@ -40,7 +40,12 @@ describe("donation thank-you page", () => {
     expect(fetchMock).toHaveBeenCalled();
     expect(fetchMock.mock.calls.every(([input]) => String(input).includes("/api/v1/donations/session?session_id="))).toBe(true);
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/api/v1/donations/promoter"))).toBe(false);
-    expect(fetchMock.mock.calls.some((call) => ((call[1] as RequestInit | undefined)?.method ?? "GET").toUpperCase() !== "GET")).toBe(false);
+    expect(
+      fetchMock.mock.calls.some((call) => {
+        const [, init] = call as unknown as [RequestInfo | URL, RequestInit | undefined];
+        return ((init?.method ?? "GET").toUpperCase() !== "GET");
+      }),
+    ).toBe(false);
   });
 
   it("does not fetch anything when the session_id is missing or invalid", async () => {

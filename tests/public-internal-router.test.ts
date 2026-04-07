@@ -5,11 +5,11 @@ import { resetDb } from "./helpers/reset-db";
 import { seedEventAndAdmin } from "./helpers/context";
 
 function callApp(request: Request): Promise<Response> {
-  return app.fetch(
+  return Promise.resolve(app.fetch(
     request,
     env as any,
     { passThroughOnException: () => {}, waitUntil: () => {} } as any,
-  );
+  ));
 }
 
 describe("public and internal router smoke tests", () => {

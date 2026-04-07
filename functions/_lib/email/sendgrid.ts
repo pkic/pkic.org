@@ -56,7 +56,7 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
     }));
   }
 
-  const response = await fetch(env.SENDGRID_API_BASE, {
+  const response = await fetch(env.SENDGRID_API_BASE ?? "https://api.sendgrid.com/v3/mail/send", {
     method: "POST",
     headers: {
       "content-type": "application/json",

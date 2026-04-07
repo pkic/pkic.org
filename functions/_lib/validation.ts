@@ -10,10 +10,17 @@ import {
 type JsonRequestLike = Request | { raw?: Request; json?: () => Promise<unknown> };
 
 export async function parseJsonBody<T>(request: JsonRequestLike, schema: z.ZodSchema<T>): Promise<T> {
-  const source = request instanceof Request ? request : (request.raw ?? request);
   let body: unknown;
   try {
-    body = await source.json();
+    if (request instanceof Request) {
+      body = await request.json();
+    } else if (request.raw) {
+      body = await request.raw.json();
+    } else if (request.json) {
+      body = await request.json();
+    } else {
+      throw new Error("Missing JSON reader");
+    }
   } catch {
     throw new AppError(400, "INVALID_JSON", "Request body must be valid JSON");
   }
