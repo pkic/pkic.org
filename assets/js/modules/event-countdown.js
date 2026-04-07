@@ -6,12 +6,14 @@
  */
 document.querySelectorAll('[data-countdown]').forEach(function (el) {
   var target = new Date(el.getAttribute('data-countdown'));
+  let intervalId = null;
 
   function tick() {
     var diff = target - Date.now();
     if (diff <= 0) {
       var wrap = el.closest('.event-countdown');
       if (wrap) wrap.remove();
+      if (intervalId) clearInterval(intervalId);
       return;
     }
     var d = Math.floor(diff / 86400000);
@@ -27,5 +29,5 @@ document.querySelectorAll('[data-countdown]').forEach(function (el) {
   }
 
   tick();
-  setInterval(tick, 1000);
+  intervalId = setInterval(tick, 1000);
 });

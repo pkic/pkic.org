@@ -13,6 +13,16 @@ import { applyCampaignCustomText } from "./campaign-custom";
 import { parseQueuedEmailAttachments, type QueuedEmailAttachment } from "./attachments";
 import type { DatabaseLike, Env } from "../types";
 
+function uint8ToBase64(bytes: Uint8Array): string {
+  const chunkSize = 12288; // 12kb chunks to avoid stack overflow
+  let result = "";
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    result += String.fromCharCode(...chunk);
+  }
+  return btoa(result);
+}
+
 interface OutboxRow {
   id: string;
   event_id: string | null;
@@ -224,7 +234,7 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
     let templateVersion = 0;
     let subject: string;
     let contentWithCustom: string;
-    let resolvedContentType: "markdown" | "html" | "text" = "markdown";
+    let resolvedContentType: "markdown" | "html" | "text";
 
     if (bodyOverride) {
       // Direct body still supports subject placeholders like {{eventName}}.
@@ -250,11 +260,7 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
         {
           filename: "event.ics",
           contentType: "text/calendar",
-          base64Content: btoa(
-            Array.from(new TextEncoder().encode(calendar.icsContent), (b) =>
-              String.fromCharCode(b)
-            ).join("")
-          ),
+          base64Content: uint8ToBase64(new TextEncoder().encode(calendar.icsContent)),
         },
       ];
     }
@@ -276,7 +282,7 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
           const buf           = await badgeObj.arrayBuffer();
           const bytes         = new Uint8Array(buf);
           const format        = sniffImageAttachmentFormat(declaredType, bytes);
-          const base64        = btoa(Array.from(bytes, (b) => String.fromCharCode(b)).join(""));
+          const base64        = uint8ToBase64(bytes);
           const badgeFilename = `${badgeAttachment.filenameBase}.${format.ext}`;
           attachments = [
             ...(attachments ?? []),

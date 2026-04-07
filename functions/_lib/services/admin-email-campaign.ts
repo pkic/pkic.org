@@ -210,13 +210,19 @@ export function findBroadcastOnlyTemplateRefs(
   const content = parts.filter((part): part is string => Boolean(part && part.trim()));
   const found = new Set<string>();
 
+  const regexMap = new Map<string, RegExp>();
+  for (const key of disallowed) {
+    if (key === "reg_details") {
+      regexMap.set(key, /\{\{>\s*reg_details\s*\}\}/);
+    } else {
+      regexMap.set(key, new RegExp(`\\{\\{[^}]*\\b${escapeRegex(key)}\\b[^}]*\\}\\}`));
+    }
+  }
+
   for (const part of content) {
     for (const key of disallowed) {
-      if (key === "reg_details") {
-        if (/\{\{>\s*reg_details\s*\}\}/.test(part)) found.add(key);
-        continue;
-      }
-      if (templateReferencesKey(part, key)) found.add(key);
+      const regex = regexMap.get(key);
+      if (regex?.test(part)) found.add(key);
     }
   }
 

@@ -72,7 +72,7 @@ function buildDayStatusSummary(
     const dayLabel = entry.label ?? entry.dayDate;
     const waitlistStatus = waitlistByDay.get(entry.dayDate);
 
-    let statusLabel = "Confirmed";
+    let statusLabel: string;
     let statusClass = "text-bg-success";
 
     if (waitlistStatus === "offered") {

@@ -119,7 +119,7 @@ export function renderProfileLinks(
   const hint = document.createElement("p");
   hint.className = "form-text mt-0 mb-2";
   hint.textContent =
-    "Add professional profile links that demonstrate your expertise, such as LinkedIn, GitHub, ORCID, research publications," +
+    "Add professional profile links that demonstrate your expertise, such as LinkedIn, GitHub, ORCID, research publications, " +
     "or any page that shows your work.";
 
   // Pill container

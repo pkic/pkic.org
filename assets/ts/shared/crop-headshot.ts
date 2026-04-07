@@ -8,6 +8,8 @@
  * Returns a JPEG Blob if the user confirmed, or null if they cancelled.
  */
 
+import { mountModalTemplate } from "./modal-template";
+
 const CROP_OUTPUT_SIZE = 1024; // px — square output
 
 /**
@@ -27,36 +29,39 @@ export function cropHeadshot(file: File): Promise<Blob | null> {
 }
 
 function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void): void {
-  // ── Overlay ───────────────────────────────────────────────────────────────
-  const overlay = document.createElement("div");
-  overlay.style.cssText =
-    "position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);" +
-    "display:flex;align-items:center;justify-content:center;flex-direction:column";
+  // ── Get or create modal from template ──────────────────────────────────────
+  const modal = mountModalTemplate(
+    "crop-headshot-template",
+    "crop-headshot-modal",
+    "Crop headshot",
+  );
+  if (!modal) {
+    done(null);
+    return;
+  }
 
-  const card = document.createElement("div");
-  card.style.cssText =
-    "background:#fff;border-radius:12px;padding:24px;max-width:480px;width:90vw;" +
-    "box-shadow:0 8px 32px rgba(0,0,0,.3);display:flex;flex-direction:column;align-items:center;gap:16px";
+  const overlay = modal.querySelector(".crop-headshot-overlay") as HTMLElement | null;
+  const viewport = modal.querySelector(".crop-headshot-viewport") as HTMLElement | null;
+  const imgEl = viewport?.querySelector("img") as HTMLImageElement | null;
+  const slider = modal.querySelector(".crop-headshot-slider") as HTMLInputElement | null;
+  const cancelBtn = modal.querySelector(".crop-headshot-cancel") as HTMLButtonElement | null;
+  const confirmBtn = modal.querySelector(".crop-headshot-confirm") as HTMLButtonElement | null;
 
-  card.innerHTML = '<h6 class="mb-0">Crop headshot</h6>';
+  if (!overlay || !viewport || !imgEl || !slider || !cancelBtn || !confirmBtn) {
+    console.error("Crop headshot template is incomplete");
+    modal.remove();
+    done(null);
+    return;
+  }
 
-  // ── Circular viewport ─────────────────────────────────────────────────────
-  const viewportSize = 300;
-  const viewport = document.createElement("div");
-  viewport.style.cssText =
-    `width:${viewportSize}px;height:${viewportSize}px;border-radius:50%;overflow:hidden;` +
-    "position:relative;cursor:grab;border:3px solid #198754;background:#eee;touch-action:none;flex-shrink:0";
+  const modalEl = modal;
+  const imageEl = imgEl;
 
-  const imgEl = document.createElement("img");
   imgEl.src = img.src;
-  imgEl.draggable = false;
-  imgEl.style.cssText =
-    "position:absolute;top:0;left:0;transform-origin:0 0;user-select:none;pointer-events:none";
-
-  viewport.appendChild(imgEl);
-  card.appendChild(viewport);
+  modal.classList.add("active");
 
   // ── Initial scale (cover) ─────────────────────────────────────────────────
+  const viewportSize = Math.round(viewport.getBoundingClientRect().width);
   const naturalW = img.naturalWidth;
   const naturalH = img.naturalHeight;
   const minDim = Math.min(naturalW, naturalH);
@@ -76,10 +81,10 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void)
   }
 
   function applyTransform(): void {
-    imgEl.style.width = `${naturalW * scale}px`;
-    imgEl.style.height = `${naturalH * scale}px`;
-    imgEl.style.left = `${panX}px`;
-    imgEl.style.top = `${panY}px`;
+    imageEl.style.width = `${naturalW * scale}px`;
+    imageEl.style.height = `${naturalH * scale}px`;
+    imageEl.style.left = `${panX}px`;
+    imageEl.style.top = `${panY}px`;
   }
 
   clampPan();
@@ -93,8 +98,8 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void)
     dragging = true;
     dragStartX = e.clientX; dragStartY = e.clientY;
     panStartX = panX; panStartY = panY;
-    viewport.style.cursor = "grabbing";
-    viewport.setPointerCapture(e.pointerId);
+    viewport.classList.add("dragging");
+    viewport.setPointerCapture((e as PointerEvent).pointerId);
   });
   viewport.addEventListener("pointermove", (e) => {
     if (!dragging) return;
@@ -105,28 +110,11 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void)
   });
   viewport.addEventListener("pointerup", () => {
     dragging = false;
-    viewport.style.cursor = "grab";
+    viewport.classList.remove("dragging");
   });
 
   // ── Zoom slider ───────────────────────────────────────────────────────────
-  const zoomRow = document.createElement("div");
-  zoomRow.style.cssText = "display:flex;align-items:center;gap:8px;width:100%";
-  zoomRow.innerHTML = '<span class="small text-muted">−</span>';
-
-  const slider = document.createElement("input");
-  slider.type = "range";
-  slider.min = "0";
-  slider.max = "100";
   slider.value = String(((fitScale - minScale) / (maxScale - minScale)) * 100);
-  slider.className = "form-range";
-  slider.style.flex = "1";
-  zoomRow.appendChild(slider);
-
-  const plusLabel = document.createElement("span");
-  plusLabel.className = "small text-muted";
-  plusLabel.textContent = "+";
-  zoomRow.appendChild(plusLabel);
-  card.appendChild(zoomRow);
 
   slider.addEventListener("input", () => {
     const newScale = minScale + (parseFloat(slider.value) / 100) * (maxScale - minScale);
@@ -155,32 +143,13 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void)
     slider.value = String(((scale - minScale) / (maxScale - minScale)) * 100);
   }, { passive: false });
 
-  // ── Buttons ───────────────────────────────────────────────────────────────
-  const btnRow = document.createElement("div");
-  btnRow.style.cssText = "display:flex;gap:8px";
-
-  const cancelBtn = document.createElement("button");
-  cancelBtn.className = "btn btn-sm btn-outline-secondary";
-  cancelBtn.textContent = "Cancel";
-
-  const confirmBtn = document.createElement("button");
-  confirmBtn.className = "btn btn-sm btn-success";
-  confirmBtn.textContent = "Crop & Upload";
-
-  btnRow.appendChild(cancelBtn);
-  btnRow.appendChild(confirmBtn);
-  card.appendChild(btnRow);
-
-  overlay.appendChild(card);
-  document.body.appendChild(overlay);
-
   // ── Event handlers ────────────────────────────────────────────────────────
   function dismiss(blob: Blob | null): void {
-    overlay.remove();
+    modalEl.remove();
     done(blob);
   }
 
-  cancelBtn.addEventListener("click", () => dismiss(null));
+  cancelBtn.addEventListener("click", () => dismiss(null), { once: true });
   overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(null); });
 
   confirmBtn.addEventListener("click", () => {
@@ -199,5 +168,5 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void)
     ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, CROP_OUTPUT_SIZE, CROP_OUTPUT_SIZE);
 
     canvas.toBlob((blob) => dismiss(blob), "image/jpeg", 0.92);
-  });
+  }, { once: true });
 }
