@@ -14,7 +14,7 @@ export default defineConfig({
     url: "http://127.0.0.1:8788",
     // Always start fresh so Wrangler uses the seeded state dir.
     reuseExistingServer: false,
-    timeout: 120_000,
+    timeout: 300_000,
   },
   use: {
     baseURL: "http://127.0.0.1:8788",
