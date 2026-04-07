@@ -68,6 +68,8 @@ export interface Env {
   REMINDER_INTERVAL_DAYS?: string;
   MAX_INVITE_REMINDERS?: string;
   MAX_PRESENTATION_REMINDERS?: string;
+  SCHEDULED_REMINDER_LIMIT?: string;
+  SCHEDULED_OUTBOX_LIMIT?: string;
   SENDGRID_API_KEY?: string;
   SENDGRID_API_BASE: string;
   FROM_EMAIL?: string;
