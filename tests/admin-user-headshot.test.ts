@@ -123,7 +123,7 @@ describe("admin user headshot upload", () => {
     });
 
     const context = createContext({ ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket }, request, { userId: targetUserId });
-    context.req.parseBody = async () => ({ file });
+    context.req!.parseBody = async () => ({ file });
 
     const response = await adminUserHeadshotRequest(context);
 

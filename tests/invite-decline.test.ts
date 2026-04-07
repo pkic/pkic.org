@@ -156,7 +156,7 @@ describe("invite decline", () => {
     );
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+  const data = (await response.json()) as { success: boolean; forwarded: string[] };
     expect(data.success).toBe(true);
     expect(data.forwarded).toContain("colleague1@example.test");
     expect(data.forwarded).toContain("colleague2@example.test");
@@ -207,7 +207,7 @@ describe("invite decline", () => {
     );
 
     expect(response.status).toBe(200);
-    const data = await response.json();
+    const data = (await response.json()) as { success: boolean; forwarded: string[] };
     expect(data.forwarded).toEqual([]);
   });
 });

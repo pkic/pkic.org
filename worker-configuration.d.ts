@@ -93,7 +93,7 @@ declare namespace Cloudflare {
 	interface Env {
 		ASSETS_BUCKET?: R2Bucket;
 		SPEAKER_UPLOADS_BUCKET?: R2Bucket;
-		DB?: D1Database;
+        DB: D1Database;
 		IMAGES?: ImagesBinding;
 		ASSETS_PUBLIC?: Fetcher;
 		HUGO_VERSION?: "0.160.0";

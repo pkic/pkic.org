@@ -37,10 +37,7 @@ export interface StaticAssetsBinding {
   fetch(request: Request): Promise<Response>;
 }
 
-export interface R2BucketLike {
-  get(key: string): Promise<R2ObjectLike | null>;
-  put(key: string, value: string | ArrayBuffer | ReadableStream, options?: Record<string, unknown>): Promise<void>;
-}
+export type R2BucketLike = R2Bucket;
 
 export interface Env {
   DB: DatabaseLike;
@@ -58,20 +55,20 @@ export interface Env {
   IMAGES?: ImagesBinding;
   /** Optional explicit origin for local dev or background jobs that lack a request URL. */
   APP_BASE_URL?: string;
-  DEFAULT_MIN_PROPOSAL_REVIEWS: string;
-  DEFAULT_REFERRAL_CODE_LENGTH: string;
-  DEFAULT_INVITE_LIMIT_PER_ATTENDEE: string;
+  DEFAULT_MIN_PROPOSAL_REVIEWS?: string;
+  DEFAULT_REFERRAL_CODE_LENGTH?: string;
+  DEFAULT_INVITE_LIMIT_PER_ATTENDEE?: string;
   DEFAULT_INVITE_LIMIT_SPEAKER_NOMINATION?: string;
-  WAITLIST_CLAIM_WINDOW_HOURS: string;
-  MAGIC_LINK_TTL_MINUTES: string;
-  MANAGE_TOKEN_TTL_HOURS: string;
+  WAITLIST_CLAIM_WINDOW_HOURS?: string;
+  MAGIC_LINK_TTL_MINUTES?: string;
+  MANAGE_TOKEN_TTL_HOURS?: string;
   REMINDER_INTERVAL_DAYS?: string;
   MAX_INVITE_REMINDERS?: string;
   MAX_PRESENTATION_REMINDERS?: string;
   SCHEDULED_REMINDER_LIMIT?: string;
   SCHEDULED_OUTBOX_LIMIT?: string;
   SENDGRID_API_KEY?: string;
-  SENDGRID_API_BASE: string;
+  SENDGRID_API_BASE?: string;
   FROM_EMAIL?: string;
   FROM_NAME?: string;
   SENDGRID_FROM_EMAIL?: string;
