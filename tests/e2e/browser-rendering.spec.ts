@@ -384,58 +384,66 @@ test.describe("browser workflows", () => {
     const screenshot = createScreenshotter(page);
 
     const adminToken = await signInAsAdmin(page);
-    await setEventDayInPersonCapacity(page, adminToken, "pqc-conference-amsterdam-nl", "2026-12-01", 1);
+    const eventSlug = "pqc-conference-amsterdam-nl";
+    const dayDate = "2026-12-01";
+    const restoredCapacity = 800;
 
-    await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
-    await fillRegistrationStep1(page, {
-      firstName: "Capacity",
-      lastName: "One",
-      email: "capacity-one@example.test",
-    });
-    await fillRegistrationStep2(page);
-    await fillRegistrationStep3(page);
-    await fillRegistrationStep4(page);
+    try {
+      await setEventDayInPersonCapacity(page, adminToken, eventSlug, dayDate, 1);
 
-    const firstConfirmEmail = await waitForEmail("capacity-one@example.test", "confirm");
-    const firstConfirmationUrl = extractUrlFromEmail(firstConfirmEmail, "/register/confirm");
-    await page.goto(firstConfirmationUrl);
-    await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
-    await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
+      await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
+      await fillRegistrationStep1(page, {
+        firstName: "Capacity",
+        lastName: "One",
+        email: "capacity-one@example.test",
+      });
+      await fillRegistrationStep2(page);
+      await fillRegistrationStep3(page);
+      await fillRegistrationStep4(page);
 
-    await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
-    await fillRegistrationStep1(page, {
-      firstName: "Capacity",
-      lastName: "Two",
-      email: "capacity-two@example.test",
-    });
-    await fillRegistrationStep2(page);
-    await fillRegistrationStep3(page);
-    await fillRegistrationStep4(page);
+      const firstConfirmEmail = await waitForEmail("capacity-one@example.test", "confirm");
+      const firstConfirmationUrl = extractUrlFromEmail(firstConfirmEmail, "/register/confirm");
+      await page.goto(firstConfirmationUrl);
+      await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+      await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
-    const secondConfirmEmail = await waitForEmail("capacity-two@example.test", "confirm");
-    const secondConfirmationUrl = extractUrlFromEmail(secondConfirmEmail, "/register/confirm");
-    await page.goto(secondConfirmationUrl);
-    await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
-    await expect(page.getByRole("heading", { name: /registration is in place/i })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByText("Your overall registration is confirmed, but one or more selected in-person days are still pending")).toBeVisible();
-    await screenshot("01-partial-capacity-confirmed");
+      await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
+      await fillRegistrationStep1(page, {
+        firstName: "Capacity",
+        lastName: "Two",
+        email: "capacity-two@example.test",
+      });
+      await fillRegistrationStep2(page);
+      await fillRegistrationStep3(page);
+      await fillRegistrationStep4(page);
 
-    const secondRegisteredEmail = await waitForEmail("capacity-two@example.test", "confirmed");
-    const secondManageUrl = extractUrlFromEmail(secondRegisteredEmail, "/register/manage/");
-    const secondManageToken = new URL(secondManageUrl).searchParams.get("token") ?? "";
+      const secondConfirmEmail = await waitForEmail("capacity-two@example.test", "confirm");
+      const secondConfirmationUrl = extractUrlFromEmail(secondConfirmEmail, "/register/confirm");
+      await page.goto(secondConfirmationUrl);
+      await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+      await expect(page.getByRole("heading", { name: /registration is in place/i })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByText("Your overall registration is confirmed, but one or more selected in-person days are still pending")).toBeVisible();
+      await screenshot("01-partial-capacity-confirmed");
 
-    await page.goto(
-      `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(secondManageToken)}`,
-    );
+      const secondRegisteredEmail = await waitForEmail("capacity-two@example.test", "confirmed");
+      const secondManageUrl = extractUrlFromEmail(secondRegisteredEmail, "/register/manage/");
+      const secondManageToken = new URL(secondManageUrl).searchParams.get("token") ?? "";
 
-    await expect(page.locator("[data-manage-status-badge]")).toHaveText(/Confirmed/i);
-    await expect(page.locator("[data-manage-status-banner]")).toContainText(
-      "Some day-specific entries are still pending, so those days are marked waitlisted below.",
-    );
-    await expect(page.locator("[data-day-waitlist-section]")).toContainText("Tuesday 1 December 2026: Waiting for in-person seat");
-    await screenshot("02-partial-capacity-manage-friendly-state");
+      await page.goto(
+        `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(secondManageToken)}`,
+      );
 
-    errorMonitor.assertClean();
+      await expect(page.locator("[data-manage-status-badge]")).toHaveText(/Confirmed/i);
+      await expect(page.locator("[data-manage-status-banner]")).toContainText(
+        "Some day-specific entries are still pending, so those days are marked waitlisted below.",
+      );
+      await expect(page.locator("[data-day-waitlist-section]")).toContainText("Tuesday 1 December 2026: Waiting for in-person seat");
+      await screenshot("02-partial-capacity-manage-friendly-state");
+
+      errorMonitor.assertClean();
+    } finally {
+      await setEventDayInPersonCapacity(page, adminToken, eventSlug, dayDate, restoredCapacity);
+    }
   });
 
   test("covers registration, invite acceptance, confirmation, manage updates, and invite decline", async ({ page }) => {
