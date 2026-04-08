@@ -187,9 +187,24 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
       return;
     }
 
-    const icsLines = icsContent.split(/\r?\n/).map((line) => line.trim());
+    // Unfold ICS continuation lines (RFC 5545 §3.1: CRLF followed by a single
+    // space or tab is a line fold) so property values aren't truncated.
+    const unfoldedIcs = icsContent.replace(/\r?\n[ \t]/g, "");
+    const icsLines = unfoldedIcs.split(/\r?\n/).map((line) => line.trim());
     const partstatLine = icsLines.find((line) => line.includes("PARTSTAT="));
     const attendeeLine = icsLines.find((line) => line.startsWith("ATTENDEE"));
+
+    // Determine the ics_uid to store.  The per-day RSVP address (verified via
+    // HMAC) is the cryptographic source of truth for *which day* was replied to.
+    // Construct the canonical per-day UID from it so the admin UI can map it to
+    // the correct day row, even if Outlook's reply ICS folds/mangles the UID.
+    let icsUid: string;
+    if (rsvpDayDate) {
+      icsUid = `${rsvpRegistrationId}-${rsvpDayDate}@pkic.org`;
+    } else {
+      const uidLine = icsLines.find((line) => line.startsWith("UID:"));
+      icsUid = uidLine ? uidLine.slice(4).trim() : `ics-${rsvpRegistrationId}`;
+    }
 
     if (!partstatLine) {
       logInfo("EMAIL_IGNORED_INVALID_CALENDAR", { 
@@ -219,7 +234,9 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
     }
 
     const sourceMessageId = emailData.messageId || `inbound-${Date.now()}`;
-    const dedupeKey = `${rsvpRegistrationId}#${sourceMessageId}`;
+    // Include the ics_uid in the dedupe key so replies for different days
+    // (which arrive as separate emails with distinct message-ids) don't collide.
+    const dedupeKey = `${rsvpRegistrationId}#${icsUid}#${sourceMessageId}`;
 
     await env.DB.prepare(
       `INSERT INTO calendar_rsvp_events 
@@ -232,7 +249,7 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
       .bind(
         crypto.randomUUID(),
         rsvpRegistrationId, // Securely mapped from the HMAC matched address! 
-        `ics-${rsvpRegistrationId}`,
+        icsUid,
         attendeeEmail,
         partstat.toLowerCase(),
         "cloudflare_email_routing_ics",

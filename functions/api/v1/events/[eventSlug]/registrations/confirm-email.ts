@@ -103,7 +103,8 @@ async function confirmRegistration(
           registrationId: registration.id,
           eventId: event.id,
           icsUid: calendar.uid,
-          icsContent: calendar.content,
+          icsFiles: calendar.files,
+          inlineContent: calendar.inlineContent,
         },
       });
       c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));

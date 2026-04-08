@@ -226,7 +226,8 @@ export async function onRequestPost(c: any): Promise<Response> {
         registrationId: created.registration.id,
         eventId: event.id,
         icsUid: calendar.uid,
-        icsContent: calendar.content,
+        icsFiles: calendar.files,
+        inlineContent: calendar.inlineContent,
       },
     });
 

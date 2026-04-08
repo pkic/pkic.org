@@ -153,7 +153,7 @@ function buildIcsContent(events: CalendarEvent[]): string {
     const calendar = new ICAL.Component("vcalendar");
     calendar.addPropertyWithValue("version", "2.0");
     calendar.addPropertyWithValue("calscale", "GREGORIAN");
-    calendar.addPropertyWithValue("method", "PUBLISH");
+    calendar.addPropertyWithValue("method", "REQUEST");
     calendar.addPropertyWithValue("prodid", "-//PKI Consortium//Event Registration//EN");
     calendar.addPropertyWithValue("x-wr-calname", "PKI Consortium Events");
 
@@ -182,6 +182,17 @@ export interface DayAttendanceEntry {
   label: string | null;
 }
 
+export interface IcsFile {
+  uid: string;
+  filename: string;
+  content: string;
+}
+
+/** Returns the lowercase weekday name (e.g. "tuesday") for a YYYY-MM-DD date string, evaluated in UTC. */
+function dayOfWeekName(dateStr: string): string {
+  return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" }).toLowerCase();
+}
+
 /**
  * Builds the ICS calendar attachment for a registration confirmation email.
  *
@@ -206,7 +217,7 @@ export async function buildRegistrationIcs(
   rsvpEmail?: string,
   attendeeEmail?: string,
   signingSecret?: string,
-): Promise<{ uid: string; content: string }> {
+): Promise<{ uid: string; files: IcsFile[]; inlineContent?: string }> {
   const uid = `${registrationId}@pkic.org`;
   const baseUrl = appBaseUrl ?? "https://pkic.org";
 
@@ -218,39 +229,50 @@ export async function buildRegistrationIcs(
   if (liveDays.length > 0) {
     const isMultiDay = liveDays.length > 1;
 
-    const events: CalendarEvent[] = await Promise.all(liveDays.map(async (day) => {
-      const window = toDayWindow(day.dayDate, event.starts_at, event.ends_at);
-      const isInPerson = day.attendanceType === "in_person";
-      const location = isInPerson ? (venueAddress ?? undefined) : (virtualUrl ?? undefined);
-      const url = isInPerson ? manageUrl : (virtualUrl ?? manageUrl);
-      const dayLabel = day.label ?? day.dayDate;
-      const title = isMultiDay ? `${event.name} – ${dayLabel}` : event.name;
-      const eventUid = isMultiDay ? `${registrationId}-${day.dayDate}@pkic.org` : uid;
+    const calEvents: Array<{ dayDate: string; eventUid: string; calEvent: CalendarEvent }> = await Promise.all(
+      liveDays.map(async (day) => {
+        const window = toDayWindow(day.dayDate, event.starts_at, event.ends_at);
+        const isInPerson = day.attendanceType === "in_person";
+        const location = isInPerson ? (venueAddress ?? undefined) : (virtualUrl ?? undefined);
+        const url = isInPerson ? manageUrl : (virtualUrl ?? manageUrl);
+        const dayLabel = day.label ?? day.dayDate;
+        const title = isMultiDay ? `${event.name} – ${dayLabel}` : event.name;
+        const eventUid = isMultiDay ? `${registrationId}-${day.dayDate}@pkic.org` : uid;
 
-      // For multi-day events, use a per-day RSVP address so implicit email replies
-      // (subject-line declines without an ICS attachment) can be mapped to the correct day.
-      let eventRsvpEmail = rsvpEmail;
-      if (isMultiDay && rsvpEmail && signingSecret) {
-        const { generateSignedRsvpAddress } = await import("../email/rsvp");
-        eventRsvpEmail = await generateSignedRsvpAddress(registrationId, signingSecret, rsvpEmail, day.dayDate);
-      }
+        // For multi-day events, use a per-day RSVP address so implicit email replies
+        // (subject-line declines without an ICS attachment) can be mapped to the correct day.
+        let eventRsvpEmail = rsvpEmail;
+        if (isMultiDay && rsvpEmail && signingSecret) {
+          const { generateSignedRsvpAddress } = await import("../email/rsvp");
+          eventRsvpEmail = await generateSignedRsvpAddress(registrationId, signingSecret, rsvpEmail, day.dayDate);
+        }
 
-      return {
-        uid: eventUid,
-        title,
-        description: `Manage your registration at ${manageUrl}`,
-        url,
-        location,
-        organizerEmail: eventRsvpEmail,
-        attendeeEmail,
-        start: window.start,
-        end: window.end,
-        status: "CONFIRMED",
-        alarms: STANDARD_ALARMS,
-      };
-    }));
+        const calEvent: CalendarEvent = {
+          uid: eventUid,
+          title,
+          description: `Manage your registration at ${manageUrl}`,
+          url,
+          location,
+          organizerEmail: eventRsvpEmail,
+          attendeeEmail,
+          start: window.start,
+          end: window.end,
+          status: "CONFIRMED",
+          alarms: STANDARD_ALARMS,
+        };
 
-    return { uid, content: buildIcsContent(events) };
+        return { dayDate: day.dayDate, eventUid, calEvent };
+      })
+    );
+
+    // Single combined VCALENDAR with all VEVENTs as attachment.
+    // No inline text/calendar for multi-day: Outlook's inline prompt only
+    // processes the first VEVENT and then deletes the email, losing the rest.
+    // Users open the attachment to import all days at once.
+    const combinedContent = buildIcsContent(calEvents.map(({ calEvent }) => calEvent));
+    const files: IcsFile[] = [{ uid, filename: "invite.ics", content: combinedContent }];
+
+    return { uid, files };
   }
 
   const window = toEventWindow(event);
@@ -267,5 +289,6 @@ export async function buildRegistrationIcs(
     alarms: STANDARD_ALARMS,
   };
 
-  return { uid, content: buildIcsContent([fallbackEvent]) };
+  const fallbackContent = buildIcsContent([fallbackEvent]);
+  return { uid, files: [{ uid, filename: "invite.ics", content: fallbackContent }], inlineContent: fallbackContent };
 }

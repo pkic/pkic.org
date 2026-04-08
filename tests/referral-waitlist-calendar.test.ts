@@ -168,7 +168,8 @@ describe("referral, waitlist, and calendar flows", () => {
         registrationId,
         eventId,
         icsUid: `${registrationId}@pkic.org`,
-        icsContent: "BEGIN:VCALENDAR\nEND:VCALENDAR",
+        icsFiles: [{ uid: `${registrationId}@pkic.org`, filename: "invite.ics", content: "BEGIN:VCALENDAR\nEND:VCALENDAR" }],
+        inlineContent: "BEGIN:VCALENDAR\nEND:VCALENDAR",
       },
     });
 
@@ -193,13 +194,13 @@ describe("referral, waitlist, and calendar flows", () => {
     const calendarContent = (sendgridPayload.content ?? []).find((item) =>
       (item.type ?? "").toLowerCase().includes("text/calendar")
     );
-    expect(calendarContent?.type).toBe("text/calendar");
+    expect(calendarContent?.type).toBe("text/calendar; method=REQUEST");
     expect(calendarContent?.value).toContain("BEGIN:VCALENDAR");
 
     const calendarAttachment = (sendgridPayload.attachments ?? []).find((item) =>
-      item.filename === "event.ics"
+      item.filename === "invite.ics"
     );
-    expect(calendarAttachment?.type).toBe("text/calendar");
+    expect(calendarAttachment?.type).toBe("application/ics");
 
     const outboxRows = await queryAll<{ status: string; provider_message_id: string | null }>(env.DB, 
       "SELECT status, provider_message_id FROM email_outbox WHERE id = ?",
