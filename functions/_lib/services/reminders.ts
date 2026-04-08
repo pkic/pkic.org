@@ -1,11 +1,13 @@
 import { all, run } from "../db/queries";
 import { queueEmail } from "../email/outbox";
-import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl, speakerManagePageUrl } from "./frontend-links";
+import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl, speakerManagePageUrl, registrationConfirmPageUrl } from "./frontend-links";
 import { formatInviterList, getInviteInviters, markInviteReminderSent, refreshInviteToken } from "./invites";
 import { buildProposalInviteEmailContext, refreshSpeakerManageToken } from "./proposals";
 import { buildEventEmailVariables } from "./events";
 import { nowIso } from "../utils/time";
 import { parseJsonSafe } from "../utils/json";
+import { randomToken, sha256Hex } from "../utils/crypto";
+import { addHours } from "../utils/time";
 import type { DatabaseLike } from "../types";
 
 interface EventRouteRow {
@@ -84,7 +86,7 @@ interface DueSpeakerInviteRow {
 }
 
 interface ReminderCandidatePreview {
-  category: "attendee_invite" | "speaker_invite" | "co_speaker_invite" | "presentation_upload_request";
+  category: "attendee_invite" | "speaker_invite" | "co_speaker_invite" | "presentation_upload_request" | "registration_confirmation";
   templateKey: string;
   eventName: string;
   eventSlug: string;
@@ -184,12 +186,14 @@ export async function runReminderCycle(
   inviteRemindersQueued: number;
   speakerInviteRemindersQueued: number;
   presentationRemindersQueued: number;
+  confirmationRemindersQueued: number;
   processed: number;
   preview: {
     attendeeInvites: ReminderCandidatePreview[];
     speakerInvites: ReminderCandidatePreview[];
     coSpeakerInvites: ReminderCandidatePreview[];
     presentationUploads: ReminderCandidatePreview[];
+    registrationConfirmations: ReminderCandidatePreview[];
   };
 }> {
   const now = nowIso();
@@ -522,16 +526,138 @@ export async function runReminderCycle(
     presentationRemindersQueued += 1;
   }
 
+  const remainingLimitForConfirmations = payload.limit - inviteRemindersQueued - speakerInviteRemindersQueued - presentationRemindersQueued;
+  const dueConfirmations = remainingLimitForConfirmations > 0
+    ? await all<ConfirmationReminderRow>(
+        db,
+        `SELECT
+           r.id,
+           r.event_id,
+           u.id AS user_id,
+           u.first_name,
+           u.last_name,
+           u.email,
+           u.language,
+           r.confirmation_token_hash,
+           r.confirmation_token_expires_at,
+           e.name       AS event_name,
+           e.slug       AS event_slug,
+           e.base_path  AS event_base_path,
+           e.starts_at  AS event_starts_at,
+           e.settings_json AS event_settings_json
+         FROM registrations r
+         JOIN events e ON e.id = r.event_id
+         JOIN users u ON u.id = r.user_id
+         WHERE r.status = 'pending_email_confirmation'
+           AND r.confirmation_reminder_sent_at IS NULL
+           AND r.confirmation_token_expires_at IS NOT NULL
+           AND r.confirmation_token_expires_at > ?
+           AND datetime(r.confirmation_token_expires_at, '-1 day') <= ?
+         ORDER BY r.created_at ASC
+         LIMIT ?`,
+        [now, now, remainingLimitForConfirmations],
+      )
+    : [];
+
+  let confirmationRemindersQueued = 0;
+  const registrationConfirmations: ReminderCandidatePreview[] = [];
+
+  for (const row of dueConfirmations) {
+    const event: EventRouteRow = {
+      id: row.event_id,
+      name: row.event_name,
+      slug: row.event_slug,
+      base_path: row.event_base_path,
+      starts_at: row.event_starts_at,
+      settings_json: row.event_settings_json,
+    };
+
+    const daysToExpire = daysUntil(row.confirmation_token_expires_at) ?? 0;
+    const timeToExpire = daysToExpire > 0 ? `${daysToExpire} days` : "24 hours";
+    const subject = `Reminder: please confirm your registration for ${event.name}`;
+
+    const previewCandidate: ReminderCandidatePreview = {
+      category: "registration_confirmation",
+      templateKey: "registration_confirmation_reminder",
+      eventName: event.name,
+      eventSlug: event.slug,
+      recipientEmail: row.email,
+      recipientName: [row.first_name, row.last_name].filter(Boolean).join(" ") || null,
+      proposalTitle: null,
+      reminderNumber: 1,
+      dueAt: row.confirmation_token_expires_at,
+      subject,
+    };
+
+    registrationConfirmations.push(previewCandidate);
+
+    if (!payload.dryRun) {
+      const newToken = randomToken(24);
+      const newTokenHash = await sha256Hex(newToken);
+      // Give them a fresh 48h from reminder time
+      const newExpiresAt = addHours(now, 48);
+      const confirmationUrl = registrationConfirmPageUrl(payload.appBaseUrl, event, newToken);
+      const manageUrl = `${payload.appBaseUrl}/events/${event.slug}/manage`;
+
+      await queueEmail(db, {
+        eventId: event.id,
+        templateKey: "registration_confirmation_reminder",
+        recipientEmail: row.email,
+        recipientUserId: row.user_id,
+        messageType: "transactional",
+        subject,
+        data: {
+          ...buildEventEmailVariables(event, payload.appBaseUrl),
+          firstName: row.first_name ?? "",
+          confirmationUrl,
+          manageUrl,
+          timeToExpire: "48 hours",
+          __subjectOverride: subject,
+        },
+      });
+
+      await run(
+        db,
+        `UPDATE registrations
+         SET confirmation_reminder_sent_at = ?,
+             confirmation_token_hash = ?,
+             confirmation_token_expires_at = ?
+         WHERE id = ?`,
+        [now, newTokenHash, newExpiresAt, row.id],
+      );
+    }
+
+    confirmationRemindersQueued += 1;
+  }
+
   return {
     inviteRemindersQueued,
     speakerInviteRemindersQueued,
     presentationRemindersQueued,
-    processed: inviteRemindersQueued + speakerInviteRemindersQueued + presentationRemindersQueued,
+    confirmationRemindersQueued,
+    processed: inviteRemindersQueued + speakerInviteRemindersQueued + presentationRemindersQueued + confirmationRemindersQueued,
     preview: {
       attendeeInvites,
       speakerInvites,
       coSpeakerInvites,
       presentationUploads,
+      registrationConfirmations,
     },
   };
+}
+interface ConfirmationReminderRow {
+  id: string;
+  event_id: string;
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  language: string;
+  confirmation_token_hash: string;
+  confirmation_token_expires_at: string;
+  event_name: string;
+  event_slug: string;
+  event_base_path: string | null;
+  event_starts_at: string | null;
+  event_settings_json: string;
 }
