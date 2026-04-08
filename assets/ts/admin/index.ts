@@ -231,6 +231,7 @@ interface DonationPeriod {
 interface StatsResponse {
   registrations: {
     byStatus: Record<string, number>;
+    byAttendanceType: Record<string, number>;
     total: number;
     weekly: Array<{ week: string; count: number }>;
     monthly: Array<{ month: string; count: number }>;
@@ -1087,6 +1088,7 @@ function wireRegistrationsGroupTabs(slug: string): void {
 function registrationsListHtml(slug: string): string {
   void slug;
   return (
+    '<div id="regs-stats" class="mb-2"></div>' +
     '<div class="d-flex justify-content-end mb-2">' +
       `<button class="btn btn-sm btn-outline-warning" data-run-waitlist-promotions="${esc(slug)}">Run waitlist promotions</button>` +
     '</div>' +
@@ -1111,10 +1113,30 @@ async function loadEventRegistrations(slug: string): Promise<void> {
       const query = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
       const d = await api<{
         registrations: Registration[];
+        stats?: { byAttendanceType: Record<string, number>; byStatus: Record<string, number> };
         page?: { limit: number; offset: number; hasMore: boolean; total: number };
       }>(`/api/v1/admin/events/${slug}/registrations?${query.toString()}`);
 
       const regs = d.registrations ?? [];
+
+      // Render attendance-type stats above the table
+      const statsEl = q("#regs-stats");
+      if (statsEl && d.stats?.byAttendanceType) {
+        const { byAttendanceType } = d.stats;
+        const labels: Record<string, string> = { in_person: "In person", virtual: "Virtual", on_demand: "On demand" };
+        const total = Object.values(byAttendanceType).reduce((s, n) => s + n, 0);
+        const items = Object.entries(byAttendanceType)
+          .map(([k, v]) => `<span class="badge bg-secondary me-1">${esc(labels[k] ?? k)}</span><span class="fw-semibold me-3">${v}</span>`)
+          .join("");
+        statsEl.innerHTML =
+          `<div class="d-flex align-items-center flex-wrap gap-1 small mb-1">` +
+          `<span class="text-muted me-2">Attendance type:</span>${items}` +
+          `<span class="text-muted ms-auto">Total: <strong>${total}</strong></span>` +
+          `</div>`;
+      } else if (statsEl) {
+        statsEl.innerHTML = "";
+      }
+
       body.innerHTML = regsTable(regs);
       wireRegsTable(slug, regs);
 
@@ -6505,6 +6527,15 @@ async function loadStats(): Promise<void> {
               Object.entries(s.registrations.byStatus).map(([k, v]) => `<tr><td>${badge(k)}</td><td class="mono">${v}</td></tr>`),
               "None",
             ) +
+            '<h6 class="text-uppercase small fw-bold text-muted mb-3 mt-3">By Attendance Type</h6>' +
+            tbl(
+              ["Attendance Type", "Count"],
+              Object.entries(s.registrations.byAttendanceType ?? {}).map(([k, v]) => {
+                const labels: Record<string, string> = { in_person: "In person", virtual: "Virtual", on_demand: "On demand" };
+                return `<tr><td>${esc(labels[k] ?? k)}</td><td class="mono">${v}</td></tr>`;
+              }),
+              "None",
+            ) +
           "</div></div></div>" +
           '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
             '<h6 class="text-uppercase small fw-bold text-muted mb-3">Invites</h6>' +
@@ -6528,6 +6559,17 @@ async function loadStats(): Promise<void> {
 
       registrations:
         '<div class="card border-0 shadow-sm"><div class="card-body">' +
+          '<h6 class="text-uppercase small fw-bold text-muted mb-3">Registrations by Attendance Type</h6>' +
+          tbl(
+            ["Attendance Type", "Count"],
+            Object.entries(s.registrations.byAttendanceType ?? {}).map(([k, v]) => {
+              const labels: Record<string, string> = { in_person: "In person", virtual: "Virtual", on_demand: "On demand" };
+              return `<tr><td>${esc(labels[k] ?? k)}</td><td class="mono">${v}</td></tr>`;
+            }),
+            "No data",
+          ) +
+        "</div></div>" +
+        '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
           '<h6 class="text-uppercase small fw-bold text-muted mb-3">Registrations — Weekly (last 12 weeks)</h6>' +
           svgBarChart(s.registrations.weekly.map((d) => d.week.slice(5)), s.registrations.weekly.map((d) => d.count)) +
           tbl(

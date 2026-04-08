@@ -15,6 +15,7 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   const [
     registrationsByStatus,
+    registrationsByAttendanceType,
     invitesByStatus,
     outboxByStatus,
     topEvents,
@@ -29,6 +30,11 @@ export async function onRequestGet(c: any): Promise<Response> {
     all<{ status: string; count: number }>(
       db,
       `SELECT status, COUNT(*) AS count FROM registrations GROUP BY status`,
+      [],
+    ),
+    all<{ attendance_type: string; count: number }>(
+      db,
+      `SELECT attendance_type, COUNT(*) AS count FROM registrations GROUP BY attendance_type`,
       [],
     ),
     all<{ status: string; count: number }>(
@@ -163,6 +169,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     generatedAt: new Date().toISOString(),
     registrations: {
       byStatus: toMap(registrationsByStatus),
+      byAttendanceType: Object.fromEntries(registrationsByAttendanceType.map((r) => [r.attendance_type, r.count])),
       total: registrationsByStatus.reduce((s, r) => s + r.count, 0),
       weekly: registrationWeekly,
       monthly: registrationMonthly,

@@ -98,16 +98,33 @@ export async function onRequestGet(c: any): Promise<Response> {
     };
   });
 
-  const totalRow = await first<{ total: number }>(
-    c.env.DB,
-    "SELECT COUNT(*) AS total FROM registrations WHERE event_id = ?",
-    [event.id],
-  );
+  const [totalRow, statRows] = await Promise.all([
+    first<{ total: number }>(
+      c.env.DB,
+      "SELECT COUNT(*) AS total FROM registrations WHERE event_id = ?",
+      [event.id],
+    ),
+    all<{ attendance_type: string; status: string; count: number }>(
+      c.env.DB,
+      `SELECT attendance_type, status, COUNT(*) AS count
+       FROM registrations WHERE event_id = ?
+       GROUP BY attendance_type, status`,
+      [event.id],
+    ),
+  ]);
   const total = Number(totalRow?.total ?? 0);
+
+  const byAttendanceType: Record<string, number> = {};
+  const byStatus: Record<string, number> = {};
+  for (const row of statRows) {
+    byAttendanceType[row.attendance_type] = (byAttendanceType[row.attendance_type] ?? 0) + Number(row.count);
+    byStatus[row.status] = (byStatus[row.status] ?? 0) + Number(row.count);
+  }
 
   return json({
     event: { id: event.id, slug: event.slug, name: event.name },
     registrations: registrationsWithSummary,
+    stats: { byAttendanceType, byStatus },
     page: {
       limit,
       offset,
