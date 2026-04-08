@@ -10,8 +10,19 @@ export async function generateSignedBounceAddress(
   
   const [localPart, domain] = baseEmail.split("@");
   if (!domain) throw new Error("Invalid base email");
-  
-  return `${localPart}+${outboxId}-${signature}@${domain}`;
+  const baseLocal = localPart.split("+")[0];
+
+  // sub-address appended: +{UUID-36}-{sig10} = 1+36+1+10 = 48 chars
+  // RFC 5321 local-part limit is 64 chars, so base must be ≤ 16
+  const MAX_BASE_LOCAL = 16;
+  if (baseLocal.length > MAX_BASE_LOCAL) {
+    throw new Error(
+      `Bounce base email local part "${baseLocal}" is ${baseLocal.length} chars; ` +
+      `max allowed is ${MAX_BASE_LOCAL} to stay within the 64-char RFC 5321 limit.`
+    );
+  }
+
+  return `${baseLocal}+${outboxId}-${signature}@${domain}`;
 }
 
 export async function verifySignedBounceAddress(
@@ -26,7 +37,7 @@ export async function verifySignedBounceAddress(
   if (parts.length !== 2) return null;
   if (parts[1].toLowerCase() !== baseDomain.toLowerCase()) return null;
   
-  const escapedLocal = baseLocal.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedLocal = baseLocal.split("+")[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const regex = new RegExp(`^${escapedLocal}\\+([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})-([a-f0-9]{10})$`, "i");
   const match = parts[0].match(regex);
   if (!match) return null;
