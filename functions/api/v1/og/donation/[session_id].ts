@@ -1,7 +1,7 @@
 /**
  * GET /api/v1/og/donation/:session_id
  *
- * Returns a personalised 1200×630 JPEG donation badge for sharing on social
+ * Returns a personalised 1200x630 donation badge for sharing on social
  * media. The badge shows the donor's name, the amount donated, and a
  * "Match this donation!" CTA, styled to match the PKI Consortium brand.
  *
@@ -15,6 +15,7 @@
 import { json } from "../../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { generateDonationBadgePng } from "../../../../_lib/services/og-badge-prerender";
+import { applyDownloadDisposition } from "../../../../_lib/utils/download-disposition";
 
 const JPEG_CONTENT_TYPE = "image/jpeg";
 const PNG_CONTENT_TYPE  = "image/png";
@@ -32,12 +33,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   const isDownload = url.searchParams.get("download") === "1";
-  const extraHeaders: Record<string, string> = {};
-  if (isDownload) {
-    const rawName  = url.searchParams.get("name") ?? "donation-badge";
-    const safeName = rawName.replace(/[^\w\-. ]/g, "").trim().replace(/\.jpe?g$/i, "") || "donation-badge";
-    extraHeaders["Content-Disposition"] = `attachment; filename="${safeName}.jpg"`;
-  }
+  const rawName = url.searchParams.get("name") ?? "donation-badge";
 
   const r2Key = `${R2_KEY_PREFIX}${session_id}`;
 
@@ -45,14 +41,15 @@ export async function onRequestGet(c: any): Promise<Response> {
   if (bucket) {
     const cached = await bucket.get(r2Key);
     if (cached) {
-      return new Response(await cached.arrayBuffer(), {
+      const cachedContentType = cached.httpMetadata?.contentType ?? JPEG_CONTENT_TYPE;
+      const response = new Response(await cached.arrayBuffer(), {
         headers: {
-          "Content-Type": JPEG_CONTENT_TYPE,
+          "Content-Type": cachedContentType,
           "Cache-Control": isDownload ? "no-store" : CACHE_CONTROL,
           "X-Cache": "HIT",
-          ...extraHeaders,
         },
       });
+      return isDownload ? applyDownloadDisposition(response, rawName, "donation-badge") : response;
     }
   }
 
@@ -78,7 +75,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       const pngStream = new ReadableStream<Uint8Array>({
         start(ctrl) { ctrl.enqueue(png as Uint8Array); ctrl.close(); },
       });
-      const result  = await c.env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 85 });
+      const result  = await c.env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 90 });
       const jpegBuf = await (await result.response()).arrayBuffer();
       c.executionCtx.waitUntil(
         bucket.put(r2Key, jpegBuf, {
@@ -86,24 +83,24 @@ export async function onRequestGet(c: any): Promise<Response> {
           customMetadata: { sessionId: session_id },
         }),
       );
-      return new Response(jpegBuf, {
+      const response = new Response(jpegBuf, {
         headers: {
           "Content-Type": JPEG_CONTENT_TYPE,
           "Cache-Control": isDownload ? "no-store" : CACHE_CONTROL,
           "X-Cache": "MISS",
-          ...extraHeaders,
         },
       });
+      return isDownload ? applyDownloadDisposition(response, rawName, "donation-badge") : response;
     } catch { /* fall through to PNG fallback */ }
   }
 
   // Fallback: serve raw PNG (local dev — no IMAGES binding)
-  return new Response(png.buffer as ArrayBuffer, {
+  const response = new Response(png.buffer as ArrayBuffer, {
     headers: {
       "Content-Type": PNG_CONTENT_TYPE,
       "Cache-Control": "no-store",
       "X-Cache": "MISS",
-      ...extraHeaders,
     },
   });
+  return isDownload ? applyDownloadDisposition(response, rawName, "donation-badge") : response;
 }

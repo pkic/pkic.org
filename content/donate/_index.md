@@ -1,6 +1,6 @@
 ---
 title: Donate
-description: Make a voluntary donation to the PKI Consortium to help us keep our conferences and resources accessible to all.
+description: Back the PKI Consortium with a voluntary donation to keep memberships, resources, and events free for everyone. Your support helps sustain open collaboration and the community people count on.
 summary: Support our mission to advance trust in digital communications.
 image: /img/pkic-og.png
 layout: single

@@ -110,7 +110,7 @@ export interface PagesContext<P extends Record<string, string> = Record<string, 
   next?: () => Promise<Response>;
   req?: {
     raw?: Request;
-    param?: (name: string) => string;
+    param?: (name?: string) => string | P;
     parseBody?: () => Promise<Record<string, unknown>>;
   };
   executionCtx?: {

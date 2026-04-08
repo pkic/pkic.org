@@ -17,6 +17,7 @@ import { json } from "../../_lib/http";
 import { first, run } from "../../_lib/db/queries";
 import { resolveAppBaseUrl } from "../../_lib/config";
 import { getClientIp, getUserAgent } from "../../_lib/request";
+import { resolveOgImageType } from "../../_lib/utils/og-image-type";
 // ─── Social-scraper detection (same list as /r/[code].ts) ────────────────────
 
 const SCRAPER_UA_PATTERNS = [
@@ -58,17 +59,31 @@ function esc(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
+function buildPromoterOgDescription(sharerName: string | null): string {
+  return sharerName
+    ? `${sharerName} is backing the PKI Consortium with a voluntary donation to keep memberships, resources, and events free and accessible for everyone. Join them and help fund the non-profit that makes it possible.`
+    : `Back the PKI Consortium with a voluntary donation to keep memberships, resources, and events free and accessible for everyone. Your support helps fund the non-profit that makes it possible.`;
+}
+
+function buildPromoterOgImageAlt(sharerName: string | null): string {
+  return sharerName
+    ? `${sharerName}'s personalized PKI Consortium donation card for sharing a voluntary contribution.`
+    : `Personalized PKI Consortium donation card for sharing a voluntary contribution.`;
+}
+
 function buildPromoterOgHtml(
   code: string,
   appBaseUrl: string,
   promoter: PromoterRow,
   donateUrl: string,
+  ogImageType: string,
 ): string {
   const sharerName  = promoter.name ? esc(promoter.name) : null;
   const ogTitle     = sharerName
     ? `${sharerName} is supporting the PKI Consortium`
     : "Support the PKI Consortium";
-  const ogDesc      = "Help keep PKI memberships, resources, and events free and accessible worldwide.";
+  const ogDesc      = esc(buildPromoterOgDescription(promoter.name));
+  const ogImageAlt  = esc(buildPromoterOgImageAlt(promoter.name));
   const ogUrl       = esc(`${appBaseUrl}/donate/r/${encodeURIComponent(code)}`);
   const ogImage     = promoter.checkout_session_id
     ? esc(`${appBaseUrl}/api/v1/og/donation/${encodeURIComponent(promoter.checkout_session_id)}`)
@@ -89,13 +104,15 @@ function buildPromoterOgHtml(
   <meta property="og:image"        content="${ogImage}">
   <meta property="og:image:width"  content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:type"   content="image/jpeg">
+  <meta property="og:image:type"   content="${ogImageType}">
+  <meta property="og:image:alt"    content="${ogImageAlt}">
   <meta property="og:site_name"    content="PKI Consortium">
 
   <meta name="twitter:card"        content="summary_large_image">
   <meta name="twitter:title"       content="${ogTitle}">
   <meta name="twitter:description" content="${ogDesc}">
   <meta name="twitter:image"       content="${ogImage}">
+  <meta name="twitter:image:alt"   content="${ogImageAlt}">
 
   <link rel="canonical" href="${canonical}">
 
@@ -133,6 +150,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   const donateUrl = `${appBase}/donate/?ref=${encodeURIComponent(code)}`;
+  const ogImageType = resolveOgImageType(c.env);
 
   // ── For real browsers, record the click (fire-and-forget) ─────────────────
   // Scrapers are excluded so they don't inflate click counts.
@@ -146,7 +164,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   // Using a meta-refresh (and JS fallback) instead of a 302 redirect means
   // every crawler — not just the ones in the UA whitelist — can read the
   // personalised Open Graph tags before being sent to the destination.
-  return new Response(buildPromoterOgHtml(code, appBase, promoter, donateUrl), {
+  return new Response(buildPromoterOgHtml(code, appBase, promoter, donateUrl, ogImageType), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",
       "Cache-Control": "public, max-age=300, s-maxage=300",

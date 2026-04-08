@@ -1,0 +1,66 @@
+{{- if eq (.Param "eventType" | default "") "conference" -}}
+  {{- $page := $ -}}
+  {{- $eventDateParam := $page.Param "eventDate" -}}
+  {{- $eventData := $page.Params.data | default dict -}}
+  {{- if $eventDateParam -}}
+    {{- $eventDate := time $eventDateParam -}}
+    {{- $eventDuration := int (default 1 ($page.Param "eventDuration")) -}}
+    {{- $eventEndDate := $eventDate.AddDate 0 0 (sub $eventDuration 1) -}}
+    {{- $eventTitle := $eventData.name | default ($page.Param "heroTitle" | default $page.Title) -}}
+    {{- $eventDescription := $page.Summary | plainify | strings.TrimSpace -}}
+    {{- $location := index $eventData "location" | default "" -}}
+    {{- $attendanceMode := index $eventData "attendanceMode" | default "" -}}
+    {{- $imagePath := index $eventData "image" | default ($page.Param "heroImage" | default "") -}}
+    {{- $registrationPath := index $eventData "registrationUrl" | default "" -}}
+    {{- $participationPath := index $eventData "participationUrl" | default "" -}}
+    {{- $sponsorshipPath := index $eventData "sponsorshipUrl" | default "" -}}
+    {{- $organizerName := index $eventData "organizerName" | default "PKI Consortium" -}}
+    {{- $organizerPath := index $eventData "organizerUrl" | default "/" -}}
+    {{- $imageURL := partial "utils/resolve-url.html" (dict "page" $page "value" $imagePath) -}}
+    {{- $registrationURL := partial "utils/resolve-url.html" (dict "page" $page "value" $registrationPath) -}}
+    {{- $participationURL := partial "utils/resolve-url.html" (dict "page" $page "value" $participationPath) -}}
+    {{- $sponsorshipURL := partial "utils/resolve-url.html" (dict "page" $page "value" $sponsorshipPath) -}}
+    {{- $organizerURL := partial "utils/resolve-url.html" (dict "page" $page "value" $organizerPath) -}}
+
+<div class="d-none" itemscope itemtype="https://schema.org/ConferenceEvent">
+  <meta itemprop="name" content="{{ $eventTitle }}">
+  <link itemprop="url" href="{{ $page.Permalink }}">
+  <link itemprop="mainEntityOfPage" href="{{ $page.Permalink }}">
+  {{ with $eventDescription }}<meta itemprop="description" content="{{ . | plainify | strings.TrimSpace }}">{{ end }}
+  <meta itemprop="startDate" content="{{ $eventDate.Format "2006-01-02" }}">
+  <meta itemprop="endDate" content="{{ $eventEndDate.Format "2006-01-02" }}">
+  {{ with $location }}<meta itemprop="location" content="{{ . | plainify | strings.TrimSpace }}">{{ end }}
+  {{ with $attendanceMode }}<meta itemprop="eventAttendanceMode" content="{{ . }}">{{ end }}
+  <meta itemprop="eventStatus" content="https://schema.org/EventScheduled">
+  {{ with $imageURL }}<meta itemprop="image" content="{{ absURL . }}">{{ end }}
+
+  {{- with $organizerName }}
+  <div itemprop="organizer" itemscope itemtype="https://schema.org/Organization">
+    <meta itemprop="name" content="{{ . | plainify | strings.TrimSpace }}">
+    {{ with $organizerURL }}<link itemprop="url" href="{{ absURL . }}">{{ end }}
+  </div>
+  {{ end }}
+
+  {{ with $registrationURL }}
+  <div itemprop="offers" itemscope itemtype="https://schema.org/Offer">
+    <meta itemprop="name" content="Registration">
+    <link itemprop="url" href="{{ absURL . }}">
+  </div>
+  {{ end }}
+
+  {{ with $participationURL }}
+  <div itemprop="hasParticipationOffer" itemscope itemtype="https://schema.org/Offer">
+    <meta itemprop="name" content="Call for Proposals">
+    <link itemprop="url" href="{{ absURL . }}">
+  </div>
+  {{ end }}
+
+  {{ with $sponsorshipURL }}
+  <div itemprop="hasSponsorshipOffer" itemscope itemtype="https://schema.org/Offer">
+    <meta itemprop="name" content="Sponsorship opportunities">
+    <link itemprop="url" href="{{ absURL . }}">
+  </div>
+  {{ end }}
+</div>
+  {{- end -}}
+{{- end -}}

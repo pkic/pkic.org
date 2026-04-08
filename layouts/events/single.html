@@ -1,5 +1,6 @@
 {{ define "main" }}
 {{ partial "hero.html" . }}
+{{ partial "events/conference-schema.html" . }}
 
 <div class="{{ if not .Params.fullwidth }}container{{ else }}container-fluid{{ end }}">
     <div class="row">
