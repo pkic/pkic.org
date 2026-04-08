@@ -150,10 +150,7 @@ interface Registration {
   source_type?: string;
   created_at: string;
   referral_code?: string | null;
-  rsvp_status?: string | null;
-  warning_sent_at?: string | null;
-  action_executed_at?: string | null;
-  action_taken?: string | null;
+  rsvp_events_json?: string | null;
   dayAttendance?: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
   dayWaitlist?: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
   dayWaitlistSummary?: string | null;
@@ -1677,6 +1674,32 @@ function regDetailHtml(r: Registration, slug: string, eventDays: AdminRegistrati
 
   void slug; // used by wiring functions via data-reg-id
 
+  let rsvpHtml = `<p class="small text-muted mb-2"><strong>Calendar RSVP:</strong> Not received</p>`;
+  if (r.rsvp_events_json) {
+    try {
+      const parsed = JSON.parse(r.rsvp_events_json);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        rsvpHtml = parsed.map((ev) => {
+          let label = "Event RSVP";
+          if (ev.uid && String(ev.uid).includes("@")) {
+            const dateMatch = String(ev.uid).match(/-(\d{4}-\d{2}-\d{2})@/);
+            if (dateMatch) label = `Day ${dateMatch[1]} RSVP`;
+          } else if (ev.uid && String(ev.uid).startsWith("implicit-")) {
+            label = "Email Reply";
+          }
+          
+          let subDetails = "";
+          if (ev.warning_sent_at) subDetails += `<br><span class="text-warning small">Warned: ${esc(new Date(ev.warning_sent_at).toLocaleString())}</span>`;
+          if (ev.action_executed_at) subDetails += `<br><span class="text-danger small">Enforced: ${badge(String(ev.action_taken))} at ${esc(new Date(ev.action_executed_at).toLocaleString())}</span>`;
+          
+          return `<p class="small mb-2"><strong>${esc(label)}:</strong> ${badge(ev.status)} ${subDetails}</p>`;
+        }).join("");
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   return (
     `<div class="row g-3">` +
 
@@ -1692,9 +1715,7 @@ function regDetailHtml(r: Registration, slug: string, eventDays: AdminRegistrati
     // ── Resend email ──────────────────────────────────────────────────────
     `<div class="col-md-3">` +
     `<h6 class="small fw-semibold text-uppercase text-muted mb-2">Confirmation Email & RSVP</h6>` +
-    (r.rsvp_status ? `<p class="small mb-2"><strong>Calendar RSVP:</strong> ${badge(r.rsvp_status)}</p>` : `<p class="small text-muted mb-2"><strong>Calendar RSVP:</strong> Not received</p>`) +
-    (r.warning_sent_at ? `<p class="small text-warning mb-2"><strong>Warned:</strong> ${esc(new Date(r.warning_sent_at).toLocaleString())}</p>` : "") +
-    (r.action_executed_at ? `<p class="small text-danger mb-2"><strong>Enforced:</strong> ${badge(String(r.action_taken))} at ${esc(new Date(r.action_executed_at).toLocaleString())}</p>` : "") +
+    rsvpHtml +
     `<p class="small text-muted mb-2 mt-1">Rotates the token and re-queues the email (confirm link or manage link depending on status).</p>` +
     `<button class="btn btn-sm btn-outline-primary" data-resend-reg="${esc(r.id)}">Resend Email</button>` +
     `<div class="mt-2 small" id="rd-resend-status-${esc(r.id)}"></div>` +

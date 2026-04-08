@@ -181,7 +181,7 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
         ? "DECLINED"
         : "TENTATIVE";
     
-    let attendeeEmail = "unknown@example.com";
+    let attendeeEmail: string;
     if (attendeeLine) {
       const emailMatch = attendeeLine.match(/mailto:(.+?)(?:;|$)/i);
       if (emailMatch) {

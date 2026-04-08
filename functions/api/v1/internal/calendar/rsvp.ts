@@ -25,6 +25,7 @@ const rsvpRequestSchema = z.union([
     provider: z.string(),
     sourceMessageId: z.string(),
     calendarIcs: z.string(),
+    fromEmail: z.string().optional(),
   }),
   z.object({
     provider: z.string(),
@@ -100,7 +101,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     
     // Extract email from ATTENDEE line (e.g., "ATTENDEE;PARTSTAT=DECLINED:mailto:alice@example.com")
     const emailMatch = attendeeLine?.match(/mailto:(.+)$/);
-    attendeeEmail = emailMatch ? emailMatch[1] : "unknown@example.com";
+    attendeeEmail = emailMatch ? emailMatch[1] : body.fromEmail || "";
   } else {
     uid = body.uid;
     partstat = body.partstat;
