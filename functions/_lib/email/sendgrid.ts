@@ -10,6 +10,8 @@ export interface SendgridMessage {
   calendarIcsContent?: string;
   calendarMethod?: "PUBLISH" | "REQUEST";
   categories?: string[];
+  replyTo?: string;
+  bounceAddress?: string;
   attachments?: Array<{ filename: string; contentType: string; base64Content: string }>;
 }
 
@@ -33,6 +35,7 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
         : {}),
     }],
     from: { email: fromEmail, name: fromName },
+    ...(message.replyTo ? { reply_to: { email: message.replyTo } } : {}),
     subject: message.subject,
     content: [
       { type: "text/plain", value: message.text },
@@ -45,6 +48,7 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
         : []),
     ],
     categories: message.categories ?? [],
+    ...(message.bounceAddress ? { mail_settings: { bounce_forward: { email: message.bounceAddress, enable: true } } } : {}),
   };
 
   if (message.attachments && message.attachments.length > 0) {

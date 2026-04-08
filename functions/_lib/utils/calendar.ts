@@ -11,6 +11,8 @@ interface CalendarEvent {
   description: string;
   url?: string;
   location?: string;
+  organizerEmail?: string;
+  attendeeEmail?: string;
   start: IcsDateTuple;
   end: IcsDateTuple;
   status: "CONFIRMED";
@@ -20,7 +22,7 @@ interface CalendarEvent {
 interface CalendarAlarm {
   action: "display";
   description: string;
-  trigger: { hours: number; before: boolean };
+  trigger: { hours?: number; minutes?: number; before: boolean };
 }
 
 /** Attendance types that represent a scheduled live attendance (in-person or livestream). */
@@ -94,7 +96,8 @@ function buildAlarm(alarm: CalendarAlarm): InstanceType<typeof ICAL.Component> {
   component.addPropertyWithValue(
     "trigger",
     ICAL.Duration.fromData({
-      hours: alarm.trigger.hours,
+      hours: alarm.trigger.hours ?? 0,
+      minutes: alarm.trigger.minutes ?? 0,
       isNegative: alarm.trigger.before,
     }),
   );
@@ -116,6 +119,22 @@ function buildEventComponent(event: CalendarEvent): InstanceType<typeof ICAL.Com
   }
   if (event.location) {
     component.addPropertyWithValue("location", event.location);
+  }
+
+  if (event.organizerEmail) {
+    const org = new ICAL.Property("organizer");
+    org.setParameter("cn", "PKI Consortium Events");
+    org.setValue(`mailto:${event.organizerEmail}`);
+    component.addProperty(org);
+  }
+
+  if (event.attendeeEmail) {
+    const att = new ICAL.Property("attendee");
+    att.setParameter("role", "REQ-PARTICIPANT");
+    att.setParameter("partstat", "NEEDS-ACTION");
+    att.setParameter("rsvp", "TRUE");
+    att.setValue(`mailto:${event.attendeeEmail}`);
+    component.addProperty(att);
   }
 
   for (const alarm of event.alarms) {
@@ -149,10 +168,12 @@ function buildIcsContent(events: CalendarEvent[]): string {
   }
 }
 
-/** Standard calendar reminder alarms — 1 day and 1 hour before each event. */
+/** Standard calendar reminder alarms — 1 day, 1 hour, 15 minutes, and 5 minutes before each event. */
 const STANDARD_ALARMS: CalendarAlarm[] = [
   { action: "display", description: "Reminder", trigger: { hours: 24, before: true } },
   { action: "display", description: "Reminder", trigger: { hours: 1, before: true } },
+  { action: "display", description: "Reminder", trigger: { minutes: 15, before: true } },
+  { action: "display", description: "Reminder", trigger: { minutes: 5, before: true } },
 ];
 
 export interface DayAttendanceEntry {
@@ -182,6 +203,8 @@ export function buildRegistrationIcs(
   manageUrl: string,
   dayAttendance: DayAttendanceEntry[] = [],
   appBaseUrl?: string,
+  rsvpEmail?: string,
+  attendeeEmail?: string,
 ): { uid: string; content: string } {
   const uid = `${registrationId}@pkic.org`;
   const baseUrl = appBaseUrl ?? "https://pkic.org";
@@ -209,6 +232,8 @@ export function buildRegistrationIcs(
         description: `Manage your registration at ${manageUrl}`,
         url,
         location,
+        organizerEmail: rsvpEmail,
+        attendeeEmail,
         start: window.start,
         end: window.end,
         status: "CONFIRMED",
@@ -225,6 +250,8 @@ export function buildRegistrationIcs(
     title: event.name,
     description: `Manage your registration at ${manageUrl}`,
     url: manageUrl,
+    organizerEmail: rsvpEmail,
+    attendeeEmail,
     start: window.start,
     end: window.end,
     status: "CONFIRMED",

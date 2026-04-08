@@ -109,7 +109,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   // Store RSVP in database
   try {
-    const registrationIdMatch = uid.match(/^([a-f0-9-]+)@/);
+    const registrationIdMatch = uid.match(/^([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})/i);
     if (registrationIdMatch) {
       const registrationId = registrationIdMatch[1];
       // Deduplicate by sourceMessageId to avoid processing same email multiple times

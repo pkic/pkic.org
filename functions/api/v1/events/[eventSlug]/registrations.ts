@@ -12,6 +12,7 @@ import { trySeedGravatarThenPrerender } from "../../../../_lib/services/og-badge
 import { buildBadgeAttachment } from "../../../../_lib/email/attachments";
 import { persistConsents, validateRequiredConsents } from "../../../../_lib/services/consent";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
+import { generateSignedRsvpAddress } from "../../../../_lib/email/rsvp";
 import { buildRegistrationIcs } from "../../../../_lib/utils/calendar";
 import { getClientIp, getUserAgent, requireInternalSecret } from "../../../../_lib/request";
 import { writeAuditLog } from "../../../../_lib/services/audit";
@@ -171,7 +172,8 @@ export async function onRequestPost(c: any): Promise<Response> {
 
     c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
   } else {
-    const calendar = buildRegistrationIcs(event, created.registration.id, manageUrl, dayAttendanceRaw, appBaseUrl);
+    const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET ? await generateSignedRsvpAddress(created.registration.id, c.env.INTERNAL_SIGNING_SECRET) : undefined;
+    const calendar = buildRegistrationIcs(event, created.registration.id, manageUrl, dayAttendanceRaw, appBaseUrl, rsvpEmail, user.email);
     const outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
       baseUrl: appBaseUrl,
@@ -219,6 +221,7 @@ export async function onRequestPost(c: any): Promise<Response> {
         redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
         badgeImageUrl: `${appBaseUrl}/api/v1/og/${referralCode}`,
       },
+      bounceAddress: rsvpEmail,
       calendar: {
         registrationId: created.registration.id,
         eventId: event.id,

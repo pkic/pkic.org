@@ -175,6 +175,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       outboxByStatus: toMap(outboxByStatus),
       totalQueued: outboxByStatus.find((r) => r.status === "queued")?.count ?? 0,
       totalFailed: outboxByStatus.find((r) => r.status === "failed")?.count ?? 0,
+      totalBounced: outboxByStatus.find((r) => r.status === "bounced")?.count ?? 0,
     },
     topEvents,
     recentActivity,

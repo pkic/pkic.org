@@ -11,6 +11,7 @@ import { loadEmailLayout, loadEmailPartials } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import { parseQueuedEmailAttachments, type QueuedEmailAttachment } from "./attachments";
+import { generateSignedBounceAddress } from "./bounces";
 import type { DatabaseLike, Env } from "../types";
 
 function uint8ToBase64(bytes: Uint8Array): string {
@@ -35,7 +36,7 @@ interface OutboxRow {
   message_type: "transactional" | "promotional";
   provider: string;
   provider_message_id: string | null;
-  status: "queued" | "sending" | "sent" | "failed" | "retrying";
+  status: "queued" | "sending" | "sent" | "failed" | "retrying" | "bounced";
   attempts: number;
   send_after: string;
   last_error: string | null;
@@ -123,6 +124,8 @@ export async function queueEmail(
     messageType: "transactional" | "promotional";
     calendar?: CalendarPayload;
     attachments?: QueuedEmailAttachment[];
+    replyTo?: string;
+    bounceAddress?: string;
     /** Delay delivery by this many seconds (e.g. to let OG badge rendering finish). */
     sendAfterSeconds?: number;
   },
@@ -140,6 +143,14 @@ export async function queueEmail(
 
   if (payload.attachments && payload.attachments.length > 0) {
     data.__attachments = payload.attachments;
+  }
+
+  if (payload.replyTo) {
+    data.__replyTo = payload.replyTo;
+  }
+
+  if (payload.bounceAddress) {
+    data.__bounceAddress = payload.bounceAddress;
   }
 
   const sendAfter = payload.sendAfterSeconds && payload.sendAfterSeconds > 0
@@ -298,6 +309,14 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
       ? payload.__bccRecipients.filter((item): item is string => typeof item === "string" && item.includes("@"))
       : undefined;
 
+    let bounceAddress = typeof payload.__bounceAddress === "string" ? payload.__bounceAddress : undefined;
+    if (!bounceAddress) {
+      if (!env.INTERNAL_SIGNING_SECRET) {
+        throw new AppError(500, "CONFIG_ERROR", "INTERNAL_SIGNING_SECRET is a required config parameter");
+      }
+      bounceAddress = await generateSignedBounceAddress(row.id, env.INTERNAL_SIGNING_SECRET);
+    }
+
     const messageId = await sendViaSendgrid(env, {
       to: row.recipient_email,
       bcc: bccRecipients,
@@ -307,6 +326,8 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
       calendarIcsContent: calendar?.icsContent,
       calendarMethod: "PUBLISH",
       categories: [row.template_key, row.message_type],
+      replyTo: typeof payload.__replyTo === "string" ? payload.__replyTo : undefined,
+      bounceAddress,
       attachments,
     });
 

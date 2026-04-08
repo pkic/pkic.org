@@ -34,7 +34,7 @@ interface OutboxListRow {
   message_type: "transactional" | "promotional";
   provider: string;
   provider_message_id: string | null;
-  status: "queued" | "sending" | "sent" | "failed" | "retrying";
+  status: "queued" | "sending" | "sent" | "failed" | "retrying" | "bounced";
   attempts: number;
   send_after: string;
   last_error: string | null;
