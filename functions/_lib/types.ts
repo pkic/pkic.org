@@ -73,6 +73,8 @@ export interface Env {
   FROM_NAME?: string;
   SENDGRID_FROM_EMAIL?: string;
   SENDGRID_FROM_NAME?: string;
+  RSVP_EMAIL?: string;
+  BOUNCE_EMAIL?: string;
   INTERNAL_SIGNING_SECRET?: string;
   FEEDBACK_IDENTITY_SECRET_V1?: string;
   /**

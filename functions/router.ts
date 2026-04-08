@@ -5,6 +5,7 @@ import { processPendingOutbox } from "./_lib/email/outbox";
 import { logError, logInfo } from "./_lib/logging";
 import { runReminderCycle } from "./_lib/services/reminders";
 import { runRetentionJob } from "./_lib/services/retention";
+import { runRsvpEnforcer } from "./_lib/services/rsvp-enforcer";
 import api_Router from "./api/router";
 import donate_Router from "./donate/router";
 import r_Router from "./r/router";
@@ -36,10 +37,13 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
 			});
 			const outbox = await processPendingOutbox(env.DB, env, config.scheduledOutboxLimit);
 
+			const rsvpEnforcement = await runRsvpEnforcer(env.DB, env);
+
 			logInfo("SCHEDULED_REMINDERS_COMPLETED", {
 				cron: controller.cron,
 				reminders,
 				outbox,
+				rsvpEnforcement,
 			});
 			return;
 		}

@@ -42,6 +42,7 @@ interface RegistrationRow {
   user_email: string | null;
   display_name: string | null;
   referral_code: string | null;
+  rsvp_status: string | null;
 }
 
 async function fetchRegistrationWithDetails(
@@ -55,7 +56,8 @@ async function fetchRegistrationWithDetails(
             r.created_at, r.updated_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
-            rc.code AS referral_code
+            rc.code AS referral_code,
+            (SELECT response_status FROM calendar_rsvp_events WHERE registration_id = r.id ORDER BY created_at DESC LIMIT 1) AS rsvp_status
      FROM registrations r
      LEFT JOIN users u ON u.id = r.user_id
      LEFT JOIN referral_codes rc ON rc.owner_type = 'registration' AND rc.owner_id = r.id

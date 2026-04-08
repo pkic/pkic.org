@@ -150,6 +150,10 @@ interface Registration {
   source_type?: string;
   created_at: string;
   referral_code?: string | null;
+  rsvp_status?: string | null;
+  warning_sent_at?: string | null;
+  action_executed_at?: string | null;
+  action_taken?: string | null;
   dayAttendance?: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
   dayWaitlist?: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
   dayWaitlistSummary?: string | null;
@@ -633,6 +637,8 @@ function badge(status: string): string {
     submitted: "primary", under_review: "info", rejected: "danger", needs_work: "warning", withdrawn: "secondary",
     // Review recommendation
     accept: "success", reject: "danger", "needs-work": "warning",
+    // RSVP statuses
+    bounced: "danger", tentative: "info", needs_action: "warning",
   };
   const labels: Record<string, string> = {
     registered: "Confirmed",
@@ -1685,8 +1691,11 @@ function regDetailHtml(r: Registration, slug: string, eventDays: AdminRegistrati
 
     // ── Resend email ──────────────────────────────────────────────────────
     `<div class="col-md-3">` +
-    `<h6 class="small fw-semibold text-uppercase text-muted mb-2">Confirmation Email</h6>` +
-    `<p class="small text-muted mb-2">Rotates the token and re-queues the email (confirm link or manage link depending on status).</p>` +
+    `<h6 class="small fw-semibold text-uppercase text-muted mb-2">Confirmation Email & RSVP</h6>` +
+    (r.rsvp_status ? `<p class="small mb-2"><strong>Calendar RSVP:</strong> ${badge(r.rsvp_status)}</p>` : `<p class="small text-muted mb-2"><strong>Calendar RSVP:</strong> Not received</p>`) +
+    (r.warning_sent_at ? `<p class="small text-warning mb-2"><strong>Warned:</strong> ${esc(new Date(r.warning_sent_at).toLocaleString())}</p>` : "") +
+    (r.action_executed_at ? `<p class="small text-danger mb-2"><strong>Enforced:</strong> ${badge(String(r.action_taken))} at ${esc(new Date(r.action_executed_at).toLocaleString())}</p>` : "") +
+    `<p class="small text-muted mb-2 mt-1">Rotates the token and re-queues the email (confirm link or manage link depending on status).</p>` +
     `<button class="btn btn-sm btn-outline-primary" data-resend-reg="${esc(r.id)}">Resend Email</button>` +
     `<div class="mt-2 small" id="rd-resend-status-${esc(r.id)}"></div>` +
     `</div>` +

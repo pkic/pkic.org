@@ -172,7 +172,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
     c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
   } else {
-    const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET ? await generateSignedRsvpAddress(created.registration.id, c.env.INTERNAL_SIGNING_SECRET) : undefined;
+    const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET ? await generateSignedRsvpAddress(created.registration.id, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL) : undefined;
     const calendar = buildRegistrationIcs(event, created.registration.id, manageUrl, dayAttendanceRaw, appBaseUrl, rsvpEmail, user.email);
     const outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,

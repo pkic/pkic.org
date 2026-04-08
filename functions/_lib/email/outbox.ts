@@ -314,7 +314,7 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
       if (!env.INTERNAL_SIGNING_SECRET) {
         throw new AppError(500, "CONFIG_ERROR", "INTERNAL_SIGNING_SECRET is a required config parameter");
       }
-      bounceAddress = await generateSignedBounceAddress(row.id, env.INTERNAL_SIGNING_SECRET);
+      bounceAddress = await generateSignedBounceAddress(row.id, env.INTERNAL_SIGNING_SECRET, env.BOUNCE_EMAIL);
     }
 
     const messageId = await sendViaSendgrid(env, {
