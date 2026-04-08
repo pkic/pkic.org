@@ -20,6 +20,7 @@ import { buildAttendanceEmailData } from "../../../../../../../_lib/utils/attend
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../../../_lib/utils/registration-email";
 import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../../../../_lib/services/frontend-links";
 import { buildRegistrationIcs } from "../../../../../../../_lib/utils/calendar";
+import { generateSignedRsvpAddress } from "../../../../../../../_lib/email/rsvp";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import type { RegistrationRecord } from "../../../../../../../_lib/services/registrations/types";
 import type { UserRecord } from "../../../../../../../_lib/services/users";
@@ -127,7 +128,8 @@ export async function onRequestPost(
     );
 
     const manageUrl = registrationManagePageUrl(appBaseUrl, event, freshManageToken);
-    const calendar = buildRegistrationIcs(event, registration.id, manageUrl, dayAttendanceRaw, appBaseUrl);
+    const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET ? await generateSignedRsvpAddress(registration.id, c.env.INTERNAL_SIGNING_SECRET) : undefined;
+    const calendar = buildRegistrationIcs(event, registration.id, manageUrl, dayAttendanceRaw, appBaseUrl, rsvpEmail, user.email);
 
     outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
@@ -170,6 +172,7 @@ export async function onRequestPost(
           redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(`${appBaseUrl}/r/${referralRow.code}`)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
         } : {}),
       },
+      bounceAddress: rsvpEmail,
       calendar: {
         registrationId: registration.id,
         eventId: event.id,

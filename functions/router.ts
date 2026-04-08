@@ -9,6 +9,7 @@ import api_Router from "./api/router";
 import donate_Router from "./donate/router";
 import r_Router from "./r/router";
 import type { Env } from "./_lib/types";
+import { processIncomingEmail } from "./_lib/email/ingest";
 
 const app = new Hono<{ Bindings: Env }>();
 export const openapi = fromHono(app);
@@ -66,6 +67,9 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
 
 export default {
 	fetch: app.fetch,
+	email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): void {
+		ctx.waitUntil(processIncomingEmail(message, env));
+	},
 	scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
 		ctx.waitUntil(runScheduledJob(controller, env));
 	},
