@@ -34,8 +34,8 @@ export function createContext<P extends Record<string, string>>(
     data,
     req: {
       raw: request,
-      param(name: string) {
-        return params[name];
+      param(name?: string) {
+        return name ? params[name] : params;
       },
     },
     executionCtx: {

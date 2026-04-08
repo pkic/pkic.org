@@ -154,18 +154,18 @@ async function fetchHeroImage(settingsJson: string, origin: string, env: Pick<En
       if (env.IMAGES && res.body) {
         const transformed = await env.IMAGES.input(res.body)
           .transform({ width: 1200, height: 630, fit: "cover" })
-          .output({ format: "jpeg", quality: 60 });
+          .output({ format: "jpeg", quality: 90 });
         res = await transformed.response();
       }
     } else {
       // Resize to badge dimensions and convert to JPEG before embedding.
-      // The hero is used as a dark-overlaid full-bleed background so quality 60
+      // The hero is used as a dark-overlaid full-bleed background so quality 90
       // is indistinguishable from the original at this display size.
       // The `cf.image` option is a Cloudflare Worker-specific extension to fetch();
       // it is silently ignored in non-CF environments (local dev) so no cast needed
       // at runtime, but TypeScript doesn't know about it — hence the assertion.
       res = await fetch(source.url, {
-        cf: { image: { width: 1200, height: 630, fit: "cover", format: "jpeg", quality: 60 } },
+        cf: { image: { width: 1200, height: 630, fit: "cover", format: "jpeg", quality: 90 } },
       } as unknown as RequestInit);
     }
     if (!res.ok) return null;
@@ -386,7 +386,7 @@ async function pngToR2(
     const pngStream = new ReadableStream<Uint8Array>({
       start(ctrl) { ctrl.enqueue(png); ctrl.close(); },
     });
-    const result  = await env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 85 });
+    const result  = await env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 90 });
     const jpegBuf = await (await result.response()).arrayBuffer();
     await env.ASSETS_BUCKET.put(r2Key, jpegBuf, {
       httpMetadata: { contentType: "image/jpeg" },
