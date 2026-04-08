@@ -14,6 +14,10 @@ interface RegistrationRow {
   user_email: string | null;
   display_name: string | null;
   referral_code: string | null;
+  rsvp_status: string | null;
+  warning_sent_at: string | null;
+  action_executed_at: string | null;
+  action_taken: string | null;
 }
 
 interface WaitlistSummaryRow {
@@ -35,10 +39,19 @@ export async function onRequestGet(c: any): Promise<Response> {
     `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
-            rc.code AS referral_code
+            rc.code AS referral_code,
+            cre.response_status AS rsvp_status,
+            cre.warning_sent_at AS warning_sent_at,
+            cre.action_executed_at AS action_executed_at,
+            cre.action_taken AS action_taken
      FROM registrations r
      LEFT JOIN users u ON u.id = r.user_id
      LEFT JOIN referral_codes rc ON rc.owner_type = 'registration' AND rc.owner_id = r.id
+     LEFT JOIN (
+         SELECT registration_id, response_status, warning_sent_at, action_executed_at, action_taken,
+                ROW_NUMBER() OVER (PARTITION BY registration_id ORDER BY created_at DESC) AS rn
+         FROM calendar_rsvp_events
+     ) cre ON cre.registration_id = r.id AND cre.rn = 1
      WHERE r.event_id = ?
      ORDER BY r.created_at DESC
      LIMIT ? OFFSET ?`,

@@ -52,7 +52,7 @@ async function confirmRegistration(
       );
       const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, registration.custom_answers_json);
       const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, registration.id);
-      const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET ? await generateSignedRsvpAddress(registration.id, c.env.INTERNAL_SIGNING_SECRET) : undefined;
+      const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET ? await generateSignedRsvpAddress(registration.id, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL) : undefined;
       const calendar = buildRegistrationIcs(event, registration.id, manageUrl, dayAttendanceRaw, appBaseUrl, rsvpEmail, user.email);
       const outboxId = await queueEmail(c.env.DB, {
         eventId: event.id,

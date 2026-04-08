@@ -302,8 +302,16 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/badge-role`)),
     ],
     [
+      "POST /api/v1/admin/events/:slug/waitlist/promote",
+      () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/waitlist/promote`)),
+    ],
+    [
       "GET /api/v1/admin/events/:slug/registrations/:registrationId",
       () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}`)),
+    ],
+    [
+      "PATCH /api/v1/admin/events/:slug/registrations/:registrationId",
+      () => callApp(anonPatch(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}`)),
     ],
     [
       "POST /api/v1/admin/events/:slug/registrations/:registrationId/open-manage",

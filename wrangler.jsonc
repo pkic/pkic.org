@@ -59,7 +59,7 @@
       },
       "vars": {
         "APP_BASE_URL": "https://pkic.org",
-        "HUGO_VERSION": "0.160.0",
+        "HUGO_VERSION": "0.160.1",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
         "DEFAULT_REFERRAL_CODE_LENGTH": "7",
         "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
@@ -74,6 +74,8 @@
         "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
         "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
         "FROM_EMAIL": "noreply@pkic.org",
+        "RSVP_EMAIL": "rsvp@mail.pkic.org",
+        "BOUNCE_EMAIL": "bounces@mail.pkic.org",
         "FROM_NAME": "PKI Consortium",
         "STRIPE_PUBLISHABLE_KEY": "pk_live_51TADczLT173BlQwOkLRjg7nIK7sX9gZJj4DAvD30X8mKpP3Zu3ksMmMk6GYE2moavKccbH3VBqCHDF09mAlny3kg00pZN2Ke0d"
       }
@@ -111,7 +113,7 @@
       },
       "vars": {
         "APP_BASE_URL": "https://pkic-org-preview.pkic.workers.dev/",
-        "HUGO_VERSION": "0.160.0",
+        "HUGO_VERSION": "0.160.1",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
         "DEFAULT_REFERRAL_CODE_LENGTH": "7",
         "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
@@ -126,6 +128,8 @@
         "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
         "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
         "FROM_EMAIL": "noreply@pkic.org",
+        "RSVP_EMAIL": "rsvp-preview@mail.pkic.org",
+        "BOUNCE_EMAIL": "bounces-preview@mail.pkic.org",
         "FROM_NAME": "PKI Consortium (Preview)",
         "STRIPE_PUBLISHABLE_KEY": "pk_test_51TADczLT173BlQwOCJAhV0Mf5xxJXJWG9VWkprhXUSJZTaYdqr5vJynipzUfCglU93cIoCBBNOkviwhOqQ3ZFPNk00cxzuEyMH"
       }
@@ -161,7 +165,7 @@
       },
       "vars": {
         "DEV_STATIC_ORIGIN": "http://127.0.0.1:13131",
-        "HUGO_VERSION": "0.160.0",
+        "HUGO_VERSION": "0.160.1",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
         "DEFAULT_REFERRAL_CODE_LENGTH": "7",
         "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
@@ -176,6 +180,8 @@
         "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
         "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
         "FROM_EMAIL": "noreply@pkic.org",
+        "RSVP_EMAIL": "rsvp-local@mail.pkic.org",
+        "BOUNCE_EMAIL": "bounces-local@mail.pkic.org",
         "FROM_NAME": "PKI Consortium",
         "STRIPE_PUBLISHABLE_KEY": "pk_live_51TADczLT173BlQwOkLRjg7nIK7sX9gZJj4DAvD30X8mKpP3Zu3ksMmMk6GYE2moavKccbH3VBqCHDF09mAlny3kg00pZN2Ke0d"
       }
