@@ -1639,7 +1639,7 @@ function regDetailHtml(r: Registration, slug: string, eventDays: AdminRegistrati
     ? `<div class="alert alert-warning mb-0 mt-2"><strong>Waitlisted:</strong> this attendee does not yet have a confirmed in-person seat. The registration is active, but the seat is still pending availability.</div>`
     : "";
 
-  const dayStatusMap = new Map<string, { attendanceType?: string; attendanceLabel?: string | null; waitlist?: { status: string; priorityLane: string; offerExpiresAt: string | null } }>();
+  const dayStatusMap = new Map<string, { attendanceType?: string; attendanceLabel?: string | null; waitlist?: { status: string; priorityLane: string; offerExpiresAt: string | null }, rsvp?: any, rsvpLabel?: string }>();
   for (const entry of r.dayAttendance ?? []) {
     dayStatusMap.set(entry.dayDate, {
       attendanceType: entry.attendanceType,
@@ -1656,6 +1656,38 @@ function regDetailHtml(r: Registration, slug: string, eventDays: AdminRegistrati
     dayStatusMap.set(entry.dayDate, current);
   }
 
+  const nonDayRsvp: any[] = [];
+
+  if (r.rsvp_events_json) {
+    try {
+      const parsed = JSON.parse(r.rsvp_events_json);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        for (const ev of parsed) {
+          let isDaySpecific = false;
+          if (ev.uid && String(ev.uid).includes("@")) {
+            const dateMatch = String(ev.uid).match(/-(\d{4}-\d{2}-\d{2})@/);
+            if (dateMatch) {
+              isDaySpecific = true;
+              const current = dayStatusMap.get(dateMatch[1]) ?? {};
+              if (!current.rsvp) {
+                current.rsvp = ev;
+                current.rsvpLabel = "Calendar RSVP";
+              }
+              dayStatusMap.set(dateMatch[1], current);
+            }
+          }
+
+          if (!isDaySpecific) {
+            // Cannot map to a specific day — collect for display in the email section below
+            nonDayRsvp.push(ev);
+          }
+        }
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
   const dayStatusRows = Array.from(dayStatusMap.entries())
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([dayDate, day]) => {
@@ -1665,40 +1697,42 @@ function regDetailHtml(r: Registration, slug: string, eventDays: AdminRegistrati
       const waitlistHtml = day.waitlist
         ? `<div>${waitlistStatusBadge(day.waitlist.status)}</div><div class="text-body-secondary small">Lane: ${esc(day.waitlist.priorityLane)}</div>${day.waitlist.offerExpiresAt ? `<div class="text-body-secondary small">Offer expires ${esc(day.waitlist.offerExpiresAt)}</div>` : ""}`
         : `<span class="text-body-secondary">None</span>`;
-      return `<tr><td>${esc(dayDate)}</td><td>${attendanceHtml}</td><td>${waitlistHtml}</td></tr>`;
+      
+      let rsvpCellHtml = `<span class="text-body-secondary">None</span>`;
+      if (day.rsvp) {
+        const ev = day.rsvp;
+        let subDetails = "";
+        let prefix = day.rsvpLabel ? `<div class="text-muted small mb-1">${esc(day.rsvpLabel)}</div>` : "";
+        if (ev.warning_sent_at) subDetails += `<div class="text-warning small mt-1">Warned: ${esc(new Date(ev.warning_sent_at).toLocaleString())}</div>`;
+        if (ev.action_executed_at) subDetails += `<div class="text-danger small mt-1">Enforced: ${badge(String(ev.action_taken))} at ${esc(new Date(ev.action_executed_at).toLocaleString())}</div>`;
+        rsvpCellHtml = `${prefix}<div>${badge(ev.status)}</div>${subDetails}`;
+      }
+
+      return `<tr><td>${esc(dayDate)}</td><td>${attendanceHtml}</td><td>${waitlistHtml}</td><td>${rsvpCellHtml}</td></tr>`;
     })
     .join("");
+  const nonDayRsvpHtml = nonDayRsvp.map((ev) => {
+    let label = "Event RSVP";
+    if (ev.uid && (String(ev.uid).startsWith("implicit-") || String(ev.uid).startsWith("bounce-"))) {
+      label = String(ev.uid).startsWith("bounce-") ? "Email Bounce" : "Email Reply";
+      if (ev.raw_payload_json) {
+        try {
+          const payload = typeof ev.raw_payload_json === "string" ? JSON.parse(ev.raw_payload_json) : ev.raw_payload_json;
+          if (payload && payload.subject) label = `${label}: ${payload.subject}`;
+        } catch (_) {}
+      }
+    }
+    let subDetails = "";
+    if (ev.warning_sent_at) subDetails += ` · <span class="text-warning">Warned: ${esc(new Date(ev.warning_sent_at).toLocaleString())}</span>`;
+    if (ev.action_executed_at) subDetails += ` · <span class="text-danger">Enforced: ${badge(String(ev.action_taken))} at ${esc(new Date(ev.action_executed_at).toLocaleString())}</span>`;
+    return `<div class="small"><strong>${esc(label)}:</strong> ${badge(ev.status)}${subDetails} <span class="text-muted">(no specific day)</span></div>`;
+  }).join("");
+
   const dayStatusBlock = dayStatusMap.size > 0
-    ? `<div class="mt-3"><h6 class="small fw-semibold text-uppercase text-muted mb-2">Day status</h6><p class="small text-body-secondary mb-2">Per-day waitlist offers can be admitted directly here; the attendee does not need to claim them first.</p><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Day</th><th>Attendance</th><th>Waitlist</th></tr></thead><tbody>${dayStatusRows}</tbody></table></div></div>`
-    : `<div class="mt-3"><h6 class="small fw-semibold text-uppercase text-muted mb-2">Day status</h6><p class="small text-body-secondary mb-0">No day-level attendance or waitlist records were returned for this registration.</p></div>`;
+    ? `<div class="mt-3"><h6 class="small fw-semibold text-uppercase text-muted mb-2">Day status</h6><p class="small text-body-secondary mb-2">Per-day waitlist offers can be admitted directly here; the attendee does not need to claim them first.</p><div class="table-responsive"><table class="table table-sm align-middle mb-0"><thead><tr><th>Day</th><th>Attendance</th><th>Waitlist</th><th>RSVP</th></tr></thead><tbody>${dayStatusRows}</tbody></table></div>${nonDayRsvpHtml ? `<div class="mt-2">${nonDayRsvpHtml}</div>` : ""}</div>`
+    : `<div class="mt-3"><h6 class="small fw-semibold text-uppercase text-muted mb-2">Day status</h6><p class="small text-body-secondary mb-0">No day-level attendance or waitlist records were returned for this registration.</p>${nonDayRsvpHtml ? `<div class="mt-2">${nonDayRsvpHtml}</div>` : ""}</div>`;
 
   void slug; // used by wiring functions via data-reg-id
-
-  let rsvpHtml = `<p class="small text-muted mb-2"><strong>Calendar RSVP:</strong> Not received</p>`;
-  if (r.rsvp_events_json) {
-    try {
-      const parsed = JSON.parse(r.rsvp_events_json);
-      if (Array.isArray(parsed) && parsed.length > 0) {
-        rsvpHtml = parsed.map((ev) => {
-          let label = "Event RSVP";
-          if (ev.uid && String(ev.uid).includes("@")) {
-            const dateMatch = String(ev.uid).match(/-(\d{4}-\d{2}-\d{2})@/);
-            if (dateMatch) label = `Day ${dateMatch[1]} RSVP`;
-          } else if (ev.uid && String(ev.uid).startsWith("implicit-")) {
-            label = "Email Reply";
-          }
-          
-          let subDetails = "";
-          if (ev.warning_sent_at) subDetails += `<br><span class="text-warning small">Warned: ${esc(new Date(ev.warning_sent_at).toLocaleString())}</span>`;
-          if (ev.action_executed_at) subDetails += `<br><span class="text-danger small">Enforced: ${badge(String(ev.action_taken))} at ${esc(new Date(ev.action_executed_at).toLocaleString())}</span>`;
-          
-          return `<p class="small mb-2"><strong>${esc(label)}:</strong> ${badge(ev.status)} ${subDetails}</p>`;
-        }).join("");
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  }
 
   return (
     `<div class="row g-3">` +
@@ -1714,8 +1748,7 @@ function regDetailHtml(r: Registration, slug: string, eventDays: AdminRegistrati
 
     // ── Resend email ──────────────────────────────────────────────────────
     `<div class="col-md-3">` +
-    `<h6 class="small fw-semibold text-uppercase text-muted mb-2">Confirmation Email & RSVP</h6>` +
-    rsvpHtml +
+    `<h6 class="small fw-semibold text-uppercase text-muted mb-2">Confirmation Email</h6>` +
     `<p class="small text-muted mb-2 mt-1">Rotates the token and re-queues the email (confirm link or manage link depending on status).</p>` +
     `<button class="btn btn-sm btn-outline-primary" data-resend-reg="${esc(r.id)}">Resend Email</button>` +
     `<div class="mt-2 small" id="rd-resend-status-${esc(r.id)}"></div>` +
@@ -5101,7 +5134,7 @@ function openTemplate(key: string, versions: EmailTemplateVersion[]): void {
                 'Subject template <span class="text-muted fw-normal">(supports conditions and variables)</span>' +
               '</label>' +
               '<div style="position:relative">' +
-                '<pre id="t-subject-src" aria-hidden="true" style="position:absolute;inset:0;margin:0;padding:.25rem .5rem;font-size:.875rem;font-family:SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace;line-height:1.5;white-space:pre;overflow:hidden;border:none;border-radius:.375rem;background:#fff;pointer-events:none;color:#212529"></pre>' +
+                '<pre id="t-subject-src" aria-hidden="true" style="position:absolute;inset:0;margin:0;padding:.25rem .5rem;font-size:.875rem;font-family:SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace;line-height:1.5;white-space:pre;overflow:hidden;border:1px solid transparent;border-radius:.375rem;background:#fff;pointer-events:none;color:#212529"></pre>' +
                 `<input type="text" class="form-control form-control-sm font-monospace" id="t-subject" ` +
                   `value="${esc(current?.subject_template ?? "")}" placeholder="e.g. Your invitation to {{eventName}}" style="position:relative;z-index:1;background:transparent;caret-color:#212529">` +
               '</div>' +
@@ -5111,7 +5144,7 @@ function openTemplate(key: string, versions: EmailTemplateVersion[]): void {
                 'Body <span class="text-muted fw-normal">(supports {{variables}}, {{#if}}\u2026{{/if}}, {{#each}}\u2026{{/each}})</span>' +
               '</label>' +
               '<div style="position:relative">' +
-                '<pre id="t-content-src" aria-hidden="true" style="position:absolute;inset:0;margin:0;padding:.375rem .75rem;font-size:.8rem;font-family:SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace;line-height:1.5;white-space:pre-wrap;word-break:break-all;overflow:hidden;border:none;border-radius:.375rem;background:#fff;pointer-events:none;color:#212529"></pre>' +
+                '<pre id="t-content-src" aria-hidden="true" style="position:absolute;inset:0;margin:0;padding:.375rem .75rem;font-size:.8rem;font-family:SFMono-Regular,Consolas,Liberation Mono,Menlo,monospace;line-height:1.5;white-space:pre-wrap;word-break:break-all;overflow:hidden;border:1px solid transparent;border-radius:.375rem;background:#fff;pointer-events:none;color:#212529"></pre>' +
                 `<textarea class="form-control font-monospace" id="t-content" rows="16" style="position:relative;z-index:1;background:transparent;color:transparent;caret-color:#212529;font-size:.8rem;resize:vertical">${esc(current?.body ?? "")}</textarea>` +
               '</div>' +
             '</div>' +
@@ -5329,7 +5362,7 @@ function highlightTemplateSyntax(source: string): string {
     }
 
     const style = bg
-      ? `color:${color};font-weight:600;background:${bg};border-radius:3px;padding:0 2px`
+      ? `color:${color};font-weight:600;background:${bg};border-radius:3px;padding:0 2px;margin:0 -2px`
       : `color:${color};font-weight:600`;
     out.push(`<span style="${style}">${esc(token)}</span>`);
     pos = end + 2;

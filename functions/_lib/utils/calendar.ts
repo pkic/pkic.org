@@ -197,7 +197,7 @@ export interface DayAttendanceEntry {
  * - Both in-person and virtual VEVENTs include 24 h and 1 h display reminders.
  * - Falls back to a single spanning event when no live day attendance is present.
  */
-export function buildRegistrationIcs(
+export async function buildRegistrationIcs(
   event: EventRecord,
   registrationId: string,
   manageUrl: string,
@@ -205,7 +205,8 @@ export function buildRegistrationIcs(
   appBaseUrl?: string,
   rsvpEmail?: string,
   attendeeEmail?: string,
-): { uid: string; content: string } {
+  signingSecret?: string,
+): Promise<{ uid: string; content: string }> {
   const uid = `${registrationId}@pkic.org`;
   const baseUrl = appBaseUrl ?? "https://pkic.org";
 
@@ -217,7 +218,7 @@ export function buildRegistrationIcs(
   if (liveDays.length > 0) {
     const isMultiDay = liveDays.length > 1;
 
-    const events: CalendarEvent[] = liveDays.map((day) => {
+    const events: CalendarEvent[] = await Promise.all(liveDays.map(async (day) => {
       const window = toDayWindow(day.dayDate, event.starts_at, event.ends_at);
       const isInPerson = day.attendanceType === "in_person";
       const location = isInPerson ? (venueAddress ?? undefined) : (virtualUrl ?? undefined);
@@ -226,20 +227,28 @@ export function buildRegistrationIcs(
       const title = isMultiDay ? `${event.name} – ${dayLabel}` : event.name;
       const eventUid = isMultiDay ? `${registrationId}-${day.dayDate}@pkic.org` : uid;
 
+      // For multi-day events, use a per-day RSVP address so implicit email replies
+      // (subject-line declines without an ICS attachment) can be mapped to the correct day.
+      let eventRsvpEmail = rsvpEmail;
+      if (isMultiDay && rsvpEmail && signingSecret) {
+        const { generateSignedRsvpAddress } = await import("../email/rsvp");
+        eventRsvpEmail = await generateSignedRsvpAddress(registrationId, signingSecret, rsvpEmail, day.dayDate);
+      }
+
       return {
         uid: eventUid,
         title,
         description: `Manage your registration at ${manageUrl}`,
         url,
         location,
-        organizerEmail: rsvpEmail,
+        organizerEmail: eventRsvpEmail,
         attendeeEmail,
         start: window.start,
         end: window.end,
         status: "CONFIRMED",
         alarms: STANDARD_ALARMS,
       };
-    });
+    }));
 
     return { uid, content: buildIcsContent(events) };
   }
