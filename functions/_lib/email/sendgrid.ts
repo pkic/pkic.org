@@ -8,7 +8,6 @@ export interface SendgridMessage {
   html: string;
   text: string;
   calendarIcsContent?: string;
-  calendarMethod?: "PUBLISH" | "REQUEST";
   categories?: string[];
   replyTo?: string;
   bounceAddress?: string;
@@ -42,7 +41,7 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
       { type: "text/html", value: message.html },
       ...(message.calendarIcsContent
         ? [{
-          type: "text/calendar",
+          type: "text/calendar; method=REQUEST",
           value: message.calendarIcsContent,
         }]
         : []),

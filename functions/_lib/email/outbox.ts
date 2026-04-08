@@ -49,7 +49,8 @@ interface CalendarPayload {
   registrationId: string;
   eventId: string;
   icsUid: string;
-  icsContent: string;
+  icsFiles: Array<{ uid: string; filename: string; content: string }>;
+  inlineContent?: string;
 }
 
 function getOutboxStatusForRetry(attempts: number): "retrying" | "failed" {
@@ -266,14 +267,12 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
 
     let attachments: Array<{ filename: string; contentType: string; base64Content: string }> | undefined;
     const calendar = payload.__calendarInvite as CalendarPayload | undefined;
-    if (calendar) {
-      attachments = [
-        {
-          filename: "event.ics",
-          contentType: "text/calendar",
-          base64Content: uint8ToBase64(new TextEncoder().encode(calendar.icsContent)),
-        },
-      ];
+    if (calendar?.icsFiles?.length) {
+      attachments = calendar.icsFiles.map((f) => ({
+        filename: f.filename,
+        contentType: "application/ics",
+        base64Content: uint8ToBase64(new TextEncoder().encode(f.content)),
+      }));
     }
 
     // Attach badge to email. prerenderAndCache stores a JPEG at og-badges/{code}
@@ -323,8 +322,10 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
       subject,
       html: rendered.html,
       text: rendered.text,
-      calendarIcsContent: calendar?.icsContent,
-      calendarMethod: "PUBLISH",
+      // Always send inline content — email clients (Gmail, Apple Mail, Outlook)
+      // use the text/calendar alternative with method=REQUEST for the native
+      // accept/decline prompt. Per-day .ics attachments provide granular control.
+      calendarIcsContent: calendar?.inlineContent,
       categories: [row.template_key, row.message_type],
       replyTo: typeof payload.__replyTo === "string" ? payload.__replyTo : undefined,
       bounceAddress,

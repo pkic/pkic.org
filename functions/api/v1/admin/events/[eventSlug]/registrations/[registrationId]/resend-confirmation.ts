@@ -177,7 +177,8 @@ export async function onRequestPost(
         registrationId: registration.id,
         eventId: event.id,
         icsUid: calendar.uid,
-        icsContent: calendar.content,
+        icsFiles: calendar.files,
+        inlineContent: calendar.inlineContent,
       },
     });
   }
