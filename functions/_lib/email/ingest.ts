@@ -1,7 +1,7 @@
 import type { Env } from "../types";
 import PostalMime from "postal-mime";
 import { logError, logInfo } from "../logging";
-import { verifySignedRsvpAddress } from "./rsvp";
+import { verifySignedRsvpAddressFull } from "./rsvp";
 import { verifySignedBounceAddress } from "./bounces";
 
 export async function processIncomingEmail(message: any, env: Env): Promise<void> {
@@ -32,10 +32,15 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
     const baseBounceLocal = (env.BOUNCE_EMAIL || "bounces@mail.pkic.org").split("@")[0].toLowerCase();
 
     let rsvpRegistrationId: string | null = null;
+    let rsvpDayDate: string | null = null;
     let outboxId: string | null = null;
 
     if (toLower.startsWith(baseRsvpLocal + "+")) {
-      rsvpRegistrationId = await verifySignedRsvpAddress(message.to, env.INTERNAL_SIGNING_SECRET, env.RSVP_EMAIL);
+      const verified = await verifySignedRsvpAddressFull(message.to, env.INTERNAL_SIGNING_SECRET, env.RSVP_EMAIL);
+      if (verified) {
+        rsvpRegistrationId = verified.registrationId;
+        rsvpDayDate = verified.dayDate;
+      }
     } else if (toLower.startsWith(baseBounceLocal + "+")) {
       outboxId = await verifySignedBounceAddress(message.to, env.INTERNAL_SIGNING_SECRET, env.BOUNCE_EMAIL);
     }
@@ -83,10 +88,10 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
        await env.DB.prepare(
         `INSERT INTO calendar_rsvp_events 
          (id, registration_id, ics_uid, attendee_email, response_status, provider, 
-          source_message_id, dedupe_key, received_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
+          source_message_id, dedupe_key, raw_payload_json, received_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
          ON CONFLICT(dedupe_key) DO UPDATE SET 
-         response_status = excluded.response_status, updated_at = datetime('now')`
+         response_status = excluded.response_status, raw_payload_json = excluded.raw_payload_json, updated_at = datetime('now')`
       ).bind(
         crypto.randomUUID(),
         rsvpRegistrationId,
@@ -95,7 +100,8 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
         "bounced", // Specifically categorize bounces so they don't look like intentional declines
         "cloudflare_email_routing_bounce",
         sourceMessageId,
-        dedupeKey
+        dedupeKey,
+        JSON.stringify({ subject: emailData.subject || "" })
       ).run();
 
       logInfo("BOUNCE_PROCESSED", { registrationId: rsvpRegistrationId, subject: emailData.subject });
@@ -109,6 +115,24 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
       if (attachment.mimeType === "text/calendar" || attachment.mimeType === "application/ics") {
         icsContent = typeof attachment.content === "string" ? attachment.content : new TextDecoder().decode(attachment.content);
         break;
+      }
+    }
+
+    // TNEF (winmail.dat) attachments from Outlook may embed iCalendar data as plain text
+    // within the binary blob — scan for BEGIN:VCALENDAR markers
+    if (!icsContent) {
+      for (const attachment of emailData.attachments || []) {
+        if (attachment.mimeType === "application/ms-tnef" || attachment.mimeType === "application/vnd.ms-tnef") {
+          const raw = typeof attachment.content === "string"
+            ? attachment.content
+            : new TextDecoder("utf-8", { fatal: false }).decode(attachment.content as Uint8Array);
+          const calStart = raw.indexOf("BEGIN:VCALENDAR");
+          const calEnd = raw.indexOf("END:VCALENDAR");
+          if (calStart !== -1 && calEnd !== -1) {
+            icsContent = raw.slice(calStart, calEnd + "END:VCALENDAR".length);
+            break;
+          }
+        }
       }
     }
 
@@ -134,19 +158,20 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
          await env.DB.prepare(
           `INSERT INTO calendar_rsvp_events 
            (id, registration_id, ics_uid, attendee_email, response_status, provider, 
-            source_message_id, dedupe_key, received_at, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
+            source_message_id, dedupe_key, raw_payload_json, received_at, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
            ON CONFLICT(dedupe_key) DO UPDATE SET 
-           response_status = excluded.response_status, updated_at = datetime('now')`
+           response_status = excluded.response_status, raw_payload_json = excluded.raw_payload_json, updated_at = datetime('now')`
         ).bind(
           crypto.randomUUID(),
           rsvpRegistrationId,
-          `implicit-${rsvpRegistrationId}`,
+          rsvpDayDate ? `${rsvpRegistrationId}-${rsvpDayDate}@pkic.org` : `implicit-${rsvpRegistrationId}`,
           message.from,
           implicitStatus,
           "cloudflare_email_routing_subject",
           sourceMessageId,
-          dedupeKey
+          dedupeKey,
+          JSON.stringify({ subject: emailData.subject || "" })
         ).run();
 
         logInfo("RSVP_PROCESSED_IMPLICIT", { registrationId: rsvpRegistrationId, status: implicitStatus });

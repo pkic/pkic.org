@@ -42,10 +42,11 @@ export async function onRequestGet(c: any): Promise<Response> {
                 'status', response_status,
                 'warning_sent_at', warning_sent_at,
                 'action_executed_at', action_executed_at,
-                'action_taken', action_taken
+                'action_taken', action_taken,
+                'raw_payload_json', raw_payload_json
             )) 
              FROM (
-               SELECT ics_uid, response_status, warning_sent_at, action_executed_at, action_taken,
+               SELECT ics_uid, response_status, warning_sent_at, action_executed_at, action_taken, raw_payload_json,
                       ROW_NUMBER() OVER (PARTITION BY ics_uid ORDER BY created_at DESC) AS rn
                FROM calendar_rsvp_events
                WHERE registration_id = r.id

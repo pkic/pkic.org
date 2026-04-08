@@ -129,7 +129,7 @@ export async function onRequestPost(
 
     const manageUrl = registrationManagePageUrl(appBaseUrl, event, freshManageToken);
     const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET ? await generateSignedRsvpAddress(registration.id, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL) : undefined;
-    const calendar = buildRegistrationIcs(event, registration.id, manageUrl, dayAttendanceRaw, appBaseUrl, rsvpEmail, user.email);
+    const calendar = await buildRegistrationIcs(event, registration.id, manageUrl, dayAttendanceRaw, appBaseUrl, rsvpEmail, user.email, c.env.INTERNAL_SIGNING_SECRET);
 
     outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
