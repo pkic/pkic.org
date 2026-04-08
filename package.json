@@ -21,6 +21,9 @@
     "check:max-lines": "node scripts/check-max-lines.mjs",
     "check": "npm run typecheck && npm run test && npm run check:max-lines",
     "wrangler:types": "npx wrangler types --env local",
+    "migrate:local": "npx wrangler d1 migrations apply DB --env local --local",
+    "migrate:preview": "npx wrangler d1 migrations apply DB --env preview --remote",
+    "migrate:production": "npx wrangler d1 migrations apply DB --env production --remote",
     "seed:local": "node scripts/seed.mjs --local",
     "seed:preview": "node scripts/seed.mjs --preview",
     "seed:production": "node scripts/seed.mjs --production"
