@@ -75,7 +75,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       const pngStream = new ReadableStream<Uint8Array>({
         start(ctrl) { ctrl.enqueue(png as Uint8Array); ctrl.close(); },
       });
-      const result  = await c.env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 90 });
+      const result  = await c.env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 95 });
       const jpegBuf = await (await result.response()).arrayBuffer();
       c.executionCtx.waitUntil(
         bucket.put(r2Key, jpegBuf, {
