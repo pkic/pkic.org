@@ -70,7 +70,7 @@ export async function resizeHeadshot(
     });
     const result = await envImages.input(stream)
       .transform({ width: 1024, height: 1024, fit: "cover" })
-      .output({ format: "image/jpeg", quality: 90 });
+      .output({ format: "image/jpeg", quality: 95 });
     // We resize it to 1024x1024 JPEG for safety, same as client side.
     return {
       buffer: await (await result.response()).arrayBuffer(),

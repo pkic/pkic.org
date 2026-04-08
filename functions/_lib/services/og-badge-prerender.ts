@@ -154,7 +154,7 @@ async function fetchHeroImage(settingsJson: string, origin: string, env: Pick<En
       if (env.IMAGES && res.body) {
         const transformed = await env.IMAGES.input(res.body)
           .transform({ width: 1200, height: 630, fit: "cover" })
-          .output({ format: "jpeg", quality: 90 });
+          .output({ format: "jpeg", quality: 95 });
         res = await transformed.response();
       }
     } else {
@@ -165,7 +165,7 @@ async function fetchHeroImage(settingsJson: string, origin: string, env: Pick<En
       // it is silently ignored in non-CF environments (local dev) so no cast needed
       // at runtime, but TypeScript doesn't know about it — hence the assertion.
       res = await fetch(source.url, {
-        cf: { image: { width: 1200, height: 630, fit: "cover", format: "jpeg", quality: 90 } },
+        cf: { image: { width: 1200, height: 630, fit: "cover", format: "jpeg", quality: 95 } },
       } as unknown as RequestInit);
     }
     if (!res.ok) return null;
@@ -386,7 +386,7 @@ async function pngToR2(
     const pngStream = new ReadableStream<Uint8Array>({
       start(ctrl) { ctrl.enqueue(png); ctrl.close(); },
     });
-    const result  = await env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 90 });
+    const result  = await env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 95 });
     const jpegBuf = await (await result.response()).arrayBuffer();
     await env.ASSETS_BUCKET.put(r2Key, jpegBuf, {
       httpMetadata: { contentType: "image/jpeg" },
