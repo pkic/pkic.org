@@ -12,6 +12,7 @@ import { registrationManagePageUrl } from "../../../../_lib/services/frontend-li
 import { buildAttendanceEmailData, STATUS_LABELS } from "../../../../_lib/utils/attendance";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
 import { buildEventEmailVariables } from "../../../../_lib/services/events";
+import { writeAuditLog } from "../../../../_lib/services/audit";
 import { registrationManageSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPatch(c: any): Promise<Response> {
@@ -56,6 +57,22 @@ export async function onRequestPatch(c: any): Promise<Response> {
       sourceRef: body.sourceRef,
       waitlistClaimWindowHours: config.waitlistClaimWindowHours,
     });
+
+    // Audit log — capture what changed, including status transitions
+    await writeAuditLog(
+      c.env.DB,
+      isJwt ? "admin" : "user",
+      updated.user_id,
+      `self_service_${body.action}`,
+      "registration",
+      updated.id,
+      {
+        action: body.action,
+        from: current.status,
+        to: updated.status,
+        attendanceType: updated.attendance_type,
+      },
+    );
 
     // Update user PII when provided on update action (name, org, job title).
     if (body.action === "update" && (body.firstName || body.lastName || body.organizationName || body.jobTitle)) {

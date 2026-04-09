@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
+import { onRequestGet as AdminAuditLogGet_l } from "./audit-log";
 import { onRequestGet as AdminDonationsGet_l } from "./donations";
 import { onRequestGet as AdminEmailTemplatesGet_l } from "./email-templates";
 import { onRequestGet as AdminEventsGet_l } from "./events";
@@ -19,6 +20,7 @@ const app = new Hono();
 export const openapi = fromHono(app);
 
 app.get("/donations", AdminDonationsGet_l);
+app.get("/audit-log", AdminAuditLogGet_l);
 app.get("/email-templates", AdminEmailTemplatesGet_l);
 app.get("/events", AdminEventsGet_l);
 app.post("/events", AdminEventsPost_l);
