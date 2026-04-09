@@ -344,7 +344,7 @@ export const adminAuthVerifySchema = z.object({
 });
 
 export const adminRetryOutboxSchema = z.object({
-  limit: z.number().int().positive().max(100).default(20),
+  limit: z.number().int().positive().max(500).default(20),
   ids: z.array(z.string().uuid()).max(100).optional(),
 });
 
@@ -556,33 +556,48 @@ export const adminUserUpdateSchema = z
 /** POST /anonymize — no body required; confirmation is implicit in calling the endpoint. */
 export const adminUserAnonymizeSchema = z.object({}).strict();
 
+// Names in admin-uploaded CSVs may contain any Unicode characters (including
+// characters from non-UTF-8 encoded files, unusual punctuation, etc.).  We
+// only enforce a length bound here — rendering templates HTML-escape the values.
+const bulkInviteNameSchema = (max: number) =>
+  z.string().trim().min(1).max(max).optional();
+
 export const adminBulkAttendeeInvitesSchema = z.object({
   previewToken: z.string().trim().min(16).max(2048),
+  /** When sending a large list in chunks, pass the digest of the full list so the
+   *  preview token (which was issued for the complete invite digest) validates correctly. */
+  inviteDigest: z.string().max(128).optional(),
   invites: z
     .array(
       inviteeSchema.extend({
+        firstName: bulkInviteNameSchema(80),
+        lastName: bulkInviteNameSchema(120),
         sourceType: sourceTypeSchema.optional(),
       }),
     )
     .min(1)
-    .max(500),
+    .max(900),
 });
 
 export const adminBulkAttendeeInvitesPreviewSchema = z.object({
   invites: z
     .array(
       inviteeSchema.extend({
+        firstName: bulkInviteNameSchema(80),
+        lastName: bulkInviteNameSchema(120),
         sourceType: sourceTypeSchema.optional(),
       }),
     )
     .min(1)
-    .max(500),
+    .max(50000),
 });
 
 export const adminBulkSpeakerInvitesSchema = z.object({
   invites: z
     .array(
       inviteeSchema.extend({
+        firstName: bulkInviteNameSchema(80),
+        lastName: bulkInviteNameSchema(120),
         sourceType: sourceTypeSchema.optional(),
       }),
     )

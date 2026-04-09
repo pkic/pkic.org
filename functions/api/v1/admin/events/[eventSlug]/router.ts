@@ -11,6 +11,7 @@ import { onRequestGet as AdminEventsEventSlugPromotersGet_l } from "./promoters"
 import { onRequestGet as AdminEventsEventSlugProposalsGet_l } from "./proposals";
 import { onRequestGet as AdminEventsEventSlugRegistrationsGet_l } from "./registrations";
 import { onRequestPatch as AdminEventsEventSlugSettingsPatch_l } from "./settings";
+import { onRequestGet as AdminEventsEventSlugStatsGet_l } from "./stats";
 import { onRequestGet as AdminEventsEventSlugTermsGet_l } from "./terms";
 import { onRequestPut as AdminEventsEventSlugTermsPut_l } from "./terms";
 import emails_Router from "./emails/router";
@@ -33,6 +34,7 @@ app.get("/promoters", AdminEventsEventSlugPromotersGet_l);
 app.get("/proposals", AdminEventsEventSlugProposalsGet_l);
 app.get("/registrations", AdminEventsEventSlugRegistrationsGet_l);
 app.patch("/settings", AdminEventsEventSlugSettingsPatch_l);
+app.get("/stats", AdminEventsEventSlugStatsGet_l);
 app.get("/terms", AdminEventsEventSlugTermsGet_l);
 app.put("/terms", AdminEventsEventSlugTermsPut_l);
 app.route("/emails", emails_Router);

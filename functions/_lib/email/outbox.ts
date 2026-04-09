@@ -183,6 +183,48 @@ export async function queueEmail(
   return id;
 }
 
+/**
+ * Queues invite emails for multiple recipients in a single db.batch() call.
+ * All rows share the same templateKey, eventId, subject, and base data; only
+ * the recipient-specific fields (email, registrationUrl, declineUrl) differ.
+ */
+export async function bulkQueueInviteEmails(
+  db: DatabaseLike,
+  rows: Array<{
+    eventId: string;
+    recipientEmail: string;
+    templateKey: string;
+    subject: string;
+    data: Record<string, unknown>;
+  }>,
+): Promise<void> {
+  if (rows.length === 0) return;
+  const now = nowIso();
+  await db.batch(
+    rows.map((row) =>
+      db
+        .prepare(
+          `INSERT INTO email_outbox (
+            id, event_id, template_key, template_version, recipient_user_id, recipient_email,
+            subject, payload_json, message_type, provider, provider_message_id, status, attempts,
+            send_after, last_error, created_at, updated_at, sent_at
+          ) VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, 'transactional', 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL)`,
+        )
+        .bind(
+          uuid(),
+          row.eventId,
+          row.templateKey,
+          row.recipientEmail,
+          row.subject,
+          stringifyJson(row.data),
+          now,
+          now,
+          now,
+        ),
+    ),
+  );
+}
+
 async function markOutboxSending(db: DatabaseLike, outboxId: string): Promise<void> {
   await run(db, "UPDATE email_outbox SET status = 'sending', updated_at = ? WHERE id = ?", [nowIso(), outboxId]);
 }

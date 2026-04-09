@@ -30,6 +30,26 @@ export async function onRequestGet(c: any): Promise<Response> {
   const url = new URL(c.req.raw.url);
   const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10) || 50));
   const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
+  const search = (url.searchParams.get("q") ?? "").trim();
+  const statusFilter = url.searchParams.get("status") ?? "";
+
+  const validStatuses = new Set(["registered", "pending_email_confirmation", "waitlisted", "cancelled"]);
+
+  const conditions: string[] = ["r.event_id = ?"];
+  const bindings: unknown[] = [event.id];
+
+  if (statusFilter && validStatuses.has(statusFilter)) {
+    conditions.push("r.status = ?");
+    bindings.push(statusFilter);
+  }
+
+  if (search) {
+    conditions.push("(u.email LIKE ? OR COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) LIKE ?)");
+    const pattern = `%${search}%`;
+    bindings.push(pattern, pattern);
+  }
+
+  const whereClause = conditions.join(" AND ");
 
   const registrationRows = await all<RegistrationRow>(
     c.env.DB,
@@ -56,10 +76,10 @@ export async function onRequestGet(c: any): Promise<Response> {
      FROM registrations r
      LEFT JOIN users u ON u.id = r.user_id
      LEFT JOIN referral_codes rc ON rc.owner_type = 'registration' AND rc.owner_id = r.id
-     WHERE r.event_id = ?
+     WHERE ${whereClause}
      ORDER BY r.created_at DESC
      LIMIT ? OFFSET ?`,
-    [event.id, limit + 1, offset],
+    [...bindings, limit + 1, offset],
   );
 
   const hasMore = registrationRows.length > limit;
@@ -101,9 +121,10 @@ export async function onRequestGet(c: any): Promise<Response> {
   const [totalRow, statRows] = await Promise.all([
     first<{ total: number }>(
       c.env.DB,
-      "SELECT COUNT(*) AS total FROM registrations WHERE event_id = ?",
-      [event.id],
+      `SELECT COUNT(*) AS total FROM registrations r LEFT JOIN users u ON u.id = r.user_id WHERE ${whereClause}`,
+      bindings,
     ),
+    // Aggregate stats always cover all registrations for the event (unfiltered)
     all<{ attendance_type: string; status: string; count: number }>(
       c.env.DB,
       `SELECT attendance_type, status, COUNT(*) AS count

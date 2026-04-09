@@ -3,9 +3,9 @@ import { json } from "../../../../../../../_lib/http";
 import { AppError } from "../../../../../../../_lib/errors";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
-import { createInvite } from "../../../../../../../_lib/services/invites";
+import { bulkCreateAttendeesAdmin } from "../../../../../../../_lib/services/invites";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
-import { queueEmail } from "../../../../../../../_lib/email/outbox";
+import { bulkQueueInviteEmails } from "../../../../../../../_lib/email/outbox";
 import { registrationPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import {
@@ -27,7 +27,10 @@ export async function onRequestPost(
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const secret = requireInternalSecret(c.env);
 
-  const inviteDigest = await computeAttendeeInviteDigest(body.invites);
+  // When sending a large list in chunks the frontend supplies the digest of the
+  // full invite list (matching what was committed at preview time).  For single-
+  // batch sends the digest is computed directly from the current invites.
+  const inviteDigest = body.inviteDigest ?? await computeAttendeeInviteDigest(body.invites);
   const previewValidation = await verifyAttendeeInvitePreviewToken({
     secret,
     token: body.previewToken,
@@ -46,58 +49,47 @@ export async function onRequestPost(
     throw new AppError(400, "INVITE_PREVIEW_INVALID", "Invalid invite preview token. Render preview before sending.");
   }
 
-  const created: BulkItemResult[] = [];
-  const endorsed: BulkItemResult[] = [];
-  const skipped: BulkItemResult[] = [];
+  // Bulk-create invites: 3 D1 round-trips total (pre-check batch + token hashing + insert batch)
+  // instead of N×4-6 sequential round-trips for N invites.
+  const outcomes = await bulkCreateAttendeesAdmin(c.env.DB, {
+    event,
+    invites: body.invites.map((i) => ({
+      inviteeEmail: i.email,
+      inviteeFirstName: i.firstName ?? null,
+      inviteeLastName: i.lastName ?? null,
+      sourceType: i.sourceType,
+    })),
+    ttlHours: 24 * 14,
+  });
 
-  for (const item of body.invites) {
-    try {
-      const { invite, token, isNew } = await createInvite(c.env.DB, {
-        eventId: event.id,
-        inviteeEmail: item.email,
-        inviteeFirstName: item.firstName,
-        inviteeLastName: item.lastName,
-        inviteType: "attendee",
-        sourceType: item.sourceType,
-        ttlHours: 24 * 14,
-      });
+  // Pre-compute shared email variables once.
+  const sharedEmailVars = buildEventEmailVariables(event, appBaseUrl);
 
-      if (isNew) {
-        const registrationUrl = registrationPageUrl(appBaseUrl, event, {
-          invite: token,
-          source: "invite",
-        });
-        const declineUrl = inviteDeclineUrl(appBaseUrl, event, token);
-        const outboxId = await queueEmail(c.env.DB, {
-          eventId: event.id,
-          templateKey: "attendee_invite",
-          recipientEmail: invite.invitee_email,
-          messageType: "transactional",
-          subject: `Invitation: ${event.name}`,
-          data: {
-            ...buildEventEmailVariables(event, appBaseUrl),
-            registrationUrl,
-            declineUrl,
-          },
-        });
-        created.push({ email: invite.invitee_email, inviteToken: token });
-      } else {
-        // Invitee already has an active invite — admin's intent was noted but no
-        // duplicate email is sent.
-        endorsed.push({ email: invite.invitee_email });
-      }
-    } catch (err) {
-      if (err instanceof AppError && (
-        err.code === "INVITEE_ALREADY_REGISTERED"
-        || err.code === "INVITEE_ALREADY_PROPOSED"
-        || err.code === "INVITEE_UNSUBSCRIBED"
-      )) {
-        skipped.push({ email: item.email });
-      } else {
-        throw err;
-      }
-    }
-  }
+  // Queue invite emails for new invites in a single batch INSERT.
+  const emailRows = outcomes
+    .filter((o) => o.status === "created" && o.token)
+    .map((o) => ({
+      eventId: event.id,
+      recipientEmail: o.email,
+      templateKey: "attendee_invite",
+      subject: `Invitation: ${event.name}`,
+      data: {
+        ...sharedEmailVars,
+        registrationUrl: registrationPageUrl(appBaseUrl, event, { invite: o.token!, source: "invite" }),
+        declineUrl: inviteDeclineUrl(appBaseUrl, event, o.token!),
+      },
+    }));
+  await bulkQueueInviteEmails(c.env.DB, emailRows);
+
+  const created: BulkItemResult[] = outcomes
+    .filter((o) => o.status === "created")
+    .map((o) => ({ email: o.email, inviteToken: o.token }));
+  const endorsed: BulkItemResult[] = outcomes
+    .filter((o) => o.status === "endorsed")
+    .map((o) => ({ email: o.email }));
+  const skipped: BulkItemResult[] = outcomes
+    .filter((o) => o.status === "skipped")
+    .map((o) => ({ email: o.email }));
 
   return json({ success: true, created, endorsed, skipped });
 }

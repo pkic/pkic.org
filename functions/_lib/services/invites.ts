@@ -489,3 +489,201 @@ export async function setInviteRemindersPausedUntil(
 export async function clearInviteRemindersPause(db: DatabaseLike, inviteId: string): Promise<void> {
   await run(db, "UPDATE invites SET reminders_paused_until = NULL WHERE id = ?", [inviteId]);
 }
+
+export type BulkAttendeeOutcome = {
+  email: string;
+  /** "created" → new invite row inserted, caller must queue the invite email.  */
+  status: "created" | "endorsed" | "skipped";
+  /** Populated only when status === "created". */
+  inviteId?: string;
+  token?: string;
+};
+
+/**
+ * High-throughput bulk invite creation for admin-initiated attendee lists.
+ *
+ * Replaces N×createInvite() calls (N×4-6 D1 round-trips) with:
+ *   1. ONE db.batch() call for three bulk guard SELECTs
+ *   2. Parallel in-process token+hash generation
+ *   3. ONE db.batch() call to INSERT all new invite rows
+ *
+ * No inviterUserId path (inviter tracking, engagement points) since this is
+ * an admin-only bulk operation.
+ *
+ * Does NOT queue emails — the caller should call bulkQueueInviteEmails() with
+ * the "created" outcomes.
+ */
+export async function bulkCreateAttendeesAdmin(
+  db: DatabaseLike,
+  payload: {
+    event: {
+      id: string;
+      starts_at: string | null;
+      registration_mode: string;
+      settings_json: string;
+    };
+    invites: Array<{
+      inviteeEmail: string;
+      inviteeFirstName?: string | null;
+      inviteeLastName?: string | null;
+      sourceType?: string;
+    }>;
+    ttlHours: number;
+  },
+): Promise<BulkAttendeeOutcome[]> {
+  if (payload.invites.length === 0) return [];
+
+  const now = nowIso();
+  const eventId = payload.event.id;
+  const normalizedEmails = payload.invites.map((i) => normalizeEmail(i.inviteeEmail));
+
+  // D1 hard-limits bound parameters to 100 per statement.  Split the email
+  // list into sub-chunks of ≤90 so each IN clause stays well under the limit
+  // (the existingInvites query also binds eventId + now = 2 extra params).
+  const MAX_IN = 90;
+  const emailChunks: string[][] = [];
+  for (let i = 0; i < normalizedEmails.length; i += MAX_IN) {
+    emailChunks.push(normalizedEmails.slice(i, i + MAX_IN));
+  }
+
+  // --- Round-trip 1: all guard sub-queries in one db.batch() call ---
+  // Layout: [unsub × numChunks, reg × numChunks, existing × numChunks]
+  const batchStatements = [
+    ...emailChunks.map((chunk) => {
+      const p = chunk.map(() => "?").join(", ");
+      return db.prepare(
+        `SELECT email FROM unsubscribes
+         WHERE email IN (${p})
+           AND channel = 'invites'
+           AND (
+             (scope_type = 'global' AND scope_ref IS NULL) OR
+             (scope_type = 'event' AND scope_ref = ?)
+           )`,
+      ).bind(...chunk, eventId);
+    }),
+    ...emailChunks.map((chunk) => {
+      const p = chunk.map(() => "?").join(", ");
+      return db.prepare(
+        `SELECT u.normalized_email
+         FROM registrations r
+         JOIN users u ON u.id = r.user_id
+         WHERE u.normalized_email IN (${p})
+           AND r.event_id = ?
+           AND r.status NOT IN ('cancelled')`,
+      ).bind(...chunk, eventId);
+    }),
+    ...emailChunks.map((chunk) => {
+      const p = chunk.map(() => "?").join(", ");
+      return db.prepare(
+        `SELECT invitee_email FROM invites
+         WHERE event_id = ? AND invite_type = 'attendee' AND status = 'sent'
+           AND (expires_at IS NULL OR expires_at > ?)
+           AND invitee_email IN (${p})`,
+      ).bind(eventId, now, ...chunk);
+    }),
+  ];
+
+  const batchResults = (await db.batch(batchStatements)) as Array<{ results: Array<Record<string, string>> }>;
+  const nc = emailChunks.length;
+  const unsubscribed = new Set(
+    batchResults.slice(0, nc).flatMap((r) => (r.results ?? []).map((row) => row.email as string)),
+  );
+  const registered = new Set(
+    batchResults.slice(nc, nc * 2).flatMap((r) => (r.results ?? []).map((row) => row.normalized_email as string)),
+  );
+  const alreadyInvited = new Set(
+    batchResults.slice(nc * 2, nc * 3).flatMap((r) => (r.results ?? []).map((row) => row.invitee_email as string)),
+  );
+
+  // --- Compute expiry once (same logic as createInvite, using pre-loaded event) ---
+  const settings = parseJsonSafe<{
+    registrationClosesAt?: string | null;
+    registration?: { closesAt?: string | null };
+  }>(payload.event.settings_json, {});
+  const registrationClosesAt = settings.registration?.closesAt ?? settings.registrationClosesAt ?? null;
+
+  function computeExpiry(): string {
+    let expiresAt = addHours(now, payload.ttlHours);
+    if (
+      payload.event.registration_mode !== "invite_only"
+      && registrationClosesAt
+      && new Date(registrationClosesAt).getTime() > new Date(now).getTime()
+    ) {
+      expiresAt = new Date(registrationClosesAt).toISOString();
+    }
+    if (payload.event.starts_at) {
+      const eventStartMs = new Date(payload.event.starts_at).getTime();
+      const nowMs = new Date(now).getTime();
+      const currentExpiryMs = new Date(expiresAt).getTime();
+      if (Number.isFinite(eventStartMs) && eventStartMs > nowMs && eventStartMs < currentExpiryMs) {
+        expiresAt = new Date(eventStartMs).toISOString();
+      }
+    }
+    return expiresAt;
+  }
+
+  // --- Classify each input row ---
+  const outcomes: BulkAttendeeOutcome[] = [];
+  const toCreate: Array<{ idx: number; email: string; item: (typeof payload.invites)[0] }> = [];
+
+  for (let i = 0; i < payload.invites.length; i++) {
+    const email = normalizedEmails[i];
+    const item = payload.invites[i];
+    if (unsubscribed.has(email) || registered.has(email)) {
+      outcomes.push({ email, status: "skipped" });
+    } else if (alreadyInvited.has(email)) {
+      outcomes.push({ email, status: "endorsed" });
+    } else {
+      outcomes.push({ email, status: "created" }); // filled in below
+      toCreate.push({ idx: i, email, item });
+    }
+  }
+
+  if (toCreate.length === 0) return outcomes;
+
+  // --- Round-trip 2: generate tokens in parallel (in-process crypto, no DB) ---
+  const tokens = await Promise.all(toCreate.map(() => randomToken(24)));
+  const tokenHashes = await Promise.all(tokens.map((t) => sha256Hex(t)));
+  const expiresAt = computeExpiry();
+
+  // --- Round-trip 3: INSERT all new invites in one batch call ---
+  const inviteIds = toCreate.map(() => uuid());
+  await db.batch(
+    toCreate.map((tc, j) => {
+      const inviteId = inviteIds[j];
+      const item = tc.item;
+      return db
+        .prepare(
+          `INSERT INTO invites (
+            id, event_id, inviter_user_id, inviter_registration_id, invitee_email,
+            invitee_first_name, invitee_last_name, invite_type, token_hash, status,
+            decline_reason_code, decline_reason_note, unsubscribe_future, reminder_count,
+            last_communication_at, reminders_paused_until, max_uses, used_count,
+            source_type, expires_at, accepted_at, declined_at, created_at
+          ) VALUES (?, ?, NULL, NULL, ?, ?, ?, 'attendee', ?, 'sent',
+                    NULL, NULL, 0, 0, ?, NULL, 1, 0, ?, ?, NULL, NULL, ?)`,
+        )
+        .bind(
+          inviteId,
+          eventId,
+          tc.email,
+          item.inviteeFirstName ?? null,
+          item.inviteeLastName ?? null,
+          tokenHashes[j],
+          now, // last_communication_at
+          item.sourceType ?? "direct",
+          expiresAt,
+          now, // created_at
+        );
+    }),
+  );
+
+  // Populate the outcome objects with the generated ids and tokens.
+  for (let j = 0; j < toCreate.length; j++) {
+    const outcome = outcomes[toCreate[j].idx];
+    outcome.inviteId = inviteIds[j];
+    outcome.token = tokens[j];
+  }
+
+  return outcomes;
+}

@@ -21,6 +21,7 @@ export async function onRequestGet(
   const url = new URL(c.req.raw.url);
   const statusFilter = url.searchParams.get("status");
   const typeFilter = url.searchParams.get("type");
+  const search = (url.searchParams.get("q") ?? "").trim();
   const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10) || 50));
   const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
 
@@ -38,6 +39,12 @@ export async function onRequestGet(
   if (typeFilter && validTypes.has(typeFilter)) {
     conditions.push("i.invite_type = ?");
     bindings.push(typeFilter);
+  }
+
+  if (search) {
+    conditions.push("(i.invitee_email LIKE ? OR COALESCE(i.invitee_first_name || ' ' || i.invitee_last_name, i.invitee_first_name, i.invitee_email) LIKE ?)");
+    const pattern = `%${search}%`;
+    bindings.push(pattern, pattern);
   }
 
   const rows = await all(
