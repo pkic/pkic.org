@@ -70,6 +70,7 @@ export async function onRequestPost(
     success: true,
     previewToken: preview.token,
     previewExpiresAt: preview.expiresAt,
+    inviteDigest: digest,
     recipientCount: body.invites.length,
     subject,
     html: rendered.html,

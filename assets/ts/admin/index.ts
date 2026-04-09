@@ -6,6 +6,9 @@
 
 import { showHeadshotDisclaimer } from "../shared/headshot-upload";
 import { cropHeadshot } from "../shared/crop-headshot";
+import { z } from "zod";
+
+const _emailValidator = z.email();
 
 // ── Type declarations ──────────────────────────────────────────────────────────
 
@@ -247,6 +250,22 @@ interface StatsResponse {
     weekly: Array<{ week: string } & DonationPeriod>;
     monthly: Array<{ month: string } & DonationPeriod>;
   };
+}
+
+interface EventStatsResponse {
+  event: { id: string; slug: string; name: string };
+  registrations: {
+    byStatus: Record<string, number>;
+    byAttendanceType: Record<string, number>;
+    total: number;
+    daily: Array<{ date: string; count: number }>;
+    weekly: Array<{ week: string; count: number }>;
+  };
+  invites: {
+    attendee: { byStatus: Record<string, number>; total: number };
+    speaker: { byStatus: Record<string, number>; total: number };
+  };
+  proposals: { byStatus: Record<string, number>; total: number };
 }
 
 interface AdminEmailOutboxRow {
@@ -1001,11 +1020,13 @@ async function openEvent(slug: string): Promise<void> {
           `<li class="nav-item"><button class="nav-link active" data-main-tab="registrations">Registrations</button></li>` +
           '<li class="nav-item"><button class="nav-link" data-main-tab="proposals">Proposals</button></li>' +
           '<li class="nav-item"><button class="nav-link" data-main-tab="promoters">Promoters &#127881;</button></li>' +
+          '<li class="nav-item"><button class="nav-link" data-main-tab="event-stats">Stats</button></li>' +
           '<li class="nav-item"><button class="nav-link" data-main-tab="settings">Event Settings</button></li>' +
         '</ul>' +
         `<div id="et-registrations">${registrationsGroupTabHtml(slug)}</div>` +
         `<div id="et-proposals-group" class="d-none">${proposalsGroupTabHtml()}</div>` +
         `<div id="et-promoters" class="d-none">${promotersTabHtml()}</div>` +
+        `<div id="et-event-stats" class="d-none">${eventStatsTabHtml()}</div>` +
         `<div id="et-settings" class="d-none">${eventSettingsTabHtml()}</div>` +
       '</div></div>';
 
@@ -1014,7 +1035,7 @@ async function openEvent(slug: string): Promise<void> {
     det.querySelectorAll<HTMLButtonElement>("[data-main-tab]").forEach((btn) => {
       btn.addEventListener("click", () => {
         det.querySelectorAll<HTMLButtonElement>("[data-main-tab]").forEach((b) => b.classList.remove("active"));
-        ["registrations", "proposals-group", "promoters", "settings"].forEach((id) => hide(q(`#et-${id}`)));
+        ["registrations", "proposals-group", "promoters", "event-stats", "settings"].forEach((id) => hide(q(`#et-${id}`)));
         btn.classList.add("active");
         const tab = btn.dataset.mainTab!;
         if (tab === "registrations") {
@@ -1030,6 +1051,10 @@ async function openEvent(slug: string): Promise<void> {
         if (tab === "promoters") {
           show(q("#et-promoters"));
           void loadEventPromoters(slug);
+        }
+        if (tab === "event-stats") {
+          show(q("#et-event-stats"));
+          void loadEventStats(slug);
         }
         if (tab === "settings") {
           show(q("#et-settings"));
@@ -1086,10 +1111,18 @@ function wireRegistrationsGroupTabs(slug: string): void {
 }
 
 function registrationsListHtml(slug: string): string {
-  void slug;
   return (
     '<div id="regs-stats" class="mb-2"></div>' +
-    '<div class="d-flex justify-content-end mb-2">' +
+    '<div class="d-flex gap-2 align-items-center mb-2 flex-wrap">' +
+      '<input type="search" class="form-control form-control-sm" id="regs-search" placeholder="Search name / email…" style="max-width:260px" autocomplete="off">' +
+      '<select class="form-select form-select-sm" id="regs-status-filter" style="width:auto">' +
+        '<option value="">All statuses</option>' +
+        '<option value="registered">Confirmed</option>' +
+        '<option value="pending_email_confirmation">Pending confirmation</option>' +
+        '<option value="waitlisted">Waitlisted</option>' +
+        '<option value="cancelled">Cancelled</option>' +
+      '</select>' +
+      '<button class="btn btn-sm btn-outline-secondary ms-auto" id="regs-list-refresh">&circlearrowright; Refresh</button>' +
       `<button class="btn btn-sm btn-outline-warning" data-run-waitlist-promotions="${esc(slug)}">Run waitlist promotions</button>` +
     '</div>' +
     '<div id="regs-list-body">' + spinner() + '</div>' +
@@ -1104,6 +1137,10 @@ async function loadEventRegistrations(slug: string): Promise<void> {
   body.innerHTML = spinner();
   if (pager) pager.innerHTML = "";
 
+  const searchInput = q<HTMLInputElement>("#regs-search");
+  const statusSel = q<HTMLSelectElement>("#regs-status-filter");
+  const refreshBtn = q<HTMLButtonElement>("#regs-list-refresh");
+
   let offset = 0;
   let pageSize = ADMIN_LIST_PAGE_SIZE_DEFAULT;
 
@@ -1111,6 +1148,10 @@ async function loadEventRegistrations(slug: string): Promise<void> {
     body.innerHTML = spinner();
     try {
       const query = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
+      const searchVal = (searchInput?.value ?? "").trim();
+      if (searchVal) query.set("q", searchVal);
+      const statusVal = statusSel?.value ?? "";
+      if (statusVal) query.set("status", statusVal);
       const d = await api<{
         registrations: Registration[];
         stats?: { byAttendanceType: Record<string, number>; byStatus: Record<string, number> };
@@ -1185,6 +1226,9 @@ async function loadEventRegistrations(slug: string): Promise<void> {
   const bodyEl = body as HTMLElement;
   if (!bodyEl.dataset.regListWired) {
     bodyEl.dataset.regListWired = "1";
+    searchInput?.addEventListener("input", () => { offset = 0; void doLoad(); });
+    statusSel?.addEventListener("change", () => { offset = 0; void doLoad(); });
+    refreshBtn?.addEventListener("click", () => { offset = 0; void doLoad(); });
   }
 
   await doLoad();
@@ -1275,16 +1319,17 @@ function proposalInviteFormHtml(): string {
 function proposalInviteListHtml(): string {
   return (
     '<div class="d-flex gap-2 align-items-center mb-3 flex-wrap">' +
-      '<label class="form-label mb-0 small fw-semibold" for="pinv-filter">Filter status:</label>' +
+      '<input type="search" class="form-control form-control-sm" id="pinv-search" placeholder="Search email / name…" style="max-width:260px" autocomplete="off">' +
+      '<label class="form-label mb-0 small fw-semibold visually-hidden" for="pinv-filter">Filter status:</label>' +
       '<select class="form-select form-select-sm" id="pinv-filter" style="width:auto">' +
-        '<option value="">All</option>' +
+        '<option value="">All statuses</option>' +
         '<option value="sent" selected>Pending (sent)</option>' +
         '<option value="accepted">Accepted</option>' +
         '<option value="declined">Declined</option>' +
         '<option value="expired">Expired</option>' +
         '<option value="revoked">Revoked</option>' +
       '</select>' +
-      '<button class="btn btn-sm btn-outline-secondary" id="pinv-list-refresh">&circlearrowright; Refresh</button>' +
+      '<button class="btn btn-sm btn-outline-secondary ms-auto" id="pinv-list-refresh">&circlearrowright; Refresh</button>' +
     '</div>' +
     '<div id="pinv-list-body">' + spinner() + '</div>' +
     '<div id="pinv-list-pager" class="mt-2"></div>'
@@ -1292,15 +1337,18 @@ function proposalInviteListHtml(): string {
 }
 
 function syncProposalInviteCount(): void {
-  const rows = document.querySelectorAll("#pinv-rows .inv-row");
   const lbl = q("#pinv-count-lbl");
-  if (lbl) lbl.textContent = rows.length > 0 ? `${rows.length} row${rows.length !== 1 ? "s" : ""}` : "";
+  if (!lbl) return;
+  const count = _proposalInviteEntries.length > 0
+    ? _proposalInviteEntries.length
+    : document.querySelectorAll("#pinv-rows .inv-row").length;
+  lbl.textContent = count > 0 ? `${count.toLocaleString()} row${count !== 1 ? "s" : ""}` : "";
 }
 
 function collectProposalInvites(): Array<{ email: string; firstName?: string; lastName?: string }> {
+  if (_proposalInviteEntries.length > 0) return _proposalInviteEntries;
   const container = q("#pinv-rows");
   if (!container) return [];
-
   return Array.from(container.querySelectorAll<HTMLElement>(".inv-row"))
     .map((row) => ({
       email: (row.querySelector<HTMLInputElement>("[data-pinv-email]")?.value ?? "").trim(),
@@ -1308,6 +1356,35 @@ function collectProposalInvites(): Array<{ email: string; firstName?: string; la
       lastName: (row.querySelector<HTMLInputElement>("[data-pinv-last]")?.value ?? "").trim() || undefined,
     }))
     .filter((item) => item.email);
+}
+
+function renderProposalBulkSummary(entries: AdminInviteEntry[]): void {
+  const container = q("#pinv-rows");
+  if (!container) return;
+  const preview = entries.slice(0, INVITE_BULK_THRESHOLD);
+  const more = entries.length - preview.length;
+  const rows = preview
+    .map((e) => {
+      return `<tr><td class="small">${esc(e.firstName || "—")}</td><td class="small">${esc(e.lastName || "—")}</td><td class="small mono">${esc(e.email)}</td></tr>`;
+    })
+    .join("");
+  container.innerHTML =
+    `<div class="d-flex align-items-center gap-2 rounded border px-3 py-2 mb-2 small bg-light">` +
+    `<span><strong>${entries.length.toLocaleString()}</strong> invites loaded from CSV</span>` +
+    `<button type="button" class="btn btn-sm btn-link p-0 text-danger ms-auto" id="pinv-clear-bulk">× Clear</button>` +
+    `</div>` +
+    `<table class="table table-sm mb-1"><thead><tr><th class="small">First name</th><th class="small">Last name</th><th class="small">Email</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table>` +
+    (more > 0 ? `<div class="small text-muted ps-1">\u2026and ${more.toLocaleString()} more</div>` : "");
+  container.querySelector("#pinv-clear-bulk")?.addEventListener("click", () => clearProposalBulkImport());
+}
+
+function clearProposalBulkImport(): void {
+  _proposalInviteEntries = [];
+  const container = q("#pinv-rows");
+  if (container) container.innerHTML = "";
+  addProposalInviteRow();
+  syncProposalInviteCount();
 }
 
 function makeProposalInviteRow(entry?: AdminInviteEntry): HTMLElement {
@@ -1341,6 +1418,12 @@ function addProposalInviteRow(entry?: AdminInviteEntry): void {
 }
 
 function addParsedProposalEntries(entries: AdminInviteEntry[]): void {
+  if (entries.length > INVITE_BULK_THRESHOLD) {
+    _proposalInviteEntries = entries;
+    renderProposalBulkSummary(entries);
+    syncProposalInviteCount();
+    return;
+  }
   const container = q("#pinv-rows");
   if (!container) return;
   const existingRows = Array.from(container.querySelectorAll<HTMLElement>(".inv-row"));
@@ -1370,12 +1453,13 @@ function wireProposalInviteForm(slug: string): void {
 
   q("#pinv-parse-btn")?.addEventListener("click", () => {
     const text = q<HTMLTextAreaElement>("#pinv-paste")?.value ?? "";
-    const entries = parseAdminInviteText(text);
-    if (!entries.length) { toast("No valid email addresses found in the pasted text", "error"); return; }
-    addParsedProposalEntries(entries);
+    const { valid, skipped } = parseAdminInviteText(text);
+    if (!valid.length) { toast(skipped > 0 ? `No valid email addresses found (${skipped} invalid)` : "No valid email addresses found in the pasted text", "error"); return; }
+    addParsedProposalEntries(valid);
     const ta = q<HTMLTextAreaElement>("#pinv-paste");
     if (ta) ta.value = "";
-    toast(`Parsed ${entries.length} entr${entries.length !== 1 ? "ies" : "y"}`, "success");
+    const skipMsg = skipped > 0 ? ` (${skipped} skipped — invalid email)` : "";
+    toast(`Parsed ${valid.length} entr${valid.length !== 1 ? "ies" : "y"}${skipMsg}`, skipped > 0 ? "info" : "success");
   });
 
   q<HTMLInputElement>("#pinv-csv")?.addEventListener("change", (e) => {
@@ -1384,10 +1468,11 @@ function wireProposalInviteForm(slug: string): void {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string ?? "";
-      const entries = parseAdminCsv(text);
-      if (!entries.length) { toast("No valid rows found in CSV", "error"); return; }
-      addParsedProposalEntries(entries);
-      toast(`Imported ${entries.length} row${entries.length !== 1 ? "s" : ""} from CSV`, "success");
+      const { valid, skipped } = parseAdminCsv(text);
+      if (!valid.length) { toast("No valid rows found in CSV", "error"); return; }
+      addParsedProposalEntries(valid);
+      const skipMsg = skipped > 0 ? ` (${skipped} row${skipped !== 1 ? "s" : ""} skipped — invalid email)` : "";
+      toast(`Imported ${valid.length} row${valid.length !== 1 ? "s" : ""} from CSV${skipMsg}`, skipped > 0 ? "info" : "success");
       (e.target as HTMLInputElement).value = "";
     };
     reader.readAsText(file);
@@ -1398,9 +1483,7 @@ function wireProposalInviteForm(slug: string): void {
 }
 
 async function doAdminProposalInvite(slug: string): Promise<void> {
-  const container = q("#pinv-rows");
   const statusEl = q("#pinv-form-status");
-  if (!container) return;
 
   const invites = collectProposalInvites();
   if (!invites.length) {
@@ -1413,16 +1496,36 @@ async function doAdminProposalInvite(slug: string): Promise<void> {
   if (statusEl) { statusEl.textContent = ""; statusEl.className = "mt-2 small"; }
 
   try {
-    const r = await api<{ created?: unknown[] }>(`/api/v1/admin/events/${slug}/invites/speakers/bulk`, {
-      method: "POST",
-      body: JSON.stringify({ invites }),
-    });
-    const count = r.created?.length ?? invites.length;
-    toast(`Sent ${count} proposal invite${count !== 1 ? "s" : ""}`, "success");
-    container.innerHTML = "";
-    addProposalInviteRow();
-    syncProposalInviteCount();
-    if (statusEl) { statusEl.textContent = `✓ ${count} proposal invitation${count !== 1 ? "s" : ""} queued.`; statusEl.className = "mt-2 small text-success"; }
+    const chunks: typeof invites[] = [];
+    for (let i = 0; i < invites.length; i += INVITE_CHUNK_SIZE) {
+      chunks.push(invites.slice(i, i + INVITE_CHUNK_SIZE));
+    }
+
+    let totalCreated = 0;
+    let totalEndorsed = 0;
+    let totalSkipped = 0;
+
+    for (let i = 0; i < chunks.length; i++) {
+      if (chunks.length > 1 && statusEl) {
+        statusEl.textContent = `Sending batch ${i + 1} of ${chunks.length}…`;
+        statusEl.className = "mt-2 small text-muted";
+      }
+      const r = await api<{ created?: unknown[]; endorsed?: unknown[]; skipped?: unknown[] }>(
+        `/api/v1/admin/events/${slug}/invites/speakers/bulk`,
+        { method: "POST", body: JSON.stringify({ invites: chunks[i] }) },
+      );
+      totalCreated  += r.created?.length  ?? 0;
+      totalEndorsed += r.endorsed?.length ?? 0;
+      totalSkipped  += r.skipped?.length  ?? 0;
+    }
+
+    const parts = [`✓ ${totalCreated} proposal invitation${totalCreated !== 1 ? "s" : ""} queued`];
+    if (totalEndorsed) parts.push(`${totalEndorsed} already invited`);
+    if (totalSkipped)  parts.push(`${totalSkipped} skipped`);
+    toast(parts.join(" · "), "success");
+
+    clearProposalBulkImport();
+    if (statusEl) { statusEl.textContent = parts.join(" · "); statusEl.className = "mt-2 small text-success"; }
   } catch (err) {
     toast((err as Error).message, "error");
     if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "mt-2 small text-danger"; }
@@ -1457,6 +1560,7 @@ async function loadProposalInvites(slug: string, statusFilter?: string): Promise
   if (pager) pager.innerHTML = "";
 
   const filterSel = q<HTMLSelectElement>("#pinv-filter");
+  const searchInput = q<HTMLInputElement>("#pinv-search");
   const refreshBtn = q<HTMLButtonElement>("#pinv-list-refresh");
 
   const getFilter = (): string => filterSel?.value ?? (statusFilter ?? "sent");
@@ -1471,6 +1575,8 @@ async function loadProposalInvites(slug: string, statusFilter?: string): Promise
     query.set("limit", String(pageSize));
     query.set("offset", String(offset));
     if (filter) query.set("status", filter);
+    const searchVal = (searchInput?.value ?? "").trim();
+    if (searchVal) query.set("q", searchVal);
     const url = `/api/v1/admin/events/${slug}/invites?${query.toString()}`;
 
     try {
@@ -1546,14 +1652,172 @@ async function loadProposalInvites(slug: string, statusFilter?: string): Promise
   const bodyEl = body as HTMLElement;
   if (!bodyEl.dataset.proposalInvListWired) {
     bodyEl.dataset.proposalInvListWired = "1";
-    filterSel?.addEventListener("change", () => {
-      offset = 0;
-      void doLoad();
-    });
-    refreshBtn?.addEventListener("click", () => {
-      offset = 0;
-      void doLoad();
-    });
+    searchInput?.addEventListener("input", () => { offset = 0; void doLoad(); });
+    filterSel?.addEventListener("change", () => { offset = 0; void doLoad(); });
+    refreshBtn?.addEventListener("click", () => { offset = 0; void doLoad(); });
+  }
+
+  await doLoad();
+}
+
+function eventStatsTabHtml(): string {
+  return (
+    '<div class="d-flex justify-content-end mb-3">' +
+      '<button class="btn btn-sm btn-outline-secondary" id="btn-event-stats-refresh">&circlearrowright; Refresh</button>' +
+    '</div>' +
+    '<div id="event-stats-body">' + spinner() + '</div>'
+  );
+}
+
+async function loadEventStats(slug: string): Promise<void> {
+  const body = q("#event-stats-body");
+  if (!body) return;
+
+  const refreshBtn = q<HTMLButtonElement>("#btn-event-stats-refresh");
+
+  const doLoad = async (): Promise<void> => {
+    body.innerHTML = spinner();
+    try {
+      const s = await api<EventStatsResponse>(`/api/v1/admin/events/${slug}/stats`);
+
+      const attLabels: Record<string, string> = { in_person: "In person", virtual: "Virtual", on_demand: "On demand" };
+
+      const regTotal = s.registrations.total;
+      const confirmed = s.registrations.byStatus.registered ?? 0;
+      const waitlisted = s.registrations.byStatus.waitlisted ?? 0;
+      const pendingConf = s.registrations.byStatus.pending_email_confirmation ?? 0;
+      const cancelled = s.registrations.byStatus.cancelled ?? 0;
+      const attendeePending = s.invites.attendee.byStatus.sent ?? 0;
+      const attendeeAccepted = s.invites.attendee.byStatus.accepted ?? 0;
+      const speakerPending = s.invites.speaker.byStatus.sent ?? 0;
+      const speakerAccepted = s.invites.speaker.byStatus.accepted ?? 0;
+
+      const tabContent = {
+        overview:
+          '<div class="row g-3">' +
+            '<div class="col-md-4">' +
+              `<div class="card text-center border-0 shadow-sm"><div class="card-body py-3">` +
+              `<div class="fs-3 fw-bold">${regTotal}</div>` +
+              `<div class="text-muted small">Total Registrations</div>` +
+              `<div class="mt-1 small">${confirmed} confirmed · ${waitlisted} waitlisted</div>` +
+              `</div></div>` +
+            '</div>' +
+            '<div class="col-md-4">' +
+              `<div class="card text-center border-0 shadow-sm"><div class="card-body py-3">` +
+              `<div class="fs-3 fw-bold">${s.invites.attendee.total}</div>` +
+              `<div class="text-muted small">Attendee Invites</div>` +
+              `<div class="mt-1 small">${attendeePending} pending · ${attendeeAccepted} accepted</div>` +
+              `</div></div>` +
+            '</div>' +
+            '<div class="col-md-4">' +
+              `<div class="card text-center border-0 shadow-sm"><div class="card-body py-3">` +
+              `<div class="fs-3 fw-bold">${s.invites.speaker.total + s.proposals.total}</div>` +
+              `<div class="text-muted small">Speaker Invites / Proposals</div>` +
+              `<div class="mt-1 small">${speakerPending} pending · ${speakerAccepted} accepted</div>` +
+              `</div></div>` +
+            '</div>' +
+          '</div>' +
+          '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+            '<h6 class="text-uppercase small fw-bold text-muted mb-3">Registration Status</h6>' +
+            statusBars(s.registrations.byStatus, regTotal) +
+          '</div></div>' +
+          (s.registrations.daily.length > 0
+            ? '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+              '<h6 class="text-uppercase small fw-bold text-muted mb-3">Daily Registrations — last 30 days</h6>' +
+              svgBarChart(s.registrations.daily.map((d) => d.date.slice(5)), s.registrations.daily.map((d) => d.count)) +
+              '</div></div>'
+            : ''),
+
+        registrations:
+          '<div class="row g-3">' +
+            '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
+              '<h6 class="text-uppercase small fw-bold text-muted mb-3">By Status</h6>' +
+              tbl(
+                ["Status", "Count"],
+                Object.entries(s.registrations.byStatus).map(([k, v]) => `<tr><td>${badge(k)}</td><td class="mono">${v}</td></tr>`),
+                "None",
+              ) +
+            '</div></div></div>' +
+            '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
+              '<h6 class="text-uppercase small fw-bold text-muted mb-3">By Attendance Type</h6>' +
+              tbl(
+                ["Type", "Count"],
+                Object.entries(s.registrations.byAttendanceType).map(([k, v]) =>
+                  `<tr><td>${esc(attLabels[k] ?? k)}</td><td class="mono">${v}</td></tr>`),
+                "None",
+              ) +
+            '</div></div></div>' +
+          '</div>' +
+          (s.registrations.weekly.length > 0
+            ? '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+              '<h6 class="text-uppercase small fw-bold text-muted mb-3">Weekly Registrations — last 12 weeks</h6>' +
+              svgBarChart(s.registrations.weekly.map((d) => d.week.slice(5)), s.registrations.weekly.map((d) => d.count)) +
+              tbl(["Week", "Count"], s.registrations.weekly.map((d) => `<tr><td class="mono">${esc(d.week)}</td><td>${d.count}</td></tr>`), "No data") +
+              '</div></div>'
+            : ''),
+
+        invites:
+          '<div class="row g-3">' +
+            '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
+              '<h6 class="text-uppercase small fw-bold text-muted mb-3">Attendee Invites</h6>' +
+              tbl(
+                ["Status", "Count"],
+                Object.entries(s.invites.attendee.byStatus).map(([k, v]) => `<tr><td>${inviteBadge(k)}</td><td class="mono">${v}</td></tr>`),
+                "None",
+              ) +
+              `<div class="mt-2 small text-muted">Total: <strong>${s.invites.attendee.total}</strong></div>` +
+            '</div></div></div>' +
+            '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
+              '<h6 class="text-uppercase small fw-bold text-muted mb-3">Speaker Invites</h6>' +
+              tbl(
+                ["Status", "Count"],
+                Object.entries(s.invites.speaker.byStatus).map(([k, v]) => `<tr><td>${inviteBadge(k)}</td><td class="mono">${v}</td></tr>`),
+                "None",
+              ) +
+              `<div class="mt-2 small text-muted">Total: <strong>${s.invites.speaker.total}</strong></div>` +
+            '</div></div></div>' +
+          '</div>' +
+          (s.proposals.total > 0
+            ? '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+              '<h6 class="text-uppercase small fw-bold text-muted mb-3">Proposals</h6>' +
+              tbl(
+                ["Status", "Count"],
+                Object.entries(s.proposals.byStatus).map(([k, v]) => `<tr><td>${badge(k)}</td><td class="mono">${v}</td></tr>`),
+                "None",
+              ) +
+              `<div class="mt-2 small text-muted">Total: <strong>${s.proposals.total}</strong></div>` +
+              '</div></div>'
+            : ''),
+      };
+
+      const tabKeys = ["overview", "registrations", "invites"] as const;
+      const tabLabels: Record<string, string> = { overview: "Overview", registrations: "Registrations", invites: "Invites & Proposals" };
+
+      body.innerHTML =
+        '<ul class="nav nav-tabs mb-3" id="event-stats-tabs">' +
+          tabKeys.map((k, i) =>
+            `<li class="nav-item"><button class="nav-link${i === 0 ? " active" : ""}" data-event-stats-tab="${k}">${tabLabels[k]}</button></li>`,
+          ).join("") +
+        '</ul>' +
+        `<div id="event-stats-tab-content">${tabContent.overview}</div>`;
+
+      body.querySelector("#event-stats-tabs")?.addEventListener("click", (evt) => {
+        const btn = (evt.target as Element).closest<HTMLButtonElement>("[data-event-stats-tab]");
+        if (!btn) return;
+        const tab = btn.dataset.eventStatsTab as keyof typeof tabContent;
+        body.querySelectorAll<HTMLButtonElement>("[data-event-stats-tab]").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const content = body.querySelector("#event-stats-tab-content");
+        if (content) content.innerHTML = tabContent[tab] ?? "";
+      });
+    } catch (err) {
+      body.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+    }
+  };
+
+  if (refreshBtn && !refreshBtn.dataset.wired) {
+    refreshBtn.dataset.wired = "1";
+    refreshBtn.addEventListener("click", () => void doLoad());
   }
 
   await doLoad();
@@ -2275,16 +2539,17 @@ function inviteListHtml(slug: string): string {
   void slug;
   return (
     '<div class="d-flex gap-2 align-items-center mb-3 flex-wrap">' +
-      '<label class="form-label mb-0 small fw-semibold" for="inv-filter">Filter status:</label>' +
+      '<input type="search" class="form-control form-control-sm" id="inv-search" placeholder="Search email / name…" style="max-width:260px" autocomplete="off">' +
+      '<label class="form-label mb-0 small fw-semibold visually-hidden" for="inv-filter">Filter status:</label>' +
       '<select class="form-select form-select-sm" id="inv-filter" style="width:auto">' +
-        '<option value="">All</option>' +
+        '<option value="">All statuses</option>' +
         '<option value="sent" selected>Pending (sent)</option>' +
         '<option value="accepted">Accepted</option>' +
         '<option value="declined">Declined</option>' +
         '<option value="expired">Expired</option>' +
         '<option value="revoked">Revoked</option>' +
       '</select>' +
-      '<button class="btn btn-sm btn-outline-secondary" id="inv-list-refresh">&circlearrowright; Refresh</button>' +
+      '<button class="btn btn-sm btn-outline-secondary ms-auto" id="inv-list-refresh">&circlearrowright; Refresh</button>' +
     '</div>' +
     '<div id="inv-list-body">' + spinner() + '</div>' +
     '<div id="inv-list-pager" class="mt-2"></div>'
@@ -2315,7 +2580,8 @@ async function loadEventPromoters(slug: string): Promise<void> {
       const d = await api<PromotersResponse>(`/api/v1/admin/events/${slug}/promoters`);
 
       // ── Promoter leaderboard table ──────────────────────────────────────
-      const promoterRows = d.promoters.map((p, idx) => {
+      const top100 = d.promoters.slice(0, 100);
+      const promoterRows = top100.map((p, idx) => {
         const displayName = [p.first_name, p.last_name].filter(Boolean).join(" ");
         const nameCell = displayName
           ? `${esc(displayName)}<br><span class="mono text-muted" style="font-size:.75rem">${esc(p.email ?? "")}</span>`
@@ -2338,29 +2604,6 @@ async function loadEventPromoters(slug: string): Promise<void> {
         );
       });
 
-      // ── Referral code details table ─────────────────────────────────────
-      const codeRows = d.referralCodes.map((rc) => {
-        const ownerName = [rc.owner_first_name, rc.owner_last_name].filter(Boolean).join(" ");
-        const ownerDisplay = rc.owner_email
-          ? (ownerName
-              ? `${esc(ownerName)}<br><span class="mono text-muted" style="font-size:.72rem">${esc(rc.owner_email)}</span>`
-              : `<span class="mono">${esc(rc.owner_email)}</span>`)
-          : `<span class="text-muted fst-italic">${esc(rc.owner_type)}:${esc(rc.owner_id.slice(0, 8))}</span>`;
-        const clickBar = rc.clicks > 0
-          ? `<div class="bar-track" style="display:inline-block;width:80px;vertical-align:middle"><div class="bar-fill" style="width:${Math.min(100, rc.clicks * 5)}%;background:#3b82f6"></div></div> ${rc.clicks}`
-          : "0";
-        return (
-          `<tr>` +
-          `<td class="mono fw-semibold">${esc(rc.code)}</td>` +
-          `<td style="font-size:.82rem">${ownerDisplay}</td>` +
-          `<td class="text-muted small">${esc(rc.channel_hint ?? "—")}</td>` +
-          `<td>${clickBar}</td>` +
-          `<td class="text-center"><span class="badge text-bg-primary">${rc.conversions}</span></td>` +
-          `<td class="mono small">${fmt(rc.created_at)}</td>` +
-          `</tr>`
-        );
-      });
-
       // ── Click timeline ──────────────────────────────────────────────────
       const timelineHtml = d.clickTimeline.length > 0
         ? tbl(
@@ -2373,18 +2616,13 @@ async function loadEventPromoters(slug: string): Promise<void> {
         : '<p class="text-muted fst-italic small">No referral link clicks recorded in the last 30 days.</p>';
 
       body.innerHTML =
-        '<h6 class="text-uppercase small fw-bold text-muted mb-2">Top Promoters &amp; Inviters</h6>' +
+        '<h6 class="text-uppercase small fw-bold text-muted mb-2">Top Promoters &amp; Inviters' +
+        (d.promoters.length > 100 ? ` <span class="fw-normal">(showing top 100 of ${d.promoters.length})</span>` : '') +
+        '</h6>' +
         tbl(
           ["#", "Person", "Sent", "Accepted", "Declined", "Conv. Rate", "Link Clicks", "Link Conv.", "Impact", "Last Invite"],
           promoterRows,
           "No invite or referral activity yet — send invites or share referral links to see data here.",
-        ) +
-        '<hr class="my-3">' +
-        '<h6 class="text-uppercase small fw-bold text-muted mb-2">Referral Links</h6>' +
-        tbl(
-          ["Code", "Owner", "Channel", "Clicks", "Registrations", "Created"],
-          codeRows,
-          "No referral codes generated for this event yet.",
         ) +
         '<hr class="my-3">' +
         '<h6 class="text-uppercase small fw-bold text-muted mb-2">Click Activity (last 30 days)</h6>' +
@@ -2850,8 +3088,9 @@ function adminCapWord(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
 }
 
-function parseAdminInviteText(raw: string): AdminInviteEntry[] {
+function parseAdminInviteText(raw: string): { valid: AdminInviteEntry[]; skipped: number } {
   const results: AdminInviteEntry[] = [];
+  let skipped = 0;
   const lines = raw.split(/\n+/).map((l) => l.trim()).filter(Boolean);
   for (const line of lines) {
     // "First Last" <email>  or  First Last <email>
@@ -2859,7 +3098,7 @@ function parseAdminInviteText(raw: string): AdminInviteEntry[] {
     if (angleBracket) {
       const namePart = angleBracket[1].trim();
       const email = angleBracket[2].trim().toLowerCase();
-      if (!email.includes("@")) continue;
+      if (!EMAIL_REGEX.test(email)) { skipped++; continue; }
       const entry: AdminInviteEntry = { email };
       if (namePart) {
         const parts = namePart.split(/\s+/).filter(Boolean);
@@ -2872,14 +3111,18 @@ function parseAdminInviteText(raw: string): AdminInviteEntry[] {
     // CSV: three comma-separated values where last looks like email
     const csv = line.split(",").map((s) => s.trim());
     if (csv.length === 3 && csv[2].includes("@") && !csv[2].includes(" ")) {
-      results.push({ firstName: csv[0] || undefined, lastName: csv[1] || undefined, email: csv[2].toLowerCase() });
+      const email = csv[2].toLowerCase();
+      if (!EMAIL_REGEX.test(email)) { skipped++; continue; }
+      results.push({ firstName: csv[0] || undefined, lastName: csv[1] || undefined, email });
       continue;
     }
     // Plain email(s) separated by commas/semicolons
     for (const atom of line.split(/[,;]+/).map((s) => s.trim()).filter(Boolean)) {
       if (!atom.includes("@")) continue;
-      const entry: AdminInviteEntry = { email: atom.toLowerCase() };
-      const local = atom.split("@")[0];
+      const email = atom.toLowerCase();
+      if (!EMAIL_REGEX.test(email)) { skipped++; continue; }
+      const entry: AdminInviteEntry = { email };
+      const local = email.split("@")[0];
       const dotParts = local.split(".").filter(Boolean);
       if (dotParts.length >= 2) {
         entry.firstName = adminCapWord(dotParts[0]);
@@ -2889,16 +3132,21 @@ function parseAdminInviteText(raw: string): AdminInviteEntry[] {
     }
   }
   const seen = new Set<string>();
-  return results.filter((e) => {
+  const valid = results.filter((e) => {
     if (seen.has(e.email)) return false;
     seen.add(e.email);
     return true;
   });
+  return { valid, skipped };
 }
 
-function parseAdminCsv(text: string): AdminInviteEntry[] {
+const EMAIL_REGEX = { test: (s: string) => _emailValidator.safeParse(s).success };
+
+function parseAdminCsv(text: string): { valid: AdminInviteEntry[]; skipped: number } {
+  // Strip UTF-8 BOM that Excel adds to CSV exports.
+  if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
   const lines = text.split(/\n/).map((l) => l.trim()).filter(Boolean);
-  if (!lines.length) return [];
+  if (!lines.length) return { valid: [], skipped: 0 };
   // Detect header row: first line with no '@' and contains commas
   let dataStart = 0;
   const header = lines[0].toLowerCase();
@@ -2906,42 +3154,72 @@ function parseAdminCsv(text: string): AdminInviteEntry[] {
   const colFirst = header.split(",").findIndex((c) => c.includes("first"));
   const colLast  = header.split(",").findIndex((c) => c.includes("last"));
   if (colEmail !== -1) { dataStart = 1; } // has header
-  const results: AdminInviteEntry[] = [];
+  const valid: AdminInviteEntry[] = [];
+  let skipped = 0;
   for (let i = dataStart; i < lines.length; i++) {
     const parts = lines[i].split(",").map((s) => s.trim().replace(/^"|"$/g, ""));
     if (colEmail !== -1) {
-      const email = parts[colEmail]?.toLowerCase();
-      if (!email?.includes("@")) continue;
-      results.push({
-        email,
-        firstName: colFirst !== -1 ? (parts[colFirst] || undefined) : undefined,
-        lastName:  colLast  !== -1 ? (parts[colLast]  || undefined) : undefined,
-      });
+      const email = parts[colEmail]?.trim().toLowerCase() ?? "";
+      if (!EMAIL_REGEX.test(email)) { skipped++; continue; }
+      const entry: AdminInviteEntry = { email };
+      if (colFirst !== -1) { entry.firstName = parts[colFirst] || undefined; }
+      if (colLast  !== -1) { entry.lastName  = parts[colLast]  || undefined; }
+      if (colFirst === -1 && colLast === -1) {
+        const local = email.split("@")[0];
+        const dotParts = local.split(".").filter(Boolean);
+        if (dotParts.length >= 2) {
+          entry.firstName = adminCapWord(dotParts[0]);
+          entry.lastName  = adminCapWord(dotParts.slice(1).join(" "));
+        }
+      }
+      valid.push(entry);
     } else {
       // No header: treat as plain text
       const parsed = parseAdminInviteText(lines[i]);
-      results.push(...parsed);
+      valid.push(...parsed.valid);
+      skipped += parsed.skipped;
     }
   }
-  return results;
+  return { valid, skipped };
 }
 
 // ── Admin invite row management ──────────────────────────────────────────────
 
 const MAX_ADMIN_INVITES = 500;
-let _invitePreviewState: { token: string; digest: string; expiresAt: string } | null = null;
+/** Show at most this many rows in the DOM when a large CSV is imported. */
+const INVITE_BULK_THRESHOLD = 10;
+/** Entries per POST when chunking a large invite list across multiple requests. */
+// D1/SQLite hard-limits bind variables per statement to 999.
+// The pre-check queries bind up to N+2 variables, so keep chunks ≤ 900.
+const INVITE_CHUNK_SIZE = 900;
+
+let _invitePreviewState: {
+  token: string;
+  digest: string;
+  expiresAt: string;
+  /** SHA-256 hex digest of the full invite list, returned by the preview endpoint.
+   *  Sent with every bulk chunk so the preview token validates against the full list. */
+  inviteDigest: string;
+} | null = null;
+/** In-memory store for large CSV imports (> INVITE_BULK_THRESHOLD entries). */
+let _adminInviteEntries: AdminInviteEntry[] = [];
+/** In-memory store for large speaker CSV imports. */
+let _proposalInviteEntries: AdminInviteEntry[] = [];
 const _emailPreviewTokens = new Map<string, string | null>();
 
 function syncInviteCount(): void {
-  const rows = document.querySelectorAll("#inv-rows .inv-row");
   const lbl = q("#inv-count-lbl");
-  if (lbl) lbl.textContent = rows.length > 0 ? `${rows.length} row${rows.length !== 1 ? "s" : ""}` : "";
+  if (!lbl) return;
+  const count = _adminInviteEntries.length > 0
+    ? _adminInviteEntries.length
+    : document.querySelectorAll("#inv-rows .inv-row").length;
+  lbl.textContent = count > 0 ? `${count.toLocaleString()} row${count !== 1 ? "s" : ""}` : "";
 }
 
 function collectAdminInvites(): Array<{ email: string; firstName?: string; lastName?: string }> {
+  if (_adminInviteEntries.length > 0) return _adminInviteEntries;
   const container = q("#inv-rows");
   if (!container) return [];
-
   return Array.from(container.querySelectorAll<HTMLElement>(".inv-row"))
     .map((row) => ({
       email: (row.querySelector<HTMLInputElement>("[data-inv-email]")?.value ?? "").trim(),
@@ -2949,6 +3227,38 @@ function collectAdminInvites(): Array<{ email: string; firstName?: string; lastN
       lastName: (row.querySelector<HTMLInputElement>("[data-inv-last]")?.value ?? "").trim() || undefined,
     }))
     .filter((item) => item.email);
+}
+
+function renderAdminBulkSummary(entries: AdminInviteEntry[]): void {
+  const container = q("#inv-rows");
+  if (!container) return;
+  const preview = entries.slice(0, INVITE_BULK_THRESHOLD);
+  const more = entries.length - preview.length;
+  const rows = preview
+    .map((e) => {
+      return `<tr><td class="small">${esc(e.firstName || "—")}</td><td class="small">${esc(e.lastName || "—")}</td><td class="small mono">${esc(e.email)}</td></tr>`;
+    })
+    .join("");
+  container.innerHTML =
+    `<div class="d-flex align-items-center gap-2 rounded border px-3 py-2 mb-2 small bg-light">` +
+    `<span><strong>${entries.length.toLocaleString()}</strong> invites loaded from CSV</span>` +
+    `<button type="button" class="btn btn-sm btn-link p-0 text-danger ms-auto" id="inv-clear-bulk">× Clear</button>` +
+    `</div>` +
+    `<table class="table table-sm mb-1"><thead><tr><th class="small">First name</th><th class="small">Last name</th><th class="small">Email</th></tr></thead>` +
+    `<tbody>${rows}</tbody></table>` +
+    (more > 0 ? `<div class="small text-muted ps-1">\u2026and ${more.toLocaleString()} more</div>` : "");
+  container.querySelector("#inv-clear-bulk")?.addEventListener("click", () => {
+    clearAdminBulkImport();
+    invalidateInvitePreview();
+  });
+}
+
+function clearAdminBulkImport(): void {
+  _adminInviteEntries = [];
+  const container = q("#inv-rows");
+  if (container) container.innerHTML = "";
+  addAdminInviteRow();
+  syncInviteCount();
 }
 
 function invitePreviewDigest(invites: Array<{ email: string; firstName?: string; lastName?: string; sourceType?: string }>): string {
@@ -3331,7 +3641,7 @@ function makeAdminInviteRow(entry?: AdminInviteEntry): HTMLElement {
     const pasted = e.clipboardData?.getData("text") ?? "";
     if (!pasted.includes("<") && !pasted.includes(",") && !pasted.includes("\n")) return;
     e.preventDefault();
-    const entries = parseAdminInviteText(pasted);
+    const { valid: entries, skipped: _s } = parseAdminInviteText(pasted);
     if (!entries.length) return;
     const firstEl = div.querySelector<HTMLInputElement>("[data-inv-first]");
     const lastEl  = div.querySelector<HTMLInputElement>("[data-inv-last]");
@@ -3355,6 +3665,12 @@ function addAdminInviteRow(entry?: AdminInviteEntry): void {
 }
 
 function addParsedAdminEntries(entries: AdminInviteEntry[]): void {
+  if (entries.length > INVITE_BULK_THRESHOLD) {
+    _adminInviteEntries = entries;
+    renderAdminBulkSummary(entries);
+    syncInviteCount();
+    return;
+  }
   const container = q("#inv-rows");
   if (!container) return;
   // Fill existing empty rows first
@@ -3397,13 +3713,14 @@ function wireInviteForm(slug: string): void {
   // Parse button
   q("#inv-parse-btn")?.addEventListener("click", () => {
     const text = q<HTMLTextAreaElement>("#inv-paste")?.value ?? "";
-    const entries = parseAdminInviteText(text);
-    if (!entries.length) { toast("No valid email addresses found in the pasted text", "error"); return; }
-    addParsedAdminEntries(entries);
+    const { valid, skipped } = parseAdminInviteText(text);
+    if (!valid.length) { toast(skipped > 0 ? `No valid email addresses found (${skipped} invalid)` : "No valid email addresses found in the pasted text", "error"); return; }
+    addParsedAdminEntries(valid);
     const ta = q<HTMLTextAreaElement>("#inv-paste");
     if (ta) ta.value = "";
     invalidateInvitePreview();
-    toast(`Parsed ${entries.length} entr${entries.length !== 1 ? "ies" : "y"}`, "success");
+    const skipMsg = skipped > 0 ? ` (${skipped} skipped — invalid email)` : "";
+    toast(`Parsed ${valid.length} entr${valid.length !== 1 ? "ies" : "y"}${skipMsg}`, skipped > 0 ? "info" : "success");
   });
 
   // Auto-parse on paste into the textarea
@@ -3411,9 +3728,10 @@ function wireInviteForm(slug: string): void {
     setTimeout(() => {
       const ta = q<HTMLTextAreaElement>("#inv-paste");
       if (!ta?.value.trim()) return;
-      const entries = parseAdminInviteText(ta.value);
-      if (!entries.length) return;
-      addParsedAdminEntries(entries);
+      const { valid, skipped } = parseAdminInviteText(ta.value);
+      if (!valid.length) return;
+      addParsedAdminEntries(valid);
+      if (skipped > 0) toast(`${skipped} address${skipped !== 1 ? "es" : ""} skipped — invalid email`, "info");
       ta.value = "";
       syncInviteCount();
       invalidateInvitePreview();
@@ -3427,11 +3745,12 @@ function wireInviteForm(slug: string): void {
     const reader = new FileReader();
     reader.onload = (ev) => {
       const text = ev.target?.result as string ?? "";
-      const entries = parseAdminCsv(text);
-      if (!entries.length) { toast("No valid rows found in CSV", "error"); return; }
-      addParsedAdminEntries(entries);
+      const { valid, skipped } = parseAdminCsv(text);
+      if (!valid.length) { toast("No valid rows found in CSV", "error"); return; }
+      addParsedAdminEntries(valid);
       invalidateInvitePreview();
-      toast(`Imported ${entries.length} row${entries.length !== 1 ? "s" : ""} from CSV`, "success");
+      const skipMsg = skipped > 0 ? ` (${skipped} row${skipped !== 1 ? "s" : ""} skipped — invalid email)` : "";
+      toast(`Imported ${valid.length} row${valid.length !== 1 ? "s" : ""} from CSV${skipMsg}`, skipped > 0 ? "info" : "success");
       (e.target as HTMLInputElement).value = "";
     };
     reader.readAsText(file);
@@ -3480,6 +3799,7 @@ async function doAdminInvitePreview(slug: string): Promise<void> {
       previewToken: string;
       previewExpiresAt: string;
       recipientCount: number;
+      inviteDigest: string;
       subject: string;
       html: string;
       text: string;
@@ -3492,6 +3812,7 @@ async function doAdminInvitePreview(slug: string): Promise<void> {
       token: result.previewToken,
       digest: invitePreviewDigest(invites),
       expiresAt: result.previewExpiresAt,
+      inviteDigest: result.inviteDigest,
     };
 
     const previewSubject = q("#inv-preview-subject");
@@ -3528,9 +3849,7 @@ async function doAdminInvitePreview(slug: string): Promise<void> {
 }
 
 async function doAdminInvite(slug: string): Promise<void> {
-  const container = q("#inv-rows");
   const statusEl = q("#inv-form-status");
-  if (!container) return;
 
   const invites = collectAdminInvites();
 
@@ -3563,20 +3882,50 @@ async function doAdminInvite(slug: string): Promise<void> {
   if (statusEl) { statusEl.textContent = ""; statusEl.className = "mt-2 small"; }
 
   try {
-    const r = await api<{ created?: unknown[] }>(`/api/v1/admin/events/${slug}/invites/attendees/bulk`, {
-      method: "POST",
-      body: JSON.stringify({ invites, previewToken: _invitePreviewState.token }),
-    });
-    const count = r.created?.length ?? invites.length;
-    toast(`Sent ${count} invite${count !== 1 ? "s" : ""}`, "success");
-    _invitePreviewState = null;
-    if (container) {
-      container.innerHTML = "";
-      addAdminInviteRow();
-      syncInviteCount();
+    // Split large lists into chunks so each Worker request stays within the
+    // 30-second wall-clock limit.  All chunks share the same previewToken
+    // (issued for the full list) and include the full-list inviteDigest so
+    // the backend can validate the token against the complete list rather
+    // than just the current chunk.
+    const chunks: typeof invites[] = [];
+    for (let i = 0; i < invites.length; i += INVITE_CHUNK_SIZE) {
+      chunks.push(invites.slice(i, i + INVITE_CHUNK_SIZE));
     }
+
+    let totalCreated = 0;
+    let totalEndorsed = 0;
+    let totalSkipped = 0;
+
+    for (let i = 0; i < chunks.length; i++) {
+      if (chunks.length > 1 && statusEl) {
+        statusEl.textContent = `Sending batch ${i + 1} of ${chunks.length}…`;
+        statusEl.className = "mt-2 small text-muted";
+      }
+      const payload: Record<string, unknown> = {
+        invites: chunks[i],
+        previewToken: _invitePreviewState.token,
+      };
+      if (chunks.length > 1) {
+        payload.inviteDigest = _invitePreviewState.inviteDigest;
+      }
+      const r = await api<{ created?: unknown[]; endorsed?: unknown[]; skipped?: unknown[] }>(
+        `/api/v1/admin/events/${slug}/invites/attendees/bulk`,
+        { method: "POST", body: JSON.stringify(payload) },
+      );
+      totalCreated  += r.created?.length  ?? 0;
+      totalEndorsed += r.endorsed?.length ?? 0;
+      totalSkipped  += r.skipped?.length  ?? 0;
+    }
+
+    const parts = [`✓ ${totalCreated} invitation${totalCreated !== 1 ? "s" : ""} queued`];
+    if (totalEndorsed) parts.push(`${totalEndorsed} already invited`);
+    if (totalSkipped)  parts.push(`${totalSkipped} skipped`);
+    toast(parts.join(" · "), "success");
+
+    _invitePreviewState = null;
+    clearAdminBulkImport();
     invalidateInvitePreview();
-    if (statusEl) { statusEl.textContent = `✓ ${count} invitation${count !== 1 ? "s" : ""} queued.`; statusEl.className = "mt-2 small text-success"; }
+    if (statusEl) { statusEl.textContent = parts.join(" · "); statusEl.className = "mt-2 small text-success"; }
   } catch (err) {
     toast((err as Error).message, "error");
     if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "mt-2 small text-danger"; }
@@ -3708,6 +4057,7 @@ async function loadEventInvites(slug: string, statusFilter?: string): Promise<vo
 
   // Wire filter controls once
   const filterSel = q<HTMLSelectElement>("#inv-filter");
+  const searchInput = q<HTMLInputElement>("#inv-search");
   const refreshBtn = q<HTMLButtonElement>("#inv-list-refresh");
 
   const getFilter = (): string => filterSel?.value ?? (statusFilter ?? "sent");
@@ -3719,6 +4069,8 @@ async function loadEventInvites(slug: string, statusFilter?: string): Promise<vo
     const filter = getFilter();
     const query = new URLSearchParams({ type: "attendee", limit: String(pageSize), offset: String(offset) });
     if (filter) query.set("status", filter);
+    const searchVal = (searchInput?.value ?? "").trim();
+    if (searchVal) query.set("q", searchVal);
     const url = `/api/v1/admin/events/${slug}/invites?${query.toString()}`;
     try {
       const d = await api<{ invites: InviteRecord[]; page?: { limit: number; offset: number; hasMore: boolean; total: number } }>(url);
@@ -3794,14 +4146,9 @@ async function loadEventInvites(slug: string, statusFilter?: string): Promise<vo
   const bodyEl = body as HTMLElement;
   if (!bodyEl.dataset.invListWired) {
     bodyEl.dataset.invListWired = "1";
-    filterSel?.addEventListener("change", () => {
-      offset = 0;
-      void doLoad();
-    });
-    refreshBtn?.addEventListener("click", () => {
-      offset = 0;
-      void doLoad();
-    });
+    searchInput?.addEventListener("input", () => { offset = 0; void doLoad(); });
+    filterSel?.addEventListener("change", () => { offset = 0; void doLoad(); });
+    refreshBtn?.addEventListener("click", () => { offset = 0; void doLoad(); });
   }
 
   await doLoad();
@@ -6068,9 +6415,11 @@ async function loadEmail(): Promise<void> {
             '</div>' +
             '<div class="d-flex flex-wrap gap-2 align-items-end">' +
               '<div><label class="form-label small fw-semibold mb-1">Queue batch limit</label>' +
-              '<input type="number" class="form-control form-control-sm" id="retry-limit" value="20" min="1" max="100" style="width:90px"></div>' +
+              '<input type="number" class="form-control form-control-sm" id="retry-limit" value="20" min="1" max="500" style="width:90px"></div>' +
               '<div class="form-check mt-4"><input class="form-check-input" type="checkbox" id="email-outbox-select-visible"><label class="form-check-label small" for="email-outbox-select-visible">Select visible</label></div>' +
               '<button class="btn btn-sm btn-success" id="btn-do-retry">Process due queue</button>' +
+              '<button class="btn btn-sm btn-primary" id="btn-do-retry-all">Process all due</button>' +
+              '<span class="small text-muted align-self-center" id="retry-all-status"></span>' +
               '<button class="btn btn-sm btn-outline-success" id="btn-do-retry-selected" disabled>Process selected</button>' +
               '<button class="btn btn-sm btn-outline-danger" id="btn-do-reset-selected" disabled>Reset selected failed</button>' +
               '<button class="btn btn-sm btn-danger" id="btn-do-reset-failed">Reset all failed</button>' +
@@ -6180,6 +6529,7 @@ async function loadEmail(): Promise<void> {
         void loadEmail();
       });
       q("#btn-do-retry")?.addEventListener("click", () => void doRetry());
+      q("#btn-do-retry-all")?.addEventListener("click", () => void doProcessAllDue());
       q("#btn-do-retry-selected")?.addEventListener("click", () => {
         const ids = outboxData.outbox.filter((row) => _adminEmailOutboxSelectedIds.has(row.id) && isOutboxDueNow(row)).map((row) => row.id);
         void doRetry(ids);
@@ -6258,6 +6608,36 @@ async function doRetry(ids?: string[]): Promise<void> {
     await loadEmail();
   } catch (err) {
     toast((err as Error).message, "error");
+  }
+}
+
+async function doProcessAllDue(): Promise<void> {
+  const BATCH = 500;
+  const btn = q<HTMLButtonElement>("#btn-do-retry-all");
+  const statusEl = q("#retry-all-status");
+  if (btn) { btn.disabled = true; btn.textContent = "Processing…"; }
+  let totalProcessed = 0;
+  let totalFailed = 0;
+  try {
+    while (true) {
+      if (statusEl) statusEl.textContent = `${totalProcessed} sent so far…`;
+      const r = await api<{ processed?: number; failed?: number }>("/api/v1/internal/email/retry", {
+        method: "POST",
+        body: JSON.stringify({ limit: BATCH }),
+      });
+      const processed = r.processed ?? 0;
+      totalProcessed += processed;
+      totalFailed += r.failed ?? 0;
+      if (processed < BATCH) break; // queue exhausted
+    }
+    toast(`Done: ${totalProcessed} sent, ${totalFailed} failed`, "success");
+    if (statusEl) statusEl.textContent = "";
+    await loadEmail();
+  } catch (err) {
+    toast((err as Error).message, "error");
+    if (statusEl) statusEl.textContent = "";
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = "Process all due"; }
   }
 }
 
