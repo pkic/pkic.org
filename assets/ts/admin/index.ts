@@ -165,6 +165,18 @@ interface AdminRegistrationDay {
   label: string | null;
 }
 
+interface AuditLogEntry {
+  id: string;
+  actor_type: string;
+  actor_id: string | null;
+  actor_display: string | null;
+  action: string;
+  entity_type: string;
+  entity_id: string | null;
+  details: Record<string, unknown> | null;
+  created_at: string;
+}
+
 interface ProposalSummary {
   id: string;
   event_id: string;
@@ -754,6 +766,7 @@ function nav(sec: string): void {
     stats: loadStats,
     donations: loadDonations,
     users: loadUsers,
+    auditlog: loadAuditLog,
   };
   loaders[sec]?.();
 }
@@ -2083,7 +2096,15 @@ function regDetailHtml(r: Registration, slug: string, eventDays: AdminRegistrati
         }).join("")}</div><div class="d-flex gap-2 mt-2"><button class="btn btn-sm btn-success" data-admit-selected-days="${esc(r.id)}">Admit Selected Days</button><button class="btn btn-sm btn-outline-secondary" data-select-all-admit-days="${esc(r.id)}">Select All</button><button class="btn btn-sm btn-outline-secondary" data-clear-admit-days="${esc(r.id)}">Clear</button></div></div></div>`
       : "") +
 
-    dayStatusBlock
+    dayStatusBlock +
+
+    // ── Audit log ─────────────────────────────────────────────────────────────
+    `<div class="row g-3 mt-0 border-top pt-3">` +
+    `<div class="col-12">` +
+    `<h6 class="small fw-semibold text-uppercase text-muted mb-2">Audit Log</h6>` +
+    `<div id="rd-audit-log-${esc(r.id)}">${spinner()}</div>` +
+    `</div>` +
+    `</div>`
   );
 }
 
@@ -2169,6 +2190,8 @@ function wireRegsTable(slug: string, regs: Registration[]): void {
             });
             // Load badge role info
             void doLoadBadgeRoleInfo(slug, regId);
+            // Load audit log
+            void doLoadAuditLog(slug, regId);
           } catch (err) {
             if (container) container.innerHTML = `<div class="alert alert-danger mb-0">${esc((err as Error).message)}</div>`;
           }
@@ -2364,6 +2387,47 @@ async function doSetBadgeRoleOverride(
     toast((err as Error).message, "error");
     if (statusEl) { statusEl.textContent = (err as Error).message; statusEl.className = "small text-danger"; }
     if (saveBtn) resetButton(saveBtn);
+  }
+}
+
+async function doLoadAuditLog(slug: string, regId: string): Promise<void> {
+  const container = document.getElementById(`rd-audit-log-${regId}`);
+  if (!container) return;
+  try {
+    const { auditLog } = await api<{ auditLog: AuditLogEntry[] }>(
+      `/api/v1/admin/events/${slug}/registrations/${regId}/audit-log`,
+    );
+    if (auditLog.length === 0) {
+      container.innerHTML = `<p class="small text-body-secondary mb-0">No audit log entries found for this registration.</p>`;
+      return;
+    }
+    const rows = auditLog.map((entry) => {
+      const actorHtml = entry.actor_type === "system"
+        ? `<span class="text-muted">System</span>`
+        : entry.actor_display
+          ? esc(entry.actor_display)
+          : entry.actor_id
+            ? `<span class="text-muted small">${esc(entry.actor_id)}</span>`
+            : `<span class="text-muted">${esc(entry.actor_type)}</span>`;
+      const detailsHtml = entry.details
+        ? `<pre class="mb-0 small text-body-secondary">${esc(JSON.stringify(entry.details, null, 2))}</pre>`
+        : "";
+      const ts = new Date(entry.created_at).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "medium" });
+      return `<tr>
+        <td class="text-nowrap small text-muted">${esc(ts)}</td>
+        <td class="small">${actorHtml}</td>
+        <td><code class="small">${esc(entry.action)}</code></td>
+        <td>${detailsHtml}</td>
+      </tr>`;
+    }).join("");
+    container.innerHTML =
+      `<div class="table-responsive">` +
+      `<table class="table table-sm align-middle mb-0">` +
+      `<thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Details</th></tr></thead>` +
+      `<tbody>${rows}</tbody>` +
+      `</table></div>`;
+  } catch (err) {
+    container.innerHTML = `<span class="small text-danger">${esc((err as Error).message)}</span>`;
   }
 }
 
@@ -3950,6 +4014,14 @@ function inviteBadge(status: string): string {
 
 const ADMIN_LIST_PAGE_SIZE_DEFAULT = 50;
 const ADMIN_LIST_PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
+let _adminAuditLogState = {
+  q: "",
+  entityType: "",
+  actorType: "",
+  action: "",
+  offset: 0,
+  pageSize: ADMIN_LIST_PAGE_SIZE_DEFAULT,
+};
 let _adminEmailOutboxState = {
   status: "",
   messageType: "",
@@ -7036,6 +7108,158 @@ async function loadStats(): Promise<void> {
   } catch (err) {
     el.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
   }
+}
+
+// ── Audit Log section ─────────────────────────────────────────────────────────
+
+async function loadAuditLog(): Promise<void> {
+  const el = q("#al-body");
+  if (!el) return;
+
+  let offset = _adminAuditLogState.offset;
+  let pageSize = _adminAuditLogState.pageSize;
+
+  const doLoad = async (): Promise<void> => {
+    el.innerHTML = spinner();
+    _adminAuditLogState = { ..._adminAuditLogState, offset, pageSize };
+
+    const qs = new URLSearchParams({
+      limit: String(pageSize),
+      offset: String(offset),
+    });
+    if (_adminAuditLogState.q)          qs.set("q", _adminAuditLogState.q);
+    if (_adminAuditLogState.entityType) qs.set("entityType", _adminAuditLogState.entityType);
+    if (_adminAuditLogState.actorType)  qs.set("actorType", _adminAuditLogState.actorType);
+    if (_adminAuditLogState.action)     qs.set("action", _adminAuditLogState.action);
+
+    try {
+      const data = await api<{
+        entries: AuditLogEntry[];
+        page: { limit: number; offset: number; total: number; hasMore: boolean };
+      }>(`/api/v1/admin/audit-log?${qs.toString()}`);
+
+      const rows = data.entries.map((entry) => {
+        const actorHtml = entry.actor_type === "system"
+          ? `<span class="text-muted">System</span>`
+          : entry.actor_display
+            ? esc(entry.actor_display)
+            : entry.actor_id
+              ? `<span class="text-muted small mono">${esc(entry.actor_id)}</span>`
+              : `<span class="text-muted">${esc(entry.actor_type)}</span>`;
+        const detailsHtml = entry.details
+          ? `<pre class="mb-0 small text-body-secondary" style="max-width:28rem;overflow-x:auto">${esc(JSON.stringify(entry.details, null, 2))}</pre>`
+          : "";
+        const ts = new Date(entry.created_at).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "medium" });
+        return `<tr>
+          <td class="text-nowrap small text-muted">${esc(ts)}</td>
+          <td class="small">${actorHtml}<div class="text-muted small">${esc(entry.actor_type)}</div></td>
+          <td><code class="small">${esc(entry.action)}</code></td>
+          <td class="small text-muted">${badge(entry.entity_type)}</td>
+          <td class="mono small text-muted">${entry.entity_id ? esc(entry.entity_id) : "—"}</td>
+          <td>${detailsHtml}</td>
+        </tr>`;
+      }).join("");
+
+      const currentPage = pageSize > 0 ? Math.floor(offset / pageSize) + 1 : 1;
+      el.innerHTML =
+        // ── Filters ──
+        `<div class="d-flex gap-2 align-items-end flex-wrap mb-3">` +
+          `<div>` +
+            `<label class="form-label small mb-1">Search</label>` +
+            `<input type="search" class="form-control form-control-sm" id="al-q" placeholder="action, entity, details…" value="${esc(_adminAuditLogState.q)}" style="min-width:200px">` +
+          `</div>` +
+          `<div>` +
+            `<label class="form-label small mb-1">Entity type</label>` +
+            `<select class="form-select form-select-sm" id="al-entity-type">` +
+              `<option value="">All</option>` +
+              `${["registration","event","user","form","invite","event_permission","proposal","headshot","auth"].map((t) =>
+                `<option value="${t}"${_adminAuditLogState.entityType === t ? " selected" : ""}>${t}</option>`
+              ).join("")}` +
+            `</select>` +
+          `</div>` +
+          `<div>` +
+            `<label class="form-label small mb-1">Actor type</label>` +
+            `<select class="form-select form-select-sm" id="al-actor-type">` +
+              `<option value="">All</option>` +
+              `${["admin","system","user"].map((t) =>
+                `<option value="${t}"${_adminAuditLogState.actorType === t ? " selected" : ""}>${t}</option>`
+              ).join("")}` +
+            `</select>` +
+          `</div>` +
+          `<div>` +
+            `<label class="form-label small mb-1">Action</label>` +
+            `<input type="search" class="form-control form-control-sm" id="al-action" placeholder="e.g. force_status" value="${esc(_adminAuditLogState.action)}" style="min-width:160px">` +
+          `</div>` +
+          `<button class="btn btn-sm btn-primary" id="al-apply">Apply</button>` +
+          `<button class="btn btn-sm btn-outline-secondary" id="al-reset">Reset</button>` +
+        `</div>` +
+        // ── Table ──
+        (data.entries.length === 0
+          ? `<p class="text-muted">No entries match the current filters.</p>`
+          : `<div class="table-responsive">` +
+            `<table class="table table-sm align-middle mb-2">` +
+            `<thead class="table-light"><tr><th>When</th><th>Actor</th><th>Action</th><th>Entity</th><th>Entity ID</th><th>Details</th></tr></thead>` +
+            `<tbody>${rows}</tbody>` +
+            `</table></div>`
+        ) +
+        // ── Pager ──
+        `<div id="al-pager" class="mt-2">${pagerHtml(currentPage, data.page.hasMore, pageSize, offset, data.entries.length, data.page.total)}</div>`;
+
+      // Wire filters
+      const applyFilters = (): void => {
+        _adminAuditLogState = {
+          q: (q<HTMLInputElement>("#al-q")?.value ?? "").trim(),
+          entityType: q<HTMLSelectElement>("#al-entity-type")?.value ?? "",
+          actorType: q<HTMLSelectElement>("#al-actor-type")?.value ?? "",
+          action: (q<HTMLInputElement>("#al-action")?.value ?? "").trim(),
+          offset: 0,
+          pageSize,
+        };
+        offset = 0;
+        void doLoad();
+      };
+
+      q<HTMLButtonElement>("#al-apply")?.addEventListener("click", applyFilters);
+      q<HTMLInputElement>("#al-q")?.addEventListener("keydown", (e) => { if (e.key === "Enter") applyFilters(); });
+      q<HTMLInputElement>("#al-action")?.addEventListener("keydown", (e) => { if (e.key === "Enter") applyFilters(); });
+      q<HTMLSelectElement>("#al-entity-type")?.addEventListener("change", applyFilters);
+      q<HTMLSelectElement>("#al-actor-type")?.addEventListener("change", applyFilters);
+      q<HTMLButtonElement>("#al-reset")?.addEventListener("click", () => {
+        _adminAuditLogState = { q: "", entityType: "", actorType: "", action: "", offset: 0, pageSize: ADMIN_LIST_PAGE_SIZE_DEFAULT };
+        offset = 0;
+        pageSize = ADMIN_LIST_PAGE_SIZE_DEFAULT;
+        void doLoad();
+      });
+
+      // Wire pager
+      const pagerEl = q("#al-pager");
+      pagerEl?.querySelector<HTMLButtonElement>("[data-page-prev]")?.addEventListener("click", () => {
+        if (offset > 0) { offset = Math.max(0, offset - pageSize); void doLoad(); }
+      });
+      pagerEl?.querySelector<HTMLButtonElement>("[data-page-next]")?.addEventListener("click", () => {
+        if (data.page.hasMore) { offset += pageSize; void doLoad(); }
+      });
+      pagerEl?.querySelectorAll<HTMLButtonElement>("[data-page-jump]").forEach((btn) => {
+        btn.addEventListener("click", () => {
+          const page = parseInt(btn.dataset.pageJump!, 10);
+          offset = (page - 1) * pageSize;
+          void doLoad();
+        });
+      });
+      pagerEl?.querySelector<HTMLSelectElement>("[data-page-size]")?.addEventListener("change", (e) => {
+        pageSize = parseInt((e.target as HTMLSelectElement).value, 10) || ADMIN_LIST_PAGE_SIZE_DEFAULT;
+        offset = 0;
+        void doLoad();
+      });
+    } catch (err) {
+      el.innerHTML = `<div class="alert alert-danger">${esc((err as Error).message)}</div>`;
+    }
+  };
+
+  void doLoad();
+
+  // Wire the refresh button in the page heading
+  q<HTMLButtonElement>("#btn-auditlog-refresh")?.addEventListener("click", () => void doLoad());
 }
 
 

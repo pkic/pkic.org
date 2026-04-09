@@ -125,6 +125,10 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
       () => callApp(anonGet("https://app.test/api/v1/admin/donations")),
     ],
     [
+      "GET /api/v1/admin/audit-log",
+      () => callApp(anonGet("https://app.test/api/v1/admin/audit-log")),
+    ],
+    [
       "GET /api/v1/admin/email-templates",
       () => callApp(anonGet("https://app.test/api/v1/admin/email-templates")),
     ],
@@ -324,6 +328,10 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     [
       "POST /api/v1/admin/events/:slug/registrations/:registrationId/resend-confirmation",
       () => callApp(anonPost(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/resend-confirmation`)),
+    ],
+    [
+      "GET /api/v1/admin/events/:slug/registrations/:registrationId/audit-log",
+      () => callApp(anonGet(`https://app.test/api/v1/admin/events/${eventSlug}/registrations/${registrationId}/audit-log`)),
     ],
     [
       "POST /api/v1/admin/proposals/:proposalId/finalize",

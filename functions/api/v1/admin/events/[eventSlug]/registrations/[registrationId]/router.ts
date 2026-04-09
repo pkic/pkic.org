@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import { onRequestPost as AdminEventsEventSlugRegistrationsRegistrationIdAdmitPost_l } from "./admit";
+import { onRequestGet as AdminEventsEventSlugRegistrationsRegistrationIdAuditLogGet_l } from "./audit-log";
 import { onRequestGet as AdminEventsEventSlugRegistrationsRegistrationIdBadgeRoleGet_l } from "./badge-role";
 import { onRequestPatch as AdminEventsEventSlugRegistrationsRegistrationIdBadgeRolePatch_l } from "./badge-role";
 import { onRequestGet as AdminEventsEventSlugRegistrationsRegistrationIdGet_l } from "./index";
@@ -13,6 +14,7 @@ const app = new Hono();
 export const openapi = fromHono(app);
 
 app.post("/admit", AdminEventsEventSlugRegistrationsRegistrationIdAdmitPost_l);
+app.get("/audit-log", AdminEventsEventSlugRegistrationsRegistrationIdAuditLogGet_l);
 app.get("/badge-role", AdminEventsEventSlugRegistrationsRegistrationIdBadgeRoleGet_l);
 app.patch("/badge-role", AdminEventsEventSlugRegistrationsRegistrationIdBadgeRolePatch_l);
 app.get("/", AdminEventsEventSlugRegistrationsRegistrationIdGet_l);
