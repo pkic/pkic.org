@@ -219,12 +219,7 @@ async function markOutboxFailed(db: DatabaseLike, row: OutboxRow, error: unknown
   );
 }
 
-export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: string): Promise<void> {
-  const row = await first<OutboxRow>(db, "SELECT * FROM email_outbox WHERE id = ?", [outboxId]);
-  if (!row) {
-    throw new AppError(404, "OUTBOX_NOT_FOUND", "Outbox message not found");
-  }
-
+async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Promise<void> {
   // Honour send_after — sleep until the scheduled time before sending.
   const sendAfterMs = new Date(row.send_after).getTime() - Date.now();
   if (sendAfterMs > 0) {
@@ -339,6 +334,14 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
   }
 }
 
+export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: string): Promise<void> {
+  const row = await first<OutboxRow>(db, "SELECT * FROM email_outbox WHERE id = ?", [outboxId]);
+  if (!row) {
+    throw new AppError(404, "OUTBOX_NOT_FOUND", "Outbox message not found");
+  }
+  await processOutboxRow(db, env, row);
+}
+
 export async function processOutboxByIdBackground(
   db: DatabaseLike,
   env: Env,
@@ -351,6 +354,22 @@ export async function processOutboxByIdBackground(
     const details = error instanceof AppError ? error.details : undefined;
     logError("EMAIL_OUTBOX_PROCESS_FAILED", { outboxId, error: message, ...(details ? { details } : {}) });
   }
+}
+
+/** Process rows in parallel chunks to stay within Cloudflare's subrequest limit (~7 subreqs/email × 10 = 70/chunk). */
+async function processInChunks(
+  db: DatabaseLike,
+  env: Env,
+  rows: OutboxRow[],
+  chunkSize = 10,
+): Promise<{ processed: number; failed: number }> {
+  let failed = 0;
+  for (let i = 0; i < rows.length; i += chunkSize) {
+    const chunk = rows.slice(i, i + chunkSize);
+    const results = await Promise.allSettled(chunk.map((row) => processOutboxRow(db, env, row)));
+    failed += results.filter((r) => r.status === "rejected").length;
+  }
+  return { processed: rows.length, failed };
 }
 
 export async function processPendingOutbox(
@@ -367,19 +386,7 @@ export async function processPendingOutbox(
     [nowIso(), limit],
   );
 
-  let processed = 0;
-  let failed = 0;
-
-  for (const row of rows) {
-    processed += 1;
-    try {
-      await processOutboxById(db, env, row.id);
-    } catch {
-      failed += 1;
-    }
-  }
-
-  return { processed, failed };
+  return processInChunks(db, env, rows);
 }
 
 export async function summarizePendingOutbox(
@@ -429,21 +436,9 @@ export async function processSelectedOutbox(
     [...ids, nowIso()],
   );
 
-  let processed = 0;
-  let failed = 0;
-
-  for (const row of rows) {
-    processed += 1;
-    try {
-      await processOutboxById(db, env, row.id);
-    } catch {
-      failed += 1;
-    }
-  }
-
+  const results = await processInChunks(db, env, rows);
   return {
-    processed,
-    failed,
+    ...results,
     skipped: Math.max(0, ids.length - rows.length),
   };
 }
