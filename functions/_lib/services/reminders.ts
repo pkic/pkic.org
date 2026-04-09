@@ -537,7 +537,6 @@ export async function runReminderCycle(
            u.first_name,
            u.last_name,
            u.email,
-           u.language,
            r.confirmation_token_hash,
            r.confirmation_token_expires_at,
            e.name       AS event_name,
@@ -652,7 +651,6 @@ interface ConfirmationReminderRow {
   first_name: string;
   last_name: string;
   email: string;
-  language: string;
   confirmation_token_hash: string;
   confirmation_token_expires_at: string;
   event_name: string;

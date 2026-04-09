@@ -5,7 +5,7 @@ import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
 import { createInvite } from "../../../../../../../_lib/services/invites";
 import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
-import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
+import { queueEmail } from "../../../../../../../_lib/email/outbox";
 import { proposalPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
 import { adminBulkSpeakerInvitesSchema } from "../../../../../../../../assets/shared/schemas/api";
 
@@ -54,7 +54,6 @@ export async function onRequestPost(
             declineUrl,
           },
         });
-        c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
         created.push({ email: invite.invitee_email, inviteToken: token });
       } else {
         endorsed.push({ email: invite.invitee_email });

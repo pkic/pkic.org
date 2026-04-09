@@ -5,7 +5,7 @@ import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
 import { createInvite } from "../../../../../../../_lib/services/invites";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
-import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
+import { queueEmail } from "../../../../../../../_lib/email/outbox";
 import { registrationPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import {
@@ -80,7 +80,6 @@ export async function onRequestPost(
             declineUrl,
           },
         });
-        c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
         created.push({ email: invite.invitee_email, inviteToken: token });
       } else {
         // Invitee already has an active invite — admin's intent was noted but no
