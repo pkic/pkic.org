@@ -40,6 +40,8 @@ interface StripeSession {
   status: "open" | "complete" | "expired";
   payment_status: string;
   payment_intent: string | null;
+  payment_method_types?: string[] | null;
+  expires_at?: number | null;
   amount_total: number | null;
   currency: string;
   customer_email: string | null;
@@ -47,12 +49,19 @@ interface StripeSession {
 
 interface StripePaymentIntent {
   id: string;
+  status: string;
   latest_charge: string | null;
+  /** Non-null when the PI was declined (e.g. redirect-based methods like iDEAL that never create a charge). */
+  last_payment_error: { code: string; type: string } | null;
+  /** The actual method type is also available at PI level for redirect-based methods. */
+  payment_method_types?: string[] | null;
 }
 
 interface StripeCharge {
   id: string;
   balance_transaction: string | null;
+  failure_code: string | null;
+  payment_method_details?: { type: string } | null;
 }
 
 interface StripeBalanceTransaction {
@@ -62,7 +71,7 @@ interface StripeBalanceTransaction {
 
 interface SyncResult {
   sessionId: string;
-  outcome: "completed" | "expired" | "still_pending" | "error";
+  outcome: "completed" | "expired" | "awaiting_payment" | "failed" | "still_pending" | "error";
   error?: string;
 }
 
@@ -98,20 +107,91 @@ async function fetchStripeSession(stripeKey: string, sessionId: string): Promise
   return (await res.json()) as StripeSession;
 }
 
-async function fetchNetAmount(stripeKey: string, paymentIntentId: string): Promise<number | null> {
+interface PaymentDetails {
+  netAmount: number | null;
+  paymentMethodType: string | null;
+  /** True when the charge has a failure_code — payment was attempted and rejected. */
+  paymentFailed: boolean;
+}
+
+async function fetchPaymentDetails(stripeKey: string, paymentIntentId: string): Promise<PaymentDetails> {
   const headers = { "Authorization": `Bearer ${stripeKey}` };
   const piRes = await fetch(`https://api.stripe.com/v1/payment_intents/${paymentIntentId}`, { headers });
-  if (!piRes.ok) return null;
+  // ── Propagate early returns from fetchPaymentDetails when no latest_charge
+  // (means payment was never attempted — keep existing null returns)
+  if (!piRes.ok) {
+    console.error("fetchPaymentDetails: payment_intent fetch failed", piRes.status, await piRes.text());
+    return { netAmount: null, paymentMethodType: null, paymentFailed: false };
+  }
   const pi = (await piRes.json()) as StripePaymentIntent;
-  if (!pi.latest_charge) return null;
+
+  // Redirect-based async methods (iDEAL, Bancontact, etc.) may fail WITHOUT
+  // creating a charge — the PI status returns to requires_payment_method with
+  // last_payment_error set instead.
+  if (!pi.latest_charge) {
+    // Only return a method type when the user has committed to one:
+    //   requires_action  = bank redirect initiated (e.g. iDEAL mid-flow)
+    //   processing       = being processed by the acquiring bank
+    // For plain requires_payment_method (no attempt yet), we don't know the method.
+    const committedMethod = (pi.status === "requires_action" || pi.status === "processing")
+      ? (pi.payment_method_types?.[0] ?? null)
+      : null;
+    if (pi.status === "requires_payment_method" && pi.last_payment_error) {
+      return { netAmount: null, paymentMethodType: committedMethod ?? pi.payment_method_types?.[0] ?? null, paymentFailed: true };
+    }
+    console.warn("fetchPaymentDetails: no latest_charge on", paymentIntentId, "pi.status:", pi.status);
+    return { netAmount: null, paymentMethodType: committedMethod, paymentFailed: false };
+  }
   const chargeRes = await fetch(`https://api.stripe.com/v1/charges/${pi.latest_charge}`, { headers });
-  if (!chargeRes.ok) return null;
+  if (!chargeRes.ok) {
+    console.error("fetchPaymentDetails: charge fetch failed", chargeRes.status);
+    return { netAmount: null, paymentMethodType: null, paymentFailed: false };
+  }
   const charge = (await chargeRes.json()) as StripeCharge;
-  if (!charge.balance_transaction) return null;
+  const paymentMethodType = charge.payment_method_details?.type ?? null;
+
+  // A non-null failure_code means the charge was attempted and declined/bounced.
+  if (charge.failure_code) {
+    return { netAmount: null, paymentMethodType, paymentFailed: true };
+  }
+
+  if (!charge.balance_transaction) {
+    console.warn("fetchPaymentDetails: no balance_transaction on charge");
+    return { netAmount: null, paymentMethodType, paymentFailed: false };
+  }
   const btRes = await fetch(`https://api.stripe.com/v1/balance_transactions/${charge.balance_transaction}`, { headers });
-  if (!btRes.ok) return null;
+  if (!btRes.ok) {
+    console.error("fetchPaymentDetails: balance_transaction fetch failed", btRes.status);
+    return { netAmount: null, paymentMethodType, paymentFailed: false };
+  }
   const bt = (await btRes.json()) as StripeBalanceTransaction;
-  return bt.net ?? null;
+  return { netAmount: bt.net ?? null, paymentMethodType, paymentFailed: false };
+}
+
+async function sendPaymentFailedEmail(db: D1Database, env: any, sessionId: string, executionCtx: ExecutionContext): Promise<void> {
+  try {
+    const donor = await db.prepare(
+      `SELECT name, email, currency, gross_amount FROM donations WHERE checkout_session_id = ?`,
+    ).bind(sessionId).first() as DonorRow | null;
+    if (!donor?.email) return;
+    const firstName = donor.name !== "Unknown" ? (donor.name.split(" ")[0] ?? "") : "";
+    const formattedAmount = formatMajorAmount(donor.gross_amount, donor.currency);
+    const outboxId = await queueEmail(db, {
+      templateKey: "donation_payment_failed",
+      recipientEmail: donor.email,
+      messageType: "transactional",
+      subject: "Your donation payment failed — PKI Consortium",
+      data: {
+        firstName,
+        name: donor.name,
+        formattedAmount,
+        currency: donor.currency.toUpperCase(),
+      },
+    });
+    executionCtx.waitUntil(processOutboxByIdBackground(db, env, outboxId));
+  } catch (err) {
+    console.error("Failed to queue donation payment failed email during sync", err);
+  }
 }
 
 export async function onRequestPost(c: any): Promise<Response> {
@@ -140,16 +220,24 @@ export async function onRequestPost(c: any): Promise<Response> {
   let pending: PendingDonation[];
   if (targetIds && targetIds.length > 0) {
     const placeholders = targetIds.map(() => "?").join(", ");
+    // When explicit IDs are requested, also include completed rows that are
+    // missing net_amount or payment_method_type so admins can backfill them.
     pending = await all<PendingDonation>(
       env.DB,
       `SELECT id, checkout_session_id FROM donations
-       WHERE status = 'pending' AND checkout_session_id IN (${placeholders})`,
+       WHERE checkout_session_id IN (${placeholders})
+         AND (status IN ('pending', 'awaiting_payment')
+              OR (status = 'completed' AND (net_amount IS NULL OR payment_method_type IS NULL)))`,
       targetIds,
     );
   } else {
+    // Also include completed rows missing net_amount or payment_method_type so a
+    // single "Sync all" backfills historical data without per-row clicks.
     pending = await all<PendingDonation>(
       env.DB,
-      `SELECT id, checkout_session_id FROM donations WHERE status = 'pending'`,
+      `SELECT id, checkout_session_id FROM donations
+       WHERE status IN ('pending', 'awaiting_payment')
+          OR (status = 'completed' AND (net_amount IS NULL OR payment_method_type IS NULL))`,
       [],
     );
   }
@@ -158,11 +246,22 @@ export async function onRequestPost(c: any): Promise<Response> {
     return json({ synced: 0, results: [] });
   }
 
+  interface PendingDonationWithStatus extends PendingDonation {
+    status: string;
+  }
+  const pendingWithStatus = await all<PendingDonationWithStatus>(
+    env.DB,
+    `SELECT id, checkout_session_id, status FROM donations WHERE id IN (${pending.map(() => "?").join(", ")})`,
+    pending.map((p) => p.id),
+  );
+  const statusById = Object.fromEntries(pendingWithStatus.map((p) => [p.checkout_session_id, p.status]));
+
   // ── Process each session sequentially to avoid hammering Stripe ──────────
   const results: SyncResult[] = [];
 
   for (const donation of pending) {
     const sessionId = donation.checkout_session_id;
+    const currentStatus = statusById[sessionId] ?? "pending";
     try {
       const session = await fetchStripeSession(env.STRIPE_SECRET_KEY, sessionId);
       if (!session) {
@@ -170,25 +269,41 @@ export async function onRequestPost(c: any): Promise<Response> {
         continue;
       }
 
-      if (session.status === "complete") {
-        const completedAt = new Date().toISOString();
-        let netAmount: number | null = null;
+      // ── Already-completed row: backfill net_amount / payment_method_type only
+      if (currentStatus === "completed") {
+        let details: PaymentDetails = { netAmount: null, paymentMethodType: null, paymentFailed: false };
         if (session.payment_intent) {
-          try {
-            netAmount = await fetchNetAmount(env.STRIPE_SECRET_KEY, session.payment_intent);
-          } catch {
-            // non-fatal
-          }
+          details = await fetchPaymentDetails(env.STRIPE_SECRET_KEY, session.payment_intent);
+        }
+        await env.DB.prepare(
+          `UPDATE donations
+           SET net_amount           = COALESCE(net_amount, ?),
+               payment_method_type  = COALESCE(payment_method_type, ?),
+               payment_intent_id    = COALESCE(payment_intent_id, ?)
+           WHERE checkout_session_id = ?`,
+        )
+          .bind(details.netAmount, details.paymentMethodType, session.payment_intent ?? null, sessionId)
+          .run();
+        results.push({ sessionId, outcome: "completed" });
+        continue;
+      }
+
+      if (session.status === "complete" && session.payment_status === "paid") {
+        const completedAt = new Date().toISOString();
+        let details: PaymentDetails = { netAmount: null, paymentMethodType: null };
+        if (session.payment_intent) {
+          details = await fetchPaymentDetails(env.STRIPE_SECRET_KEY, session.payment_intent);
         }
         await env.DB.prepare(
           `UPDATE donations
            SET payment_intent_id = ?,
                net_amount        = ?,
                completed_at      = ?,
-               status            = 'completed'
+               status            = 'completed',
+               payment_method_type = COALESCE(payment_method_type, ?)
            WHERE checkout_session_id = ?`,
         )
-          .bind(session.payment_intent ?? null, netAmount, completedAt, sessionId)
+          .bind(session.payment_intent ?? null, details.netAmount, completedAt, details.paymentMethodType, sessionId)
           .run();
         results.push({ sessionId, outcome: "completed" });
 
@@ -241,6 +356,41 @@ export async function onRequestPost(c: any): Promise<Response> {
           console.error("Failed to queue donation thank-you email during sync", err);
         }
 
+      } else if (session.status === "complete" && session.payment_status !== "paid") {
+        // Checkout completed but bank transfer / ACH / SEPA not yet settled.
+        // First check whether the payment actually failed (e.g. SEPA bounce, bank rejection).
+        let details: PaymentDetails = { netAmount: null, paymentMethodType: session.payment_method_types?.[0] ?? null, paymentFailed: false };
+        if (session.payment_intent) {
+          details = await fetchPaymentDetails(env.STRIPE_SECRET_KEY, session.payment_intent);
+        }
+
+        if (details.paymentFailed) {
+          await env.DB.prepare(
+            `UPDATE donations
+             SET status = 'failed',
+                 payment_method_type = COALESCE(payment_method_type, ?)
+             WHERE checkout_session_id = ? AND status NOT IN ('completed')`,
+          )
+            .bind(details.paymentMethodType, sessionId)
+            .run();
+          await sendPaymentFailedEmail(env.DB, env, sessionId, c.executionCtx);
+          results.push({ sessionId, outcome: "failed" });
+        } else {
+          // Still in flight — mark as awaiting_payment so the front-end shows the correct message;
+          // the async_payment_succeeded webhook will complete it when the bank confirms.
+          const methodType = details.paymentMethodType ?? session.payment_method_types?.[0] ?? null;
+          await env.DB.prepare(
+            `UPDATE donations
+             SET status = 'awaiting_payment',
+                 payment_method_type  = COALESCE(payment_method_type, ?),
+                 session_expires_at   = COALESCE(session_expires_at, ?)
+             WHERE checkout_session_id = ? AND status = 'pending'`,
+          )
+            .bind(methodType, session.expires_at ?? null, sessionId)
+            .run();
+          results.push({ sessionId, outcome: "awaiting_payment" });
+        }
+
       } else if (session.status === "expired") {
         await env.DB.prepare(
           `UPDATE donations SET status = 'expired' WHERE checkout_session_id = ?`,
@@ -277,17 +427,46 @@ export async function onRequestPost(c: any): Promise<Response> {
         }
 
       } else {
-        // still "open" — payment not yet made
-        results.push({ sessionId, outcome: "still_pending" });
+        // "open" session — payment not yet made, or was declined (which keeps the session open for retry)
+        let isFailed = false;
+        if (session.payment_intent) {
+          const details = await fetchPaymentDetails(env.STRIPE_SECRET_KEY, session.payment_intent);
+          if (details.paymentFailed) {
+            isFailed = true;
+            await env.DB.prepare(
+              `UPDATE donations
+               SET status = 'failed',
+                   payment_method_type = COALESCE(payment_method_type, ?)
+               WHERE checkout_session_id = ? AND status NOT IN ('completed')`,
+            )
+              .bind(details.paymentMethodType, sessionId)
+              .run();
+            await sendPaymentFailedEmail(env.DB, env, sessionId, c.executionCtx);
+            results.push({ sessionId, outcome: "failed" });
+          } else if (details.paymentMethodType) {
+            // User has committed to a method (e.g. iDEAL bank redirect initiated) — save it
+            await env.DB.prepare(
+              `UPDATE donations SET payment_method_type = COALESCE(payment_method_type, ?)
+               WHERE checkout_session_id = ? AND status NOT IN ('completed')`,
+            )
+              .bind(details.paymentMethodType, sessionId)
+              .run();
+          }
+        }
+        if (!isFailed) {
+          results.push({ sessionId, outcome: "still_pending" });
+        }
       }
     } catch (err) {
       results.push({ sessionId, outcome: "error", error: (err as Error).message });
     }
   }
 
-  const completed = results.filter((r) => r.outcome === "completed").length;
-  const expired   = results.filter((r) => r.outcome === "expired").length;
-  const errors    = results.filter((r) => r.outcome === "error").length;
+  const completed        = results.filter((r) => r.outcome === "completed").length;
+  const awaitingPayment  = results.filter((r) => r.outcome === "awaiting_payment").length;
+  const expired          = results.filter((r) => r.outcome === "expired").length;
+  const failed           = results.filter((r) => r.outcome === "failed").length;
+  const errors           = results.filter((r) => r.outcome === "error").length;
 
-  return json({ synced: pending.length, completed, expired, errors, results });
+  return json({ synced: pending.length, completed, awaitingPayment, expired, failed, errors, results });
 }

@@ -18,6 +18,7 @@ import {
   CURRENCIES,
   currencyForCountry,
   currencyInfo,
+  minDonationMajorUnits,
   toSmallestUnit,
   type CurrencyInfo,
 } from "../../shared/constants/currencies";
@@ -179,7 +180,7 @@ async function initForm(root: HTMLElement): Promise<void> {
     }
 
     const info = currencyInfo(selectedCurrency);
-    const minMajor = info.zeroDecimal ? 100 : 1;
+    const minMajor = minDonationMajorUnits(info);
     if (selectedAmount < minMajor) {
       showStatus(`Minimum donation is ${info.symbol}${minMajor}.`, true);
       return;

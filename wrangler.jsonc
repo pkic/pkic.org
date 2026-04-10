@@ -1,3 +1,5 @@
+// Generate Wrangler types with an explicit environment:
+// npm wrangler types -e production
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pkic-org-base",
@@ -75,7 +77,6 @@
         "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
         "FROM_EMAIL": "noreply@pkic.org",
         "RSVP_EMAIL": "rsvp@mail.pkic.org",
-        "BOUNCE_EMAIL": "bounces@mail.pkic.org",
         "FROM_NAME": "PKI Consortium",
         "STRIPE_PUBLISHABLE_KEY": "pk_live_51TADczLT173BlQwOkLRjg7nIK7sX9gZJj4DAvD30X8mKpP3Zu3ksMmMk6GYE2moavKccbH3VBqCHDF09mAlny3kg00pZN2Ke0d"
       }
@@ -129,13 +130,16 @@
         "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
         "FROM_EMAIL": "noreply@pkic.org",
         "RSVP_EMAIL": "rsvp-preview@mail.pkic.org",
-        "BOUNCE_EMAIL": "bounces-preview@mail.pkic.org",
         "FROM_NAME": "PKI Consortium (Preview)",
         "STRIPE_PUBLISHABLE_KEY": "pk_test_51TADczLT173BlQwOCJAhV0Mf5xxJXJWG9VWkprhXUSJZTaYdqr5vJynipzUfCglU93cIoCBBNOkviwhOqQ3ZFPNk00cxzuEyMH"
       }
     },
     "local": {
       "name": "pkic-org-local",
+      "build": {
+        "command": "hugo --minify && npx -y pagefind --site './public/'",
+        "watch_dir": ["functions", "assets", "archetypes", "config", "content", "data", "i18n", "layouts", "static"]
+      },
       "assets": {
         "directory": "./public/",
         "binding": "ASSETS_PUBLIC",
@@ -181,7 +185,6 @@
         "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
         "FROM_EMAIL": "noreply@pkic.org",
         "RSVP_EMAIL": "rsvp-local@mail.pkic.org",
-        "BOUNCE_EMAIL": "bounces-local@mail.pkic.org",
         "FROM_NAME": "PKI Consortium",
         "STRIPE_PUBLISHABLE_KEY": "pk_live_51TADczLT173BlQwOkLRjg7nIK7sX9gZJj4DAvD30X8mKpP3Zu3ksMmMk6GYE2moavKccbH3VBqCHDF09mAlny3kg00pZN2Ke0d"
       }

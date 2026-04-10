@@ -24,6 +24,8 @@ interface DonationRow {
   net_amount: number | null;
   source: string | null;
   status: string;
+  payment_method_type: string | null;
+  session_expires_at: number | null;
   created_at: string;
   completed_at: string | null;
 }
@@ -56,7 +58,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       c.env.DB,
       `SELECT id, checkout_session_id, payment_intent_id, name, email,
               organization, currency, gross_amount, net_amount, source,
-              status, created_at, completed_at
+              status, payment_method_type, session_expires_at, created_at, completed_at
        FROM donations
        ${where}
        ORDER BY created_at DESC

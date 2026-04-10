@@ -16,6 +16,7 @@
 
 import { getJson } from "./api-client";
 import { currencyInfo, toMajorUnit } from "../../shared/constants/currencies";
+import { asyncPaymentWindow } from "../../shared/constants/async-payment-window";
 
 interface DonationSession {
   grossAmount: number;
@@ -27,10 +28,26 @@ interface DonationSession {
 
 interface PendingSession {
   pending: true;
+  asyncPayment?: boolean;
+  paymentMethodType?: string | null;
+  sessionExpiresAt?: number | null;
+}
+
+interface TerminalSession {
+  failed?: true;
+  expired?: true;
 }
 
 const POLL_INTERVAL_MS = 2000;
-const MAX_POLLS = 15; // 30s total
+const MAX_POLLS = 15; // 30 s — fast phase for card / wallet payments
+
+// Async payment methods (bank transfer / ACH / SEPA) can settle anywhere from
+// minutes to several business days.  We keep watching for the duration of the
+// browser session so the badge appears immediately if the bank confirms quickly,
+// while gracefully stopping after a reasonable limit and letting the email take
+// over for slower transfers.
+const ASYNC_POLL_INTERVAL_MS = 5000;
+const ASYNC_MAX_POLLS = 60; // 5 min — covers same-day SEPA / fast ACH
 
 export async function initDonationThankYou(): Promise<void> {
   const container = document.querySelector<HTMLElement>("[data-donation-badge]");
@@ -54,13 +71,24 @@ export async function initDonationThankYou(): Promise<void> {
   `;
   container.hidden = false;
 
-  // Poll the session endpoint until the webhook fires (or we time out)
+  // ── Phase 1: fast polling (card / wallet — typically confirms in < 5 s) ───
   let session: DonationSession | null = null;
+  let isAsyncPayment = false;
+  let asyncMethodType: string | null | undefined;
+  let asyncExpiresAt: number | null | undefined;
   for (let i = 0; i < MAX_POLLS; i++) {
     try {
-      const data = await getJson<DonationSession | PendingSession>(
+      const data = await getJson<DonationSession | PendingSession | TerminalSession>(
         `/api/v1/donations/session?session_id=${encodeURIComponent(sessionId)}`,
       );
+      if ("asyncPayment" in data && data.asyncPayment) {
+        isAsyncPayment = true;
+        asyncMethodType = data.paymentMethodType;
+        asyncExpiresAt  = data.sessionExpiresAt;
+        break; // switch to slow async phase below
+      }
+      if ("failed" in data) { renderFailed(container); return; }
+      if ("expired" in data) { renderExpired(container); return; }
       if (!("pending" in data)) {
         session = data;
         break;
@@ -73,8 +101,55 @@ export async function initDonationThankYou(): Promise<void> {
     }
   }
 
-  if (!session) {
+  // Fast phase resolved — show badge and exit if already confirmed.
+  if (session) {
+    renderBadge(container, session, sessionId);
+    void fetchPromoterCode(sessionId).then((result) => {
+      if (!result) return;
+      updateShareLinks(container, result.shareUrl, session!, formattedAmountFor(session!));
+    });
+    return;
+  }
+
+  // Unknown session (not found at all after timeout) — generic fallback.
+  if (!isAsyncPayment) {
     renderStaticThankYou(container);
+    return;
+  }
+
+  // ── Phase 2: async payment phase (bank transfer / ACH / SEPA) ────────────
+  // Show the informational message immediately so the user is not left with a
+  // spinner.  Keep polling at a slower cadence — many bank transfers settle
+  // the same day and we want to show the badge automatically if they do.
+  // Cap the poll count to the remaining time until session expiry so we don't
+  // keep polling forever on a long-window (e.g. 30-day) session.
+  renderAsyncPending(container, asyncMethodType, asyncExpiresAt);
+
+  const msUntilExpiry = asyncExpiresAt ? Math.max(0, asyncExpiresAt * 1000 - Date.now()) : null;
+  const asyncPolls = msUntilExpiry !== null
+    ? Math.min(ASYNC_MAX_POLLS, Math.ceil(msUntilExpiry / ASYNC_POLL_INTERVAL_MS))
+    : ASYNC_MAX_POLLS;
+
+  for (let i = 0; i < asyncPolls; i++) {
+    await sleep(ASYNC_POLL_INTERVAL_MS);
+    try {
+      const data = await getJson<DonationSession | PendingSession | TerminalSession>(
+        `/api/v1/donations/session?session_id=${encodeURIComponent(sessionId)}`,
+      );
+      if ("failed" in data) { renderFailed(container); return; }
+      if ("expired" in data) { renderExpired(container); return; }
+      if (!("pending" in data)) {
+        session = data;
+        break;
+      }
+    } catch {
+      // Tolerate network errors; keep trying
+    }
+  }
+
+  if (!session) {
+    // Still awaiting after the in-session window — leave the async message.
+    // The donor will receive an email when Stripe confirms.
     return;
   }
 
@@ -251,6 +326,68 @@ function renderBadge(container: HTMLElement, session: DonationSession, sessionId
     img.style.opacity = "0";
     img.style.transition = "opacity .3s";
   }
+}
+
+function renderAsyncPending(container: HTMLElement, methodType?: string | null, expiresAt?: number | null): void {
+  const info = asyncPaymentWindow(methodType ?? null);
+  const deadlineHtml = expiresAt
+    ? `<p class="donation-badge-body">
+        Please ensure your payment is received by
+        <strong>${new Date(expiresAt * 1000).toLocaleString(undefined, { dateStyle: "long", timeStyle: "short" })}</strong>.
+        After this deadline Stripe will close the payment window.
+      </p>`
+    : "";
+  container.innerHTML = `
+    <div class="donation-badge donation-badge--pending">
+      <h2 class="donation-badge-title">Your payment is being processed</h2>
+      <p class="donation-badge-body">
+        Your donation has been initiated via <strong>${info.label}</strong>.
+        ${expiresAt ? "" : "These payments typically take a few business days to settle."}
+      </p>
+      ${deadlineHtml}
+      <p class="donation-badge-body">
+        Once your bank confirms the payment you will receive a receipt and your
+        personalised badge by email. No further action is needed on your part.
+      </p>
+      <p class="donation-badge-body text-muted small">
+        Thank you for your patience and generous support of the PKI Consortium!
+      </p>
+    </div>
+  `;
+  container.hidden = false;
+}
+
+function renderFailed(container: HTMLElement): void {
+  container.innerHTML = `
+    <div class="donation-badge donation-badge--failed">
+      <h2 class="donation-badge-title">Payment not completed</h2>
+      <p class="donation-badge-body">
+        Your bank was unable to process the payment. No funds have been charged.
+      </p>
+      <p class="donation-badge-body">
+        If you would like to try again, please
+        <a href="/donate/">return to the donation page</a> and use a different
+        payment method.
+      </p>
+    </div>
+  `;
+  container.hidden = false;
+}
+
+function renderExpired(container: HTMLElement): void {
+  container.innerHTML = `
+    <div class="donation-badge donation-badge--expired">
+      <h2 class="donation-badge-title">Checkout session expired</h2>
+      <p class="donation-badge-body">
+        The payment window for this checkout has closed and no payment was taken.
+      </p>
+      <p class="donation-badge-body">
+        Please return to the donation page to 
+        <a href="/donate/">try again</a>, we really appreciate your support.
+      </p>
+    </div>
+  `;
+  container.hidden = false;
 }
 
 function renderStaticThankYou(container: HTMLElement): void {
