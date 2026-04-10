@@ -122,3 +122,21 @@ export function toMajorUnit(smallestUnit: number, currencyCode: string): number 
   const info = currencyInfo(currencyCode);
   return info.zeroDecimal ? smallestUnit : smallestUnit / 100;
 }
+
+/**
+ * Returns the minimum donation amount in major units for display and frontend
+ * validation. Based on Stripe's $0.50 USD conversion minimum with a small
+ * buffer for exchange rate fluctuations.
+ */
+export function minDonationMajorUnits(info: CurrencyInfo): number {
+  return Math.ceil(1 * (info.approxUsdRate ?? 1));
+}
+
+/**
+ * Returns the minimum donation amount in the currency's smallest unit for
+ * backend/schema validation. Mirrors minDonationMajorUnits.
+ */
+export function minDonationSmallestUnits(info: CurrencyInfo): number {
+  const majorMin = minDonationMajorUnits(info);
+  return info.zeroDecimal ? majorMin : majorMin * 100;
+}

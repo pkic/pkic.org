@@ -19,6 +19,7 @@ import { AppError } from "../../../_lib/errors";
 import { json } from "../../../_lib/http";
 import { logError } from "../../../_lib/logging";
 import { donationCheckoutSchema } from "../../../../assets/shared/schemas/donation";
+import { currencyInfo, minDonationSmallestUnits } from "../../../../assets/shared/constants/currencies";
 
 const DISCLAIMER =
   "This payment is voluntary and is not a ticket, fee, or payment for goods or " +
@@ -93,6 +94,17 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   const { amount, currency, name, email, organizationName, successPath, cancelPath, metadata, embedded } = parsed.data;
+
+  // ── Validate minimum amount meets Stripe's conversion threshold ───────────
+  // Stripe requires the total to convert to at least $0.50 USD. The frontend
+  // enforces this too, but we guard server-side to prevent direct API calls.
+  const info = currencyInfo(currency);
+  const minSmallest = minDonationSmallestUnits(info);
+  if (amount < minSmallest) {
+    throw new AppError(400, "VALIDATION_ERROR", `Donation amount is below the minimum for ${currency.toUpperCase()} (${info.symbol}${minSmallest / (info.zeroDecimal ? 1 : 100)})`, {
+      fieldErrors: { amount: [`Must be at least ${info.symbol}${minSmallest / (info.zeroDecimal ? 1 : 100)}`] },
+    });
+  }
 
   // ── Build redirect URLs ──────────────────────────────────────────────────
   const baseUrl = appBaseUrl;

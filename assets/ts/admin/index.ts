@@ -6,6 +6,7 @@
 
 import { showHeadshotDisclaimer } from "../shared/headshot-upload";
 import { cropHeadshot } from "../shared/crop-headshot";
+import { asyncPaymentWindow } from "../../shared/constants/async-payment-window";
 import { z } from "zod";
 
 const _emailValidator = z.email();
@@ -269,15 +270,22 @@ interface EventStatsResponse {
   registrations: {
     byStatus: Record<string, number>;
     byAttendanceType: Record<string, number>;
+    byStatusAndType: Array<{ status: string; attendance_type: string; count: number }>;
     total: number;
-    daily: Array<{ date: string; count: number }>;
-    weekly: Array<{ week: string; count: number }>;
+    growthByDay: Array<{ date: string; attendance_type: string; count: number }>;
   };
+  registrationsByEventDay: Array<{ day_date: string; label: string | null; sort_order: number; attendance_type: string; status: string; count: number }>;
   invites: {
-    attendee: { byStatus: Record<string, number>; total: number };
-    speaker: { byStatus: Record<string, number>; total: number };
+    attendee: { byStatus: Record<string, number>; total: number; declineReasons: Array<{ reason_code: string | null; count: number; unsubscribed: number }> };
+    speaker:  { byStatus: Record<string, number>; total: number; declineReasons: Array<{ reason_code: string | null; count: number; unsubscribed: number }> };
   };
   proposals: { byStatus: Record<string, number>; total: number };
+  rsvp: {
+    byStatus: Record<string, number>;
+    byProvider: Record<string, number>;
+    actionsTaken: Record<string, number>;
+    total: number;
+  };
 }
 
 interface AdminEmailOutboxRow {
@@ -873,6 +881,65 @@ function statusBars(byStatus: Record<string, number>, total: number): string {
     .join("");
 }
 
+/** Single combined segmented bar: all statuses sum to 100%. */
+function svgStatusSegmentBar(byStatus: Record<string, number>, total: number): string {
+  if (!total) return '<p class="text-muted fst-italic small">No data</p>';
+  const STATUS_ORDER = ["registered", "pending_email_confirmation", "waitlisted", "cancelled"];
+  const STATUS_COLORS: Record<string, string> = {
+    registered: "#198754",
+    pending_email_confirmation: "#fd7e14",
+    waitlisted: "#0dcaf0",
+    cancelled: "#dc3545",
+  };
+  const STATUS_LABELS: Record<string, string> = {
+    registered: "Confirmed",
+    pending_email_confirmation: "Pending",
+    waitlisted: "Waitlisted",
+    cancelled: "Cancelled",
+  };
+  const W = 460, barH = 20, radius = 4;
+  let x = 0;
+  let segments = "";
+  // Sort by STATUS_ORDER, unknown statuses appended at the end
+  const sorted = [...STATUS_ORDER, ...Object.keys(byStatus).filter((k) => !STATUS_ORDER.includes(k))];
+  const items = sorted.map((k) => [k, byStatus[k] ?? 0] as [string, number]).filter(([, v]) => v > 0);
+  items.forEach(([k, v], idx) => {
+    const segW = (v / total) * W;
+    const color = STATUS_COLORS[k] ?? "#6c757d";
+    const lbl = STATUS_LABELS[k] ?? k;
+    const pct = Math.round((v / total) * 100);
+    const title = `${lbl}: ${v} (${pct}%)`;
+    const isFirst = idx === 0, isLast = idx === items.length - 1;
+    // Draw the segment rect
+    if (isFirst && isLast) {
+      segments += `<rect x="${x.toFixed(2)}" y="0" width="${segW.toFixed(2)}" height="${barH}" fill="${color}" rx="${radius}"><title>${esc(title)}</title></rect>`;
+    } else if (isFirst) {
+      segments += `<rect x="${x.toFixed(2)}" y="0" width="${segW.toFixed(2)}" height="${barH}" fill="${color}" rx="${radius}"><title>${esc(title)}</title></rect>`;
+      segments += `<rect x="${(x + segW - radius).toFixed(2)}" y="0" width="${radius}" height="${barH}" fill="${color}"/>`;
+    } else if (isLast) {
+      segments += `<rect x="${x.toFixed(2)}" y="0" width="${segW.toFixed(2)}" height="${barH}" fill="${color}" rx="${radius}"><title>${esc(title)}</title></rect>`;
+      segments += `<rect x="${x.toFixed(2)}" y="0" width="${radius}" height="${barH}" fill="${color}"/>`;
+    } else {
+      segments += `<rect x="${x.toFixed(2)}" y="0" width="${segW.toFixed(2)}" height="${barH}" fill="${color}"><title>${esc(title)}</title></rect>`;
+    }
+    x += segW;
+  });
+  const legend = items
+    .map(([k, v]) => {
+      const pct = Math.round((v / total) * 100);
+      const color = STATUS_COLORS[k] ?? "#6c757d";
+      const lbl = STATUS_LABELS[k] ?? k;
+      return `<span class="adm-chart-legend-item">` +
+        `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="${color}"/></svg>` +
+        `${esc(lbl)}: <strong>${v}</strong> <span class="text-muted">(${pct}%)</span></span>`;
+    })
+    .join("");
+  return (
+    `<svg viewBox="0 0 ${W} ${barH}" width="100%" preserveAspectRatio="none" aria-hidden="true">${segments}</svg>` +
+    `<div class="adm-chart-legend mt-2">${legend}</div>`
+  );
+}
+
 function fmtMoney(cents: number, currency: string): string {
   return (cents / 100).toLocaleString("en-US", {
     style: "currency",
@@ -903,7 +970,7 @@ function svgBarChart(
   for (let g = 1; g <= gridSteps; g++) {
     const gy = pT + chartH - (g / gridSteps) * chartH;
     out += `<line x1="${pL}" y1="${gy.toFixed(1)}" x2="${(W - pR).toFixed(1)}" y2="${gy.toFixed(1)}" stroke="#e9ecef" stroke-width="1"/>`;
-    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="8" fill="#6c757d" font-family="inherit">${Math.round((g / gridSteps) * maxVal)}</text>`;
+    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#6c757d" font-family="inherit">${Math.round((g / gridSteps) * maxVal)}</text>`;
   }
   for (let i = 0; i < n; i++) {
     const x = pL + i * slotW + 1.5;
@@ -911,13 +978,13 @@ function svgBarChart(
     const y = pT + chartH - barH;
     out += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" fill="${color}" rx="2"/>`;
     if (values[i] > 0 && barH > 14) {
-      out += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="#212529" font-family="inherit">${values[i]}</text>`;
+      out += `<text x="${(x + barW / 2).toFixed(1)}" y="${(y - 3).toFixed(1)}" text-anchor="middle" font-size="9" fill="#212529" font-family="inherit">${values[i]}</text>`;
     }
     if (i % step === 0 || i === n - 1) {
       out += `<text x="${(x + barW / 2).toFixed(1)}" y="${(pT + chartH + 14).toFixed(1)}" text-anchor="middle" font-size="9" fill="#6c757d" font-family="inherit">${esc(labels[i])}</text>`;
     }
   }
-  return `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${out}</svg>`;
+  return `<svg class="adm-chart-svg" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${out}</svg>`;
 }
 
 function svgLineChart(
@@ -939,7 +1006,7 @@ function svgLineChart(
   for (let g = 1; g <= gridSteps; g++) {
     const gy = pT + chartH - (g / gridSteps) * chartH;
     out += `<line x1="${pL}" y1="${gy.toFixed(1)}" x2="${(W - pR).toFixed(1)}" y2="${gy.toFixed(1)}" stroke="#e9ecef" stroke-width="1"/>`;
-    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="8" fill="#6c757d" font-family="inherit">${Math.round((g / gridSteps) * maxVal)}</text>`;
+    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#6c757d" font-family="inherit">${Math.round((g / gridSteps) * maxVal)}</text>`;
   }
   for (let i = 0; i < n; i++) {
     if (i % step === 0 || i === n - 1) {
@@ -961,7 +1028,113 @@ function svgLineChart(
     )
     .join("");
   return (
-    `<svg viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${out}</svg>` +
+    `<svg class="adm-chart-svg" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${out}</svg>` +
+    `<div class="adm-chart-legend">${legend}</div>`
+  );
+}
+
+/** Returns every ISO date string (YYYY-MM-DD) from `from` to `to` inclusive. */
+function isoDateRange(from: string, to: string): string[] {
+  const result: string[] = [];
+  const end = new Date(to + "T12:00:00Z");
+  const cur = new Date(from + "T12:00:00Z");
+  while (cur <= end) {
+    result.push(cur.toISOString().slice(0, 10));
+    cur.setUTCDate(cur.getUTCDate() + 1);
+  }
+  return result;
+}
+
+function svgStackedBarChart(
+  labels: string[],
+  series: Array<{ label: string; values: number[]; color: string }>,
+  opts?: { isoLabels?: string[] },
+): string {
+  const n = labels.length;
+  if (!n || series.length === 0) return '<p class="text-muted fst-italic small">No data</p>';
+  const hasIso = (opts?.isoLabels?.length ?? 0) === n;
+  const WKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const W = 460;
+  const pL = 30, pR = 8, pT = 18;
+  // Extra bottom padding for two-line labels when isoLabels provided
+  const pB = hasIso ? 40 : 28;
+  const H = pT + 114 + pB; // keep chart area constant at 114px
+  const chartH = 114;
+  const chartW = W - pL - pR;
+  const totals = labels.map((_, i) => series.reduce((s, sr) => s + (sr.values[i] ?? 0), 0));
+  const maxVal = Math.max(...totals, 1);
+  const slotW = chartW / n;
+  const barW = Math.max(2, slotW - 3);
+  const step = Math.max(1, Math.ceil(n / 12));
+  const gridSteps = 3;
+  let out = "";
+  // Grid lines
+  for (let g = 1; g <= gridSteps; g++) {
+    const gy = pT + chartH - (g / gridSteps) * chartH;
+    out += `<line x1="${pL}" y1="${gy.toFixed(1)}" x2="${(W - pR).toFixed(1)}" y2="${gy.toFixed(1)}" stroke="#e9ecef" stroke-width="1"/>`;
+    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#6c757d" font-family="inherit">${Math.round((g / gridSteps) * maxVal)}</text>`;
+  }
+  // Weekend background tints (drawn first, behind every bar)
+  if (hasIso) {
+    for (let i = 0; i < n; i++) {
+      const iso = opts!.isoLabels![i];
+      if (!iso) continue;
+      const dow = new Date(iso + "T12:00:00Z").getUTCDay();
+      if (dow === 0 || dow === 6) {
+        out += `<rect x="${(pL + i * slotW).toFixed(1)}" y="${pT}" width="${slotW.toFixed(1)}" height="${chartH}" fill="#f8f6f6" rx="0"/>`;
+      }
+    }
+  }
+  // Bars + labels
+  for (let i = 0; i < n; i++) {
+    const x = pL + i * slotW + 1.5;
+    const cx = (x + barW / 2).toFixed(1);
+    let yBase = pT + chartH;
+    for (const sr of series) {
+      const v = sr.values[i] ?? 0;
+      if (v <= 0) continue;
+      const segH = Math.max(1, (v / maxVal) * chartH);
+      yBase -= segH;
+      out += `<rect x="${x.toFixed(1)}" y="${yBase.toFixed(1)}" width="${barW.toFixed(1)}" height="${segH.toFixed(1)}" fill="${sr.color}" rx="1"/>`;
+    }
+    const total = totals[i];
+    if (total > 0 && (pT + chartH - yBase) > 14) {
+      out += `<text x="${cx}" y="${(yBase - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="#212529" font-family="inherit">${total}</text>`;
+    }
+    if (i % step === 0 || i === n - 1) {
+      out += `<text x="${cx}" y="${(pT + chartH + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="#6c757d" font-family="inherit">${esc(labels[i])}</text>`;
+      if (hasIso) {
+        const iso = opts!.isoLabels![i];
+        const dow = new Date(iso + "T12:00:00Z").getUTCDay();
+        const isWeekend = dow === 0 || dow === 6;
+        out += `<text x="${cx}" y="${(pT + chartH + 24).toFixed(1)}" text-anchor="middle" font-size="8" fill="${isWeekend ? "#ced4da" : "#adb5bd"}" font-family="inherit">${WKDAYS[dow]}</text>`;
+      }
+    }
+    // Transparent overlay rect — carries the column tooltip via data-tip
+    if (total > 0) {
+      const tipLines: string[] = [];
+      if (hasIso) {
+        const iso = opts!.isoLabels![i];
+        const dow = new Date(iso + "T12:00:00Z").getUTCDay();
+        tipLines.push(`${iso} (${WKDAYS[dow]})`);
+      } else {
+        tipLines.push(labels[i]);
+      }
+      for (const sr of series) {
+        const v = sr.values[i] ?? 0;
+        if (v > 0) tipLines.push(`${sr.label}: ${v}`);
+      }
+      tipLines.push(`Total: ${total}`);
+      out += `<rect x="${(pL + i * slotW).toFixed(1)}" y="${pT}" width="${slotW.toFixed(1)}" height="${chartH}" fill="transparent" data-tip="${esc(tipLines.join("\n"))}"/>`;
+    }
+  }
+  const legend = series
+    .map((sr) =>
+      `<span class="adm-chart-legend-item"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="${sr.color}"/></svg>${esc(sr.label)}</span>`,
+    )
+    .join("");
+  return (
+    `<svg class="adm-chart-svg" viewBox="0 0 ${W} ${H}" width="100%" preserveAspectRatio="xMidYMid meet" aria-hidden="true">${out}</svg>` +
     `<div class="adm-chart-legend">${legend}</div>`
   );
 }
@@ -1694,78 +1867,242 @@ async function loadEventStats(slug: string): Promise<void> {
       const s = await api<EventStatsResponse>(`/api/v1/admin/events/${slug}/stats`);
 
       const attLabels: Record<string, string> = { in_person: "In person", virtual: "Virtual", on_demand: "On demand" };
+      const attColors: Record<string, string> = { in_person: "#0d6efd", virtual: "#198754", on_demand: "#fd7e14" };
+      const statusColors: Record<string, string> = {
+        registered: "#198754",
+        pending_email_confirmation: "#fd7e14",
+        waitlisted: "#0dcaf0",
+        cancelled: "#dc3545",
+      };
 
       const regTotal = s.registrations.total;
       const confirmed = s.registrations.byStatus.registered ?? 0;
       const waitlisted = s.registrations.byStatus.waitlisted ?? 0;
-      const pendingConf = s.registrations.byStatus.pending_email_confirmation ?? 0;
-      const cancelled = s.registrations.byStatus.cancelled ?? 0;
       const attendeePending = s.invites.attendee.byStatus.sent ?? 0;
       const attendeeAccepted = s.invites.attendee.byStatus.accepted ?? 0;
+      const attendeeDeclined = s.invites.attendee.byStatus.declined ?? 0;
       const speakerPending = s.invites.speaker.byStatus.sent ?? 0;
       const speakerAccepted = s.invites.speaker.byStatus.accepted ?? 0;
+
+      // ── Growth chart: stacked by attendance type, full history (gaps filled) ────
+      const rawGrowthDates = [...new Set(s.registrations.growthByDay.map((r) => r.date))].sort();
+      const growthDates = rawGrowthDates.length > 1
+        ? isoDateRange(rawGrowthDates[0], rawGrowthDates[rawGrowthDates.length - 1])
+        : rawGrowthDates;
+      const allAttTypes = [...new Set(s.registrations.growthByDay.map((r) => r.attendance_type))];
+      const growthByDayIndex: Record<string, Record<string, number>> = {};
+      for (const r of s.registrations.growthByDay) {
+        growthByDayIndex[r.date] ??= {};
+        growthByDayIndex[r.date][r.attendance_type] = (growthByDayIndex[r.date][r.attendance_type] ?? 0) + r.count;
+      }
+      const growthSeries = allAttTypes.map((at) => ({
+        label: attLabels[at] ?? at,
+        color: attColors[at] ?? "#6c757d",
+        // gaps already yield 0 via the ?? 0 fallback
+        values: growthDates.map((d) => growthByDayIndex[d]?.[at] ?? 0),
+      }));
+      const growthChartHtml = growthDates.length > 0
+        ? svgStackedBarChart(
+            growthDates.map((d) => `${d.slice(8)}/${d.slice(5, 7)}`),
+            growthSeries,
+            { isoLabels: growthDates },
+          )
+        : '<p class="text-muted fst-italic small">No registrations yet.</p>';
+
+      // ── Per-event-day breakdown (confirmed + pending) ────────────────────
+      const dayLabels = [...new Set(s.registrationsByEventDay.map((r) => r.label ?? r.day_date))];
+      const dayAttTypes = [...new Set(s.registrationsByEventDay.map((r) => r.attendance_type))];
+      const attLightColors: Record<string, string> = { in_person: "#9ec5fe", virtual: "#a3cfbb", on_demand: "#fed8b1" };
+      // index: dayLabel -> attType -> { confirmed, pending }
+      const dayStatusIndex: Record<string, Record<string, { confirmed: number; pending: number }>> = {};
+      for (const r of s.registrationsByEventDay) {
+        const lbl = r.label ?? r.day_date;
+        dayStatusIndex[lbl] ??= {};
+        dayStatusIndex[lbl][r.attendance_type] ??= { confirmed: 0, pending: 0 };
+        if (r.status === "registered") {
+          dayStatusIndex[lbl][r.attendance_type].confirmed += r.count;
+        } else {
+          dayStatusIndex[lbl][r.attendance_type].pending += r.count;
+        }
+      }
+      // Group by att type: [in_person confirmed, in_person pending, virtual confirmed, ...]
+      const daySeries = dayAttTypes
+        .flatMap((at) => [
+          {
+            label: `${attLabels[at] ?? at} – Confirmed`,
+            color: attColors[at] ?? "#6c757d",
+            values: dayLabels.map((lbl) => dayStatusIndex[lbl]?.[at]?.confirmed ?? 0),
+          },
+          {
+            label: `${attLabels[at] ?? at} – Pending`,
+            color: attLightColors[at] ?? "#ced4da",
+            values: dayLabels.map((lbl) => dayStatusIndex[lbl]?.[at]?.pending ?? 0),
+          },
+        ])
+        .filter((sr) => sr.values.some((v) => v > 0));
+      const dayChartHtml = dayLabels.length > 0
+        ? svgStackedBarChart(dayLabels, daySeries)
+        : '<p class="text-muted fst-italic small">No per-day attendance data yet.</p>';
+      const dayTableRows = dayLabels.flatMap((lbl) =>
+        dayAttTypes.map((at) => {
+          const conf = dayStatusIndex[lbl]?.[at]?.confirmed ?? 0;
+          const pend = dayStatusIndex[lbl]?.[at]?.pending ?? 0;
+          if (!conf && !pend) return "";
+          return (
+            `<tr>` +
+            `<td>${esc(lbl)}</td>` +
+            `<td class="small">${esc(attLabels[at] ?? at)}</td>` +
+            `<td class="mono text-success text-end">${conf > 0 ? conf : "—"}</td>` +
+            `<td class="mono text-secondary text-end">${pend > 0 ? pend : "—"}</td>` +
+            `<td class="mono fw-semibold text-end">${conf + pend}</td>` +
+            `</tr>`
+          );
+        }),
+      ).filter(Boolean);
+      const dayBlockHtml = dayLabels.length > 0
+        ? '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+          '<h6 class="text-uppercase small fw-bold text-muted mb-2">Registrations by Event Day</h6>' +
+          '<div class="text-muted small mb-2">Stacked by attendance type · <span class="text-success fw-semibold">solid = confirmed</span>, <span style="color:#adb5bd" class="fw-semibold">light = pending/waitlisted</span>.</div>' +
+          dayChartHtml +
+          (dayTableRows.length > 0
+            ? '<div class="mt-3">' + tbl(["Day", "Type", "Confirmed", "Pending", "Total"], dayTableRows, "No data") + '</div>'
+            : '') +
+          '</div></div>'
+        : '';
+
+      // ── Status × type cross-tab ────────────────────────────────────────────
+      const crossStatuses = [...new Set(s.registrations.byStatusAndType.map((r) => r.status))];
+      const crossAttTypes = [...new Set(s.registrations.byStatusAndType.map((r) => r.attendance_type))];
+      const crossIndex: Record<string, Record<string, number>> = {};
+      for (const r of s.registrations.byStatusAndType) {
+        crossIndex[r.status] ??= {};
+        crossIndex[r.status][r.attendance_type] = r.count;
+      }
+      const crossHeaderCols = crossAttTypes.map((at) =>
+        `<th class="text-end small">${esc(attLabels[at] ?? at)}</th>`).join("") + "<th class=\"text-end small\">Total</th>";
+      const crossTableRows = crossStatuses.map((st) => {
+        const rowTotal = crossAttTypes.reduce((s, at) => s + (crossIndex[st]?.[at] ?? 0), 0);
+        const cells = crossAttTypes.map((at) => `<td class="text-end mono">${crossIndex[st]?.[at] ?? 0}</td>`).join("");
+        return `<tr><td>${badge(st)}</td>${cells}<td class="text-end mono fw-semibold">${rowTotal}</td></tr>`;
+      });
+      const crossTotalsRow = `<tr class="table-light fw-semibold"><td class="small">Total</td>${crossAttTypes.map((at) => {
+        const col = crossStatuses.reduce((s, st) => s + (crossIndex[st]?.[at] ?? 0), 0);
+        return `<td class="text-end mono">${col}</td>`;
+      }).join("")}<td class="text-end mono">${regTotal}</td></tr>`;
+
+      const crossTableHtml = crossStatuses.length > 0
+        ? `<div class="tbl-wrap"><table class="table table-sm align-middle mb-0"><thead class="table-light"><tr><th class="small">Status</th>${crossHeaderCols}</tr></thead><tbody>${crossTableRows.join("")}</tbody><tfoot>${crossTotalsRow}</tfoot></table></div>`
+        : '<p class="text-muted fst-italic small">No data</p>';
+
+      // ── Stack chart: status × attendance type ─────────────────────────────
+      const statusSeries = crossStatuses.map((st) => ({
+        label: st,
+        color: statusColors[st] ?? "#6c757d",
+        values: crossAttTypes.map((at) => crossIndex[st]?.[at] ?? 0),
+      }));
+      const statusStackHtml = crossStatuses.length > 0
+        ? svgStackedBarChart(crossAttTypes.map((at) => attLabels[at] ?? at), statusSeries)
+        : '';
+
+      // ── Invite decline reasons ─────────────────────────────────────────────
+      const declineTable = (
+        title: string,
+        reasons: Array<{ reason_code: string | null; count: number; unsubscribed: number }>,
+      ): string => {
+        if (!reasons.length) return `<p class="text-muted fst-italic small">No declines recorded.</p>`;
+        const total = reasons.reduce((s, r) => s + r.count, 0);
+        const rows = reasons.map((r) => {
+          const pct = total > 0 ? Math.round((r.count / total) * 100) : 0;
+          return (
+            `<tr>` +
+            `<td class="small">${r.reason_code ? esc(r.reason_code) : '<span class="text-muted fst-italic">not given</span>'}</td>` +
+            `<td class="mono">${r.count}</td>` +
+            `<td class="text-muted small">${pct}%</td>` +
+            `<td class="mono small text-warning">${r.unsubscribed > 0 ? r.unsubscribed : "—"}</td>` +
+            `</tr>`
+          );
+        });
+        return tbl([title, "Declined", "%", "Unsub'd"], rows, "No data");
+      };
+
+      // ── RSVP (calendar replies) ──────────────────────────────────────────
+      const actionLabel: Record<string, string> = {
+        cancelled: "Cancelled",
+        downgraded_virtual: "Downgraded → Virtual",
+        downgraded_on_demand: "Downgraded → On demand",
+      };
+      const rsvpStatusRows2 = Object.entries(s.rsvp.byStatus).map(
+        ([k, v]) =>
+          `<tr>` +
+          `<td>${badge(k)}</td>` +
+          `<td class="mono">${v}</td>` +
+          `<td class="text-muted small">${s.rsvp.total > 0 ? Math.round((v / s.rsvp.total) * 100) : 0}%</td>` +
+          `</tr>`,
+      );
+      const rsvpProviderRows = Object.entries(s.rsvp.byProvider).map(
+        ([k, v]) => `<tr><td class="small">${esc(k)}</td><td class="mono">${v}</td></tr>`,
+      );
+      const rsvpActionRows = Object.entries(s.rsvp.actionsTaken).map(
+        ([k, v]) =>
+          `<tr><td class="small">${esc(actionLabel[k] ?? k)}</td><td class="mono">${v}</td></tr>`,
+      );
+      const rsvpTabHtml =
+        s.rsvp.total === 0
+          ? '<p class="text-muted fst-italic">No calendar reply emails received yet.</p>'
+          : '<div class="row g-3">' +
+              `<div class="col-sm-4">${sc("Calendar Replies", s.rsvp.total, `${s.rsvp.byStatus.accepted ?? 0} accepted · ${s.rsvp.byStatus.declined ?? 0} declined`)}</div>` +
+              `<div class="col-sm-4">${sc("Actions Taken", Object.values(s.rsvp.actionsTaken).reduce((a, b) => a + b, 0), "Automated pipeline actions")}</div>` +
+              `<div class="col-sm-4">${sc("Providers", Object.keys(s.rsvp.byProvider).length, "Distinct calendar clients")}</div>` +
+            '</div>' +
+            '<div class="row g-3 mt-1">' +
+              '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
+                '<h6 class="text-uppercase small fw-bold text-muted mb-3">Response Status</h6>' +
+                tbl(["Status", "Count", "%"], rsvpStatusRows2, "No replies") +
+              '</div></div></div>' +
+              '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
+                '<h6 class="text-uppercase small fw-bold text-muted mb-3">Calendar Providers</h6>' +
+                tbl(["Provider", "Count"], rsvpProviderRows, "No data") +
+              '</div></div></div>' +
+            '</div>' +
+            (rsvpActionRows.length > 0
+              ? '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+                '<h6 class="text-uppercase small fw-bold text-muted mb-3">Automated Actions Taken</h6>' +
+                '<p class="text-muted small">Actions executed by the RSVP pipeline in response to declined / bounced calendar replies.</p>' +
+                tbl(["Action", "Count"], rsvpActionRows, "No actions") +
+                '</div></div>'
+              : '');
 
       const tabContent = {
         overview:
           '<div class="row g-3">' +
-            '<div class="col-md-4">' +
-              `<div class="card text-center border-0 shadow-sm"><div class="card-body py-3">` +
-              `<div class="fs-3 fw-bold">${regTotal}</div>` +
-              `<div class="text-muted small">Total Registrations</div>` +
-              `<div class="mt-1 small">${confirmed} confirmed · ${waitlisted} waitlisted</div>` +
-              `</div></div>` +
-            '</div>' +
-            '<div class="col-md-4">' +
-              `<div class="card text-center border-0 shadow-sm"><div class="card-body py-3">` +
-              `<div class="fs-3 fw-bold">${s.invites.attendee.total}</div>` +
-              `<div class="text-muted small">Attendee Invites</div>` +
-              `<div class="mt-1 small">${attendeePending} pending · ${attendeeAccepted} accepted</div>` +
-              `</div></div>` +
-            '</div>' +
-            '<div class="col-md-4">' +
-              `<div class="card text-center border-0 shadow-sm"><div class="card-body py-3">` +
-              `<div class="fs-3 fw-bold">${s.invites.speaker.total + s.proposals.total}</div>` +
-              `<div class="text-muted small">Speaker Invites / Proposals</div>` +
-              `<div class="mt-1 small">${speakerPending} pending · ${speakerAccepted} accepted</div>` +
-              `</div></div>` +
-            '</div>' +
+            `<div class="col-sm-4">${sc("Total Registrations", regTotal, `${confirmed} confirmed · ${waitlisted} waitlisted`)}</div>` +
+            `<div class="col-sm-4">${sc("Attendee Invites", s.invites.attendee.total, `${attendeeAccepted} accepted · ${attendeePending} pending · ${attendeeDeclined} declined`)}</div>` +
+            `<div class="col-sm-4">${sc("Speaker Invites / Proposals", s.invites.speaker.total + s.proposals.total, `${speakerAccepted} accepted · ${speakerPending} pending`)}</div>` +
           '</div>' +
           '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
             '<h6 class="text-uppercase small fw-bold text-muted mb-3">Registration Status</h6>' +
-            statusBars(s.registrations.byStatus, regTotal) +
+            svgStatusSegmentBar(s.registrations.byStatus, regTotal) +
           '</div></div>' +
-          (s.registrations.daily.length > 0
-            ? '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
-              '<h6 class="text-uppercase small fw-bold text-muted mb-3">Daily Registrations — last 30 days</h6>' +
-              svgBarChart(s.registrations.daily.map((d) => d.date.slice(5)), s.registrations.daily.map((d) => d.count)) +
-              '</div></div>'
-            : ''),
+          '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
+            '<h6 class="text-uppercase small fw-bold text-muted mb-2">Registration Growth — all time, by attendance type</h6>' +
+            '<div class="text-muted small mb-2">Stacked by attendance type per day since first registration.</div>' +
+            growthChartHtml +
+          '</div></div>',
 
         registrations:
-          '<div class="row g-3">' +
-            '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
-              '<h6 class="text-uppercase small fw-bold text-muted mb-3">By Status</h6>' +
-              tbl(
-                ["Status", "Count"],
-                Object.entries(s.registrations.byStatus).map(([k, v]) => `<tr><td>${badge(k)}</td><td class="mono">${v}</td></tr>`),
-                "None",
-              ) +
-            '</div></div></div>' +
-            '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
-              '<h6 class="text-uppercase small fw-bold text-muted mb-3">By Attendance Type</h6>' +
-              tbl(
-                ["Type", "Count"],
-                Object.entries(s.registrations.byAttendanceType).map(([k, v]) =>
-                  `<tr><td>${esc(attLabels[k] ?? k)}</td><td class="mono">${v}</td></tr>`),
-                "None",
-              ) +
-            '</div></div></div>' +
-          '</div>' +
-          (s.registrations.weekly.length > 0
+          '<div class="card border-0 shadow-sm"><div class="card-body">' +
+            '<h6 class="text-uppercase small fw-bold text-muted mb-3">Status × Attendance Type</h6>' +
+            statusStackHtml +
+            '<div class="mt-3">' + crossTableHtml + '</div>' +
+          '</div></div>' +
+          (dayLabels.length > 0
             ? '<div class="card border-0 shadow-sm mt-3"><div class="card-body">' +
-              '<h6 class="text-uppercase small fw-bold text-muted mb-3">Weekly Registrations — last 12 weeks</h6>' +
-              svgBarChart(s.registrations.weekly.map((d) => d.week.slice(5)), s.registrations.weekly.map((d) => d.count)) +
-              tbl(["Week", "Count"], s.registrations.weekly.map((d) => `<tr><td class="mono">${esc(d.week)}</td><td>${d.count}</td></tr>`), "No data") +
+              '<h6 class="text-uppercase small fw-bold text-muted mb-2">Registrations by Event Day</h6>' +
+              '<div class="text-muted small mb-2">Confirmed registrations per event day, stacked by attendance type.</div>' +
+              dayChartHtml +
+              (dayTableRows.length > 0
+                ? '<div class="mt-3">' + tbl(["Day", "Type", "Confirmed", "Pending", "Total"], dayTableRows, "No data") + '</div>'
+                : '') +
               '</div></div>'
             : ''),
 
@@ -1779,6 +2116,9 @@ async function loadEventStats(slug: string): Promise<void> {
                 "None",
               ) +
               `<div class="mt-2 small text-muted">Total: <strong>${s.invites.attendee.total}</strong></div>` +
+              '<hr class="my-3">' +
+              '<h6 class="text-uppercase small fw-bold text-muted mb-2">Decline Reasons — Attendees</h6>' +
+              declineTable("Reason", s.invites.attendee.declineReasons) +
             '</div></div></div>' +
             '<div class="col-md-6"><div class="card border-0 shadow-sm"><div class="card-body">' +
               '<h6 class="text-uppercase small fw-bold text-muted mb-3">Speaker Invites</h6>' +
@@ -1788,6 +2128,9 @@ async function loadEventStats(slug: string): Promise<void> {
                 "None",
               ) +
               `<div class="mt-2 small text-muted">Total: <strong>${s.invites.speaker.total}</strong></div>` +
+              '<hr class="my-3">' +
+              '<h6 class="text-uppercase small fw-bold text-muted mb-2">Decline Reasons — Speakers</h6>' +
+              declineTable("Reason", s.invites.speaker.declineReasons) +
             '</div></div></div>' +
           '</div>' +
           (s.proposals.total > 0
@@ -1801,15 +2144,17 @@ async function loadEventStats(slug: string): Promise<void> {
               `<div class="mt-2 small text-muted">Total: <strong>${s.proposals.total}</strong></div>` +
               '</div></div>'
             : ''),
+
+        rsvp: rsvpTabHtml,
       };
 
-      const tabKeys = ["overview", "registrations", "invites"] as const;
-      const tabLabels: Record<string, string> = { overview: "Overview", registrations: "Registrations", invites: "Invites & Proposals" };
+      const tabKeys = ["overview", "registrations", "invites", "rsvp"] as const;
+      const tabLabels2: Record<string, string> = { overview: "Overview", registrations: "Registrations", invites: "Invites & Proposals", rsvp: "Calendar RSVPs" };
 
       body.innerHTML =
         '<ul class="nav nav-tabs mb-3" id="event-stats-tabs">' +
           tabKeys.map((k, i) =>
-            `<li class="nav-item"><button class="nav-link${i === 0 ? " active" : ""}" data-event-stats-tab="${k}">${tabLabels[k]}</button></li>`,
+            `<li class="nav-item"><button class="nav-link${i === 0 ? " active" : ""}" data-event-stats-tab="${k}">${tabLabels2[k]}</button></li>`,
           ).join("") +
         '</ul>' +
         `<div id="event-stats-tab-content">${tabContent.overview}</div>`;
@@ -6740,6 +7085,8 @@ interface DonationRow {
   net_amount: number | null;
   source: string | null;
   status: string;
+  payment_method_type: string | null;
+  session_expires_at: number | null;
   created_at: string;
   completed_at: string | null;
 }
@@ -6753,7 +7100,7 @@ interface DonationsResponse {
 
 interface DonationSyncResult {
   sessionId: string;
-  outcome: "completed" | "expired" | "still_pending" | "error";
+  outcome: "completed" | "expired" | "awaiting_payment" | "failed" | "still_pending" | "error";
   error?: string;
 }
 
@@ -6761,6 +7108,7 @@ interface DonationSyncResponse {
   synced: number;
   completed: number;
   expired: number;
+  failed: number;
   errors: number;
   results: DonationSyncResult[];
 }
@@ -6789,13 +7137,16 @@ async function loadDonations(filter?: string): Promise<void> {
 
     const total     = Object.values(data.summary).reduce((s, v) => s + v, 0);
     const completed = data.summary["completed"] ?? 0;
-    const pending   = data.summary["pending"] ?? 0;
+    const pending   = (data.summary["pending"] ?? 0) + (data.summary["awaiting_payment"] ?? 0);
+    // Count completed rows missing net_amount or payment_method_type — sync will backfill them
+    const backfillable = data.donations.filter((d) => d.status === "completed" && (d.net_amount === null || d.payment_method_type === null)).length;
+    const syncable = pending + backfillable;
     const expired   = data.summary["expired"] ?? 0;
     const failed    = data.summary["failed"] ?? 0;
 
-    const filterBtns = (["", "pending", "completed", "expired", "failed"] as const).map((f) => {
+    const filterBtns = (["" , "pending", "awaiting_payment", "completed", "expired", "failed"] as const).map((f) => {
       const active = _donFilter === f ? " active" : "";
-      const label  = f ? f.charAt(0).toUpperCase() + f.slice(1) : "All";
+      const label  = f === "" ? "All" : f === "awaiting_payment" ? "Awaiting" : f.charAt(0).toUpperCase() + f.slice(1);
       const cnt    = f === "" ? total : (data.summary[f] ?? 0);
       return `<button class="btn btn-sm btn-outline-secondary${active}" data-don-filter="${f}">${label} <span class="badge text-bg-secondary">${cnt}</span></button>`;
     }).join(" ");
@@ -6804,17 +7155,23 @@ async function loadDonations(filter?: string): Promise<void> {
       const donBadge = badge(d.status);
       const gross = fmtAmount(d.gross_amount, d.currency);
       const net   = d.net_amount !== null ? fmtAmount(d.net_amount, d.currency) : "—";
-      const syncBtn = d.status === "pending"
+      const syncBtn = (d.status === "pending" || d.status === "awaiting_payment" ||
+                       (d.status === "completed" && (d.net_amount === null || d.payment_method_type === null)))
         ? `<button class="btn btn-xs btn-outline-primary btn-don-sync" data-session="${esc(d.checkout_session_id)}" style="font-size:.7rem;padding:.1rem .4rem">Sync</button>`
         : "";
       const badgeBtn = d.status === "completed"
         ? `<a class="btn btn-xs btn-outline-secondary" href="/api/v1/og/donation/${esc(d.checkout_session_id)}?name=${encodeURIComponent(d.name)}" download="${esc(d.name.replace(/[^\w\s-]/g, ""))}-donation-badge.jpeg" style="font-size:.7rem;padding:.1rem .4rem">🖼 Badge</a>`
+        : "";
+      const methodLabel = d.payment_method_type ? asyncPaymentWindow(d.payment_method_type).label : "—";
+      const deadline = d.status === "awaiting_payment" && d.session_expires_at
+        ? `<br><small class="text-muted">due ${new Date(d.session_expires_at * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</small>`
         : "";
       return `<tr>
         <td class="mono small">${esc(d.checkout_session_id.slice(0, 24))}…</td>
         <td>${esc(d.name)}<br><small class="text-muted">${esc(d.email)}</small>${d.organization ? `<br><small class="text-muted">${esc(d.organization)}</small>` : ""}</td>
         <td>${gross}<br><small class="text-muted">Net: ${net}</small></td>
         <td>${donBadge} ${syncBtn}${badgeBtn}</td>
+        <td class="small">${esc(methodLabel)}${deadline}</td>
         <td class="small text-muted">${d.source ? esc(d.source) : "—"}</td>
         <td class="small text-muted">${fmt(d.created_at)}</td>
         <td class="small text-muted">${fmt(d.completed_at)}</td>
@@ -6830,12 +7187,12 @@ async function loadDonations(filter?: string): Promise<void> {
         `<div class="d-flex align-items-center gap-2 mb-3 flex-wrap">` +
           filterBtns +
           `<div class="ms-auto d-flex gap-2">` +
-            `<button class="btn btn-sm btn-success" id="btn-don-sync-pending">↺ Sync all pending (${pending})</button>` +
+            `<button class="btn btn-sm btn-success" id="btn-don-sync-pending">↺ Sync all (${syncable})</button>` +
             (failed > 0 ? `<span class="badge text-bg-danger ms-1" title="Payment failed">${failed} failed</span>` : "") +
           `</div>` +
         `</div>` +
         tbl(
-          ["Session ID", "Donor", "Amount", "Status", "Source", "Created", "Completed"],
+          ["Session ID", "Donor", "Amount", "Status", "Method", "Source", "Created", "Completed"],
           rows,
           "No donations found",
         ) +
@@ -6881,7 +7238,9 @@ async function loadDonations(filter?: string): Promise<void> {
           .then((res) => {
             const r = res.results[0];
             if (r?.outcome === "completed") toast("Donation marked as completed.", "success");
+            else if (r?.outcome === "awaiting_payment") toast("Payment initiated — awaiting bank settlement.", "info");
             else if (r?.outcome === "expired") toast("Session expired — donation marked expired.", "info");
+            else if (r?.outcome === "failed") toast("Payment failed — bank declined or bounced.", "error");
             else if (r?.outcome === "still_pending") toast("Session still pending on Stripe.", "info");
             else toast(r?.error ?? "Sync failed.", "error");
             void loadDonations();
@@ -6892,13 +7251,19 @@ async function loadDonations(filter?: string): Promise<void> {
 
     // Sync all pending
     q<HTMLButtonElement>("#btn-don-sync-pending")?.addEventListener("click", () => {
-      if (pending === 0) { toast("No pending donations to sync.", "info"); return; }
+      if (syncable === 0) { toast("No donations to sync.", "info"); return; }
       const btn = q<HTMLButtonElement>("#btn-don-sync-pending");
       if (btn) { btn.disabled = true; btn.textContent = "Syncing…"; }
       api<DonationSyncResponse>("/api/v1/admin/donations/sync", { method: "POST" })
         .then((res) => {
-          toast(`Synced ${res.synced}: ${res.completed} completed, ${res.expired} expired, ${res.errors} errors.`,
-            res.errors > 0 ? "error" : "success");
+          const parts = [
+            res.completed  ? `${res.completed} completed`  : "",
+            res.failed     ? `${res.failed} failed`         : "",
+            res.expired    ? `${res.expired} expired`       : "",
+            res.errors     ? `${res.errors} errors`         : "",
+          ].filter(Boolean).join(", ");
+          toast(`Synced ${res.synced}${parts ? ": " + parts : "."}`,
+            res.errors > 0 || res.failed > 0 ? "error" : "success");
           void loadDonations();
         })
         .catch((err: Error) => { toast(err.message, "error"); void loadDonations(); });
@@ -7302,7 +7667,40 @@ async function verifyMagicLink(token: string): Promise<void> {
 
 // ── Boot ───────────────────────────────────────────────────────────────────────
 
+// ── Chart tooltip ──────────────────────────────────────────────────────────────
+let _admTipEl: HTMLDivElement | null = null;
+function admTipEl(): HTMLDivElement {
+  if (!_admTipEl) {
+    _admTipEl = document.createElement("div");
+    _admTipEl.className = "adm-tooltip";
+    document.body.appendChild(_admTipEl);
+  }
+  return _admTipEl;
+}
+function initChartTooltips(): void {
+  const escH = (s: string) =>
+    s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  document.addEventListener("mousemove", (e: MouseEvent) => {
+    const el = (e.target as Element).closest<Element>("[data-tip]");
+    const tip = admTipEl();
+    if (el) {
+      tip.innerHTML = (el.getAttribute("data-tip") ?? "")
+        .split("\n").map(escH).join("<br>");
+      tip.classList.add("visible");
+      const tw = tip.offsetWidth + 24;
+      const th = tip.offsetHeight + 16;
+      const x = Math.min(e.clientX + 14, window.innerWidth - tw);
+      const y = Math.max(e.clientY - th, 8);
+      tip.style.left = `${x}px`;
+      tip.style.top = `${y}px`;
+    } else {
+      tip.classList.remove("visible");
+    }
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  initChartTooltips();
   loadAuth();
 
   document.querySelectorAll<HTMLButtonElement>(".sidebar-link[data-sec]").forEach((btn) => {

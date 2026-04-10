@@ -19,6 +19,9 @@ interface DonationBadgeRow {
   name: string;
   source: string | null;
   completed_at: string | null;
+  status: string;
+  payment_method_type: string | null;
+  session_expires_at: number | null;
 }
 
 export async function onRequestGet(c: any): Promise<Response> {
@@ -33,16 +36,34 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   const row = await env.DB.prepare(
-    `SELECT gross_amount, currency, name, source, completed_at
+    `SELECT gross_amount, currency, name, source, completed_at, status, payment_method_type, session_expires_at
      FROM donations
-     WHERE checkout_session_id = ?
-       AND completed_at IS NOT NULL`,
+     WHERE checkout_session_id = ?`,
   )
     .bind(sessionId)
     .first<DonationBadgeRow>();
 
   if (!row) {
-    // Either not found or not yet completed (webhook may be in-flight)
+    // Either not found or not yet created (race condition at checkout)
+    return json({ pending: true }, 202);
+  }
+
+  if (row.status === "awaiting_payment") {
+    // Async payment method (bank transfer / ACH / SEPA) initiated:
+    // checkout completed but settlement takes 1–5 business days.
+    return json({ pending: true, asyncPayment: true, paymentMethodType: row.payment_method_type, sessionExpiresAt: row.session_expires_at }, 202);
+  }
+
+  if (row.status === "failed") {
+    return json({ failed: true }, 200);
+  }
+
+  if (row.status === "expired") {
+    return json({ expired: true }, 200);
+  }
+
+  if (!row.completed_at) {
+    // Still pending (webhook not yet received)
     return json({ pending: true }, 202);
   }
 

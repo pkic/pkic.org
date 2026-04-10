@@ -2,7 +2,6 @@ import type { Env } from "../types";
 import PostalMime from "postal-mime";
 import { logError, logInfo } from "../logging";
 import { verifySignedRsvpAddressFull } from "./rsvp";
-import { verifySignedBounceAddress } from "./bounces";
 
 export async function processIncomingEmail(message: any, env: Env): Promise<void> {
   logInfo("EMAIL_RECEIVED", { from: message.from, to: message.to });
@@ -29,11 +28,9 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
     // Check prefix before wasting cycles on crypto/HMAC verification
     const toLower = message.to.toLowerCase();
     const baseRsvpLocal = (env.RSVP_EMAIL || "rsvp@mail.pkic.org").split("@")[0].toLowerCase();
-    const baseBounceLocal = (env.BOUNCE_EMAIL || "bounces@mail.pkic.org").split("@")[0].toLowerCase();
 
     let rsvpRegistrationId: string | null = null;
     let rsvpDayDate: string | null = null;
-    let outboxId: string | null = null;
 
     if (toLower.startsWith(baseRsvpLocal + "+")) {
       const verified = await verifySignedRsvpAddressFull(message.to, env.INTERNAL_SIGNING_SECRET, env.RSVP_EMAIL);
@@ -41,11 +38,9 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
         rsvpRegistrationId = verified.registrationId;
         rsvpDayDate = verified.dayDate;
       }
-    } else if (toLower.startsWith(baseBounceLocal + "+")) {
-      outboxId = await verifySignedBounceAddress(message.to, env.INTERNAL_SIGNING_SECRET, env.BOUNCE_EMAIL);
     }
 
-    if (!rsvpRegistrationId && !outboxId) {
+    if (!rsvpRegistrationId) {
       logInfo("EMAIL_IGNORED_INVALID_MAC", {
         messageId: emailData.messageId,
         subject: emailData.subject,
@@ -54,26 +49,7 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
       return;
     }
 
-    // Handle generic bounces
-    if (outboxId) {
-      logInfo("GENERIC_BOUNCE_RECEIVED", { outboxId, subject: emailData.subject });
-      
-      const subjectLower = emailData.subject?.toLowerCase() || '';
-      const isTemporary = subjectLower.includes('delay') || subjectLower.includes('warning') || subjectLower.includes('transient');
-      
-      if (isTemporary) {
-        await env.DB.prepare(
-          `UPDATE email_outbox SET last_error = 'Delivery delayed by MTA', updated_at = datetime('now') WHERE id = ? AND status != 'bounced'`
-        ).bind(outboxId).run();
-      } else {
-        await env.DB.prepare(
-          `UPDATE email_outbox SET status = 'bounced', last_error = 'Hard Bounce Received', updated_at = datetime('now') WHERE id = ?`
-        ).bind(outboxId).run();
-      }
-      return;
-    }
-
-    // Handle RSVP addresses (rsvpRegistrationId is guaranteed truthy here)
+    // Handle RSVP addresses
     const isBounce = emailData.subject && (
       emailData.subject.toLowerCase().includes('undeliverable') || 
       emailData.subject.toLowerCase().includes('bounce') ||

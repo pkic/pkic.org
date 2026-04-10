@@ -10,7 +10,6 @@ export interface SendgridMessage {
   calendarIcsContent?: string;
   categories?: string[];
   replyTo?: string;
-  bounceAddress?: string;
   attachments?: Array<{ filename: string; contentType: string; base64Content: string }>;
 }
 
@@ -47,7 +46,7 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
         : []),
     ],
     categories: message.categories ?? [],
-    ...(message.bounceAddress ? { mail_settings: { bounce_forward: { email: message.bounceAddress, enable: true } } } : {}),
+    ...(env.APP_BASE_URL ? { custom_args: { env_url: env.APP_BASE_URL } } : {}),
   };
 
   if (message.attachments && message.attachments.length > 0) {

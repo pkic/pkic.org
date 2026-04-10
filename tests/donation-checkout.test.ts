@@ -652,7 +652,7 @@ describe("POST /api/v1/webhooks/stripe", () => {
     expect(response.status).toBe(400);
   });
 
-  it("does not confirm or email a donation before Stripe marks the payment as paid", async () => {
+  it("marks donation as awaiting_payment when checkout.session.completed fires with payment_status=unpaid", async () => {
     const env = makeWebhookEnv();
     const body = JSON.stringify({
       type: "checkout.session.completed",
@@ -681,8 +681,12 @@ describe("POST /api/v1/webhooks/stripe", () => {
 
     expect(response.status).toBe(200);
     expect(payload.pending).toBe(true);
+    // DB must be updated to 'awaiting_payment' so the front-end can show the
+    // bank-transfer pending message instead of timing out on the generic fallback.
     const db = env.DB as unknown as { prepare: ReturnType<typeof vi.fn> };
-    expect(db.prepare).not.toHaveBeenCalled();
+    expect(db.prepare).toHaveBeenCalledWith(expect.stringContaining("awaiting_payment"));
+    // Must NOT send a thank-you email (payment is not confirmed yet)
+    expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
   it("does not confirm or email an async payment until Stripe reports it as paid", async () => {
@@ -835,6 +839,25 @@ describe("GET /api/v1/donations/session", () => {
     expect(body.pending).toBe(true);
   });
 
+  it("returns 202 with pending:true and asyncPayment:true for awaiting_payment status", async () => {
+    const dbRow = {
+      gross_amount: 5000,
+      currency: "eur",
+      name: "Bob Donor",
+      source: null,
+      completed_at: null,
+      status: "awaiting_payment",
+    };
+    const env = makeSessionEnv(dbRow);
+    const request = new Request("https://pkic.org/api/v1/donations/session?session_id=cs_test_async");
+    const ctx = createContext(env, request, {});
+    const response = await sessionOnRequest(ctx);
+    expect(response.status).toBe(202);
+    const body = await response.json() as { pending: boolean; asyncPayment?: boolean };
+    expect(body.pending).toBe(true);
+    expect(body.asyncPayment).toBe(true);
+  });
+
   it("returns 200 with badge data for a completed session", async () => {
     const dbRow = {
       gross_amount: 5000,
@@ -842,6 +865,7 @@ describe("GET /api/v1/donations/session", () => {
       name: "Alice Donor",
       source: "/events/2026/pqc/",
       completed_at: "2026-01-01T10:00:00Z",
+      status: "completed",
     };
     const env = makeSessionEnv(dbRow);
     const request = new Request("https://pkic.org/api/v1/donations/session?session_id=cs_test_done");

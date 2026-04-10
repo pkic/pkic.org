@@ -90,6 +90,8 @@ interface StripeCheckoutSession {
   id: string;
   object: "checkout.session";
   payment_intent: string | null;
+  payment_method_types?: string[] | null;
+  expires_at?: number | null;
   amount_total: number | null;
   currency: string;
   customer_email: string | null;
@@ -117,6 +119,7 @@ interface StripePaymentIntent {
 interface StripeCharge {
   id: string;
   balance_transaction: string | null;
+  payment_method_details?: { type: string } | null;
 }
 
 interface StripeDonorIdentity {
@@ -301,20 +304,41 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const session = event.data.object as StripeCheckoutSession;
   if (!isStripePaymentConfirmed(session, event.type)) {
+    // Async payment method (bank transfer / ACH / SEPA): checkout session
+    // completed but settlement is still pending. Mark the donation so the
+    // front-end can show a proper "waiting for bank" message instead of the
+    // generic spinner timeout fallback.
+    if (event.type === "checkout.session.completed" && session.payment_status === "unpaid") {
+      const methodType = session.payment_method_types?.[0] ?? null;
+      await env.DB.prepare(
+        `UPDATE donations
+         SET status = 'awaiting_payment',
+             payment_method_type  = COALESCE(payment_method_type, ?),
+             session_expires_at   = COALESCE(session_expires_at, ?)
+         WHERE checkout_session_id = ? AND status = 'pending'`,
+      )
+        .bind(methodType, session.expires_at ?? null, session.id)
+        .run();
+    }
     return json({ received: true, pending: true });
   }
   const donorIdentity = getDonorIdentityFromSession(session);
 
-  // ── Fetch net amount from Stripe ──────────────────────────────────────────
-  // Gross amount is stored at checkout time. We look up the balance transaction
-  // to get the net amount (gross minus Stripe's processing fee).
+  // ── Fetch net amount + actual payment method from Stripe ─────────────────
+  // Gross amount is stored at checkout time. We traverse PI → charge →
+  // balance_transaction to get the net (gross minus Stripe fee), and read
+  // payment_method_details.type for the actual method used (not just what
+  // was offered in the session).
   let netAmount: number | null = null;
+  let paymentMethodType: string | null = null;
   if (env.STRIPE_SECRET_KEY && session.payment_intent) {
     try {
-      netAmount = await fetchNetAmount(env.STRIPE_SECRET_KEY, session.payment_intent);
+      const details = await fetchPaymentDetails(env.STRIPE_SECRET_KEY, session.payment_intent);
+      netAmount = details.netAmount;
+      paymentMethodType = details.paymentMethodType;
     } catch (err) {
-      // Non-fatal — we record null and can back-fill from Stripe export
-      console.error("Failed to fetch net amount for PI", session.payment_intent, err);
+      // Non-fatal — we record null and can back-fill from admin sync
+      console.error("Failed to fetch payment details for PI", session.payment_intent, err);
     }
   }
 
@@ -326,6 +350,7 @@ export async function onRequestPost(c: any): Promise<Response> {
          net_amount        = ?,
          completed_at      = ?,
          status            = 'completed',
+         payment_method_type = COALESCE(payment_method_type, ?),
          name              = CASE
                                WHEN ? IS NOT NULL AND (name IS NULL OR TRIM(name) = '' OR name = 'Unknown')
                                THEN ?
@@ -352,6 +377,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       session.payment_intent ?? null,
       netAmount,
       completedAt,
+      paymentMethodType,
       donorIdentity.name,
       donorIdentity.name,
       donorIdentity.email,
@@ -471,31 +497,48 @@ function formatMajorAmount(smallestUnit: number, currencyCode: string): string {
 }
 
 /**
- * Fetches the net amount for a payment intent by traversing:
- *   PaymentIntent → latest_charge → balance_transaction → net
+ * Fetches net amount and actual payment method type for a payment intent by traversing:
+ *   PaymentIntent → latest_charge → balance_transaction + payment_method_details
  */
-async function fetchNetAmount(stripeKey: string, paymentIntentId: string): Promise<number | null> {
+async function fetchPaymentDetails(stripeKey: string, paymentIntentId: string): Promise<{ netAmount: number | null; paymentMethodType: string | null }> {
   const headers = {
     "Authorization": `Bearer ${stripeKey}`,
   };
 
   const piRes = await fetch(`https://api.stripe.com/v1/payment_intents/${paymentIntentId}`, { headers });
-  if (!piRes.ok) return null;
+  if (!piRes.ok) {
+    console.error("fetchPaymentDetails: payment_intent fetch failed", piRes.status);
+    return { netAmount: null, paymentMethodType: null };
+  }
 
   const pi = (await piRes.json()) as StripePaymentIntent;
-  if (!pi.latest_charge) return null;
+  if (!pi.latest_charge) {
+    console.warn("fetchPaymentDetails: no latest_charge on", paymentIntentId);
+    return { netAmount: null, paymentMethodType: null };
+  }
 
   const chargeRes = await fetch(`https://api.stripe.com/v1/charges/${pi.latest_charge}`, { headers });
-  if (!chargeRes.ok) return null;
+  if (!chargeRes.ok) {
+    console.error("fetchPaymentDetails: charge fetch failed", chargeRes.status);
+    return { netAmount: null, paymentMethodType: null };
+  }
 
   const charge = (await chargeRes.json()) as StripeCharge;
-  if (!charge.balance_transaction) return null;
+  const paymentMethodType = charge.payment_method_details?.type ?? null;
+
+  if (!charge.balance_transaction) {
+    console.warn("fetchPaymentDetails: no balance_transaction on charge");
+    return { netAmount: null, paymentMethodType };
+  }
 
   const btRes = await fetch(`https://api.stripe.com/v1/balance_transactions/${charge.balance_transaction}`, { headers });
-  if (!btRes.ok) return null;
+  if (!btRes.ok) {
+    console.error("fetchPaymentDetails: balance_transaction fetch failed", btRes.status);
+    return { netAmount: null, paymentMethodType };
+  }
 
   const bt = (await btRes.json()) as StripeBalanceTransaction;
-  return bt.net ?? null;
+  return { netAmount: bt.net ?? null, paymentMethodType };
 }
 
 export class WebhooksStripePost extends OpenAPIRoute {

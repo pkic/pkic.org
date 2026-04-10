@@ -20,7 +20,7 @@
     "test:watch": "vitest",
     "check:max-lines": "node scripts/check-max-lines.mjs",
     "check": "npm run typecheck && npm run test && npm run check:max-lines",
-    "wrangler:types": "npx wrangler types --env local",
+    "wrangler:types": "npx wrangler types --env production",
     "migrate:local": "npx wrangler d1 migrations apply DB --env local --local",
     "migrate:preview": "npx wrangler d1 migrations apply DB --env preview --remote",
     "migrate:production": "npx wrangler d1 migrations apply DB --env production --remote",
@@ -32,9 +32,9 @@
     "@resvg/resvg-wasm": "^2.6.2",
     "chanfana": "^3.3.0",
     "handlebars": "^4.7.9",
-    "hono": "^4.12.10",
+    "hono": "^4.12.12",
     "ical.js": "^2.2.1",
-    "marked": "^17.0.5",
+    "marked": "^17.0.6",
     "postal-mime": "^2.7.4",
     "yaml": "^2.8.3",
     "zod": "^4.3.6"
@@ -42,11 +42,11 @@
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.13.5",
     "@playwright/test": "^1.59.1",
-    "@types/node": "^24.12.1",
+    "@types/node": "^24.12.2",
     "jsdom": "^27.4.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.2",
-    "wrangler": "^4.80.0"
+    "vitest": "^4.1.4",
+    "wrangler": "^4.81.1"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

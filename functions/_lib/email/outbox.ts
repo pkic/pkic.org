@@ -11,7 +11,6 @@ import { loadEmailLayout, loadEmailPartials } from "./partials";
 import { sendViaSendgrid } from "./sendgrid";
 import { applyCampaignCustomText } from "./campaign-custom";
 import { parseQueuedEmailAttachments, type QueuedEmailAttachment } from "./attachments";
-import { generateSignedBounceAddress } from "./bounces";
 import type { DatabaseLike, Env } from "../types";
 
 function uint8ToBase64(bytes: Uint8Array): string {
@@ -345,14 +344,6 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
       ? payload.__bccRecipients.filter((item): item is string => typeof item === "string" && item.includes("@"))
       : undefined;
 
-    let bounceAddress = typeof payload.__bounceAddress === "string" ? payload.__bounceAddress : undefined;
-    if (!bounceAddress) {
-      if (!env.INTERNAL_SIGNING_SECRET) {
-        throw new AppError(500, "CONFIG_ERROR", "INTERNAL_SIGNING_SECRET is a required config parameter");
-      }
-      bounceAddress = await generateSignedBounceAddress(row.id, env.INTERNAL_SIGNING_SECRET, env.BOUNCE_EMAIL);
-    }
-
     const messageId = await sendViaSendgrid(env, {
       to: row.recipient_email,
       bcc: bccRecipients,
@@ -365,7 +356,6 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
       calendarIcsContent: calendar?.inlineContent,
       categories: [row.template_key, row.message_type],
       replyTo: typeof payload.__replyTo === "string" ? payload.__replyTo : undefined,
-      bounceAddress,
       attachments,
     });
 
