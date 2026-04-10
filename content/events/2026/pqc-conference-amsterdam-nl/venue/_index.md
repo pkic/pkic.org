@@ -19,7 +19,7 @@ The conference takes place at **[Meervaart](https://meervaart.nl/en/meetings-eve
 
 ### Public transport
 
-Amsterdam public transport (GVB) serves Meervaart directly. Use [9292.nl](https://9292.nl/?naar=amsterdam_meer-en-vaart-300) to plan your journey.
+Amsterdam public transport (GVB) serves Meervaart directly. Use [9292.nl](https://9292.nl/en/?naar=amsterdam_meer-en-vaart-300) to plan your journey.
 
 - **Tram 1** — stop *Meer en Vaart*
 - **Tram 17** — stop *Osdorpplein Oost*
