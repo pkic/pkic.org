@@ -124,7 +124,7 @@ export async function requestAdminMagicLink(
 
 export async function verifyAdminMagicLink(
   db: DatabaseLike,
-  payload: { token: string; sessionTtlHours: number },
+  payload: { token: string; sessionTtlHours: number; ipHash?: string | null; userAgentHash?: string | null },
 ): Promise<{ admin: AuthAdmin; sessionToken: string; expiresAt: string }> {
   const tokenHash = await sha256Hex(payload.token);
   const row = await first<{
@@ -132,11 +132,13 @@ export async function verifyAdminMagicLink(
     user_id: string;
     expires_at: string;
     used_at: string | null;
+    request_ip_hash: string | null;
+    user_agent_hash: string | null;
     email: string;
     role: string;
   }>(
     db,
-    `SELECT m.id, m.user_id, m.expires_at, m.used_at, u.email, u.role
+    `SELECT m.id, m.user_id, m.expires_at, m.used_at, m.request_ip_hash, m.user_agent_hash, u.email, u.role
      FROM auth_magic_links m
      JOIN users u ON u.id = m.user_id
      WHERE m.token_hash = ? AND u.active = 1 AND u.role = 'admin'`,
@@ -153,6 +155,14 @@ export async function verifyAdminMagicLink(
 
   if (new Date(row.expires_at).getTime() <= Date.now()) {
     throw new AppError(410, "MAGIC_LINK_EXPIRED", "Magic link expired");
+  }
+
+  if (row.request_ip_hash && row.request_ip_hash !== payload.ipHash) {
+    throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", "Magic link is not valid from this network");
+  }
+
+  if (row.user_agent_hash && row.user_agent_hash !== payload.userAgentHash) {
+    throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", "Magic link is not valid from this browser");
   }
 
   await run(db, "UPDATE auth_magic_links SET used_at = ? WHERE id = ?", [nowIso(), row.id]);

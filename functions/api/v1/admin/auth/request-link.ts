@@ -3,6 +3,7 @@ import { json } from "../../../../_lib/http";
 import { requestAdminMagicLink } from "../../../../_lib/auth/admin";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../../../../_lib/request";
+import { enforceRateLimit } from "../../../../_lib/rate-limit";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import { logInfo } from "../../../../_lib/logging";
@@ -10,11 +11,23 @@ import { adminAuthRequestSchema } from "../../../../../assets/shared/schemas/api
 
 export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, adminAuthRequestSchema);
+  const clientIp = getClientIp(c.req.raw);
+  await enforceRateLimit({
+    binding: c.env.EMAIL_RATE_LIMITER,
+    namespace: "admin-auth-request-link:email",
+    key: body.email,
+  });
+  await enforceRateLimit({
+    binding: c.env.IP_RATE_LIMITER,
+    namespace: "admin-auth-request-link:ip",
+    key: clientIp,
+  });
+
   const config = getConfig(c.env, c.req.raw);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   const secret = requireInternalSecret(c.env);
-  const ipHash = await hashOptional(getClientIp(c.req.raw), secret);
+  const ipHash = await hashOptional(clientIp, secret);
   const userAgentHash = await hashOptional(getUserAgent(c.req.raw), secret);
 
   const magic = await requestAdminMagicLink(c.env.DB, {

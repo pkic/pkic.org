@@ -1,3 +1,5 @@
+import type { RateLimitBinding } from "./rate-limit";
+
 export interface StatementLike {
   bind(...values: unknown[]): StatementLike;
   run<T = Record<string, unknown>>(): Promise<{ success: boolean; results?: T[]; meta?: { changes: number } }>;
@@ -53,6 +55,10 @@ export interface Env {
   SPEAKER_UPLOADS_BUCKET?: R2BucketLike;
   /** Cloudflare Images binding — resize/convert images from raw streams without a public URL. */
   IMAGES?: ImagesBinding;
+  /** Cloudflare Rate Limiting binding for low-volume per-email public email triggers. */
+  EMAIL_RATE_LIMITER?: RateLimitBinding;
+  /** Cloudflare Rate Limiting binding for higher-volume per-IP public email triggers. */
+  IP_RATE_LIMITER?: RateLimitBinding;
   /** Optional explicit origin for local dev or background jobs that lack a request URL. */
   APP_BASE_URL?: string;
   DEFAULT_MIN_PROPOSAL_REVIEWS?: string;

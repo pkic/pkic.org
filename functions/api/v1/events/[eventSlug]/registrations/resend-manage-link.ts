@@ -6,8 +6,6 @@
  *
  * The response is always { success: true } regardless of whether the email
  * matched a registration — this prevents enumeration of registered attendees.
- *
- * Rate limiting / abuse prevention is handled at the edge (Cloudflare WAF).
  */
 import { z } from "zod";
 import { parseJsonBody } from "../../../../../_lib/validation";
@@ -16,6 +14,8 @@ import { getEventBySlug, buildEventEmailVariables } from "../../../../../_lib/se
 import { first, run } from "../../../../../_lib/db/queries";
 import { randomToken, sha256Hex } from "../../../../../_lib/utils/crypto";
 import { nowIso } from "../../../../../_lib/utils/time";
+import { getClientIp } from "../../../../../_lib/request";
+import { enforceRateLimit } from "../../../../../_lib/rate-limit";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../_lib/email/outbox";
 import { registrationManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
@@ -29,6 +29,17 @@ export async function onRequestPost(c: any): Promise<Response> {
   c.set("sensitive", true);
 
   const body = await parseJsonBody(c.req, schema);
+  await enforceRateLimit({
+    binding: c.env.EMAIL_RATE_LIMITER,
+    namespace: "registration-resend-manage-link:email",
+    key: body.email,
+  });
+  await enforceRateLimit({
+    binding: c.env.IP_RATE_LIMITER,
+    namespace: "registration-resend-manage-link:ip",
+    key: getClientIp(c.req.raw),
+  });
+
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 

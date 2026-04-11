@@ -59,6 +59,24 @@
       "images": {
         "binding": "IMAGES"
       },
+      "ratelimits": [
+        {
+          "name": "EMAIL_RATE_LIMITER",
+          "namespace_id": "910001",
+          "simple": {
+            "limit": 3,
+            "period": 60
+          }
+        },
+        {
+          "name": "IP_RATE_LIMITER",
+          "namespace_id": "910002",
+          "simple": {
+            "limit": 20,
+            "period": 60
+          }
+        }
+      ],
       "vars": {
         "APP_BASE_URL": "https://pkic.org",
         "HUGO_VERSION": "0.160.1",
@@ -112,6 +130,24 @@
       "images": {
         "binding": "IMAGES"
       },
+      "ratelimits": [
+        {
+          "name": "EMAIL_RATE_LIMITER",
+          "namespace_id": "910101",
+          "simple": {
+            "limit": 3,
+            "period": 60
+          }
+        },
+        {
+          "name": "IP_RATE_LIMITER",
+          "namespace_id": "910102",
+          "simple": {
+            "limit": 20,
+            "period": 60
+          }
+        }
+      ],
       "vars": {
         "APP_BASE_URL": "https://pkic-org-preview.pkic.workers.dev/",
         "HUGO_VERSION": "0.160.1",
@@ -167,6 +203,24 @@
       "images": {
         "binding": "IMAGES"
       },
+      "ratelimits": [
+        {
+          "name": "EMAIL_RATE_LIMITER",
+          "namespace_id": "910201",
+          "simple": {
+            "limit": 3,
+            "period": 60
+          }
+        },
+        {
+          "name": "IP_RATE_LIMITER",
+          "namespace_id": "910202",
+          "simple": {
+            "limit": 20,
+            "period": 60
+          }
+        }
+      ],
       "vars": {
         "DEV_STATIC_ORIGIN": "http://127.0.0.1:13131",
         "HUGO_VERSION": "0.160.1",

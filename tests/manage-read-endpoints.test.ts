@@ -1,10 +1,12 @@
 import { describe, expect, it, beforeEach} from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, seedEventAndAdmin } from "./helpers/context";
+import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { createAdminSession } from "./helpers/auth";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { onRequestGet as getRegistration } from "../functions/api/v1/registrations/manage/[token]";
 import { onRequestGet as getProposal } from "../functions/api/v1/proposals/manage/[token]";
+import { onRequestPost as openRegistrationManage } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/open-manage";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 
@@ -115,6 +117,76 @@ describe("manage read endpoints", () => {
         offerExpiresAt: null,
       },
     ]);
+  });
+
+  it("enforces admin manage JWT IP and user-agent binding", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    await createAdminSession(env.DB, admin.id, "admin-manage-token");
+
+    await env.DB.prepare(`
+      INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+      VALUES ('jwt-user', 'jwt-user@example.test', 'jwt-user@example.test', 'Jwt', 'User', datetime('now'), datetime('now'))
+    `).run();
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistration(env.DB, {
+      event,
+      userId: "jwt-user",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+
+    const openResponse = await openRegistrationManage(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/admin/events/pqc-2026/registrations/open-manage", {
+          method: "POST",
+          headers: {
+            authorization: "Bearer admin-manage-token",
+            "cf-connecting-ip": "203.0.113.30",
+            "user-agent": "admin-browser",
+          },
+        }),
+        { eventSlug: "pqc-2026", registrationId: created.registration.id },
+      ),
+    );
+
+    expect(openResponse.status).toBe(200);
+    const { manageUrl } = await openResponse.json() as { manageUrl: string };
+    const jwt = new URL(manageUrl).searchParams.get("token") as string;
+    expect(jwt.split(".")).toHaveLength(3);
+
+    const validResponse = await getRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+          headers: {
+            "cf-connecting-ip": "203.0.113.30",
+            "user-agent": "admin-browser",
+          },
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(validResponse.status).toBe(200);
+
+    const wrongContextResponse = await getRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
+          headers: {
+            "cf-connecting-ip": "203.0.113.31",
+            "user-agent": "admin-browser",
+          },
+        }),
+        { token: jwt },
+      ),
+    );
+    expect(wrongContextResponse.status).toBe(403);
+    const body = await wrongContextResponse.json() as { error: { code: string } };
+    expect(body.error.code).toBe("AUTH_INVALID");
   });
 
   it("returns proposal state for a valid manage token", async () => {
