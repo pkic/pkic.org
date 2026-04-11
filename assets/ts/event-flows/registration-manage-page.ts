@@ -10,98 +10,13 @@ import {
 } from "../shared/render-custom-fields";
 import { readDayAttendance, renderDayAttendance, writeDayAttendance } from "../shared/render-day-attendance";
 import { renderSharePanel, refreshSharePanelBadge } from "../shared/render-share-panel";
-import { showManageLinkRecoveryForm } from "../shared/manage-link-recovery";
-import { showHeadshotDisclaimer } from "../shared/headshot-upload";
-import { cropHeadshot } from "../shared/crop-headshot";
-import { renderHeadshotPreview } from "../shared/headshot-preview";
 import { bootstrap, setStatus } from "./boot";
-
-// ── Headshot section wiring ──────────────────────────────────────────────────
-
-function wireHeadshotSection(
-  root: HTMLElement,
-  token: string,
-  apiBase: string,
-  initialHeadshotUrl: string | null | undefined,
-  statusEl: HTMLElement,
-  onChanged?: () => void,
-): void {
-  const section = root.querySelector<HTMLElement>("[data-headshot-section]");
-  if (!section) return;
-
-  const preview = section.querySelector<HTMLElement>("[data-headshot-preview]");
-  const headshotStatus = section.querySelector<HTMLElement>("[data-headshot-status]");
-  const fileInput = section.querySelector<HTMLInputElement>("[data-headshot-file]");
-  const deleteBtn = section.querySelector<HTMLButtonElement>("[data-headshot-delete]");
-
-  function setPreview(url: string | null | undefined): void {
-    renderHeadshotPreview(preview, url, { alt: "Your headshot", emptyLabel: "No photo" });
-    if (deleteBtn) deleteBtn.style.display = url ? "" : "none";
-  }
-
-  setPreview(initialHeadshotUrl);
-
-  fileInput?.addEventListener("change", () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-
-    void (async () => {
-      const accepted = await showHeadshotDisclaimer();
-      if (!accepted) {
-        fileInput.value = "";
-        return;
-      }
-
-      const cropped = await cropHeadshot(file);
-      if (!cropped) {
-        fileInput.value = "";
-        return;
-      }
-
-      if (headshotStatus) headshotStatus.textContent = "Uploading…";
-      fileInput.value = "";
-
-      try {
-        const form = new FormData();
-        form.append("file", cropped, "headshot.jpg");
-        form.append("consent", "true");
-        const res = await fetch(`${apiBase}/registrations/manage/${encodeURIComponent(token)}/headshot`, {
-          method: "PUT",
-          body: form,
-        });
-        const data = await res.json() as { success?: boolean; headshotUrl?: string; error?: { message?: string } };
-        if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`);
-        if (headshotStatus) headshotStatus.textContent = "Photo updated. Your social badge is regenerating…";
-        setPreview(data.headshotUrl);
-        onChanged?.();
-      } catch (err) {
-        const msg = (err as Error).message;
-        if (headshotStatus) headshotStatus.textContent = `Upload failed: ${msg}`;
-        setStatus(statusEl, `Failed to upload headshot: ${msg}`, true);
-      }
-    })();
-  });
-
-  deleteBtn?.addEventListener("click", () => {
-    if (!confirm("Remove your profile photo?")) return;
-    void (async () => {
-      try {
-        const res = await fetch(`${apiBase}/registrations/manage/${encodeURIComponent(token)}/headshot`, {
-          method: "DELETE",
-        });
-        if (!res.ok) {
-          const d = await res.json() as { error?: { message?: string } };
-          throw new Error(d.error?.message ?? `HTTP ${res.status}`);
-        }
-        if (headshotStatus) headshotStatus.textContent = "Photo removed. Your social badge has been updated.";
-        setPreview(null);
-        onChanged?.();
-      } catch (err) {
-        setStatus(statusEl, `Failed to remove headshot: ${(err as Error).message}`, true);
-      }
-    })();
-  });
-}
+import { wireHeadshotSection } from "./registration-manage-headshot";
+import {
+  buildManageLinkRecoveryMessage,
+  showPostAction,
+  showResendManageLinkForm,
+} from "./registration-manage-panels";
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -243,56 +158,6 @@ function statusLabel(status: string): { label: string; cssClass: string } {
     default:
       return { label: status, cssClass: "bg-secondary" };
   }
-}
-
-function showPostAction(
-  root: HTMLElement,
-  manageFormEl: HTMLElement,
-  opts: { title: string; message: string; isError?: boolean },
-): void {
-  manageFormEl.classList.add("d-none");
-  const postAction = root.querySelector<HTMLElement>("[data-post-action]");
-  const alertEl = root.querySelector<HTMLElement>("[data-post-action-alert]");
-  const titleEl = root.querySelector<HTMLElement>("[data-post-action-title]");
-  const msgEl = root.querySelector<HTMLElement>("[data-post-action-message]");
-  if (!postAction || !alertEl || !titleEl || !msgEl) return;
-  titleEl.textContent = opts.title;
-  msgEl.textContent = opts.message;
-  alertEl.classList.remove("alert-success", "alert-warning", "alert-danger");
-  alertEl.classList.add(opts.isError ? "alert-danger" : "alert-success");
-  postAction.classList.remove("d-none");
-}
-
-function showResendManageLinkForm(
-  root: HTMLElement,
-  apiBase: string,
-  eventSlug: string,
-  introMessage?: string,
-): void {
-  showManageLinkRecoveryForm({
-    root,
-    loadingSelector: "[data-manage-loading]",
-    sectionSelector: "[data-resend-manage-section]",
-    buttonSelector: "[data-resend-manage-btn]",
-    statusSelector: "[data-resend-manage-status]",
-    emailSelector: "[data-resend-manage-email]",
-    endpoint: `${apiBase}/events/${eventSlug}/registrations/resend-manage-link`,
-    successMessage: "If the details match a registration, you will receive an email shortly. Please check your inbox (and spam folder).",
-    introMessage,
-  });
-}
-
-function buildManageLinkRecoveryMessage(message: string): string {
-  const detail = message.trim();
-  if (!detail) {
-    return "Invalid or expired management link. You can request a fresh management link below.";
-  }
-
-  if (/invalid|expired|not found/i.test(detail)) {
-    return `${detail} You can request a fresh management link below.`;
-  }
-
-  return `Invalid or expired management link. ${detail} You can request a fresh management link below.`;
 }
 
 // ── Main ────────────────────────────────────────────────────────────────────
@@ -469,7 +334,7 @@ async function main(): Promise<void> {
     });
   } else {
     const headshotSection = root.querySelector<HTMLElement>("[data-headshot-section]");
-    if (headshotSection) headshotSection.style.display = "none";
+    headshotSection?.classList.add("d-none");
   }
 
   // Re-apply custom field visibility when day attendance changes.

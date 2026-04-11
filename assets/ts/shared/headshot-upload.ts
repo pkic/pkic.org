@@ -80,7 +80,12 @@ export function showHeadshotDisclaimer(opts: HeadshotDisclaimerOptions = {}): Pr
     }
 
     titleEl.textContent = title;
-    listEl.innerHTML = texts.map((text) => `<li>${text}</li>`).join("");
+    listEl.textContent = "";
+    texts.forEach((text) => {
+      const item = document.createElement("li");
+      item.textContent = text;
+      listEl.append(item);
+    });
     confirmBtn.textContent = confirmText;
     checkbox.checked = false;
     confirmBtn.disabled = true;
