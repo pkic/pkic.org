@@ -1,4 +1,4 @@
-import { ApiFn, EventPermission } from "./types";
+import { type ApiFn, type EventPermission } from "./types";
 import { esc, fmt, q, tbl, toast } from "./ui";
 
 export function teamTabHtml(): string {

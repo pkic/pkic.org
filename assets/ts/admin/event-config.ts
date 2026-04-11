@@ -1,7 +1,5 @@
-import { AdminEventFormSummary, AdminFormDetailField, AdminFormSubmission } from "./types";
+import { type AdminEventFormSummary, type AdminFormDetailField, type AdminFormSubmission, type ApiFn } from "./types";
 import { esc, q, spinner, tbl, badge, fmt, toast } from "./ui";
-
-type ApiFn = <T>(url: string, init?: RequestInit) => Promise<T>;
 
 export function eventTermsTabHtml(): string {
   return (

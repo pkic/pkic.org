@@ -1,4 +1,4 @@
-import { AdminAttendanceOption, AdminEventDay, ApiFn, EventDetail } from "./types";
+import { type AdminAttendanceOption, type AdminEventDay, type ApiFn, type EventDetail } from "./types";
 import { esc, q, toast } from "./ui";
 
 function timeInZone(iso: string | null | undefined, timeZone: string | null | undefined): string {
