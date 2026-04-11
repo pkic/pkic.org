@@ -1,0 +1,153 @@
+// Chart tooltip (global, outside #admin-main scope)
+
+.adm-tooltip {
+  position: fixed;
+  z-index: 9999;
+  pointer-events: none;
+  background: rgba(33, 37, 41, 0.88);
+  color: #fff;
+  font-size: 0.75rem;
+  line-height: 1.6;
+  padding: 0.35rem 0.65rem;
+  border-radius: 0.375rem;
+  white-space: nowrap;
+  opacity: 0;
+  transition: opacity 0.08s ease;
+
+  &.visible {
+    opacity: 1;
+  }
+}
+
+// Mobile topbar (hidden on desktop)
+
+#admin-topbar {
+  display: none;
+}
+
+#sidebar-toggle {
+  display: none;
+}
+
+#sidebar-backdrop {
+  display: none;
+}
+
+// Responsive: mobile
+
+@media (max-width: 767px) {
+  #admin-root {
+    flex-direction: column;
+    position: relative;
+  }
+
+  #admin-topbar {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 0.6rem 1rem;
+    background: $adm-surface;
+    border-bottom: 1px solid $adm-border;
+    position: sticky;
+    top: 0;
+    z-index: 200;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+
+    .adm-brand {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: $adm-green;
+    }
+  }
+
+  #sidebar-toggle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 0.3rem;
+    color: #495057;
+    border-radius: 0.375rem;
+    flex-shrink: 0;
+
+    &:hover {
+      background: #f0f7f4;
+      color: $adm-green;
+    }
+  }
+
+  #admin-sidebar {
+    position: fixed;
+    left: -260px;
+    top: 0;
+    height: 100vh;
+    width: 240px;
+    z-index: 1050;
+    transition: left 0.25s ease;
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.15);
+
+    &.open {
+      left: 0;
+    }
+  }
+
+  #sidebar-backdrop {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1040;
+
+    &.active {
+      display: block;
+    }
+  }
+
+  #admin-main {
+    padding: 1rem;
+    width: 100%;
+  }
+
+  #admin-main .stat-grid {
+    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+  }
+
+  #admin-main .page-heading {
+    font-size: 1rem;
+  }
+}
+
+// Toast notifications
+
+#toast-area {
+  position: fixed;
+  bottom: 1.25rem;
+  right: 1.25rem;
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  pointer-events: none;
+}
+
+.adm-summary-toggle {
+  cursor: pointer;
+}
+
+.my-toast {
+  pointer-events: auto;
+  padding: 0.6rem 1rem;
+  border-radius: 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  animation: adm-toastin 0.2s ease;
+  max-width: 320px;
+}
+
+@keyframes adm-toastin {
+  from { transform: translateX(20px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}

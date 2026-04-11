@@ -1,0 +1,49 @@
+#admin-main {
+  .adm-user-filter-select,
+  .adm-user-role-select {
+    width: auto;
+  }
+
+  .adm-user-search {
+    width: 220px;
+  }
+
+  .adm-user-row {
+    cursor: pointer;
+  }
+
+  .adm-user-email {
+    font-size: 0.8rem;
+  }
+
+  .adm-user-role-select {
+    font-size: 0.75rem;
+  }
+
+  .adm-user-info-label {
+    width: 140px;
+  }
+
+  .adm-headshot-preview,
+  .adm-headshot-placeholder,
+  .adm-headshot-preview-img {
+    width: 150px;
+    height: 150px;
+  }
+
+  .adm-headshot-preview {
+    margin: 0 auto;
+    border-radius: 999px;
+    overflow: hidden;
+  }
+
+  .adm-headshot-preview-img {
+    object-fit: cover;
+  }
+
+  .adm-headshot-placeholder-icon {
+    font-size: 0.85rem;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+}

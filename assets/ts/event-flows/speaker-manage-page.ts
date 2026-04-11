@@ -3,10 +3,8 @@ import { setButtonLoading, resetButton } from "../shared/button-loading";
 import { normalizeValidation } from "../shared/validation-map";
 import { renderProfileLinks, type ProfileLinksWidget } from "../shared/render-profile-links";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/render-consents";
-import { showHeadshotDisclaimer } from "../shared/headshot-upload";
-import { cropHeadshot } from "../shared/crop-headshot";
 import { showManageLinkRecoveryForm } from "../shared/manage-link-recovery";
-import { renderHeadshotPreview } from "../shared/headshot-preview";
+import { wireHeadshotController } from "../shared/headshot-controller";
 import { bootstrap, setStatus } from "./boot";
 import type { RequiredTerm } from "../shared/types";
 
@@ -167,6 +165,7 @@ async function main(): Promise<void> {
   const headshotPreview = boot.root.querySelector<HTMLElement>("[data-headshot-preview]");
   const headshotStatus = boot.root.querySelector<HTMLElement>("[data-headshot-status]");
   const headshotFile = boot.root.querySelector<HTMLInputElement>("[data-headshot-file]");
+  const headshotDelete = boot.root.querySelector<HTMLButtonElement>("[data-headshot-delete]");
 
   function toggleEditableSections(isEnabled: boolean): void {
     headshotSection?.classList.toggle("d-none", !isEnabled);
@@ -189,8 +188,6 @@ async function main(): Promise<void> {
     declinedMsg?.classList.remove("d-none");
     toggleEditableSections(false);
   }
-
-  renderHeadshotPreview(headshotPreview, data.profile.headshotUrl, { alt: "Your headshot", emptyLabel: "No headshot uploaded yet." });
 
   // Confirm
   const confirmForm = boot.root.querySelector<HTMLFormElement>("[data-confirm-form]");
@@ -314,42 +311,27 @@ async function main(): Promise<void> {
   if (data.speaker.status === "declined") {
     headshotSection?.classList.add("d-none");
   } else {
-    headshotFile?.addEventListener("change", () => {
-      const file = headshotFile.files?.[0];
-      if (!file) return;
-
-      void (async () => {
-        const accepted = await showHeadshotDisclaimer();
-        if (!accepted) {
-          headshotFile.value = "";
-          return;
-        }
-        
-        const cropped = await cropHeadshot(file);
-        if (!cropped) {
-          headshotFile.value = "";
-          return;
-        }
-
-        if (headshotStatus) headshotStatus.textContent = "Uploading…";
-        headshotFile.value = "";
-
-        try {
-          const form = new FormData();
-          form.append("file", cropped, "headshot.jpg");
-          form.append("consent", "true");
-          const response = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/headshot`, {
-            method: "PUT",
-            body: form,
-          });
-          const json = await response.json() as { success?: boolean; headshotUrl?: string; error?: { message?: string } };
-          if (!response.ok) throw new Error(json.error?.message ?? `HTTP ${response.status}`);
-          if (headshotStatus) headshotStatus.textContent = "Headshot uploaded successfully.";
-          renderHeadshotPreview(headshotPreview, json.headshotUrl, { alt: "Your headshot", emptyLabel: "No headshot uploaded yet." });
-        } catch (error) {
-          if (headshotStatus) headshotStatus.textContent = `Upload failed: ${(error as Error).message}`;
-        }
-      })();
+    wireHeadshotController({
+      preview: headshotPreview,
+      status: headshotStatus,
+      fileInput: headshotFile,
+      deleteButton: headshotDelete,
+      initialUrl: data.profile.headshotUrl,
+      previewOptions: { alt: "Your headshot", emptyLabel: "No headshot uploaded yet." },
+      uploadStatus: "Uploading...",
+      uploadSuccessStatus: "Headshot uploaded successfully.",
+      uploadHeadshot: async (cropped) => {
+        const form = new FormData();
+        form.append("file", cropped, "headshot.jpg");
+        form.append("consent", "true");
+        const response = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/headshot`, {
+          method: "PUT",
+          body: form,
+        });
+        const json = await response.json() as { success?: boolean; headshotUrl?: string; error?: { message?: string } };
+        if (!response.ok) throw new Error(json.error?.message ?? `HTTP ${response.status}`);
+        return { headshotUrl: json.headshotUrl ?? null };
+      },
     });
   }
 
