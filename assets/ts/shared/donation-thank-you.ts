@@ -90,7 +90,7 @@ export async function initDonationThankYou(): Promise<void> {
       if ("failed" in data) { renderFailed(container); return; }
       if ("expired" in data) { renderExpired(container); return; }
       if (!("pending" in data)) {
-        session = data;
+        session = data as DonationSession;
         break;
       }
     } catch {
@@ -139,7 +139,7 @@ export async function initDonationThankYou(): Promise<void> {
       if ("failed" in data) { renderFailed(container); return; }
       if ("expired" in data) { renderExpired(container); return; }
       if (!("pending" in data)) {
-        session = data;
+        session = data as DonationSession;
         break;
       }
     } catch {
