@@ -1,4 +1,12 @@
-{{- range where .Site.Pages "Params.redirect" "!=" nil -}}
+/feed /feed/blog/ 301
+/feed/ /feed/blog/ 301
+/blog/feed /feed/blog/ 301
+/blog/feed/ /feed/blog/ 301
+/feed/blog /feed/blog/ 301
+/feed/blog/ /feed/blog/index.xml 200
+/news/feed /news/feed/ 301
+/news/feed/ /news/feed/index.xml 200
+{{ range where .Site.Pages "Params.redirect" "!=" nil -}}
 {{- if hasPrefix (.Param "redirect") "/" | or (hasPrefix (.Param "redirect") "https://") | or (hasPrefix (.Param "redirect") "http://") -}}
 {{- printf "%s %s 301\n" .RelPermalink (.Param "redirect") -}}
 {{- else -}}
