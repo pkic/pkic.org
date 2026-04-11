@@ -14,6 +14,7 @@ interface PendingRsvpEvent {
   attendance_type: string;
   settings_json: string;
   user_email: string;
+  first_name: string | null;
   event_name: string;
 }
 
@@ -56,17 +57,19 @@ export async function runRsvpEnforcer(db: DatabaseLike, env: Env): Promise<{
 
     // 2. Process Warnings for Declined / Tentative
     const warnings = await db.prepare(
-      `SELECT rsvp.id, rsvp.registration_id, r.event_id, r.user_id, rsvp.attendee_email, e.name as event_name, e.slug as event_slug, r.manage_token_hash 
+      `SELECT rsvp.id, rsvp.registration_id, r.event_id, r.user_id, rsvp.attendee_email,
+              e.name as event_name, e.slug as event_slug, r.manage_token_hash, u.first_name
        FROM calendar_rsvp_events rsvp
        JOIN registrations r ON rsvp.registration_id = r.id
        JOIN events e ON r.event_id = e.id
+       LEFT JOIN users u ON r.user_id = u.id
        WHERE rsvp.response_status IN ('declined', 'tentative') 
          AND rsvp.warning_sent_at IS NULL 
          AND rsvp.action_executed_at IS NULL 
          AND r.attendance_type = 'in_person'
          AND r.status IN ('registered', 'waitlisted')
          AND rsvp.received_at < datetime('now', '-1 hour')`
-    ).all<{ id: string; registration_id: string; event_id: string; user_id: string; attendee_email: string; event_name: string; event_slug: string; manage_token_hash: string }>();
+    ).all<{ id: string; registration_id: string; event_id: string; user_id: string; attendee_email: string; event_name: string; event_slug: string; manage_token_hash: string; first_name: string | null }>();
 
     for (const w of warnings.results || []) {
       // Check if they already accepted in a newer chronological record
@@ -95,6 +98,7 @@ export async function runRsvpEnforcer(db: DatabaseLike, env: Env): Promise<{
         recipientUserId: w.user_id,
         recipientEmail: w.attendee_email,
         data: {
+          firstName: w.first_name ?? "",
           event_name: w.event_name,
           manage_url: manageUrl
         },
@@ -110,9 +114,9 @@ export async function runRsvpEnforcer(db: DatabaseLike, env: Env): Promise<{
 
     // 3. Process Downgrades / Cancellations
     const pendingActions = await db.prepare(
-      `SELECT rsvp.id, rsvp.registration_id, rsvp.response_status, rsvp.received_at, rsvp.warning_sent_at,
+            `SELECT rsvp.id, rsvp.registration_id, rsvp.response_status, rsvp.received_at, rsvp.warning_sent_at,
               r.event_id, r.user_id, r.attendance_type, 
-              e.starts_at, e.settings_json, e.name as event_name, u.email as user_email
+              e.starts_at, e.settings_json, e.name as event_name, u.email as user_email, u.first_name
        FROM calendar_rsvp_events rsvp
        JOIN registrations r ON rsvp.registration_id = r.id
        JOIN events e ON r.event_id = e.id
@@ -199,6 +203,7 @@ export async function runRsvpEnforcer(db: DatabaseLike, env: Env): Promise<{
           recipientUserId: action.user_id,
           recipientEmail: action.user_email,
           data: {
+            firstName: action.first_name ?? "",
             event_name: action.event_name,
             action_taken: actionTaken,
             new_attendance_type: newAttendanceType,

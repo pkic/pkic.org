@@ -356,6 +356,50 @@ This is a friendly reminder that your registration for **{{eventName}}** is not 
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // 12. RSVP warning / follow-up
+  // Variables: firstName, event_name, manage_url
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "rsvp_warning",
+    subjectTemplate: "Action required: Your in-person registration for {{event_name}} is at risk",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+
+We noticed that the calendar invitation for **{{event_name}}** was recently declined or removed from your calendar.
+
+As a nonprofit, the PKI Consortium covers significant costs for catering and venue space ($150–$300 per attendee, per day) to keep this event fully funded by sponsors and free for attendees. Because in-person capacity is strictly limited, it's incredibly important that we know exactly who will be attending.
+
+If you are still planning to join us in person, please confirm your attendance using the link below as soon as possible. If we do not receive your re-confirmation, we will automatically update your registration to remote / virtual attendance to free up your seat for a community member on the waitlist.
+
+<div class="cta"><a href="{{manage_url}}">Re-confirm my in-person attendance &rarr;</a></div>
+
+If your plans have changed and you intended to decline, you do not need to do anything. We will adjust your registration automatically so you can still participate virtually, and your seat will be given to someone else. Thank you for your understanding and cooperation!
+`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // 13. RSVP downgrade / cancellation notice
+  // Variables: firstName, event_name, action_taken, new_attendance_type, new_status, manage_url
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "rsvp_downgraded",
+    subjectTemplate: "Update: Your registration for {{event_name}} has been changed",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+
+Following up on our previous email regarding your declined calendar invitation, your registration for **{{event_name}}** has now been automatically updated.
+
+Because we did not receive an in-person confirmation, we have released your seat to another community member on the waitlist.
+
+{{#if eq new_status "cancelled"}}
+<div class="notice notice-warning"><strong>Your registration has been cancelled.</strong> Because there is no virtual option available for this event, we had to cancel your registration completely to allow another community member to attend.</div>
+{{else}}
+<div class="notice notice-info"><strong>Your attendance type has been updated to {{new_attendance_type}}.</strong> Your registration remains active and you will receive access details closer to the event.</div>
+{{/if}}
+
+If this was done in error and you still wish to attend in person, please use your [registration management link]({{manage_url}}) to review and update your registration, subject to remaining availability.
+`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // 4. Attendee invite
   // Variables: eventName, firstName, lastName, inviterName, registrationUrl, declineUrl,
   //            sponsorsImageUrl, heroImageUrl
@@ -802,6 +846,8 @@ function parseArgs(argv) {
     configPath: DEFAULT_CONFIG_PATH,
     bucket: DEFAULT_BUCKET,
     adminEmail: DEFAULT_ADMIN_EMAIL,
+    onlyTemplates: [],
+    ifMissing: false,
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -850,6 +896,17 @@ function parseArgs(argv) {
     if (arg === "--persist-to" && next) {
       parsed.persistTo = next;
       index += 1;
+      continue;
+    }
+
+    if ((arg === "--only-template" || arg === "--template") && next) {
+      parsed.onlyTemplates.push(...next.split(",").map((value) => value.trim()).filter(Boolean));
+      index += 1;
+      continue;
+    }
+
+    if (arg === "--if-missing") {
+      parsed.ifMissing = true;
       continue;
     }
 
@@ -907,8 +964,22 @@ function seedConfig(config, cli) {
     });
   }
 
+  const templates = Array.from(merged.values());
+
+  if (cli.onlyTemplates.length === 0) {
+    return { templates };
+  }
+
+  const requestedKeys = new Set(cli.onlyTemplates);
+  const filteredTemplates = templates.filter((template) => requestedKeys.has(template.key));
+  const missingKeys = cli.onlyTemplates.filter((key) => !merged.has(key));
+
+  if (missingKeys.length > 0) {
+    throw new Error(`Unknown template key(s): ${missingKeys.join(", ")}`);
+  }
+
   return {
-    templates: Array.from(merged.values()),
+    templates: filteredTemplates,
   };
 }
 
@@ -958,6 +1029,34 @@ function buildTemplateSqlStatements(cli, templates) {
   const normalizedAdminEmail = cli.adminEmail.trim().toLowerCase();
 
   for (const template of templates) {
+    if (cli.ifMissing) {
+      statements.push(`
+INSERT INTO email_template_versions (
+  id, template_key, version, subject_template, body, content_type, r2_object_key,
+  checksum_sha256, status, created_by_user_id, created_at
+)
+SELECT
+  ${sqlString(randomUUID())},
+  ${sqlString(template.key)},
+  COALESCE((SELECT MAX(version) FROM email_template_versions WHERE template_key = ${sqlString(template.key)}), 0) + 1,
+  ${toSqlNullableText(template.subjectTemplate)},
+  ${sqlString(template.content)},
+  ${sqlString(template.contentType ?? 'markdown')},
+  NULL,
+  ${sqlString(sha256Hex(template.content))},
+  'active',
+  (SELECT id FROM users WHERE normalized_email = ${sqlString(normalizedAdminEmail)} LIMIT 1),
+  datetime('now')
+WHERE NOT EXISTS (
+  SELECT 1
+  FROM email_template_versions
+  WHERE template_key = ${sqlString(template.key)}
+    AND status = 'active'
+);
+`);
+      continue;
+    }
+
     statements.push(`
 UPDATE email_template_versions
 SET status = 'archived'
@@ -990,6 +1089,10 @@ function main() {
   const config = loadConfig(cli.configPath);
   const seed = seedConfig(config, cli);
 
+  if (seed.templates.length === 0) {
+    throw new Error("No email templates selected for seeding.");
+  }
+
   ensureAdminExists(cli);
 
   const sql = buildTemplateSqlStatements(cli, seed.templates);
@@ -1006,7 +1109,9 @@ function main() {
   ];
 
   runWrangler(executeArgs);
-  console.log(`Seeded ${seed.templates.length} email templates in ${cli.mode} mode.`);
+  console.log(
+    `Seeded ${seed.templates.length} email template(s) in ${cli.mode} mode${cli.ifMissing ? " (missing only)" : ""}.`,
+  );
 }
 
 main();
