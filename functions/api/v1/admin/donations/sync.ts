@@ -290,7 +290,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
       if (session.status === "complete" && session.payment_status === "paid") {
         const completedAt = new Date().toISOString();
-        let details: PaymentDetails = { netAmount: null, paymentMethodType: null };
+        let details: PaymentDetails = { netAmount: null, paymentMethodType: null, paymentFailed: false };
         if (session.payment_intent) {
           details = await fetchPaymentDetails(env.STRIPE_SECRET_KEY, session.payment_intent);
         }
