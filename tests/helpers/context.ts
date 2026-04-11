@@ -1,4 +1,5 @@
 import type { DatabaseLike, Env, PagesContext } from "../../functions/_lib/types";
+import type { RateLimitBinding } from "../../functions/_lib/rate-limit";
 
 /**
  * Query helper replacing the old `D1DatabaseShim.raw()` method.
@@ -48,6 +49,17 @@ export function createContext<P extends Record<string, string>>(
       return data[key];
     },
     waitUntil,
+  };
+}
+
+export function createTestRateLimiter(limit: number): RateLimitBinding {
+  const countsByKey = new Map<string, number>();
+  return {
+    async limit({ key }) {
+      const count = (countsByKey.get(key) ?? 0) + 1;
+      countsByKey.set(key, count);
+      return { success: count <= limit };
+    },
   };
 }
 

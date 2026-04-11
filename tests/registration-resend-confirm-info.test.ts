@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { createContext, createTestRateLimiter, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequestGet as confirmInfo } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-info";
@@ -295,5 +295,35 @@ describe("resend-manage-link endpoint", () => {
         ),
       ),
     ).rejects.toBeTruthy();
+  });
+
+  it("rate-limits repeated manage-link resends for the same email", async () => {
+    await seedEventAndAdmin(env.DB);
+    const limitedEnv = {
+      ...env,
+      EMAIL_RATE_LIMITER: createTestRateLimiter(3),
+      IP_RATE_LIMITER: createTestRateLimiter(20),
+    };
+    const email = `rate-limit-${crypto.randomUUID()}@example.test`;
+
+    const makeRequest = () => resendManageLink(
+      createContext(
+        limitedEnv,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations/resend-manage-link", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "cf-connecting-ip": "203.0.113.20",
+          },
+          body: JSON.stringify({ email }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+
+    expect((await makeRequest()).status).toBe(200);
+    expect((await makeRequest()).status).toBe(200);
+    expect((await makeRequest()).status).toBe(200);
+    await expect(makeRequest()).rejects.toMatchObject({ code: "RATE_LIMITED", status: 429 });
   });
 });

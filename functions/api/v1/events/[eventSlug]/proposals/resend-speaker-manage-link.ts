@@ -14,6 +14,8 @@ import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/se
 import { first } from "../../../../../_lib/db/queries";
 import { queueEmail, processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
+import { getClientIp } from "../../../../../_lib/request";
+import { enforceRateLimit } from "../../../../../_lib/rate-limit";
 import { speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { buildProposalInviteEmailContext, refreshSpeakerManageToken } from "../../../../../_lib/services/proposals";
 import { normalizedEmailSchema } from "../../../../../../assets/shared/schemas/api";
@@ -25,6 +27,17 @@ export async function onRequestPost(c: any): Promise<Response> {
   c.set("sensitive", true);
 
   const body = await parseJsonBody(c.req, schema);
+  await enforceRateLimit({
+    binding: c.env.EMAIL_RATE_LIMITER,
+    namespace: "proposal-resend-speaker-manage-link:email",
+    key: body.email,
+  });
+  await enforceRateLimit({
+    binding: c.env.IP_RATE_LIMITER,
+    namespace: "proposal-resend-speaker-manage-link:ip",
+    key: getClientIp(c.req.raw),
+  });
+
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
