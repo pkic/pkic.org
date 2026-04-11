@@ -9,6 +9,7 @@ const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 const publicDir = resolve(projectRoot, "public");
 const hugoBuildState = globalThis as typeof globalThis & {
   __pkicHugoBuildPromise?: Promise<void>;
+  __pkicHugoDevBuildPromise?: Promise<void>;
 };
 
 const hugoSourcePaths = [
@@ -64,12 +65,14 @@ async function buildHugoSite(isDev: boolean): Promise<void> {
   await run("pnpm", ["exec", "pagefind", "--site", "./public/"]);
 }
 
-function buildHugoSiteOnce(): Promise<void> {
-  hugoBuildState.__pkicHugoBuildPromise ??= buildHugoSite(false).catch((error: unknown) => {
-    delete hugoBuildState.__pkicHugoBuildPromise;
+function buildHugoSiteOnce(isDev: boolean): Promise<void> {
+  const promiseKey = isDev ? "__pkicHugoDevBuildPromise" : "__pkicHugoBuildPromise";
+
+  hugoBuildState[promiseKey] ??= buildHugoSite(isDev).catch((error: unknown) => {
+    delete hugoBuildState[promiseKey];
     throw error;
   });
-  return hugoBuildState.__pkicHugoBuildPromise;
+  return hugoBuildState[promiseKey];
 }
 
 function isHugoSource(file: string): boolean {
@@ -109,11 +112,15 @@ function hugoPlugin(): Plugin {
     name: "pkic-hugo",
     async config(_, { command }) {
       if (command === "build") {
-        await buildHugoSiteOnce();
+        await buildHugoSiteOnce(false);
+      }
+
+      if (command === "serve") {
+        await buildHugoSiteOnce(true);
       }
     },
     async configureServer(server) {
-      await queueBuild(server);
+      await buildHugoSiteOnce(true);
 
       server.watcher.add(hugoSourcePaths.map((sourcePath) => resolve(projectRoot, sourcePath)));
 
