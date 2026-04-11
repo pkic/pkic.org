@@ -52,7 +52,7 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Ganesh Mallaya
-    role: Distinguished Architect and Industry Evanglist
+    role: Distinguished Architect and Industry Evangelist
     social:
       x:
       linkedin: https://www.linkedin.com/in/ganeshmallaya/
@@ -103,6 +103,6 @@ content: |
 
   ### Global presence
 
-  AppViewX serves as an global enterprises having offices in United States, Europe, Canada and India.
+  AppViewX is a global enterprises having offices in United States, Europe, Canada and India.
 
   {{< youtube aL72uEYh9vo>}}
