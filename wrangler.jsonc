@@ -1,21 +1,11 @@
-// Generate Wrangler types with an explicit environment:
-// npm wrangler types -e production
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "pkic-org-base",
   "compatibility_date": "2026-03-17",
   "compatibility_flags": ["nodejs_compat"],
   "main": "functions/router.ts",
-  "dev": {
-    "port": 8788,
-    "local_protocol": "http"
-  },
   "observability": {
     "enabled": true
-  },
-  "build": {
-    "command": "git submodule update --init --remote && hugo --minify && npx -y pagefind --site './public/'",
-    "watch_dir": ["functions", "assets", "archetypes", "config", "content", "data", "i18n", "layouts", "static"]
   },
   "env": {
     "production": {
@@ -172,10 +162,6 @@
     },
     "local": {
       "name": "pkic-org-local",
-      "build": {
-        "command": "hugo --minify && npx -y pagefind --site './public/'",
-        "watch_dir": ["functions", "assets", "archetypes", "config", "content", "data", "i18n", "layouts", "static"]
-      },
       "assets": {
         "directory": "./public/",
         "binding": "ASSETS_PUBLIC",
