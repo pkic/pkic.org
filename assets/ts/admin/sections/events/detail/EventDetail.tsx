@@ -1,40 +1,31 @@
-import { h } from "preact";
 import { useState, useEffect, useCallback } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { toast } from "../../../ui";
 import type { EventDetail } from "../../../types";
 import { Settings } from "./Settings";
 import { Registrations } from "./Registrations";
-import { Invites } from "./Invites";
 import { Proposals } from "./Proposals";
-import { Team } from "./Team";
 import { Promoters } from "./Promoters";
 import { EventStats } from "./EventStats";
-import { EventEmail } from "./EventEmail";
 import { currentEvent } from "../../../state";
 
 type EventDetailTab =
-  | "settings"
   | "registrations"
-  | "invites"
   | "proposals"
-  | "team"
   | "promoters"
   | "stats"
-  | "email";
+  | "settings";
 
 const TABS: Array<{ key: EventDetailTab; label: string }> = [
-  { key: "settings",      label: "Settings" },
   { key: "registrations", label: "Registrations" },
-  { key: "invites",       label: "Invites" },
   { key: "proposals",     label: "Proposals" },
-  { key: "team",          label: "Team" },
   { key: "promoters",     label: "Promoters" },
   { key: "stats",         label: "Stats" },
-  { key: "email",         label: "Email" },
+  { key: "settings",      label: "Settings" },
 ];
 
 export function EventDetailView({ slug, tab: tabProp }: { slug: string; tab?: string }) {
@@ -86,28 +77,14 @@ export function EventDetailView({ slug, tab: tabProp }: { slug: string; tab?: st
       </div>
 
       {/* Tabs */}
-      <ul class="nav nav-tabs mb-3 flex-wrap">
-        {TABS.map((t) => (
-          <li key={t.key} class="nav-item">
-            <button
-              class={`nav-link${tab === t.key ? " active" : ""}`}
-              onClick={() => navigate(`/events/${slug}/${t.key}`)}
-            >
-              {t.label}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <Tabs items={TABS} active={tab} onChange={(key) => navigate(`/events/${slug}/${key}`)} className="mb-3 flex-wrap" />
 
       {/* Tab content */}
-      {tab === "settings"      && <Settings event={event} onUpdated={handleUpdated} />}
       {tab === "registrations" && <Registrations slug={slug} />}
-      {tab === "invites"       && <Invites slug={slug} />}
       {tab === "proposals"     && <Proposals slug={slug} />}
-      {tab === "team"          && <Team slug={slug} />}
       {tab === "promoters"     && <Promoters slug={slug} />}
       {tab === "stats"         && <EventStats slug={slug} />}
-      {tab === "email"         && <EventEmail slug={slug} audience="attendees" />}
+      {tab === "settings"      && <Settings event={event} onUpdated={handleUpdated} />}
     </div>
   );
 }

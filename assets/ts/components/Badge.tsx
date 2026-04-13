@@ -1,5 +1,3 @@
-import { h } from "preact";
-
 const STATUS_COLOR: Record<string, string> = {
   // registration
   registered: "success",
@@ -48,11 +46,35 @@ const STATUS_COLOR: Record<string, string> = {
   sending: "info",
   failed: "danger",
   retrying: "warning",
+  // donations
+  completed: "success",
+  pending: "warning",
   // calendar rsvp
   rsvp_accepted: "success",
   rsvp_declined: "danger",
   rsvp_tentative: "warning",
+  // registration mode
+  open: "success",
+  invite_only: "info",
+  invite_or_open: "primary",
 };
+
+const STATUS_LABEL: Record<string, string> = {
+  pending_email_confirmation: "Pending confirmation",
+  under_review: "Under review",
+  needs_work: "Needs work",
+  "needs-work": "Needs work",
+  program_committee: "Program committee",
+  invite_only: "Invite only",
+  invite_or_open: "Invite or open",
+  rsvp_accepted: "RSVP accepted",
+  rsvp_declined: "RSVP declined",
+  rsvp_tentative: "RSVP tentative",
+};
+
+function formatStatus(status: string): string {
+  return STATUS_LABEL[status] ?? status.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
 
 interface BadgeProps {
   status: string;
@@ -61,5 +83,5 @@ interface BadgeProps {
 
 export function Badge({ status, label }: BadgeProps) {
   const color = STATUS_COLOR[status] ?? "secondary";
-  return <span class={`badge text-bg-${color}`}>{label ?? status}</span>;
+  return <span class={`badge text-bg-${color}`}>{label ?? formatStatus(status)}</span>;
 }

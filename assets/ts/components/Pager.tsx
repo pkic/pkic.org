@@ -1,5 +1,3 @@
-import { h } from "preact";
-
 export const ADMIN_LIST_PAGE_SIZE_DEFAULT = 50;
 const PAGE_SIZE_OPTIONS = [25, 50, 100, 200];
 
@@ -38,7 +36,8 @@ export function Pager({ page, hasMore, pageSize, offset, rowCount, total, onPrev
   const max = total > 0 ? Math.ceil(total / pageSize) : page + (hasMore ? 1 : 0);
 
   return (
-    <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+    <div class="d-flex align-items-center justify-content-center gap-2 flex-wrap mt-3 adm-pager">
+      <span class="text-muted small adm-pager-range">{rangeText(offset, rowCount, total)}</span>
       <nav>
         <ul class="pagination pagination-sm mb-0">
           <li class={`page-item${page <= 1 ? " disabled" : ""}`}>
@@ -58,9 +57,8 @@ export function Pager({ page, hasMore, pageSize, offset, rowCount, total, onPrev
           </li>
         </ul>
       </nav>
-      <span class="text-muted small">{rangeText(offset, rowCount, total)}</span>
       <select
-        class="form-select form-select-sm adm-filter-select"
+        class="form-select form-select-sm adm-pager-size"
         value={pageSize}
         onChange={(e) => onPageSizeChange(Number((e.target as HTMLSelectElement).value))}
       >

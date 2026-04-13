@@ -1,7 +1,5 @@
-import { h } from "preact";
-import { useState, useEffect, useCallback, useRef } from "preact/hooks";
-import { Spinner } from "../../../../components/Spinner";
-import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { useState, useEffect, useRef } from "preact/hooks";
+import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { toast } from "../../../ui";
 import type { EmailTemplateVersion } from "../../../types";
@@ -335,10 +333,12 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
             <div class="small text-muted">Subject</div>
             <div class="fw-semibold mb-2">{preview.subject}</div>
             {preview.recipientCount != null && <div class="small text-muted mb-1">{preview.recipientCount} recipients</div>}
-            <ul class="nav nav-tabs mb-2">
-              <li class="nav-item"><button class={`nav-link${previewTab === "html" ? " active" : ""}`} type="button" onClick={() => setPreviewTab("html")}>HTML</button></li>
-              <li class="nav-item"><button class={`nav-link${previewTab === "text" ? " active" : ""}`} type="button" onClick={() => setPreviewTab("text")}>Text</button></li>
-            </ul>
+            <Tabs
+              items={[{ key: "html", label: "HTML" }, { key: "text", label: "Text" }]}
+              active={previewTab}
+              onChange={(key) => setPreviewTab(key as "html" | "text")}
+              className="mb-2"
+            />
             {previewTab === "html" && <iframe ref={iframeRef} sandbox="" class="adm-email-preview-frame" />}
             {previewTab === "text" && <pre class="json-out adm-email-preview-text">{preview.text}</pre>}
             <div class="form-check mt-2">

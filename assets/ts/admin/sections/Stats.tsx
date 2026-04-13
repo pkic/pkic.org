@@ -1,8 +1,9 @@
-import { h, Fragment } from "preact";
 import { useState } from "preact/hooks";
 import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
+import { DataTable, type Column } from "../../components/Table";
+import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
 import { fmtMoney, svgBarChart, svgLineChart } from "../charts";
 import type { StatsResponse, DonationPeriod } from "../types";
@@ -34,19 +35,7 @@ export function Stats() {
 
   return (
     <div>
-      <ul class="nav nav-tabs mb-3">
-        {TABS.map(({ key, label }) => (
-          <li key={key} class="nav-item">
-            <button
-              class={`nav-link${tab === key ? " active" : ""}`}
-              type="button"
-              onClick={() => setTab(key)}
-            >
-              {label}
-            </button>
-          </li>
-        ))}
-      </ul>
+      <Tabs items={TABS} active={tab} onChange={(key) => setTab(key as StatsTab)} />
 
       {tab === "overview" && <OverviewTab stats={stats} />}
       {tab === "registrations" && <RegistrationsTab stats={stats} />}
@@ -142,84 +131,52 @@ function DonationsTab({ stats }: { stats: StatsResponse }) {
     return d.date ?? d.week ?? d.month ?? "";
   }
 
-  function PeriodRows({ rows }: { rows: Array<DonationPeriod & { date?: string; week?: string; month?: string }> }) {
-    return (
-      <>
-        {rows.map((d, i) => (
-          <tr key={i}>
-            <td class="mono">{periodLabel(d)}</td>
-            <td>{d.count}</td>
-            <td>{d.completed}</td>
-            <td>{d.pending}</td>
-            <td>{d.failed}</td>
-            <td>{d.expired}</td>
-            <td class="mono">{d.gross > 0 ? fmtMoney(d.gross, primaryCurrency) : "—"}</td>
-          </tr>
-        ))}
-      </>
-    );
-  }
-
-  const periodHeads = ["Period", "Total", "Compl.", "Pend.", "Failed", "Expd.", `Gross (${primaryCurrency.toUpperCase()})`];
+  const periodColumns: Column<DonationPeriod & { date?: string; week?: string; month?: string }>[] = [
+    { header: "Period", cell: (d) => periodLabel(d), className: "mono" },
+    { header: { label: "Total", className: "text-end" }, cell: (d) => d.count, className: "mono text-end" },
+    { header: { label: "Compl.", className: "text-end" }, cell: (d) => d.completed, className: "mono text-end" },
+    { header: { label: "Pend.", className: "text-end" }, cell: (d) => d.pending, className: "mono text-end" },
+    { header: { label: "Failed", className: "text-end" }, cell: (d) => d.failed, className: "mono text-end" },
+    { header: { label: "Expd.", className: "text-end" }, cell: (d) => d.expired, className: "mono text-end" },
+    { header: { label: `Gross (${primaryCurrency.toUpperCase()})`, className: "text-end" }, cell: (d) => d.gross > 0 ? fmtMoney(d.gross, primaryCurrency) : "—", className: "mono text-end" },
+  ];
 
   return (
     <div>
       <div class="card border-0 shadow-sm">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-3">Donations by Status &amp; Currency</h6>
-          <div class="table-responsive">
-            <table class="table table-sm">
-              <thead><tr><th>Status</th><th>Currency</th><th>Count</th><th>Gross</th><th>Avg Gross</th><th>Net Total</th></tr></thead>
-              <tbody>
-                {don.byCurrency.length === 0 ? (
-                  <tr><td colSpan={6} class="text-center text-muted fst-italic">No donations</td></tr>
-                ) : don.byCurrency.map((d, i) => (
-                  <tr key={i}>
-                    <td><Badge status={d.status} /></td>
-                    <td class="mono">{d.currency.toUpperCase()}</td>
-                    <td>{d.count}</td>
-                    <td class="mono">{fmtMoney(d.total_gross, d.currency)}</td>
-                    <td class="mono">{fmtMoney(d.avg_gross, d.currency)}</td>
-                    <td class="mono">{d.total_net != null ? fmtMoney(d.total_net, d.currency) : `— (${d.status})`}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={[
+              { header: "Status", cell: (d) => <Badge status={d.status} /> },
+              { header: "Currency", cell: (d) => d.currency.toUpperCase(), className: "mono" },
+              { header: { label: "Count", className: "text-end" }, cell: (d) => d.count, className: "mono text-end" },
+              { header: { label: "Gross", className: "text-end" }, cell: (d) => fmtMoney(d.total_gross, d.currency), className: "mono text-end" },
+              { header: { label: "Avg Gross", className: "text-end" }, cell: (d) => fmtMoney(d.avg_gross, d.currency), className: "mono text-end" },
+              { header: { label: "Net Total", className: "text-end" }, cell: (d) => d.total_net != null ? fmtMoney(d.total_net, d.currency) : `— (${d.status})`, className: "mono text-end" },
+            ]}
+            data={don.byCurrency}
+            empty="No donations"
+          />
         </div>
       </div>
       <div class="card border-0 shadow-sm mt-3">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-3">Donations — Daily (last 30 days)</h6>
-          <div class="table-responsive">
-            <table class="table table-sm">
-              <thead><tr>{periodHeads.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
-              <tbody><PeriodRows rows={don.daily} /></tbody>
-            </table>
-          </div>
+          <DataTable columns={periodColumns} data={don.daily} empty="No data" />
         </div>
       </div>
       <div class="card border-0 shadow-sm mt-3">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-3">Donations — Weekly (last 12 weeks)</h6>
-          <div class="table-responsive">
-            <table class="table table-sm">
-              <thead><tr>{periodHeads.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
-              <tbody><PeriodRows rows={don.weekly} /></tbody>
-            </table>
-          </div>
+          <DataTable columns={periodColumns} data={don.weekly} empty="No data" />
         </div>
       </div>
       <div class="card border-0 shadow-sm mt-3">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-3">Donations — Monthly (last 12 months)</h6>
           <div dangerouslySetInnerHTML={{ __html: monthlyChart }} />
-          <div class="table-responsive">
-            <table class="table table-sm">
-              <thead><tr>{periodHeads.map((h, i) => <th key={i}>{h}</th>)}</tr></thead>
-              <tbody><PeriodRows rows={don.monthly} /></tbody>
-            </table>
-          </div>
+          <DataTable columns={periodColumns} data={don.monthly} empty="No data" />
         </div>
       </div>
       <details class="card border-0 shadow-sm mt-3">
@@ -236,34 +193,26 @@ function DonationsTab({ stats }: { stats: StatsResponse }) {
 
 function StatusTable({ entries }: { entries: Array<[string, number]> }) {
   return (
-    <div class="table-responsive">
-      <table class="table table-sm">
-        <thead><tr><th>Status</th><th>Count</th></tr></thead>
-        <tbody>
-          {entries.length === 0 ? (
-            <tr><td colSpan={2} class="text-center text-muted fst-italic">None</td></tr>
-          ) : entries.map(([k, v]) => (
-            <tr key={k}><td><Badge status={k} /></td><td class="mono">{v}</td></tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={[
+        { header: "Status", cell: (e) => <Badge status={e[0]} /> },
+        { header: { label: "Count", className: "text-end" }, cell: (e) => e[1], className: "mono text-end" },
+      ]}
+      data={entries}
+      empty="None"
+    />
   );
 }
 
 function SimpleTable({ rows, heads = ["Item", "Count"] }: { rows: Array<[string, string]>; heads?: [string, string] }) {
   return (
-    <div class="table-responsive">
-      <table class="table table-sm">
-        <thead><tr><th>{heads[0]}</th><th>{heads[1]}</th></tr></thead>
-        <tbody>
-          {rows.length === 0 ? (
-            <tr><td colSpan={2} class="text-center text-muted fst-italic">No data</td></tr>
-          ) : rows.map(([label, value], i) => (
-            <tr key={i}><td>{label}</td><td class="mono">{value}</td></tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={[
+        { header: heads[0], cell: (r) => r[0] },
+        { header: { label: heads[1], className: "text-end" }, cell: (r) => r[1], className: "mono text-end" },
+      ]}
+      data={rows}
+      empty="No data"
+    />
   );
 }

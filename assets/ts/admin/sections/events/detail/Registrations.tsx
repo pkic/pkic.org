@@ -1,15 +1,13 @@
-import { h } from "preact";
-import { useState } from "preact/hooks";
+import { useState, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
-import { Spinner } from "../../../../components/Spinner";
-import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { Pager } from "../../../../components/Pager";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
+import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
 import type { Registration } from "../../../types";
-import { useData } from "../../../../hooks/useData";
-import { usePageState } from "../../../../hooks/usePageState";
+import { Invites } from "./Invites";
+import { EventEmail } from "./EventEmail";
 
 function attendanceTypeLabel(t: string): string {
   return { in_person: "In-person", virtual: "Virtual", on_demand: "On-demand" }[t] ?? t;
@@ -17,52 +15,32 @@ function attendanceTypeLabel(t: string): string {
 
 // ─── Registration list ────────────────────────────────────────────────────────
 
-interface RegsResponse {
-  registrations: Registration[];
-  pagination: { offset: number; limit: number; total: number; hasMore: boolean };
-}
-
-export function Registrations({ slug }: { slug: string }) {
-  const { offset, pageSize, resetPage, pagerProps } = usePageState();
-  const [search, setSearch] = useState("");
-  const [pendingSearch, setPendingSearch] = useState("");
+function RegistrationsList({ slug }: { slug: string }) {
   const [statusFilter, setStatusFilter] = useState("");
   const [, navigate] = useHashLocation();
-
-  const { data, loading, error, reload } = useData<RegsResponse>(() => {
-    const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
-    if (search) params.set("q", search);
-    if (statusFilter) params.set("status", statusFilter);
-    return api<RegsResponse>(`/api/v1/admin/events/${slug}/registrations?${params}`);
-  }, [slug, search, statusFilter, offset, pageSize]);
-
-  const regs = data?.registrations ?? [];
-  const total = data?.pagination?.total ?? 0;
-  const hasMore = data?.pagination?.hasMore ?? false;
-
-  function applySearch() { setSearch(pendingSearch); resetPage(); }
+  const tableRef = useRef<ApiTableActions | null>(null);
 
   async function runWaitlistPromotions() {
     try {
       await api(`/api/v1/admin/events/${slug}/waitlist/promote`, { method: "POST", body: "{}" });
       toast("Waitlist promotions run", "success");
-      void reload();
+      tableRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     }
   }
 
   return (
-    <div>
-      <div class="d-flex gap-2 align-items-center mb-2 flex-wrap">
-        <input
-          type="search"
-          class="form-control form-control-sm adm-search-input"
-          placeholder="Search name / email…"
-          value={pendingSearch}
-          onInput={(e) => setPendingSearch((e.target as HTMLInputElement).value)}
-          onKeyDown={(e) => { if (e.key === "Enter") applySearch(); }}
-        />
+    <ApiDataTable<Registration>
+      endpoint={`/api/v1/admin/events/${slug}/registrations`}
+      resolve={(d) => (d as { registrations: Registration[] }).registrations}
+      resolvePage={(d) => (d as { pagination: { total: number; hasMore: boolean } }).pagination}
+      paginate
+      searchPlaceholder="Search name / email…"
+      params={statusFilter ? { status: statusFilter } : undefined}
+      actionsRef={tableRef}
+      deps={[slug, statusFilter]}
+      toolbar={({ resetPage }) => (<>
         <select class="form-select form-select-sm adm-filter-select" value={statusFilter} onChange={(e) => { setStatusFilter((e.target as HTMLSelectElement).value); resetPage(); }}>
           <option value="">All statuses</option>
           <option value="registered">Confirmed</option>
@@ -70,54 +48,45 @@ export function Registrations({ slug }: { slug: string }) {
           <option value="waitlisted">Waitlisted</option>
           <option value="cancelled">Cancelled</option>
         </select>
-        <button class="btn btn-sm btn-outline-secondary" onClick={applySearch}>Search</button>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void reload()}>↺ Refresh</button>
         <button class="btn btn-sm btn-outline-warning" onClick={() => void runWaitlistPromotions()}>Run waitlist promotions</button>
-      </div>
+      </>)}
+      columns={[
+        { header: "Name / Email", cell: (r) => <><strong class="adm-cell-name">{r.display_name ?? r.user_email ?? "—"}</strong>{r.display_name && r.user_email && <><br /><span class="text-muted small">{r.user_email}</span></>}</> },
+        { header: "Status", cell: (r) => <Badge status={r.status} /> },
+        { header: "Attendance", cell: (r) => r.attendance_type ? attendanceTypeLabel(r.attendance_type) : "—" },
+        { header: "Day waitlist", cell: (r) => r.dayWaitlistSummary ?? (r.dayWaitlistCount ? `${r.dayWaitlistCount} day${r.dayWaitlistCount !== 1 ? "s" : ""}` : "—") },
+        { header: "Source", cell: (r) => r.source_type ?? "—", className: "small text-muted" },
+        { header: "Registered", cell: (r) => fmt(r.created_at), className: "mono small" },
+        { header: "", cell: () => <span class="btn btn-sm btn-outline-secondary">View →</span> },
+      ]}
+      empty="No registrations yet"
+      rowKey={(r) => r.id}
+      rowClass={() => "adm-reg-row"}
+      onRowClick={(r) => navigate(`/events/${slug}/registrations/${r.id}`)}
+    />
+  );
+}
 
-      {loading ? <Spinner /> : error ? <ErrorAlert error={error} /> : (
-        <>
-          <div class="table-responsive">
-            <table class="table table-sm table-hover">
-              <thead>
-                <tr>
-                  <th>Name / Email</th>
-                  <th>Status</th>
-                  <th>Attendance</th>
-                  <th>Day waitlist</th>
-                  <th>Source</th>
-                  <th>Registered</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {regs.length === 0 ? (
-                  <tr><td colSpan={7} class="text-center text-muted fst-italic py-3">No registrations yet</td></tr>
-                ) : regs.map((r) => {
-                  const name = r.display_name ?? r.user_email ?? "—";
-                  return (
-                    <tr key={r.id} class="adm-reg-row" onClick={() => navigate(`/events/${slug}/registrations/${r.id}`)}>
-                      <td>
-                        <strong class="adm-cell-name">{name}</strong>
-                        {r.display_name && r.user_email && <><br /><span class="text-muted small">{r.user_email}</span></>}
-                      </td>
-                      <td><Badge status={r.status} /></td>
-                      <td>{r.attendance_type ? attendanceTypeLabel(r.attendance_type) : "—"}</td>
-                      <td>{r.dayWaitlistSummary ?? (r.dayWaitlistCount ? `${r.dayWaitlistCount} day${r.dayWaitlistCount !== 1 ? "s" : ""}` : "—")}</td>
-                      <td class="small text-muted">{r.source_type ?? "—"}</td>
-                      <td class="mono small">{fmt(r.created_at)}</td>
-                      <td>
-                        <span class="btn btn-sm btn-outline-secondary">View →</span>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <Pager {...pagerProps(regs.length, total, hasMore)} />
-        </>
-      )}
+// ─── Registrations compositor ─────────────────────────────────────────────────
+
+export function Registrations({ slug }: { slug: string }) {
+  const [tab, setTab] = useState<"overview" | "invites" | "email">("overview");
+
+  return (
+    <div>
+      <Tabs
+        items={[
+          { key: "overview", label: "Overview" },
+          { key: "invites", label: "Invites" },
+          { key: "email", label: "Email" },
+        ]}
+        active={tab}
+        onChange={(key) => setTab(key as "overview" | "invites" | "email")}
+      />
+
+      {tab === "overview" && <RegistrationsList slug={slug} />}
+      {tab === "invites" && <Invites slug={slug} />}
+      {tab === "email" && <EventEmail slug={slug} audience="attendees" />}
     </div>
   );
 }

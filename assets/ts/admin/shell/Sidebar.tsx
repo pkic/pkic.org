@@ -1,4 +1,4 @@
-import { h, type ComponentChildren } from "preact";
+import { type ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { Link } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";

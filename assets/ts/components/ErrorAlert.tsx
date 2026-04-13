@@ -1,5 +1,3 @@
-import { h } from "preact";
-
 interface ErrorAlertProps {
   error: string | Error | null | undefined;
 }

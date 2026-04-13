@@ -1,4 +1,3 @@
-import { h } from "preact";
 import { isAuthed } from "./state";
 import { Login } from "./shell/Login";
 import { AdminShell } from "./shell/AdminShell";

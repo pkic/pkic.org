@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef, useMemo } from "preact/hooks";
 import type { FormField } from "../types";
-import { optionsFor, readRules, type FieldRules, type FieldOption } from "./custom-field-rules";
+import { optionsFor, readRules, type FieldRules } from "./custom-field-rules";
 import { COUNTRIES } from "../countries";
 
 // ── Validation helpers ────────────────────────────────────────────────────

@@ -1,14 +1,17 @@
-import { h, Fragment } from "preact";
+import { Fragment } from "preact";
 import { useState, useEffect } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Pager } from "../../../../components/Pager";
+import { Table } from "../../../../components/Table";
+import { Tabs } from "../../../../components/Tabs";
 import { useData } from "../../../../hooks/useData";
 import { usePageState } from "../../../../hooks/usePageState";
 import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
 import type { ProposalSummary, ProposalReview, ProposalSpeaker, ProposalAccess } from "../../../types";
+import { EventEmail } from "./EventEmail";
 
 // ─── Proposal detail panel ────────────────────────────────────────────────────
 
@@ -188,24 +191,8 @@ function ProposalsList({ slug }: { slug: string }) {
 
       {loading ? <Spinner /> : error ? <ErrorAlert error={error} /> : (
         <>
-          <div class="table-responsive">
-            <table class="table table-sm table-hover">
-              <thead>
-                <tr>
-                  <th>Title</th>
-                  <th>Proposer</th>
-                  <th>Type</th>
-                  <th>Status</th>
-                  <th>Decision</th>
-                  <th>Reviews</th>
-                  <th>Submitted</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {proposals.length === 0 ? (
-                  <tr><td colSpan={8} class="text-center text-muted fst-italic py-3">No proposals found</td></tr>
-                ) : proposals.map((p) => {
+          <Table heads={["Title", "Proposer", "Type", "Status", "Decision", "Reviews", "Submitted", ""]} empty="No proposals found">
+              {proposals.length > 0 && proposals.map((p) => {
                   const proposer = [p.proposer_first_name, p.proposer_last_name].filter(Boolean).join(" ") || p.proposer_email;
                   const isExpanded = expandedId === p.id;
                   return (
@@ -237,9 +224,7 @@ function ProposalsList({ slug }: { slug: string }) {
                     </Fragment>
                   );
                 })}
-              </tbody>
-            </table>
-          </div>
+          </Table>
           <Pager {...pagerProps(proposals.length, total, hasMore)} />
         </>
       )}
@@ -250,24 +235,26 @@ function ProposalsList({ slug }: { slug: string }) {
 // ─── Proposals compositor ─────────────────────────────────────────────────────
 
 export function Proposals({ slug }: { slug: string }) {
-  const [tab, setTab] = useState<"proposals" | "invites">("proposals");
+  const [tab, setTab] = useState<"proposals" | "invites" | "email">("proposals");
 
   return (
     <div>
-      <ul class="nav nav-tabs mb-3">
-        <li class="nav-item">
-          <button class={`nav-link${tab === "proposals" ? " active" : ""}`} onClick={() => setTab("proposals")}>Proposals</button>
-        </li>
-        <li class="nav-item">
-          <button class={`nav-link${tab === "invites" ? " active" : ""}`} onClick={() => setTab("invites")}>Speaker Invites</button>
-        </li>
-      </ul>
+      <Tabs
+        items={[
+          { key: "proposals", label: "Overview" },
+          { key: "invites", label: "Speaker Invites" },
+          { key: "email", label: "Email" },
+        ]}
+        active={tab}
+        onChange={(key) => setTab(key as "proposals" | "invites" | "email")}
+      />
       {tab === "proposals" && <ProposalsList slug={slug} />}
       {tab === "invites" && (
         <p class="text-muted small fst-italic">
           Use the Invites tab to send speaker invitations for this event.
         </p>
       )}
+      {tab === "email" && <EventEmail slug={slug} audience="speakers" />}
     </div>
   );
 }

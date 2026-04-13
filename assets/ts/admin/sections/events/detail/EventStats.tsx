@@ -1,4 +1,3 @@
-import { h } from "preact";
 import { StatCard } from "../../../../components/StatCard";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -111,9 +110,9 @@ export function EventStats({ slug }: { slug: string }) {
           <h6 class="text-uppercase small fw-bold text-muted mb-2">Status × Attendance Type</h6>
           {crossStatuses.length > 0 && <div dangerouslySetInnerHTML={{ __html: svgStackedBarChart(crossAttTypes.map((at) => ATT_LABELS[at] ?? at), statusSeries) }} />}
           {crossStatuses.length > 0 ? (
-            <div class="table-responsive mt-3">
+            <div class="tbl-wrap mt-3">
               <table class="table table-sm align-middle mb-0">
-                <thead class="table-light">
+                <thead class="table-dark">
                   <tr>
                     <th class="small">Status</th>
                     {crossAttTypes.map((at) => <th key={at} class="text-end small">{ATT_LABELS[at] ?? at}</th>)}
@@ -165,7 +164,7 @@ export function EventStats({ slug }: { slug: string }) {
               <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
                   <h6 class="text-uppercase small fw-bold text-muted mb-2">{type === "attendee" ? "Attendee" : "Speaker"} Invites</h6>
-                  <div class="table-responsive">
+                  <div class="tbl-wrap">
                     <table class="table table-sm mb-0">
                       <tbody>
                         {Object.entries(inv.byStatus).map(([status, count]) => (

@@ -1,5 +1,3 @@
-import { h } from "preact";
-
 export interface TabItem {
   key: string;
   label: string;

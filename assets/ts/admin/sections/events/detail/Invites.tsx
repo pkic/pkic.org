@@ -1,11 +1,7 @@
-import { h, Fragment } from "preact";
 import { useState, useRef } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
-import { Spinner } from "../../../../components/Spinner";
-import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { Pager } from "../../../../components/Pager";
-import { useData } from "../../../../hooks/useData";
-import { usePageState } from "../../../../hooks/usePageState";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
+import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
 import type { AdminInviteEntry, InviteRecord } from "../../../types";
@@ -180,50 +176,32 @@ function InviteForm({ slug }: { slug: string }) {
 
 // ─── Invite list ──────────────────────────────────────────────────────────────
 
-interface InvitesResponse {
-  invites: InviteRecord[];
-  pagination: { offset: number; limit: number; total: number; hasMore: boolean };
-}
-
 function InviteList({ slug }: { slug: string }) {
-  const { offset, pageSize, resetPage, pagerProps } = usePageState();
-  const [search, setSearch] = useState("");
-  const [pendingSearch, setPendingSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("sent");
-
-  const { data, loading, error, reload } = useData<InvitesResponse>(() => {
-    const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
-    if (search) params.set("q", search);
-    if (statusFilter) params.set("status", statusFilter);
-    return api<InvitesResponse>(`/api/v1/admin/events/${slug}/invites?${params}`);
-  }, [slug, search, statusFilter, offset, pageSize]);
-
-  const invites = data?.invites ?? [];
-  const total = data?.pagination?.total ?? 0;
-  const hasMore = data?.pagination?.hasMore ?? false;
+  const tableRef = useRef<ApiTableActions | null>(null);
 
   async function handleRevoke(id: string) {
     if (!confirm("Revoke this invite?")) return;
     try {
       await api(`/api/v1/admin/events/${slug}/invites/${id}/revoke`, { method: "POST", body: "{}" });
       toast("Invite revoked", "success");
-      void reload();
+      tableRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     }
   }
 
   return (
-    <div>
-      <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
-        <input
-          type="search"
-          class="form-control form-control-sm adm-search-input"
-          placeholder="Search email / name…"
-          value={pendingSearch}
-          onInput={(e) => setPendingSearch((e.target as HTMLInputElement).value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { setSearch(pendingSearch); resetPage(); } }}
-        />
+    <ApiDataTable<InviteRecord>
+      endpoint={`/api/v1/admin/events/${slug}/invites`}
+      resolve={(d) => (d as { invites: InviteRecord[] }).invites}
+      resolvePage={(d) => (d as { pagination: { total: number; hasMore: boolean } }).pagination}
+      paginate
+      searchPlaceholder="Search email / name…"
+      params={statusFilter ? { status: statusFilter } : undefined}
+      actionsRef={tableRef}
+      deps={[slug, statusFilter]}
+      toolbar={({ resetPage }) => (
         <select class="form-select form-select-sm adm-filter-select" value={statusFilter} onChange={(e) => { setStatusFilter((e.target as HTMLSelectElement).value); resetPage(); }}>
           <option value="">All statuses</option>
           <option value="sent">Pending (sent)</option>
@@ -232,55 +210,20 @@ function InviteList({ slug }: { slug: string }) {
           <option value="expired">Expired</option>
           <option value="revoked">Revoked</option>
         </select>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void reload()}>↺ Refresh</button>
-      </div>
-
-      {loading ? <Spinner /> : error ? <ErrorAlert error={error} /> : (
-        <>
-          <div class="table-responsive">
-            <table class="table table-sm table-hover">
-              <thead>
-                <tr>
-                  <th>Email</th>
-                  <th>Name</th>
-                  <th>Status</th>
-                  <th>Type</th>
-                  <th>Sent by</th>
-                  <th>Sent</th>
-                  <th>Accepted</th>
-                  <th></th>
-                </tr>
-              </thead>
-              <tbody>
-                {invites.length === 0 ? (
-                  <tr><td colSpan={8} class="text-center text-muted fst-italic py-3">No invites found</td></tr>
-                ) : invites.map((inv) => {
-                  const name = [inv.invitee_first_name, inv.invitee_last_name].filter(Boolean).join(" ") || "—";
-                  const inviter = inv.inviter_email ?? inv.inviter_user_id ?? "—";
-                  return (
-                    <tr key={inv.id}>
-                      <td>{inv.invitee_email}</td>
-                      <td>{name}</td>
-                      <td><Badge status={inv.status} /></td>
-                      <td class="small text-muted">{inv.invite_type}</td>
-                      <td class="small text-muted">{inviter}</td>
-                      <td class="mono small">{fmt(inv.created_at)}</td>
-                      <td class="mono small">{inv.accepted_at ? fmt(inv.accepted_at) : "—"}</td>
-                      <td>
-                        {(inv.status === "sent" || inv.status === "pending") && (
-                          <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(inv.id)}>Revoke</button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          <Pager {...pagerProps(invites.length, total, hasMore)} />
-        </>
       )}
-    </div>
+      columns={[
+        { header: "Email", cell: (inv) => inv.invitee_email },
+        { header: "Name", cell: (inv) => [inv.invitee_first_name, inv.invitee_last_name].filter(Boolean).join(" ") || "—" },
+        { header: "Status", cell: (inv) => <Badge status={inv.status} /> },
+        { header: "Type", cell: (inv) => inv.invite_type, className: "small text-muted" },
+        { header: "Sent by", cell: (inv) => inv.inviter_email ?? inv.inviter_user_id ?? "—", className: "small text-muted" },
+        { header: "Sent", cell: (inv) => fmt(inv.created_at), className: "mono small" },
+        { header: "Accepted", cell: (inv) => inv.accepted_at ? fmt(inv.accepted_at) : "—", className: "mono small" },
+        { header: "", cell: (inv) => (inv.status === "sent" || inv.status === "pending") ? <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(inv.id)}>Revoke</button> : null },
+      ]}
+      empty="No invites found"
+      rowKey={(inv) => inv.id}
+    />
   );
 }
 
@@ -291,14 +234,14 @@ export function Invites({ slug }: { slug: string }) {
 
   return (
     <div>
-      <ul class="nav nav-tabs mb-3">
-        <li class="nav-item">
-          <button class={`nav-link${tab === "send" ? " active" : ""}`} onClick={() => setTab("send")}>Send Invites</button>
-        </li>
-        <li class="nav-item">
-          <button class={`nav-link${tab === "list" ? " active" : ""}`} onClick={() => setTab("list")}>Invite List</button>
-        </li>
-      </ul>
+      <Tabs
+        items={[
+          { key: "send", label: "Send Invites" },
+          { key: "list", label: "Invite List" },
+        ]}
+        active={tab}
+        onChange={(key) => setTab(key as "send" | "list")}
+      />
 
       {tab === "send" && <InviteForm slug={slug} />}
       {tab === "list" && <InviteList slug={slug} />}
