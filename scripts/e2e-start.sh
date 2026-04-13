@@ -23,6 +23,13 @@ APP_BASE_URL=http://127.0.0.1:8788
 EMAIL_BADGE_DELAY_SECONDS=0
 EOF
 
+# ── 0. Clean stale build artifacts ───────────────────────────────────────────
+# A previous `pnpm build` or `deploy:preview` may have left dist/ and
+# .wrangler/deploy/config.json targeting a different environment (e.g.
+# "production" or "preview"). Remove them so wrangler dev --env=local
+# can start cleanly without an environment mismatch error.
+rm -rf dist/ .wrangler/deploy/config.json
+
 # ── 1. Build static site ────────────────────────────────────────────────────
 node scripts/build-frontend.mjs --dev
 hugo -e development --cleanDestinationDir
