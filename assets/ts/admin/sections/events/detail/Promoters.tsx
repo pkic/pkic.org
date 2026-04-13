@@ -12,6 +12,9 @@ interface PromoterEntry {
   email: string;
   first_name: string | null;
   last_name: string | null;
+  organization: string | null;
+  job_title: string | null;
+  has_headshot: boolean;
   invites_sent: number;
   invites_accepted: number;
   invites_declined: number;
@@ -60,20 +63,38 @@ function impactColor(score: number): string {
   return "";
 }
 
+/** True if this person actually did something (sent invites or generated clicks). */
+function isActivePromoter(p: PromoterEntry): boolean {
+  return p.invites_sent > 0 || p.referral_clicks > 0;
+}
+
+/** True if this person brought in at least one registration. */
+function hasImpact(p: PromoterEntry): boolean {
+  return p.invites_accepted > 0 || p.referral_conversions > 0;
+}
+
 function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
   const name = [p.first_name, p.last_name].filter(Boolean).join(" ") || p.email;
+  const subtitle = [p.job_title, p.organization].filter(Boolean).join(" · ");
   const conversion = p.invite_conversion_rate ?? 0;
+  const headshotUrl = p.has_headshot ? `/api/v1/admin/users/${p.user_id}/headshot` : null;
+  const initials = [p.first_name?.[0], p.last_name?.[0]].filter(Boolean).join("").toUpperCase() || "?";
 
   return (
     <div class={`adm-promoter-card ${RANK_CARD[rank] ?? (rank <= 10 ? "top-ten" : "")}`}>
       <div class={`adm-promoter-rank ${rankTier(rank)}`}>
         {rank}
       </div>
+      {headshotUrl
+        ? <img class="adm-promoter-avatar" src={headshotUrl} alt={name} />
+        : <div class="adm-promoter-avatar adm-promoter-avatar-initials">{initials}</div>
+      }
       <div class="adm-promoter-info">
-        <div class="name">{name}</div>
-        {name !== p.email && <div class="email">{p.email}</div>}
+        <a href={`mailto:${p.email}`} class="name text-decoration-none" title={p.email}>{name}</a>
+        {subtitle && <div class="subtitle">{subtitle}</div>}
       </div>
-      <div class="adm-promoter-stats">
+
+      {p.invites_sent > 0 && (
         <div class="adm-promoter-group">
           <div class="adm-promoter-group-label">Invites</div>
           <div class="d-flex gap-3">
@@ -94,6 +115,9 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
             </div>
           </div>
         </div>
+      )}
+
+      {p.referral_clicks > 0 && (
         <div class="adm-promoter-group">
           <div class="adm-promoter-group-label">Referrals</div>
           <div class="d-flex gap-3">
@@ -107,11 +131,13 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
             </div>
           </div>
         </div>
-        <div class="adm-promoter-stat adm-promoter-impact">
-          <div class={`val fw-semibold ${impactColor(p.impact_score)}`}>{p.impact_score.toFixed(1)}</div>
-          <div class="lbl">Impact</div>
-        </div>
+      )}
+
+      <div class="adm-promoter-stat adm-promoter-impact">
+        <div class={`val fw-semibold ${impactColor(p.impact_score)}`}>{p.impact_score.toFixed(0)}</div>
+        <div class="lbl">Impact</div>
       </div>
+
       {(p.invites_declined > 0 || p.invites_expired > 0) && (
         <div class="d-flex gap-1 flex-shrink-0">
           {p.invites_declined > 0 && <Badge status="declined" label={`${p.invites_declined} declined`} />}
@@ -132,9 +158,13 @@ export function Promoters({ slug }: { slug: string }) {
   if (error) return <ErrorAlert error={error} />;
   if (!data) return null;
 
-  const { promoters, referralCodes } = data;
+  const { promoters: allPromoters, referralCodes } = data;
 
-  // Summary stats
+  // Only show people who actually promoted (sent invites or generated link clicks)
+  const promoters = allPromoters.filter(isActivePromoter);
+  const withImpact = promoters.filter(hasImpact).length;
+
+  // Summary stats (over active promoters)
   const totalSent = promoters.reduce((s, p) => s + p.invites_sent, 0);
   const totalAccepted = promoters.reduce((s, p) => s + p.invites_accepted, 0);
   const totalClicks = promoters.reduce((s, p) => s + p.referral_clicks, 0);
@@ -146,7 +176,8 @@ export function Promoters({ slug }: { slug: string }) {
         <div class="stat-grid mb-3">
           <div class="stat-card ok">
             <div class="val">{promoters.length}</div>
-            <div class="lbl">Promoters</div>
+            <div class="lbl">Active Promoters</div>
+            <div class="note">{withImpact} with registrations</div>
           </div>
           <div class="stat-card">
             <div class="val">{totalSent}</div>
@@ -154,23 +185,23 @@ export function Promoters({ slug }: { slug: string }) {
           </div>
           <div class="stat-card ok">
             <div class="val">{totalAccepted}</div>
-            <div class="lbl">Accepted</div>
+            <div class="lbl">Invite Accepted</div>
             {totalSent > 0 && <div class="note">{((totalAccepted / totalSent) * 100).toFixed(0)}% conversion</div>}
           </div>
           <div class="stat-card">
             <div class="val">{totalClicks}</div>
-            <div class="lbl">Referral Clicks</div>
+            <div class="lbl">Link Clicks</div>
           </div>
           <div class="stat-card ok">
             <div class="val">{totalConversions}</div>
-            <div class="lbl">Conversions</div>
+            <div class="lbl">Link Registrations</div>
           </div>
         </div>
       )}
 
       <Tabs
         items={[
-          { key: "promoters", label: `Top Promoters (${promoters.length})` },
+          { key: "promoters", label: `Active Promoters (${promoters.length})` },
           { key: "codes", label: `Referral Codes (${referralCodes.length})` },
         ]}
         active={tab}

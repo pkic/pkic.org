@@ -492,6 +492,25 @@ $adm-danger:    #dc3545;
     &.other   { background: #f8f9fa; color: #6c757d; border: 1px solid #dee2e6; }
   }
 
+  .adm-promoter-avatar {
+    width: 2.25rem;
+    height: 2.25rem;
+    border-radius: 50%;
+    flex-shrink: 0;
+    object-fit: cover;
+    border: 1px solid $adm-border;
+
+    &.adm-promoter-avatar-initials {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #e9ecef;
+      color: #6c757d;
+      font-weight: 700;
+      font-size: 0.75rem;
+    }
+  }
+
   .adm-promoter-card {
     background: $adm-surface;
     border: 1px solid $adm-border;
@@ -513,30 +532,21 @@ $adm-danger:    #dc3545;
   }
 
   .adm-promoter-info {
-    flex: 1;
     min-width: 0;
 
     .name {
       font-weight: 600;
       font-size: 0.9rem;
-      color: #212529;
+      color: $adm-green;
     }
 
-    .email {
+    .subtitle {
       font-size: 0.75rem;
       color: $adm-muted;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-  }
-
-  .adm-promoter-stats {
-    display: flex;
-    gap: 1.5rem;
-    align-items: center;
-    flex-shrink: 0;
-    flex-wrap: wrap;
   }
 
   .adm-promoter-group {
