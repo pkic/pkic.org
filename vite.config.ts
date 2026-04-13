@@ -46,7 +46,16 @@ function run(command: string, args: string[]): Promise<void> {
   });
 }
 
-async function buildHugoSite(isDev: boolean): Promise<void> {
+async function buildFrontendBundles(isDev: boolean): Promise<void> {
+  const args = isDev ? ["--dev"] : [];
+  await run("node", ["scripts/build-frontend.mjs", ...args]);
+}
+
+async function buildHugoSite(isDev: boolean, rebuildFrontend = true): Promise<void> {
+  // Frontend bundles must be built before Hugo so the asset manifest is ready.
+  if (rebuildFrontend) {
+    await buildFrontendBundles(isDev);
+  }
   const cloudflareEnv = process.env.CLOUDFLARE_ENV ?? "local";
 
   if (!isDev && cloudflareEnv !== "local") {
@@ -82,14 +91,26 @@ function isHugoSource(file: string): boolean {
     return false;
   }
 
+  // Exclude Vite-built frontend artifacts. These are written by buildFrontendBundles()
+  // which is called *inside* buildHugoSite(). Letting them trigger another rebuild
+  // would create an infinite loop: build → write files → watch fires → build again.
+  if (
+    relativePath.startsWith(`static${sep}js${sep}built`) ||
+    relativePath === `data${sep}asset-manifest.json`
+  ) {
+    return false;
+  }
+
   return hugoSourcePaths.some((sourcePath) => relativePath === sourcePath || relativePath.startsWith(`${sourcePath}${sep}`));
 }
 
 function hugoPlugin(): Plugin {
   let currentBuild: Promise<void> | null = null;
   let queuedBuild = false;
+  let pendingFrontendRebuild = false;
 
-  async function queueBuild(server?: ViteDevServer): Promise<void> {
+  async function queueBuild(server?: ViteDevServer, rebuildFrontend = false): Promise<void> {
+    if (rebuildFrontend) pendingFrontendRebuild = true;
     if (currentBuild) {
       queuedBuild = true;
       return currentBuild;
@@ -97,7 +118,9 @@ function hugoPlugin(): Plugin {
 
     do {
       queuedBuild = false;
-      currentBuild = buildHugoSite(Boolean(server));
+      const doFrontend = pendingFrontendRebuild;
+      pendingFrontendRebuild = false;
+      currentBuild = buildHugoSite(Boolean(server), doFrontend);
       try {
         await currentBuild;
       } finally {
@@ -134,8 +157,11 @@ function hugoPlugin(): Plugin {
           clearTimeout(reloadTimer);
         }
 
+        const relPath = relative(projectRoot, file);
+        const isTsFile = relPath.startsWith(`assets${sep}ts${sep}`);
+
         reloadTimer = setTimeout(() => {
-          void queueBuild(server).catch((error: unknown) => {
+          void queueBuild(server, isTsFile).catch((error: unknown) => {
             server.config.logger.error(error instanceof Error ? error.message : String(error));
           });
         }, 100);

@@ -997,6 +997,19 @@
 .event-flow-share-og-preview {
   // No padding — image fills the card top; overflow:hidden on parent clips corners.
   line-height: 0;
+  position: relative;
+}
+
+.event-flow-share-og-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  background: rgba(255, 255, 255, 0.85);
+  border-radius: 0.5rem;
+  z-index: 1;
 }
 
 .event-flow-share-og-img {

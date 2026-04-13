@@ -1,4 +1,4 @@
-import { wireHeadshotController } from "../shared/headshot-controller";
+import { wireHeadshotController } from "../shared/headshot/controller";
 import { setStatus } from "./boot";
 
 export function wireHeadshotSection(

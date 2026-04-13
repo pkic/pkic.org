@@ -24,7 +24,8 @@ EMAIL_BADGE_DELAY_SECONDS=0
 EOF
 
 # ── 1. Build static site ────────────────────────────────────────────────────
-hugo -e development
+node scripts/build-frontend.mjs --dev
+hugo -e development --cleanDestinationDir
 
 # ── 2. Seed a fresh database ────────────────────────────────────────────────
 printf 'y\n' | npx wrangler d1 migrations apply pkic-db-local --env local --local --persist-to="$STATE_DIR"

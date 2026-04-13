@@ -12,10 +12,13 @@
     "allowJs": false,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
   },
   "include": [
     "assets/ts/**/*.ts",
+    "assets/ts/**/*.tsx",
     "shared/constants/**/*.ts",
     "tests/frontend/**/*.ts"
   ]

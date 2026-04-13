@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { renderHeadshotPreview } from "../../assets/ts/shared/headshot-preview";
+import { renderHeadshotPreview } from "../../assets/ts/shared/headshot/preview";
 
 describe("renderHeadshotPreview", () => {
   it("applies the shared avatar container class when rendering an image", () => {

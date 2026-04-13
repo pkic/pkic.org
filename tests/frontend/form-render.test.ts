@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from "vitest";
-import { renderConsentInputs, readConsentValues } from "../../assets/ts/shared/render-consents";
-import { applyCustomFieldVisibility, renderCustomFields, readCustomFieldValues } from "../../assets/ts/shared/render-custom-fields";
-import { findFieldErrorTarget } from "../../assets/ts/shared/validation-map";
-import { installLiveValidation } from "../../assets/ts/shared/form-validation";
+import { renderConsentInputs, readConsentValues } from "../../assets/ts/shared/widgets/consents";
+import { renderCustomFields, readCustomFieldValues } from "../../assets/ts/shared/widgets/custom-fields";
+import { findFieldErrorTarget } from "../../assets/ts/shared/form/validation-map";
+import { installLiveValidation } from "../../assets/ts/shared/form/validation";
 
 describe("frontend field rendering", () => {
   it("renders display text for terms and serializes accepted consent values", () => {
@@ -109,7 +109,7 @@ describe("frontend field rendering", () => {
 
   it("hides conditional questions when attendance conditions are not met", () => {
     const host = document.createElement("div");
-    renderCustomFields(host, [
+    const controller = renderCustomFields(host, [
       {
         key: "dietary_restrictions",
         label: "Dietary restrictions",
@@ -127,14 +127,14 @@ describe("frontend field rendering", () => {
       throw new Error("expected rendered field");
     }
 
-    applyCustomFieldVisibility(host, {
+    controller.updateVisibility({
       dayAttendance: [{ attendanceType: "virtual" }],
       eventAttendanceType: "virtual",
     });
     expect(row.classList.contains("visually-hidden")).toBe(true);
     expect(field.disabled).toBe(true);
 
-    applyCustomFieldVisibility(host, {
+    controller.updateVisibility({
       dayAttendance: [{ attendanceType: "in_person" }],
       eventAttendanceType: "in_person",
     });

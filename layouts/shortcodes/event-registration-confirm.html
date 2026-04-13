@@ -15,6 +15,7 @@
   data-event-registration-confirm
   data-event-slug="{{ $eventSlug }}"
   data-event-page-path="{{ $eventPagePath }}"
+  data-module="event-flows/registration-confirm-page"
   data-api-base="/api/v1"
   data-success-title="{{ $successTitle }}"
   data-success-body="{{ $successBody }}"
@@ -49,5 +50,4 @@
 
   <p data-flow-status class="alert visually-hidden mt-3 mb-0" role="status" aria-live="polite"></p>
 </div>
-{{ partial "script.html" (dict "path" "ts/event-flows/registration-confirm-page.ts") }}
 
