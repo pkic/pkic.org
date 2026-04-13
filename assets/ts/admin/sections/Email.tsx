@@ -1,9 +1,9 @@
-import { h, Fragment } from "preact";
 import { useState, useEffect, useCallback } from "preact/hooks";
 import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { Pager, ADMIN_LIST_PAGE_SIZE_DEFAULT } from "../../components/Pager";
+import { Table } from "../../components/Table";
 import { api } from "../api";
 import { fmt, toast } from "../ui";
 import type { AdminEmailOutboxRow, AdminEmailOutboxResponse } from "../types";
@@ -439,22 +439,8 @@ export function Email() {
           <ErrorAlert error={error} />
         ) : (
           <>
-            <div class="table-responsive">
-              <table class="table table-sm table-hover align-middle">
-                <thead>
-                  <tr>
-                    <th></th>
-                    <th>Recipient</th>
-                    <th>Message</th>
-                    <th>Queue</th>
-                    <th>Timing</th>
-                    <th>Details</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ob.outbox.length === 0 ? (
-                    <tr><td colSpan={6} class="text-center text-muted fst-italic py-3">No outbox rows match the current filters</td></tr>
-                  ) : ob.outbox.map((row) => (
+            <Table heads={["", "Recipient", "Message", "Queue", "Timing", "Details"]} empty="No outbox rows match the current filters" className="align-middle">
+              {ob.outbox.length > 0 && ob.outbox.map((row) => (
                     <OutboxRow
                       key={row.id}
                       row={row}
@@ -462,9 +448,7 @@ export function Email() {
                       onToggle={toggleRow}
                     />
                   ))}
-                </tbody>
-              </table>
-            </div>
+            </Table>
             <Pager
               page={currentPage}
               hasMore={ob.page.hasMore}

@@ -1,11 +1,8 @@
-import { h } from "preact";
-import { useState } from "preact/hooks";
-import { Spinner } from "../../../../components/Spinner";
-import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { useState, useRef } from "preact/hooks";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
 import { api } from "../../../api";
 import { toast } from "../../../ui";
 import type { EventPermission } from "../../../types";
-import { useData } from "../../../../hooks/useData";
 
 const PERM_LABELS: Record<string, string> = {
   organizer: "Organizer",
@@ -15,10 +12,7 @@ const PERM_LABELS: Record<string, string> = {
 };
 
 export function Team({ slug }: { slug: string }) {
-  const { data, loading, error, reload } = useData<{ permissions: EventPermission[] }>(
-    () => api<{ permissions: EventPermission[] }>(`/api/v1/admin/events/${slug}/permissions`), [slug],
-  );
-  const perms = data?.permissions ?? [];
+  const tableRef = useRef<ApiTableActions | null>(null);
   const [newEmail, setNewEmail] = useState("");
   const [newPerm, setNewPerm] = useState("organizer");
   const [adding, setAdding] = useState(false);
@@ -29,7 +23,7 @@ export function Team({ slug }: { slug: string }) {
     try {
       await api(`/api/v1/admin/events/${slug}/permissions/${permId}`, { method: "DELETE" });
       toast("Permission revoked", "success");
-      void reload();
+      tableRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     }
@@ -48,7 +42,7 @@ export function Team({ slug }: { slug: string }) {
       toast("Permission added", "success");
       setNewEmail("");
       setAddStatus("");
-      void reload();
+      tableRef.current?.reload();
     } catch (e) {
       const msg = (e as Error).message;
       setAddStatus(msg);
@@ -80,36 +74,21 @@ export function Team({ slug }: { slug: string }) {
         </div>
       </div>
 
-      {loading ? <Spinner /> : error ? <ErrorAlert error={error} /> : (
-        <div class="table-responsive">
-          <table class="table table-sm table-hover">
-            <thead>
-              <tr>
-                <th>Email</th>
-                <th>Permission</th>
-                <th>Added by</th>
-                <th>Added</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {perms.length === 0 ? (
-                <tr><td colSpan={5} class="text-center text-muted fst-italic py-3">No team members</td></tr>
-              ) : perms.map((p) => (
-                <tr key={p.id}>
-                  <td>{p.user_email}</td>
-                  <td><span class="badge text-bg-secondary">{PERM_LABELS[p.permission] ?? p.permission}</span></td>
-                  <td class="small text-muted">{p.granter_email ?? "—"}</td>
-                  <td class="mono small">{p.created_at ? p.created_at.substring(0, 10) : "—"}</td>
-                  <td>
-                    <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(p.id)}>Revoke</button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <ApiDataTable<EventPermission>
+        endpoint={`/api/v1/admin/events/${slug}/permissions`}
+        resolve={(d) => (d as { permissions: EventPermission[] }).permissions}
+        actionsRef={tableRef}
+        deps={[slug]}
+        columns={[
+          { header: "Email", cell: (p) => p.user_email },
+          { header: "Permission", cell: (p) => <span class="badge text-bg-secondary">{PERM_LABELS[p.permission] ?? p.permission}</span> },
+          { header: "Added by", cell: (p) => p.granter_email ?? "—", className: "small text-muted" },
+          { header: "Added", cell: (p) => p.created_at ? p.created_at.substring(0, 10) : "—", className: "mono small" },
+          { header: "", cell: (p) => <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(p.id)}>Revoke</button> },
+        ]}
+        empty="No team members"
+        rowKey={(p) => p.id}
+      />
     </div>
   );
 }

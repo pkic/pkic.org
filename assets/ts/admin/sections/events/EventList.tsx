@@ -1,13 +1,10 @@
-import { h, Fragment } from "preact";
-import { useState } from "preact/hooks";
+import { useState, useRef } from "preact/hooks";
 import { Badge } from "../../../components/Badge";
-import { Spinner } from "../../../components/Spinner";
-import { ErrorAlert } from "../../../components/ErrorAlert";
+import { ApiDataTable, type ApiTableActions } from "../../../components/Table";
 import { api } from "../../api";
-import { fmt, toast } from "../../ui";
+import { toast } from "../../ui";
 import type { EventSummary } from "../../types";
 import { useHashLocation } from "wouter/use-hash-location";
-import { useData } from "../../../hooks/useData";
 
 // ────────────────────────────────────────────────────────
 // New event form
@@ -121,21 +118,15 @@ function NewEventForm({ onCreated, onCancel }: { onCreated: (slug: string) => vo
 // ────────────────────────────────────────────────────────
 
 export function EventList() {
-  const { data, loading, error, reload } = useData<{ events: EventSummary[] }>(
-    () => api<{ events: EventSummary[] }>("/api/v1/admin/events"), [],
-  );
-  const events = data?.events ?? [];
   const [showNewForm, setShowNewForm] = useState(false);
   const [, navigate] = useHashLocation();
+  const tableRef = useRef<ApiTableActions | null>(null);
 
   function handleCreated(slug: string) {
     setShowNewForm(false);
-    void reload();
+    tableRef.current?.reload();
     navigate(`/events/${encodeURIComponent(slug)}`);
   }
-
-  if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
 
   return (
     <div>
@@ -154,48 +145,22 @@ export function EventList() {
         </div>
       )}
 
-      <div class="table-responsive">
-        <table class="table table-sm table-hover">
-          <thead>
-            <tr>
-              <th>Event</th>
-              <th>Dates</th>
-              <th>Mode</th>
-              <th>Confirmed</th>
-              <th>Total</th>
-              <th>Pending</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            {events.length === 0 ? (
-              <tr><td colSpan={7} class="text-center text-muted fst-italic py-3">No events found</td></tr>
-            ) : events.map((e) => (
-              <tr key={e.slug}>
-                <td>
-                  <strong style="font-size:.85rem">{e.name}</strong><br />
-                  <span class="mono text-muted" style="font-size:.75rem">{e.slug}</span>
-                </td>
-                <td class="mono" style="white-space:nowrap;font-size:.75rem">
-                  {e.starts_at ? e.starts_at.substring(0, 10) : "—"}
-                </td>
-                <td><Badge status={e.registration_mode} /></td>
-                <td class="mono">{e.confirmed_registrations ?? 0}</td>
-                <td class="mono">{e.total_registrations ?? 0}</td>
-                <td class="mono">{e.pending_invites ?? 0}</td>
-                <td>
-                  <button
-                    class="btn btn-sm btn-outline-success"
-                    onClick={() => navigate(`/events/${encodeURIComponent(e.slug)}`)}
-                  >
-                    Manage →
-                  </button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ApiDataTable<EventSummary>
+        endpoint="/api/v1/admin/events"
+        resolve={(d) => (d as { events: EventSummary[] }).events}
+        actionsRef={tableRef}
+        columns={[
+          { header: "Event", cell: (e) => <><strong class="adm-cell-name">{e.name}</strong><br /><span class="mono text-muted small">{e.slug}</span></> },
+          { header: "Dates", cell: (e) => e.starts_at ? e.starts_at.substring(0, 10) : "—", className: "mono small text-nowrap" },
+          { header: "Mode", cell: (e) => <Badge status={e.registration_mode} /> },
+          { header: { label: "Confirmed", className: "text-end" }, cell: (e) => e.confirmed_registrations ?? 0, className: "mono text-end" },
+          { header: { label: "Total", className: "text-end" }, cell: (e) => e.total_registrations ?? 0, className: "mono text-end" },
+          { header: { label: "Pending", className: "text-end" }, cell: (e) => e.pending_invites ?? 0, className: "mono text-end" },
+          { header: "", cell: (e) => <button class="btn btn-sm btn-outline-success" onClick={() => navigate(`/events/${encodeURIComponent(e.slug)}`)}>Manage →</button> },
+        ]}
+        empty="No events found"
+        rowKey={(e) => e.slug}
+      />
     </div>
   );
 }

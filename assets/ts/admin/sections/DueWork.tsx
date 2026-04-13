@@ -1,9 +1,9 @@
-import { h, Fragment } from "preact";
 import { useState, useEffect, useCallback } from "preact/hooks";
 import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { Pager } from "../../components/Pager";
+import { DataTable } from "../../components/Table";
 import { api } from "../api";
 import { fmt, toast } from "../ui";
 import type { AdminDueWorkRow, AdminDueWorkTab, AdminEmailOutboxResponse, AdminJobsRunResponse, AdminReminderPreviewRow } from "../types";
@@ -139,45 +139,18 @@ function DueWorkTable({
         ))}
       </div>
       <div class="border rounded p-3">
-        <div class="table-responsive">
-          <table class="table table-sm table-hover align-middle">
-            <thead>
-              <tr>
-                <th>Type</th>
-                <th>Target</th>
-                <th>Context</th>
-                <th>Due</th>
-                <th>Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pagedRows.length === 0 ? (
-                <tr><td colSpan={5} class="text-center text-muted fst-italic py-3">{emptyMsg}</td></tr>
-              ) : pagedRows.map((row, i) => (
-                <tr key={i}>
-                  <td>
-                    <span class={`badge text-bg-${BUCKET_COLORS[row.bucket] ?? "secondary"}`}>{row.typeLabel}</span>
-                  </td>
-                  <td>
-                    <div class="fw-semibold">{row.title}</div>
-                    {row.subtitle && <div class="mono small text-muted">{row.subtitle}</div>}
-                  </td>
-                  <td>
-                    <div class="small">{row.context}</div>
-                    {row.detail && <div class="small text-muted mt-1">{row.detail}</div>}
-                  </td>
-                  <td class="small">{fmt(row.dueAt)}</td>
-                  <td>
-                    {row.bucket === "outbox"
-                      ? <Badge status={row.statusKey} />
-                      : <span class="badge text-bg-light border text-dark">{row.statusLabel}</span>
-                    }
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={[
+            { header: "Type", cell: (row) => <span class={`badge text-bg-${BUCKET_COLORS[row.bucket] ?? "secondary"}`}>{row.typeLabel}</span> },
+            { header: "Target", cell: (row) => <><div class="fw-semibold">{row.title}</div>{row.subtitle && <div class="mono small text-muted">{row.subtitle}</div>}</> },
+            { header: "Context", cell: (row) => <><div class="small">{row.context}</div>{row.detail && <div class="small text-muted mt-1">{row.detail}</div>}</> },
+            { header: "Due", cell: (row) => fmt(row.dueAt), className: "small" },
+            { header: "Status", cell: (row) => row.bucket === "outbox" ? <Badge status={row.statusKey} /> : <span class="badge text-bg-light border text-dark">{row.statusLabel}</span> },
+          ]}
+          data={pagedRows}
+          empty={emptyMsg}
+          className="align-middle"
+        />
         <Pager
           page={currentPage}
           hasMore={offset + pagedRows.length < filteredRows.length}
@@ -224,21 +197,19 @@ function JobRunSummary({ result, title, empty }: { result: AdminJobsRunResponse 
           <summary class="small fw-semibold">
             Cleanup candidates ({result.retention.preview.totalEvents})
           </summary>
-          <div class="mt-2 table-responsive">
-            <table class="table table-sm">
-              <thead><tr><th>Event</th><th>Ended</th><th>Retention</th><th>Regs</th><th>Users</th></tr></thead>
-              <tbody>
-                {result.retention.preview.dueEvents.slice(0, 5).map((item) => (
-                  <tr key={item.eventId}>
-                    <td><div class="fw-semibold">{item.eventName}</div><div class="small text-muted">{item.eventSlug}</div></td>
-                    <td class="small">{fmt(item.endsAt)}</td>
-                    <td class="small">{item.retentionDays} day(s)</td>
-                    <td class="small">{item.eligibleRegistrations}</td>
-                    <td class="small">{item.eligibleUsers}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div class="mt-2">
+            <DataTable
+              columns={[
+                { header: "Event", cell: (item) => <><div class="fw-semibold">{item.eventName}</div><div class="small text-muted">{item.eventSlug}</div></> },
+                { header: "Ended", cell: (item) => fmt(item.endsAt), className: "small" },
+                { header: { label: "Retention", className: "text-end" }, cell: (item) => `${item.retentionDays} day(s)`, className: "small text-end" },
+                { header: { label: "Regs", className: "text-end" }, cell: (item) => item.eligibleRegistrations, className: "small mono text-end" },
+                { header: { label: "Users", className: "text-end" }, cell: (item) => item.eligibleUsers, className: "small mono text-end" },
+              ]}
+              data={result.retention.preview.dueEvents.slice(0, 5)}
+              empty="No cleanup candidates"
+              rowKey={(item) => item.eventId}
+            />
           </div>
           {result.retention.preview.dueEvents.length > 5 && (
             <div class="small text-muted mt-2">{result.retention.preview.dueEvents.length - 5} more event(s) eligible for cleanup.</div>
@@ -248,22 +219,16 @@ function JobRunSummary({ result, title, empty }: { result: AdminJobsRunResponse 
       {reminderSections.map((section) => (
         <details key={section.title} class="mt-3">
           <summary class="small fw-semibold">{section.title} ({section.rows.length})</summary>
-          <div class="mt-2 table-responsive">
-            <table class="table table-sm">
-              <thead><tr><th>Recipient</th><th>Event / Template</th><th>Subject</th></tr></thead>
-              <tbody>
-                {section.rows.slice(0, 5).map((row, i) => (
-                  <tr key={i}>
-                    <td>
-                      <div class="fw-semibold">{row.recipientName || row.recipientEmail}</div>
-                      <div class="mono small text-muted">{row.recipientEmail}</div>
-                    </td>
-                    <td class="small">{[row.templateKey, `${row.eventName} (${row.eventSlug})`, `#${row.reminderNumber}`].filter(Boolean).join(" | ")}</td>
-                    <td class="small">{row.subject}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div class="mt-2">
+            <DataTable
+              columns={[
+                { header: "Recipient", cell: (row) => <><div class="fw-semibold">{row.recipientName || row.recipientEmail}</div><div class="mono small text-muted">{row.recipientEmail}</div></> },
+                { header: "Event / Template", cell: (row) => [row.templateKey, `${row.eventName} (${row.eventSlug})`, `#${row.reminderNumber}`].filter(Boolean).join(" | "), className: "small" },
+                { header: "Subject", cell: (row) => row.subject, className: "small" },
+              ]}
+              data={section.rows.slice(0, 5)}
+              empty="No candidates"
+            />
           </div>
           {section.rows.length > 5 && <div class="small text-muted mt-2">{section.rows.length - 5} more candidate(s).</div>}
         </details>

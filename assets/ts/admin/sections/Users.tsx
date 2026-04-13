@@ -1,10 +1,9 @@
-import { h, Fragment } from "preact";
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
-import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
+import { ApiDataTable, type ApiTableActions } from "../../components/Table";
 import { api } from "../api";
-import { authToken, authEmail as authEmailSignal } from "../state";
+import { authToken } from "../state";
 import { fmt, toast } from "../ui";
 import type { AdminUser } from "../types";
 import { wireHeadshotController, confirmHeadshotUsage } from "../../shared/headshot/controller";
@@ -235,37 +234,8 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
 // ────────────────────────────────────────────────────────
 
 function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<AdminUser[]>([]);
   const [roleFilter, setRoleFilter] = useState("");
-  const [searchQ, setSearchQ] = useState("");
-
-  const load = useCallback(async (role?: string, q?: string) => {
-    setLoading(true);
-    setError(null);
-    try {
-      const params = new URLSearchParams();
-      if (role) params.set("role", role);
-      if (q) params.set("search", q);
-      const data = await api<{ users: AdminUser[] }>(`/api/v1/admin/users${params.toString() ? `?${params}` : ""}`);
-      setUsers(data.users ?? []);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => { void load(); }, [load]);
-
-  function handleSearch() {
-    void load(roleFilter, searchQ);
-  }
-
-  function handleSearchKey(e: KeyboardEvent) {
-    if ((e as KeyboardEvent).key === "Enter") handleSearch();
-  }
+  const tableRef = useRef<ApiTableActions | null>(null);
 
   async function updateRole(userId: string, newRole: string, select: HTMLSelectElement) {
     const prev = select.dataset.currentRole ?? select.value;
@@ -279,93 +249,34 @@ function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
     }
   }
 
-  if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
-
   return (
-    <div>
-      <div class="mb-3 d-flex gap-2 flex-wrap align-items-end">
-        <div>
-          <label class="form-label small fw-semibold mb-1">Filter by role</label>
-          <select
-            class="form-select form-select-sm"
-            value={roleFilter}
-            onChange={(e) => {
-              const val = (e.target as HTMLSelectElement).value;
-              setRoleFilter(val);
-              void load(val, searchQ);
-            }}
-          >
-            <option value="">All</option>
-            <option value="admin">Admin</option>
-            <option value="user">User</option>
-            <option value="guest">Guest</option>
-          </select>
-        </div>
-        <div>
-          <label class="form-label small fw-semibold mb-1">Search</label>
-          <input
-            class="form-control form-control-sm"
-            type="search"
-            placeholder="email or name"
-            value={searchQ}
-            onInput={(e) => setSearchQ((e.target as HTMLInputElement).value)}
-            onKeyDown={handleSearchKey}
-          />
-        </div>
-        <button class="btn btn-sm btn-outline-secondary" onClick={handleSearch}>Search</button>
-      </div>
-
-      <div class="table-responsive">
-        <table class="table table-sm table-hover">
-          <thead>
-            <tr><th>Email</th><th>Name</th><th>Organisation</th><th>Role</th><th>Since</th><th></th></tr>
-          </thead>
-          <tbody>
-            {users.length === 0 ? (
-              <tr><td colSpan={6} class="text-center text-muted fst-italic py-3">No users found</td></tr>
-            ) : users.map((user) => {
-              const name = [user.first_name, user.last_name].filter(Boolean).join(" ") || "—";
-              return (
-                <tr key={user.id} class="adm-user-row" style="cursor:pointer" onClick={() => onViewUser(user.id)}>
-                  <td class="mono adm-user-email">
-                    <a
-                      href={`mailto:${user.email}`}
-                      class="text-decoration-none"
-                      onClick={(e) => e.stopPropagation()}
-                    >
-                      {user.email}
-                    </a>
-                  </td>
-                  <td class="fw-semibold">{name}</td>
-                  <td class="small text-muted">{user.organization_name ?? "—"}</td>
-                  <td>
-                    <span class={`badge text-bg-${ROLE_COLOR[user.role] ?? "secondary"}`}>{user.role}</span>
-                  </td>
-                  <td class="mono">{fmt(user.created_at)}</td>
-                  <td onClick={(e) => e.stopPropagation()}>
-                    <select
-                      class="form-select form-select-sm d-inline-block"
-                      style="width:auto"
-                      value={user.role}
-                      data-current-role={user.role}
-                      onChange={(e) => {
-                        e.stopPropagation();
-                        void updateRole(user.id, (e.target as HTMLSelectElement).value, e.target as HTMLSelectElement);
-                      }}
-                    >
-                      <option value="admin">admin</option>
-                      <option value="user">user</option>
-                      <option value="guest">guest</option>
-                    </select>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </div>
+    <ApiDataTable<AdminUser>
+      endpoint="/api/v1/admin/users"
+      resolve={(d) => (d as { users: AdminUser[] }).users}
+      actionsRef={tableRef}
+      searchPlaceholder="email or name"
+      params={roleFilter ? { role: roleFilter } : {}}
+      toolbar={() => (
+        <select class="form-select form-select-sm w-auto" value={roleFilter} onChange={(e) => setRoleFilter((e.target as HTMLSelectElement).value)}>
+          <option value="">All roles</option>
+          <option value="admin">Admin</option>
+          <option value="user">User</option>
+          <option value="guest">Guest</option>
+        </select>
+      )}
+      columns={[
+        { header: "Email", cell: (user) => <a href={`mailto:${user.email}`} class="text-decoration-none" onClick={(e) => e.stopPropagation()}>{user.email}</a>, className: "mono adm-user-email" },
+        { header: "Name", cell: (user) => [user.first_name, user.last_name].filter(Boolean).join(" ") || "—", className: "fw-semibold" },
+        { header: "Organisation", cell: (user) => user.organization_name ?? "—", className: "small text-muted" },
+        { header: "Role", cell: (user) => <span class={`badge text-bg-${ROLE_COLOR[user.role] ?? "secondary"}`}>{user.role}</span> },
+        { header: "Since", cell: (user) => fmt(user.created_at), className: "mono" },
+        { header: "", cell: (user) => <div onClick={(e) => e.stopPropagation()}><select class="form-select form-select-sm d-inline-block adm-user-role-select" value={user.role} data-current-role={user.role} onChange={(e) => { e.stopPropagation(); void updateRole(user.id, (e.target as HTMLSelectElement).value, e.target as HTMLSelectElement); }}><option value="admin">admin</option><option value="user">user</option><option value="guest">guest</option></select></div> },
+      ]}
+      empty="No users found"
+      rowKey={(user) => user.id}
+      rowClass={() => "adm-user-row"}
+      onRowClick={(user) => onViewUser(user.id)}
+    />
   );
 }
 

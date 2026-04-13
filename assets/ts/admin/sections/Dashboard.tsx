@@ -1,7 +1,7 @@
-import { h } from "preact";
 import { StatCard } from "../../components/StatCard";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
+import { DataTable } from "../../components/Table";
 import { api } from "../api";
 import { fmtMoney, statusBars, svgLineChart } from "../charts";
 import type { StatsResponse } from "../types";
@@ -75,29 +75,16 @@ export function Dashboard() {
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
               <h6 class="text-uppercase small fw-bold text-muted mb-3">Top Events</h6>
-              <div class="table-responsive">
-                <table class="table table-sm">
-                  <thead><tr><th>Event</th><th>Conf.</th><th>Total</th></tr></thead>
-                  <tbody>
-                    {stats.topEvents.length === 0 ? (
-                      <tr><td colSpan={3} class="text-muted fst-italic text-center">No events</td></tr>
-                    ) : stats.topEvents.map((e) => (
-                      <tr key={e.slug}>
-                        <td>
-                          <button
-                            class="btn btn-link p-0 small text-start"
-                            onClick={() => navigate(`/events/${encodeURIComponent(e.slug)}`)}
-                          >
-                            {e.name}
-                          </button>
-                        </td>
-                        <td>{e.confirmed}</td>
-                        <td>{e.total}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <DataTable
+                columns={[
+                  { header: "Event", cell: (e) => <button class="btn btn-link p-0 small text-start" onClick={() => navigate(`/events/${encodeURIComponent(e.slug)}`)}>{e.name}</button> },
+                  { header: { label: "Conf.", className: "text-end" }, cell: (e) => e.confirmed, className: "mono text-end" },
+                  { header: { label: "Total", className: "text-end" }, cell: (e) => e.total, className: "mono text-end" },
+                ]}
+                data={stats.topEvents}
+                empty="No events"
+                rowKey={(e) => e.slug}
+              />
             </div>
           </div>
         </div>

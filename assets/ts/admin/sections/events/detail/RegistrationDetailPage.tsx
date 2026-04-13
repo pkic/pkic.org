@@ -1,9 +1,9 @@
-import { h, Fragment } from "preact";
 import { useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { DataTable } from "../../../../components/Table";
 import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
 import type { Registration, AdminEventDay, BadgeRoleInfo } from "../../../types";
@@ -23,20 +23,16 @@ function attendanceTypeLabel(t: string): string {
 function DayAttendanceTable({ dayAttendance }: { dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }> }) {
   if (!dayAttendance.length) return <p class="small text-muted fst-italic mb-0">No day attendance records.</p>;
   return (
-    <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0">
-        <thead><tr><th>Date</th><th>Day</th><th>Attendance</th></tr></thead>
-        <tbody>
-          {dayAttendance.map((d) => (
-            <tr key={d.dayDate}>
-              <td class="mono small">{d.dayDate}</td>
-              <td class="small">{d.label ?? "—"}</td>
-              <td><span class={`badge text-bg-${d.attendanceType === "in_person" ? "success" : d.attendanceType === "virtual" ? "info" : "secondary"}`}>{attendanceTypeLabel(d.attendanceType)}</span></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={[
+        { header: "Date", cell: (d) => d.dayDate, className: "mono small" },
+        { header: "Day", cell: (d) => d.label ?? "—", className: "small" },
+        { header: "Attendance", cell: (d) => <span class={`badge text-bg-${d.attendanceType === "in_person" ? "success" : d.attendanceType === "virtual" ? "info" : "secondary"}`}>{attendanceTypeLabel(d.attendanceType)}</span> },
+      ]}
+      data={dayAttendance}
+      className="align-middle"
+      rowKey={(d) => d.dayDate}
+    />
   );
 }
 
@@ -46,21 +42,17 @@ function DayWaitlistTable({ dayWaitlist }: { dayWaitlist: Array<{ dayDate: strin
   if (!dayWaitlist.length) return <p class="small text-muted fst-italic mb-0">No waitlist entries.</p>;
   const statusColour: Record<string, string> = { waiting: "warning", offered: "info", accepted: "success", expired: "secondary" };
   return (
-    <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0">
-        <thead><tr><th>Date</th><th>Status</th><th>Priority</th><th>Offer expires</th></tr></thead>
-        <tbody>
-          {dayWaitlist.map((w) => (
-            <tr key={w.dayDate}>
-              <td class="mono small">{w.dayDate}</td>
-              <td><span class={`badge text-bg-${statusColour[w.status] ?? "secondary"}`}>{w.status}</span></td>
-              <td class="small">{w.priorityLane}</td>
-              <td class="mono small">{w.offerExpiresAt ? fmt(w.offerExpiresAt) : "—"}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={[
+        { header: "Date", cell: (w) => w.dayDate, className: "mono small" },
+        { header: "Status", cell: (w) => <span class={`badge text-bg-${statusColour[w.status] ?? "secondary"}`}>{w.status}</span> },
+        { header: "Priority", cell: (w) => w.priorityLane, className: "small" },
+        { header: "Offer expires", cell: (w) => w.offerExpiresAt ? fmt(w.offerExpiresAt) : "—", className: "mono small" },
+      ]}
+      data={dayWaitlist}
+      className="align-middle"
+      rowKey={(w) => w.dayDate}
+    />
   );
 }
 
@@ -134,28 +126,16 @@ function AuditLogSection({ slug, regId }: { slug: string; regId: string }) {
   if (!entries?.length) return <p class="small text-body-secondary mb-0">No audit log entries.</p>;
 
   return (
-    <div class="table-responsive">
-      <table class="table table-sm align-middle mb-0">
-        <thead><tr><th>When</th><th>Actor</th><th>Action</th><th>Details</th></tr></thead>
-        <tbody>
-          {entries.map((entry, i) => {
-            const ts = new Date(entry.created_at).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "medium" });
-            const actor = entry.actor_type === "system" ? <span class="text-muted">System</span>
-              : entry.actor_display ? <>{entry.actor_display}</>
-              : entry.actor_id ? <span class="text-muted small">{entry.actor_id}</span>
-              : <span class="text-muted">{entry.actor_type}</span>;
-            return (
-              <tr key={i}>
-                <td class="text-nowrap small text-muted">{ts}</td>
-                <td class="small">{actor}</td>
-                <td><code class="small">{entry.action}</code></td>
-                <td>{entry.details ? <pre class="mb-0 small text-body-secondary">{JSON.stringify(entry.details, null, 2)}</pre> : null}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+    <DataTable
+      columns={[
+        { header: "When", cell: (entry) => new Date(entry.created_at).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "medium" }), className: "text-nowrap small text-muted" },
+        { header: "Actor", cell: (entry) => { const actor = entry.actor_type === "system" ? <span class="text-muted">System</span> : entry.actor_display ? <>{entry.actor_display}</> : entry.actor_id ? <span class="text-muted small">{entry.actor_id}</span> : <span class="text-muted">{entry.actor_type}</span>; return actor; }, className: "small" },
+        { header: "Action", cell: (entry) => <code class="small">{entry.action}</code> },
+        { header: "Details", cell: (entry) => entry.details ? <pre class="mb-0 small text-body-secondary">{JSON.stringify(entry.details, null, 2)}</pre> : null },
+      ]}
+      data={entries}
+      className="align-middle"
+    />
   );
 }
 

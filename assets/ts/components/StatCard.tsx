@@ -1,5 +1,3 @@
-import { h } from "preact";
-
 interface StatCardProps {
   label: string;
   value: number | string;

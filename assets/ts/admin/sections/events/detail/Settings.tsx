@@ -1,10 +1,12 @@
-import { h, Fragment } from "preact";
 import { useState, useEffect, useCallback } from "preact/hooks";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { DataTable } from "../../../../components/Table";
+import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { toast } from "../../../ui";
 import type { EventDetail, AdminEventDay, AdminAttendanceOption, AdminEventTerm, AdminEventFormSummary } from "../../../types";
+import { Team } from "./Team";
 
 // ─── General tab ────────────────────────────────────────────────────────────
 
@@ -347,30 +349,17 @@ function TermsTab({ slug }: { slug: string }) {
       <div class="d-flex justify-content-end mb-2">
         <button class="btn btn-sm btn-outline-secondary" onClick={() => void load()}>↺ Refresh</button>
       </div>
-      <div class="table-responsive">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>Key</th>
-              <th>Version</th>
-              <th>Required</th>
-              <th>Display text</th>
-            </tr>
-          </thead>
-          <tbody>
-            {terms.length === 0 ? (
-              <tr><td colSpan={4} class="text-center text-muted fst-italic py-3">No terms configured</td></tr>
-            ) : terms.map((t) => (
-              <tr key={t.id}>
-                <td class="mono small">{t.term_key}</td>
-                <td class="mono small">{t.version}</td>
-                <td>{t.required ? "Yes" : "No"}</td>
-                <td class="small">{t.display_text ?? "—"}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={[
+          { header: "Key", cell: (t) => t.term_key, className: "mono small" },
+          { header: "Version", cell: (t) => t.version, className: "mono small" },
+          { header: "Required", cell: (t) => t.required ? "Yes" : "No" },
+          { header: "Display text", cell: (t) => t.display_text ?? "—", className: "small" },
+        ]}
+        data={terms}
+        empty="No terms configured"
+        rowKey={(t) => t.id}
+      />
     </div>
   );
 }
@@ -405,41 +394,26 @@ function FormsTab({ slug }: { slug: string }) {
       <div class="d-flex justify-content-end mb-2">
         <button class="btn btn-sm btn-outline-secondary" onClick={() => void load()}>↺ Refresh</button>
       </div>
-      <div class="table-responsive">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>Key</th>
-              <th>Purpose</th>
-              <th>Status</th>
-              <th>Fields</th>
-              <th>Submissions</th>
-              <th>Title</th>
-            </tr>
-          </thead>
-          <tbody>
-            {forms.length === 0 ? (
-              <tr><td colSpan={6} class="text-center text-muted fst-italic py-3">No forms configured</td></tr>
-            ) : forms.map((f) => (
-              <tr key={f.id}>
-                <td class="mono small">{f.key}</td>
-                <td class="small">{f.purpose}</td>
-                <td><span class="badge text-bg-secondary">{f.status}</span></td>
-                <td class="mono">{f.field_count}</td>
-                <td class="mono">{f.submission_count}</td>
-                <td class="small">{f.title}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataTable
+        columns={[
+          { header: "Key", cell: (f) => f.key, className: "mono small" },
+          { header: "Purpose", cell: (f) => f.purpose, className: "small" },
+          { header: "Status", cell: (f) => <span class="badge text-bg-secondary">{f.status}</span> },
+          { header: { label: "Fields", className: "text-end" }, cell: (f) => f.field_count, className: "mono text-end" },
+          { header: { label: "Submissions", className: "text-end" }, cell: (f) => f.submission_count, className: "mono text-end" },
+          { header: "Title", cell: (f) => f.title, className: "small" },
+        ]}
+        data={forms}
+        empty="No forms configured"
+        rowKey={(f) => f.id}
+      />
     </div>
   );
 }
 
 // ─── Settings compositor ─────────────────────────────────────────────────────
 
-type SettingsTab = "general" | "days" | "terms" | "forms";
+type SettingsTab = "general" | "days" | "terms" | "forms" | "team";
 
 export function Settings({ event, onUpdated }: { event: EventDetail; onUpdated: (d: EventDetail) => void }) {
   const [tab, setTab] = useState<SettingsTab>("general");
@@ -449,22 +423,18 @@ export function Settings({ event, onUpdated }: { event: EventDetail; onUpdated: 
     { key: "days", label: "Days" },
     { key: "terms", label: "Terms" },
     { key: "forms", label: "Forms" },
+    { key: "team", label: "Team" },
   ];
 
   return (
     <div>
-      <ul class="nav nav-tabs mb-3">
-        {tabs.map((t) => (
-          <li key={t.key} class="nav-item">
-            <button class={`nav-link${tab === t.key ? " active" : ""}`} onClick={() => setTab(t.key)}>{t.label}</button>
-          </li>
-        ))}
-      </ul>
+      <Tabs items={tabs} active={tab} onChange={(key) => setTab(key as SettingsTab)} />
 
       {tab === "general" && <GeneralTab event={event} onUpdated={onUpdated} />}
       {tab === "days" && <DaysTab slug={event.slug} timezone={event.timezone} />}
       {tab === "terms" && <TermsTab slug={event.slug} />}
       {tab === "forms" && <FormsTab slug={event.slug} />}
+      {tab === "team" && <Team slug={event.slug} />}
     </div>
   );
 }

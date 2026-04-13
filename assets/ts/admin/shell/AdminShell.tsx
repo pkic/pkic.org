@@ -1,4 +1,3 @@
-import { h } from "preact";
 import { useEffect } from "preact/hooks";
 import { Router, Route, Switch } from "wouter";
 import { useHashLocation } from "wouter/use-hash-location";

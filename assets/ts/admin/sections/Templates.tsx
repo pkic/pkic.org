@@ -1,8 +1,9 @@
-import { h, Fragment } from "preact";
 import { useState, useEffect, useCallback, useRef } from "preact/hooks";
 import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
+import { DataTable } from "../../components/Table";
+import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
 import { esc, toast } from "../ui";
 import type { EmailTemplateVersion } from "../types";
@@ -122,7 +123,6 @@ function TemplateEditor({
   function insertSnippet(snippet: string, preferredTarget?: "subject" | "body" | null) {
     const target = preferredTarget ?? editorFocusRef.current;
     if (target === "subject") {
-      const pos = subject.length;
       setSubject((s) => s + snippet);
       editorFocusRef.current = "subject";
     } else {
@@ -350,22 +350,12 @@ function TemplateEditor({
                     <div class="small text-muted">Subject</div>
                     <div class="fw-semibold">{previewSubject}</div>
                   </div>
-                  <ul class="nav nav-tabs mb-2">
-                    <li class="nav-item">
-                      <button
-                        class={`nav-link${previewTab === "html" ? " active" : ""}`}
-                        type="button"
-                        onClick={() => setPreviewTab("html")}
-                      >HTML</button>
-                    </li>
-                    <li class="nav-item">
-                      <button
-                        class={`nav-link${previewTab === "text" ? " active" : ""}`}
-                        type="button"
-                        onClick={() => setPreviewTab("text")}
-                      >Text</button>
-                    </li>
-                  </ul>
+                  <Tabs
+                    items={[{ key: "html", label: "HTML" }, { key: "text", label: "Text" }]}
+                    active={previewTab}
+                    onChange={(key) => setPreviewTab(key as "html" | "text")}
+                    className="mb-2"
+                  />
                   {previewTab === "html"
                     ? <iframe ref={iframeRef} sandbox="" class="adm-template-preview-frame" />
                     : <pre class="json-out adm-template-preview-text">{previewText}</pre>
@@ -382,32 +372,18 @@ function TemplateEditor({
       <div class="card border-0 shadow-sm mt-3">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-2">Version History</h6>
-          <div class="table-responsive">
-            <table class="table table-sm">
-              <thead>
-                <tr><th>Version</th><th>Status</th><th>Checksum</th><th>Created</th><th></th></tr>
-              </thead>
-              <tbody>
-                {versions.length === 0 ? (
-                  <tr><td colSpan={5} class="text-center text-muted fst-italic">No versions yet</td></tr>
-                ) : versions.map((v) => (
-                  <tr key={v.id}>
-                    <td class="mono">v{v.version}</td>
-                    <td><Badge status={v.status} /></td>
-                    <td class="mono adm-template-checksum">{v.checksum_sha256.substring(0, 12)}…</td>
-                    <td class="mono">{v.created_at ? new Date(v.created_at).toLocaleString("en-GB") : "—"}</td>
-                    <td class="text-nowrap">
-                      {v.status !== "active"
-                        ? <button class="btn btn-sm btn-outline-success me-1" onClick={() => void doActivate(v.version)}>Activate</button>
-                        : <span class="badge text-bg-success me-1">In use</span>
-                      }
-                      <button class="btn btn-sm btn-outline-secondary" onClick={() => loadVersion(v)}>Load</button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <DataTable
+            columns={[
+              { header: "Version", cell: (v) => `v${v.version}`, className: "mono" },
+              { header: "Status", cell: (v) => <Badge status={v.status} /> },
+              { header: "Checksum", cell: (v) => <>{v.checksum_sha256.substring(0, 12)}…</>, className: "mono adm-template-checksum" },
+              { header: "Created", cell: (v) => v.created_at ? new Date(v.created_at).toLocaleString("en-GB") : "—", className: "mono" },
+              { header: "", cell: (v) => <>{v.status !== "active" ? <button class="btn btn-sm btn-outline-success me-1" onClick={() => void doActivate(v.version)}>Activate</button> : <span class="badge text-bg-success me-1">In use</span>}<button class="btn btn-sm btn-outline-secondary" onClick={() => loadVersion(v)}>Load</button></>, className: "text-nowrap" },
+            ]}
+            data={versions}
+            empty="No versions yet"
+            rowKey={(v) => v.id}
+          />
         </div>
       </div>
     </div>
@@ -614,38 +590,18 @@ export function Templates() {
           + New Template
         </button>
       </div>
-      <div class="table-responsive">
-      <table class="table table-sm table-hover">
-        <thead>
-          <tr><th>Template Key</th><th>Active</th><th>Status</th><th>Versions</th><th></th></tr>
-        </thead>
-        <tbody>
-          {entries.map(([key, versions]) => {
-            const activeVersion = versions.find((v) => v.status === "active");
-            const hasDraft = versions.some((v) => v.status === "draft");
-            return (
-              <tr key={key}>
-                <td class="mono adm-template-key">{key}</td>
-                <td class="mono">{activeVersion ? `v${activeVersion.version}` : "—"}</td>
-                <td>
-                  <Badge status={activeVersion ? "active" : "draft"} />
-                  {hasDraft && activeVersion && <span class="badge text-bg-warning ms-1">draft pending</span>}
-                </td>
-                <td class="mono">{versions.length}</td>
-                <td>
-                  <button
-                    class="btn btn-sm btn-outline-success"
-                    onClick={() => setView({ key, versions })}
-                  >
-                    Edit →
-                  </button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
+      <DataTable
+        columns={[
+          { header: "Template Key", cell: (e) => e[0], className: "mono adm-template-key" },
+          { header: "Active", cell: (e) => { const av = e[1].find((v) => v.status === "active"); return av ? `v${av.version}` : "—"; }, className: "mono" },
+          { header: "Status", cell: (e) => { const av = e[1].find((v) => v.status === "active"); const hasDraft = e[1].some((v) => v.status === "draft"); return <><Badge status={av ? "active" : "draft"} />{hasDraft && av && <span class="badge text-bg-warning ms-1">draft pending</span>}</>; } },
+          { header: "Versions", cell: (e) => e[1].length, className: "mono" },
+          { header: "", cell: (e) => <button class="btn btn-sm btn-outline-success" onClick={() => setView({ key: e[0], versions: e[1] })}>Edit →</button> },
+        ]}
+        data={entries}
+        empty="No templates"
+        rowKey={(e) => e[0]}
+      />
     </div>
   );
 }

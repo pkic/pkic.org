@@ -1,8 +1,6 @@
-import { h } from "preact";
-import { useEffect, useRef } from "preact/hooks";
+import { useEffect } from "preact/hooks";
 
 export function Topbar() {
-  const backdropRef = useRef<HTMLDivElement | null>(null);
 
   function toggleSidebar() {
     const sidebar = document.getElementById("admin-sidebar");

@@ -389,6 +389,8 @@ $adm-danger:    #dc3545;
     table { margin: 0; min-width: 500px; }
   }
 
+  .tbl-row-link { cursor: pointer; }
+
   // ── Code / JSON output ──────────────────────────────────────────────────────
 
   .mono {
@@ -440,6 +442,171 @@ $adm-danger:    #dc3545;
   .adm-cell-name       { font-size: 0.85rem; }
   .adm-flex-1          { flex: 1; }
   .adm-snippet-disabled { opacity: 0.4; }
+
+  // ── Pagination ──────────────────────────────────────────────────────────────
+
+  .adm-pager {
+    padding: 0.5rem 0;
+    border-top: 1px solid #e9ecef;
+
+    .pagination {
+      .page-link {
+        min-width: 2rem;
+        text-align: center;
+      }
+
+      .page-item.active .page-link {
+        background-color: $adm-green;
+        border-color: $adm-green;
+      }
+    }
+  }
+
+  .adm-pager-range {
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+  }
+
+  .adm-pager-size {
+    width: auto;
+    font-size: 0.75rem;
+  }
+
+  // ── Promoters leaderboard ──────────────────────────────────────────────────
+
+  .adm-promoter-rank {
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 0.85rem;
+    flex-shrink: 0;
+
+    &.gold    { background: #fff3cd; color: #997404; border: 2px solid #ffc107; }
+    &.silver  { background: #e9ecef; color: #495057; border: 2px solid #adb5bd; }
+    &.bronze  { background: #fde8d0; color: #984c0c; border: 2px solid #fd7e14; }
+    &.top-ten { background: #f0f7f4; color: #0f5132; border: 2px solid #badbcc; }
+    &.other   { background: #f8f9fa; color: #6c757d; border: 1px solid #dee2e6; }
+  }
+
+  .adm-promoter-card {
+    background: $adm-surface;
+    border: 1px solid $adm-border;
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    transition: box-shadow 0.15s, border-color 0.15s;
+
+    &:hover {
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+    }
+
+    &.top-1   { border-left: 3px solid #ffc107; }
+    &.top-2   { border-left: 3px solid #adb5bd; }
+    &.top-3   { border-left: 3px solid #fd7e14; }
+    &.top-ten { border-left: 3px solid #badbcc; }
+  }
+
+  .adm-promoter-info {
+    flex: 1;
+    min-width: 0;
+
+    .name {
+      font-weight: 600;
+      font-size: 0.9rem;
+      color: #212529;
+    }
+
+    .email {
+      font-size: 0.75rem;
+      color: $adm-muted;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+  }
+
+  .adm-promoter-stats {
+    display: flex;
+    gap: 1.5rem;
+    align-items: center;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+
+  .adm-promoter-group {
+    border-left: 2px solid #e9ecef;
+    padding-left: 0.75rem;
+  }
+
+  .adm-promoter-group-label {
+    font-size: 0.6rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #adb5bd;
+    margin-bottom: 0.2rem;
+  }
+
+  .adm-promoter-impact {
+    border-left: 2px solid #e9ecef;
+    padding-left: 0.75rem;
+  }
+
+  .adm-promoter-stat {
+    text-align: center;
+
+    .val {
+      font-size: 1.1rem;
+      font-weight: 700;
+      line-height: 1;
+      color: #212529;
+    }
+
+    .lbl {
+      font-size: 0.65rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+      color: $adm-muted;
+      margin-top: 0.15rem;
+    }
+  }
+
+  .adm-promoter-conversion {
+    width: 80px;
+    height: 6px;
+    background: #e9ecef;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-top: 0.25rem;
+
+    .fill {
+      height: 100%;
+      border-radius: 3px;
+      background: $adm-danger;
+      transition: width 0.4s ease;
+    }
+
+    &.mid .fill  { background: #ffc107; }
+    &.high .fill { background: $adm-green; }
+  }
+
+  .adm-referral-code {
+    font-family: 'Courier New', monospace;
+    font-size: 0.82rem;
+    padding: 0.15rem 0.5rem;
+    background: #f0f7f4;
+    border: 1px solid #c3e6cb;
+    border-radius: 0.25rem;
+    color: #155724;
+    letter-spacing: 0.03em;
+  }
 
   // ── Email preview (shared by EventEmail, Invites, Templates) ────────────────
 

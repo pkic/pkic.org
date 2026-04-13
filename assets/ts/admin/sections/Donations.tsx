@@ -1,4 +1,3 @@
-import { h } from "preact";
 import { useState, useEffect, useCallback } from "preact/hooks";
 import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";
@@ -55,6 +54,8 @@ interface PromoterRow {
   name: string | null;
   checkout_session_id: string | null;
   clicks: number;
+  own_gross: number;
+  own_currency: string | null;
   attributed_total: number;
   attributed_completed: number;
   attributed_gross: number;
@@ -166,6 +167,71 @@ function DonationTableRow({ d, onSync }: { d: DonationRow; onSync: (sessionId: s
   );
 }
 
+const RANK_CLASS: Record<number, string> = { 1: "gold", 2: "silver", 3: "bronze" };
+const RANK_CARD: Record<number, string> = { 1: "top-1", 2: "top-2", 3: "top-3" };
+
+function rankTier(rank: number): string {
+  if (rank <= 3) return RANK_CLASS[rank];
+  if (rank <= 10) return "top-ten";
+  return "other";
+}
+
+function DonorPromoterCard({ p, rank }: { p: PromoterRow; rank: number }) {
+  const ownAmt = p.own_gross > 0 && p.own_currency ? fmtAmount(p.own_gross, p.own_currency) : null;
+  const refAmt = p.attributed_gross > 0 && p.currency ? fmtAmount(p.attributed_gross, p.currency) : null;
+  const totalGross = p.own_gross + p.attributed_gross;
+  const totalCurrency = p.own_currency ?? p.currency;
+  const totalAmt = totalGross > 0 && totalCurrency ? fmtAmount(totalGross, totalCurrency) : "—";
+  const appBase = window.location.origin;
+
+  return (
+    <div class={`adm-promoter-card ${RANK_CARD[rank] ?? (rank <= 10 ? "top-ten" : "")}`}>
+      <div class={`adm-promoter-rank ${rankTier(rank)}`}>
+        {rank}
+      </div>
+      <div class="adm-promoter-info">
+        <div class="name">{p.name ?? <span class="fst-italic text-muted">anonymous</span>}</div>
+        <a href={`${appBase}/donate/r/${p.code}`} target="_blank" rel="noopener" class="email mono">/donate/r/{p.code}</a>
+      </div>
+      <div class="adm-promoter-stats">
+        <div class="adm-promoter-group">
+          <div class="adm-promoter-group-label">Own Donation</div>
+          <div class="d-flex gap-3">
+            <div class="adm-promoter-stat">
+              <div class={`val ${ownAmt ? "text-success" : "text-muted"}`}>{ownAmt ?? "—"}</div>
+              <div class="lbl">Amount</div>
+            </div>
+          </div>
+        </div>
+        <div class="adm-promoter-group">
+          <div class="adm-promoter-group-label">Referrals</div>
+          <div class="d-flex gap-3">
+            <div class="adm-promoter-stat">
+              <div class="val">{p.clicks}</div>
+              <div class="lbl">Clicks</div>
+            </div>
+            <div class="adm-promoter-stat">
+              <div class="val text-success">{p.attributed_completed}</div>
+              <div class="lbl">Donated</div>
+              {p.attributed_total > p.attributed_completed && (
+                <div class="small text-muted">of {p.attributed_total}</div>
+              )}
+            </div>
+            <div class="adm-promoter-stat">
+              <div class={`val ${refAmt ? "text-success" : "text-muted"}`}>{refAmt ?? "—"}</div>
+              <div class="lbl">Amount</div>
+            </div>
+          </div>
+        </div>
+        <div class="adm-promoter-stat adm-promoter-impact">
+          <div class="val fw-bold text-success">{totalAmt}</div>
+          <div class="lbl">Total Impact</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function PromotersTab() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -186,38 +252,57 @@ function PromotersTab() {
 
   useEffect(() => { void load(); }, []);
 
-  const appBase = window.location.origin;
+  // Sort by total impact (own + attributed)
+  const sorted = [...promoters].sort((a, b) => (b.own_gross + b.attributed_gross) - (a.own_gross + a.attributed_gross));
+
+  // Summary stats
+  const totalOwn = sorted.reduce((s, p) => s + p.own_gross, 0);
+  const totalReferred = sorted.reduce((s, p) => s + p.attributed_gross, 0);
+  const totalClicks = sorted.reduce((s, p) => s + p.clicks, 0);
+  const totalDonated = sorted.reduce((s, p) => s + p.attributed_completed, 0);
+  const mainCurrency = sorted.find((p) => p.own_currency ?? p.currency)?.own_currency
+    ?? sorted.find((p) => p.currency)?.currency ?? "USD";
 
   return (
     <div>
+      {sorted.length > 0 && (
+        <div class="stat-grid mb-3">
+          <div class="stat-card ok">
+            <div class="val">{sorted.length}</div>
+            <div class="lbl">Share Links</div>
+          </div>
+          <div class="stat-card ok">
+            <div class="val">{fmtAmount(totalOwn, mainCurrency)}</div>
+            <div class="lbl">Own Donations</div>
+          </div>
+          <div class="stat-card">
+            <div class="val">{totalClicks}</div>
+            <div class="lbl">Link Clicks</div>
+          </div>
+          <div class="stat-card ok">
+            <div class="val">{totalDonated}</div>
+            <div class="lbl">Referred Donors</div>
+          </div>
+          <div class="stat-card ok">
+            <div class="val">{fmtAmount(totalReferred, mainCurrency)}</div>
+            <div class="lbl">Referred Amount</div>
+          </div>
+        </div>
+      )}
+
       <div class="d-flex justify-content-end mb-2">
         <button class="btn btn-sm btn-outline-secondary" onClick={load}>↺ Refresh</button>
       </div>
       {loading && <Spinner />}
       {!loading && <ErrorAlert error={error} />}
       {!loading && !error && (
-        <Table heads={["Name", "Share URL", "Clicks", "Attributed (compl.)", "Attributed Gross", "Created"]} empty="No promoter links yet">
-          {promoters.map((p) => {
-            const shareUrl = `${appBase}/donate/r/${p.code}`;
-            const gross = p.attributed_gross > 0 && p.currency ? fmtAmount(p.attributed_gross, p.currency) : "—";
-            return (
-              <tr key={p.code}>
-                <td>{p.name ?? <span class="text-muted fst-italic">anonymous</span>}</td>
-                <td class="mono small">
-                  <a href={shareUrl} target="_blank" rel="noopener">
-                    /donate/r/{p.code}
-                  </a>
-                </td>
-                <td>{p.clicks}</td>
-                <td>
-                  {p.attributed_completed} / {p.attributed_total}
-                </td>
-                <td class="mono">{gross}</td>
-                <td class="small text-muted">{fmt(p.created_at)}</td>
-              </tr>
-            );
-          })}
-        </Table>
+        sorted.length === 0
+          ? <div class="text-muted text-center py-4">No promoter links yet</div>
+          : <div class="d-flex flex-column gap-2">
+              {sorted.map((p, i) => (
+                <DonorPromoterCard key={p.code} p={p} rank={i + 1} />
+              ))}
+            </div>
       )}
     </div>
   );
