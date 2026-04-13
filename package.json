@@ -32,6 +32,7 @@
     "seed:production": "node scripts/seed.mjs --production"
   },
   "dependencies": {
+    "@preact/signals": "^2.9.0",
     "@resvg/resvg-wasm": "^2.6.2",
     "chanfana": "^3.3.0",
     "handlebars": "^4.7.9",
@@ -39,6 +40,8 @@
     "ical.js": "^2.2.1",
     "marked": "^17.0.6",
     "postal-mime": "^2.7.4",
+    "preact": "^10.29.1",
+    "wouter": "^3.9.0",
     "yaml": "^2.8.3",
     "zod": "^4.3.6"
   },

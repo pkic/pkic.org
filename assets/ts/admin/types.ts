@@ -362,3 +362,89 @@ export interface AdminDueWorkRow {
   statusKey: string;
   statusLabel: string;
 }
+
+// ── Users ─────────────────────────────────────────────────────────────────────
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  organization_name: string | null;
+  role: string;
+  active: number;
+  created_at: string;
+}
+
+// ── Email templates ───────────────────────────────────────────────────────────
+
+export interface EmailTemplateVersion {
+  id: string;
+  template_key: string;
+  version: number;
+  subject_template: string | null;
+  body: string | null;
+  content_type: string;
+  r2_object_key: string | null;
+  checksum_sha256: string;
+  status: "draft" | "active";
+  created_by_user_id: string | null;
+  created_at: string;
+}
+
+// ── Reports / Stats ───────────────────────────────────────────────────────────
+
+export interface DonationPeriod {
+  count: number;
+  completed: number;
+  pending: number;
+  failed: number;
+  expired: number;
+  gross: number;
+}
+
+export interface StatsResponse {
+  registrations: {
+    byStatus: Record<string, number>;
+    byAttendanceType: Record<string, number>;
+    total: number;
+    weekly: Array<{ week: string; count: number }>;
+    monthly: Array<{ month: string; count: number }>;
+  };
+  invites: { byStatus: Record<string, number>; total: number };
+  email: { outboxByStatus: Record<string, number>; totalQueued: number; totalFailed: number };
+  topEvents: Array<{ slug: string; name: string; confirmed: number; total: number }>;
+  recentActivity: Array<{ date: string; registrations: number; invites: number }>;
+  donations: {
+    byStatus: Record<string, number>;
+    byCurrency: Array<{ status: string; currency: string; count: number; total_gross: number; avg_gross: number; total_net: number | null }>;
+    daily: Array<{ date: string } & DonationPeriod>;
+    weekly: Array<{ week: string } & DonationPeriod>;
+    monthly: Array<{ month: string } & DonationPeriod>;
+  };
+}
+
+// ── Event stats ───────────────────────────────────────────────────────────────
+
+export interface EventStatsResponse {
+  event: { id: string; slug: string; name: string };
+  registrations: {
+    byStatus: Record<string, number>;
+    byAttendanceType: Record<string, number>;
+    byStatusAndType: Array<{ status: string; attendance_type: string; count: number }>;
+    total: number;
+    growthByDay: Array<{ date: string; attendance_type: string; count: number }>;
+  };
+  registrationsByEventDay: Array<{ day_date: string; label: string | null; sort_order: number; attendance_type: string; status: string; count: number }>;
+  invites: {
+    attendee: { byStatus: Record<string, number>; total: number; declineReasons: Array<{ reason_code: string | null; count: number; unsubscribed: number }> };
+    speaker: { byStatus: Record<string, number>; total: number; declineReasons: Array<{ reason_code: string | null; count: number; unsubscribed: number }> };
+  };
+  proposals: { byStatus: Record<string, number>; total: number };
+  rsvp: {
+    total: number;
+    byStatus: Record<string, number>;
+    byProvider: Record<string, number>;
+    actionsTaken: Record<string, number>;
+  };
+}

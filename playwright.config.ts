@@ -13,7 +13,7 @@ export default defineConfig({
     command: "sh scripts/e2e-start.sh",
     url: "http://127.0.0.1:8788",
     // Always start fresh so Wrangler uses the seeded state dir.
-    reuseExistingServer: false,
+    reuseExistingServer: Boolean(process.env.REUSE_SERVER),
     timeout: 300_000,
   },
   use: {

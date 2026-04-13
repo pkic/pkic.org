@@ -72,3 +72,15 @@
     </footer>
 
     {{ partial "script.html" (dict "path" "js/main.js") }}
+    {{- /* Module loader — dynamically imports whichever module the page declares via
+         [data-module]. The hashed URL is read from the asset manifest produced by
+         scripts/build-frontend.mjs, which runs automatically before every Hugo build. */ -}}
+    {{- $manifest := index site.Data "asset-manifest" -}}
+    {{- with $manifest -}}
+      {{- $loader := index . "loader" -}}
+      {{- with $loader -}}
+        {{- $url := index . "url" -}}
+        {{- $sri := index . "integrity" -}}
+        {{- with $url }}<script src="{{ . }}" type="module"{{ with $sri }} integrity="{{ . }}" crossorigin="anonymous"{{ end }}></script>{{ end -}}
+      {{- end -}}
+    {{- end -}}

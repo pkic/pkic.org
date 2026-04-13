@@ -55,7 +55,7 @@
 {{- $imgIndex := 0 -}}
 {{- $imagesPerCell := int ($yaml.imagesPerCell | default 3) -}}
 
-<div class="pkic-photo-grid pkic-photo-grid--cols-{{ $colsSafe }} pkic-photo-grid--gap-{{ $gapSafe }} pkic-photo-grid--row-{{ $heightSafe }} {{ $outerClass }}">
+<div class="pkic-photo-grid pkic-photo-grid--cols-{{ $colsSafe }} pkic-photo-grid--gap-{{ $gapSafe }} pkic-photo-grid--row-{{ $heightSafe }} {{ $outerClass }}" data-module="modules/photo-grid">
   {{- range $yaml.photos -}}
   {{- $rawAlt := .alt | default "" -}}
   {{- $caption := .caption -}}
@@ -97,4 +97,3 @@
   {{- end -}}
   {{- end -}}
 </div>
-{{ partial "script.html" (dict "path" "ts/modules/photo-grid.ts" "build" true "defer" true) }}

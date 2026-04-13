@@ -1,5 +1,9 @@
 import { parseQueryContext } from "../shared/query-context";
 
+// Re-export setStatus from form-helpers so existing `import { setStatus } from "./boot"`
+// statements continue to work.
+export { setStatus } from "../shared/form/helpers";
+
 export interface FlowBoot {
   root: HTMLElement;
   eventSlug: string;
@@ -46,11 +50,4 @@ export function bootstrap(selector: string): FlowBoot | null {
     statusEl,
     form,
   };
-}
-
-export function setStatus(target: HTMLElement, message: string, isError = false): void {
-  target.textContent = message;
-  target.dataset.state = isError ? "error" : "ok";
-  target.classList.remove("visually-hidden", "alert-success", "alert-danger");
-  target.classList.add(isError ? "alert-danger" : "alert-success");
 }

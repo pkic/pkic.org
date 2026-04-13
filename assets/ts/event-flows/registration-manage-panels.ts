@@ -1,4 +1,4 @@
-import { showManageLinkRecoveryForm } from "../shared/manage-link-recovery";
+import { showManageLinkRecoveryForm } from "../shared/widgets/link-recovery";
 
 export function showPostAction(
   root: HTMLElement,

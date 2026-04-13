@@ -6,7 +6,7 @@
   Inner content (markdown) is shown when the session cannot be confirmed —
   e.g. the session_id is missing, invalid, or the webhook has not yet fired.
 */}}
-<div data-donation-badge hidden></div>
-<div data-donation-pending-content hidden>{{ .Inner | markdownify }}</div>
-
-{{ partial "script.html" (dict "path" "ts/shared/donation-thank-you.ts") }}
+<div data-module="shared/donation-thank-you">
+  <div data-donation-badge hidden></div>
+  <div data-donation-pending-content hidden>{{ .Inner | markdownify }}</div>
+</div>

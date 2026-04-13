@@ -34,7 +34,7 @@ describe("donation thank-you page", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await import("../../assets/ts/shared/donation-thank-you");
+    await import("../../assets/ts/shared/donation/thank-you");
     await vi.runAllTimersAsync();
 
     expect(fetchMock).toHaveBeenCalled();
@@ -67,7 +67,7 @@ describe("donation thank-you page", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await import("../../assets/ts/shared/donation-thank-you");
+    await import("../../assets/ts/shared/donation/thank-you");
     await vi.runAllTimersAsync();
 
     // Should have polled more than once (phase 1 + at least one phase 2 poll)
@@ -118,7 +118,7 @@ describe("donation thank-you page", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
 
-    await import("../../assets/ts/shared/donation-thank-you");
+    await import("../../assets/ts/shared/donation/thank-you");
     await vi.runAllTimersAsync();
 
     // Container should now show the full badge (amount visible)
@@ -133,7 +133,7 @@ describe("donation thank-you page", () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
 
-    await import("../../assets/ts/shared/donation-thank-you");
+    await import("../../assets/ts/shared/donation/thank-you");
     await vi.runAllTimersAsync();
 
     expect(fetchMock).not.toHaveBeenCalled();

@@ -1,6 +1,6 @@
 {{- $eventSlug := partial "events/flow/slug.html" . -}}
 {{- $eventPagePath := partial "events/flow/page-path.html" . -}}
-<div class="event-flow" data-event-registration data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1">
+<div class="event-flow" data-event-registration data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1" data-module="event-flows/registration-page">
 
   {{/* ── Step progress indicator ─────────────────────────────────────────── */}}
   <nav class="event-flow-stepper" aria-label="Registration progress">
@@ -112,5 +112,4 @@
 
   </form>
 </div>
-{{ partial "script.html" (dict "path" "ts/event-flows/registration-page.ts") }}
 

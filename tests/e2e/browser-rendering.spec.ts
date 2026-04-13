@@ -147,9 +147,19 @@ async function setupPage(page: Page): Promise<void> {
 
   // Inject a red-dot cursor overlay so recordings show the actual click target
   // even when Playwright synthesizes the interaction without a normal mousemove.
+  // Also auto-scroll <main> into the center of the viewport on every page load
+  // so screenshots and videos focus on the content area, not the hero banner.
   await page.addInitScript(() => {
     const install = (): void => {
       if (document.getElementById("__pw_cursor")) return;
+
+      // Scroll <main> to the center of the viewport on every page load
+      const main = document.querySelector("main");
+      if (main) {
+        const rect = main.getBoundingClientRect();
+        const targetY = window.scrollY + rect.top + rect.height / 2 - window.innerHeight / 2;
+        window.scrollTo({ top: Math.max(0, targetY), behavior: "instant" });
+      }
 
       const dot = document.createElement("div");
       dot.id = "__pw_cursor";
@@ -220,6 +230,7 @@ async function fillRegistrationStep2(page: Page): Promise<void> {
 async function fillRegistrationStep3(page: Page): Promise<void> {
   await page.getByLabel("Organization").fill("Test Org");
   await page.getByLabel("Job title").fill("Engineer");
+  await page.getByLabel("Country").selectOption("US");
   await page.getByRole("button", { name: /Continue/i }).click();
 }
 
@@ -238,6 +249,7 @@ async function fillInviteRegistration(page: Page, values: { firstName: string; l
   await page.getByRole("button", { name: /Continue/i }).click();
   await page.getByLabel("Organization").fill("Test Org");
   await page.getByLabel("Job title").fill("Engineer");
+  await page.getByLabel("Country").selectOption("US");
   await page.getByRole("button", { name: /Continue/i }).click();
   await clickConsentCard(page, "privacy policy");
   await clickConsentCard(page, "code of conduct");
