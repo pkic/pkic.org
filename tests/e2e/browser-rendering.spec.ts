@@ -218,6 +218,8 @@ async function fillRegistrationStep1(page: Page, values: { firstName: string; la
   await page.getByLabel("Last name").fill(values.lastName);
   await page.getByLabel("Work email").fill(values.email);
   await page.getByRole("button", { name: /Continue/i }).click();
+  // Wait for step 2 day-attendance inputs (rendered by Preact after an API call)
+  await page.locator("input[id^='dayAttendance-']").first().waitFor({ timeout: 15_000 });
 }
 
 async function fillRegistrationStep2(page: Page): Promise<void> {
@@ -445,7 +447,7 @@ test.describe("browser workflows", () => {
         `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(secondManageToken)}`,
       );
 
-      await expect(page.locator("[data-manage-status-badge]")).toHaveText(/Confirmed/i);
+      await expect(page.locator("[data-manage-status-badge]")).toHaveText(/Confirmed/i, { timeout: 15_000 });
       await expect(page.locator("[data-manage-status-banner]")).toContainText(
         "Some day-specific entries are still pending, so those days are marked waitlisted below.",
       );
