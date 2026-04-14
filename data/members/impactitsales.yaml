@@ -1,0 +1,58 @@
+id: impactitsales
+name: Impact IT Sales
+slogan:
+website: 
+
+# Short description, longer content can be placed in `content/members/`
+description: 
+
+# membership
+memberSince: 2026-04-14
+memberType: H2
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Davin Cooke
+    role: Consultant - Director of Business Development
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/davin-cooke
+    description: Davin is the Consultant - Director of Business Development at Impact IT Sales and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
