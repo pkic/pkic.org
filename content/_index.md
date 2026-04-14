@@ -24,7 +24,7 @@ aliases:
 {{< alert >}}
 The slides and recordings of the **Post-Quantum Cryptography Conference** in Kuala Lumpur, Malaysia are online! [Check them out now](/events/2025/pqc-conference-kuala-lumpur-my/)!
   
-**Next stop:** Amsterdam, Netherlands from 1-3 December 2026 — [request an invite now](/register)!
+**Next stop:** Amsterdam, Netherlands from 1-3 December 2026 — [register now](/register)!
 {{< /alert >}}
 {{< members limit="80" title="Our Members & Sponsors" >}}
 
