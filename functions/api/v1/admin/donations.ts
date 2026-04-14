@@ -26,6 +26,8 @@ interface DonationRow {
   status: string;
   payment_method_type: string | null;
   session_expires_at: number | null;
+  settled_amount: number | null;
+  settled_currency: string | null;
   created_at: string;
   completed_at: string | null;
 }
@@ -53,12 +55,14 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
-  const [donations, counts] = await Promise.all([
+  const [donations, counts, totalRow] = await Promise.all([
     all<DonationRow>(
       c.env.DB,
       `SELECT id, checkout_session_id, payment_intent_id, name, email,
               organization, currency, gross_amount, net_amount, source,
-              status, payment_method_type, session_expires_at, created_at, completed_at
+              status, payment_method_type, session_expires_at,
+              settled_amount, settled_currency,
+              created_at, completed_at
        FROM donations
        ${where}
        ORDER BY created_at DESC
@@ -70,11 +74,17 @@ export async function onRequestGet(c: any): Promise<Response> {
       `SELECT status, COUNT(*) AS count FROM donations GROUP BY status`,
       [],
     ),
+    all<{ total: number }>(
+      c.env.DB,
+      `SELECT COUNT(*) AS total FROM donations ${where}`,
+      [...params],
+    ),
   ]);
 
   const summary = Object.fromEntries(counts.map((r) => [r.status, r.count]));
+  const total = totalRow[0]?.total ?? 0;
 
-  return json({ donations, summary, limit, offset });
+  return json({ donations, summary, limit, offset, total });
 }
 
 export async function onRequest(c: any): Promise<Response> {

@@ -7,6 +7,7 @@ import { Dashboard } from "../sections/Dashboard";
 import { Stats } from "../sections/Stats";
 import { AuditLog } from "../sections/AuditLog";
 import { Donations } from "../sections/Donations";
+import { DonationDetailPage } from "../sections/DonationDetailPage";
 import { Email } from "../sections/Email";
 import { DueWork } from "../sections/DueWork";
 import { Templates } from "../sections/Templates";
@@ -52,9 +53,14 @@ export function AdminShell() {
                 <EventList />
               </SectionWrapper>
             )} />
-            <Route path="/events/:slug/registrations/:regId" component={({ params }: { params: { slug: string; regId: string } }) => (
+            <Route path="/events/:slug/registration/:regId" component={({ params }: { params: { slug: string; regId: string } }) => (
               <SectionWrapper title="Registration">
                 <RegistrationDetailPage slug={params.slug} regId={params.regId} />
+              </SectionWrapper>
+            )} />
+            <Route path="/events/:slug/:tab/:subTab" component={({ params }: { params: { slug: string; tab: string; subTab: string } }) => (
+              <SectionWrapper title="Event">
+                <EventDetailView slug={params.slug} tab={params.tab} subTab={params.subTab} />
               </SectionWrapper>
             )} />
             <Route path="/events/:slug/:tab?" component={({ params }: { params: { slug: string; tab?: string } }) => (
@@ -66,7 +72,22 @@ export function AdminShell() {
             <Route path="/email" component={() => <SectionWrapper title="Email"><Email /></SectionWrapper>} />
             <Route path="/email/templates" component={() => <SectionWrapper title="Email Templates"><Templates /></SectionWrapper>} />
             <Route path="/duework" component={() => <SectionWrapper title="Due Work"><DueWork /></SectionWrapper>} />
+            <Route path="/stats/:subTab" component={({ params }: { params: { subTab: string } }) => (
+              <SectionWrapper title="Stats">
+                <Stats subTab={params.subTab} />
+              </SectionWrapper>
+            )} />
             <Route path="/stats" component={() => <SectionWrapper title="Stats"><Stats /></SectionWrapper>} />
+            <Route path="/donations/:id" component={({ params }: { params: { id: string } }) => (
+              <SectionWrapper title="Donation">
+                <DonationDetailPage donationId={params.id} />
+              </SectionWrapper>
+            )} />
+            <Route path="/donations/:subTab" component={({ params }: { params: { subTab: string } }) => (
+              <SectionWrapper title="Donations">
+                <Donations subTab={params.subTab} />
+              </SectionWrapper>
+            )} />
             <Route path="/donations" component={() => <SectionWrapper title="Donations"><Donations /></SectionWrapper>} />
             <Route path="/users" component={() => <SectionWrapper title="Users"><Users /></SectionWrapper>} />
             <Route path="/auditlog" component={() => <SectionWrapper title="Audit Log"><AuditLog /></SectionWrapper>} />

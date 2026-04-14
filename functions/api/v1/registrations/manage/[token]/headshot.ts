@@ -129,7 +129,7 @@ async function onPut(c: any): Promise<Response> {
   );
 
   const appOrigin = resolveAppBaseUrl(c.env, c.req.raw);
-  c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, appOrigin));
+  await invalidateAndRerender(user.id, c.env, appOrigin);
 
   const parts = r2Key.split("/");
   const pubFilename = parts.slice(2).join("/");
@@ -178,7 +178,7 @@ async function onDelete(c: any): Promise<Response> {
   );
 
   const origin = resolveAppBaseUrl(c.env, c.req.raw);
-  c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, origin));
+  await invalidateAndRerender(user.id, c.env, origin);
 
   return json({ success: true });
 }

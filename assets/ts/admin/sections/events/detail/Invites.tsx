@@ -7,6 +7,8 @@ import { fmt, toast } from "../../../ui";
 import type { AdminInviteEntry, InviteRecord } from "../../../types";
 import { parseContactText } from "../../../../shared/invite-parser";
 
+export type InviteType = "attendee" | "speaker";
+
 // ─── Invite form ──────────────────────────────────────────────────────────────
 
 interface ParsedInvites { valid: AdminInviteEntry[]; skipped: number }
@@ -24,16 +26,22 @@ function parseText(raw: string): ParsedInvites {
 
 interface InviteRow extends AdminInviteEntry { _key: number }
 
-function InviteForm({ slug }: { slug: string }) {
+function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType }) {
   const [pasteText, setPasteText] = useState("");
   const [rows, setRows] = useState<InviteRow[]>([{ _key: 0, email: "", firstName: "", lastName: "" }]);
   const [keyCounter, setKeyCounter] = useState(1);
   const [preview, setPreview] = useState<{ subject: string; html: string; text: string } | null>(null);
+  const [previewToken, setPreviewToken] = useState<string | null>(null);
+  const [inviteDigest, setInviteDigest] = useState<string | null>(null);
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
-  const [previewStatus, setPreviewStatus] = useState("Preview required before sending.");
+  const [previewStatus, setPreviewStatus] = useState(
+    inviteType === "attendee" ? "Preview required before sending." : "",
+  );
   const [sendStatus, setSendStatus] = useState("");
   const [sending, setSending] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  const typeLabel = inviteType === "attendee" ? "attendee" : "speaker";
 
   function handleParse() {
     const { valid, skipped } = parseText(pasteText);
@@ -41,6 +49,12 @@ function InviteForm({ slug }: { slug: string }) {
     setRows(valid.map((e, i) => ({ ...e, _key: keyCounter + i })));
     setKeyCounter((k) => k + valid.length);
     setPasteText("");
+    // Reset preview state when invite list changes
+    setPreview(null);
+    setPreviewToken(null);
+    setInviteDigest(null);
+    setPreviewConfirmed(false);
+    if (inviteType === "attendee") setPreviewStatus("Preview required before sending.");
     toast(`Parsed ${valid.length} invite${valid.length !== 1 ? "s" : ""}${skipped ? `, ${skipped} skipped` : ""}`, "success");
   }
 
@@ -64,12 +78,17 @@ function InviteForm({ slug }: { slug: string }) {
     setPreviewStatus("Generating preview…");
     setPreview(null);
     setPreviewConfirmed(false);
+    setPreviewToken(null);
+    setInviteDigest(null);
     try {
-      const res = await api<{ subject: string; html: string; text: string }>(
-        `/api/v1/admin/events/${slug}/invites/preview`,
-        { method: "POST", body: JSON.stringify({ invitees: validRows.slice(0, 1) }) },
+      const invites = validRows.map(({ email, firstName, lastName }) => ({ email, firstName, lastName }));
+      const res = await api<{ subject: string; html: string; text: string; previewToken: string; inviteDigest: string }>(
+        `/api/v1/admin/events/${slug}/invites/attendees/preview`,
+        { method: "POST", body: JSON.stringify({ invites }) },
       );
       setPreview(res);
+      setPreviewToken(res.previewToken);
+      setInviteDigest(res.inviteDigest);
       setPreviewStatus("Review and confirm below.");
       if (iframeRef.current) {
         iframeRef.current.srcdoc = res.html;
@@ -82,29 +101,44 @@ function InviteForm({ slug }: { slug: string }) {
   }
 
   async function handleSend() {
-    if (!previewConfirmed) { toast("Review the preview and tick the confirmation checkbox first.", "error"); return; }
+    if (inviteType === "attendee" && !previewConfirmed) {
+      toast("Review the preview and tick the confirmation checkbox first.", "error");
+      return;
+    }
     if (!validRows.length) return;
     setSending(true);
     setSendStatus("Sending…");
     try {
-      const CHUNK = 50;
-      const allRows = validRows.slice(0, 500);
-      let total = 0;
-      for (let i = 0; i < allRows.length; i += CHUNK) {
-        const chunk = allRows.slice(i, i + CHUNK);
-        await api(`/api/v1/admin/events/${slug}/invites`, {
+      const invites = validRows.slice(0, 500).map(({ email, firstName, lastName }) => ({ email, firstName, lastName }));
+      if (inviteType === "attendee") {
+        const CHUNK = 50;
+        let total = 0;
+        for (let i = 0; i < invites.length; i += CHUNK) {
+          const chunk = invites.slice(i, i + CHUNK);
+          await api(`/api/v1/admin/events/${slug}/invites/attendees/bulk`, {
+            method: "POST",
+            body: JSON.stringify({ previewToken, inviteDigest, invites: chunk }),
+          });
+          total += chunk.length;
+          setSendStatus(`Sent ${total} of ${invites.length}…`);
+        }
+        toast(`Sent ${total} ${typeLabel} invites`, "success");
+        setSendStatus(`✓ Sent ${total} invites`);
+      } else {
+        await api(`/api/v1/admin/events/${slug}/invites/speakers/bulk`, {
           method: "POST",
-          body: JSON.stringify({ invitees: chunk }),
+          body: JSON.stringify({ invites }),
         });
-        total += chunk.length;
-        setSendStatus(`Sent ${total} of ${allRows.length}…`);
+        toast(`Sent ${invites.length} ${typeLabel} invites`, "success");
+        setSendStatus(`✓ Sent ${invites.length} invites`);
       }
-      toast(`Sent ${total} invites`, "success");
-      setSendStatus(`✓ Sent ${total} invites`);
       setRows([{ _key: keyCounter, email: "", firstName: "", lastName: "" }]);
       setKeyCounter((k) => k + 1);
       setPreview(null);
+      setPreviewToken(null);
+      setInviteDigest(null);
       setPreviewConfirmed(false);
+      if (inviteType === "attendee") setPreviewStatus("Preview required before sending.");
     } catch (e) {
       const msg = (e as Error).message;
       setSendStatus(msg);
@@ -113,6 +147,8 @@ function InviteForm({ slug }: { slug: string }) {
       setSending(false);
     }
   }
+
+  const canSend = inviteType === "speaker" || previewConfirmed;
 
   return (
     <div>
@@ -149,11 +185,15 @@ function InviteForm({ slug }: { slug: string }) {
 
       <div class="d-flex gap-2 align-items-center flex-wrap mb-2">
         <button type="button" class="btn btn-sm btn-outline-secondary" onClick={addRow}>+ Add row</button>
-        <button type="button" class="btn btn-sm btn-outline-primary" onClick={() => void handlePreview()}>Preview Email</button>
-        <button type="button" class="btn btn-sm btn-success" onClick={() => void handleSend()} disabled={sending || !previewConfirmed}>Send Invites</button>
+        {inviteType === "attendee" && (
+          <button type="button" class="btn btn-sm btn-outline-primary" onClick={() => void handlePreview()}>Preview Email</button>
+        )}
+        <button type="button" class="btn btn-sm btn-success" onClick={() => void handleSend()} disabled={sending || !canSend}>
+          Send {inviteType === "attendee" ? "Attendee" : "Speaker"} Invites
+        </button>
         <span class="text-muted small">{validRows.length} valid</span>
       </div>
-      <div class="small text-muted">{previewStatus}</div>
+      {previewStatus && <div class="small text-muted">{previewStatus}</div>}
       {sendStatus && <div class={`mt-1 small ${sendStatus.startsWith("✓") ? "text-success" : "text-danger"}`}>{sendStatus}</div>}
 
       {preview && (
@@ -176,7 +216,7 @@ function InviteForm({ slug }: { slug: string }) {
 
 // ─── Invite list ──────────────────────────────────────────────────────────────
 
-function InviteList({ slug }: { slug: string }) {
+function InviteList({ slug, inviteType }: { slug: string; inviteType: InviteType }) {
   const [statusFilter, setStatusFilter] = useState("sent");
   const tableRef = useRef<ApiTableActions | null>(null);
 
@@ -198,9 +238,9 @@ function InviteList({ slug }: { slug: string }) {
       resolvePage={(d) => (d as { pagination: { total: number; hasMore: boolean } }).pagination}
       paginate
       searchPlaceholder="Search email / name…"
-      params={statusFilter ? { status: statusFilter } : undefined}
+      params={{ type: inviteType, ...(statusFilter ? { status: statusFilter } : {}) }}
       actionsRef={tableRef}
-      deps={[slug, statusFilter]}
+      deps={[slug, inviteType, statusFilter]}
       toolbar={({ resetPage }) => (
         <select class="form-select form-select-sm adm-filter-select" value={statusFilter} onChange={(e) => { setStatusFilter((e.target as HTMLSelectElement).value); resetPage(); }}>
           <option value="">All statuses</option>
@@ -215,13 +255,12 @@ function InviteList({ slug }: { slug: string }) {
         { header: "Email", cell: (inv) => inv.invitee_email },
         { header: "Name", cell: (inv) => [inv.invitee_first_name, inv.invitee_last_name].filter(Boolean).join(" ") || "—" },
         { header: "Status", cell: (inv) => <Badge status={inv.status} /> },
-        { header: "Type", cell: (inv) => inv.invite_type, className: "small text-muted" },
         { header: "Sent by", cell: (inv) => inv.inviter_email ?? inv.inviter_user_id ?? "—", className: "small text-muted" },
         { header: "Sent", cell: (inv) => fmt(inv.created_at), className: "mono small" },
         { header: "Accepted", cell: (inv) => inv.accepted_at ? fmt(inv.accepted_at) : "—", className: "mono small" },
         { header: "", cell: (inv) => (inv.status === "sent" || inv.status === "pending") ? <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(inv.id)}>Revoke</button> : null },
       ]}
-      empty="No invites found"
+      empty={`No ${inviteType} invites found`}
       rowKey={(inv) => inv.id}
     />
   );
@@ -229,22 +268,23 @@ function InviteList({ slug }: { slug: string }) {
 
 // ─── Invites compositor ───────────────────────────────────────────────────────
 
-export function Invites({ slug }: { slug: string }) {
+export function Invites({ slug, inviteType = "attendee" }: { slug: string; inviteType?: InviteType }) {
   const [tab, setTab] = useState<"send" | "list">("send");
+  const typeLabel = inviteType === "attendee" ? "Attendee" : "Speaker";
 
   return (
     <div>
       <Tabs
         items={[
-          { key: "send", label: "Send Invites" },
-          { key: "list", label: "Invite List" },
+          { key: "send", label: `Send ${typeLabel} Invites` },
+          { key: "list", label: `${typeLabel} Invite List` },
         ]}
         active={tab}
         onChange={(key) => setTab(key as "send" | "list")}
       />
 
-      {tab === "send" && <InviteForm slug={slug} />}
-      {tab === "list" && <InviteList slug={slug} />}
+      {tab === "send" && <InviteForm slug={slug} inviteType={inviteType} />}
+      {tab === "list" && <InviteList slug={slug} inviteType={inviteType} />}
     </div>
   );
 }

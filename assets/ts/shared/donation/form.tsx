@@ -26,6 +26,7 @@ import {
 } from "../../../shared/constants/currencies";
 
 const PRESET_AMOUNTS = [50, 100, 250, 500, 1000];
+const DEFAULT_AMOUNT = 500; // Pre-selected — Default Effect nudge + Anchoring
 const API_BASE = "/api/v1";
 
 interface DonationConfig {
@@ -90,7 +91,7 @@ async function initForm(root: HTMLElement): Promise<void> {
 
   // ── State ──────────────────────────────────────────────────────────────
   let selectedCurrency = defaultCurrency;
-  let selectedAmount: number | null = null; // major units (e.g. 100 = $100)
+  let selectedAmount: number | null = DEFAULT_AMOUNT; // pre-selected (Default Effect)
   let isCustom = false;
 
   // ── Build UI ───────────────────────────────────────────────────────────
@@ -123,6 +124,9 @@ async function initForm(root: HTMLElement): Promise<void> {
   // ── Render preset buttons ──────────────────────────────────────────────
   renderPresets(presetContainer, selectedCurrency);
 
+  // ── Pre-select default amount (Default Effect) ─────────────────────────
+  activatePreset(presetContainer, DEFAULT_AMOUNT);
+
   // ── Update display for initial currency ────────────────────────────────
   updateCurrencyDisplay();
 
@@ -145,6 +149,7 @@ async function initForm(root: HTMLElement): Promise<void> {
     isCustom = false;
     customInput.value = "";
     activatePreset(presetContainer, selectedAmount);
+    updateCurrencyDisplay();
     clearStatus();
   });
 
@@ -158,6 +163,7 @@ async function initForm(root: HTMLElement): Promise<void> {
     } else {
       if (isCustom) selectedAmount = null;
     }
+    updateCurrencyDisplay();
     clearStatus();
   });
 
@@ -273,7 +279,7 @@ async function initForm(root: HTMLElement): Promise<void> {
   function updateCurrencyDisplay(): void {
     const info = currencyInfo(selectedCurrency);
     if (customPrefix) customPrefix.textContent = info.symbol;
-    if (donateBtn && selectedAmount && !isCustom) {
+    if (donateBtn && selectedAmount && selectedAmount > 0) {
       donateBtn.textContent = `Donate ${formatAmount(selectedAmount, info)}`;
     } else {
       donateBtn!.textContent = "Donate";
@@ -332,6 +338,7 @@ function PresetButtons({ currencyCode }: { currencyCode: string }) {
   const info = currencyInfo(currencyCode);
   const rate = info.approxUsdRate ?? 1;
   const effectiveRate = Math.abs(rate - 1) < 0.25 ? 1 : rate;
+  const defaultConverted = niceRound(DEFAULT_AMOUNT * effectiveRate);
   const amounts = Array.from(new Set(PRESET_AMOUNTS.map((usd) => niceRound(usd * effectiveRate))));
   return (
     <>
@@ -339,9 +346,10 @@ function PresetButtons({ currencyCode }: { currencyCode: string }) {
         <button
           key={amt}
           type="button"
-          class="btn btn-outline-secondary donation-preset-btn"
+          class={`btn btn-outline-secondary donation-preset-btn${amt === defaultConverted ? " donation-preset-btn--popular" : ""}`}
           data-preset-amount={amt}
         >
+          {amt === defaultConverted && <span class="donation-preset-popular-label">Most popular</span>}
           {formatAmount(amt, info)}
         </button>
       ))}

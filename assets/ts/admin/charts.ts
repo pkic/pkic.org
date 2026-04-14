@@ -249,7 +249,7 @@ export function svgStackedBarChart(
         if (v > 0) tipLines.push(`${sr.label}: ${v}`);
       }
       tipLines.push(`Total: ${total}`);
-      out += `<rect x="${(pL + i * slotW).toFixed(1)}" y="${pT}" width="${slotW.toFixed(1)}" height="${chartH}" fill="transparent" data-tip="${esc(tipLines.join("\n"))}"/>`;
+      out += `<rect x="${(pL + i * slotW).toFixed(1)}" y="${pT}" width="${slotW.toFixed(1)}" height="${chartH}" fill="transparent"><title>${esc(tipLines.join("\n"))}</title></rect>`;
     }
   }
   const legend = series

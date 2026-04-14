@@ -62,7 +62,14 @@ async function buildHugoSite(isDev: boolean, rebuildFrontend = true): Promise<vo
     await run("git", ["submodule", "update", "--init", "--remote"]);
   }
 
-  const hugoArgs = ["--destination", "public", "--cleanDestinationDir"];
+  const hugoArgs = ["--destination", "public"];
+
+  // Only clean the destination dir for production builds — in dev the wipe
+  // races with Vite's static-file serving causing broken styles until Hugo
+  // finishes writing the new fingerprinted CSS.
+  if (!isDev) {
+    hugoArgs.push("--cleanDestinationDir");
+  }
 
   if (isDev) {
     hugoArgs.push("--environment", "development");

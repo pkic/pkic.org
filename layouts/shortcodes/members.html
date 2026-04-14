@@ -1,6 +1,9 @@
 {{ .Scratch.Set "date" (.Get "date") }}
 {{ .Scratch.Set "limit" (or (.Get "limit") "999999") }}
 
+{{ with .Get "title" }}
+<div class="pkic-section-label"><span>{{ . }}</span></div>
+{{ end }}
 <section class="members-overview {{ .Get "class"}}">
     <div class="container-fluid px-2 px-md-3 py-4 text-center members">
         {{ partial "members/wall.html" . }}

@@ -113,7 +113,7 @@ export async function onRequestPut(c: any): Promise<Response> {
   await updateSpeakerProfile(c.env.DB, user.id, { headshotR2Key: r2Key });
 
   const origin = resolveAppBaseUrl(c.env, c.req.raw);
-  c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, origin));
+  await invalidateAndRerender(user.id, c.env, origin);
 
   return json({
     success: true,

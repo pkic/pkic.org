@@ -27,21 +27,25 @@ export function EventStats({ slug }: { slug: string }) {
   if (!stats) return null;
 
   const s = stats;
-  const confirmed = s.registrations.byStatus.registered ?? 0;
-  const waitlisted = s.registrations.byStatus.waitlisted ?? 0;
-  const attendeePending = s.invites.attendee.byStatus.sent ?? 0;
-  const attendeeAccepted = s.invites.attendee.byStatus.accepted ?? 0;
-  const speakerPending = s.invites.speaker.byStatus.sent ?? 0;
-  const speakerAccepted = s.invites.speaker.byStatus.accepted ?? 0;
+  const confirmed = s.registrations?.byStatus?.registered ?? 0;
+  const waitlisted = s.registrations?.byStatus?.waitlisted ?? 0;
+  const attendeePending = s.invites?.attendee?.byStatus?.sent ?? 0;
+  const attendeeAccepted = s.invites?.attendee?.byStatus?.accepted ?? 0;
+  const speakerPending = s.invites?.speaker?.byStatus?.sent ?? 0;
+  const speakerAccepted = s.invites?.speaker?.byStatus?.accepted ?? 0;
+
+  const growthByDay = s.registrations?.growthByDay ?? [];
+  const registrationsByEventDay = s.registrationsByEventDay ?? [];
+  const byStatusAndType = s.registrations?.byStatusAndType ?? [];
 
   // Growth chart
   const growthDates = (() => {
-    const raw = [...new Set(s.registrations.growthByDay.map((r) => r.date))].sort();
+    const raw = [...new Set(growthByDay.map((r) => r.date))].sort();
     return raw.length > 1 ? isoDateRange(raw[0], raw[raw.length - 1]) : raw;
   })();
-  const allAttTypes = [...new Set(s.registrations.growthByDay.map((r) => r.attendance_type))];
+  const allAttTypes = [...new Set(growthByDay.map((r) => r.attendance_type))];
   const growthIdx: Record<string, Record<string, number>> = {};
-  for (const r of s.registrations.growthByDay) {
+  for (const r of growthByDay) {
     growthIdx[r.date] ??= {};
     growthIdx[r.date][r.attendance_type] = (growthIdx[r.date][r.attendance_type] ?? 0) + r.count;
   }
@@ -52,10 +56,10 @@ export function EventStats({ slug }: { slug: string }) {
   }));
 
   // By-day chart
-  const dayLabels = [...new Set(s.registrationsByEventDay.map((r) => r.label ?? r.day_date))];
-  const dayAttTypes = [...new Set(s.registrationsByEventDay.map((r) => r.attendance_type))];
+  const dayLabels = [...new Set(registrationsByEventDay.map((r) => r.label ?? r.day_date))];
+  const dayAttTypes = [...new Set(registrationsByEventDay.map((r) => r.attendance_type))];
   const dayIdx: Record<string, Record<string, { confirmed: number; pending: number }>> = {};
-  for (const r of s.registrationsByEventDay) {
+  for (const r of registrationsByEventDay) {
     const lbl = r.label ?? r.day_date;
     dayIdx[lbl] ??= {};
     dayIdx[lbl][r.attendance_type] ??= { confirmed: 0, pending: 0 };
@@ -70,10 +74,10 @@ export function EventStats({ slug }: { slug: string }) {
     .filter((sr) => sr.values.some((v) => v > 0));
 
   // Cross status x attendance
-  const crossStatuses = [...new Set(s.registrations.byStatusAndType.map((r) => r.status))];
-  const crossAttTypes = [...new Set(s.registrations.byStatusAndType.map((r) => r.attendance_type))];
+  const crossStatuses = [...new Set(byStatusAndType.map((r) => r.status))];
+  const crossAttTypes = [...new Set(byStatusAndType.map((r) => r.attendance_type))];
   const crossIdx: Record<string, Record<string, number>> = {};
-  for (const r of s.registrations.byStatusAndType) { crossIdx[r.status] ??= {}; crossIdx[r.status][r.attendance_type] = r.count; }
+  for (const r of byStatusAndType) { crossIdx[r.status] ??= {}; crossIdx[r.status][r.attendance_type] = r.count; }
   const statusSeries = crossStatuses.map((st) => ({ label: st, color: STATUS_COLORS[st] ?? "#6c757d", values: crossAttTypes.map((at) => crossIdx[st]?.[at] ?? 0) }));
 
   return (
@@ -86,8 +90,8 @@ export function EventStats({ slug }: { slug: string }) {
       <div class="row g-3 mb-3">
         <div class="col-6 col-md-3"><StatCard label="Confirmed" value={confirmed} note="registered" /></div>
         <div class="col-6 col-md-3"><StatCard label="Waitlisted" value={waitlisted} note="waiting" /></div>
-        <div class="col-6 col-md-3"><StatCard label="Total Registrations" value={s.registrations.total} note="all statuses" /></div>
-        <div class="col-6 col-md-3"><StatCard label="Proposals" value={s.proposals.total} note="submitted" /></div>
+        <div class="col-6 col-md-3"><StatCard label="Total Registrations" value={s.registrations?.total ?? 0} note="all statuses" /></div>
+        <div class="col-6 col-md-3"><StatCard label="Proposals" value={s.proposals?.total ?? 0} note="submitted" /></div>
         <div class="col-6 col-md-3"><StatCard label="Attendee Invites Pending" value={attendeePending} note="sent, not accepted" /></div>
         <div class="col-6 col-md-3"><StatCard label="Attendee Invites Accepted" value={attendeeAccepted} note="" /></div>
         <div class="col-6 col-md-3"><StatCard label="Speaker Invites Pending" value={speakerPending} note="" /></div>
@@ -135,7 +139,7 @@ export function EventStats({ slug }: { slug: string }) {
                   <tr class="table-light fw-semibold">
                     <td class="small">Total</td>
                     {crossAttTypes.map((at) => <td key={at} class="text-end mono">{crossStatuses.reduce((sum, st) => sum + (crossIdx[st]?.[at] ?? 0), 0)}</td>)}
-                    <td class="text-end mono">{s.registrations.total}</td>
+                    <td class="text-end mono">{s.registrations?.total ?? 0}</td>
                   </tr>
                 </tfoot>
               </table>
@@ -158,7 +162,9 @@ export function EventStats({ slug }: { slug: string }) {
       {/* Invites breakdown */}
       <div class="row g-3 mb-3">
         {(["attendee", "speaker"] as const).map((type) => {
-          const inv = s.invites[type];
+          const inv = s.invites?.[type];
+          if (!inv) return null;
+          const declineReasons = inv.declineReasons ?? [];
           return (
             <div key={type} class="col-md-6">
               <div class="card border-0 shadow-sm h-100">
@@ -167,7 +173,7 @@ export function EventStats({ slug }: { slug: string }) {
                   <div class="tbl-wrap">
                     <table class="table table-sm mb-0">
                       <tbody>
-                        {Object.entries(inv.byStatus).map(([status, count]) => (
+                        {Object.entries(inv.byStatus ?? {}).map(([status, count]) => (
                           <tr key={status}>
                             <td>{inviteBadge(status)}</td>
                             <td class="mono text-end">{count}</td>
@@ -175,18 +181,18 @@ export function EventStats({ slug }: { slug: string }) {
                         ))}
                         <tr class="table-light fw-semibold">
                           <td class="small">Total</td>
-                          <td class="mono text-end">{inv.total}</td>
+                          <td class="mono text-end">{inv.total ?? 0}</td>
                         </tr>
                       </tbody>
                     </table>
                   </div>
-                  {inv.declineReasons.length > 0 && (
+                  {declineReasons.length > 0 && (
                     <>
                       <div class="small fw-semibold mt-2 mb-1">Decline reasons</div>
                       <table class="table table-sm mb-0">
                         <thead><tr><th class="small">Reason</th><th class="text-end small">Count</th><th class="text-end small">Unsub</th></tr></thead>
                         <tbody>
-                          {inv.declineReasons.map((dr, i) => (
+                          {declineReasons.map((dr, i) => (
                             <tr key={i}>
                               <td class="small">{dr.reason_code ?? "Not specified"}</td>
                               <td class="mono text-end">{dr.count}</td>
@@ -205,7 +211,7 @@ export function EventStats({ slug }: { slug: string }) {
       </div>
 
       {/* RSVP data */}
-      {s.rsvp.total > 0 && (
+      {(s.rsvp?.total ?? 0) > 0 && (
         <div class="card border-0 shadow-sm mb-3">
           <div class="card-body">
             <h6 class="text-uppercase small fw-bold text-muted mb-2">Calendar RSVP ({s.rsvp.total})</h6>
@@ -214,18 +220,18 @@ export function EventStats({ slug }: { slug: string }) {
                 <div class="small fw-semibold mb-1">By Status</div>
                 <table class="table table-sm mb-0">
                   <tbody>
-                    {Object.entries(s.rsvp.byStatus).map(([st, cnt]) => (
+                    {Object.entries(s.rsvp.byStatus ?? {}).map(([st, cnt]) => (
                       <tr key={st}><td class="small">{st}</td><td class="mono text-end">{cnt}</td></tr>
                     ))}
                   </tbody>
                 </table>
               </div>
-              {Object.keys(s.rsvp.actionsTaken).length > 0 && (
+              {Object.keys(s.rsvp.actionsTaken ?? {}).length > 0 && (
                 <div class="col-md-6">
                   <div class="small fw-semibold mb-1">Actions Taken</div>
                   <table class="table table-sm mb-0">
                     <tbody>
-                      {Object.entries(s.rsvp.actionsTaken).map(([action, cnt]) => (
+                      {Object.entries(s.rsvp.actionsTaken ?? {}).map(([action, cnt]) => (
                         <tr key={action}><td class="small">{action}</td><td class="mono text-end">{cnt}</td></tr>
                       ))}
                     </tbody>

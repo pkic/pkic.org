@@ -1,5 +1,6 @@
 import { Fragment } from "preact";
 import { useState, useEffect } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -12,6 +13,7 @@ import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
 import type { ProposalSummary, ProposalReview, ProposalSpeaker, ProposalAccess } from "../../../types";
 import { EventEmail } from "./EventEmail";
+import { Invites } from "./Invites";
 
 // ─── Proposal detail panel ────────────────────────────────────────────────────
 
@@ -234,8 +236,9 @@ function ProposalsList({ slug }: { slug: string }) {
 
 // ─── Proposals compositor ─────────────────────────────────────────────────────
 
-export function Proposals({ slug }: { slug: string }) {
-  const [tab, setTab] = useState<"proposals" | "invites" | "email">("proposals");
+export function Proposals({ slug, subTab }: { slug: string; subTab?: string }) {
+  const [, navigate] = useHashLocation();
+  const tab = (subTab === "invites" || subTab === "email") ? subTab : "proposals";
 
   return (
     <div>
@@ -246,14 +249,10 @@ export function Proposals({ slug }: { slug: string }) {
           { key: "email", label: "Email" },
         ]}
         active={tab}
-        onChange={(key) => setTab(key as "proposals" | "invites" | "email")}
+        onChange={(key) => navigate(`/events/${slug}/proposals/${key === "proposals" ? "" : key}`)}
       />
       {tab === "proposals" && <ProposalsList slug={slug} />}
-      {tab === "invites" && (
-        <p class="text-muted small fst-italic">
-          Use the Invites tab to send speaker invitations for this event.
-        </p>
-      )}
+      {tab === "invites" && <Invites slug={slug} inviteType="speaker" />}
       {tab === "email" && <EventEmail slug={slug} audience="speakers" />}
     </div>
   );

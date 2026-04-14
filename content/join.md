@@ -33,3 +33,16 @@ By joining the PKI Consortium, you agree to adhere to the [Intellectual Property
 ## Membership Application 
 
 {{< joinform >}}
+
+{{< banner style="inline" >}}
+heading: Help us keep everything free
+body: Membership is free, but running the consortium is not. Your donation or sponsorship directly funds the community.
+stat: Free
+statLabel: membership, events, and resources
+links:
+  - text: Donate now
+    url: /donate/
+    primary: true
+  - text: Become a sponsor
+    url: /sponsors/sponsor/
+{{< /banner >}}

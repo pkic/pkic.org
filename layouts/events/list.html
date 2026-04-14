@@ -83,6 +83,9 @@
         </section>
         {{ end }}
 
+        {{/* Content from _index.md (banners, CTAs, etc.) */}}
+        {{ .Content }}
+
         {{/* Past events grouped by year */}}
         {{ if $pastYears }}
         <section class="events-section events-section--past">
@@ -125,7 +128,7 @@
       <aside class="col-lg-3">
         <div class="events-sidebar sticky-lg-top">
 
-          {{- $ws         := .Param "webinarSidebar" | default dict -}}
+          {{- $ws         := .Scratch.Get "sidebarData" | default dict -}}
           {{- $wsTitle    := index $ws "title"    | default "Sponsored Webinars" -}}
           {{- $wsDesc     := index $ws "description" | default "" -}}
           {{- $wsCta      := index $ws "cta"      | default "Want to host a sponsored webinar?" -}}

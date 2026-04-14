@@ -9,6 +9,7 @@ import { runRsvpEnforcer } from "./_lib/services/rsvp-enforcer";
 import api_Router from "./api/router";
 import donate_Router from "./donate/router";
 import r_Router from "./r/router";
+import { onRequestGet as OgCardGet } from "./api/v1/og/card/[...path]";
 import type { Env } from "./_lib/types";
 import { processIncomingEmail } from "./_lib/email/ingest";
 
@@ -18,6 +19,7 @@ export const openapi = fromHono(app);
 const REMINDER_CRON = "*/15 * * * *";
 const RETENTION_CRON = "0 3 * * *";
 
+app.get("/og/*", OgCardGet);
 app.route("/api", api_Router);
 app.route("/donate", donate_Router);
 app.route("/r", r_Router);

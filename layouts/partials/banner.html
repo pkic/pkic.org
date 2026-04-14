@@ -1,0 +1,67 @@
+{{/*
+  banner.html — Generic CTA banner partial.
+
+  Used by the {{< banner >}} shortcode. Receives a parsed YAML map with
+  heading, body, stat, statLabel, and links.
+
+  Parameters:
+    .data   — Parsed YAML map (from shortcode inner content)
+    .style  — "banner" (full-width, default), "inline" (card between sections),
+              or "join" (centered CTA with green gradient)
+*/}}
+{{- $style := .style | default "banner" -}}
+
+{{/* ── Resolve content source ─────────────────────────────────────────── */}}
+{{- $d := .data -}}
+{{- if $d -}}
+
+{{- $heading   := $d.heading   | default "" -}}
+{{- $body      := $d.body      | default "" | markdownify -}}
+{{- $stat      := $d.stat      | default "" -}}
+{{- $statLabel := $d.statLabel | default "" -}}
+{{- $links     := $d.links     | default slice -}}
+
+{{- if eq $style "join" -}}
+<section class="pkic-join-cta">
+  <div class="container text-center">
+    {{- if $heading }}
+    <h2 class="fw-bold mb-3">{{ $heading }}</h2>
+    {{- end }}
+    {{- if $body }}
+    <p class="lead mb-4 mx-auto pkic-join-cta-body">{{ $body }}</p>
+    {{- end }}
+    {{- range $links }}
+    <a href="{{ .url }}" class="btn btn-light btn-lg rounded-pill px-5 fw-bold">{{ .text }}</a>
+    {{- end }}
+  </div>
+</section>
+{{- else if $heading -}}
+<div class="support-cta support-cta--{{ $style }}" data-reveal>
+  <div class="{{ if eq $style "banner" }}container{{ else }}support-cta-card{{ end }}">
+    <div class="support-cta-inner">
+      {{- if $stat }}
+      <div class="support-cta-stat-col">
+        <span class="support-cta-stat">{{ $stat }}</span>
+        {{- if $statLabel }}
+        <span class="support-cta-stat-label">{{ $statLabel }}</span>
+        {{- end }}
+      </div>
+      {{- end }}
+      <div class="support-cta-text">
+        <p class="support-cta-heading">{{ $heading }}</p>
+        <div class="support-cta-body">{{ $body }}</div>
+        {{- if $links }}
+        <div class="support-cta-actions">
+          {{- range $links }}
+          {{- $primary := .primary | default false -}}
+          {{- $class := cond $primary "btn btn-pkic support-cta-btn-primary" "support-cta-link" -}}
+          <a href="{{ .url }}" class="{{ $class }}">{{ .text }}{{ if not $primary }} &rarr;{{ end }}</a>
+          {{- end }}
+        </div>
+        {{- end }}
+      </div>
+    </div>
+  </div>
+</div>
+{{- end -}}
+{{- end -}}

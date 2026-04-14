@@ -32,6 +32,7 @@
     "seed:production": "node scripts/seed.mjs --production"
   },
   "dependencies": {
+    "@cloudflare/puppeteer": "^1.1.0",
     "@preact/signals": "^2.9.0",
     "@resvg/resvg-wasm": "^2.6.2",
     "chanfana": "^3.3.0",

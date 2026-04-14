@@ -1,0 +1,44 @@
+{{/*
+  working-groups — Working Groups spotlight cards.
+
+  Usage:
+    {{< working-groups >}}
+    heading: Working Groups
+    moreText: All working groups →
+    moreUrl: /wg/
+    {{< /working-groups >}}
+*/}}
+{{- $yaml := dict -}}
+{{- with .Inner -}}
+  {{- $yaml = . | transform.Unmarshal -}}
+{{- end -}}
+
+{{- $heading  := $yaml.heading  | default "Working Groups" -}}
+{{- $moreText := $yaml.moreText | default "All working groups →" -}}
+{{- $moreUrl  := $yaml.moreUrl  | default "/wg/" -}}
+
+{{- $wgCards := slice -}}
+{{- range where site.Pages "Section" "wg" -}}
+  {{- if and (eq .Kind "section") (ne .RelPermalink "/wg/") .Params.card -}}
+    {{- $wgCards = $wgCards | append . -}}
+  {{- end -}}
+{{- end -}}
+{{- $wgCards = sort $wgCards "Params.card.order" -}}
+
+<section class="pkic-wg-section py-5">
+  <div class="container">
+    <div class="d-flex align-items-end justify-content-between mb-4 pb-1">
+      <div>
+        <h2 class="h3 fw-bold mb-0">{{ $heading }}</h2>
+      </div>
+      <a href="{{ $moreUrl }}" class="btn btn-sm btn-outline-secondary flex-shrink-0">{{ $moreText }}</a>
+    </div>
+    <div class="row g-4">
+      {{ range $wgCards }}
+      <div class="col-sm-6 col-xl-3">
+        {{ partial "wg/spotlight-card.html" . }}
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>

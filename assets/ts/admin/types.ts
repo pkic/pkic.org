@@ -42,6 +42,7 @@ export interface AdminAttendanceOption {
 
 export interface AdminEventTerm {
   id: string;
+  audience_type: string;
   term_key: string;
   version: string;
   required: number;

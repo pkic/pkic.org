@@ -1,0 +1,40 @@
+{{/*
+  recent-posts — Latest blog post cards.
+
+  Usage:
+    {{< recent-posts >}}
+    heading: Latest from the Blog
+    moreText: All posts →
+    moreUrl: /blog/
+    limit: 3
+    {{< /recent-posts >}}
+*/}}
+{{- $yaml := dict -}}
+{{- with .Inner -}}
+  {{- $yaml = . | transform.Unmarshal -}}
+{{- end -}}
+
+{{- $heading  := $yaml.heading  | default "Latest from the Blog" -}}
+{{- $moreText := $yaml.moreText | default "All posts →" -}}
+{{- $moreUrl  := $yaml.moreUrl  | default "/blog/" -}}
+{{- $limit    := int ($yaml.limit | default 3) -}}
+
+{{- $posts := first $limit (where site.RegularPages "Type" "blog") -}}
+
+{{ if $posts }}
+<section class="pkic-recent-posts py-5">
+  <div class="container">
+    <div class="d-flex align-items-baseline justify-content-between mb-4">
+      <h2 class="h3 fw-bold mb-0">{{ $heading }}</h2>
+      <a href="{{ $moreUrl }}" class="btn btn-sm btn-outline-secondary">{{ $moreText }}</a>
+    </div>
+    <div class="row g-4 align-items-start">
+      {{ range $posts }}
+      <div class="col-md-4">
+        {{ partial "blog/card.html" . }}
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}

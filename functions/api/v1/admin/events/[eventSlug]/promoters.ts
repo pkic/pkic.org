@@ -27,7 +27,7 @@ export async function onRequestGet(
     inviter_last_name: string | null;
     inviter_organization: string | null;
     inviter_job_title: string | null;
-    inviter_has_headshot: number;
+    inviter_headshot_r2_key: string | null;
     invites_sent: number;
     invites_accepted: number;
     invites_declined: number;
@@ -42,7 +42,7 @@ export async function onRequestGet(
        u.last_name         AS inviter_last_name,
        u.organization_name AS inviter_organization,
        u.job_title         AS inviter_job_title,
-       CASE WHEN u.headshot_r2_key IS NOT NULL THEN 1 ELSE 0 END AS inviter_has_headshot,
+       u.headshot_r2_key AS inviter_headshot_r2_key,
        COUNT(*)            AS invites_sent,
        COUNT(CASE WHEN i.status = 'accepted' THEN 1 END) AS invites_accepted,
        COUNT(CASE WHEN i.status = 'declined' THEN 1 END) AS invites_declined,
@@ -72,7 +72,7 @@ export async function onRequestGet(
     referrer_last_name: string | null;
     referrer_organization: string | null;
     referrer_job_title: string | null;
-    referrer_has_headshot: number;
+    referrer_headshot_r2_key: string | null;
     codes_issued: number;
     total_clicks: number;
     total_conversions: number;
@@ -85,7 +85,7 @@ export async function onRequestGet(
        COALESCE(u1.last_name,  u2.last_name)  AS referrer_last_name,
        COALESCE(u1.organization_name, u2.organization_name) AS referrer_organization,
        COALESCE(u1.job_title,  u2.job_title)  AS referrer_job_title,
-       CASE WHEN COALESCE(u1.headshot_r2_key, u2.headshot_r2_key) IS NOT NULL THEN 1 ELSE 0 END AS referrer_has_headshot,
+       COALESCE(u1.headshot_r2_key, u2.headshot_r2_key) AS referrer_headshot_r2_key,
        COUNT(DISTINCT rc.code) AS codes_issued,
        SUM(rc.clicks)          AS total_clicks,
        SUM(rc.conversions)     AS total_conversions
@@ -165,7 +165,7 @@ export async function onRequestGet(
     last_name: string | null;
     organization: string | null;
     job_title: string | null;
-    has_headshot: boolean;
+    headshot_url: string | null;
     // invite metrics
     invites_sent: number;
     invites_accepted: number;
@@ -191,7 +191,7 @@ export async function onRequestGet(
       last_name: row.inviter_last_name,
       organization: row.inviter_organization,
       job_title: row.inviter_job_title,
-      has_headshot: row.inviter_has_headshot === 1,
+      headshot_url: row.inviter_headshot_r2_key ? `/api/v1/${row.inviter_headshot_r2_key}` : null,
       invites_sent: row.invites_sent,
       invites_accepted: row.invites_accepted,
       invites_declined: row.invites_declined,
@@ -217,7 +217,7 @@ export async function onRequestGet(
       // Update profile fields if richer data is available from referral query
       if (!existing.organization && row.referrer_organization) existing.organization = row.referrer_organization;
       if (!existing.job_title && row.referrer_job_title) existing.job_title = row.referrer_job_title;
-      if (!existing.has_headshot && row.referrer_has_headshot === 1) existing.has_headshot = true;
+      if (!existing.headshot_url && row.referrer_headshot_r2_key) existing.headshot_url = `/api/v1/${row.referrer_headshot_r2_key}`;
     } else {
       promoterMap.set(row.effective_user_id, {
         user_id: row.effective_user_id,
@@ -226,7 +226,7 @@ export async function onRequestGet(
         last_name: row.referrer_last_name,
         organization: row.referrer_organization,
         job_title: row.referrer_job_title,
-        has_headshot: row.referrer_has_headshot === 1,
+        headshot_url: row.referrer_headshot_r2_key ? `/api/v1/${row.referrer_headshot_r2_key}` : null,
         invites_sent: 0,
         invites_accepted: 0,
         invites_declined: 0,

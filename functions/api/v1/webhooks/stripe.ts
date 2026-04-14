@@ -113,7 +113,13 @@ interface StripeBalanceTransaction {
 
 interface StripePaymentIntent {
   id: string;
-  latest_charge: string | null;
+  latest_charge: string | StripeChargeExpanded | null;
+}
+
+interface StripeChargeExpanded {
+  id: string;
+  balance_transaction: string | StripeBalanceTransaction | null;
+  payment_method_details?: { type: string } | null;
 }
 
 interface StripeCharge {
@@ -331,11 +337,15 @@ export async function onRequestPost(c: any): Promise<Response> {
   // was offered in the session).
   let netAmount: number | null = null;
   let paymentMethodType: string | null = null;
+  let settledAmount: number | null = null;
+  let settledCurrency: string | null = null;
   if (env.STRIPE_SECRET_KEY && session.payment_intent) {
     try {
       const details = await fetchPaymentDetails(env.STRIPE_SECRET_KEY, session.payment_intent);
       netAmount = details.netAmount;
       paymentMethodType = details.paymentMethodType;
+      settledAmount = details.settledAmount;
+      settledCurrency = details.settledCurrency;
     } catch (err) {
       // Non-fatal — we record null and can back-fill from admin sync
       console.error("Failed to fetch payment details for PI", session.payment_intent, err);
@@ -351,6 +361,8 @@ export async function onRequestPost(c: any): Promise<Response> {
          completed_at      = ?,
          status            = 'completed',
          payment_method_type = COALESCE(payment_method_type, ?),
+         settled_amount    = ?,
+         settled_currency  = ?,
          name              = CASE
                                WHEN ? IS NOT NULL AND (name IS NULL OR TRIM(name) = '' OR name = 'Unknown')
                                THEN ?
@@ -378,6 +390,8 @@ export async function onRequestPost(c: any): Promise<Response> {
       netAmount,
       completedAt,
       paymentMethodType,
+      settledAmount,
+      settledCurrency,
       donorIdentity.name,
       donorIdentity.name,
       donorIdentity.email,
@@ -497,48 +511,34 @@ function formatMajorAmount(smallestUnit: number, currencyCode: string): string {
 }
 
 /**
- * Fetches net amount and actual payment method type for a payment intent by traversing:
- *   PaymentIntent → latest_charge → balance_transaction + payment_method_details
+ * Fetches net amount and actual payment method type for a payment intent using
+ * expand[] to get charge + balance_transaction in a single API call.
  */
-async function fetchPaymentDetails(stripeKey: string, paymentIntentId: string): Promise<{ netAmount: number | null; paymentMethodType: string | null }> {
-  const headers = {
-    "Authorization": `Bearer ${stripeKey}`,
-  };
-
-  const piRes = await fetch(`https://api.stripe.com/v1/payment_intents/${paymentIntentId}`, { headers });
+async function fetchPaymentDetails(stripeKey: string, paymentIntentId: string): Promise<{ netAmount: number | null; paymentMethodType: string | null; settledAmount: number | null; settledCurrency: string | null }> {
+  const headers = { "Authorization": `Bearer ${stripeKey}` };
+  const url = `https://api.stripe.com/v1/payment_intents/${paymentIntentId}?expand[]=latest_charge.balance_transaction`;
+  const piRes = await fetch(url, { headers });
   if (!piRes.ok) {
     console.error("fetchPaymentDetails: payment_intent fetch failed", piRes.status);
-    return { netAmount: null, paymentMethodType: null };
+    return { netAmount: null, paymentMethodType: null, settledAmount: null, settledCurrency: null };
   }
 
   const pi = (await piRes.json()) as StripePaymentIntent;
-  if (!pi.latest_charge) {
-    console.warn("fetchPaymentDetails: no latest_charge on", paymentIntentId);
-    return { netAmount: null, paymentMethodType: null };
+  if (!pi.latest_charge || typeof pi.latest_charge === "string") {
+    console.warn("fetchPaymentDetails: no expanded latest_charge on", paymentIntentId);
+    return { netAmount: null, paymentMethodType: null, settledAmount: null, settledCurrency: null };
   }
 
-  const chargeRes = await fetch(`https://api.stripe.com/v1/charges/${pi.latest_charge}`, { headers });
-  if (!chargeRes.ok) {
-    console.error("fetchPaymentDetails: charge fetch failed", chargeRes.status);
-    return { netAmount: null, paymentMethodType: null };
-  }
-
-  const charge = (await chargeRes.json()) as StripeCharge;
+  const charge = pi.latest_charge;
   const paymentMethodType = charge.payment_method_details?.type ?? null;
 
-  if (!charge.balance_transaction) {
-    console.warn("fetchPaymentDetails: no balance_transaction on charge");
-    return { netAmount: null, paymentMethodType };
+  if (!charge.balance_transaction || typeof charge.balance_transaction === "string") {
+    console.warn("fetchPaymentDetails: no expanded balance_transaction on charge");
+    return { netAmount: null, paymentMethodType, settledAmount: null, settledCurrency: null };
   }
 
-  const btRes = await fetch(`https://api.stripe.com/v1/balance_transactions/${charge.balance_transaction}`, { headers });
-  if (!btRes.ok) {
-    console.error("fetchPaymentDetails: balance_transaction fetch failed", btRes.status);
-    return { netAmount: null, paymentMethodType };
-  }
-
-  const bt = (await btRes.json()) as StripeBalanceTransaction;
-  return { netAmount: bt.net ?? null, paymentMethodType };
+  const bt = charge.balance_transaction;
+  return { netAmount: bt.net ?? null, paymentMethodType, settledAmount: bt.amount ?? null, settledCurrency: bt.currency ?? null };
 }
 
 export class WebhooksStripePost extends OpenAPIRoute {

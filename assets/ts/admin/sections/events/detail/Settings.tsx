@@ -321,17 +321,88 @@ function DaysTab({ slug, timezone }: { slug: string; timezone: string }) {
 
 // ─── Terms tab ───────────────────────────────────────────────────────────────
 
+interface TermState {
+  termKey: string;
+  version: string;
+  required: boolean;
+  contentRef: string;
+  displayText: string;
+  helpText: string;
+}
+
+function emptyTerm(): TermState {
+  return { termKey: "", version: "1.0", required: true, contentRef: "", displayText: "", helpText: "" };
+}
+
+function termFromRow(t: AdminEventTerm): TermState {
+  return {
+    termKey: t.term_key,
+    version: t.version,
+    required: !!t.required,
+    contentRef: t.content_ref ?? "",
+    displayText: t.display_text ?? "",
+    helpText: t.help_text ?? "",
+  };
+}
+
+function TermRow({ term, onChange, onRemove }: { term: TermState; onChange: (t: TermState) => void; onRemove: () => void }) {
+  const upd = (patch: Partial<TermState>) => onChange({ ...term, ...patch });
+  return (
+    <div class="card border mb-2">
+      <div class="card-body py-2 px-3">
+        <div class="row g-2 mb-2">
+          <div class="col-md-3">
+            <label class="form-label small mb-1">Key</label>
+            <input class="form-control form-control-sm mono" value={term.termKey} onInput={(e) => upd({ termKey: (e.target as HTMLInputElement).value })} placeholder="terms-of-service" />
+          </div>
+          <div class="col-md-2">
+            <label class="form-label small mb-1">Version</label>
+            <input class="form-control form-control-sm mono" value={term.version} onInput={(e) => upd({ version: (e.target as HTMLInputElement).value })} placeholder="1.0" />
+          </div>
+          <div class="col-md-5">
+            <label class="form-label small mb-1">Link URL</label>
+            <input class="form-control form-control-sm" type="url" value={term.contentRef} onInput={(e) => upd({ contentRef: (e.target as HTMLInputElement).value })} placeholder="https://..." />
+          </div>
+          <div class="col-md-1 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" checked={term.required} onChange={(e) => upd({ required: (e.target as HTMLInputElement).checked })} id={`req-${term.termKey}`} />
+              <label class="form-check-label small" for={`req-${term.termKey}`}>Req</label>
+            </div>
+          </div>
+          <div class="col-md-1 d-flex align-items-end">
+            <button type="button" class="btn btn-sm btn-outline-danger" onClick={onRemove}>✕</button>
+          </div>
+        </div>
+        <div class="row g-2">
+          <div class="col-md-6">
+            <label class="form-label small mb-1">Display text</label>
+            <input class="form-control form-control-sm" value={term.displayText} onInput={(e) => upd({ displayText: (e.target as HTMLInputElement).value })} placeholder="I agree to the Terms of Service" />
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small mb-1">Help text</label>
+            <input class="form-control form-control-sm" value={term.helpText} onInput={(e) => upd({ helpText: (e.target as HTMLInputElement).value })} placeholder="Optional help text shown below" />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function TermsTab({ slug }: { slug: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [terms, setTerms] = useState<AdminEventTerm[]>([]);
+  const [attendee, setAttendee] = useState<TermState[]>([]);
+  const [speaker, setSpeaker] = useState<TermState[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ terms: AdminEventTerm[] }>(`/api/v1/admin/events/${slug}/terms`);
-      setTerms(data.terms ?? []);
+      const data = await api<{ terms: { attendee: AdminEventTerm[]; speaker: AdminEventTerm[] } }>(`/api/v1/admin/events/${slug}/terms`);
+      setAttendee((data.terms?.attendee ?? []).map(termFromRow));
+      setSpeaker((data.terms?.speaker ?? []).map(termFromRow));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -341,25 +412,58 @@ function TermsTab({ slug }: { slug: string }) {
 
   useEffect(() => { void load(); }, [load]);
 
+  async function handleSave() {
+    setSaving(true);
+    setSaveStatus("Saving…");
+    try {
+      const toPayload = (list: TermState[]) =>
+        list.filter((t) => t.termKey.trim() && t.displayText.trim()).map((t) => ({
+          termKey: t.termKey.trim(),
+          version: t.version.trim() || "1.0",
+          required: t.required,
+          contentRef: t.contentRef.trim() || undefined,
+          displayText: t.displayText.trim(),
+          helpText: t.helpText.trim() || undefined,
+        }));
+      await api(`/api/v1/admin/events/${slug}/terms`, {
+        method: "PUT",
+        body: JSON.stringify({ attendee: toPayload(attendee), speaker: toPayload(speaker) }),
+      });
+      setSaveStatus("✓ Saved");
+      toast("Terms updated", "success");
+      void load();
+    } catch (e) {
+      const msg = (e as Error).message;
+      setSaveStatus(msg);
+      toast(msg, "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
 
   return (
     <div>
-      <div class="d-flex justify-content-end mb-2">
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => void load()}>↺ Refresh</button>
+      <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
+        <span class="small text-muted">Manage terms &amp; conditions shown during registration</span>
+        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void load()}>↺ Refresh</button>
+        <button class="btn btn-sm btn-primary" onClick={() => void handleSave()} disabled={saving}>Save Terms</button>
       </div>
-      <DataTable
-        columns={[
-          { header: "Key", cell: (t) => t.term_key, className: "mono small" },
-          { header: "Version", cell: (t) => t.version, className: "mono small" },
-          { header: "Required", cell: (t) => t.required ? "Yes" : "No" },
-          { header: "Display text", cell: (t) => t.display_text ?? "—", className: "small" },
-        ]}
-        data={terms}
-        empty="No terms configured"
-        rowKey={(t) => t.id}
-      />
+      {saveStatus && <div class={`small mb-2 ${saveStatus.startsWith("✓") ? "text-success" : "text-warning"}`}>{saveStatus}</div>}
+
+      <h6 class="small fw-bold text-uppercase text-muted mb-2">Attendee Terms</h6>
+      {attendee.map((t, i) => (
+        <TermRow key={i} term={t} onChange={(u) => setAttendee((prev) => prev.map((x, j) => j === i ? u : x))} onRemove={() => setAttendee((prev) => prev.filter((_, j) => j !== i))} />
+      ))}
+      <button type="button" class="btn btn-sm btn-outline-secondary mb-4" onClick={() => setAttendee((prev) => [...prev, emptyTerm()])}>+ Add attendee term</button>
+
+      <h6 class="small fw-bold text-uppercase text-muted mb-2">Speaker Terms</h6>
+      {speaker.map((t, i) => (
+        <TermRow key={i} term={t} onChange={(u) => setSpeaker((prev) => prev.map((x, j) => j === i ? u : x))} onRemove={() => setSpeaker((prev) => prev.filter((_, j) => j !== i))} />
+      ))}
+      <button type="button" class="btn btn-sm btn-outline-secondary mb-3" onClick={() => setSpeaker((prev) => [...prev, emptyTerm()])}>+ Add speaker term</button>
     </div>
   );
 }
@@ -415,20 +519,22 @@ function FormsTab({ slug }: { slug: string }) {
 
 type SettingsTab = "general" | "days" | "terms" | "forms" | "team";
 
-export function Settings({ event, onUpdated }: { event: EventDetail; onUpdated: (d: EventDetail) => void }) {
-  const [tab, setTab] = useState<SettingsTab>("general");
+const SETTINGS_TABS: Array<{ key: SettingsTab; label: string }> = [
+  { key: "general", label: "General" },
+  { key: "days", label: "Days" },
+  { key: "terms", label: "Terms" },
+  { key: "forms", label: "Forms" },
+  { key: "team", label: "Team" },
+];
 
-  const tabs: Array<{ key: SettingsTab; label: string }> = [
-    { key: "general", label: "General" },
-    { key: "days", label: "Days" },
-    { key: "terms", label: "Terms" },
-    { key: "forms", label: "Forms" },
-    { key: "team", label: "Team" },
-  ];
+export function Settings({ event, onUpdated, subTab }: { event: EventDetail; onUpdated: (d: EventDetail) => void; subTab?: string }) {
+  const tab: SettingsTab = (SETTINGS_TABS.find((t) => t.key === subTab)?.key ?? "general") as SettingsTab;
 
   return (
     <div>
-      <Tabs items={tabs} active={tab} onChange={(key) => setTab(key as SettingsTab)} />
+      <Tabs items={SETTINGS_TABS} active={tab} onChange={(key) => {
+        location.hash = `/events/${event.slug}/settings/${key}`;
+      }} />
 
       {tab === "general" && <GeneralTab event={event} onUpdated={onUpdated} />}
       {tab === "days" && <DaysTab slug={event.slug} timezone={event.timezone} />}

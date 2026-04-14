@@ -1,0 +1,56 @@
+{{/*
+  events-cards — Conference event cards (upcoming first, then recent past).
+
+  Usage:
+    {{< events-cards >}}
+    heading: Events
+    moreText: All events →
+    moreUrl: /events/
+    limit: 3
+    {{< /events-cards >}}
+*/}}
+{{- $yaml := dict -}}
+{{- with .Inner -}}
+  {{- $yaml = . | transform.Unmarshal -}}
+{{- end -}}
+
+{{- $heading  := $yaml.heading  | default "Events" -}}
+{{- $moreText := $yaml.moreText | default "All events →" -}}
+{{- $moreUrl  := $yaml.moreUrl  | default "/events/" -}}
+{{- $limit    := int ($yaml.limit | default 3) -}}
+
+{{- $allEvents := sort (where site.Pages "Params.eventType" "!=" nil) "Params.eventDate" "asc" -}}
+{{- $today     := now.Format "2006-01-02" -}}
+
+{{- $upcomingConfs := slice -}}
+{{- $pastConfs     := slice -}}
+{{- range $allEvents -}}
+  {{- if eq (.Param "eventType") "conference" -}}
+    {{- $eventDate := time (.Param "eventDate") -}}
+    {{- if ge ($eventDate.Format "2006-01-02") $today -}}
+      {{- $upcomingConfs = $upcomingConfs | append . -}}
+    {{- else -}}
+      {{- $pastConfs = $pastConfs | append . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $cards := first $limit ($upcomingConfs | append (sort $pastConfs "Params.eventDate" "desc")) -}}
+
+{{ if $cards }}
+<section class="pkic-home-events py-5">
+  <div class="container">
+    <div class="d-flex align-items-baseline justify-content-between mb-4">
+      <h2 class="h3 fw-bold mb-0">{{ $heading }}</h2>
+      <a href="{{ $moreUrl }}" class="btn btn-sm btn-outline-secondary">{{ $moreText }}</a>
+    </div>
+    <div class="row g-4 align-items-start">
+      {{ range $cards }}
+      <div class="col-md-4">
+        {{ partial "events/card.html" . }}
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+{{ end }}
