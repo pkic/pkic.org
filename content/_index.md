@@ -9,6 +9,12 @@ keywords: ["pkic", "trust","identity","pki","tls","ssl","crypto","iot","devices"
 heroHeader: PKI Consortium | PKIC
 heroTitle: Public Key Infrastructure Consortium
 heroDescription: Trusted digital assets and communication for everyone and everything
+heroLinks:
+  - text: Learn more
+    url: /about/
+    primary: true
+  - text: Join the Consortium
+    url: /join/
 
 aliases:
   - /resources/
@@ -20,3 +26,45 @@ The slides and recordings of the **Post-Quantum Cryptography Conference** in Kua
   
 **Next stop:** Amsterdam, Netherlands from 1-3 December 2026 — [request an invite now](/register)!
 {{< /alert >}}
+{{< members limit="80" title="Our Members & Sponsors" >}}
+
+{{< working-groups >}}
+heading: Working Groups
+moreText: All working groups →
+moreUrl: /wg/
+{{< /working-groups >}}
+
+{{< banner style="inline" >}}
+heading: Help us keep this free
+body: No membership fees. No tickets. No paywalls. We rely on voluntary donations and sponsors to keep it that way.
+stat: "$500"
+statLabel: keeps one seat free at our events
+links:
+  - text: Donate now
+    url: /donate/
+    primary: true
+  - text: Become a sponsor
+    url: /sponsors/sponsor/
+{{< /banner >}}
+
+{{< recent-posts >}}
+heading: Latest from the Blog
+moreText: All posts →
+moreUrl: /blog/
+limit: 3
+{{< /recent-posts >}}
+
+{{< events-cards >}}
+heading: Events
+moreText: All events →
+moreUrl: /events/
+limit: 3
+{{< /events-cards >}}
+
+{{< banner style="join" >}}
+heading: Become a Member
+body: The PKI Consortium is open to organizations committed to improving trust in digital assets and communications. Membership is free.
+links:
+  - text: "Join today — it's free"
+    url: /join/
+{{< /banner >}}

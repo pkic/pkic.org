@@ -1,4 +1,5 @@
 import { useState } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
@@ -17,11 +18,12 @@ const ATTENDANCE_LABELS: Record<string, string> = {
   on_demand: "On demand",
 };
 
-export function Stats() {
+export function Stats({ subTab }: { subTab?: string }) {
   const { data: stats, loading, error } = useData<StatsResponse>(
     () => api<StatsResponse>("/api/v1/admin/stats"), [],
   );
-  const [tab, setTab] = useState<StatsTab>("overview");
+  const [, navigate] = useHashLocation();
+  const tab: StatsTab = (subTab === "registrations" || subTab === "donations") ? subTab : "overview";
 
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
@@ -35,7 +37,7 @@ export function Stats() {
 
   return (
     <div>
-      <Tabs items={TABS} active={tab} onChange={(key) => setTab(key as StatsTab)} />
+      <Tabs items={TABS} active={tab} onChange={(key) => navigate(key === "overview" ? "/stats" : `/stats/${key}`)} />
 
       {tab === "overview" && <OverviewTab stats={stats} />}
       {tab === "registrations" && <RegistrationsTab stats={stats} />}

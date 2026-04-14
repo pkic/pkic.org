@@ -55,6 +55,7 @@ body {
 .pkic-page-hero {
   padding: 0 !important;
   height: 100%;
+  perspective: 600px;
   background: var(
     --og-theme-gradient,
     linear-gradient(135deg, #0a1f14 0%, #0d3d24 55%, #0a2f40 100%)
@@ -330,11 +331,11 @@ body {
 }
 
 // ── Member logo wall — full-bleed 3D background layer ────────────────────
-// All logos rendered as a flat grid behind the hero text.
 // Logos are inverted to white and faded so they read as a texture, not content.
+// A subtle perspective + rotateX tilt gives the wall a receding depth effect.
 .og-member-wall-bg {
   position: absolute;
-  inset: 0;
+  inset: -40px 0 0 0;
   z-index: 0;
   overflow: hidden;
   display: grid;
@@ -342,7 +343,7 @@ body {
   gap: 10px;
   padding: 16px;
   align-content: start;
-  transform: scale(1.12);
+  transform: scale(1.15) rotateX(18deg) rotateY(-4deg);
   transform-origin: center top;
   opacity: 0.18;
   pointer-events: none;
@@ -361,7 +362,7 @@ body {
       max-height: 28px;
       max-width: 100%;
       object-fit: contain;
-      filter: brightness(0) invert(1);
+      filter: grayscale(1) invert(1) brightness(1.8) contrast(0.6);
       display: block;
     }
   }

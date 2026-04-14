@@ -177,6 +177,8 @@
 
 // Blog post cards on the homepage reuse the .blog-card styles from _blog.scss
 
+// ── Join CTA section ────────────────────────────────────────────────────────
+
 .pkic-join-cta {
   background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 100%);
   color: #fff;
@@ -202,6 +204,10 @@
   .lead {
     opacity: 0.88;
     font-size: 1.2rem;
+  }
+
+  .pkic-join-cta-body {
+    max-width: 560px;
   }
 }
 

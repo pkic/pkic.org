@@ -1,12 +1,12 @@
-import { useState, useEffect, useCallback } from "preact/hooks";
+import { useState, useEffect, useRef, useCallback } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
-import { Table } from "../../components/Table";
+import { ApiDataTable, type ApiTableActions, type Column } from "../../components/Table";
 import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
-import { fmt } from "../ui";
-import { toast } from "../ui";
+import { fmt, toast } from "../ui";
 import { asyncPaymentWindow } from "../../../shared/constants/async-payment-window";
 
 interface DonationRow {
@@ -23,6 +23,8 @@ interface DonationRow {
   status: string;
   payment_method_type: string | null;
   session_expires_at: number | null;
+  settled_amount: number | null;
+  settled_currency: string | null;
   created_at: string;
   completed_at: string | null;
 }
@@ -32,6 +34,7 @@ interface DonationsResponse {
   summary: Record<string, number>;
   limit: number;
   offset: number;
+  total: number;
 }
 
 interface DonationSyncResult {
@@ -83,87 +86,35 @@ function fmtAmount(smallestUnit: number, currency: string): string {
   }
 }
 
-function DonationTableRow({ d, onSync }: { d: DonationRow; onSync: (sessionId: string) => void }) {
+function SyncButton({ d, onSync }: { d: DonationRow; onSync: (sessionId: string) => Promise<void> }) {
   const [syncing, setSyncing] = useState(false);
-  const gross = fmtAmount(d.gross_amount, d.currency);
-  const net = d.net_amount !== null ? fmtAmount(d.net_amount, d.currency) : "—";
   const needsSync =
     d.status === "pending" ||
     d.status === "awaiting_payment" ||
     (d.status === "completed" && (d.net_amount === null || d.payment_method_type === null));
-  const methodLabel = d.payment_method_type ? asyncPaymentWindow(d.payment_method_type).label : "—";
-  const deadline =
-    d.status === "awaiting_payment" && d.session_expires_at
-      ? new Date(d.session_expires_at * 1000).toLocaleDateString(undefined, {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        })
-      : null;
-  const badgeUrl = `/api/v1/og/donation/${encodeURIComponent(d.checkout_session_id)}?name=${encodeURIComponent(d.name)}`;
-
-  async function handleSync() {
-    setSyncing(true);
-    try {
-      await onSync(d.checkout_session_id);
-    } finally {
-      setSyncing(false);
-    }
-  }
-
+  if (!needsSync) return null;
   return (
-    <tr>
-      <td class="mono small">{d.checkout_session_id.slice(0, 24)}…</td>
-      <td>
-        {d.name}
-        <br />
-        <small class="text-muted">{d.email}</small>
-        {d.organization && (
-          <>
-            <br />
-            <small class="text-muted">{d.organization}</small>
-          </>
-        )}
-      </td>
-      <td>
-        {gross}
-        <br />
-        <small class="text-muted">Net: {net}</small>
-      </td>
-      <td>
-        <Badge status={d.status} />{" "}
-        {needsSync && (
-          <button
-            class="btn btn-xs btn-outline-primary adm-donation-action-btn"
-            disabled={syncing}
-            onClick={handleSync}
-          >
-            {syncing ? "…" : "Sync"}
-          </button>
-        )}
-        {d.status === "completed" && (
-          <a
-            class="btn btn-xs btn-outline-secondary adm-donation-action-btn"
-            href={badgeUrl}
-            download={`${d.name.replace(/[^\w\s-]/g, "")}-donation-badge.jpeg`}
-          >
-            🖼 Badge
-          </a>
-        )}
-      </td>
-      <td class="small">
-        {methodLabel}
-        {deadline && (
-          <>
-            <br />
-            <small class="text-muted">due {deadline}</small>
-          </>
-        )}
-      </td>
-      <td class="small text-muted">{d.source ?? "—"}</td>
-      <td class="small text-muted">{fmt(d.created_at)}</td>
-      <td class="small text-muted">{fmt(d.completed_at)}</td>
-    </tr>
+    <button
+      class="btn btn-xs btn-outline-primary adm-donation-action-btn"
+      disabled={syncing}
+      onClick={async () => { setSyncing(true); try { await onSync(d.checkout_session_id); } finally { setSyncing(false); } }}
+    >
+      {syncing ? "…" : "Sync"}
+    </button>
+  );
+}
+
+function BadgeButton({ d }: { d: DonationRow }) {
+  if (d.status !== "completed") return null;
+  const badgeUrl = `/api/v1/og/donation/${encodeURIComponent(d.checkout_session_id)}?name=${encodeURIComponent(d.name)}`;
+  return (
+    <a
+      class="btn btn-xs btn-outline-secondary adm-donation-action-btn"
+      href={badgeUrl}
+      download={`${d.name.replace(/[^\w\s-]/g, "")}-donation-badge.jpeg`}
+    >
+      Badge
+    </a>
   );
 }
 
@@ -308,32 +259,14 @@ function PromotersTab() {
   );
 }
 
-export function Donations() {
-  const [tab, setTab] = useState<"list" | "promoters">("list");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [donations, setDonations] = useState<DonationRow[]>([]);
-  const [summary, setSummary] = useState<Record<string, number>>({});
+export function Donations({ subTab }: { subTab?: string }) {
+  const tab = subTab === "promoters" ? "promoters" : "list";
   const [statusFilter, setStatusFilter] = useState("");
+  const [summary, setSummary] = useState<Record<string, number>>({});
   const [syncingAll, setSyncingAll] = useState(false);
-
-  const load = useCallback(async (filter?: string) => {
-    const activeFilter = filter !== undefined ? filter : statusFilter;
-    setLoading(true);
-    setError(null);
-    try {
-      const qs = activeFilter ? `?status=${encodeURIComponent(activeFilter)}` : "";
-      const data = await api<DonationsResponse>(`/api/v1/admin/donations${qs}`);
-      setDonations(data.donations);
-      setSummary(data.summary);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [statusFilter]);
-
-  useEffect(() => { void load(); }, [statusFilter]);
+  const [, navigate] = useHashLocation();
+  const [donations, setDonations] = useState<DonationRow[]>([]);
+  const actionsRef = useRef<ApiTableActions | null>(null);
 
   async function handleSync(sessionId: string) {
     try {
@@ -348,9 +281,31 @@ export function Donations() {
       else if (result?.outcome === "failed") toast("Payment failed — bank declined or bounced.", "error");
       else if (result?.outcome === "still_pending") toast("Session still pending on Stripe.", "info");
       else toast(result?.error ?? "Sync failed.", "error");
-      void load(statusFilter);
+      actionsRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
+    }
+  }
+
+  async function handleSyncPending() {
+    setSyncingAll(true);
+    try {
+      const res = await api<DonationSyncResponse>("/api/v1/admin/donations/sync", {
+        method: "POST",
+        body: JSON.stringify({ pendingOnly: true }),
+      });
+      const parts = [
+        res.completed ? `${res.completed} completed` : "",
+        res.failed ? `${res.failed} failed` : "",
+        res.expired ? `${res.expired} expired` : "",
+        res.errors ? `${res.errors} errors` : "",
+      ].filter(Boolean).join(", ");
+      toast(`Synced ${res.synced}${parts ? `: ${parts}` : "."}`, res.errors > 0 || res.failed > 0 ? "error" : "success");
+      actionsRef.current?.reload();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setSyncingAll(false);
     }
   }
 
@@ -365,7 +320,7 @@ export function Donations() {
         res.errors ? `${res.errors} errors` : "",
       ].filter(Boolean).join(", ");
       toast(`Synced ${res.synced}${parts ? `: ${parts}` : "."}`, res.errors > 0 || res.failed > 0 ? "error" : "success");
-      void load(statusFilter);
+      actionsRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
     } finally {
@@ -381,6 +336,48 @@ export function Donations() {
   const syncable = pending + backfillable;
   const failed = summary.failed ?? 0;
 
+  const columns: Column<DonationRow>[] = [
+    {
+      header: "Donor",
+      cell: (d) => (
+        <>
+          {d.name}
+          {d.organization && <small class="text-muted"> — {d.organization}</small>}
+        </>
+      ),
+    },
+    {
+      header: { label: "Amount", className: "text-end" },
+      cell: (d) => {
+        const gross = fmtAmount(d.gross_amount, d.currency);
+        const netCurrency = d.settled_currency ?? d.currency;
+        const net = d.net_amount !== null ? fmtAmount(d.net_amount, netCurrency) : null;
+        return (
+          <>
+            <span class="fw-semibold">{gross}</span>
+            {net && <small class="text-muted d-block">Net: {net}</small>}
+          </>
+        );
+      },
+      className: "text-end text-nowrap",
+    },
+    {
+      header: "Status",
+      cell: (d) => <Badge status={d.status} />,
+      className: "small",
+    },
+    {
+      header: "Method",
+      cell: (d) => d.payment_method_type ? asyncPaymentWindow(d.payment_method_type).label : "—",
+      className: "small",
+    },
+    {
+      header: "Date",
+      cell: (d) => fmt(d.completed_at ?? d.created_at),
+      className: "small text-muted text-nowrap",
+    },
+  ];
+
   return (
     <div>
       <Tabs
@@ -389,55 +386,77 @@ export function Donations() {
           { key: "promoters", label: "Share Links" },
         ]}
         active={tab}
-        onChange={(k) => setTab(k as typeof tab)}
+        onChange={(k) => navigate(k === "list" ? "/donations" : "/donations/promoters")}
       />
 
       {tab === "list" && (
-        <div>
-          <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-            {FILTERS.map((f) => {
-              const label =
-                f === "" ? "All" : f === "awaiting_payment" ? "Awaiting" : f.charAt(0).toUpperCase() + f.slice(1);
-              const count = f === "" ? total : (summary[f] ?? 0);
-              return (
+        <>
+          <ApiDataTable<DonationRow>
+            endpoint="/api/v1/admin/donations"
+            resolve={(d) => {
+              const resp = d as DonationsResponse;
+              setSummary(resp.summary);
+              setDonations(resp.donations);
+              return resp.donations;
+            }}
+            resolvePage={(d) => {
+              const resp = d as DonationsResponse;
+              return { total: resp.total, hasMore: resp.offset + resp.limit < resp.total };
+            }}
+            paginate
+            params={{
+              ...(statusFilter && { status: statusFilter }),
+            }}
+            deps={[statusFilter]}
+            actionsRef={actionsRef}
+            toolbar={({ resetPage }) => (
+              <>
+                <div class="d-flex align-items-center gap-2 flex-wrap">
+                  {FILTERS.map((f) => {
+                    const label =
+                      f === "" ? "All" : f === "awaiting_payment" ? "Awaiting" : f.charAt(0).toUpperCase() + f.slice(1);
+                    const count = f === "" ? total : (summary[f] ?? 0);
+                    return (
+                      <button
+                        key={f}
+                        class={`btn btn-sm btn-outline-secondary${statusFilter === f ? " active" : ""}`}
+                        onClick={() => { setStatusFilter(f); resetPage(); }}
+                      >
+                        {label} <span class="badge text-bg-secondary">{count}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+                {pending > 0 && (
+                  <button
+                    class="btn btn-sm btn-outline-success"
+                    disabled={syncingAll}
+                    onClick={handleSyncPending}
+                  >
+                    {syncingAll ? "Syncing…" : `↺ Sync pending (${pending})`}
+                  </button>
+                )}
                 <button
-                  key={f}
-                  class={`btn btn-sm btn-outline-secondary${statusFilter === f ? " active" : ""}`}
-                  onClick={() => setStatusFilter(f)}
+                  class="btn btn-sm btn-success"
+                  disabled={syncingAll || syncable === 0}
+                  onClick={handleSyncAll}
                 >
-                  {label} <span class="badge text-bg-secondary">{count}</span>
+                  {syncingAll ? "Syncing…" : `↺ Sync all (${syncable})`}
                 </button>
-              );
-            })}
-            <div class="ms-auto d-flex gap-2 align-items-center">
-              <button
-                class="btn btn-sm btn-success"
-                disabled={syncingAll || syncable === 0}
-                onClick={handleSyncAll}
-              >
-                {syncingAll ? "Syncing…" : `↺ Sync all (${syncable})`}
-              </button>
-              {failed > 0 && (
-                <span class="badge text-bg-danger" title="Payment failed">
-                  {failed} failed
-                </span>
-              )}
-            </div>
-          </div>
-
-          {loading && <Spinner />}
-          {!loading && <ErrorAlert error={error} />}
-          {!loading && !error && (
-            <Table
-              heads={["Session ID", "Donor", "Amount", "Status", "Method", "Source", "Created", "Completed"]}
-              empty="No donations found"
-            >
-              {donations.map((d) => (
-                <DonationTableRow key={d.id} d={d} onSync={handleSync} />
-              ))}
-            </Table>
-          )}
-        </div>
+                {failed > 0 && (
+                  <span class="badge text-bg-danger" title="Payment failed">
+                    {failed} failed
+                  </span>
+                )}
+              </>
+            )}
+            columns={columns}
+            empty="No donations found"
+            className="align-middle"
+            rowKey={(d) => d.id}
+            onRowClick={(d) => navigate(`/donations/${d.id}`)}
+          />
+        </>
       )}
 
       {tab === "promoters" && <PromotersTab />}

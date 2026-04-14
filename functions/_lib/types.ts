@@ -55,6 +55,8 @@ export interface Env {
   SPEAKER_UPLOADS_BUCKET?: R2BucketLike;
   /** Cloudflare Images binding — resize/convert images from raw streams without a public URL. */
   IMAGES?: ImagesBinding;
+  /** Cloudflare Browser Rendering binding — headless Chromium for HTML-to-image rendering. */
+  BROWSER?: Fetcher;
   /** Cloudflare Rate Limiting binding for low-volume per-email public email triggers. */
   EMAIL_RATE_LIMITER?: RateLimitBinding;
   /** Cloudflare Rate Limiting binding for higher-volume per-IP public email triggers. */

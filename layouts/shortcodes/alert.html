@@ -13,7 +13,9 @@
 -}}
 {{- $grad := index $gradients $type | default (index $gradients "success") -}}
 {{- $icon := index $iconMap $type | default "✓" -}}
-<div class="pkic-alert pkic-alert-{{ $type }}" role="alert" style="background: linear-gradient({{ $grad }}); border-left: 4px solid currentColor;">
-  <span class="pkic-alert-icon">{{ $icon }}</span>
-  <div class="pkic-alert-body">{{ .Inner | markdownify }}</div>
+<div class="container">
+  <div class="pkic-alert pkic-alert-{{ $type }}" role="alert" style="background: linear-gradient({{ $grad }}); border-left: 4px solid currentColor;">
+    <span class="pkic-alert-icon">{{ $icon }}</span>
+    <div class="pkic-alert-body">{{ .Inner | markdownify }}</div>
+  </div>
 </div>

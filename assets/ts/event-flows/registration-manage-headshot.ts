@@ -25,7 +25,7 @@ export function wireHeadshotSection(
     initialUrl: initialHeadshotUrl ?? null,
     previewOptions: { alt: "Your headshot", emptyLabel: "No photo" },
     uploadStatus: "Uploading...",
-    uploadSuccessStatus: "Photo updated. Your social badge is regenerating...",
+    uploadSuccessStatus: "Photo updated. Your social badge has been updated.",
     deleteSuccessStatus: "Photo removed. Your social badge has been updated.",
     confirmDeleteMessage: "Remove your profile photo?",
     uploadHeadshot: async (cropped) => {

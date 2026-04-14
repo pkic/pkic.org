@@ -28,7 +28,7 @@ const TABS: Array<{ key: EventDetailTab; label: string }> = [
   { key: "settings",      label: "Settings" },
 ];
 
-export function EventDetailView({ slug, tab: tabProp }: { slug: string; tab?: string }) {
+export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; tab?: string; subTab?: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [event, setEvent] = useState<EventDetail | null>(null);
@@ -80,11 +80,11 @@ export function EventDetailView({ slug, tab: tabProp }: { slug: string; tab?: st
       <Tabs items={TABS} active={tab} onChange={(key) => navigate(`/events/${slug}/${key}`)} className="mb-3 flex-wrap" />
 
       {/* Tab content */}
-      {tab === "registrations" && <Registrations slug={slug} />}
-      {tab === "proposals"     && <Proposals slug={slug} />}
-      {tab === "promoters"     && <Promoters slug={slug} />}
+      {tab === "registrations" && <Registrations slug={slug} subTab={subTab} />}
+      {tab === "proposals"     && <Proposals slug={slug} subTab={subTab} />}
+      {tab === "promoters"     && <Promoters slug={slug} subTab={subTab} />}
       {tab === "stats"         && <EventStats slug={slug} />}
-      {tab === "settings"      && <Settings event={event} onUpdated={handleUpdated} />}
+      {tab === "settings"      && <Settings event={event} onUpdated={handleUpdated} subTab={subTab} />}
     </div>
   );
 }

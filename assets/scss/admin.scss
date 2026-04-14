@@ -306,6 +306,29 @@ $adm-danger:    #dc3545;
     }
   }
 
+  // ── Mini stats (inline compact stat badges) ─────────────────────────────────
+
+  .adm-mini-stats {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.25rem 0.75rem;
+    font-size: 0.82rem;
+    color: $adm-muted;
+  }
+
+  .adm-mini-stat strong {
+    font-size: 0.95rem;
+    color: #212529;
+    margin-right: 0.15rem;
+  }
+
+  .adm-mini-stat-sep {
+    width: 1px;
+    height: 1rem;
+    background: $adm-border;
+  }
+
   // ── Bar charts ──────────────────────────────────────────────────────────────
 
   .bar-row {
@@ -474,31 +497,38 @@ $adm-danger:    #dc3545;
 
   // ── Promoters leaderboard ──────────────────────────────────────────────────
 
-  .adm-promoter-rank {
-    width: 2.5rem;
-    height: 2.5rem;
+  .adm-promoter-avatar-wrap {
+    position: relative;
+    flex-shrink: 0;
+  }
+
+  .adm-promoter-rank-badge {
+    position: absolute;
+    top: -0.3rem;
+    left: -0.3rem;
+    width: 1.25rem;
+    height: 1.25rem;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     font-weight: 700;
-    font-size: 0.85rem;
-    flex-shrink: 0;
+    font-size: 0.6rem;
 
-    &.gold    { background: #fff3cd; color: #997404; border: 2px solid #ffc107; }
-    &.silver  { background: #e9ecef; color: #495057; border: 2px solid #adb5bd; }
-    &.bronze  { background: #fde8d0; color: #984c0c; border: 2px solid #fd7e14; }
-    &.top-ten { background: #f0f7f4; color: #0f5132; border: 2px solid #badbcc; }
+    &.gold    { background: #fff3cd; color: #997404; border: 1.5px solid #ffc107; }
+    &.silver  { background: #e9ecef; color: #495057; border: 1.5px solid #adb5bd; }
+    &.bronze  { background: #fde8d0; color: #984c0c; border: 1.5px solid #fd7e14; }
+    &.top-ten { background: #f0f7f4; color: #0f5132; border: 1.5px solid #badbcc; }
     &.other   { background: #f8f9fa; color: #6c757d; border: 1px solid #dee2e6; }
   }
 
   .adm-promoter-avatar {
-    width: 2.25rem;
-    height: 2.25rem;
+    width: 2.5rem;
+    height: 2.5rem;
     border-radius: 50%;
-    flex-shrink: 0;
     object-fit: cover;
-    border: 1px solid $adm-border;
+    border: 1.5px solid $adm-border;
+    display: block;
 
     &.adm-promoter-avatar-initials {
       display: flex;
@@ -507,7 +537,7 @@ $adm-danger:    #dc3545;
       background: #e9ecef;
       color: #6c757d;
       font-weight: 700;
-      font-size: 0.75rem;
+      font-size: 0.8rem;
     }
   }
 
@@ -515,10 +545,11 @@ $adm-danger:    #dc3545;
     background: $adm-surface;
     border: 1px solid $adm-border;
     border-radius: 0.5rem;
-    padding: 1rem 1.25rem;
+    padding: 0.75rem 1rem;
     display: flex;
     align-items: center;
-    gap: 1rem;
+    gap: 0.75rem;
+    flex-wrap: wrap;
     transition: box-shadow 0.15s, border-color 0.15s;
 
     &:hover {
@@ -533,6 +564,7 @@ $adm-danger:    #dc3545;
 
   .adm-promoter-info {
     min-width: 0;
+    flex: 1 1 120px;
 
     .name {
       font-weight: 600;
@@ -541,12 +573,20 @@ $adm-danger:    #dc3545;
     }
 
     .subtitle {
-      font-size: 0.75rem;
+      font-size: 0.72rem;
       color: $adm-muted;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
     }
+  }
+
+  .adm-promoter-stats {
+    display: flex;
+    gap: 1rem;
+    align-items: center;
+    flex-wrap: wrap;
+    margin-left: auto;
   }
 
   .adm-promoter-group {

@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Badge } from "../../../../components/Badge";
@@ -14,7 +14,7 @@ interface PromoterEntry {
   last_name: string | null;
   organization: string | null;
   job_title: string | null;
-  has_headshot: boolean;
+  headshot_url: string | null;
   invites_sent: number;
   invites_accepted: number;
   invites_declined: number;
@@ -77,61 +77,63 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
   const name = [p.first_name, p.last_name].filter(Boolean).join(" ") || p.email;
   const subtitle = [p.job_title, p.organization].filter(Boolean).join(" · ");
   const conversion = p.invite_conversion_rate ?? 0;
-  const headshotUrl = p.has_headshot ? `/api/v1/admin/users/${p.user_id}/headshot` : null;
   const initials = [p.first_name?.[0], p.last_name?.[0]].filter(Boolean).join("").toUpperCase() || "?";
 
   return (
     <div class={`adm-promoter-card ${RANK_CARD[rank] ?? (rank <= 10 ? "top-ten" : "")}`}>
-      <div class={`adm-promoter-rank ${rankTier(rank)}`}>
-        {rank}
+      <div class="adm-promoter-avatar-wrap">
+        {p.headshot_url
+          ? <img class="adm-promoter-avatar" src={p.headshot_url} alt={name} />
+          : <div class="adm-promoter-avatar adm-promoter-avatar-initials">{initials}</div>
+        }
+        <span class={`adm-promoter-rank-badge ${rankTier(rank)}`}>{rank}</span>
       </div>
-      {headshotUrl
-        ? <img class="adm-promoter-avatar" src={headshotUrl} alt={name} />
-        : <div class="adm-promoter-avatar adm-promoter-avatar-initials">{initials}</div>
-      }
+
       <div class="adm-promoter-info">
         <a href={`mailto:${p.email}`} class="name text-decoration-none" title={p.email}>{name}</a>
         {subtitle && <div class="subtitle">{subtitle}</div>}
       </div>
 
-      {p.invites_sent > 0 && (
-        <div class="adm-promoter-group">
-          <div class="adm-promoter-group-label">Invites</div>
-          <div class="d-flex gap-3">
-            <div class="adm-promoter-stat">
-              <div class="val">{p.invites_sent}</div>
-              <div class="lbl">Sent</div>
-            </div>
-            <div class="adm-promoter-stat">
-              <div class="val text-success">{p.invites_accepted}</div>
-              <div class="lbl">Accepted</div>
-            </div>
-            <div class="adm-promoter-stat">
-              <div class="val">{conversion}%</div>
-              <div class="lbl">Rate</div>
-              <div class={`adm-promoter-conversion ${conversionColor(conversion)}`}>
-                <div class="fill" style={{ width: `${Math.min(conversion, 100)}%` }} />
+      <div class="adm-promoter-stats">
+        {p.invites_sent > 0 && (
+          <div class="adm-promoter-group">
+            <div class="adm-promoter-group-label">Invites</div>
+            <div class="d-flex gap-3">
+              <div class="adm-promoter-stat">
+                <div class="val">{p.invites_sent}</div>
+                <div class="lbl">Sent</div>
+              </div>
+              <div class="adm-promoter-stat">
+                <div class="val text-success">{p.invites_accepted}</div>
+                <div class="lbl">Accepted</div>
+              </div>
+              <div class="adm-promoter-stat">
+                <div class="val">{conversion}%</div>
+                <div class="lbl">Rate</div>
+                <div class={`adm-promoter-conversion ${conversionColor(conversion)}`}>
+                  <div class="fill" style={{ width: `${Math.min(conversion, 100)}%` }} />
+                </div>
               </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {p.referral_clicks > 0 && (
-        <div class="adm-promoter-group">
-          <div class="adm-promoter-group-label">Referrals</div>
-          <div class="d-flex gap-3">
-            <div class="adm-promoter-stat">
-              <div class="val">{p.referral_clicks}</div>
-              <div class="lbl">Clicks</div>
-            </div>
-            <div class="adm-promoter-stat">
-              <div class="val text-success">{p.referral_conversions}</div>
-              <div class="lbl">Registered</div>
+        {p.referral_clicks > 0 && (
+          <div class="adm-promoter-group">
+            <div class="adm-promoter-group-label">Referrals</div>
+            <div class="d-flex gap-3">
+              <div class="adm-promoter-stat">
+                <div class="val">{p.referral_clicks}</div>
+                <div class="lbl">Clicks</div>
+              </div>
+              <div class="adm-promoter-stat">
+                <div class="val text-success">{p.referral_conversions}</div>
+                <div class="lbl">Registered</div>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
 
       <div class="adm-promoter-stat adm-promoter-impact">
         <div class={`val fw-semibold ${impactColor(p.impact_score)}`}>{p.impact_score.toFixed(0)}</div>
@@ -148,11 +150,12 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
   );
 }
 
-export function Promoters({ slug }: { slug: string }) {
+export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
   const { data, loading, error } = useData<PromotersResponse>(
     () => api<PromotersResponse>(`/api/v1/admin/events/${slug}/promoters`), [slug],
   );
-  const [tab, setTab] = useState<"promoters" | "codes">("promoters");
+  const [, navigate] = useHashLocation();
+  const tab = subTab === "codes" ? "codes" : "promoters";
 
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
@@ -205,7 +208,7 @@ export function Promoters({ slug }: { slug: string }) {
           { key: "codes", label: `Referral Codes (${referralCodes.length})` },
         ]}
         active={tab}
-        onChange={(key) => setTab(key as "promoters" | "codes")}
+        onChange={(key) => navigate(`/events/${slug}/promoters/${key === "promoters" ? "" : key}`)}
       />
 
       {tab === "promoters" && (
