@@ -177,11 +177,6 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-function templateReferencesKey(template: string, key: string): boolean {
-  const pattern = new RegExp(`\\{\\{[^}]*\\b${escapeRegex(key)}\\b[^}]*\\}\\}`);
-  return pattern.test(template);
-}
-
 export function findBroadcastOnlyTemplateRefs(
   recipients: CampaignRecipient[],
   parts: Array<string | null | undefined>,

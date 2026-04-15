@@ -9,7 +9,7 @@
  * Auth: proposal manage token proves proposer identity.
  */
 import { z } from "zod";
-import { json, markSensitive } from "../../../../../../_lib/http";
+import { json } from "../../../../../../_lib/http";
 import { parseJsonBody } from "../../../../../../_lib/validation";
 import {
   getProposalByManageToken,

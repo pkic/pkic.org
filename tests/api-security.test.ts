@@ -22,7 +22,7 @@ import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { nowIso } from "../functions/_lib/utils/time";
-import type { DatabaseLike, Env as AppEnv, PagesContext } from "../functions/_lib/types";
+import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
 
 // ── Admin endpoint handlers ───────────────────────────────────────────────────
 import { onRequest as adminUsersRequest } from "../functions/api/v1/admin/users";

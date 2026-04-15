@@ -188,11 +188,6 @@ export interface IcsFile {
   content: string;
 }
 
-/** Returns the lowercase weekday name (e.g. "tuesday") for a YYYY-MM-DD date string, evaluated in UTC. */
-function dayOfWeekName(dateStr: string): string {
-  return new Date(`${dateStr}T00:00:00Z`).toLocaleDateString("en-US", { weekday: "long", timeZone: "UTC" }).toLowerCase();
-}
-
 /**
  * Builds the ICS calendar attachment for a registration confirmation email.
  *

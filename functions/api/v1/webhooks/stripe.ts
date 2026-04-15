@@ -122,12 +122,6 @@ interface StripeChargeExpanded {
   payment_method_details?: { type: string } | null;
 }
 
-interface StripeCharge {
-  id: string;
-  balance_transaction: string | null;
-  payment_method_details?: { type: string } | null;
-}
-
 interface StripeDonorIdentity {
   name: string | null;
   email: string | null;

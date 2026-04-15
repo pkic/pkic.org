@@ -1,5 +1,5 @@
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json, markSensitive } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { findInviteByToken, acceptInvite } from "../../../../_lib/services/invites";
 import { getRequiredTerms } from "../../../../_lib/services/events";
 import { first } from "../../../../_lib/db/queries";

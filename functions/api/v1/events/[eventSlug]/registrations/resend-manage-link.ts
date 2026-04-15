@@ -9,7 +9,7 @@
  */
 import { z } from "zod";
 import { parseJsonBody } from "../../../../../_lib/validation";
-import { json, markSensitive } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { getEventBySlug, buildEventEmailVariables } from "../../../../../_lib/services/events";
 import { first, run } from "../../../../../_lib/db/queries";
 import { randomToken, sha256Hex } from "../../../../../_lib/utils/crypto";

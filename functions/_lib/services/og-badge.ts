@@ -219,7 +219,6 @@ export function renderBadgeSvg(data: BadgeData): string {
   const SAFE_L = 120;          // 10 % of 1200
   const SAFE_R = W - 120;
   const SAFE_T = 63;           // 10 % of 630
-  const SAFE_B = H - 63;
 
   // ── Bottom branding bar (solid black like website footer) ──────────────
   const BRAND_H   = 56;

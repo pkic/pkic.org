@@ -46,7 +46,7 @@ describe("admin user deactivation", () => {
   beforeEach(async () => { await resetDb(); });
 
   it("deactivates an active user", async () => {
-    const { adminId } = await setup();
+    await setup();
     const userId = await seedUser(env.DB, "target@example.test");
 
     const response = await patchUser(

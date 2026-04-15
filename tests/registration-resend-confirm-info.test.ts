@@ -72,7 +72,7 @@ describe("confirm-info endpoint", () => {
   });
 
   it("returns attendee info for a valid confirmation token", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 

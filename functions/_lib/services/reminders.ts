@@ -571,8 +571,6 @@ export async function runReminderCycle(
       settings_json: row.event_settings_json,
     };
 
-    const daysToExpire = daysUntil(row.confirmation_token_expires_at) ?? 0;
-    const timeToExpire = daysToExpire > 0 ? `${daysToExpire} days` : "24 hours";
     const subject = `Reminder: please confirm your registration for ${event.name}`;
 
     const previewCandidate: ReminderCandidatePreview = {
