@@ -1,6 +1,7 @@
 import type { DatabaseLike, Env } from "../types";
 import { logError, logInfo } from "../logging";
 import { queueEmail } from "../email/outbox";
+import { prepareAuditLog } from "./audit";
 
 interface PendingRsvpEvent {
   id: string;
@@ -47,10 +48,7 @@ export async function runRsvpEnforcer(db: DatabaseLike, env: Env): Promise<{
         db.prepare(
           `UPDATE calendar_rsvp_events SET action_executed_at = datetime('now'), action_taken = 'cancelled_due_to_bounce' WHERE id = ?`
         ).bind(b.id),
-        db.prepare(
-          `INSERT INTO audit_log (id, actor_type, action, entity_type, entity_id, details_json, created_at)
-           VALUES (?, 'system', 'cancelled_bounce', 'registration', ?, ?, datetime('now'))`
-        ).bind(crypto.randomUUID(), b.registration_id, JSON.stringify({ reason: "bounced_rsvp" }))
+        prepareAuditLog(db, "system", null, "cancelled_bounce", "registration", b.registration_id, { reason: "bounced_rsvp" })
       ]);
       bouncesProcessed++;
     }
@@ -187,13 +185,10 @@ export async function runRsvpEnforcer(db: DatabaseLike, env: Env): Promise<{
           db.prepare(
             `UPDATE calendar_rsvp_events SET action_executed_at = datetime('now'), action_taken = ? WHERE id = ?`
           ).bind(actionTaken, action.id),
-          db.prepare(
-            `INSERT INTO audit_log (id, actor_type, action, entity_type, entity_id, details_json, created_at)
-             VALUES (?, 'system', ?, 'registration', ?, ?, datetime('now'))`
-          ).bind(crypto.randomUUID(), actionTaken, action.registration_id, JSON.stringify({ 
+          prepareAuditLog(db, "system", null, actionTaken, "registration", action.registration_id, {
             previous_attendance_type: action.attendance_type,
-            rsvp_id: action.id
-          }))
+            rsvp_id: action.id,
+          })
         ]);
 
         // Send confirmation email

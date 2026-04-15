@@ -5,6 +5,7 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { recordReferralConversion } from "./referrals";
 import { recordEngagement } from "./engagement";
+import { writeAuditLog } from "./audit";
 import type { DatabaseLike } from "../types";
 
 export interface ProposalRecord {
@@ -432,6 +433,9 @@ export async function confirmSpeakerParticipation(
      WHERE id = ?`,
     [now, now, speaker.id],
   );
+  await writeAuditLog(db, "user", speaker.user_id, "speaker_confirmed", "proposal_speaker", speaker.id, {
+    proposalId: speaker.proposal_id,
+  });
 }
 
 export async function declineSpeakerParticipation(
@@ -462,6 +466,10 @@ export async function declineSpeakerParticipation(
      WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND source_ref = ?`,
     [now, proposal.event_id, speaker.user_id, proposal.id],
   );
+  await writeAuditLog(db, "user", speaker.user_id, "speaker_declined", "proposal_speaker", speaker.id, {
+    proposalId: speaker.proposal_id,
+    reason: payload.reason ?? null,
+  });
 }
 
 export async function updateSpeakerProfile(
