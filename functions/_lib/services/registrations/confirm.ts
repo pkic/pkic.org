@@ -11,6 +11,7 @@ import {
   resolveCapacityExemptReason,
 } from "./day-waitlist";
 import { upsertAttendeeParticipant } from "./participant-registration";
+import { writeAuditLog } from "../audit";
 import type { DatabaseLike } from "../../types";
 import type { RegistrationRecord } from "./types";
 
@@ -83,6 +84,11 @@ export async function confirmRegistrationByToken(
   await upsertAttendeeParticipant(db, {
     ...registration,
     status: newStatus,
+  });
+  await writeAuditLog(db, "user", registration.user_id, "registration_email_confirmed", "registration", registration.id, {
+    eventId: registration.event_id,
+    status: newStatus,
+    attendanceType: registration.attendance_type,
   });
   if (newStatus === "waitlisted") {
     await addToWaitlist(db, registration.event_id, registration.id);

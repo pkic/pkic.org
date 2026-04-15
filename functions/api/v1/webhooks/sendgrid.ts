@@ -40,6 +40,7 @@ import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../_lib/http";
 import type { Env } from "../../../_lib/types";
 import { logInfo, logError } from "../../../_lib/logging";
+import { prepareAuditLog, writeAuditLog } from "../../../_lib/services/audit";
 
 interface SendgridEvent {
   event: string;
@@ -120,7 +121,7 @@ async function verifySendgridSignature(
     return await crypto.subtle.verify(
       { name: "ECDSA", hash: { name: "SHA-256" } },
       key,
-      sigBytes,
+      sigBytes.buffer as ArrayBuffer,
       dataBytes,
     );
   } catch {
@@ -162,10 +163,7 @@ async function cancelRegistrationDueToBounce(
     db.prepare(
       `UPDATE registrations SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?`,
     ).bind(reg.id),
-    db.prepare(
-      `INSERT INTO audit_log (id, actor_type, action, entity_type, entity_id, details_json, created_at)
-       VALUES (?, 'system', 'cancelled_bounce', 'registration', ?, ?, datetime('now'))`,
-    ).bind(crypto.randomUUID(), reg.id, JSON.stringify({ reason })),
+    prepareAuditLog(db, "system", null, "cancelled_bounce", "registration", reg.id, { reason }),
   ]);
   logInfo("REGISTRATION_CANCELLED_BOUNCE", { registrationId: reg.id, reason });
 }
@@ -183,6 +181,12 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
   const baseId = extractBaseMessageId(sg_message_id);
   logInfo("SENDGRID_EVENT", { eventType, baseId, bounceType: event.type });
 
+  // Resolve the outbox row ID once for audit logging
+  const outboxRow = await env.DB!.prepare(
+    `SELECT id FROM email_outbox WHERE provider_message_id = ?`,
+  ).bind(baseId).first<{ id: string }>();
+  const outboxId = outboxRow?.id ?? null;
+
   switch (eventType) {
     case "bounce": {
       const isHard = event.type !== "soft";
@@ -193,6 +197,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
            SET status = 'bounced', last_error = ?, updated_at = datetime('now')
            WHERE provider_message_id = ?`,
         ).bind(`Hard bounce: ${reason}`, baseId).run();
+        await writeAuditLog(env.DB!, "system", null, "email_hard_bounce", "email_outbox", outboxId, { reason, baseId });
         await cancelRegistrationDueToBounce(env.DB!, baseId, `Hard bounce: ${reason}`);
       } else {
         await env.DB!.prepare(
@@ -200,6 +205,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
            SET last_error = ?, updated_at = datetime('now')
            WHERE provider_message_id = ? AND status != 'bounced'`,
         ).bind(`Soft bounce: ${reason}`, baseId).run();
+        await writeAuditLog(env.DB!, "system", null, "email_soft_bounce", "email_outbox", outboxId, { reason, baseId });
       }
       break;
     }
@@ -211,6 +217,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
          SET last_error = ?, updated_at = datetime('now')
          WHERE provider_message_id = ? AND status != 'bounced'`,
       ).bind(`Delivery deferred: ${reason}`, baseId).run();
+      await writeAuditLog(env.DB!, "system", null, "email_deferred", "email_outbox", outboxId, { reason, baseId });
       break;
     }
 
@@ -221,6 +228,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
          SET status = 'bounced', last_error = ?, updated_at = datetime('now')
          WHERE provider_message_id = ?`,
       ).bind(`Dropped: ${reason}`, baseId).run();
+      await writeAuditLog(env.DB!, "system", null, "email_dropped", "email_outbox", outboxId, { reason, baseId });
       await cancelRegistrationDueToBounce(env.DB!, baseId, `Dropped: ${reason}`);
       break;
     }
@@ -231,6 +239,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
          SET status = 'bounced', last_error = 'Spam report received', updated_at = datetime('now')
          WHERE provider_message_id = ?`,
       ).bind(baseId).run();
+      await writeAuditLog(env.DB!, "system", null, "email_spam_report", "email_outbox", outboxId, { email: event.email, baseId });
       await cancelRegistrationDueToBounce(env.DB!, baseId, "Spam report received");
       if (event.email) {
         await env.DB!.prepare(
@@ -251,6 +260,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
           `INSERT OR IGNORE INTO unsubscribes (id, email, channel, scope_type, scope_ref, reason, created_at)
            VALUES (?, ?, ?, 'global', NULL, 'unsubscribed', datetime('now'))`,
         ).bind(crypto.randomUUID(), event.email, channel).run();
+        await writeAuditLog(env.DB!, "system", null, "email_unsubscribe", "email_outbox", outboxId, { email: event.email, channel, baseId });
       }
       break;
     }
@@ -261,6 +271,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
          SET status = 'delivered', updated_at = datetime('now')
          WHERE provider_message_id = ? AND status = 'sent'`,
       ).bind(baseId).run();
+      await writeAuditLog(env.DB!, "system", null, "email_delivered", "email_outbox", outboxId, { baseId });
       break;
     }
   }
