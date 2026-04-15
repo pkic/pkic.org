@@ -1,6 +1,6 @@
     <div class="container members text-nowrap overflow-hidden my-4 text-center">
         <div class="banner">
-            {{ partialCached "members.html" . }}
+            {{ partialCached "members/wall.html" . }}
         </div>
     </div>
 
@@ -9,7 +9,7 @@
         {{/* ── CTA bar ───────────────────────────────────────────── */}}
         <div id="participate" class="py-4">
             <div class="container">
-                Participate in our <a href="https://github.com/orgs/pkic/discussions" target="_blank">community</a> discussions and/or <a href="/join/">join</a> the consortium
+                Participate in our <a href="https://github.com/orgs/pkic/discussions" target="_blank">community</a> discussions, <a href="/join/">join</a> the consortium, and <a href="/donate/" class="footer-cta-donate">support us with a donation</a>
             </div>
         </div>
 
@@ -72,3 +72,15 @@
     </footer>
 
     {{ partial "script.html" (dict "path" "js/main.js") }}
+    {{- /* Module loader — dynamically imports whichever module the page declares via
+         [data-module]. The hashed URL is read from the asset manifest produced by
+         scripts/build-frontend.mjs, which runs automatically before every Hugo build. */ -}}
+    {{- $manifest := index site.Data "asset-manifest" -}}
+    {{- with $manifest -}}
+      {{- $loader := index . "loader" -}}
+      {{- with $loader -}}
+        {{- $url := index . "url" -}}
+        {{- $sri := index . "integrity" -}}
+        {{- with $url }}<script src="{{ . }}" type="module"{{ with $sri }} integrity="{{ . }}" crossorigin="anonymous"{{ end }}></script>{{ end -}}
+      {{- end -}}
+    {{- end -}}

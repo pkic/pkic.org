@@ -1,0 +1,42 @@
+<template id="headshot-disclaimer-template">
+  <div id="headshot-disclaimer-modal" class="hsd-modal" aria-hidden="true">
+    <div class="hsd-overlay">
+      <div class="hsd-card" role="dialog" aria-modal="true" aria-labelledby="headshot-disclaimer-title">
+        <h2 id="headshot-disclaimer-title" class="hsd-title h5 mb-0">Before you upload a photo</h2>
+        <ul class="hsd-list"></ul>
+        <form class="hsd-form">
+          <div class="form-check hsd-check">
+            <input class="form-check-input hsd-agree" type="checkbox" id="headshot-disclaimer-agree">
+            <label class="form-check-label" for="headshot-disclaimer-agree">I confirm all of the above.</label>
+          </div>
+          <div class="hsd-actions">
+            <button type="submit" class="btn btn-success btn-sm hsd-confirm" disabled>Upload photo</button>
+            <button type="button" class="btn btn-outline-secondary btn-sm hsd-cancel">Cancel</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</template>
+
+<template id="crop-headshot-template">
+  <div id="crop-headshot-modal" class="crop-headshot-modal" aria-hidden="true">
+    <div class="crop-headshot-overlay">
+      <div class="crop-headshot-card" role="dialog" aria-modal="true" aria-labelledby="crop-headshot-title">
+        <h2 id="crop-headshot-title" class="crop-headshot-title h6 mb-0">Crop headshot</h2>
+        <div class="crop-headshot-viewport">
+          <img alt="Headshot crop preview" draggable="false">
+        </div>
+        <div class="crop-headshot-zoom">
+          <span class="small text-muted" aria-hidden="true">−</span>
+          <input type="range" min="0" max="100" class="form-range crop-headshot-slider" aria-label="Zoom image">
+          <span class="small text-muted" aria-hidden="true">+</span>
+        </div>
+        <div class="crop-headshot-actions">
+          <button type="button" class="btn btn-sm btn-outline-secondary crop-headshot-cancel">Cancel</button>
+          <button type="button" class="btn btn-sm btn-success crop-headshot-confirm">Crop &amp; Upload</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</template>

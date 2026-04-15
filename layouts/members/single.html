@@ -16,7 +16,7 @@
             class="py-3"
             alt="{{ $title }}"
             title="{{ $title }}"
-            src="{{ $img.Permalink }}"
+            src="{{ $img.RelPermalink }}"
             data-pagefind-meta="image[src]"
           />
         </p>
@@ -62,7 +62,7 @@
             ><br />{{ end }}
           </small>
           <p>
-            {{ with $member.blog.feed }} {{ partial "rssfeed.html"
+            {{ with $member.blog.feed }} {{ partial "rss/feed.html"
             $member.blog.feed }} {{ end }}
           </p>
         </div>
@@ -93,7 +93,7 @@
             class="img-thumbnail"
             alt="{{ $title }}"
             title="{{ $title }}"
-            src="{{ $img.Permalink }}"
+            src="{{ $img.RelPermalink }}"
           />
           {{ end }}
         </div>

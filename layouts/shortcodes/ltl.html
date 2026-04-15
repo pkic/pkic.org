@@ -2,19 +2,23 @@
 {{ $latestUrl := "https://api.github.com/repos/pkic/ltl/releases/latest" }}
 {{ $latestRemote := try (resources.GetRemote $latestUrl) }}
 {{ with $latestRemote.Err }}
-    {{ errorf "failed to fetch latest LTL release metadata from %s: %s. GitHub may be down, rate-limiting requests, or unreachable from this build environment." $latestUrl . }}
+    {{ warnf "failed to fetch latest LTL release metadata from %s: %s. GitHub may be down, rate-limiting requests, or unreachable from this build environment." $latestUrl . }}
     {{ return }}
 {{ else with $latestRemote.Value }}
     {{ $latest = . | transform.Unmarshal }}
 {{ end }}
 {{ $ltl := dict }}
-{{ $ltlUrl := (printf "https://github.com/pkic/ltl/releases/download/%s/ltl.json" $latest.tag_name) }}
-{{ with try (resources.GetRemote $ltlUrl) }}
-    {{ with .Err }}
-        {{ errorf "%s" . }}
-    {{ else with .Value }}
-        {{ $ltl = .Content | transform.Unmarshal }}
-    {{end }}
+{{ with $latest.tag_name }}
+    {{ $ltlUrl := (printf "https://github.com/pkic/ltl/releases/download/%s/ltl.json" .) }}
+    {{ with try (resources.GetRemote $ltlUrl) }}
+        {{ with .Err }}
+            {{ warnf "failed to fetch LTL content from %s: %s" $ltlUrl . }}
+        {{ else with .Value }}
+            {{ $ltl = .Content | transform.Unmarshal }}
+        {{end }}
+    {{ end }}
+{{ else }}
+    {{ warnf "latest LTL release metadata from %s did not include a tag name; skipping LTL content rendering" $latestUrl }}
 {{ end }}
 {{ range $ltl }}
     <h2 id="{{ .name | safeURL }}">{{ .name }}

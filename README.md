@@ -8,11 +8,12 @@ Some basic git knowledge is required, please check https://guides.github.com/ to
 1. [Install hugo](https://gohugo.io/getting-started/installing/#quick-install)
 2. [Create a fork](https://guides.github.com/activities/forking/#fork) of this repository
 3. [Clone your fork](https://guides.github.com/activities/forking/#clone)
-2. Run `hugo server -D` in the root directory of your fork
-3. Open the shown URL `http://localhost:xxxx/` in your browser to preview your local version
-4. Make changes until you are satisfied; the preview will update automatically
-5. [Commit and push your changes](https://guides.github.com/activities/forking/#making-changes)
-6. [Create a pull request](https://guides.github.com/activities/forking/#making-a-pull-request)
+4. Create local worker secrets for Wrangler by copying `.dev.vars.example` to `.dev.vars` and setting at least `INTERNAL_SIGNING_SECRET`.
+5. Run `npm run dev` in the root directory of your fork (Vite runs the Cloudflare Worker and rebuilds the Hugo site into the static asset output)
+6. Open `http://localhost:8788/` in your browser to preview your local version
+7. Make changes until you are satisfied; the preview will update automatically
+8. [Commit and push your changes](https://guides.github.com/activities/forking/#making-changes)
+9. [Create a pull request](https://guides.github.com/activities/forking/#making-a-pull-request)
 
 ## Adding a new member
 1. Create a `new-member-name.yaml` in the `data/members` folder.
@@ -60,3 +61,33 @@ git submodule init
 git submodule update --remote
 ```
 The update command can be run to update your local copy when the remote branch changes. Submodules are managed in the file .gitmodules.
+
+## Build and deploy
+
+The Cloudflare Worker uses Vite with `@cloudflare/vite-plugin`. The Vite build runs Hugo, indexes the generated site with Pagefind, bundles the native TypeScript Worker, and writes the deployable Wrangler output config to `dist`.
+
+```bash
+npm run build
+npm run build:preview
+npm run build:production
+```
+
+Deployments must build the selected Cloudflare environment first because the Vite plugin applies `env.preview` or `env.production` during build time:
+
+```bash
+npm run deploy:preview
+npm run deploy:production
+```
+
+## Seed event backend data (local)
+Run the local seed flow to create admin/event data, forms/terms, and default email templates in D1+R2:
+
+```bash
+npm run seed:local
+```
+
+If templates are missing or you want to reseed template versions only:
+
+```bash
+npm run seed:templates:local
+```

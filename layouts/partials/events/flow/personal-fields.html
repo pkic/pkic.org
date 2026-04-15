@@ -1,0 +1,31 @@
+{{/*
+  Renders the re-usable personal-detail field group (first name, last name,
+  organisation, job title). Used by both the registration and manage shortcodes
+  so the HTML and labels stay in sync automatically.
+
+  Accepts an optional .prefix dict key to namespace element IDs when the same
+  partial is embedded more than once on a page (defaults to "flow").
+*/}}
+{{- $prefix := .prefix | default "flow" -}}
+<div class="row g-2">
+  <div class="col-sm-6">
+    <label for="{{ $prefix }}-first-name" class="form-label">First name</label>
+    <input id="{{ $prefix }}-first-name" name="firstName" type="text" class="form-control" autocomplete="given-name">
+    <div data-field-error="firstName" class="invalid-feedback d-block"></div>
+  </div>
+  <div class="col-sm-6">
+    <label for="{{ $prefix }}-last-name" class="form-label">Last name</label>
+    <input id="{{ $prefix }}-last-name" name="lastName" type="text" class="form-control" autocomplete="family-name">
+    <div data-field-error="lastName" class="invalid-feedback d-block"></div>
+  </div>
+  <div class="col-12">
+    <label for="{{ $prefix }}-org" class="form-label">Organization <span class="text-muted fw-normal">(optional)</span></label>
+    <input id="{{ $prefix }}-org" name="organizationName" type="text" class="form-control" autocomplete="organization">
+    <div data-field-error="organizationName" class="invalid-feedback d-block"></div>
+  </div>
+  <div class="col-12">
+    <label for="{{ $prefix }}-job" class="form-label">Job title <span class="text-muted fw-normal">(optional)</span></label>
+    <input id="{{ $prefix }}-job" name="jobTitle" type="text" class="form-control" autocomplete="organization-title">
+    <div data-field-error="jobTitle" class="invalid-feedback d-block"></div>
+  </div>
+</div>

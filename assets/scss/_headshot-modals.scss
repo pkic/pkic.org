@@ -1,0 +1,126 @@
+#headshot-disclaimer-modal,
+#crop-headshot-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 1090;
+  display: none;
+}
+
+#headshot-disclaimer-modal.hsd-active,
+#crop-headshot-modal.active {
+  display: block;
+}
+
+#headshot-disclaimer-modal .hsd-overlay,
+#crop-headshot-modal .crop-headshot-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  overflow: auto;
+  background: rgba(0, 0, 0, 0.55);
+}
+
+#headshot-disclaimer-modal .hsd-card,
+#crop-headshot-modal .crop-headshot-card {
+  width: 100%;
+  max-width: 520px;
+  border-radius: 1rem;
+  background: var(--bs-body-bg);
+  color: var(--bs-body-color);
+  box-shadow: 0 1.5rem 4rem rgba(0, 0, 0, 0.32);
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+#crop-headshot-modal .crop-headshot-card {
+  max-width: 480px;
+  align-items: center;
+}
+
+#headshot-disclaimer-modal .hsd-title,
+#crop-headshot-modal .crop-headshot-title {
+  align-self: flex-start;
+}
+
+#headshot-disclaimer-modal .hsd-list {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: grid;
+  gap: 0.35rem;
+  font-size: 0.875rem;
+}
+
+#headshot-disclaimer-modal .hsd-form {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+#headshot-disclaimer-modal .hsd-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0;
+}
+
+#headshot-disclaimer-modal .hsd-check .form-check-input {
+  margin-top: 0.2rem;
+  flex-shrink: 0;
+}
+
+#headshot-disclaimer-modal .hsd-actions,
+#crop-headshot-modal .crop-headshot-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+#crop-headshot-modal .crop-headshot-actions {
+  width: 100%;
+  justify-content: center;
+}
+
+#crop-headshot-modal .crop-headshot-viewport {
+  width: 100%;
+  max-width: 300px;
+  aspect-ratio: 1;
+  position: relative;
+  overflow: hidden;
+  flex-shrink: 0;
+  border-radius: 50%;
+  border: 3px solid var(--bs-success);
+  background: var(--bs-secondary-bg);
+  cursor: grab;
+  touch-action: none;
+}
+
+#crop-headshot-modal .crop-headshot-viewport.dragging {
+  cursor: grabbing;
+}
+
+#crop-headshot-modal .crop-headshot-viewport img {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: block;
+  transform-origin: 0 0;
+  user-select: none;
+  pointer-events: none;
+}
+
+#crop-headshot-modal .crop-headshot-zoom {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+#crop-headshot-modal .crop-headshot-slider {
+  flex: 1;
+}

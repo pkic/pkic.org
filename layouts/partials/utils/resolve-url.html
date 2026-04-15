@@ -1,0 +1,11 @@
+{{- $page := .page -}}
+{{- $value := .value | default "" -}}
+{{- if eq $value "" -}}
+{{- "" -}}
+{{- else if or (hasPrefix $value "http://") (hasPrefix $value "https://") -}}
+{{- $value -}}
+{{- else if hasPrefix $value "/" -}}
+{{- $value -}}
+{{- else -}}
+{{- printf "%s%s" $page.RelPermalink $value -}}
+{{- end -}}

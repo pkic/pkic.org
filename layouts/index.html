@@ -1,39 +1,18 @@
 {{ define "main" }}
 
-{{/* ─── Homepage event collections ─────────────────────────────────────── */}}
-{{- $heroEventPages := slice -}}
-{{- $allEventPages := slice -}}
-{{- range where .Site.Pages "Section" "events" -}}
-  {{- $eventType := .Param "eventType" -}}
-  {{- if $eventType -}}
-    {{- $heroEventPages = $heroEventPages | append . -}}
-    {{- $allEventPages = $allEventPages | append . -}}
-  {{- end -}}
-{{- end -}}
-{{- $heroUpcomingEvents := slice -}}
-{{- range $heroEventPages -}}
-  {{- if eq (partial "events/is-upcoming.html" .) "true" -}}
-    {{- $heroUpcomingEvents = $heroUpcomingEvents | append . -}}
-  {{- end -}}
-{{- end -}}
-{{- $heroUpcomingEvents = sort $heroUpcomingEvents "Date" "asc" -}}
-{{- $heroUpcomingEvents = first 3 $heroUpcomingEvents -}}
-{{- $upcomingEvents := slice -}}
-{{- $pastEvents := slice -}}
-{{- range $allEventPages -}}
-  {{- if eq (partial "events/is-upcoming.html" .) "true" -}}
-    {{- $upcomingEvents = $upcomingEvents | append . -}}
-  {{- else -}}
-    {{- $pastEvents = $pastEvents | append . -}}
-  {{- end -}}
-{{- end -}}
-{{- $upcomingEvents = sort $upcomingEvents "Date" "asc" -}}
-{{- $pastEvents = sort $pastEvents "Date" "desc" -}}
-{{- $homepageUpcomingEventCards := first 3 $upcomingEvents -}}
-{{- $homepagePastEventCards := first 3 $pastEvents -}}
-{{- $homepageEventCards := first 3 ($homepageUpcomingEventCards | append $homepagePastEventCards) -}}
-
 {{/* ─── Hero ─────────────────────────────────────────────────────────── */}}
+{{- $allEvents      := sort (where site.Pages "Params.eventType" "!=" nil) "Params.eventDate" "asc" -}}
+{{- $today          := now.Format "2006-01-02" -}}
+{{- $upcomingEvents := slice -}}
+{{- range $allEvents -}}
+  {{- $eventDate := time (.Param "eventDate") -}}
+  {{- if ge ($eventDate.Format "2006-01-02") $today -}}
+    {{- $upcomingEvents = $upcomingEvents | append . -}}
+  {{- end -}}
+{{- end -}}
+{{- $heroUpcomingEvents := first 1 $upcomingEvents -}}
+{{- $heroMoreCount      := sub (len $upcomingEvents) 1 -}}
+
 <section class="pkic-home-hero">
   <div class="container py-4">
     <div class="row align-items-center gy-4">
@@ -41,16 +20,20 @@
         <p class="text-uppercase fw-bold small mb-2 opacity-75" style="letter-spacing: 0.16em;">{{ $.Param "heroHeader" }}</p>
         <h1 class="display-4 fw-bold lh-sm mb-3">{{ $.Param "heroTitle" }}</h1>
         <p class="lead mb-4" style="max-width:540px;">{{ $.Param "heroDescription" }}</p>
+        {{ with $.Param "heroLinks" }}
         <div class="d-flex flex-wrap gap-3">
-          <a href="/about/" class="btn btn-pkic btn-lg px-4">Learn more</a>
-          <a href="/join/" class="btn btn-pkic-outline btn-lg px-4">Join the Consortium</a>
+          {{- range . -}}
+          {{- $class := cond (.primary | default false) "btn btn-pkic btn-lg px-4" "btn btn-pkic-outline btn-lg px-4" -}}
+          <a href="{{ .url }}" class="{{ $class }}">{{ .text }}</a>
+          {{- end -}}
         </div>
+        {{ end }}
       </div>
       {{ $featuredPost := first 1 (where .Site.RegularPages "Type" "blog") }}
       {{ with index $featuredPost 0 }}
       <div class="col-lg-5 d-none d-lg-block">
         <div class="pkic-hero-post-card">
-          <a href="{{ .Permalink }}" class="text-decoration-none d-block">
+          <a href="{{ .RelPermalink }}" class="text-decoration-none d-block">
             <p class="pkic-hero-post-label">Latest News</p>
             <h3 class="pkic-hero-post-title">{{ .Title }}</h3>
             <time class="pkic-hero-post-date" datetime="{{ .PublishDate.Format "2006-01-02" }}">{{ .PublishDate | time.Format ":date_long" }}</time>
@@ -63,23 +46,33 @@
             <p class="pkic-hero-post-label mb-2">Upcoming Events</p>
             <ul class="list-unstyled mb-0">
               {{ range $heroUpcomingEvents }}
+              {{ $eventPage := . }}
               <li class="mb-2">
                 <a href="{{ .RelPermalink }}" class="text-decoration-none d-block">
                   <span class="pkic-hero-post-title d-block mb-1">{{ .Param "heroTitle" | default .Title }}</span>
                 </a>
-                {{ with .Param "eventDate" }}
+                {{ with $eventPage.Param "eventDate" }}
                 {{ $eventDate := time . }}
+                {{ $eventDuration := int (default 1 ($eventPage.Param "eventDuration")) }}
+                {{ $eventLabel := partial "events/date-label.html" $eventPage }}
+                {{ if gt $eventDuration 1 }}
+                <time
+                  class="pkic-hero-post-date mb-0 d-block"
+                  datetime="{{ $eventDate.Format "2006-01-02" }}"
+                >{{ $eventLabel }}</time>
+                {{ else }}
                 <time
                   class="pkic-hero-post-date mb-0 d-block"
                   datetime="{{ $eventDate.Format "2006-01-02T15:04:05Z" }}"
                   data-local-time="{{ $eventDate.Format "2006-01-02T15:04:05Z" }}"
                   data-hour-format="24"
-                >{{ $eventDate.Format "2 Jan 2006, 15:04 UTC" }}</time>
+                >{{ $eventLabel }}</time>
+                {{ end }}
                 {{ end }}
               </li>
               {{ end }}
             </ul>
-            <a href="/events/" class="pkic-hero-post-cta d-inline-block mt-2">View all events &rarr;</a>
+            <a href="/events/" class="pkic-hero-post-cta d-inline-block mt-2">{{ if gt $heroMoreCount 0 }}+{{ $heroMoreCount }} more · {{ end }}View all upcoming and past events &rarr;</a>
           </div>
           {{ end }}
         </div>
@@ -91,10 +84,8 @@
 
 {{/* ─── Stats bar ───────────────────────────────────────────────────── */}}
 {{ $memberCount := len hugo.Data.members }}
-{{/* Only count top-level, non-draft working group sections */}}
-{{ $wgSections := where .Site.Pages "Section" "wg" }}
 {{ $wgCount := 0 }}
-{{ range $wgSections }}
+{{ range where site.Pages "Section" "wg" }}
   {{ if and (eq .Kind "section") (eq .Parent.RelPermalink "/wg/") (not .Draft) }}
     {{ $wgCount = add $wgCount 1 }}
   {{ end }}
@@ -118,99 +109,5 @@
   </div>
 </div>
 
-{{/* ─── Alert banner (from _index.md content) ────────────────────── */}}
-{{ if .Content }}
-<div class="container pt-4 pb-2" data-pagefind-ignore>
-  {{ .Content }}
-</div>
-{{ end }}
-
-{{/* ─── Members logo wall ─────────────────────────────────────────────── */}}
-<div class="pkic-section-label"><span>Our Members &amp; Sponsors</span></div>
-{{ .Scratch.Set "date" "" }}
-{{ .Scratch.Set "limit" "80" }}
-<section class="members-overview">
-  <div class="container-fluid px-2 px-md-3 py-4 text-center members">
-    {{ partial "members.html" . }}
-  </div>
-</section>
-
-{{/* ─── Working Groups spotlight ──────────────────────────────────── */}}
-{{/* Collect WG section pages that have .Params.card, sorted by card.order */}}
-{{ $wgSections := where .Site.Pages "Section" "wg" }}
-{{ $wgCards := slice }}
-{{ range $wgSections }}
-  {{ if and (eq .Kind "section") (ne .RelPermalink "/wg/") .Params.card }}
-    {{ $wgCards = $wgCards | append . }}
-  {{ end }}
-{{ end }}
-{{ $wgCards = sort $wgCards "Params.card.order" }}
-
-<section class="pkic-wg-section py-5">
-  <div class="container">
-    <div class="d-flex align-items-end justify-content-between mb-4 pb-1">
-      <div>
-        <h2 class="h3 fw-bold mb-0">Working Groups</h2>
-      </div>
-      <a href="/wg/" class="btn btn-sm btn-outline-secondary flex-shrink-0">All working groups &rarr;</a>
-    </div>
-    <div class="row g-4">
-      {{ range $wgCards }}
-      <div class="col-sm-6 col-xl-3">
-        {{ partial "wg-spotlight-card.html" . }}
-      </div>
-      {{ end }}
-    </div>
-  </div>
-</section>
-
-{{/* ─── Recent blog posts ─────────────────────────────────────────────── */}}
-{{ $posts := first 3 (where .Site.RegularPages "Type" "blog") }}
-{{ if $posts }}
-<section class="pkic-recent-posts py-5" style="background:#fff; position:relative; z-index:1;">
-  <div class="container">
-    <div class="d-flex align-items-baseline justify-content-between mb-4">
-      <h2 class="h3 fw-bold mb-0">Latest from the Blog</h2>
-      <a href="/blog/" class="btn btn-sm btn-outline-secondary">All posts &rarr;</a>
-    </div>
-    <div class="row g-4 align-items-start">
-      {{ range $posts }}
-      <div class="col-md-4">
-        {{ partial "blog-card.html" . }}
-      </div>
-      {{ end }}
-    </div>
-  </div>
-</section>
-{{ end }}
-
-{{/* ─── Event cards ─────────────────────────────────────────────────────── */}}
-{{ if $homepageEventCards }}
-<section class="pkic-home-events py-5">
-  <div class="container">
-    <div class="d-flex align-items-baseline justify-content-between mb-4">
-      <h2 class="h3 fw-bold mb-0">Events</h2>
-      <a href="/events/" class="btn btn-sm btn-outline-secondary">All events &rarr;</a>
-    </div>
-
-    <div class="row g-4 align-items-start">
-      {{ range $homepageEventCards }}
-      <div class="col-md-4">
-        {{ partial "event-card.html" . }}
-      </div>
-      {{ end }}
-    </div>
-  </div>
-</section>
-{{ end }}
-
-{{/* ─── Join CTA ────────────────────────────────────────────────────── */}}
-<section class="pkic-join-cta">
-  <div class="container text-center">
-    <h2 class="fw-bold mb-3">Become a Member</h2>
-    <p class="lead mb-4 mx-auto" style="max-width:560px;">The PKI Consortium is open to organizations committed to improving trust in digital assets and communications. Membership is free.</p>
-    <a href="/join/" class="btn btn-light btn-lg rounded-pill px-5 fw-bold">Join today &mdash; it&rsquo;s free</a>
-  </div>
-</section>
-
+{{ .Content }}
 {{ end }}

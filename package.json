@@ -1,0 +1,81 @@
+{
+  "name": "pkic-org-events-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@10.33.0",
+  "scripts": {
+    "dev": "CLOUDFLARE_ENV=local vite dev --host 0.0.0.0 --port 8788",
+    "dev:hugo": "hugo serve",
+    "build": "CLOUDFLARE_ENV=local vite build",
+    "build:preview": "CLOUDFLARE_ENV=preview vite build",
+    "build:production": "CLOUDFLARE_ENV=production vite build",
+    "preview": "npm run build && vite preview --host 0.0.0.0 --port 8788",
+    "deploy:production": "npm run build:production && wrangler deploy",
+    "deploy:preview": "npm run build:preview && wrangler deploy",
+    "typecheck": "npm run typecheck:backend && npm run typecheck:frontend",
+    "typecheck:backend": "tsc --noEmit -p tsconfig.json",
+    "typecheck:frontend": "tsc --noEmit -p tsconfig.frontend.json",
+    "test": "npm run test:backend && npm run test:frontend",
+    "test:backend": "vitest run --config vitest.config.ts",
+    "test:frontend": "vitest run --config vitest.config.frontend.ts",
+    "test:workflows": "vitest run --config vitest.config.ts tests/full-workflow.test.ts",
+    "test:e2e": "playwright test",
+    "test:watch": "vitest",
+    "check:max-lines": "node scripts/check-max-lines.mjs",
+    "lint": "eslint functions/ assets/ts/ assets/shared/ tests/",
+    "lint:fix": "eslint --fix functions/ assets/ts/ assets/shared/ tests/",
+    "format": "prettier --write \"functions/**/*.ts\" \"assets/ts/**/*.{ts,tsx}\" \"assets/shared/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"functions/**/*.ts\" \"assets/ts/**/*.{ts,tsx}\" \"assets/shared/**/*.ts\" \"tests/**/*.ts\"",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run check:max-lines",
+    "migrate:local": "npx wrangler d1 migrations apply DB --env local --local",
+    "migrate:preview": "npx wrangler d1 migrations apply DB --env preview --remote",
+    "migrate:production": "npx wrangler d1 migrations apply DB --env production --remote",
+    "seed:local": "node scripts/seed.mjs --local",
+    "seed:preview": "node scripts/seed.mjs --preview",
+    "seed:production": "node scripts/seed.mjs --production"
+  },
+  "dependencies": {
+    "@cloudflare/puppeteer": "^1.1.0",
+    "@preact/signals": "^2.9.0",
+    "@resvg/resvg-wasm": "^2.6.2",
+    "chanfana": "^3.3.0",
+    "handlebars": "^4.7.9",
+    "hono": "^4.12.12",
+    "ical.js": "^2.2.1",
+    "marked": "^17.0.6",
+    "postal-mime": "^2.7.4",
+    "preact": "^10.29.1",
+    "wouter": "^3.9.0",
+    "yaml": "^2.8.3",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "^1.31.2",
+    "@cloudflare/vitest-pool-workers": "^0.13.5",
+    "@cloudflare/workers-types": "^4.20260411.1",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.59.1",
+    "@types/node": "^24.12.2",
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
+    "jsdom": "^27.4.0",
+    "pagefind": "^1.5.0",
+    "prettier": "^3.8.3",
+    "typescript": "^5.9.3",
+    "typescript-eslint": "^8.58.2",
+    "vite": "^8.0.8",
+    "vitest": "^4.1.4",
+    "wrangler": "^4.81.1"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "sharp"
+    ],
+    "ignoredBuiltDependencies": [
+      "workerd"
+    ]
+  }
+}

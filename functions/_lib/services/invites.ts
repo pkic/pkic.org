@@ -1,0 +1,851 @@
+import { AppError } from "../errors";
+import { all, first, run } from "../db/queries";
+import { normalizeEmail } from "../validation";
+import { randomToken, sha256Hex } from "../utils/crypto";
+import { nowIso, addHours, isPast } from "../utils/time";
+import { uuid } from "../utils/ids";
+import { parseJsonSafe } from "../utils/json";
+import { recordEngagement } from "./engagement";
+import type { DatabaseLike } from "../types";
+
+export interface InviteRecord {
+  id: string;
+  event_id: string;
+  inviter_user_id: string | null;
+  inviter_registration_id: string | null;
+  invitee_email: string;
+  invitee_first_name: string | null;
+  invitee_last_name: string | null;
+  invite_type: "attendee" | "speaker";
+  token_hash: string;
+  status: "sent" | "accepted" | "declined" | "expired" | "revoked";
+  decline_reason_code: string | null;
+  decline_reason_note: string | null;
+  unsubscribe_future: number;
+  reminder_count: number;
+  last_communication_at: string | null;
+  reminders_paused_until: string | null;
+  max_uses: number;
+  used_count: number;
+  source_type: string;
+  expires_at: string | null;
+  accepted_at: string | null;
+  declined_at: string | null;
+  created_at: string;
+}
+
+export interface InviteInviterInfo {
+  userId: string;
+  firstName: string | null;
+  lastName: string | null;
+  organizationName: string | null;
+}
+
+/**
+ * Formats a list of inviters into a human-readable social-proof string.
+ *
+ * Examples:
+ *   [] → ""
+ *   1 person  → "Paul van Brouwershaven (Digitorus)"
+ *   2 people  → "Paul van Brouwershaven (Digitorus) and Sven Rajala (Keyfactor)"
+ *   5 people  → "Paul van Brouwershaven (Digitorus), Sven Rajala (Keyfactor) and 3 others"
+ *
+ * At most 2 names are shown explicitly; the rest collapse into "N others".
+ */
+export function formatInviterList(inviters: InviteInviterInfo[]): string {
+  if (inviters.length === 0) return "";
+
+  const label = (i: InviteInviterInfo) => {
+    const name = [i.firstName, i.lastName].filter(Boolean).join(" ") || "A colleague";
+    return i.organizationName ? `${name} (${i.organizationName})` : name;
+  };
+
+  if (inviters.length === 1) return label(inviters[0]);
+  if (inviters.length === 2) return `${label(inviters[0])} and ${label(inviters[1])}`;
+
+  const others = inviters.length - 2;
+  return `${label(inviters[0])}, ${label(inviters[1])} and ${others} ${others === 1 ? "other" : "others"}`;
+}
+
+export async function countInvitesByInviter(
+  db: DatabaseLike,
+  eventId: string,
+  inviterUserId: string,
+  inviteType: "attendee" | "speaker" = "attendee",
+): Promise<number> {
+  // Count only primary invites (invite rows where this user is the original inviter).
+  // Co-invites (endorsements of someone already invited) do not consume invite quota
+  // since they do not trigger new emails.
+  const row = await first<{ total: number }>(
+    db,
+    `SELECT COUNT(*) AS total
+     FROM invites
+     WHERE event_id = ? AND inviter_user_id = ? AND invite_type = ?`,
+    [eventId, inviterUserId, inviteType],
+  );
+
+  return Number(row?.total ?? 0);
+}
+
+export async function isUnsubscribed(db: DatabaseLike, email: string, eventId: string): Promise<boolean> {
+  const normalized = normalizeEmail(email);
+  const row = await first<{ id: string }>(
+    db,
+    `SELECT id
+     FROM unsubscribes
+     WHERE email = ?
+       AND channel = 'invites'
+       AND (
+         (scope_type = 'global' AND scope_ref IS NULL) OR
+         (scope_type = 'event' AND scope_ref = ?)
+       )
+     LIMIT 1`,
+    [normalized, eventId],
+  );
+
+  return Boolean(row);
+}
+
+export async function createInvite(
+  db: DatabaseLike,
+  payload: {
+    eventId: string;
+    inviterUserId?: string | null;
+    inviterRegistrationId?: string | null;
+    inviteeEmail: string;
+    inviteeFirstName?: string | null;
+    inviteeLastName?: string | null;
+    inviteType: "attendee" | "speaker";
+    sourceType?: string;
+    ttlHours: number;
+  },
+  // isNew: true  → fresh invite row created, caller must send the invite email.
+  // isNew: false → invitee already has an active invite; this inviter was recorded
+  //                as a co-inviter (social proof) but NO new email should be sent.
+): Promise<{ invite: InviteRecord; token: string; isNew: boolean }> {
+  const inviteeEmail = normalizeEmail(payload.inviteeEmail);
+
+  if (await isUnsubscribed(db, inviteeEmail, payload.eventId)) {
+    throw new AppError(409, "INVITEE_UNSUBSCRIBED", "Invitee has unsubscribed from future invitations");
+  }
+
+  // Guard: do not invite someone who is already registered for the event.
+  const alreadyRegistered = await first<{ id: string }>(
+    db,
+    `SELECT r.id
+     FROM registrations r
+     JOIN users u ON u.id = r.user_id
+     WHERE u.normalized_email = ? AND r.event_id = ? AND r.status NOT IN ('cancelled')
+     LIMIT 1`,
+    [inviteeEmail, payload.eventId],
+  );
+  if (alreadyRegistered) {
+    throw new AppError(409, "INVITEE_ALREADY_REGISTERED", "Invitee is already registered for this event");
+  }
+
+  // Guard: do not invite a speaker who already has an active proposal for this event.
+  if (payload.inviteType === "speaker") {
+    const alreadyProposed = await first<{ id: string }>(
+      db,
+      `SELECT ps.id
+       FROM proposal_speakers ps
+       JOIN session_proposals sp ON sp.id = ps.proposal_id
+       JOIN users u ON u.id = ps.user_id
+       WHERE u.normalized_email = ? AND sp.event_id = ?
+         AND sp.status NOT IN ('rejected', 'withdrawn')
+         AND ps.status NOT IN ('declined')
+       LIMIT 1`,
+      [inviteeEmail, payload.eventId],
+    );
+    if (alreadyProposed) {
+      throw new AppError(409, "INVITEE_ALREADY_PROPOSED", "Invitee already has an active proposal for this event");
+    }
+  }
+
+  const now = nowIso();
+
+  // Deduplication: if an active (sent, non-expired) invite already exists for this
+  // invitee+event+type, record the new inviter as a co-inviter for social proof
+  // and return without creating a second invite or sending a second email.
+  const existingInvite = await first<InviteRecord>(
+    db,
+    `SELECT * FROM invites
+     WHERE event_id = ? AND invitee_email = ? AND invite_type = ? AND status = 'sent'
+       AND (expires_at IS NULL OR expires_at > ?)
+     LIMIT 1`,
+    [payload.eventId, inviteeEmail, payload.inviteType, now],
+  );
+
+  if (existingInvite) {
+    if (payload.inviterUserId) {
+      await run(
+        db,
+        `INSERT OR IGNORE INTO invite_inviters
+           (id, invite_id, inviter_user_id, inviter_registration_id, source_type, invited_at)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          uuid(),
+          existingInvite.id,
+          payload.inviterUserId,
+          payload.inviterRegistrationId ?? null,
+          payload.sourceType ?? "direct",
+          now,
+        ],
+      );
+      await recordEngagement(db, {
+        userId: payload.inviterUserId,
+        eventId: payload.eventId,
+        subjectType: "invite",
+        subjectRef: existingInvite.id,
+        actionType: "invite_sent",
+        points: 1,
+        sourceType: "invite",
+        sourceRef: existingInvite.id,
+      });
+    }
+    return { invite: existingInvite, token: "", isNew: false };
+  }
+
+  const token = randomToken(24);
+  const tokenHash = await sha256Hex(token);
+  let expiresAt = addHours(now, payload.ttlHours);
+
+  const event = await first<{
+    starts_at: string | null;
+    registration_mode: string;
+    settings_json: string;
+  }>(db, "SELECT starts_at, registration_mode, settings_json FROM events WHERE id = ?", [payload.eventId]);
+
+  const registrationClosesAt = event
+    ? (() => {
+        const settings = parseJsonSafe<{
+          registrationClosesAt?: string | null;
+          registration?: { closesAt?: string | null };
+        }>(event.settings_json, {});
+        return settings.registration?.closesAt ?? settings.registrationClosesAt ?? null;
+      })()
+    : null;
+
+  // Marketing-style invites for open registration remain valid until registration closes.
+  if (
+    event &&
+    event.registration_mode !== "invite_only" &&
+    registrationClosesAt &&
+    new Date(registrationClosesAt).getTime() > new Date(now).getTime()
+  ) {
+    expiresAt = new Date(registrationClosesAt).toISOString();
+  }
+
+  if (event?.starts_at) {
+    const eventStartMs = new Date(event.starts_at).getTime();
+    const nowMs = new Date(now).getTime();
+    const currentExpiryMs = new Date(expiresAt).getTime();
+    if (Number.isFinite(eventStartMs) && eventStartMs > nowMs && eventStartMs < currentExpiryMs) {
+      expiresAt = new Date(eventStartMs).toISOString();
+    }
+  }
+
+  const invite: InviteRecord = {
+    id: uuid(),
+    event_id: payload.eventId,
+    inviter_user_id: payload.inviterUserId ?? null,
+    inviter_registration_id: payload.inviterRegistrationId ?? null,
+    invitee_email: inviteeEmail,
+    invitee_first_name: payload.inviteeFirstName ?? null,
+    invitee_last_name: payload.inviteeLastName ?? null,
+    invite_type: payload.inviteType,
+    token_hash: tokenHash,
+    status: "sent",
+    decline_reason_code: null,
+    decline_reason_note: null,
+    unsubscribe_future: 0,
+    reminder_count: 0,
+    last_communication_at: now,
+    reminders_paused_until: null,
+    max_uses: 1,
+    used_count: 0,
+    source_type: payload.sourceType ?? "direct",
+    expires_at: expiresAt,
+    accepted_at: null,
+    declined_at: null,
+    created_at: now,
+  };
+
+  await run(
+    db,
+    `INSERT INTO invites (
+      id, event_id, inviter_user_id, inviter_registration_id, invitee_email, invitee_first_name, invitee_last_name, invite_type,
+      token_hash, status, decline_reason_code, decline_reason_note, unsubscribe_future, reminder_count,
+      last_communication_at, reminders_paused_until,
+      max_uses, used_count, source_type, expires_at, accepted_at, declined_at, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [
+      invite.id,
+      invite.event_id,
+      invite.inviter_user_id,
+      invite.inviter_registration_id,
+      invite.invitee_email,
+      invite.invitee_first_name,
+      invite.invitee_last_name,
+      invite.invite_type,
+      invite.token_hash,
+      invite.status,
+      invite.decline_reason_code,
+      invite.decline_reason_note,
+      invite.unsubscribe_future,
+      invite.reminder_count,
+      invite.last_communication_at,
+      invite.reminders_paused_until,
+      invite.max_uses,
+      invite.used_count,
+      invite.source_type,
+      invite.expires_at,
+      invite.accepted_at,
+      invite.declined_at,
+      invite.created_at,
+    ],
+  );
+
+  if (invite.inviter_user_id) {
+    // Record the primary inviter in invite_inviters for social-proof tracking.
+    await run(
+      db,
+      `INSERT OR IGNORE INTO invite_inviters
+         (id, invite_id, inviter_user_id, inviter_registration_id, source_type, invited_at)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [uuid(), invite.id, invite.inviter_user_id, invite.inviter_registration_id, invite.source_type, now],
+    );
+    await recordEngagement(db, {
+      userId: invite.inviter_user_id,
+      eventId: invite.event_id,
+      subjectType: "invite",
+      subjectRef: invite.id,
+      actionType: "invite_sent",
+      points: 1,
+      sourceType: "invite",
+      sourceRef: invite.id,
+    });
+  }
+
+  return { invite, token, isNew: true };
+}
+
+/**
+ * Returns all named users who have invited (or co-invited) the given invitee,
+ * ordered by the time they sent their invitation.  Used to build social-proof
+ * copy such as "You've been invited by Paul, Sven, Chris and 4 others."
+ */
+export async function getInviteInviters(db: DatabaseLike, inviteId: string): Promise<InviteInviterInfo[]> {
+  return all<InviteInviterInfo>(
+    db,
+    `SELECT ii.inviter_user_id  AS userId,
+            u.first_name         AS firstName,
+            u.last_name          AS lastName,
+            u.organization_name  AS organizationName
+     FROM invite_inviters ii
+     JOIN users u ON u.id = ii.inviter_user_id
+     WHERE ii.invite_id = ?
+     ORDER BY ii.invited_at ASC`,
+
+    [inviteId],
+  );
+}
+
+export async function findInviteByToken(db: DatabaseLike, token: string): Promise<InviteRecord> {
+  const tokenHash = await sha256Hex(token);
+  const invite = await first<InviteRecord>(db, "SELECT * FROM invites WHERE token_hash = ?", [tokenHash]);
+  if (!invite) {
+    throw new AppError(404, "INVITE_NOT_FOUND", "Invite token is invalid");
+  }
+
+  if (invite.status !== "sent") {
+    throw new AppError(409, "INVITE_NOT_ACTIVE", "Invite is not active anymore");
+  }
+
+  if (invite.expires_at && isPast(invite.expires_at)) {
+    await run(db, "UPDATE invites SET status = 'expired' WHERE id = ?", [invite.id]);
+    throw new AppError(410, "INVITE_EXPIRED", "Invite token has expired");
+  }
+
+  return invite;
+}
+
+export async function acceptInvite(db: DatabaseLike, inviteId: string): Promise<void> {
+  const invite = await first<InviteRecord>(db, "SELECT * FROM invites WHERE id = ?", [inviteId]);
+  await run(
+    db,
+    `UPDATE invites
+     SET status = 'accepted', accepted_at = ?, used_count = used_count + 1
+     WHERE id = ?`,
+    [nowIso(), inviteId],
+  );
+
+  if (invite?.inviter_user_id) {
+    await recordEngagement(db, {
+      userId: invite.inviter_user_id,
+      eventId: invite.event_id,
+      subjectType: "invite",
+      subjectRef: invite.id,
+      actionType: "invite_accepted",
+      points: 3,
+      sourceType: "invite",
+      sourceRef: invite.id,
+      data: { inviteType: invite.invite_type },
+    });
+  }
+}
+
+export async function declineInvite(
+  db: DatabaseLike,
+  payload: {
+    inviteId: string;
+    reasonCode: string;
+    reasonNote?: string | null;
+    unsubscribeFuture?: boolean;
+    npsScore?: number | null;
+  },
+): Promise<void> {
+  const now = nowIso();
+  await run(
+    db,
+    `UPDATE invites
+     SET status = 'declined', decline_reason_code = ?, decline_reason_note = ?,
+         unsubscribe_future = ?, nps_score = ?, declined_at = ?
+     WHERE id = ?`,
+    [
+      payload.reasonCode,
+      payload.reasonNote ?? null,
+      payload.unsubscribeFuture ? 1 : 0,
+      payload.npsScore ?? null,
+      now,
+      payload.inviteId,
+    ],
+  );
+
+  const invite = await first<InviteRecord>(db, "SELECT * FROM invites WHERE id = ?", [payload.inviteId]);
+  if (invite && payload.unsubscribeFuture) {
+    await run(
+      db,
+      `INSERT OR IGNORE INTO unsubscribes (
+        id, email, channel, scope_type, scope_ref, reason, created_at
+      ) VALUES (?, ?, 'invites', 'global', NULL, ?, ?)`,
+      [uuid(), invite.invitee_email, payload.reasonCode, now],
+    );
+  }
+}
+
+export async function listPendingInviteReminders(db: DatabaseLike): Promise<InviteRecord[]> {
+  return all<InviteRecord>(
+    db,
+    `SELECT * FROM invites
+     WHERE status = 'sent' AND reminder_count < 3 AND (expires_at IS NULL OR expires_at > ?)
+     ORDER BY created_at ASC`,
+    [nowIso()],
+  );
+}
+
+export async function refreshInviteToken(db: DatabaseLike, inviteId: string): Promise<string> {
+  const token = randomToken(24);
+  const tokenHash = await sha256Hex(token);
+  await run(db, "UPDATE invites SET token_hash = ? WHERE id = ?", [tokenHash, inviteId]);
+  return token;
+}
+
+export async function markInviteReminderSent(db: DatabaseLike, inviteId: string): Promise<void> {
+  const now = nowIso();
+  await run(
+    db,
+    `UPDATE invites
+     SET reminder_count = reminder_count + 1,
+         last_communication_at = ?,
+         reminders_paused_until = NULL
+     WHERE id = ?`,
+    [now, inviteId],
+  );
+}
+
+export async function setInviteRemindersPausedUntil(
+  db: DatabaseLike,
+  inviteId: string,
+  pausedUntilIso: string,
+): Promise<void> {
+  await run(db, "UPDATE invites SET reminders_paused_until = ? WHERE id = ?", [pausedUntilIso, inviteId]);
+}
+
+export async function clearInviteRemindersPause(db: DatabaseLike, inviteId: string): Promise<void> {
+  await run(db, "UPDATE invites SET reminders_paused_until = NULL WHERE id = ?", [inviteId]);
+}
+
+export type BulkAttendeeOutcome = {
+  email: string;
+  /** "created" → new invite row inserted, caller must queue the invite email.  */
+  status: "created" | "endorsed" | "skipped";
+  /** Populated only when status === "created". */
+  inviteId?: string;
+  token?: string;
+};
+
+/**
+ * High-throughput bulk invite creation for admin-initiated attendee lists.
+ *
+ * Replaces N×createInvite() calls (N×4-6 D1 round-trips) with:
+ *   1. ONE db.batch() call for three bulk guard SELECTs
+ *   2. Parallel in-process token+hash generation
+ *   3. ONE db.batch() call to INSERT all new invite rows
+ *
+ * No inviterUserId path (inviter tracking, engagement points) since this is
+ * an admin-only bulk operation.
+ *
+ * Does NOT queue emails — the caller should call bulkQueueInviteEmails() with
+ * the "created" outcomes.
+ */
+export async function bulkCreateAttendeesAdmin(
+  db: DatabaseLike,
+  payload: {
+    event: {
+      id: string;
+      starts_at: string | null;
+      registration_mode: string;
+      settings_json: string;
+    };
+    invites: Array<{
+      inviteeEmail: string;
+      inviteeFirstName?: string | null;
+      inviteeLastName?: string | null;
+      sourceType?: string;
+    }>;
+    ttlHours: number;
+  },
+): Promise<BulkAttendeeOutcome[]> {
+  if (payload.invites.length === 0) return [];
+
+  const now = nowIso();
+  const eventId = payload.event.id;
+  const normalizedEmails = payload.invites.map((i) => normalizeEmail(i.inviteeEmail));
+
+  // Pass all emails as a single JSON array to avoid D1's 100-param-per-statement
+  // limit.  json_each() is a built-in SQLite table-valued function that expands
+  // a JSON array into rows, so each guard query needs only 2 bound parameters
+  // (the JSON blob + eventId) regardless of batch size.
+  const emailsJson = JSON.stringify(normalizedEmails);
+
+  // --- Round-trip 1: all guard queries in one db.batch() call ---
+  const batchResults = (await db.batch([
+    db
+      .prepare(
+        `SELECT email FROM unsubscribes
+       WHERE email IN (SELECT value FROM json_each(?1))
+         AND channel = 'invites'
+         AND (
+           (scope_type = 'global' AND scope_ref IS NULL) OR
+           (scope_type = 'event' AND scope_ref = ?2)
+         )`,
+      )
+      .bind(emailsJson, eventId),
+    db
+      .prepare(
+        `SELECT u.normalized_email
+       FROM registrations r
+       JOIN users u ON u.id = r.user_id
+       WHERE u.normalized_email IN (SELECT value FROM json_each(?1))
+         AND r.event_id = ?2
+         AND r.status NOT IN ('cancelled')`,
+      )
+      .bind(emailsJson, eventId),
+    db
+      .prepare(
+        `SELECT invitee_email FROM invites
+       WHERE event_id = ?1 AND invite_type = 'attendee' AND status = 'sent'
+         AND (expires_at IS NULL OR expires_at > ?2)
+         AND invitee_email IN (SELECT value FROM json_each(?3))`,
+      )
+      .bind(eventId, now, emailsJson),
+  ])) as Array<{ results: Array<Record<string, string>> }>;
+
+  const unsubscribed = new Set((batchResults[0].results ?? []).map((row) => row.email));
+  const registered = new Set((batchResults[1].results ?? []).map((row) => row.normalized_email));
+  const alreadyInvited = new Set((batchResults[2].results ?? []).map((row) => row.invitee_email));
+
+  // --- Compute expiry once (same logic as createInvite, using pre-loaded event) ---
+  const settings = parseJsonSafe<{
+    registrationClosesAt?: string | null;
+    registration?: { closesAt?: string | null };
+  }>(payload.event.settings_json, {});
+  const registrationClosesAt = settings.registration?.closesAt ?? settings.registrationClosesAt ?? null;
+
+  function computeExpiry(): string {
+    let expiresAt = addHours(now, payload.ttlHours);
+    if (
+      payload.event.registration_mode !== "invite_only" &&
+      registrationClosesAt &&
+      new Date(registrationClosesAt).getTime() > new Date(now).getTime()
+    ) {
+      expiresAt = new Date(registrationClosesAt).toISOString();
+    }
+    if (payload.event.starts_at) {
+      const eventStartMs = new Date(payload.event.starts_at).getTime();
+      const nowMs = new Date(now).getTime();
+      const currentExpiryMs = new Date(expiresAt).getTime();
+      if (Number.isFinite(eventStartMs) && eventStartMs > nowMs && eventStartMs < currentExpiryMs) {
+        expiresAt = new Date(eventStartMs).toISOString();
+      }
+    }
+    return expiresAt;
+  }
+
+  // --- Classify each input row ---
+  const outcomes: BulkAttendeeOutcome[] = [];
+  const toCreate: Array<{ idx: number; email: string; item: (typeof payload.invites)[0] }> = [];
+
+  for (let i = 0; i < payload.invites.length; i++) {
+    const email = normalizedEmails[i];
+    const item = payload.invites[i];
+    if (unsubscribed.has(email) || registered.has(email)) {
+      outcomes.push({ email, status: "skipped" });
+    } else if (alreadyInvited.has(email)) {
+      outcomes.push({ email, status: "endorsed" });
+    } else {
+      outcomes.push({ email, status: "created" }); // filled in below
+      toCreate.push({ idx: i, email, item });
+    }
+  }
+
+  if (toCreate.length === 0) return outcomes;
+
+  // --- Round-trip 2: generate tokens in parallel (in-process crypto, no DB) ---
+  const tokens = await Promise.all(toCreate.map(() => randomToken(24)));
+  const tokenHashes = await Promise.all(tokens.map((t) => sha256Hex(t)));
+  const expiresAt = computeExpiry();
+
+  // --- Round-trip(s) 3: INSERT new invites, chunked at 500 per db.batch() ---
+  const inviteIds = toCreate.map(() => uuid());
+  const MAX_BATCH = 500;
+  for (let c = 0; c < toCreate.length; c += MAX_BATCH) {
+    const slice = toCreate.slice(c, c + MAX_BATCH);
+    await db.batch(
+      slice.map((tc, si) => {
+        const j = c + si;
+        const item = tc.item;
+        return db
+          .prepare(
+            `INSERT INTO invites (
+              id, event_id, inviter_user_id, inviter_registration_id, invitee_email,
+              invitee_first_name, invitee_last_name, invite_type, token_hash, status,
+              decline_reason_code, decline_reason_note, unsubscribe_future, reminder_count,
+              last_communication_at, reminders_paused_until, max_uses, used_count,
+              source_type, expires_at, accepted_at, declined_at, created_at
+            ) VALUES (?, ?, NULL, NULL, ?, ?, ?, 'attendee', ?, 'sent',
+                      NULL, NULL, 0, 0, ?, NULL, 1, 0, ?, ?, NULL, NULL, ?)`,
+          )
+          .bind(
+            inviteIds[j],
+            eventId,
+            tc.email,
+            item.inviteeFirstName ?? null,
+            item.inviteeLastName ?? null,
+            tokenHashes[j],
+            now, // last_communication_at
+            item.sourceType ?? "direct",
+            expiresAt,
+            now, // created_at
+          );
+      }),
+    );
+  }
+
+  // Populate the outcome objects with the generated ids and tokens.
+  for (let j = 0; j < toCreate.length; j++) {
+    const outcome = outcomes[toCreate[j].idx];
+    outcome.inviteId = inviteIds[j];
+    outcome.token = tokens[j];
+  }
+
+  return outcomes;
+}
+
+// ── Bulk speaker invite creation (admin) ────────────────────────────────────
+
+export type BulkSpeakerOutcome = {
+  email: string;
+  status: "created" | "endorsed" | "skipped";
+  inviteId?: string;
+  token?: string;
+};
+
+/**
+ * High-throughput bulk invite creation for admin-initiated speaker lists.
+ *
+ * Same batched pattern as bulkCreateAttendeesAdmin but with an extra guard
+ * for existing proposals (INVITEE_ALREADY_PROPOSED) and invite_type = 'speaker'.
+ */
+export async function bulkCreateSpeakersAdmin(
+  db: DatabaseLike,
+  payload: {
+    event: {
+      id: string;
+      starts_at: string | null;
+      registration_mode: string;
+      settings_json: string;
+    };
+    invites: Array<{
+      inviteeEmail: string;
+      inviteeFirstName?: string | null;
+      inviteeLastName?: string | null;
+      sourceType?: string;
+    }>;
+    ttlHours: number;
+  },
+): Promise<BulkSpeakerOutcome[]> {
+  if (payload.invites.length === 0) return [];
+
+  const now = nowIso();
+  const eventId = payload.event.id;
+  const normalizedEmails = payload.invites.map((i) => normalizeEmail(i.inviteeEmail));
+  const emailsJson = JSON.stringify(normalizedEmails);
+
+  // --- Round-trip 1: all guard queries in one db.batch() call ---
+  const batchResults = (await db.batch([
+    db
+      .prepare(
+        `SELECT email FROM unsubscribes
+       WHERE email IN (SELECT value FROM json_each(?1))
+         AND channel = 'invites'
+         AND (
+           (scope_type = 'global' AND scope_ref IS NULL) OR
+           (scope_type = 'event' AND scope_ref = ?2)
+         )`,
+      )
+      .bind(emailsJson, eventId),
+    db
+      .prepare(
+        `SELECT u.normalized_email
+       FROM registrations r
+       JOIN users u ON u.id = r.user_id
+       WHERE u.normalized_email IN (SELECT value FROM json_each(?1))
+         AND r.event_id = ?2
+         AND r.status NOT IN ('cancelled')`,
+      )
+      .bind(emailsJson, eventId),
+    // Speaker-specific: already has an active proposal
+    db
+      .prepare(
+        `SELECT u.normalized_email
+       FROM proposal_speakers ps
+       JOIN session_proposals sp ON sp.id = ps.proposal_id
+       JOIN users u ON u.id = ps.user_id
+       WHERE u.normalized_email IN (SELECT value FROM json_each(?1))
+         AND sp.event_id = ?2
+         AND sp.status NOT IN ('rejected', 'withdrawn')
+         AND ps.status NOT IN ('declined')`,
+      )
+      .bind(emailsJson, eventId),
+    db
+      .prepare(
+        `SELECT invitee_email FROM invites
+       WHERE event_id = ?1 AND invite_type = 'speaker' AND status = 'sent'
+         AND (expires_at IS NULL OR expires_at > ?2)
+         AND invitee_email IN (SELECT value FROM json_each(?3))`,
+      )
+      .bind(eventId, now, emailsJson),
+  ])) as Array<{ results: Array<Record<string, string>> }>;
+
+  const unsubscribed = new Set((batchResults[0].results ?? []).map((row) => row.email));
+  const registered = new Set((batchResults[1].results ?? []).map((row) => row.normalized_email));
+  const alreadyProposed = new Set((batchResults[2].results ?? []).map((row) => row.normalized_email));
+  const alreadyInvited = new Set((batchResults[3].results ?? []).map((row) => row.invitee_email));
+
+  // --- Compute expiry ---
+  const settings = parseJsonSafe<{
+    registrationClosesAt?: string | null;
+    registration?: { closesAt?: string | null };
+  }>(payload.event.settings_json, {});
+  const registrationClosesAt = settings.registration?.closesAt ?? settings.registrationClosesAt ?? null;
+
+  function computeExpiry(): string {
+    let expiresAt = addHours(now, payload.ttlHours);
+    if (
+      payload.event.registration_mode !== "invite_only" &&
+      registrationClosesAt &&
+      new Date(registrationClosesAt).getTime() > new Date(now).getTime()
+    ) {
+      expiresAt = new Date(registrationClosesAt).toISOString();
+    }
+    if (payload.event.starts_at) {
+      const eventStartMs = new Date(payload.event.starts_at).getTime();
+      const nowMs = new Date(now).getTime();
+      const currentExpiryMs = new Date(expiresAt).getTime();
+      if (Number.isFinite(eventStartMs) && eventStartMs > nowMs && eventStartMs < currentExpiryMs) {
+        expiresAt = new Date(eventStartMs).toISOString();
+      }
+    }
+    return expiresAt;
+  }
+
+  // --- Classify each input row ---
+  const outcomes: BulkSpeakerOutcome[] = [];
+  const toCreate: Array<{ idx: number; email: string; item: (typeof payload.invites)[0] }> = [];
+
+  for (let i = 0; i < payload.invites.length; i++) {
+    const email = normalizedEmails[i];
+    const item = payload.invites[i];
+    if (unsubscribed.has(email) || registered.has(email) || alreadyProposed.has(email)) {
+      outcomes.push({ email, status: "skipped" });
+    } else if (alreadyInvited.has(email)) {
+      outcomes.push({ email, status: "endorsed" });
+    } else {
+      outcomes.push({ email, status: "created" });
+      toCreate.push({ idx: i, email, item });
+    }
+  }
+
+  if (toCreate.length === 0) return outcomes;
+
+  // --- Round-trip 2: generate tokens in parallel ---
+  const tokens = await Promise.all(toCreate.map(() => randomToken(24)));
+  const tokenHashes = await Promise.all(tokens.map((t) => sha256Hex(t)));
+  const expiresAt = computeExpiry();
+
+  // --- Round-trip(s) 3: INSERT new invites, chunked at 500 per db.batch() ---
+  const inviteIds = toCreate.map(() => uuid());
+  const MAX_BATCH = 500;
+  for (let c = 0; c < toCreate.length; c += MAX_BATCH) {
+    const slice = toCreate.slice(c, c + MAX_BATCH);
+    await db.batch(
+      slice.map((tc, si) => {
+        const j = c + si;
+        const item = tc.item;
+        return db
+          .prepare(
+            `INSERT INTO invites (
+              id, event_id, inviter_user_id, inviter_registration_id, invitee_email,
+              invitee_first_name, invitee_last_name, invite_type, token_hash, status,
+              decline_reason_code, decline_reason_note, unsubscribe_future, reminder_count,
+              last_communication_at, reminders_paused_until, max_uses, used_count,
+              source_type, expires_at, accepted_at, declined_at, created_at
+            ) VALUES (?, ?, NULL, NULL, ?, ?, ?, 'speaker', ?, 'sent',
+                      NULL, NULL, 0, 0, ?, NULL, 1, 0, ?, ?, NULL, NULL, ?)`,
+          )
+          .bind(
+            inviteIds[j],
+            eventId,
+            tc.email,
+            item.inviteeFirstName ?? null,
+            item.inviteeLastName ?? null,
+            tokenHashes[j],
+            now,
+            item.sourceType ?? "direct",
+            expiresAt,
+            now,
+          );
+      }),
+    );
+  }
+
+  for (let j = 0; j < toCreate.length; j++) {
+    const outcome = outcomes[toCreate[j].idx];
+    outcome.inviteId = inviteIds[j];
+    outcome.token = tokens[j];
+  }
+
+  return outcomes;
+}

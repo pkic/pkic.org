@@ -1,4 +1,4 @@
-baseURL: /
+baseURL: https://pkic.org
 languageCode: en-us
 title: PKI Consortium
 
@@ -37,6 +37,9 @@ taxonomies:
 ignoreFiles:
   - AGENTS\.md$
 
+build:
+  noJSConfigInAssets: true
+
 # disableKinds:
 #   - RSS
 #   - taxonomyTerm
@@ -67,7 +70,7 @@ params:
       source: https://github.com/pkic/pkimm/edit/main
     - prefix: wg/cm/remote-key-attestation/
       source: https://github.com/pkic/remote-key-attestation/edit/main
-    - prefix: pqccm/
+    - prefix: wg/pqc/pqccm/
       source: https://github.com/pkic/pqccm/edit/main
 
   social:
@@ -188,7 +191,7 @@ outputFormats:
     baseName: event-speakers2
     notAlternative: true
     isHTML: true
-  event-data: 
+  event-data:
     mediatype: application/json
     isPlainText: true
     baseName: event-data
@@ -221,8 +224,6 @@ caches:
   getresource:
     dir: :cacheDir/:project
     maxAge: 28800
-
-server:
   headers:
     - for: /**
       values:
@@ -234,10 +235,10 @@ server:
           block-all-mixed-content;
           style-src 'unsafe-inline' 'self';
           font-src 'self';
-          script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/;
-          img-src 'self' https://i.ytimg.com data:;
-          frame-src https://www.youtube-nocookie.com/ https://player.vimeo.com/ https://www.youtube.com/;
-          media-src  https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4;
+          script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/ https://js.stripe.com localhost:*;
+          img-src 'self' https://i.ytimg.com localhost:* data:;
+          frame-src https://www.youtube-nocookie.com/ https://player.vimeo.com/ https://www.youtube.com/ https://js.stripe.com;
+          media-src https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4 localhost:*;
           connect-src ws://localhost:1313/livereload 'self' data:;
 
     - for: /questions.html
@@ -250,5 +251,5 @@ server:
           script-src 'self' https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js https://pkic.github.io/self-assessment/;
           img-src 'self' data:;
           frame-src https://www.youtube-nocookie.com/ https://player.vimeo.com/ https://www.youtube.com/;
-          media-src  https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4;
-          connect-src ws://localhost:1313/livereload 'self' https://docs.google.com/spreadsheets/d/ data:;
+          media-src https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4;
+          connect-src ws://localhost:*/livereload 'self' https://docs.google.com/spreadsheets/d/ data:;

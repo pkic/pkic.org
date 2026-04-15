@@ -177,6 +177,8 @@
 
 // Blog post cards on the homepage reuse the .blog-card styles from _blog.scss
 
+// ── Join CTA section ────────────────────────────────────────────────────────
+
 .pkic-join-cta {
   background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 100%);
   color: #fff;
@@ -202,6 +204,10 @@
   .lead {
     opacity: 0.88;
     font-size: 1.2rem;
+  }
+
+  .pkic-join-cta-body {
+    max-width: 560px;
   }
 }
 
@@ -475,6 +481,190 @@
 .pkic-card-accent-bar {
   height: 4px;
   background: linear-gradient(90deg, $green, $blue);
+
+  &.pkic-card-accent--blue   { background: $blue; }
+  &.pkic-card-accent--green  { background: $green; }
+  &.pkic-card-accent--teal   { background: $teal; }
+  &.pkic-card-accent--purple { background: $purple; }
+  &.pkic-card-accent--orange { background: $orange; }
+  &.pkic-card-accent--red    { background: $red; }
+}
+
+.pkic-card-icon {
+  display: block;
+  font-size: 2rem;
+  line-height: 1;
+  margin-bottom: 0.75rem;
+}
+
+// ============================================================
+// Bento photo cell — image fills its grid cell entirely
+// ============================================================
+
+.bento-photo-cell {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1rem;
+  min-height: 180px;
+
+  img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform 0.45s ease;
+  }
+
+  &:hover img {
+    transform: scale(1.04);
+  }
+
+  .bento-photo-caption {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 0.5rem 0.85rem;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.62));
+    color: #fff;
+    font-size: 0.78rem;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+  }
+}
+
+// ============================================================
+// Standalone photo-grid shortcode
+// ============================================================
+
+.pkic-photo-grid {
+  display: grid;
+  grid-auto-flow: dense;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  grid-auto-rows: 220px;
+  border-radius: 1.25rem;
+  overflow: hidden;
+  margin-bottom: 2rem;
+
+  &.pkic-photo-grid--cols-1 { grid-template-columns: repeat(1, 1fr); }
+  &.pkic-photo-grid--cols-2 { grid-template-columns: repeat(2, 1fr); }
+  &.pkic-photo-grid--cols-3 { grid-template-columns: repeat(3, 1fr); }
+  &.pkic-photo-grid--cols-4 { grid-template-columns: repeat(4, 1fr); }
+  &.pkic-photo-grid--cols-5 { grid-template-columns: repeat(5, 1fr); }
+  &.pkic-photo-grid--cols-6 { grid-template-columns: repeat(6, 1fr); }
+
+  &.pkic-photo-grid--gap-025 { gap: 0.25rem; }
+  &.pkic-photo-grid--gap-050 { gap: 0.5rem; }
+  &.pkic-photo-grid--gap-075 { gap: 0.75rem; }
+  &.pkic-photo-grid--gap-100 { gap: 1rem; }
+
+  &.pkic-photo-grid--row-160 { grid-auto-rows: 160px; }
+  &.pkic-photo-grid--row-180 { grid-auto-rows: 180px; }
+  &.pkic-photo-grid--row-200 { grid-auto-rows: 200px; }
+  &.pkic-photo-grid--row-220 { grid-auto-rows: 220px; }
+  &.pkic-photo-grid--row-240 { grid-auto-rows: 240px; }
+  &.pkic-photo-grid--row-260 { grid-auto-rows: 260px; }
+  &.pkic-photo-grid--row-280 { grid-auto-rows: 280px; }
+  &.pkic-photo-grid--row-300 { grid-auto-rows: 300px; }
+
+  .pkic-photo-cell {
+    position: relative;
+    overflow: hidden;
+
+    &.pkic-photo-cell--col-span-1 { grid-column: span 1; }
+    &.pkic-photo-cell--col-span-2 { grid-column: span 2; }
+    &.pkic-photo-cell--col-span-3 { grid-column: span 3; }
+    &.pkic-photo-cell--col-span-4 { grid-column: span 4; }
+    &.pkic-photo-cell--col-span-5 { grid-column: span 5; }
+    &.pkic-photo-cell--col-span-6 { grid-column: span 6; }
+
+    &.pkic-photo-cell--row-span-1 { grid-row: span 1; }
+    &.pkic-photo-cell--row-span-2 { grid-row: span 2; }
+    &.pkic-photo-cell--row-span-3 { grid-row: span 3; }
+    &.pkic-photo-cell--row-span-4 { grid-row: span 4; }
+    &.pkic-photo-cell--row-span-5 { grid-row: span 5; }
+    &.pkic-photo-cell--row-span-6 { grid-row: span 6; }
+
+    background-color: $gray-200;
+
+    &:hover img.pkic-photo-img.active,
+    &:hover img.pkic-photo-img:not(.pkic-photo-transition) {
+      transform: scale(1.04);
+    }
+
+    img.pkic-photo-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+      transition: transform 0.45s ease;
+
+      &.pkic-photo-transition {
+        opacity: 0;
+        transition: opacity 1.5s ease-in-out, transform 0.45s ease;
+        z-index: 1;
+
+        &.active {
+          opacity: 1;
+          z-index: 2;
+        }
+      }
+    }
+
+    .pkic-photo-caption {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      padding: 0.5rem 0.85rem;
+      background: linear-gradient(transparent, rgba(0, 0, 0, 0.65));
+      color: #fff;
+      font-size: 0.78rem;
+      font-weight: 500;
+    }
+  }
+
+  @media (max-width: 767.98px) {
+    grid-template-columns: repeat(2, 1fr);
+    grid-auto-rows: 140px;
+
+    .pkic-photo-cell {
+      &.pkic-photo-cell--col-span-3,
+      &.pkic-photo-cell--col-span-4,
+      &.pkic-photo-cell--col-span-5,
+      &.pkic-photo-cell--col-span-6 {
+        grid-column: span 2;
+      }
+    }
+  }
+}
+
+.pkic-card-bento {
+  .bento-title {
+    font-size: 1.2rem;
+    font-weight: 700;
+    line-height: 1.3;
+    margin-bottom: 0.5rem;
+  }
+  .bento-icon {
+    font-size: 2.25rem;
+  }
+  .pkic-icon {
+    display: block;
+    flex-shrink: 0;
+    margin-bottom: 0.85rem;
+    // inherits currentColor from parent .bento-card for white stroke on coloured tiles
+  }
+  .bento-text {
+    font-size: 0.95rem;
+    line-height: 1.6;
+    p { margin-bottom: 0; }
+  }
 }
 
 .pkic-wg-card {
@@ -528,4 +718,103 @@
     rgba(90, 155, 213, 0.04) 0%,
     transparent 70%
   );
+}
+.hero-sponsors-overlay {
+  background: linear-gradient(to top, rgba(0,0,0,0.6) 0%, transparent 100%);
+  pointer-events: none;
+  z-index: 10;
+  display: none !important;
+}
+
+.hero-sponsor-host {
+  --hero-sponsor-min-height: 29rem;
+
+  container: hero-sponsor / size;
+}
+
+.hero-sponsor-host.hero-sponsor-host--title-medium {
+  --hero-sponsor-min-height: 31rem;
+}
+
+.hero-sponsor-host.hero-sponsor-host--title-long {
+  --hero-sponsor-min-height: 33rem;
+}
+
+.hero-sponsor-host.hero-sponsor-host--title-xl {
+  --hero-sponsor-min-height: 35rem;
+}
+
+@supports not (container-type: size) {
+  @media (min-width: 768px) and (min-height: 46rem) {
+    .hero-sponsor-host .hero-sponsors-overlay {
+      display: block !important;
+    }
+  }
+}
+
+@container hero-sponsor (min-height: 29rem) {
+  .hero-sponsor-host.hero-sponsor-host--title-short .hero-sponsors-overlay {
+    display: block !important;
+  }
+}
+
+@container hero-sponsor (min-height: 31rem) {
+  .hero-sponsor-host.hero-sponsor-host--title-medium .hero-sponsors-overlay {
+    display: block !important;
+  }
+}
+
+@container hero-sponsor (min-height: 33rem) {
+  .hero-sponsor-host.hero-sponsor-host--title-long .hero-sponsors-overlay {
+    display: block !important;
+  }
+}
+
+@container hero-sponsor (min-height: 35rem) {
+  .hero-sponsor-host.hero-sponsor-host--title-xl .hero-sponsors-overlay {
+    display: block !important;
+  }
+}
+
+.hero-sponsors-container {
+  filter: brightness(0) invert(1);
+  pointer-events: auto;
+  opacity: 0.55;
+}
+
+.hero-sponsor-link {
+  opacity: 0.8;
+  transition: opacity 0.2s;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
+.hero-sponsor-logo {
+  width: 100%;
+  height: auto;
+  object-fit: contain;
+  max-height: calc(12px + (6px * (var(--sponsor-weight, 5) - 1)));
+  max-width: calc(60px + (30px * (var(--sponsor-weight, 5) - 1)));
+  min-height: 15px;
+  min-width: 60px;
+}
+
+@media (max-width: 991.98px) {
+  .hero-sponsors-overlay {
+    padding-top: 2.5rem !important;
+    padding-bottom: 1rem !important;
+  }
+
+  .hero-sponsors-container {
+    gap: 0.75rem !important;
+  }
+
+  .hero-sponsor-logo {
+    max-height: calc((12px + (6px * (var(--sponsor-weight, 5) - 1))) * 0.5);
+    max-width: calc((60px + (30px * (var(--sponsor-weight, 5) - 1))) * 0.5);
+    min-height: 7.5px;
+    min-width: 30px;
+  }
 }

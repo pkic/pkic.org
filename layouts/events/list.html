@@ -1,6 +1,29 @@
 {{ define "main" }}
 {{ partial "hero.html" . }}
 
+{{ if ne .RelPermalink "/events/" }}
+<div class="py-2 bg-light">
+</div>
+
+<div class="container">
+  <div class="row">
+    {{- if $.Page.FirstSection.Param "sideMenu" -}}
+    <nav id="sidebarMenu" class="col-md-4 col-lg-3 d-md-block bg-light sidebar collapse">
+      <div class="position-sticky p-3 sidebar-sticky">
+        {{- partial "menu.html" . -}}
+      </div>
+    </nav>
+    <div id="content" class="col-md-8 ms-sm-auto col-lg-9 p-4" data-pagefind-body>
+    {{- else -}}
+    <div id="content" class="p-4" data-pagefind-body>
+    {{- end -}}
+
+    {{ .Content }}
+    </div>
+  </div>
+</div>
+{{ else }}
+
 <div class="events-listing py-5">
   <div class="container">
     <div class="row g-5 align-items-start">
@@ -10,25 +33,14 @@
       ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━ */}}
       <div class="col-lg-9">
 
-        {{- $consortiumEvts := slice -}}
-        {{- $webinars := slice -}}
-        {{- range where site.Pages "Section" "events" -}}
-          {{- $eventType := .Param "eventType" -}}
-          {{- if $eventType -}}
-            {{- if eq $eventType "webinar" -}}
-              {{- $webinars = $webinars | append . -}}
-            {{- else -}}
-              {{- $consortiumEvts = $consortiumEvts | append . -}}
-            {{- end -}}
-          {{- end -}}
-        {{- end -}}
-        {{- $consortiumEvts = sort $consortiumEvts "Date" "desc" -}}
-        {{- $webinars = sort $webinars "Date" "desc" -}}
+        {{- $consortiumEvts := sort (where site.Pages "Params.eventType" "conference") "Params.eventDate" "desc" -}}
+        {{- $webinars       := sort (where site.Pages "Params.eventType" "webinar") "Params.eventDate" "asc" -}}
+        {{- $today := now.Format "2006-01-02" -}}
 
         {{/* Collect unique years from event date, then sort descending */}}
         {{- $years := slice -}}
         {{- range $consortiumEvts -}}
-          {{- $yr := int (partial "events/year.html" .) -}}
+          {{- $yr := (time (.Param "eventDate")).Format "2006" -}}
           {{- if not (in $years $yr) -}}
             {{- $years = $years | append $yr -}}
           {{- end -}}
@@ -39,7 +51,7 @@
         {{- $upcomingYears := slice -}}
         {{- $pastYears     := slice -}}
         {{- range $years -}}
-          {{- if ge . now.Year -}}
+          {{- if ge (int .) now.Year -}}
             {{- $upcomingYears = $upcomingYears | append . -}}
           {{- else -}}
             {{- $pastYears = $pastYears | append . -}}
@@ -59,9 +71,10 @@
           {{ $yr := . }}
           <div class="row g-4{{ if gt (len $upcomingYears) 1 }} mb-4{{ end }}">
             {{ range $consortiumEvts }}
-            {{ if eq (int (partial "events/year.html" .)) $yr }}
+            {{- $eventDate := time (.Param "eventDate") -}}
+            {{ if eq ($eventDate.Format "2006") $yr }}
             <div class="col-md-6">
-              {{ partial "event-card.html" . }}
+              {{ partial "events/card.html" . }}
             </div>
             {{ end }}
             {{ end }}
@@ -69,6 +82,9 @@
           {{ end }}
         </section>
         {{ end }}
+
+        {{/* Content from _index.md (banners, CTAs, etc.) */}}
+        {{ .Content }}
 
         {{/* Past events grouped by year */}}
         {{ if $pastYears }}
@@ -87,9 +103,10 @@
             <h3 class="events-year-heading">{{ $yr }}</h3>
             <div class="row g-4">
               {{ range $consortiumEvts }}
-              {{ if eq (int (partial "events/year.html" .)) $yr }}
+              {{- $eventDate := time (.Param "eventDate") -}}
+              {{ if eq ($eventDate.Format "2006") $yr }}
               <div class="col-md-6">
-                {{ partial "event-card.html" . }}
+                {{ partial "events/card.html" . }}
               </div>
               {{ end }}
               {{ end }}
@@ -111,7 +128,7 @@
       <aside class="col-lg-3">
         <div class="events-sidebar sticky-lg-top">
 
-          {{- $ws         := .Param "webinarSidebar" | default dict -}}
+          {{- $ws         := .Scratch.Get "sidebarData" | default dict -}}
           {{- $wsTitle    := index $ws "title"    | default "Sponsored Webinars" -}}
           {{- $wsDesc     := index $ws "description" | default "" -}}
           {{- $wsCta      := index $ws "cta"      | default "Want to host a sponsored webinar?" -}}
@@ -127,7 +144,8 @@
           {{- $upcomingWebinars := slice -}}
           {{- $pastWebinars := slice -}}
           {{- range $webinars -}}
-            {{- if eq (partial "events/is-upcoming.html" .) "true" -}}
+            {{- $eventDate := time (.Param "eventDate") -}}
+            {{- if ge ($eventDate.Format "2006-01-02") $today -}}
               {{- $upcomingWebinars = $upcomingWebinars | append . -}}
             {{- else -}}
               {{- $pastWebinars = $pastWebinars | append . -}}
@@ -137,7 +155,7 @@
           {{ if $upcomingWebinars }}
           <div class="events-webinar-list mb-4">
             {{ range first 3 $upcomingWebinars }}
-            {{ partial "event-webinar-card.html" . }}
+            {{ partial "events/webinar-card.html" . }}
             {{ end }}
           </div>
           {{ end }}
@@ -148,7 +166,7 @@
           {{ end }}
           <div class="events-webinar-list">
             {{ range first 2 $pastWebinars }}
-            {{ partial "event-webinar-card.html" . }}
+            {{ partial "events/webinar-card.html" . }}
             {{ end }}
           </div>
           {{ end }}
@@ -173,4 +191,6 @@
     </div>{{/* /row */}}
   </div>{{/* /container */}}
 </div>
+
+{{ end }}
 {{ end }}

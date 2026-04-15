@@ -1,0 +1,18 @@
+{{/*
+  row.html — Bootstrap row wrapper for use in Markdown content.
+
+  Use with the percent-sign syntax so inner Markdown is rendered:
+    {{% row %}}
+    {{% col size="7" %}} ... {{% /col %}}
+    {{% col size="5" sticky="true" %}} ... {{% /col %}}
+    {{% /row %}}
+
+  Parameters (all optional):
+    gap   — Bootstrap g-* gutter value (default: 4)
+    align — Bootstrap align-items-* value, e.g. "start", "center" (default: none)
+*/}}
+{{- $gap   := .Get "gap"   | default "4" -}}
+{{- $align := .Get "align" | default "" -}}
+<div class="row g-{{ $gap }}{{ with $align }} align-items-{{ . }}{{ end }}">
+{{ .Inner }}
+</div>

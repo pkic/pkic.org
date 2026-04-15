@@ -1,0 +1,73 @@
+{{/* Find the page that holds event data; walk up ancestors if the current page lacks it */}}
+{{- $dataPage := $.Page -}}
+{{- if not $.Page.Params.data -}}
+  {{- range $.Page.Ancestors -}}
+    {{- if and (eq $dataPage $.Page) .Params.data -}}
+      {{- $dataPage = . -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
+
+{{- $speakers := slice -}}
+{{- range $dataPage.Params.data.speakers -}}
+    {{- $speaker := . -}}
+    {{- $headshot := (printf "speakers/%s.*" (default (.name | urlize | safeURL) .id)) -}}
+    {{- with $dataPage.Resources.GetMatch $headshot -}}
+        {{ $x150 := .Resize "x150" }}        
+        {{ $x250 := .Resize "x250" }}
+        {{ $x600 := .Resize "x600" }}
+
+        {{- $speakers = $speakers | append (merge $speaker (dict "headshot" (dict 
+            "x150" $x150.RelPermalink
+            "x250" $x250.RelPermalink
+            "x600" $x600.RelPermalink
+        ))) -}}
+
+    {{- else -}}
+        {{- $speakers = $speakers | append $speaker -}}
+    {{- end -}}
+{{- end -}}
+{{- $data := merge $dataPage.Params.data (dict "speakers" $speakers) -}}
+
+{{/* Enrich each agenda slot with endTime (HH:MM of next slot) and durationMinutes.
+     Uses string-only HH:MM arithmetic — no timezone conversion needed.
+     The resulting agenda dict uses string keys ("2006-01-02") so all consumers
+     that call time.Format on the key still work (Hugo parses ISO date strings). */}}
+{{- with $data.agenda -}}
+    {{- $transitionMins := int (default 5 $data.transitionMinutes) -}}
+    {{- $agendaEnriched := dict -}}
+    {{- range $day, $slots := . -}}
+        {{- $dayStr := $day | time.Format "2006-01-02" -}}
+        {{- $enrichedSlots := slice -}}
+        {{- range $index, $slot := $slots -}}
+            {{- $nextSlot := index $slots (add $index 1) -}}
+            {{- if $nextSlot -}}
+                {{- $sParts := split $slot.time ":" -}}
+                {{- $nParts := split $nextSlot.time ":" -}}
+                {{- $sh := default "0" (index $sParts 0 | strings.TrimLeft "0") -}}
+                {{- $sm := default "0" (index $sParts 1 | strings.TrimLeft "0") -}}
+                {{- $nh := default "0" (index $nParts 0 | strings.TrimLeft "0") -}}
+                {{- $nm := default "0" (index $nParts 1 | strings.TrimLeft "0") -}}
+                {{- $startMins := add (mul (int $sh) 60) (int $sm) -}}
+                {{- $endMins   := add (mul (int $nh) 60) (int $nm) -}}
+                {{- $dur := sub $endMins $startMins -}}
+                {{- /* Subtract transition time only when both this slot and the next have sessions (session → session),
+                     and neither slot is flagged noTransition: true.
+                     Break/lunch slots and slots before breaks keep their full duration. */ -}}
+                {{- if and $slot.sessions $nextSlot.sessions (not $slot.noTransition) (gt $dur $transitionMins) -}}
+                    {{- $dur = sub $dur $transitionMins -}}
+                {{- end -}}
+                {{- $enrichedSlots = $enrichedSlots | append (merge $slot (dict
+                    "endTime"         $nextSlot.time
+                    "durationMinutes" $dur
+                )) -}}
+            {{- else -}}
+                {{- $enrichedSlots = $enrichedSlots | append $slot -}}
+            {{- end -}}
+        {{- end -}}
+        {{- $agendaEnriched = merge $agendaEnriched (dict $dayStr $enrichedSlots) -}}
+    {{- end -}}
+    {{- $data = merge $data (dict "agenda" $agendaEnriched) -}}
+{{- end -}}
+
+{{- return $data -}}

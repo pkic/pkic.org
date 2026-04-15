@@ -1,0 +1,26 @@
+{{- with . -}}
+  {{- $feedURL := . -}}
+  {{- $t := debug.Timer $feedURL -}}
+  {{- $items := partialCached "rss/item-data.html" $feedURL $feedURL -}}
+  {{- range first 3 $items -}}
+    <div class="card mb-3">
+      <div class="row g-0">
+        {{- with .image -}}
+        <div class="col-lg-3">
+          <img src="{{ .url }}" title="{{ .title }}">
+        </div>
+        {{- end -}}
+        <div class="col">
+          <div class="card-body">
+            <h5 class="card-title"><a href="{{ .link }}" target="_blank" alt="{{ .title | plainify | htmlUnescape }}">{{ .title | plainify | htmlUnescape  }}</a></h5>
+            <p class="card-text">{{ .description | plainify | htmlUnescape | truncate 120 }}</p>
+            <p class="card-text"><small class="text-muted">Published on {{ with .pubDate }}{{ dateFormat "Monday January 2, 2006" . }}{{ end }}</small></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  {{- end -}}
+  {{- $t.Stop -}}
+{{- else -}}
+  {{- warnf "Feed URL is empty." -}}
+{{- end -}}

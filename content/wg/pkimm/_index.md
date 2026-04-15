@@ -20,6 +20,11 @@ heroButton:
 
 wgID: PKIMM
 color: purple
+sectionNav: true
+
+cascade:
+  params:
+    sectionNav: true
 
 chair:
   name: Roman Cinkais

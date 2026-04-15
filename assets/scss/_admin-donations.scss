@@ -1,0 +1,32 @@
+#admin-main {
+  .adm-donation-action-btn {
+    font-size: 0.7rem;
+    padding: 0.1rem 0.4rem;
+  }
+
+  .adm-donation-detail {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.375rem;
+    padding: 1rem;
+    margin-top: 0.5rem;
+    background: var(--bs-body-bg);
+  }
+
+  .adm-donation-detail-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 0.75rem;
+
+    .lbl {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--bs-secondary-color);
+      margin-bottom: 0.1rem;
+    }
+
+    .val {
+      font-size: 0.85rem;
+    }
+  }
+}

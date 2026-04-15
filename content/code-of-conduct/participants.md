@@ -2,6 +2,7 @@
 date: 2021-03-25T13:49:10Z
 draft: false
 title: Code of Conduct for Participants
+summary: All Participant representatives are expected to behave in a collegial and professional manner in accordance with this Code. Participants will familiarize their representatives with this Code and require them to comply with the letter and spirit of this Code.
 weight: 10
 
 heroTitle: Code of Conduct (the “Code”)

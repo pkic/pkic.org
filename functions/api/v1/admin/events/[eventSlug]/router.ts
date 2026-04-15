@@ -1,0 +1,46 @@
+import { Hono } from "hono";
+import { fromHono } from "chanfana";
+import { onRequestGet as AdminEventsEventSlugDaysGet_l } from "./days";
+import { onRequestPut as AdminEventsEventSlugDaysPut_l } from "./days";
+import { onRequestGet as AdminEventsEventSlugFormsGet_l } from "./forms";
+import { onRequestPost as AdminEventsEventSlugFormsPost_l } from "./forms";
+import { onRequestGet as AdminEventsEventSlugGet_l } from "./index";
+import { onRequestGet as AdminEventsEventSlugPermissionsGet_l } from "./permissions";
+import { onRequestPost as AdminEventsEventSlugPermissionsPost_l } from "./permissions";
+import { onRequestGet as AdminEventsEventSlugPromotersGet_l } from "./promoters";
+import { onRequestGet as AdminEventsEventSlugProposalsGet_l } from "./proposals";
+import { onRequestGet as AdminEventsEventSlugRegistrationsGet_l } from "./registrations";
+import { onRequestPatch as AdminEventsEventSlugSettingsPatch_l } from "./settings";
+import { onRequestGet as AdminEventsEventSlugStatsGet_l } from "./stats";
+import { onRequestGet as AdminEventsEventSlugTermsGet_l } from "./terms";
+import { onRequestPut as AdminEventsEventSlugTermsPut_l } from "./terms";
+import emails_Router from "./emails/router";
+import invites_Router from "./invites/router";
+import permissions_Router from "./permissions/router";
+import registrations_Router from "./registrations/router";
+import waitlist_Router from "./waitlist/router";
+
+const app = new Hono();
+export const openapi = fromHono(app);
+
+app.get("/days", AdminEventsEventSlugDaysGet_l);
+app.put("/days", AdminEventsEventSlugDaysPut_l);
+app.get("/forms", AdminEventsEventSlugFormsGet_l);
+app.post("/forms", AdminEventsEventSlugFormsPost_l);
+app.get("/", AdminEventsEventSlugGet_l);
+app.get("/permissions", AdminEventsEventSlugPermissionsGet_l);
+app.post("/permissions", AdminEventsEventSlugPermissionsPost_l);
+app.get("/promoters", AdminEventsEventSlugPromotersGet_l);
+app.get("/proposals", AdminEventsEventSlugProposalsGet_l);
+app.get("/registrations", AdminEventsEventSlugRegistrationsGet_l);
+app.patch("/settings", AdminEventsEventSlugSettingsPatch_l);
+app.get("/stats", AdminEventsEventSlugStatsGet_l);
+app.get("/terms", AdminEventsEventSlugTermsGet_l);
+app.put("/terms", AdminEventsEventSlugTermsPut_l);
+app.route("/emails", emails_Router);
+app.route("/invites", invites_Router);
+app.route("/permissions", permissions_Router);
+app.route("/registrations", registrations_Router);
+app.route("/waitlist", waitlist_Router);
+
+export default app;

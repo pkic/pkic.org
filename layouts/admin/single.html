@@ -1,0 +1,10 @@
+{{ define "head_extra" }}
+{{ $adminCss := resources.Get "scss/admin.scss" | css.Sass | resources.Fingerprint }}
+<link rel="stylesheet" href="{{ $adminCss.RelPermalink }}" {{ if hugo.IsProduction }}integrity="{{ $adminCss.Data.Integrity }}"{{ end }}>
+{{ end }}
+
+{{ define "main" }}
+<div id="admin-app" data-module="admin/index">{{/* Preact mounts here */}}</div>
+<div id="toast-area"></div>
+{{ partial "headshot-modals.html" . }}
+{{ end }}

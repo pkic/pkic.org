@@ -1,8 +1,8 @@
 // ─── WG in-page section nav ───────────────────────────────────────────
 
-// Offset WG sections for sticky navbar (57px) + section nav (~41px)
+// Offset WG sections for sticky navbar + section nav (~41px)
 [id^="wg-"] {
-  scroll-margin-top: 105px;
+  scroll-margin-top: calc(var(--pkic-navbar-height) + 48px);
 }
 
 // ─── WG section nav ──────────────────────────────────────────────────
@@ -13,7 +13,7 @@
 
 .wg-section-nav {
   position: sticky;
-  top: 57px; // just below the navbar
+  top: var(--pkic-navbar-height); // just below the navbar
   z-index: 200;
   background: #000;
   border-top: 3px solid var(--wg-color, #{$green}); // color bar always visible

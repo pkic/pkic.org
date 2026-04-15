@@ -24,6 +24,11 @@ heroButton:
 
 wgID: PQC
 color: blue
+sectionNav: true
+
+cascade:
+  params:
+    sectionNav: true
 
 card:
   icon: pqc
@@ -32,16 +37,16 @@ card:
   description: "Facilitating information exchange and sharing insights on post-quantum cryptography adoption across the PKI ecosystem."
   links:
     - text: "PQC Conference"
-      url: "/events/2025/pqc-conference-kuala-lumpur-my/"
+      url: "/wg/pqc/conferences/"
       chip: warning
     - text: "Capabilities Matrix"
-      url: "pqccm/"
+      url: "/wg/pqc/pqccm/"
       chip: primary
     - text: "Blog Posts"
       url: "/tags/pqc/"
       chip: muted
     - text: "Charter"
-      url: "charter/"
+      url: "/wg/pqc/charter/"
       chip: muted
 
 intro: >

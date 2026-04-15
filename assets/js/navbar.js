@@ -103,6 +103,7 @@
   var searchNav    = document.getElementById('pkicMainNav');
   var searchToggle = document.getElementById('pkicSearchToggle');
   var sInput       = document.getElementById('pkicSearchInput');
+  var sInputMobile = document.getElementById('pkicSearchInputMobile');
   var sClose       = document.getElementById('pkicSearchClose');
   var sPanel       = document.getElementById('pkicSearchPanel');
   var sResults   = document.getElementById('pkicSearchResults');
@@ -141,6 +142,11 @@
     document.body.classList.add('pkic-search-open');
     loadPagefind();
     if (sInput) { sInput.value = ''; sInput.focus(); }
+    if (sInputMobile) {
+      sInputMobile.value = '';
+      // Only focus the mobile input on small screens (desktop uses the navbar input)
+      if (window.innerWidth < 992) { sInputMobile.focus(); }
+    }
     setResults('<p class="pkic-search-hint">Start typing to search across all content\u2026</p>');
   }
 
@@ -152,6 +158,7 @@
     sPanel.hidden = true;
     document.body.classList.remove('pkic-search-open');
     if (sInput) sInput.value = '';
+    if (sInputMobile) sInputMobile.value = '';
     currentQuery = '';
     allResults   = [];
     currentType  = '';
@@ -238,19 +245,32 @@
     }
   });
 
+  function handleSearchInput(q) {
+    clearTimeout(debounce);
+    currentQuery = q;
+    if (!q) {
+      allResults = [];
+      resetFilterPills();
+      setResults('<p class="pkic-search-hint">Start typing to search across all content\u2026</p>');
+      return;
+    }
+    setResults('<p class="pkic-search-hint">Searching\u2026</p>');
+    debounce = setTimeout(function () { runSearch(q); }, 220);
+  }
+
   if (sInput) {
     sInput.addEventListener('input', function () {
-      clearTimeout(debounce);
-      var q = this.value.trim();
-      currentQuery = q;
-      if (!q) {
-        allResults = [];
-        resetFilterPills();
-        setResults('<p class="pkic-search-hint">Start typing to search across all content\u2026</p>');
-        return;
-      }
-      setResults('<p class="pkic-search-hint">Searching\u2026</p>');
-      debounce = setTimeout(function () { runSearch(q); }, 220);
+      handleSearchInput(this.value.trim());
+      // Keep mobile input in sync
+      if (sInputMobile) sInputMobile.value = this.value;
+    });
+  }
+
+  if (sInputMobile) {
+    sInputMobile.addEventListener('input', function () {
+      handleSearchInput(this.value.trim());
+      // Keep desktop input in sync
+      if (sInput) sInput.value = this.value;
     });
   }
 

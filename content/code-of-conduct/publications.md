@@ -2,6 +2,8 @@
 date: 2021-07-15T10:00:10Z
 draft: false
 title: Code of Conduct for Publications
+summary: Any opinions expressed at [pkic.org](https://pkic.org) or any other publication of the [PKI Consortium](/about/), except as specifically noted, are those of the individual author(s) and do not necessarily represent the views or policies of the PKI Consortium.
+
 weight: 20
 
 heroTitle: Code of Conduct for Publications

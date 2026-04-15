@@ -42,6 +42,6 @@
 {{- $css := printf ":root{%s--og-theme-gradient:linear-gradient(%s);--og-watermark-url:%s;%s}" $themeVars $themeGradient $watermarkUrl $heroBgProp -}}
 {{/* Path must be unique per page — resources.FromString caches by path, so a shared
      path would return the first-built page's vars for every subsequent page. */}}
-{{- $resourcePath := printf "og-card-vars/%s.css" (strings.Trim $page.RelPermalink "/") -}}
+{{- $resourcePath := printf "og-card-vars/%s.css" (partial "wg/path-slug.html" (dict "path" $page.RelPermalink)) -}}
 {{- $varsResource := resources.FromString $resourcePath $css | resources.Fingerprint -}}
 <link rel="stylesheet" href="{{ $varsResource.RelPermalink }}">

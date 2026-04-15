@@ -1,0 +1,23 @@
+{{/*
+  banner shortcode — Generic CTA banner with inline YAML content.
+
+  Usage in markdown:
+
+    {{< banner style="inline" >}}
+    heading: Help us keep this free
+    body: No membership fees. No tickets. No paywalls.
+    stat: "$500"
+    statLabel: keeps one seat free at our events
+    links:
+      - text: Donate now
+        url: /donate/
+        primary: true
+      - text: Become a sponsor
+        url: /sponsors/sponsor/
+    {{< /banner >}}
+
+  The "style" parameter is optional (defaults to "banner").
+*/}}
+{{- $style := .Get "style" | default "banner" -}}
+{{- $data := .Inner | transform.Unmarshal -}}
+{{- partial "banner.html" (dict "data" $data "style" $style) -}}

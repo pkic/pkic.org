@@ -73,7 +73,7 @@
         {{- $isActive := strings.HasPrefix $.Page.RelPermalink $delURL -}}
         {{- $delSection := $.Site.GetPage $delURL -}}
         {{- $delHasChildren := and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
-        {{- $slug := $delURL | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+        {{- $slug := partial "wg-path-slug.html" (dict "path" $delURL) -}}
         {{- if $delHasChildren -}}
         <div class="wg-nav-link-wrap" data-panel="wg-nav-tree-{{ $slug }}">
           <a class="wg-nav-link{{ if $isActive }} is-active{{ end }}" href="{{ $delURL }}">{{ $label }}</a>
@@ -96,7 +96,7 @@
     {{- if not $hasDelivLink -}}
     {{- $rootActive := strings.HasPrefix $.Page.RelPermalink $subRoot.RelPermalink -}}
     {{- $subRootHasChildren := or $subRoot.Sections $subRoot.RegularPages -}}
-    {{- $subSlug := $subRoot.RelPermalink | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+    {{- $subSlug := partial "wg-path-slug.html" (dict "path" $subRoot.RelPermalink) -}}
     {{- if $subRootHasChildren -}}
     <div class="wg-nav-link-wrap" data-panel="wg-nav-tree-{{ $subSlug }}">
       <a class="wg-nav-link{{ if $rootActive }} is-active{{ end }}" href="{{ $subRoot.RelPermalink }}">{{ $subRoot.Params.menuTitle | default ($subRoot.Title | truncate 22 "…") }}</a>
@@ -135,7 +135,7 @@
   {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
     {{- $delSection := $.Site.GetPage $delURL -}}
     {{- if and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
-      {{- $slug := $delURL | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+      {{- $slug := partial "wg-path-slug.html" (dict "path" $delURL) -}}
       {{- $isActive := strings.HasPrefix $.Page.RelPermalink $delURL -}}
       {{- $treePage := cond $isActive $.Page $delSection -}}
 <div class="wg-nav-tree-panel wg-{{ $wg.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
@@ -147,7 +147,7 @@
 {{/* Fallback subRoot panel (when no deliverable URL matched this section) */}}
 {{- if not $hasDelivLink -}}
   {{- if or $subRoot.Sections $subRoot.RegularPages -}}
-    {{- $subSlugPanel := $subRoot.RelPermalink | strings.TrimPrefix "/" | strings.TrimSuffix "/" | replaceRE "/" "-" -}}
+    {{- $subSlugPanel := partial "wg-path-slug.html" (dict "path" $subRoot.RelPermalink) -}}
 <div class="wg-nav-tree-panel wg-{{ $wg.Params.wgID | lower }}" id="wg-nav-tree-{{ $subSlugPanel }}" hidden>
   {{ partial "wg-sidebar-tree.html" $.Page }}
 </div>

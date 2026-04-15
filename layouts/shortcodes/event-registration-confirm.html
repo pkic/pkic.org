@@ -1,0 +1,53 @@
+{{- $eventSlug := partial "events/flow/slug.html" . -}}
+{{- $eventPagePath := partial "events/flow/page-path.html" . -}}
+
+{{/* Text overrides — use {firstName} and {eventName} as placeholder tokens. */}}
+{{- $successTitle   := .Get "successTitle"   | default "{firstName}, you're registered{forEvent}!" -}}
+{{- $successBody    := .Get "successBody"    | default "Your calendar invite is on its way. Use the link in your confirmation email to manage your registration." -}}
+{{- $waitlistTitle  := .Get "waitlistTitle"  | default "{firstName}, you're on the waitlist{forEvent}!" -}}
+{{- $waitlistBody   := .Get "waitlistBody"   | default "We have your email confirmed. We'll notify you as soon as an in-person spot becomes available. Check the email we sent you for your manage link." -}}
+{{- $partialWaitlistTitle := .Get "partialWaitlistTitle" | default "{firstName}, your registration is in place{forEvent}!" -}}
+{{- $partialWaitlistBody := .Get "partialWaitlistBody" | default "Your overall registration is confirmed, but one or more selected in-person days are still pending because those rooms are at capacity right now." -}}
+{{- $expiredTitle   := .Get "expiredTitle"   | default "Your confirmation link has expired" -}}
+{{- $expiredBody    := .Get "expiredBody"    | default "The verification link{forEvent} is no longer valid — these links expire after 48 hours for security. Click the button below and we'll send a fresh one to the same email address." -}}
+
+<div class="event-flow"
+  data-event-registration-confirm
+  data-event-slug="{{ $eventSlug }}"
+  data-event-page-path="{{ $eventPagePath }}"
+  data-module="event-flows/registration-confirm-page"
+  data-api-base="/api/v1"
+  data-success-title="{{ $successTitle }}"
+  data-success-body="{{ $successBody }}"
+  data-waitlist-title="{{ $waitlistTitle }}"
+  data-waitlist-body="{{ $waitlistBody }}"
+  data-partial-waitlist-title="{{ $partialWaitlistTitle }}"
+  data-partial-waitlist-body="{{ $partialWaitlistBody }}"
+  data-expired-title="{{ $expiredTitle }}"
+  data-expired-body="{{ $expiredBody }}"
+>
+
+  {{/* Skeleton shown while the personalisation fetch is in-flight */}}
+  <div data-confirm-loading class="my-3" aria-hidden="true">
+    <p class="placeholder-glow mb-2"><span class="placeholder col-8 fs-5"></span></p>
+    <p class="placeholder-glow mb-4"><span class="placeholder col-10"></span></p>
+    <p class="placeholder-glow"><span class="placeholder col-4 placeholder-lg btn btn-success"></span></p>
+  </div>
+
+  {{/* Personalised intro + form — hidden until the API fetch completes */}}
+  <div data-confirm-content class="d-none">
+    <p class="lead mb-4">
+      Hi <span data-placeholder="firstName">there</span>, you&rsquo;re one click away!
+      Click the button below to verify your email address and lock in your spot at
+      the <strong><span data-placeholder="eventName">event</span></strong>.
+    </p>
+    <form class="row g-3 needs-validation" novalidate>
+      <div class="col-12">
+        <button type="submit" class="btn btn-success px-4">Please click here to confirm your registration &rarr;</button>
+      </div>
+    </form>
+  </div>
+
+  <p data-flow-status class="alert visually-hidden mt-3 mb-0" role="status" aria-live="polite"></p>
+</div>
+

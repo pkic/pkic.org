@@ -1,0 +1,419 @@
+// ── Donation form ────────────────────────────────────────────────────────────
+
+.donation-checkout-overlay {
+  width: 100%;
+}
+
+.donation-form {
+  max-width: 32rem;
+  background: var(--bs-body-bg);
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
+  padding: 1.75rem;
+
+  // When embedded inside the event flow success panel, drop the card chrome
+  .event-flow-donation-cta & {
+    border: none;
+    padding: 0;
+    background: transparent;
+  }
+}
+
+.donation-form-heading {
+  margin-bottom: 0.25rem;
+}
+
+.donation-form-description {
+  color: var(--bs-secondary-color);
+  margin-bottom: 1.25rem;
+}
+
+.donation-form-identity {
+  margin-bottom: 1.25rem;
+}
+
+.donation-form-label {
+  font-size: 0.875rem;
+  font-weight: bold;
+  margin-bottom: 0.25rem;
+}
+
+.donation-form-receipt-notice {
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+.donation-form-currency-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  margin-bottom: 1rem;
+}
+
+.donation-form-currency-label {
+  margin-bottom: 0;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.donation-form-currency-select {
+  max-width: 18rem;
+}
+
+.donation-form-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.donation-preset-btn {
+  min-width: 4.5rem;
+  font-weight: 600;
+  position: relative;
+
+  &.active {
+    background-color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    color: #fff;
+  }
+
+  // "Most chosen" social-proof label
+  &--popular {
+    border-color: var(--bs-primary);
+  }
+}
+
+.donation-preset-popular-label {
+  display: block;
+  font-size: 0.625rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--bs-primary);
+  margin-bottom: 0.1rem;
+  line-height: 1;
+
+  .donation-preset-btn.active & {
+    color: rgba(255, 255, 255, 0.85);
+  }
+}
+
+.donation-form-custom {
+  margin-bottom: 1.25rem;
+}
+
+.donation-form-submit {
+  display: block;
+  width: 100%;
+  max-width: 14rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.donation-form-status {
+  min-height: 1.25rem;
+}
+
+.donation-form-disclaimer {
+  font-size: 0.8rem;
+  color: var(--bs-secondary-color);
+  margin-top: 1rem;
+  margin-bottom: 0;
+}
+
+// ── Donation thank-you badge ─────────────────────────────────────────────────
+
+.donation-badge {
+  text-align: center;
+  padding: 2rem 1rem;
+  border: 2px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
+  margin: 1.5rem 0;
+}
+
+.donation-badge-amount {
+  font-size: 2.5rem;
+  font-weight: 700;
+  color: var(--bs-emphasis-color);
+  line-height: 1.1;
+  margin-bottom: 0.5rem;
+}
+
+.donation-badge-title {
+  font-size: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
+.donation-badge-body {
+  color: var(--bs-secondary-color);
+  margin-bottom: 1.25rem;
+  max-width: 480px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.donation-badge-share-label {
+  font-size: 0.875rem;
+  font-weight: 600;
+  margin-bottom: 0.5rem;
+}
+
+.donation-badge-share {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 1.25rem;
+}
+
+.donation-badge-share-btn {
+  min-width: 100px;
+}
+
+.donation-badge-disclaimer {
+  font-size: 0.75rem;
+  color: var(--bs-secondary-color);
+  margin-bottom: 0;
+  max-width: 420px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.donation-badge-loading {
+  font-size: 0.9rem;
+}
+
+// ── Support CTA (reusable partial) ──────────────────────────────────────────
+
+.support-cta {
+  padding: 2.5rem 0;
+}
+
+.support-cta-card {
+  max-width: 860px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.support-cta-inner {
+  display: flex;
+  align-items: center;
+  gap: 2rem;
+  background: linear-gradient(135deg, #0a1f14 0%, #0d3d24 45%, #0a2f40 100%);
+  color: #fff;
+  border-radius: 1rem;
+  padding: 2.25rem 2.5rem;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.08),
+    0 16px 40px rgba(0, 0, 0, 0.12);
+  position: relative;
+  overflow: hidden;
+
+  // Rainbow accent strip at the top — matches countdown & wg-key-card
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red);
+    border-radius: 1rem 1rem 0 0;
+  }
+
+  // Decorative circle — matches WG card headers
+  &::after {
+    content: "";
+    position: absolute;
+    right: -30px;
+    top: -30px;
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.05);
+    pointer-events: none;
+  }
+
+  @media (max-width: 767px) {
+    flex-direction: column;
+    text-align: center;
+    padding: 2rem 1.5rem;
+  }
+}
+
+// Second decorative circle (via stat-col pseudo-element to avoid ::after conflict)
+.support-cta-stat-col {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 120px;
+  position: relative;
+  z-index: 1;
+
+  &::after {
+    content: "";
+    position: absolute;
+    right: -50px;
+    bottom: -60px;
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.035);
+    pointer-events: none;
+  }
+}
+
+.support-cta-stat {
+  font-size: 2.75rem;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: -0.02em;
+  color: $teal;
+}
+
+.support-cta-stat-label {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+  line-height: 1.3;
+  margin-top: 0.35rem;
+}
+
+.support-cta-text {
+  flex: 1;
+  min-width: 0;
+  position: relative;
+  z-index: 1;
+}
+
+.support-cta-inner .support-cta-heading {
+  font-size: 1.25rem;
+  font-weight: 700;
+  margin-bottom: 0.3rem;
+  color: #cde8d8;
+}
+
+.support-cta-body {
+  font-size: 0.9rem;
+  margin-bottom: 1rem;
+  color: rgba(255, 255, 255, 0.7);
+  line-height: 1.5;
+}
+
+.support-cta-actions {
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  flex-wrap: wrap;
+
+  @media (max-width: 767px) {
+    justify-content: center;
+  }
+}
+
+.support-cta-btn-primary {
+  padding: 0.6rem 1.75rem;
+  font-size: 0.95rem;
+}
+
+.support-cta-link {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 0.875rem;
+  text-decoration: none;
+  transition: color 0.2s;
+
+  &:hover {
+    color: #fff;
+  }
+}
+
+// ── Scroll-reveal entrance animation ────────────────────────────────────────
+
+// Looping rainbow shimmer on the accent strip
+@keyframes support-cta-shimmer {
+  0%   { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+[data-reveal] .support-cta-inner {
+  opacity: 0;
+  transform: translateY(24px);
+  transition: opacity 0.5s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+
+  // Rainbow strip starts with compact gradient for shimmer animation
+  &::before {
+    background-size: 200% 100%;
+  }
+}
+
+// Staggered child entrances
+[data-reveal] .support-cta-stat-col,
+[data-reveal] .support-cta-heading,
+[data-reveal] .support-cta-body,
+[data-reveal] .support-cta-actions {
+  opacity: 0;
+  transform: translateY(12px);
+  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1),
+              transform 0.45s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+[data-reveal] .support-cta-stat-col   { transition-delay: 0.15s; }
+[data-reveal] .support-cta-heading    { transition-delay: 0.25s; }
+[data-reveal] .support-cta-body       { transition-delay: 0.35s; }
+[data-reveal] .support-cta-actions    { transition-delay: 0.45s; }
+
+// Visible state
+[data-reveal].is-visible .support-cta-inner {
+  opacity: 1;
+  transform: translateY(0);
+
+  // Start looping shimmer once visible
+  &::before {
+    animation: support-cta-shimmer 4s linear infinite;
+  }
+}
+
+[data-reveal].is-visible .support-cta-stat-col,
+[data-reveal].is-visible .support-cta-heading,
+[data-reveal].is-visible .support-cta-body,
+[data-reveal].is-visible .support-cta-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+// Skip animation when reduced-motion is preferred
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] .support-cta-inner,
+  [data-reveal] .support-cta-stat-col,
+  [data-reveal] .support-cta-heading,
+  [data-reveal] .support-cta-body,
+  [data-reveal] .support-cta-actions {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  [data-reveal].is-visible .support-cta-inner::before {
+    animation: none;
+  }
+}
+
+// ── Variant: inline (card between content sections) ─────────────────────────
+
+.support-cta--inline {
+  // Uses card layout by default, no extra overrides needed
+}
+
+// ── Variant: banner (full-width dark) ───────────────────────────────────────
+
+.support-cta--banner {
+  .support-cta-inner {
+    max-width: 860px;
+    margin: 0 auto;
+  }
+}

@@ -16,6 +16,7 @@ params:
   heroImage: entrust-cover.jpg
 
   eventDate: 2026-04-02T15:00:00Z
+  eventDuration: 1
 
   heroButton:
     label: Register for this webinar

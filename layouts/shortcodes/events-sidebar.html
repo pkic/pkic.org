@@ -1,0 +1,18 @@
+{{/*
+  events-sidebar — Store sidebar content for the events layout.
+
+  This shortcode does not render visible HTML. It stores YAML data in
+  Page.Scratch so the events layout can read it when rendering the sidebar.
+
+  Usage:
+    {{< events-sidebar >}}
+    title: Sponsored Webinars
+    description: |
+      The PKI Consortium occasionally hosts sponsored webinars ...
+    cta: Want to host a sponsored webinar?
+    ctaLink: /sponsors/
+    ctaLabel: Sponsorship opportunities
+    {{< /events-sidebar >}}
+*/}}
+{{- $yaml := .Inner | transform.Unmarshal -}}
+{{- .Page.Scratch.Set "sidebarData" $yaml -}}

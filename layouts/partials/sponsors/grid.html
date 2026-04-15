@@ -1,0 +1,52 @@
+{{ $level := "all" }}
+{{ with $.Scratch.Get "level" }}
+    {{ $level = . }}
+{{ end }}
+
+{{ $sponsoring := $.Site.Params.name }}
+{{ with $.Scratch.Get "sponsoring" }}
+    {{ $sponsoring = . }}
+{{ end }}
+
+{{ $minWeight := 0 }}
+{{ with $.Scratch.Get "minWeight" }}
+    {{ $minWeight = int . }}
+{{ end }}
+
+{{ $sponsors := partial "sponsors/collect.html" (dict "site" $.Site "sponsoring" $sponsoring "level" $level "minWeight" $minWeight) }}
+
+<div class="sponsors-list">
+{{ if gt (len $sponsors) 0 }}
+    {{ range seq 8 1 }}
+        {{ if ($.Scratch.Get "rows") }}<div>{{ end }}
+
+        {{ $i := . }}
+        {{ range (shuffle $sponsors) }}
+            {{ $context := $.Site.Params.name }}
+            {{ $level := .sponsor.level }}
+            {{ with (index .sponsor.sponsoring $sponsoring) }}
+                {{ $level = .level }}
+                {{ $context = $sponsoring }}
+            {{ end }}
+            {{ $levelseq := (index hugo.Data.sponsorlevels $level) }}
+            {{ if ne $levelseq $i }}
+                {{ continue }}
+            {{ end }}
+
+            {{ $title := (printf "%s is a %s sponsor for the %s" .name $level $context ) }}
+            <a href="{{ .website }}" title="{{ $title }}" target="_blank">
+                {{ $img := resources.GetMatch (printf "/images/**/%s/%s.*" .id .id) }}
+                {{ if .logo }}
+                    {{ $img = resources.GetMatch (printf "/images/sponsors/**/%s" .logo) }}
+                {{ end }}
+
+                {{ with $img}}
+                <img style="{{ with $.Scratch.Get `max-height` }}max-height: {{ math.Round (mul (int .) $levelseq) }}px;{{ end }}{{ with $.Scratch.Get `max-width` }}max-width: {{ math.Round (mul (int .) $levelseq) }}px;{{ end }}{{ with $.Scratch.Get `height` }}height: {{ math.Round (mul (int .) $levelseq) }}px;{{ end }}" class="sponsor-logo{{ with $.Scratch.Get `class` }} {{ . }}{{ end }}" alt="{{ $title }}" title="{{ $title }}" src="{{ $img.RelPermalink }}">
+                {{ end }}
+            </a>
+        {{ end }}
+
+        {{ if ($.Scratch.Get "rows") }}</div>{{ end }}
+    {{ end }}
+{{ end }}
+</div>

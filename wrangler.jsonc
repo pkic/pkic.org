@@ -1,0 +1,242 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "pkic-org-base",
+  "compatibility_date": "2026-03-17",
+  "compatibility_flags": ["nodejs_compat"],
+  "main": "functions/router.ts",
+  "observability": {
+    "enabled": true
+  },
+  "env": {
+    "production": {
+      "name": "pkic-org",
+      "triggers": {
+        "crons": ["*/15 * * * *", "0 3 * * *"]
+      },
+      "routes": [
+        {
+          "pattern": "pkic.org",
+          "custom_domain": true
+        }
+      ],
+      "assets": {
+        "directory": "./public/",
+        "binding": "ASSETS_PUBLIC",
+        "not_found_handling": "404-page",
+        "run_worker_first": ["/api/*", "/og/*", "/r/*", "/donate/r/*"]
+      },
+      "preview_urls": true,
+      "workers_dev": true,
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "pkic-db",
+          "database_id": "705d4a53-c607-4b4f-bf90-74fc1c079d37",
+          "preview_database_id": "0647ba62-4bf0-40e5-b547-62f992acbbf0",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ASSETS_BUCKET",
+          "bucket_name": "pkic-assets"
+        },
+        {
+          "binding": "SPEAKER_UPLOADS_BUCKET",
+          "bucket_name": "pkic-speaker-uploads"
+        }
+      ],
+      "browser": {
+        "binding": "BROWSER"
+      },
+      "images": {
+        "binding": "IMAGES"
+      },
+      "ratelimits": [
+        {
+          "name": "EMAIL_RATE_LIMITER",
+          "namespace_id": "910001",
+          "simple": {
+            "limit": 3,
+            "period": 60
+          }
+        },
+        {
+          "name": "IP_RATE_LIMITER",
+          "namespace_id": "910002",
+          "simple": {
+            "limit": 20,
+            "period": 60
+          }
+        }
+      ],
+      "vars": {
+        "APP_BASE_URL": "https://pkic.org",
+        "HUGO_VERSION": "0.160.1",
+        "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
+        "DEFAULT_REFERRAL_CODE_LENGTH": "7",
+        "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
+        "WAITLIST_CLAIM_WINDOW_HOURS": "24",
+        "MAGIC_LINK_TTL_MINUTES": "15",
+        "MANAGE_TOKEN_TTL_HOURS": "48",
+        "REMINDER_INTERVAL_DAYS": "7",
+        "MAX_INVITE_REMINDERS": "12",
+        "MAX_PRESENTATION_REMINDERS": "12",
+        "SCHEDULED_REMINDER_LIMIT": "120",
+        "SCHEDULED_OUTBOX_LIMIT": "120",
+        "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
+        "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
+        "FROM_EMAIL": "noreply@pkic.org",
+        "RSVP_EMAIL": "rsvp@mail.pkic.org",
+        "FROM_NAME": "PKI Consortium",
+        "STRIPE_PUBLISHABLE_KEY": "pk_live_51TADczLT173BlQwOkLRjg7nIK7sX9gZJj4DAvD30X8mKpP3Zu3ksMmMk6GYE2moavKccbH3VBqCHDF09mAlny3kg00pZN2Ke0d"
+      }
+    },
+    "preview": {
+      "name": "pkic-org-preview",
+      "assets": {
+        "directory": "./public/",
+        "binding": "ASSETS_PUBLIC",
+        "not_found_handling": "404-page",
+        "run_worker_first": ["/api/*", "/og/*", "/r/*", "/donate/r/*"]
+      },
+      "preview_urls": true,
+      "workers_dev": true,
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "pkic-db-preview",
+          "database_id": "0647ba62-4bf0-40e5-b547-62f992acbbf0",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ASSETS_BUCKET",
+          "bucket_name": "pkic-assets-preview"
+        },
+        {
+          "binding": "SPEAKER_UPLOADS_BUCKET",
+          "bucket_name": "pkic-speaker-uploads-preview"
+        }
+      ],
+      "images": {
+        "binding": "IMAGES"
+      },
+      "ratelimits": [
+        {
+          "name": "EMAIL_RATE_LIMITER",
+          "namespace_id": "910101",
+          "simple": {
+            "limit": 3,
+            "period": 60
+          }
+        },
+        {
+          "name": "IP_RATE_LIMITER",
+          "namespace_id": "910102",
+          "simple": {
+            "limit": 20,
+            "period": 60
+          }
+        }
+      ],
+      "vars": {
+        "APP_BASE_URL": "https://pkic-org-preview.pkic.workers.dev/",
+        "HUGO_VERSION": "0.160.1",
+        "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
+        "DEFAULT_REFERRAL_CODE_LENGTH": "7",
+        "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
+        "WAITLIST_CLAIM_WINDOW_HOURS": "24",
+        "MAGIC_LINK_TTL_MINUTES": "15",
+        "MANAGE_TOKEN_TTL_HOURS": "48",
+        "REMINDER_INTERVAL_DAYS": "7",
+        "MAX_INVITE_REMINDERS": "12",
+        "MAX_PRESENTATION_REMINDERS": "12",
+        "SCHEDULED_REMINDER_LIMIT": "120",
+        "SCHEDULED_OUTBOX_LIMIT": "120",
+        "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
+        "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
+        "FROM_EMAIL": "noreply@pkic.org",
+        "RSVP_EMAIL": "rsvp-preview@mail.pkic.org",
+        "FROM_NAME": "PKI Consortium (Preview)",
+        "STRIPE_PUBLISHABLE_KEY": "pk_test_51TADczLT173BlQwOCJAhV0Mf5xxJXJWG9VWkprhXUSJZTaYdqr5vJynipzUfCglU93cIoCBBNOkviwhOqQ3ZFPNk00cxzuEyMH"
+      },
+      "browser": {
+        "binding": "BROWSER"
+      }
+    },
+    "local": {
+      "name": "pkic-org-local",
+      "assets": {
+        "directory": "./public/",
+        "binding": "ASSETS_PUBLIC",
+        "not_found_handling": "404-page",
+        "run_worker_first": ["/api/*", "/og/*", "/r/*", "/donate/r/*"]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "pkic-db-local",
+          "database_id": "705d4a53-c607-4b4f-bf90-74fc1c079d37",
+          "migrations_dir": "migrations"
+        }
+      ],
+      "r2_buckets": [
+        {
+          "binding": "ASSETS_BUCKET",
+          "bucket_name": "pkic-assets"
+        },
+        {
+          "binding": "SPEAKER_UPLOADS_BUCKET",
+          "bucket_name": "pkic-speaker-uploads"
+        }
+      ],
+      "browser": {
+        "binding": "BROWSER"
+      },
+      "images": {
+        "binding": "IMAGES"
+      },
+      "ratelimits": [
+        {
+          "name": "EMAIL_RATE_LIMITER",
+          "namespace_id": "910201",
+          "simple": {
+            "limit": 3,
+            "period": 60
+          }
+        },
+        {
+          "name": "IP_RATE_LIMITER",
+          "namespace_id": "910202",
+          "simple": {
+            "limit": 20,
+            "period": 60
+          }
+        }
+      ],
+      "vars": {
+        "DEV_STATIC_ORIGIN": "http://127.0.0.1:13131",
+        "HUGO_VERSION": "0.160.1",
+        "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
+        "DEFAULT_REFERRAL_CODE_LENGTH": "7",
+        "DEFAULT_INVITE_LIMIT_PER_ATTENDEE": "50",
+        "WAITLIST_CLAIM_WINDOW_HOURS": "24",
+        "MAGIC_LINK_TTL_MINUTES": "15",
+        "MANAGE_TOKEN_TTL_HOURS": "48",
+        "REMINDER_INTERVAL_DAYS": "7",
+        "MAX_INVITE_REMINDERS": "12",
+        "MAX_PRESENTATION_REMINDERS": "12",
+        "SCHEDULED_REMINDER_LIMIT": "120",
+        "SCHEDULED_OUTBOX_LIMIT": "120",
+        "SENDGRID_API_BASE": "https://api.sendgrid.com/v3/mail/send",
+        "SPEAKER_UPLOAD_DEADLINE_DAYS": "21",
+        "FROM_EMAIL": "noreply@pkic.org",
+        "RSVP_EMAIL": "rsvp-local@mail.pkic.org",
+        "FROM_NAME": "PKI Consortium",
+        "STRIPE_PUBLISHABLE_KEY": "pk_live_51TADczLT173BlQwOkLRjg7nIK7sX9gZJj4DAvD30X8mKpP3Zu3ksMmMk6GYE2moavKccbH3VBqCHDF09mAlny3kg00pZN2Ke0d"
+      }
+    }
+  }
+}

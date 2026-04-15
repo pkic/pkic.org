@@ -1,0 +1,7 @@
+public/
+resources/
+static/
+node_modules/
+dist/
+.wrangler/
+pnpm-lock.yaml
