@@ -1,5 +1,5 @@
 import { parseJsonBody } from "../../../../../_lib/validation";
-import { json, markSensitive } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { addHours, nowIso } from "../../../../../_lib/utils/time";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
 import { run } from "../../../../../_lib/db/queries";

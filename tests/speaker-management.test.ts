@@ -14,7 +14,6 @@ import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
-import { createInvite } from "../functions/_lib/services/invites";
 import { onRequestPost as inviteSpeakersBulk } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/bulk";
 import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
 import { addProposalSpeaker } from "../functions/_lib/services/proposals";
@@ -296,7 +295,7 @@ describe("speaker nomination by attendees", () => {
       ),
     );
     expect(regResponse.status).toBe(200);
-    const regPayload = await regResponse.json() as { manageToken: string; registrationId: string };
+    await regResponse.json();
 
     // Get confirmation token from outbox and confirm
     const outbox = await queryAll<{ payload_json: string }>(

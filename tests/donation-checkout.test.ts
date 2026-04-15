@@ -3,7 +3,7 @@ import { onRequestPost } from "../functions/api/v1/donations/checkout";
 import { createContext } from "./helpers/context";
 import { handleError } from "../functions/_lib/http";
 import type { Env, PagesContext } from "../functions/_lib/types";
-import { SUPPORTED_CURRENCY_CODES, currencyForCountry, toSmallestUnit, toMajorUnit } from "../assets/shared/constants/currencies";
+import { currencyForCountry, toSmallestUnit, toMajorUnit } from "../assets/shared/constants/currencies";
 import { donationCheckoutSchema } from "../assets/shared/schemas/donation";
 
 // ── Schema validation ──────────────────────────────────────────────────────

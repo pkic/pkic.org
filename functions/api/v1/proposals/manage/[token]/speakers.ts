@@ -8,7 +8,7 @@
  * Only the proposer holds the proposal manage token — co-speakers hold separate
  * per-speaker tokens and cannot reach this endpoint.
  */
-import { json, markSensitive } from "../../../../../_lib/http";
+import { json } from "../../../../../_lib/http";
 import { parseJsonBody } from "../../../../../_lib/validation";
 import {
   getProposalByManageToken,

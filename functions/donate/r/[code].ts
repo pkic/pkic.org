@@ -13,10 +13,9 @@
  *  - Every real visit increments `donation_promoters.clicks`.
  */
 
-import { json } from "../../_lib/http";
 import { first, run } from "../../_lib/db/queries";
 import { resolveAppBaseUrl } from "../../_lib/config";
-import { getClientIp, getUserAgent } from "../../_lib/request";
+import { getUserAgent } from "../../_lib/request";
 import { resolveOgImageType } from "../../_lib/utils/og-image-type";
 // ─── Social-scraper detection (same list as /r/[code].ts) ────────────────────
 

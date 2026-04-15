@@ -1,7 +1,6 @@
 import { AppError } from "../../errors";
 import { first, run } from "../../db/queries";
 import { randomToken, sha256Hex } from "../../utils/crypto";
-import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { addToWaitlist } from "./waitlist";
 import { recordEngagement } from "../engagement";

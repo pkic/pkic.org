@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from "preact/hooks";
+import { useState, useEffect, useRef } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";
@@ -84,38 +84,6 @@ function fmtAmount(smallestUnit: number, currency: string): string {
   } catch {
     return `${major} ${currency.toUpperCase()}`;
   }
-}
-
-function SyncButton({ d, onSync }: { d: DonationRow; onSync: (sessionId: string) => Promise<void> }) {
-  const [syncing, setSyncing] = useState(false);
-  const needsSync =
-    d.status === "pending" ||
-    d.status === "awaiting_payment" ||
-    (d.status === "completed" && (d.net_amount === null || d.payment_method_type === null));
-  if (!needsSync) return null;
-  return (
-    <button
-      class="btn btn-xs btn-outline-primary adm-donation-action-btn"
-      disabled={syncing}
-      onClick={async () => { setSyncing(true); try { await onSync(d.checkout_session_id); } finally { setSyncing(false); } }}
-    >
-      {syncing ? "…" : "Sync"}
-    </button>
-  );
-}
-
-function BadgeButton({ d }: { d: DonationRow }) {
-  if (d.status !== "completed") return null;
-  const badgeUrl = `/api/v1/og/donation/${encodeURIComponent(d.checkout_session_id)}?name=${encodeURIComponent(d.name)}`;
-  return (
-    <a
-      class="btn btn-xs btn-outline-secondary adm-donation-action-btn"
-      href={badgeUrl}
-      download={`${d.name.replace(/[^\w\s-]/g, "")}-donation-badge.jpeg`}
-    >
-      Badge
-    </a>
-  );
 }
 
 const RANK_CLASS: Record<number, string> = { 1: "gold", 2: "silver", 3: "bronze" };
@@ -267,25 +235,6 @@ export function Donations({ subTab }: { subTab?: string }) {
   const [, navigate] = useHashLocation();
   const [donations, setDonations] = useState<DonationRow[]>([]);
   const actionsRef = useRef<ApiTableActions | null>(null);
-
-  async function handleSync(sessionId: string) {
-    try {
-      const res = await api<DonationSyncResponse>("/api/v1/admin/donations/sync", {
-        method: "POST",
-        body: JSON.stringify({ sessionIds: [sessionId] }),
-      });
-      const result = res.results[0];
-      if (result?.outcome === "completed") toast("Donation marked as completed.", "success");
-      else if (result?.outcome === "awaiting_payment") toast("Payment initiated — awaiting bank settlement.", "info");
-      else if (result?.outcome === "expired") toast("Session expired — donation marked expired.", "info");
-      else if (result?.outcome === "failed") toast("Payment failed — bank declined or bounced.", "error");
-      else if (result?.outcome === "still_pending") toast("Session still pending on Stripe.", "info");
-      else toast(result?.error ?? "Sync failed.", "error");
-      actionsRef.current?.reload();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
-  }
 
   async function handleSyncPending() {
     setSyncingAll(true);

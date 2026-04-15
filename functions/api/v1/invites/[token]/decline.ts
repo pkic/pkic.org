@@ -1,5 +1,5 @@
 import { parseJsonBody } from "../../../../_lib/validation";
-import { json, markSensitive } from "../../../../_lib/http";
+import { json } from "../../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { declineInvite, findInviteByToken, createInvite } from "../../../../_lib/services/invites";
 import { buildEventEmailVariables } from "../../../../_lib/services/events";

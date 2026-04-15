@@ -1,4 +1,3 @@
-import { useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../components/Badge";
 import { Spinner } from "../../components/Spinner";

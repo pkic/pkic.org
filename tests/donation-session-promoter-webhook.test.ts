@@ -7,10 +7,10 @@
  *  - POST /api/v1/webhooks/stripe                     (various event types)
  */
 
-import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, queryAll } from "./helpers/context";
+import { createContext } from "./helpers/context";
 import { onRequestGet as donationSession } from "../functions/api/v1/donations/session";
 import { onRequestPost as donationPromoter } from "../functions/api/v1/donations/promoter";
 import { onRequestPost as stripeWebhook } from "../functions/api/v1/webhooks/stripe";
