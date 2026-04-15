@@ -137,6 +137,39 @@ function extractBaseMessageId(sgMessageId: string): string {
   return dotIndex !== -1 ? sgMessageId.slice(0, dotIndex) : sgMessageId;
 }
 
+/**
+ * Cancel any active registration for the user+event whose confirmation email bounced.
+ * Without a working email the attendee cannot receive event details, so the seat is freed.
+ */
+async function cancelRegistrationDueToBounce(
+  db: NonNullable<Env["DB"]>,
+  providerMessageId: string,
+  reason: string,
+): Promise<void> {
+  const outbox = await db.prepare(
+    `SELECT recipient_user_id, event_id FROM email_outbox WHERE provider_message_id = ?`,
+  ).bind(providerMessageId).first<{ recipient_user_id: string | null; event_id: string | null }>();
+
+  if (!outbox?.recipient_user_id || !outbox?.event_id) return;
+
+  const reg = await db.prepare(
+    `SELECT id FROM registrations WHERE event_id = ? AND user_id = ? AND status != 'cancelled'`,
+  ).bind(outbox.event_id, outbox.recipient_user_id).first<{ id: string }>();
+
+  if (!reg) return;
+
+  await db.batch([
+    db.prepare(
+      `UPDATE registrations SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?`,
+    ).bind(reg.id),
+    db.prepare(
+      `INSERT INTO audit_log (id, actor_type, action, entity_type, entity_id, details_json, created_at)
+       VALUES (?, 'system', 'cancelled_bounce', 'registration', ?, ?, datetime('now'))`,
+    ).bind(crypto.randomUUID(), reg.id, JSON.stringify({ reason })),
+  ]);
+  logInfo("REGISTRATION_CANCELLED_BOUNCE", { registrationId: reg.id, reason });
+}
+
 async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<void> {
   const { event: eventType, sg_message_id, env_url } = event;
   if (!sg_message_id) return;
@@ -160,6 +193,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
            SET status = 'bounced', last_error = ?, updated_at = datetime('now')
            WHERE provider_message_id = ?`,
         ).bind(`Hard bounce: ${reason}`, baseId).run();
+        await cancelRegistrationDueToBounce(env.DB!, baseId, `Hard bounce: ${reason}`);
       } else {
         await env.DB!.prepare(
           `UPDATE email_outbox
@@ -187,6 +221,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
          SET status = 'bounced', last_error = ?, updated_at = datetime('now')
          WHERE provider_message_id = ?`,
       ).bind(`Dropped: ${reason}`, baseId).run();
+      await cancelRegistrationDueToBounce(env.DB!, baseId, `Dropped: ${reason}`);
       break;
     }
 
@@ -196,6 +231,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
          SET status = 'bounced', last_error = 'Spam report received', updated_at = datetime('now')
          WHERE provider_message_id = ?`,
       ).bind(baseId).run();
+      await cancelRegistrationDueToBounce(env.DB!, baseId, "Spam report received");
       if (event.email) {
         await env.DB!.prepare(
           `INSERT OR IGNORE INTO unsubscribes (id, email, channel, scope_type, scope_ref, reason, created_at)
