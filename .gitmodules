@@ -1,16 +1,16 @@
 [submodule "content/pkimm"]
 	path = content/wg/pkimm/model
-	url = git@github.com:pkic/pkimm
+	url = ../pkimm
 	branch = main
 [submodule "content/pqccm"]
 	path = content/wg/pqc/pqccm
-	url = git@github.com:pkic/pqccm.git
+	url = ../pqccm.git
 	branch = main
 [submodule "content/remote-key-attestation"]
 	path = content/wg/cm/remote-key-attestation
-	url = git@github.com:pkic/remote-key-attestation.git
+	url = ../remote-key-attestation.git
 	branch = main
 [submodule "content/wg/cm/remote-key-attestation"]
 	path = content/wg/cm/remote-key-attestation
-	url = git@github.com:pkic/remote-key-attestation.git
+	url = ../remote-key-attestation.git
 	branch = main
