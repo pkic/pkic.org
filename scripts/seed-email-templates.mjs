@@ -1007,23 +1007,6 @@ function ensureAdminExists(cli) {
   }
 }
 
-function putR2Object(cli, bucket, key, content, contentType) {
-  const args = [
-    "wrangler",
-    "r2",
-    "object",
-    "put",
-    `${bucket}/${key}`,
-    ...(cli.wranglerEnv ? ["--env", cli.wranglerEnv] : []),
-    cli.mode === "remote" ? "--remote" : "--local",
-    "--content-type",
-    contentType,
-    "--pipe",
-  ];
-
-  runWrangler(args, { input: content });
-}
-
 function buildTemplateSqlStatements(cli, templates) {
   const statements = [];
   const normalizedAdminEmail = cli.adminEmail.trim().toLowerCase();
