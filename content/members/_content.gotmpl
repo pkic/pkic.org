@@ -1,4 +1,4 @@
-{{- range $memberID, $member := site.Data.members -}}
+{{- range $memberID, $member := hugo.Data.members -}}
   {{- $filePath := printf "content/members/%s.md" $memberID -}}
   {{- $bundlePath := printf "content/members/%s/index.md" $memberID -}}
   {{- if not (or (fileExists $filePath) (fileExists $bundlePath)) -}}
