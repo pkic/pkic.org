@@ -49,6 +49,16 @@
       {{/* ── Your details ─────────────────────────────────────────────── */}}
       <div class="col-12">
         <h3 class="h5">Your details</h3>
+        <div class="row g-2 mb-2" data-email-section>
+          <div class="col-12">
+            <label for="manage-email" class="form-label">Email address</label>
+            <input id="manage-email" name="email" type="email" class="form-control" autocomplete="email">
+            <div data-field-error="email" class="invalid-feedback d-block"></div>
+            <div data-email-change-notice class="form-text text-warning d-none">
+              Changing your email will require you to confirm the new address before your registration is active again.
+            </div>
+          </div>
+        </div>
         {{- partial "events/flow/personal-fields.html" (dict "prefix" "manage") -}}
       </div>
 

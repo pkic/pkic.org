@@ -172,6 +172,7 @@ export const registrationManageSchema = z.object({
   customAnswers: customAnswersSchema.optional(),
   sourceRef: trimmedString(2, 200).optional(),
   // PII fields — only used with action "update"
+  email: normalizedEmailSchema.optional(),
   firstName: firstNameSchema.optional(),
   lastName: lastNameSchema.optional(),
   organizationName: organizationNameSchema.optional(),

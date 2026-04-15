@@ -167,6 +167,11 @@ export function renderCustomFields(
   container: HTMLElement,
   fields: FormField[],
 ): CustomFieldsController {
+  // Clear any server-rendered placeholder (e.g. "Loading…") before Preact
+  // takes over. CustomFieldList returns a Fragment, so Preact's first diff
+  // may not remove pre-existing children reliably.
+  container.textContent = "";
+
   let ctx: VisibilityContext = { dayAttendance: [] };
   let geoHint: string | null = null;
   let initialValues: Record<string, unknown> = {};

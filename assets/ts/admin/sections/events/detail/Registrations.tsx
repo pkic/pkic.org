@@ -18,12 +18,14 @@ function attendanceTypeLabel(t: string): string {
 interface RegistrationStats {
   byAttendanceType: Record<string, number>;
   byStatus: Record<string, number>;
+  bouncedCount?: number;
 }
 
 // ─── Registration list ────────────────────────────────────────────────────────
 
 function RegistrationsList({ slug }: { slug: string }) {
   const [statusFilter, setStatusFilter] = useState("");
+  const [bouncedFilter, setBouncedFilter] = useState("");
   const [stats, setStats] = useState<RegistrationStats | null>(null);
   const [, navigate] = useHashLocation();
   const tableRef = useRef<ApiTableActions | null>(null);
@@ -45,6 +47,7 @@ function RegistrationsList({ slug }: { slug: string }) {
   const inPerson = stats?.byAttendanceType?.in_person ?? 0;
   const virtual = stats?.byAttendanceType?.virtual ?? 0;
   const onDemand = stats?.byAttendanceType?.on_demand ?? 0;
+  const bouncedCount = stats?.bouncedCount ?? 0;
 
   return (
     <div>
@@ -58,6 +61,7 @@ function RegistrationsList({ slug }: { slug: string }) {
           {inPerson > 0 && <span class="adm-mini-stat"><strong>{inPerson}</strong> in-person</span>}
           {virtual > 0 && <span class="adm-mini-stat"><strong>{virtual}</strong> virtual</span>}
           {onDemand > 0 && <span class="adm-mini-stat"><strong>{onDemand}</strong> on-demand</span>}
+          {bouncedCount > 0 && <><span class="adm-mini-stat-sep" /><span class="adm-mini-stat"><strong class="text-danger">{bouncedCount}</strong> bounced</span></>}
         </div>
       )}
       <ApiDataTable<Registration>
@@ -70,9 +74,9 @@ function RegistrationsList({ slug }: { slug: string }) {
         resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
       paginate
       searchPlaceholder="Search name / email…"
-      params={statusFilter ? { status: statusFilter } : undefined}
+      params={{ ...(statusFilter && { status: statusFilter }), ...(bouncedFilter && { bounced: bouncedFilter }) }}
       actionsRef={tableRef}
-      deps={[slug, statusFilter]}
+      deps={[slug, statusFilter, bouncedFilter]}
       toolbar={({ resetPage }) => (<>
         <select class="form-select form-select-sm adm-filter-select" value={statusFilter} onChange={(e) => { setStatusFilter((e.target as HTMLSelectElement).value); resetPage(); }}>
           <option value="">All statuses</option>
@@ -81,11 +85,16 @@ function RegistrationsList({ slug }: { slug: string }) {
           <option value="waitlisted">Waitlisted</option>
           <option value="cancelled">Cancelled</option>
         </select>
+        <select class="form-select form-select-sm adm-filter-select" value={bouncedFilter} onChange={(e) => { setBouncedFilter((e.target as HTMLSelectElement).value); resetPage(); }}>
+          <option value="">All email statuses</option>
+          <option value="true">Bounced</option>
+          <option value="false">Not bounced</option>
+        </select>
         <button class="btn btn-sm btn-outline-warning" onClick={() => void runWaitlistPromotions()}>Run waitlist promotions</button>
       </>)}
       columns={[
         { header: "Name / Email", cell: (r) => <><strong class="adm-cell-name">{r.display_name ?? r.user_email ?? "—"}</strong>{r.display_name && r.user_email && <><br /><span class="text-muted small">{r.user_email}</span></>}</> },
-        { header: "Status", cell: (r) => <Badge status={r.status} /> },
+        { header: "Status", cell: (r) => <><Badge status={r.status} />{r.has_bounced && <Badge status="bounced" />}</> },
         { header: "Attendance", cell: (r) => r.attendance_type ? attendanceTypeLabel(r.attendance_type) : "—" },
         { header: "Day waitlist", cell: (r) => r.dayWaitlistSummary ?? (r.dayWaitlistCount ? `${r.dayWaitlistCount} day${r.dayWaitlistCount !== 1 ? "s" : ""}` : "—") },
         { header: "Source", cell: (r) => r.source_type ?? "—", className: "small text-muted" },

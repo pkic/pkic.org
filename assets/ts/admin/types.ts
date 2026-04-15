@@ -90,6 +90,7 @@ export interface Registration {
   created_at: string;
   referral_code?: string | null;
   rsvp_events_json?: string | null;
+  has_bounced?: boolean;
   dayAttendance?: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
   dayWaitlist?: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
   dayWaitlistSummary?: string | null;
