@@ -45,6 +45,7 @@ const STATUS_COLOR: Record<string, string> = {
   queued: "secondary",
   sending: "info",
   failed: "danger",
+  bounced: "danger",
   retrying: "warning",
   // donations
   completed: "success",
