@@ -58,6 +58,38 @@ interface SendgridEvent {
 }
 
 /**
+ * Convert a DER-encoded ECDSA signature to IEEE P1363 format (r || s).
+ * SendGrid provides DER signatures, but Web Crypto expects P1363.
+ */
+function derToP1363(der: Uint8Array, byteLength: number): Uint8Array {
+  if (der[0] !== 0x30) throw new Error("Expected DER SEQUENCE");
+  let offset = 2;
+  // Handle multi-byte SEQUENCE length
+  if (der[1] & 0x80) offset += der[1] & 0x7f;
+
+  if (der[offset] !== 0x02) throw new Error("Expected INTEGER for r");
+  const rLen = der[offset + 1];
+  offset += 2;
+  const r = der.subarray(offset, offset + rLen);
+  offset += rLen;
+
+  if (der[offset] !== 0x02) throw new Error("Expected INTEGER for s");
+  const sLen = der[offset + 1];
+  offset += 2;
+  const s = der.subarray(offset, offset + sLen);
+
+  const result = new Uint8Array(byteLength * 2);
+  // Copy r, stripping any leading zero padding and right-aligning
+  const rTrim = r.length > byteLength ? r.length - byteLength : 0;
+  result.set(r.subarray(rTrim), byteLength - Math.min(r.length, byteLength));
+  // Copy s the same way
+  const sTrim = s.length > byteLength ? s.length - byteLength : 0;
+  result.set(s.subarray(sTrim), byteLength + byteLength - Math.min(s.length, byteLength));
+
+  return result;
+}
+
+/**
  * Verify a SendGrid signed event webhook signature using ECDSA P-256/SHA-256.
  * https://docs.sendgrid.com/for-developers/tracking-events/getting-started-event-webhook-security-features
  */
@@ -80,7 +112,9 @@ async function verifySendgridSignature(
       ["verify"],
     );
 
-    const sigBytes = Uint8Array.from(atob(signatureHeader), (c) => c.charCodeAt(0));
+    // SendGrid sends DER-encoded signatures; Web Crypto expects P1363 (r || s)
+    const derSigBytes = Uint8Array.from(atob(signatureHeader), (c) => c.charCodeAt(0));
+    const sigBytes = derToP1363(derSigBytes, 32); // P-256 → 32-byte r, 32-byte s
     const dataBytes = new TextEncoder().encode(timestampHeader + body);
 
     return await crypto.subtle.verify(
