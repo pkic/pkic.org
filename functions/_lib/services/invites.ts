@@ -537,62 +537,47 @@ export async function bulkCreateAttendeesAdmin(
   const eventId = payload.event.id;
   const normalizedEmails = payload.invites.map((i) => normalizeEmail(i.inviteeEmail));
 
-  // D1 hard-limits bound parameters to 100 per statement.  Split the email
-  // list into sub-chunks of ≤90 so each IN clause stays well under the limit
-  // (the existingInvites query also binds eventId + now = 2 extra params).
-  const MAX_IN = 90;
-  const emailChunks: string[][] = [];
-  for (let i = 0; i < normalizedEmails.length; i += MAX_IN) {
-    emailChunks.push(normalizedEmails.slice(i, i + MAX_IN));
-  }
+  // Pass all emails as a single JSON array to avoid D1's 100-param-per-statement
+  // limit.  json_each() is a built-in SQLite table-valued function that expands
+  // a JSON array into rows, so each guard query needs only 2 bound parameters
+  // (the JSON blob + eventId) regardless of batch size.
+  const emailsJson = JSON.stringify(normalizedEmails);
 
-  // --- Round-trip 1: all guard sub-queries in one db.batch() call ---
-  // Layout: [unsub × numChunks, reg × numChunks, existing × numChunks]
-  const batchStatements = [
-    ...emailChunks.map((chunk) => {
-      const p = chunk.map(() => "?").join(", ");
-      return db.prepare(
-        `SELECT email FROM unsubscribes
-         WHERE email IN (${p})
-           AND channel = 'invites'
-           AND (
-             (scope_type = 'global' AND scope_ref IS NULL) OR
-             (scope_type = 'event' AND scope_ref = ?)
-           )`,
-      ).bind(...chunk, eventId);
-    }),
-    ...emailChunks.map((chunk) => {
-      const p = chunk.map(() => "?").join(", ");
-      return db.prepare(
-        `SELECT u.normalized_email
-         FROM registrations r
-         JOIN users u ON u.id = r.user_id
-         WHERE u.normalized_email IN (${p})
-           AND r.event_id = ?
-           AND r.status NOT IN ('cancelled')`,
-      ).bind(...chunk, eventId);
-    }),
-    ...emailChunks.map((chunk) => {
-      const p = chunk.map(() => "?").join(", ");
-      return db.prepare(
-        `SELECT invitee_email FROM invites
-         WHERE event_id = ? AND invite_type = 'attendee' AND status = 'sent'
-           AND (expires_at IS NULL OR expires_at > ?)
-           AND invitee_email IN (${p})`,
-      ).bind(eventId, now, ...chunk);
-    }),
-  ];
+  // --- Round-trip 1: all guard queries in one db.batch() call ---
+  const batchResults = (await db.batch([
+    db.prepare(
+      `SELECT email FROM unsubscribes
+       WHERE email IN (SELECT value FROM json_each(?1))
+         AND channel = 'invites'
+         AND (
+           (scope_type = 'global' AND scope_ref IS NULL) OR
+           (scope_type = 'event' AND scope_ref = ?2)
+         )`,
+    ).bind(emailsJson, eventId),
+    db.prepare(
+      `SELECT u.normalized_email
+       FROM registrations r
+       JOIN users u ON u.id = r.user_id
+       WHERE u.normalized_email IN (SELECT value FROM json_each(?1))
+         AND r.event_id = ?2
+         AND r.status NOT IN ('cancelled')`,
+    ).bind(emailsJson, eventId),
+    db.prepare(
+      `SELECT invitee_email FROM invites
+       WHERE event_id = ?1 AND invite_type = 'attendee' AND status = 'sent'
+         AND (expires_at IS NULL OR expires_at > ?2)
+         AND invitee_email IN (SELECT value FROM json_each(?3))`,
+    ).bind(eventId, now, emailsJson),
+  ])) as Array<{ results: Array<Record<string, string>> }>;
 
-  const batchResults = (await db.batch(batchStatements)) as Array<{ results: Array<Record<string, string>> }>;
-  const nc = emailChunks.length;
   const unsubscribed = new Set(
-    batchResults.slice(0, nc).flatMap((r) => (r.results ?? []).map((row) => row.email as string)),
+    (batchResults[0].results ?? []).map((row) => row.email as string),
   );
   const registered = new Set(
-    batchResults.slice(nc, nc * 2).flatMap((r) => (r.results ?? []).map((row) => row.normalized_email as string)),
+    (batchResults[1].results ?? []).map((row) => row.normalized_email as string),
   );
   const alreadyInvited = new Set(
-    batchResults.slice(nc * 2, nc * 3).flatMap((r) => (r.results ?? []).map((row) => row.invitee_email as string)),
+    (batchResults[2].results ?? []).map((row) => row.invitee_email as string),
   );
 
   // --- Compute expiry once (same logic as createInvite, using pre-loaded event) ---
@@ -646,39 +631,230 @@ export async function bulkCreateAttendeesAdmin(
   const tokenHashes = await Promise.all(tokens.map((t) => sha256Hex(t)));
   const expiresAt = computeExpiry();
 
-  // --- Round-trip 3: INSERT all new invites in one batch call ---
+  // --- Round-trip(s) 3: INSERT new invites, chunked at 500 per db.batch() ---
   const inviteIds = toCreate.map(() => uuid());
-  await db.batch(
-    toCreate.map((tc, j) => {
-      const inviteId = inviteIds[j];
-      const item = tc.item;
-      return db
-        .prepare(
-          `INSERT INTO invites (
-            id, event_id, inviter_user_id, inviter_registration_id, invitee_email,
-            invitee_first_name, invitee_last_name, invite_type, token_hash, status,
-            decline_reason_code, decline_reason_note, unsubscribe_future, reminder_count,
-            last_communication_at, reminders_paused_until, max_uses, used_count,
-            source_type, expires_at, accepted_at, declined_at, created_at
-          ) VALUES (?, ?, NULL, NULL, ?, ?, ?, 'attendee', ?, 'sent',
-                    NULL, NULL, 0, 0, ?, NULL, 1, 0, ?, ?, NULL, NULL, ?)`,
-        )
-        .bind(
-          inviteId,
-          eventId,
-          tc.email,
-          item.inviteeFirstName ?? null,
-          item.inviteeLastName ?? null,
-          tokenHashes[j],
-          now, // last_communication_at
-          item.sourceType ?? "direct",
-          expiresAt,
-          now, // created_at
-        );
-    }),
-  );
+  const MAX_BATCH = 500;
+  for (let c = 0; c < toCreate.length; c += MAX_BATCH) {
+    const slice = toCreate.slice(c, c + MAX_BATCH);
+    await db.batch(
+      slice.map((tc, si) => {
+        const j = c + si;
+        const item = tc.item;
+        return db
+          .prepare(
+            `INSERT INTO invites (
+              id, event_id, inviter_user_id, inviter_registration_id, invitee_email,
+              invitee_first_name, invitee_last_name, invite_type, token_hash, status,
+              decline_reason_code, decline_reason_note, unsubscribe_future, reminder_count,
+              last_communication_at, reminders_paused_until, max_uses, used_count,
+              source_type, expires_at, accepted_at, declined_at, created_at
+            ) VALUES (?, ?, NULL, NULL, ?, ?, ?, 'attendee', ?, 'sent',
+                      NULL, NULL, 0, 0, ?, NULL, 1, 0, ?, ?, NULL, NULL, ?)`,
+          )
+          .bind(
+            inviteIds[j],
+            eventId,
+            tc.email,
+            item.inviteeFirstName ?? null,
+            item.inviteeLastName ?? null,
+            tokenHashes[j],
+            now, // last_communication_at
+            item.sourceType ?? "direct",
+            expiresAt,
+            now, // created_at
+          );
+      }),
+    );
+  }
 
   // Populate the outcome objects with the generated ids and tokens.
+  for (let j = 0; j < toCreate.length; j++) {
+    const outcome = outcomes[toCreate[j].idx];
+    outcome.inviteId = inviteIds[j];
+    outcome.token = tokens[j];
+  }
+
+  return outcomes;
+}
+
+// ── Bulk speaker invite creation (admin) ────────────────────────────────────
+
+export type BulkSpeakerOutcome = {
+  email: string;
+  status: "created" | "endorsed" | "skipped";
+  inviteId?: string;
+  token?: string;
+};
+
+/**
+ * High-throughput bulk invite creation for admin-initiated speaker lists.
+ *
+ * Same batched pattern as bulkCreateAttendeesAdmin but with an extra guard
+ * for existing proposals (INVITEE_ALREADY_PROPOSED) and invite_type = 'speaker'.
+ */
+export async function bulkCreateSpeakersAdmin(
+  db: DatabaseLike,
+  payload: {
+    event: {
+      id: string;
+      starts_at: string | null;
+      registration_mode: string;
+      settings_json: string;
+    };
+    invites: Array<{
+      inviteeEmail: string;
+      inviteeFirstName?: string | null;
+      inviteeLastName?: string | null;
+      sourceType?: string;
+    }>;
+    ttlHours: number;
+  },
+): Promise<BulkSpeakerOutcome[]> {
+  if (payload.invites.length === 0) return [];
+
+  const now = nowIso();
+  const eventId = payload.event.id;
+  const normalizedEmails = payload.invites.map((i) => normalizeEmail(i.inviteeEmail));
+  const emailsJson = JSON.stringify(normalizedEmails);
+
+  // --- Round-trip 1: all guard queries in one db.batch() call ---
+  const batchResults = (await db.batch([
+    db.prepare(
+      `SELECT email FROM unsubscribes
+       WHERE email IN (SELECT value FROM json_each(?1))
+         AND channel = 'invites'
+         AND (
+           (scope_type = 'global' AND scope_ref IS NULL) OR
+           (scope_type = 'event' AND scope_ref = ?2)
+         )`,
+    ).bind(emailsJson, eventId),
+    db.prepare(
+      `SELECT u.normalized_email
+       FROM registrations r
+       JOIN users u ON u.id = r.user_id
+       WHERE u.normalized_email IN (SELECT value FROM json_each(?1))
+         AND r.event_id = ?2
+         AND r.status NOT IN ('cancelled')`,
+    ).bind(emailsJson, eventId),
+    // Speaker-specific: already has an active proposal
+    db.prepare(
+      `SELECT u.normalized_email
+       FROM proposal_speakers ps
+       JOIN session_proposals sp ON sp.id = ps.proposal_id
+       JOIN users u ON u.id = ps.user_id
+       WHERE u.normalized_email IN (SELECT value FROM json_each(?1))
+         AND sp.event_id = ?2
+         AND sp.status NOT IN ('rejected', 'withdrawn')
+         AND ps.status NOT IN ('declined')`,
+    ).bind(emailsJson, eventId),
+    db.prepare(
+      `SELECT invitee_email FROM invites
+       WHERE event_id = ?1 AND invite_type = 'speaker' AND status = 'sent'
+         AND (expires_at IS NULL OR expires_at > ?2)
+         AND invitee_email IN (SELECT value FROM json_each(?3))`,
+    ).bind(eventId, now, emailsJson),
+  ])) as Array<{ results: Array<Record<string, string>> }>;
+
+  const unsubscribed = new Set(
+    (batchResults[0].results ?? []).map((row) => row.email as string),
+  );
+  const registered = new Set(
+    (batchResults[1].results ?? []).map((row) => row.normalized_email as string),
+  );
+  const alreadyProposed = new Set(
+    (batchResults[2].results ?? []).map((row) => row.normalized_email as string),
+  );
+  const alreadyInvited = new Set(
+    (batchResults[3].results ?? []).map((row) => row.invitee_email as string),
+  );
+
+  // --- Compute expiry ---
+  const settings = parseJsonSafe<{
+    registrationClosesAt?: string | null;
+    registration?: { closesAt?: string | null };
+  }>(payload.event.settings_json, {});
+  const registrationClosesAt = settings.registration?.closesAt ?? settings.registrationClosesAt ?? null;
+
+  function computeExpiry(): string {
+    let expiresAt = addHours(now, payload.ttlHours);
+    if (
+      payload.event.registration_mode !== "invite_only"
+      && registrationClosesAt
+      && new Date(registrationClosesAt).getTime() > new Date(now).getTime()
+    ) {
+      expiresAt = new Date(registrationClosesAt).toISOString();
+    }
+    if (payload.event.starts_at) {
+      const eventStartMs = new Date(payload.event.starts_at).getTime();
+      const nowMs = new Date(now).getTime();
+      const currentExpiryMs = new Date(expiresAt).getTime();
+      if (Number.isFinite(eventStartMs) && eventStartMs > nowMs && eventStartMs < currentExpiryMs) {
+        expiresAt = new Date(eventStartMs).toISOString();
+      }
+    }
+    return expiresAt;
+  }
+
+  // --- Classify each input row ---
+  const outcomes: BulkSpeakerOutcome[] = [];
+  const toCreate: Array<{ idx: number; email: string; item: (typeof payload.invites)[0] }> = [];
+
+  for (let i = 0; i < payload.invites.length; i++) {
+    const email = normalizedEmails[i];
+    const item = payload.invites[i];
+    if (unsubscribed.has(email) || registered.has(email) || alreadyProposed.has(email)) {
+      outcomes.push({ email, status: "skipped" });
+    } else if (alreadyInvited.has(email)) {
+      outcomes.push({ email, status: "endorsed" });
+    } else {
+      outcomes.push({ email, status: "created" });
+      toCreate.push({ idx: i, email, item });
+    }
+  }
+
+  if (toCreate.length === 0) return outcomes;
+
+  // --- Round-trip 2: generate tokens in parallel ---
+  const tokens = await Promise.all(toCreate.map(() => randomToken(24)));
+  const tokenHashes = await Promise.all(tokens.map((t) => sha256Hex(t)));
+  const expiresAt = computeExpiry();
+
+  // --- Round-trip(s) 3: INSERT new invites, chunked at 500 per db.batch() ---
+  const inviteIds = toCreate.map(() => uuid());
+  const MAX_BATCH = 500;
+  for (let c = 0; c < toCreate.length; c += MAX_BATCH) {
+    const slice = toCreate.slice(c, c + MAX_BATCH);
+    await db.batch(
+      slice.map((tc, si) => {
+        const j = c + si;
+        const item = tc.item;
+        return db
+          .prepare(
+            `INSERT INTO invites (
+              id, event_id, inviter_user_id, inviter_registration_id, invitee_email,
+              invitee_first_name, invitee_last_name, invite_type, token_hash, status,
+              decline_reason_code, decline_reason_note, unsubscribe_future, reminder_count,
+              last_communication_at, reminders_paused_until, max_uses, used_count,
+              source_type, expires_at, accepted_at, declined_at, created_at
+            ) VALUES (?, ?, NULL, NULL, ?, ?, ?, 'speaker', ?, 'sent',
+                      NULL, NULL, 0, 0, ?, NULL, 1, 0, ?, ?, NULL, NULL, ?)`,
+          )
+          .bind(
+            inviteIds[j],
+            eventId,
+            tc.email,
+            item.inviteeFirstName ?? null,
+            item.inviteeLastName ?? null,
+            tokenHashes[j],
+            now,
+            item.sourceType ?? "direct",
+            expiresAt,
+            now,
+          );
+      }),
+    );
+  }
+
   for (let j = 0; j < toCreate.length; j++) {
     const outcome = outcomes[toCreate[j].idx];
     outcome.inviteId = inviteIds[j];

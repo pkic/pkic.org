@@ -40,6 +40,7 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
   const [sendStatus, setSendStatus] = useState("");
   const [sending, setSending] = useState(false);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const typeLabel = inviteType === "attendee" ? "attendee" : "speaker";
 
@@ -56,6 +57,27 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
     setPreviewConfirmed(false);
     if (inviteType === "attendee") setPreviewStatus("Preview required before sending.");
     toast(`Parsed ${valid.length} invite${valid.length !== 1 ? "s" : ""}${skipped ? `, ${skipped} skipped` : ""}`, "success");
+  }
+
+  function handleFileUpload(e: Event) {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      const text = reader.result as string;
+      const { valid, skipped } = parseText(text);
+      if (!valid.length) { toast("No valid emails found in file" + (skipped ? ` (${skipped} rows skipped)` : ""), "error"); return; }
+      setRows(valid.map((entry, i) => ({ ...entry, _key: keyCounter + i })));
+      setKeyCounter((k) => k + valid.length);
+      setPreview(null);
+      setPreviewToken(null);
+      setInviteDigest(null);
+      setPreviewConfirmed(false);
+      if (inviteType === "attendee") setPreviewStatus("Preview required before sending.");
+      toast(`Loaded ${valid.length} invite${valid.length !== 1 ? "s" : ""} from file${skipped ? `, ${skipped} skipped` : ""}`, "success");
+    };
+    reader.readAsText(file);
+    if (fileRef.current) fileRef.current.value = "";
   }
 
   function addRow() {
@@ -109,10 +131,10 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
     setSending(true);
     setSendStatus("Sending…");
     try {
-      const invites = validRows.slice(0, 500).map(({ email, firstName, lastName }) => ({ email, firstName, lastName }));
+      const invites = validRows.map(({ email, firstName, lastName }) => ({ email, firstName, lastName }));
+      const CHUNK = 500;
+      let total = 0;
       if (inviteType === "attendee") {
-        const CHUNK = 50;
-        let total = 0;
         for (let i = 0; i < invites.length; i += CHUNK) {
           const chunk = invites.slice(i, i + CHUNK);
           await api(`/api/v1/admin/events/${slug}/invites/attendees/bulk`, {
@@ -122,16 +144,19 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
           total += chunk.length;
           setSendStatus(`Sent ${total} of ${invites.length}…`);
         }
-        toast(`Sent ${total} ${typeLabel} invites`, "success");
-        setSendStatus(`✓ Sent ${total} invites`);
       } else {
-        await api(`/api/v1/admin/events/${slug}/invites/speakers/bulk`, {
-          method: "POST",
-          body: JSON.stringify({ invites }),
-        });
-        toast(`Sent ${invites.length} ${typeLabel} invites`, "success");
-        setSendStatus(`✓ Sent ${invites.length} invites`);
+        for (let i = 0; i < invites.length; i += CHUNK) {
+          const chunk = invites.slice(i, i + CHUNK);
+          await api(`/api/v1/admin/events/${slug}/invites/speakers/bulk`, {
+            method: "POST",
+            body: JSON.stringify({ invites: chunk }),
+          });
+          total += chunk.length;
+          setSendStatus(`Sent ${total} of ${invites.length}…`);
+        }
       }
+      toast(`Sent ${total} ${typeLabel} invites`, "success");
+      setSendStatus(`✓ Sent ${total} invites`);
       setRows([{ _key: keyCounter, email: "", firstName: "", lastName: "" }]);
       setKeyCounter((k) => k + 1);
       setPreview(null);
@@ -158,8 +183,11 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
           <span class="text-muted fw-normal"> — one per line; supports <code>Name &lt;email&gt;</code> or dotted addresses</span>
         </label>
         <textarea class="form-control form-control-sm" rows={4} value={pasteText} onInput={(e) => setPasteText((e.target as HTMLTextAreaElement).value)} placeholder={"alice@example.com\nBob Smith <bob@example.com>"} />
-        <div class="mt-1">
+        <div class="mt-1 d-flex gap-2 align-items-center">
           <button type="button" class="btn btn-sm btn-outline-secondary" onClick={handleParse}>Parse ↓</button>
+          <span class="text-muted small">or</span>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => fileRef.current?.click()}>Upload CSV</button>
+          <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" class="d-none" onChange={handleFileUpload} />
         </div>
       </div>
 

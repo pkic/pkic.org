@@ -576,7 +576,7 @@ export const adminBulkAttendeeInvitesSchema = z.object({
       }),
     )
     .min(1)
-    .max(900),
+    .max(2000),
 });
 
 export const adminBulkAttendeeInvitesPreviewSchema = z.object({
@@ -602,7 +602,7 @@ export const adminBulkSpeakerInvitesSchema = z.object({
       }),
     )
     .min(1)
-    .max(500),
+    .max(2000),
 });
 
 export const adminRegistrationAdmitSchema = z.object({
