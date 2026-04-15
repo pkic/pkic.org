@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "CLOUDFLARE_ENV=local vite dev --host 0.0.0.0 --port 8788",
     "dev:hugo": "hugo serve",
-    "build": "CLOUDFLARE_ENV=local vite build",
+    "build": "vite build",
     "build:preview": "CLOUDFLARE_ENV=preview vite build",
     "build:production": "CLOUDFLARE_ENV=production vite build",
     "preview": "npm run build && vite preview --host 0.0.0.0 --port 8788",

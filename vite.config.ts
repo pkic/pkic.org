@@ -1,3 +1,13 @@
+// Auto-detect Cloudflare environment for CI builds (must run before plugin imports read it)
+if (!process.env.CLOUDFLARE_ENV) {
+  process.env.CLOUDFLARE_ENV =
+    process.env.WORKERS_CI_BRANCH === "main"
+      ? "production"
+      : process.env.WORKERS_CI_BRANCH
+        ? "preview"
+        : "local";
+}
+
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { clearTimeout, setTimeout } from "node:timers";
