@@ -6,10 +6,6 @@
 	path = content/wg/pqc/pqccm
 	url = ../pqccm.git
 	branch = main
-[submodule "content/remote-key-attestation"]
-	path = content/wg/cm/remote-key-attestation
-	url = ../remote-key-attestation.git
-	branch = main
 [submodule "content/wg/cm/remote-key-attestation"]
 	path = content/wg/cm/remote-key-attestation
 	url = ../remote-key-attestation.git
