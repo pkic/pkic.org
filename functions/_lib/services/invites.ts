@@ -214,28 +214,24 @@ export async function createInvite(
     starts_at: string | null;
     registration_mode: string;
     settings_json: string;
-  }>(
-    db,
-    "SELECT starts_at, registration_mode, settings_json FROM events WHERE id = ?",
-    [payload.eventId],
-  );
+  }>(db, "SELECT starts_at, registration_mode, settings_json FROM events WHERE id = ?", [payload.eventId]);
 
   const registrationClosesAt = event
     ? (() => {
-      const settings = parseJsonSafe<{ registrationClosesAt?: string | null; registration?: { closesAt?: string | null } }>(
-        event.settings_json,
-        {},
-      );
-      return settings.registration?.closesAt ?? settings.registrationClosesAt ?? null;
-    })()
+        const settings = parseJsonSafe<{
+          registrationClosesAt?: string | null;
+          registration?: { closesAt?: string | null };
+        }>(event.settings_json, {});
+        return settings.registration?.closesAt ?? settings.registrationClosesAt ?? null;
+      })()
     : null;
 
   // Marketing-style invites for open registration remain valid until registration closes.
   if (
-    event
-    && event.registration_mode !== "invite_only"
-    && registrationClosesAt
-    && new Date(registrationClosesAt).getTime() > new Date(now).getTime()
+    event &&
+    event.registration_mode !== "invite_only" &&
+    registrationClosesAt &&
+    new Date(registrationClosesAt).getTime() > new Date(now).getTime()
   ) {
     expiresAt = new Date(registrationClosesAt).toISOString();
   }
@@ -317,14 +313,7 @@ export async function createInvite(
       `INSERT OR IGNORE INTO invite_inviters
          (id, invite_id, inviter_user_id, inviter_registration_id, source_type, invited_at)
        VALUES (?, ?, ?, ?, ?, ?)`,
-      [
-        uuid(),
-        invite.id,
-        invite.inviter_user_id,
-        invite.inviter_registration_id,
-        invite.source_type,
-        now,
-      ],
+      [uuid(), invite.id, invite.inviter_user_id, invite.inviter_registration_id, invite.source_type, now],
     );
     await recordEngagement(db, {
       userId: invite.inviter_user_id,
@@ -346,10 +335,7 @@ export async function createInvite(
  * ordered by the time they sent their invitation.  Used to build social-proof
  * copy such as "You've been invited by Paul, Sven, Chris and 4 others."
  */
-export async function getInviteInviters(
-  db: DatabaseLike,
-  inviteId: string,
-): Promise<InviteInviterInfo[]> {
+export async function getInviteInviters(db: DatabaseLike, inviteId: string): Promise<InviteInviterInfo[]> {
   return all<InviteInviterInfo>(
     db,
     `SELECT ii.inviter_user_id  AS userId,
@@ -545,40 +531,40 @@ export async function bulkCreateAttendeesAdmin(
 
   // --- Round-trip 1: all guard queries in one db.batch() call ---
   const batchResults = (await db.batch([
-    db.prepare(
-      `SELECT email FROM unsubscribes
+    db
+      .prepare(
+        `SELECT email FROM unsubscribes
        WHERE email IN (SELECT value FROM json_each(?1))
          AND channel = 'invites'
          AND (
            (scope_type = 'global' AND scope_ref IS NULL) OR
            (scope_type = 'event' AND scope_ref = ?2)
          )`,
-    ).bind(emailsJson, eventId),
-    db.prepare(
-      `SELECT u.normalized_email
+      )
+      .bind(emailsJson, eventId),
+    db
+      .prepare(
+        `SELECT u.normalized_email
        FROM registrations r
        JOIN users u ON u.id = r.user_id
        WHERE u.normalized_email IN (SELECT value FROM json_each(?1))
          AND r.event_id = ?2
          AND r.status NOT IN ('cancelled')`,
-    ).bind(emailsJson, eventId),
-    db.prepare(
-      `SELECT invitee_email FROM invites
+      )
+      .bind(emailsJson, eventId),
+    db
+      .prepare(
+        `SELECT invitee_email FROM invites
        WHERE event_id = ?1 AND invite_type = 'attendee' AND status = 'sent'
          AND (expires_at IS NULL OR expires_at > ?2)
          AND invitee_email IN (SELECT value FROM json_each(?3))`,
-    ).bind(eventId, now, emailsJson),
+      )
+      .bind(eventId, now, emailsJson),
   ])) as Array<{ results: Array<Record<string, string>> }>;
 
-  const unsubscribed = new Set(
-    (batchResults[0].results ?? []).map((row) => row.email as string),
-  );
-  const registered = new Set(
-    (batchResults[1].results ?? []).map((row) => row.normalized_email as string),
-  );
-  const alreadyInvited = new Set(
-    (batchResults[2].results ?? []).map((row) => row.invitee_email as string),
-  );
+  const unsubscribed = new Set((batchResults[0].results ?? []).map((row) => row.email));
+  const registered = new Set((batchResults[1].results ?? []).map((row) => row.normalized_email));
+  const alreadyInvited = new Set((batchResults[2].results ?? []).map((row) => row.invitee_email));
 
   // --- Compute expiry once (same logic as createInvite, using pre-loaded event) ---
   const settings = parseJsonSafe<{
@@ -590,9 +576,9 @@ export async function bulkCreateAttendeesAdmin(
   function computeExpiry(): string {
     let expiresAt = addHours(now, payload.ttlHours);
     if (
-      payload.event.registration_mode !== "invite_only"
-      && registrationClosesAt
-      && new Date(registrationClosesAt).getTime() > new Date(now).getTime()
+      payload.event.registration_mode !== "invite_only" &&
+      registrationClosesAt &&
+      new Date(registrationClosesAt).getTime() > new Date(now).getTime()
     ) {
       expiresAt = new Date(registrationClosesAt).toISOString();
     }
@@ -719,26 +705,31 @@ export async function bulkCreateSpeakersAdmin(
 
   // --- Round-trip 1: all guard queries in one db.batch() call ---
   const batchResults = (await db.batch([
-    db.prepare(
-      `SELECT email FROM unsubscribes
+    db
+      .prepare(
+        `SELECT email FROM unsubscribes
        WHERE email IN (SELECT value FROM json_each(?1))
          AND channel = 'invites'
          AND (
            (scope_type = 'global' AND scope_ref IS NULL) OR
            (scope_type = 'event' AND scope_ref = ?2)
          )`,
-    ).bind(emailsJson, eventId),
-    db.prepare(
-      `SELECT u.normalized_email
+      )
+      .bind(emailsJson, eventId),
+    db
+      .prepare(
+        `SELECT u.normalized_email
        FROM registrations r
        JOIN users u ON u.id = r.user_id
        WHERE u.normalized_email IN (SELECT value FROM json_each(?1))
          AND r.event_id = ?2
          AND r.status NOT IN ('cancelled')`,
-    ).bind(emailsJson, eventId),
+      )
+      .bind(emailsJson, eventId),
     // Speaker-specific: already has an active proposal
-    db.prepare(
-      `SELECT u.normalized_email
+    db
+      .prepare(
+        `SELECT u.normalized_email
        FROM proposal_speakers ps
        JOIN session_proposals sp ON sp.id = ps.proposal_id
        JOIN users u ON u.id = ps.user_id
@@ -746,27 +737,22 @@ export async function bulkCreateSpeakersAdmin(
          AND sp.event_id = ?2
          AND sp.status NOT IN ('rejected', 'withdrawn')
          AND ps.status NOT IN ('declined')`,
-    ).bind(emailsJson, eventId),
-    db.prepare(
-      `SELECT invitee_email FROM invites
+      )
+      .bind(emailsJson, eventId),
+    db
+      .prepare(
+        `SELECT invitee_email FROM invites
        WHERE event_id = ?1 AND invite_type = 'speaker' AND status = 'sent'
          AND (expires_at IS NULL OR expires_at > ?2)
          AND invitee_email IN (SELECT value FROM json_each(?3))`,
-    ).bind(eventId, now, emailsJson),
+      )
+      .bind(eventId, now, emailsJson),
   ])) as Array<{ results: Array<Record<string, string>> }>;
 
-  const unsubscribed = new Set(
-    (batchResults[0].results ?? []).map((row) => row.email as string),
-  );
-  const registered = new Set(
-    (batchResults[1].results ?? []).map((row) => row.normalized_email as string),
-  );
-  const alreadyProposed = new Set(
-    (batchResults[2].results ?? []).map((row) => row.normalized_email as string),
-  );
-  const alreadyInvited = new Set(
-    (batchResults[3].results ?? []).map((row) => row.invitee_email as string),
-  );
+  const unsubscribed = new Set((batchResults[0].results ?? []).map((row) => row.email));
+  const registered = new Set((batchResults[1].results ?? []).map((row) => row.normalized_email));
+  const alreadyProposed = new Set((batchResults[2].results ?? []).map((row) => row.normalized_email));
+  const alreadyInvited = new Set((batchResults[3].results ?? []).map((row) => row.invitee_email));
 
   // --- Compute expiry ---
   const settings = parseJsonSafe<{
@@ -778,9 +764,9 @@ export async function bulkCreateSpeakersAdmin(
   function computeExpiry(): string {
     let expiresAt = addHours(now, payload.ttlHours);
     if (
-      payload.event.registration_mode !== "invite_only"
-      && registrationClosesAt
-      && new Date(registrationClosesAt).getTime() > new Date(now).getTime()
+      payload.event.registration_mode !== "invite_only" &&
+      registrationClosesAt &&
+      new Date(registrationClosesAt).getTime() > new Date(now).getTime()
     ) {
       expiresAt = new Date(registrationClosesAt).toISOString();
     }

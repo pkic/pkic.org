@@ -47,7 +47,10 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const sessionId = typeof body.session_id === "string" ? body.session_id.trim() : null;
   if (!sessionId || !sessionId.startsWith("cs_")) {
-    return json({ error: { code: "BAD_REQUEST", message: "session_id must be a valid Stripe checkout session ID" } }, 400);
+    return json(
+      { error: { code: "BAD_REQUEST", message: "session_id must be a valid Stripe checkout session ID" } },
+      400,
+    );
   }
 
   // Must be a completed donation
@@ -147,6 +150,6 @@ export class DonationsPromoterPost extends OpenAPIRoute {
   schema = {};
 
   async handle(c: any) {
-    return onRequestPost(c as any);
+    return onRequestPost(c);
   }
 }

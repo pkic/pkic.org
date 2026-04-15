@@ -75,11 +75,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, adminCreateEventSchema);
 
   // Check slug uniqueness before upsert to give a clear error
-  const existing = await first<{ id: string }>(
-    c.env.DB,
-    "SELECT id FROM events WHERE slug = ?",
-    [body.slug],
-  );
+  const existing = await first<{ id: string }>(c.env.DB, "SELECT id FROM events WHERE slug = ?", [body.slug]);
   if (existing) {
     return json({ error: { code: "SLUG_TAKEN", message: `The slug '${body.slug}' is already in use` } }, 409);
   }
@@ -99,22 +95,17 @@ export async function onRequestPost(c: any): Promise<Response> {
     settings,
   });
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "event_created",
-    "event",
-    event.id,
-    { slug: event.slug },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "event_created", "event", event.id, { slug: event.slug });
 
-  return json({
-    event: {
-      ...event,
-      settings: parseJsonSafe<Record<string, unknown>>(event.settings_json, {}),
+  return json(
+    {
+      event: {
+        ...event,
+        settings: parseJsonSafe<Record<string, unknown>>(event.settings_json, {}),
+      },
     },
-  }, 201);
+    201,
+  );
 }
 
 export async function onRequest(c: any): Promise<Response> {

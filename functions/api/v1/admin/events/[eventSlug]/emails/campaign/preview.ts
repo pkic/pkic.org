@@ -21,9 +21,7 @@ import { adminEventCampaignPreviewSchema } from "../../../../../../../../assets/
 
 const PREVIEW_TTL_SECONDS = 10 * 60;
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEventCampaignPreviewSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
@@ -38,8 +36,8 @@ export async function onRequestPost(
     speakerStatus: body.filter.speakerStatus,
   });
 
-  const uniqueRecipients = recipients.filter((recipient, index, arr) =>
-    arr.findIndex((candidate) => candidate.email === recipient.email) === index,
+  const uniqueRecipients = recipients.filter(
+    (recipient, index, arr) => arr.findIndex((candidate) => candidate.email === recipient.email) === index,
   );
 
   const digest = await computeCampaignDigest({
@@ -86,9 +84,7 @@ export async function onRequestPost(
   }
 
   if (body.sendMode === "bcc_batch") {
-    const template = !body.bodyContent && body.templateKey
-      ? await resolveTemplate(c.env.DB, body.templateKey)
-      : null;
+    const template = !body.bodyContent && body.templateKey ? await resolveTemplate(c.env.DB, body.templateKey) : null;
     const unsafeRefs = findBroadcastOnlyTemplateRefs(uniqueRecipients, [
       body.subjectOverride,
       body.bodyContent,
@@ -110,9 +106,10 @@ export async function onRequestPost(
   const partials = await loadEmailPartials(c.env.DB);
   const layoutHtml = await loadEmailLayout(c.env.DB);
   const sample = uniqueRecipients[0];
-  const routeVars = body.filter.audience === "attendees"
-    ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "admin_email" }) }
-    : { proposalUrl: proposalPageUrl(appBaseUrl, event, { source: "admin_email" }) };
+  const routeVars =
+    body.filter.audience === "attendees"
+      ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "admin_email" }) }
+      : { proposalUrl: proposalPageUrl(appBaseUrl, event, { source: "admin_email" }) };
   const sampleData = {
     ...buildEventEmailVariables(event, appBaseUrl),
     firstName: sample?.firstName || "Member",
@@ -136,15 +133,18 @@ export async function onRequestPost(
       customText: body.customText ?? "",
     };
     const dataWithPartials = { ...data, _partials: partials };
-    subject = renderSubject(template.subjectTemplate, body.subjectOverride ?? `Update: ${event.name}`, dataWithPartials);
+    subject = renderSubject(
+      template.subjectTemplate,
+      body.subjectOverride ?? `Update: ${event.name}`,
+      dataWithPartials,
+    );
     const templateContentType = template.contentType as "markdown" | "html" | "text";
     const content = applyCampaignCustomText(template.content, templateContentType, body.customText ?? null);
     rendered = await renderEmail(content, dataWithPartials, layoutHtml, templateContentType, appBaseUrl);
   }
 
-  const batchCount = body.sendMode === "bcc_batch"
-    ? chunkRecipients(uniqueRecipients, body.batchSize).length
-    : uniqueRecipients.length;
+  const batchCount =
+    body.sendMode === "bcc_batch" ? chunkRecipients(uniqueRecipients, body.batchSize).length : uniqueRecipients.length;
 
   return json({
     success: true,

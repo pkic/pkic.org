@@ -15,16 +15,16 @@ import { generateBadgePng } from "../../../_lib/services/og-badge-prerender";
 import { applyDownloadDisposition } from "../../../_lib/utils/download-disposition";
 
 const JPEG_CONTENT_TYPE = "image/jpeg";
-const PNG_CONTENT_TYPE  = "image/png";  // fallback when IMAGES binding unavailable
-const CACHE_CONTROL     = "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600";
-const R2_KEY_PREFIX     = "og-badges/";
+const PNG_CONTENT_TYPE = "image/png"; // fallback when IMAGES binding unavailable
+const CACHE_CONTROL = "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600";
+const R2_KEY_PREFIX = "og-badges/";
 
 export async function onRequestGet(c: any): Promise<Response> {
   const code = c.req.param("code");
-  const r2Key    = `${R2_KEY_PREFIX}${code}`;
-  const bucket   = c.env.ASSETS_BUCKET;
-  const origin   = resolveAppBaseUrl(c.env, c.req.raw);
-  const url      = new URL(c.req.raw.url);
+  const r2Key = `${R2_KEY_PREFIX}${code}`;
+  const bucket = c.env.ASSETS_BUCKET;
+  const origin = resolveAppBaseUrl(c.env, c.req.raw);
+  const url = new URL(c.req.raw.url);
   const isDownload = url.searchParams.get("download") === "1";
   const rawName = url.searchParams.get("name") ?? "";
 
@@ -64,9 +64,12 @@ export async function onRequestGet(c: any): Promise<Response> {
   if (bucket && c.env.IMAGES) {
     try {
       const pngStream = new ReadableStream<Uint8Array>({
-        start(ctrl) { ctrl.enqueue(png as Uint8Array); ctrl.close(); },
+        start(ctrl) {
+          ctrl.enqueue(png);
+          ctrl.close();
+        },
       });
-      const result  = await c.env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 95 });
+      const result = await c.env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 95 });
       const jpegBuf = await (await result.response()).arrayBuffer();
       c.executionCtx.waitUntil(
         bucket.put(r2Key, jpegBuf, {
@@ -82,7 +85,9 @@ export async function onRequestGet(c: any): Promise<Response> {
         },
       });
       return isDownload ? applyDownloadDisposition(response, rawName, "attendee-badge") : response;
-    } catch { /* fall through to raw PNG */ }
+    } catch {
+      /* fall through to raw PNG */
+    }
   }
 
   // Fallback: serve raw PNG (IMAGES binding not configured or conversion failed)

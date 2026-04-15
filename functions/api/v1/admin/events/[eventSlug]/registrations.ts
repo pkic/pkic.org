@@ -104,10 +104,11 @@ export async function onRequestGet(c: any): Promise<Response> {
   const rows = hasMore ? registrationRows.slice(0, limit) : registrationRows;
 
   const registrationIds = rows.map((row) => row.id);
-  const waitlistSummaries = registrationIds.length > 0
-    ? await all<WaitlistSummaryRow>(
-      c.env.DB,
-      `SELECT
+  const waitlistSummaries =
+    registrationIds.length > 0
+      ? await all<WaitlistSummaryRow>(
+          c.env.DB,
+          `SELECT
          w.registration_id,
          GROUP_CONCAT(CASE
            WHEN ed.label IS NOT NULL AND ed.label <> '' THEN ed.label || ' (' || w.status || ')'
@@ -119,13 +120,11 @@ export async function onRequestGet(c: any): Promise<Response> {
        WHERE w.registration_id IN (${registrationIds.map(() => "?").join(",")})
          AND w.status IN ('waiting', 'offered')
        GROUP BY w.registration_id`,
-      registrationIds,
-    )
-    : [];
+          registrationIds,
+        )
+      : [];
 
-  const waitlistByRegistrationId = new Map(
-    waitlistSummaries.map((row) => [row.registration_id, row]),
-  );
+  const waitlistByRegistrationId = new Map(waitlistSummaries.map((row) => [row.registration_id, row]));
 
   const registrationsWithSummary = rows.map((row) => {
     const summary = waitlistByRegistrationId.get(row.id);

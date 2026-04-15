@@ -17,17 +17,21 @@ import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_l
 import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
 import { buildAttendanceEmailData } from "../../../../../../../_lib/utils/attendance";
-import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../../../_lib/utils/registration-email";
-import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../../../../_lib/services/frontend-links";
+import {
+  getAcceptedTermsTextForRegistration,
+  getCustomAnswerRows,
+} from "../../../../../../../_lib/utils/registration-email";
+import {
+  registrationConfirmPageUrl,
+  registrationManagePageUrl,
+} from "../../../../../../../_lib/services/frontend-links";
 import { buildRegistrationIcs } from "../../../../../../../_lib/utils/calendar";
 import { generateSignedRsvpAddress } from "../../../../../../../_lib/email/rsvp";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import type { RegistrationRecord } from "../../../../../../../_lib/services/registrations/types";
 import type { UserRecord } from "../../../../../../../_lib/services/users";
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const config = getConfig(c.env, c.req.raw);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
@@ -44,21 +48,24 @@ export async function onRequestPost(
   }
 
   if (registration.status === "cancelled") {
-    return json({ error: { code: "REGISTRATION_CANCELLED", message: "Cannot resend email to a cancelled registration" } }, 409);
+    return json(
+      { error: { code: "REGISTRATION_CANCELLED", message: "Cannot resend email to a cancelled registration" } },
+      409,
+    );
   }
 
-  const user = await first<UserRecord>(
-    c.env.DB,
-    "SELECT * FROM users WHERE id = ?",
-    [registration.user_id],
-  );
+  const user = await first<UserRecord>(c.env.DB, "SELECT * FROM users WHERE id = ?", [registration.user_id]);
   if (!user) {
     return json({ error: { code: "USER_NOT_FOUND", message: "Associated user not found" } }, 500);
   }
 
   const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, registration.id);
   const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
-  const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(registration.attendance_type, dayAttendanceRaw, dayWaitlist);
+  const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
+    registration.attendance_type,
+    dayAttendanceRaw,
+    dayWaitlist,
+  );
   const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, registration.custom_answers_json);
   const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, registration.id);
 
@@ -121,15 +128,26 @@ export async function onRequestPost(
     const freshManageToken = randomToken(24);
     const freshManageHash = await sha256Hex(freshManageToken);
 
-    await run(
-      c.env.DB,
-      "UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?",
-      [freshManageHash, now, registration.id],
-    );
+    await run(c.env.DB, "UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?", [
+      freshManageHash,
+      now,
+      registration.id,
+    ]);
 
     const manageUrl = registrationManagePageUrl(appBaseUrl, event, freshManageToken);
-    const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET ? await generateSignedRsvpAddress(registration.id, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL) : undefined;
-    const calendar = await buildRegistrationIcs(event, registration.id, manageUrl, dayAttendanceRaw, appBaseUrl, rsvpEmail, user.email, c.env.INTERNAL_SIGNING_SECRET);
+    const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET
+      ? await generateSignedRsvpAddress(registration.id, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL)
+      : undefined;
+    const calendar = await buildRegistrationIcs(
+      event,
+      registration.id,
+      manageUrl,
+      dayAttendanceRaw,
+      appBaseUrl,
+      rsvpEmail,
+      user.email,
+      c.env.INTERNAL_SIGNING_SECRET,
+    );
 
     outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
@@ -139,14 +157,16 @@ export async function onRequestPost(
       recipientUserId: user.id,
       messageType: "transactional",
       subject: `Registration confirmed for ${event.name}`,
-      attachments: referralRow ? [
-        buildBadgeAttachment({
-          badgeCode: referralRow.code,
-          badgeType: "attendee",
-          firstName: user.first_name ?? "",
-          lastName: user.last_name ?? "",
-        }),
-      ] : undefined,
+      attachments: referralRow
+        ? [
+            buildBadgeAttachment({
+              badgeCode: referralRow.code,
+              badgeType: "attendee",
+              firstName: user.first_name ?? "",
+              lastName: user.last_name ?? "",
+            }),
+          ]
+        : undefined,
       data: {
         ...buildEventEmailVariables(event, appBaseUrl),
         firstName: user.first_name ?? "",
@@ -164,13 +184,15 @@ export async function onRequestPost(
         registrationId: registration.id,
         manageUrl,
         shareUrl,
-        ...(referralRow ? {
-          badgeImageUrl: `${appBaseUrl}/api/v1/og/${referralRow.code}`,
-          linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${appBaseUrl}/r/${referralRow.code}`)}`,
-          twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${event.name} — join me! ${appBaseUrl}/r/${referralRow.code}`)}`,
-          blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${event.name} — join me!\n${appBaseUrl}/r/${referralRow.code}`)}`,
-          redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(`${appBaseUrl}/r/${referralRow.code}`)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
-        } : {}),
+        ...(referralRow
+          ? {
+              badgeImageUrl: `${appBaseUrl}/api/v1/og/${referralRow.code}`,
+              linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(`${appBaseUrl}/r/${referralRow.code}`)}`,
+              twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${event.name} — join me! ${appBaseUrl}/r/${referralRow.code}`)}`,
+              blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${event.name} — join me!\n${appBaseUrl}/r/${referralRow.code}`)}`,
+              redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(`${appBaseUrl}/r/${referralRow.code}`)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
+            }
+          : {}),
       },
       bounceAddress: rsvpEmail,
       calendar: {
@@ -185,15 +207,11 @@ export async function onRequestPost(
 
   c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "admin_registration_email_resent",
-    "registration",
-    registration.id,
-    { eventId: event.id, recipientEmail: user.email, status: registration.status },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "admin_registration_email_resent", "registration", registration.id, {
+    eventId: event.id,
+    recipientEmail: user.email,
+    status: registration.status,
+  });
 
   return json({ success: true, message: "Email queued" });
 }

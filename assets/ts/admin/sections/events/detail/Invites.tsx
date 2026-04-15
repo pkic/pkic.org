@@ -11,10 +11,16 @@ export type InviteType = "attendee" | "speaker";
 
 // ─── Invite form ──────────────────────────────────────────────────────────────
 
-interface ParsedInvites { valid: AdminInviteEntry[]; skipped: number }
+interface ParsedInvites {
+  valid: AdminInviteEntry[];
+  skipped: number;
+}
 
 function parseText(raw: string): ParsedInvites {
-  const lineCount = raw.split(/\n+/).map((l) => l.trim()).filter(Boolean).length;
+  const lineCount = raw
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean).length;
   const contacts = parseContactText(raw);
   const valid: AdminInviteEntry[] = contacts.map((c) => ({
     email: c.email,
@@ -24,7 +30,9 @@ function parseText(raw: string): ParsedInvites {
   return { valid, skipped: Math.max(0, lineCount - valid.length) };
 }
 
-interface InviteRow extends AdminInviteEntry { _key: number }
+interface InviteRow extends AdminInviteEntry {
+  _key: number;
+}
 
 function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType }) {
   const [pasteText, setPasteText] = useState("");
@@ -46,7 +54,10 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
 
   function handleParse() {
     const { valid, skipped } = parseText(pasteText);
-    if (!valid.length) { toast("No valid emails found" + (skipped ? ` (${skipped} skipped)` : ""), "error"); return; }
+    if (!valid.length) {
+      toast("No valid emails found" + (skipped ? ` (${skipped} skipped)` : ""), "error");
+      return;
+    }
     setRows(valid.map((e, i) => ({ ...e, _key: keyCounter + i })));
     setKeyCounter((k) => k + valid.length);
     setPasteText("");
@@ -56,7 +67,10 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
     setInviteDigest(null);
     setPreviewConfirmed(false);
     if (inviteType === "attendee") setPreviewStatus("Preview required before sending.");
-    toast(`Parsed ${valid.length} invite${valid.length !== 1 ? "s" : ""}${skipped ? `, ${skipped} skipped` : ""}`, "success");
+    toast(
+      `Parsed ${valid.length} invite${valid.length !== 1 ? "s" : ""}${skipped ? `, ${skipped} skipped` : ""}`,
+      "success",
+    );
   }
 
   function handleFileUpload(e: Event) {
@@ -66,7 +80,10 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
     reader.onload = () => {
       const text = reader.result as string;
       const { valid, skipped } = parseText(text);
-      if (!valid.length) { toast("No valid emails found in file" + (skipped ? ` (${skipped} rows skipped)` : ""), "error"); return; }
+      if (!valid.length) {
+        toast("No valid emails found in file" + (skipped ? ` (${skipped} rows skipped)` : ""), "error");
+        return;
+      }
       setRows(valid.map((entry, i) => ({ ...entry, _key: keyCounter + i })));
       setKeyCounter((k) => k + valid.length);
       setPreview(null);
@@ -74,7 +91,10 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
       setInviteDigest(null);
       setPreviewConfirmed(false);
       if (inviteType === "attendee") setPreviewStatus("Preview required before sending.");
-      toast(`Loaded ${valid.length} invite${valid.length !== 1 ? "s" : ""} from file${skipped ? `, ${skipped} skipped` : ""}`, "success");
+      toast(
+        `Loaded ${valid.length} invite${valid.length !== 1 ? "s" : ""} from file${skipped ? `, ${skipped} skipped` : ""}`,
+        "success",
+      );
     };
     reader.readAsText(file);
     if (fileRef.current) fileRef.current.value = "";
@@ -86,7 +106,7 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
   }
 
   function updateRow(key: number, patch: Partial<InviteRow>) {
-    setRows((prev) => prev.map((r) => r._key === key ? { ...r, ...patch } : r));
+    setRows((prev) => prev.map((r) => (r._key === key ? { ...r, ...patch } : r)));
   }
 
   function removeRow(key: number) {
@@ -96,7 +116,10 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
   const validRows = rows.filter((r) => r.email.trim().includes("@"));
 
   async function handlePreview() {
-    if (!validRows.length) { toast("No valid emails to preview", "error"); return; }
+    if (!validRows.length) {
+      toast("No valid emails to preview", "error");
+      return;
+    }
     setPreviewStatus("Generating preview…");
     setPreview(null);
     setPreviewConfirmed(false);
@@ -104,10 +127,16 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
     setInviteDigest(null);
     try {
       const invites = validRows.map(({ email, firstName, lastName }) => ({ email, firstName, lastName }));
-      const res = await api<{ subject: string; html: string; text: string; previewToken: string; inviteDigest: string }>(
-        `/api/v1/admin/events/${slug}/invites/attendees/preview`,
-        { method: "POST", body: JSON.stringify({ invites }) },
-      );
+      const res = await api<{
+        subject: string;
+        html: string;
+        text: string;
+        previewToken: string;
+        inviteDigest: string;
+      }>(`/api/v1/admin/events/${slug}/invites/attendees/preview`, {
+        method: "POST",
+        body: JSON.stringify({ invites }),
+      });
       setPreview(res);
       setPreviewToken(res.previewToken);
       setInviteDigest(res.inviteDigest);
@@ -180,13 +209,26 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
       <div class="mb-3">
         <label class="form-label small fw-semibold">
           Paste emails &amp; names
-          <span class="text-muted fw-normal"> — one per line; supports <code>Name &lt;email&gt;</code> or dotted addresses</span>
+          <span class="text-muted fw-normal">
+            {" "}
+            — one per line; supports <code>Name &lt;email&gt;</code> or dotted addresses
+          </span>
         </label>
-        <textarea class="form-control form-control-sm" rows={4} value={pasteText} onInput={(e) => setPasteText((e.target as HTMLTextAreaElement).value)} placeholder={"alice@example.com\nBob Smith <bob@example.com>"} />
+        <textarea
+          class="form-control form-control-sm"
+          rows={4}
+          value={pasteText}
+          onInput={(e) => setPasteText((e.target as HTMLTextAreaElement).value)}
+          placeholder={"alice@example.com\nBob Smith <bob@example.com>"}
+        />
         <div class="mt-1 d-flex gap-2 align-items-center">
-          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={handleParse}>Parse ↓</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={handleParse}>
+            Parse ↓
+          </button>
           <span class="text-muted small">or</span>
-          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => fileRef.current?.click()}>Upload CSV</button>
+          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => fileRef.current?.click()}>
+            Upload CSV
+          </button>
           <input ref={fileRef} type="file" accept=".csv,.tsv,.txt" class="d-none" onChange={handleFileUpload} />
         </div>
       </div>
@@ -203,26 +245,60 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
       <div class="mb-2">
         {rows.map((r) => (
           <div key={r._key} class="d-flex gap-1 align-items-center mb-1">
-            <input class="form-control form-control-sm adm-invite-col-name" placeholder="First" value={r.firstName ?? ""} onInput={(e) => updateRow(r._key, { firstName: (e.target as HTMLInputElement).value })} />
-            <input class="form-control form-control-sm adm-invite-col-name" placeholder="Last" value={r.lastName ?? ""} onInput={(e) => updateRow(r._key, { lastName: (e.target as HTMLInputElement).value })} />
-            <input class="form-control form-control-sm adm-invite-col-email" placeholder="email@example.com" type="email" value={r.email} onInput={(e) => updateRow(r._key, { email: (e.target as HTMLInputElement).value })} required />
-            <button type="button" class="btn btn-sm btn-outline-danger adm-invite-action-btn" onClick={() => removeRow(r._key)}>×</button>
+            <input
+              class="form-control form-control-sm adm-invite-col-name"
+              placeholder="First"
+              value={r.firstName ?? ""}
+              onInput={(e) => updateRow(r._key, { firstName: (e.target as HTMLInputElement).value })}
+            />
+            <input
+              class="form-control form-control-sm adm-invite-col-name"
+              placeholder="Last"
+              value={r.lastName ?? ""}
+              onInput={(e) => updateRow(r._key, { lastName: (e.target as HTMLInputElement).value })}
+            />
+            <input
+              class="form-control form-control-sm adm-invite-col-email"
+              placeholder="email@example.com"
+              type="email"
+              value={r.email}
+              onInput={(e) => updateRow(r._key, { email: (e.target as HTMLInputElement).value })}
+              required
+            />
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-danger adm-invite-action-btn"
+              onClick={() => removeRow(r._key)}
+            >
+              ×
+            </button>
           </div>
         ))}
       </div>
 
       <div class="d-flex gap-2 align-items-center flex-wrap mb-2">
-        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={addRow}>+ Add row</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onClick={addRow}>
+          + Add row
+        </button>
         {inviteType === "attendee" && (
-          <button type="button" class="btn btn-sm btn-outline-primary" onClick={() => void handlePreview()}>Preview Email</button>
+          <button type="button" class="btn btn-sm btn-outline-primary" onClick={() => void handlePreview()}>
+            Preview Email
+          </button>
         )}
-        <button type="button" class="btn btn-sm btn-success" onClick={() => void handleSend()} disabled={sending || !canSend}>
+        <button
+          type="button"
+          class="btn btn-sm btn-success"
+          onClick={() => void handleSend()}
+          disabled={sending || !canSend}
+        >
           Send {inviteType === "attendee" ? "Attendee" : "Speaker"} Invites
         </button>
         <span class="text-muted small">{validRows.length} valid</span>
       </div>
       {previewStatus && <div class="small text-muted">{previewStatus}</div>}
-      {sendStatus && <div class={`mt-1 small ${sendStatus.startsWith("✓") ? "text-success" : "text-danger"}`}>{sendStatus}</div>}
+      {sendStatus && (
+        <div class={`mt-1 small ${sendStatus.startsWith("✓") ? "text-success" : "text-danger"}`}>{sendStatus}</div>
+      )}
 
       {preview && (
         <div class="card border mt-3">
@@ -232,8 +308,16 @@ function InviteForm({ slug, inviteType }: { slug: string; inviteType: InviteType
             <div class="fw-semibold mb-2">{preview.subject}</div>
             <iframe ref={iframeRef} sandbox="" class="adm-email-preview-frame" />
             <div class="form-check mt-2">
-              <input class="form-check-input" type="checkbox" id="inv-confirm" checked={previewConfirmed} onChange={(e) => setPreviewConfirmed((e.target as HTMLInputElement).checked)} />
-              <label class="form-check-label small" for="inv-confirm">I reviewed this preview and confirm sending this email.</label>
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="inv-confirm"
+                checked={previewConfirmed}
+                onChange={(e) => setPreviewConfirmed((e.target as HTMLInputElement).checked)}
+              />
+              <label class="form-check-label small" for="inv-confirm">
+                I reviewed this preview and confirm sending this email.
+              </label>
             </div>
           </div>
         </div>
@@ -270,7 +354,14 @@ function InviteList({ slug, inviteType }: { slug: string; inviteType: InviteType
       actionsRef={tableRef}
       deps={[slug, inviteType, statusFilter]}
       toolbar={({ resetPage }) => (
-        <select class="form-select form-select-sm adm-filter-select" value={statusFilter} onChange={(e) => { setStatusFilter((e.target as HTMLSelectElement).value); resetPage(); }}>
+        <select
+          class="form-select form-select-sm adm-filter-select"
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter((e.target as HTMLSelectElement).value);
+            resetPage();
+          }}
+        >
           <option value="">All statuses</option>
           <option value="sent">Pending (sent)</option>
           <option value="accepted">Accepted</option>
@@ -281,12 +372,27 @@ function InviteList({ slug, inviteType }: { slug: string; inviteType: InviteType
       )}
       columns={[
         { header: "Email", cell: (inv) => inv.invitee_email },
-        { header: "Name", cell: (inv) => [inv.invitee_first_name, inv.invitee_last_name].filter(Boolean).join(" ") || "—" },
+        {
+          header: "Name",
+          cell: (inv) => [inv.invitee_first_name, inv.invitee_last_name].filter(Boolean).join(" ") || "—",
+        },
         { header: "Status", cell: (inv) => <Badge status={inv.status} /> },
-        { header: "Sent by", cell: (inv) => inv.inviter_email ?? inv.inviter_user_id ?? "—", className: "small text-muted" },
+        {
+          header: "Sent by",
+          cell: (inv) => inv.inviter_email ?? inv.inviter_user_id ?? "—",
+          className: "small text-muted",
+        },
         { header: "Sent", cell: (inv) => fmt(inv.created_at), className: "mono small" },
-        { header: "Accepted", cell: (inv) => inv.accepted_at ? fmt(inv.accepted_at) : "—", className: "mono small" },
-        { header: "", cell: (inv) => (inv.status === "sent" || inv.status === "pending") ? <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(inv.id)}>Revoke</button> : null },
+        { header: "Accepted", cell: (inv) => (inv.accepted_at ? fmt(inv.accepted_at) : "—"), className: "mono small" },
+        {
+          header: "",
+          cell: (inv) =>
+            inv.status === "sent" || inv.status === "pending" ? (
+              <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(inv.id)}>
+                Revoke
+              </button>
+            ) : null,
+        },
       ]}
       empty={`No ${inviteType} invites found`}
       rowKey={(inv) => inv.id}

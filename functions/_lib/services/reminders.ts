@@ -1,6 +1,12 @@
 import { all, run } from "../db/queries";
 import { queueEmail } from "../email/outbox";
-import { inviteDeclineUrl, proposalPageUrl, registrationPageUrl, speakerManagePageUrl, registrationConfirmPageUrl } from "./frontend-links";
+import {
+  inviteDeclineUrl,
+  proposalPageUrl,
+  registrationPageUrl,
+  speakerManagePageUrl,
+  registrationConfirmPageUrl,
+} from "./frontend-links";
 import { formatInviterList, getInviteInviters, markInviteReminderSent, refreshInviteToken } from "./invites";
 import { buildProposalInviteEmailContext, refreshSpeakerManageToken } from "./proposals";
 import { buildEventEmailVariables } from "./events";
@@ -86,7 +92,12 @@ interface DueSpeakerInviteRow {
 }
 
 interface ReminderCandidatePreview {
-  category: "attendee_invite" | "speaker_invite" | "co_speaker_invite" | "presentation_upload_request" | "registration_confirmation";
+  category:
+    | "attendee_invite"
+    | "speaker_invite"
+    | "co_speaker_invite"
+    | "presentation_upload_request"
+    | "registration_confirmation";
   templateKey: string;
   eventName: string;
   eventSlug: string;
@@ -155,8 +166,7 @@ function isAttendeeInviteReminderAllowed(invite: DueInviteRow): boolean {
 }
 
 function attendeeEffectiveDeadline(invite: DueInviteRow): string | null {
-  const candidates = [invite.expires_at, attendeeRegistrationClosesAt(invite)]
-    .filter((v): v is string => Boolean(v));
+  const candidates = [invite.expires_at, attendeeRegistrationClosesAt(invite)].filter((v): v is string => Boolean(v));
 
   if (candidates.length === 0) return null;
 
@@ -309,10 +319,11 @@ export async function runReminderCycle(
 
   const remainingAfterInvites = Math.max(0, payload.limit - inviteRemindersQueued);
 
-  const dueSpeakerInvites = remainingAfterInvites > 0
-    ? await all<DueSpeakerInviteRow>(
-      db,
-      `SELECT
+  const dueSpeakerInvites =
+    remainingAfterInvites > 0
+      ? await all<DueSpeakerInviteRow>(
+          db,
+          `SELECT
          ps.id                     AS speaker_id,
          ps.proposal_id            AS proposal_id,
          ps.user_id                AS user_id,
@@ -344,9 +355,9 @@ export async function runReminderCycle(
          AND COALESCE(ps.speaker_invite_last_communication_at, ps.created_at) <= ?
        ORDER BY COALESCE(ps.speaker_invite_last_communication_at, ps.created_at) ASC
        LIMIT ?`,
-      [now, payload.maxInviteReminders, now, cutoff, remainingAfterInvites],
-    )
-    : [];
+          [now, payload.maxInviteReminders, now, cutoff, remainingAfterInvites],
+        )
+      : [];
 
   let speakerInviteRemindersQueued = 0;
   const coSpeakerInvites: ReminderCandidatePreview[] = [];
@@ -422,10 +433,11 @@ export async function runReminderCycle(
 
   const remainingLimit = Math.max(0, payload.limit - inviteRemindersQueued - speakerInviteRemindersQueued);
 
-  const duePresentation = remainingLimit > 0
-    ? await all<DuePresentationRow>(
-      db,
-      `SELECT
+  const duePresentation =
+    remainingLimit > 0
+      ? await all<DuePresentationRow>(
+          db,
+          `SELECT
          ps.id                  AS speaker_id,
          ps.proposal_id         AS proposal_id,
          ps.user_id             AS user_id,
@@ -454,9 +466,9 @@ export async function runReminderCycle(
          AND COALESCE(ps.presentation_last_communication_at, sp.updated_at, ps.created_at) <= ?
        ORDER BY COALESCE(ps.presentation_last_communication_at, sp.updated_at, ps.created_at) ASC
        LIMIT ?`,
-      [now, payload.maxPresentationReminders, now, cutoff, remainingLimit],
-    )
-    : [];
+          [now, payload.maxPresentationReminders, now, cutoff, remainingLimit],
+        )
+      : [];
 
   let presentationRemindersQueued = 0;
   const presentationUploads: ReminderCandidatePreview[] = [];
@@ -526,11 +538,13 @@ export async function runReminderCycle(
     presentationRemindersQueued += 1;
   }
 
-  const remainingLimitForConfirmations = payload.limit - inviteRemindersQueued - speakerInviteRemindersQueued - presentationRemindersQueued;
-  const dueConfirmations = remainingLimitForConfirmations > 0
-    ? await all<ConfirmationReminderRow>(
-        db,
-        `SELECT
+  const remainingLimitForConfirmations =
+    payload.limit - inviteRemindersQueued - speakerInviteRemindersQueued - presentationRemindersQueued;
+  const dueConfirmations =
+    remainingLimitForConfirmations > 0
+      ? await all<ConfirmationReminderRow>(
+          db,
+          `SELECT
            r.id,
            r.event_id,
            u.id AS user_id,
@@ -554,9 +568,9 @@ export async function runReminderCycle(
            AND datetime(r.confirmation_token_expires_at, '-1 day') <= ?
          ORDER BY r.created_at ASC
          LIMIT ?`,
-        [now, now, remainingLimitForConfirmations],
-      )
-    : [];
+          [now, now, remainingLimitForConfirmations],
+        )
+      : [];
 
   let confirmationRemindersQueued = 0;
   const registrationConfirmations: ReminderCandidatePreview[] = [];
@@ -632,7 +646,8 @@ export async function runReminderCycle(
     speakerInviteRemindersQueued,
     presentationRemindersQueued,
     confirmationRemindersQueued,
-    processed: inviteRemindersQueued + speakerInviteRemindersQueued + presentationRemindersQueued + confirmationRemindersQueued,
+    processed:
+      inviteRemindersQueued + speakerInviteRemindersQueued + presentationRemindersQueued + confirmationRemindersQueued,
     preview: {
       attendeeInvites,
       speakerInvites,

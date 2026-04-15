@@ -11,9 +11,7 @@ import { all, first } from "../../../../../../_lib/db/queries";
  *   ?status=sent|accepted|declined|expired|revoked   (omit for all)
  *   ?type=attendee|speaker                            (omit for all)
  */
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
@@ -42,7 +40,9 @@ export async function onRequestGet(
   }
 
   if (search) {
-    conditions.push("(i.invitee_email LIKE ? OR COALESCE(i.invitee_first_name || ' ' || i.invitee_last_name, i.invitee_first_name, i.invitee_email) LIKE ?)");
+    conditions.push(
+      "(i.invitee_email LIKE ? OR COALESCE(i.invitee_first_name || ' ' || i.invitee_last_name, i.invitee_first_name, i.invitee_email) LIKE ?)",
+    );
     const pattern = `%${search}%`;
     bindings.push(pattern, pattern);
   }
@@ -99,9 +99,7 @@ export async function onRequestGet(
   });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

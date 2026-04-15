@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach} from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -11,7 +11,9 @@ import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 
 describe("manage read endpoints", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it("returns registration state for a valid manage token", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -90,11 +92,9 @@ describe("manage read endpoints", () => {
     });
 
     const response = await getRegistration(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/registrations/manage/${confirmedSecond.manageToken}`),
-        { token: confirmedSecond.manageToken },
-      ),
+      createContext(env, new Request(`https://app.test/api/v1/registrations/manage/${confirmedSecond.manageToken}`), {
+        token: confirmedSecond.manageToken,
+      }),
     );
 
     expect(response.status).toBe(200);
@@ -124,10 +124,12 @@ describe("manage read endpoints", () => {
     const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
     await createAdminSession(env.DB, admin.id, "admin-manage-token");
 
-    await env.DB.prepare(`
+    await env.DB.prepare(
+      `
       INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
       VALUES ('jwt-user', 'jwt-user@example.test', 'jwt-user@example.test', 'Jwt', 'User', datetime('now'), datetime('now'))
-    `).run();
+    `,
+    ).run();
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const created = await createRegistration(env.DB, {
@@ -154,7 +156,7 @@ describe("manage read endpoints", () => {
     );
 
     expect(openResponse.status).toBe(200);
-    const { manageUrl } = await openResponse.json() as { manageUrl: string };
+    const { manageUrl } = (await openResponse.json()) as { manageUrl: string };
     const jwt = new URL(manageUrl).searchParams.get("token") as string;
     expect(jwt.split(".")).toHaveLength(3);
 
@@ -185,7 +187,7 @@ describe("manage read endpoints", () => {
       ),
     );
     expect(wrongContextResponse.status).toBe(403);
-    const body = await wrongContextResponse.json() as { error: { code: string } };
+    const body = (await wrongContextResponse.json()) as { error: { code: string } };
     expect(body.error.code).toBe("AUTH_INVALID");
   });
 

@@ -27,12 +27,9 @@ describe("event hero image URL handling", () => {
       ),
     ).toBe("/events/2026/pqc-conference-amsterdam-nl/hero.png");
 
-    expect(
-      normalizeEventHeroImageUrl(
-        "https://cdn.example.test/pkic/hero.png",
-        "https://preview.pkic.org",
-      ),
-    ).toBe("https://cdn.example.test/pkic/hero.png");
+    expect(normalizeEventHeroImageUrl("https://cdn.example.test/pkic/hero.png", "https://preview.pkic.org")).toBe(
+      "https://cdn.example.test/pkic/hero.png",
+    );
   });
 
   it("stores normalized hero image paths via the admin settings endpoint", async () => {
@@ -64,11 +61,9 @@ describe("event hero image URL handling", () => {
 
     expect(response.status).toBe(200);
 
-    const rows = await queryAll<{ settings_json: string }>(
-      env.DB,
-      "SELECT settings_json FROM events WHERE slug = ?",
-      ["pqc-2026"],
-    );
+    const rows = await queryAll<{ settings_json: string }>(env.DB, "SELECT settings_json FROM events WHERE slug = ?", [
+      "pqc-2026",
+    ]);
 
     expect(rows).toHaveLength(1);
     expect(JSON.parse(rows[0].settings_json)).toMatchObject({

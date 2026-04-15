@@ -32,7 +32,8 @@ export function showResendManageLinkForm(
     statusSelector: "[data-resend-manage-status]",
     emailSelector: "[data-resend-manage-email]",
     endpoint: `${apiBase}/events/${eventSlug}/registrations/resend-manage-link`,
-    successMessage: "If the details match a registration, you will receive an email shortly. Please check your inbox (and spam folder).",
+    successMessage:
+      "If the details match a registration, you will receive an email shortly. Please check your inbox (and spam folder).",
     introMessage,
   });
 }

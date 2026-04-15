@@ -12,9 +12,7 @@ import { all } from "../../../../../_lib/db/queries";
  *
  * Sorted by overall effectiveness: conversions desc, then acceptances desc, then invites sent desc.
  */
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
@@ -196,10 +194,7 @@ export async function onRequestGet(
       invites_accepted: row.invites_accepted,
       invites_declined: row.invites_declined,
       invites_expired: row.invites_expired,
-      invite_conversion_rate:
-        row.invites_sent > 0
-          ? Math.round((row.invites_accepted / row.invites_sent) * 100)
-          : null,
+      invite_conversion_rate: row.invites_sent > 0 ? Math.round((row.invites_accepted / row.invites_sent) * 100) : null,
       last_invite_at: row.last_invite_at,
       referral_codes_issued: 0,
       referral_clicks: 0,
@@ -212,12 +207,13 @@ export async function onRequestGet(
     const existing = promoterMap.get(row.effective_user_id);
     if (existing) {
       existing.referral_codes_issued = row.codes_issued;
-      existing.referral_clicks       = row.total_clicks;
-      existing.referral_conversions  = row.total_conversions;
+      existing.referral_clicks = row.total_clicks;
+      existing.referral_conversions = row.total_conversions;
       // Update profile fields if richer data is available from referral query
       if (!existing.organization && row.referrer_organization) existing.organization = row.referrer_organization;
       if (!existing.job_title && row.referrer_job_title) existing.job_title = row.referrer_job_title;
-      if (!existing.headshot_url && row.referrer_headshot_r2_key) existing.headshot_url = `/api/v1/${row.referrer_headshot_r2_key}`;
+      if (!existing.headshot_url && row.referrer_headshot_r2_key)
+        existing.headshot_url = `/api/v1/${row.referrer_headshot_r2_key}`;
     } else {
       promoterMap.set(row.effective_user_id, {
         user_id: row.effective_user_id,
@@ -246,10 +242,7 @@ export async function onRequestGet(
   const promoters: PromoterEntry[] = Array.from(promoterMap.values()).map((p) => ({
     ...p,
     impact_score: Math.round(
-      p.invites_accepted      * 4 +
-      p.referral_conversions  * 4 +
-      p.referral_clicks       * 1 +
-      p.invites_sent          * 0.5,
+      p.invites_accepted * 4 + p.referral_conversions * 4 + p.referral_clicks * 1 + p.invites_sent * 0.5,
     ),
   }));
 
@@ -263,9 +256,7 @@ export async function onRequestGet(
   });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

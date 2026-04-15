@@ -32,43 +32,43 @@ export interface PaymentMethodInfo {
 
 const LABEL_MAP: Record<string, string> = {
   // ── Bank debits (always async — settlement 1–5 business days) ─────────────
-  sepa_debit:       "SEPA Direct Debit",
-  ach_debit:        "ACH Direct Debit",
-  us_bank_account:  "ACH Bank Transfer",
-  bacs_debit:       "Bacs Direct Debit",
-  acss_debit:       "ACSS Direct Debit",
-  au_becs_debit:    "AU BECS Direct Debit",
-  nz_becs_debit:    "NZ BECS Direct Debit",
+  sepa_debit: "SEPA Direct Debit",
+  ach_debit: "ACH Direct Debit",
+  us_bank_account: "ACH Bank Transfer",
+  bacs_debit: "Bacs Direct Debit",
+  acss_debit: "ACSS Direct Debit",
+  au_becs_debit: "AU BECS Direct Debit",
+  nz_becs_debit: "NZ BECS Direct Debit",
 
   // ── Bank transfers (always async — customer_balance covers all regions) ────
   customer_balance: "Bank Transfer",
 
   // ── Vouchers (customer pays in-store — async by nature) ───────────────────
-  oxxo:             "OXXO",
-  boleto:           "Boleto",
-  konbini:          "Konbini",
-  multibanco:       "Multibanco",
+  oxxo: "OXXO",
+  boleto: "Boleto",
+  konbini: "Konbini",
+  multibanco: "Multibanco",
 
   // ── Bank redirects (synchronous via redirect, but listed for correct labels)
-  ideal:            "iDEAL",          // labelFromKey → "Ideal" (wrong casing)
-  bancontact:       "Bancontact",
-  eps:              "EPS",            // labelFromKey → "Eps"
-  p24:              "Przelewy24",     // labelFromKey → "P24" (not the brand name)
-  giropay:          "Giropay",
-  sofort:           "Sofort",
-  fpx:              "FPX",            // labelFromKey → "Fpx"
-  blik:             "BLIK",           // labelFromKey → "Blik"
-  twint:            "TWINT",          // labelFromKey → "Twint"
-  wero:             "Wero",
-  upi:              "UPI",            // labelFromKey → "Upi"
+  ideal: "iDEAL", // labelFromKey → "Ideal" (wrong casing)
+  bancontact: "Bancontact",
+  eps: "EPS", // labelFromKey → "Eps"
+  p24: "Przelewy24", // labelFromKey → "P24" (not the brand name)
+  giropay: "Giropay",
+  sofort: "Sofort",
+  fpx: "FPX", // labelFromKey → "Fpx"
+  blik: "BLIK", // labelFromKey → "Blik"
+  twint: "TWINT", // labelFromKey → "Twint"
+  wero: "Wero",
+  upi: "UPI", // labelFromKey → "Upi"
 
   // ── Real-time / wallet (mostly instant, but some regions have async paths) ─
-  paynow:           "PayNow",         // labelFromKey → "Paynow"
-  promptpay:        "PromptPay",      // labelFromKey → "Promptpay"
-  pix:              "Pix",
-  payto:            "PayTo",          // labelFromKey → "Payto"
-  swish:            "Swish",
-  wechat_pay:       "WeChat Pay",     // labelFromKey → "Wechat Pay"
+  paynow: "PayNow", // labelFromKey → "Paynow"
+  promptpay: "PromptPay", // labelFromKey → "Promptpay"
+  pix: "Pix",
+  payto: "PayTo", // labelFromKey → "Payto"
+  swish: "Swish",
+  wechat_pay: "WeChat Pay", // labelFromKey → "Wechat Pay"
 };
 
 /** Converts "some_payment_method" → "Some Payment Method" */

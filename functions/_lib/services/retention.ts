@@ -43,7 +43,9 @@ async function getRetentionPreviewEvents(db: DatabaseLike): Promise<RetentionPre
 
   const dueEvents: RetentionPreviewEvent[] = [];
   for (const policy of policies) {
-    const event = await all<EventEndRow>(db, "SELECT id, name, slug, ends_at FROM events WHERE id = ?", [policy.event_id]);
+    const event = await all<EventEndRow>(db, "SELECT id, name, slug, ends_at FROM events WHERE id = ?", [
+      policy.event_id,
+    ]);
     if (event.length === 0 || !event[0].ends_at) {
       continue;
     }

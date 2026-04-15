@@ -18,15 +18,15 @@ import { generateDonationBadgePng } from "../../../../_lib/services/og-badge-pre
 import { applyDownloadDisposition } from "../../../../_lib/utils/download-disposition";
 
 const JPEG_CONTENT_TYPE = "image/jpeg";
-const PNG_CONTENT_TYPE  = "image/png";
-const CACHE_CONTROL     = "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600";
-const R2_KEY_PREFIX     = "og-badges/donation-";
+const PNG_CONTENT_TYPE = "image/png";
+const CACHE_CONTROL = "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600";
+const R2_KEY_PREFIX = "og-badges/donation-";
 
 export async function onRequestGet(c: any): Promise<Response> {
   const session_id = c.req.param("session_id");
   const bucket = c.env.ASSETS_BUCKET;
   const origin = resolveAppBaseUrl(c.env, c.req.raw);
-  const url    = new URL(c.req.raw.url);
+  const url = new URL(c.req.raw.url);
 
   if (!session_id || !session_id.startsWith("cs_")) {
     return json({ error: "Invalid session_id" }, 400);
@@ -73,9 +73,12 @@ export async function onRequestGet(c: any): Promise<Response> {
   if (bucket && c.env.IMAGES) {
     try {
       const pngStream = new ReadableStream<Uint8Array>({
-        start(ctrl) { ctrl.enqueue(png as Uint8Array); ctrl.close(); },
+        start(ctrl) {
+          ctrl.enqueue(png);
+          ctrl.close();
+        },
       });
-      const result  = await c.env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 95 });
+      const result = await c.env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 95 });
       const jpegBuf = await (await result.response()).arrayBuffer();
       c.executionCtx.waitUntil(
         bucket.put(r2Key, jpegBuf, {
@@ -91,7 +94,9 @@ export async function onRequestGet(c: any): Promise<Response> {
         },
       });
       return isDownload ? applyDownloadDisposition(response, rawName, "donation-badge") : response;
-    } catch { /* fall through to PNG fallback */ }
+    } catch {
+      /* fall through to PNG fallback */
+    }
   }
 
   // Fallback: serve raw PNG (local dev — no IMAGES binding)

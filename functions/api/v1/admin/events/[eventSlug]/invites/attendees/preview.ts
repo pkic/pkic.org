@@ -17,9 +17,7 @@ import { adminBulkAttendeeInvitesPreviewSchema } from "../../../../../../../../a
 
 const PREVIEW_TTL_SECONDS = 10 * 60;
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminBulkAttendeeInvitesPreviewSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));

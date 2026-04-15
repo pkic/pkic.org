@@ -64,12 +64,14 @@ export async function onRequestGet(c: any): Promise<Response> {
     [invite.event_id],
   );
 
-  const registrationUrl = event && invite.invite_type === "attendee"
-    ? registrationPageUrl(appBaseUrl, event, { source: "decline-virtual-pivot" })
-    : null;
-  const proposalUrl = event && invite.invite_type === "speaker"
-    ? proposalPageUrl(appBaseUrl, event, { source: "speaker_invite_decline_reconsider" })
-    : null;
+  const registrationUrl =
+    event && invite.invite_type === "attendee"
+      ? registrationPageUrl(appBaseUrl, event, { source: "decline-virtual-pivot" })
+      : null;
+  const proposalUrl =
+    event && invite.invite_type === "speaker"
+      ? proposalPageUrl(appBaseUrl, event, { source: "speaker_invite_decline_reconsider" })
+      : null;
 
   return json({
     status: "valid",

@@ -1,13 +1,14 @@
-import { describe, it, expect, beforeEach} from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { queryAll } from "./helpers/context";
 import { runRetentionJob } from "../functions/_lib/services/retention";
 
 describe("retention job", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it("redacts configured PII while preserving legal consent records", async () => {
-
     const eventId = crypto.randomUUID();
     const userId = crypto.randomUUID();
     const registrationId = crypto.randomUUID();
@@ -55,28 +56,38 @@ describe("retention job", () => {
     const result = await runRetentionJob(env.DB);
     expect(result.redactedRegistrations).toBe(1);
 
-    const registration = ((await queryAll<{ custom_answers_json: string | null; source_ref: string | null }>(env.DB, 
-      "SELECT custom_answers_json, source_ref FROM registrations WHERE id = ?",
-      [registrationId],
-    )))[0];
+    const registration = (
+      await queryAll<{ custom_answers_json: string | null; source_ref: string | null }>(
+        env.DB,
+        "SELECT custom_answers_json, source_ref FROM registrations WHERE id = ?",
+        [registrationId],
+      )
+    )[0];
 
     expect(registration.custom_answers_json).toBeNull();
     expect(registration.source_ref).toBeNull();
 
-    const user = ((await queryAll<{ organization_name: string | null; job_title: string | null; first_name: string | null; last_name: string | null }>(env.DB, 
-      "SELECT organization_name, job_title, first_name, last_name FROM users WHERE id = ?",
-      [userId],
-    )))[0];
+    const user = (
+      await queryAll<{
+        organization_name: string | null;
+        job_title: string | null;
+        first_name: string | null;
+        last_name: string | null;
+      }>(env.DB, "SELECT organization_name, job_title, first_name, last_name FROM users WHERE id = ?", [userId])
+    )[0];
 
     expect(user.organization_name).toBeNull();
     expect(user.job_title).toBeNull();
     expect(user.first_name).toBeNull();
     expect(user.last_name).toBeNull();
 
-    const consent = ((await queryAll<{ total: number }>(env.DB, 
-      "SELECT COUNT(*) AS total FROM consent_acceptances WHERE registration_id = ?",
-      [registrationId],
-    )))[0];
+    const consent = (
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM consent_acceptances WHERE registration_id = ?",
+        [registrationId],
+      )
+    )[0];
 
     expect(Number(consent.total)).toBe(1);
   });

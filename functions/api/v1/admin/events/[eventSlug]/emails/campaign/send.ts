@@ -17,9 +17,7 @@ import {
 } from "../../../../../../../_lib/services/admin-email-campaign";
 import { adminEventCampaignSendSchema } from "../../../../../../../../assets/shared/schemas/api";
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEventCampaignSendSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
@@ -34,8 +32,8 @@ export async function onRequestPost(
     speakerStatus: body.filter.speakerStatus,
   });
 
-  const uniqueRecipients = recipients.filter((recipient, index, arr) =>
-    arr.findIndex((candidate) => candidate.email === recipient.email) === index,
+  const uniqueRecipients = recipients.filter(
+    (recipient, index, arr) => arr.findIndex((candidate) => candidate.email === recipient.email) === index,
   );
 
   const digest = await computeCampaignDigest({
@@ -65,10 +63,18 @@ export async function onRequestPost(
 
   if (!validation.ok) {
     if (validation.reason === "expired") {
-      throw new AppError(409, "CAMPAIGN_PREVIEW_EXPIRED", "Campaign preview expired. Render a fresh preview before sending.");
+      throw new AppError(
+        409,
+        "CAMPAIGN_PREVIEW_EXPIRED",
+        "Campaign preview expired. Render a fresh preview before sending.",
+      );
     }
     if (validation.reason === "mismatch") {
-      throw new AppError(409, "CAMPAIGN_PREVIEW_STALE", "Campaign settings or recipients changed after preview. Render preview again.");
+      throw new AppError(
+        409,
+        "CAMPAIGN_PREVIEW_STALE",
+        "Campaign settings or recipients changed after preview. Render preview again.",
+      );
     }
     throw new AppError(400, "CAMPAIGN_PREVIEW_INVALID", "Invalid campaign preview token.");
   }
@@ -82,7 +88,7 @@ export async function onRequestPost(
   }
 
   // Validate template exists only when not using a direct body override
-  const templateKey = body.bodyContent ? (body.templateKey || "__direct__") : (body.templateKey as string);
+  const templateKey = body.bodyContent ? body.templateKey || "__direct__" : (body.templateKey as string);
   const template = !body.bodyContent ? await resolveTemplate(c.env.DB, templateKey) : null;
 
   if (body.sendMode === "bcc_batch") {
@@ -104,9 +110,10 @@ export async function onRequestPost(
 
   let queued = 0;
   let batches = 0;
-  const routeVars = body.filter.audience === "attendees"
-    ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "admin_email" }) }
-    : { proposalUrl: proposalPageUrl(appBaseUrl, event, { source: "admin_email" }) };
+  const routeVars =
+    body.filter.audience === "attendees"
+      ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "admin_email" }) }
+      : { proposalUrl: proposalPageUrl(appBaseUrl, event, { source: "admin_email" }) };
 
   if (body.sendMode === "personal") {
     for (const recipient of uniqueRecipients) {

@@ -69,12 +69,14 @@ export async function onRequestGet(c: any): Promise<Response> {
     [invite.event_id],
   );
 
-  const registrationUrl = event && invite.invite_type === "attendee"
-    ? registrationPageUrl(appBaseUrl, event, { invite: c.req.param("token"), source: "invite" })
-    : null;
-  const proposalUrl = event && invite.invite_type === "speaker"
-    ? proposalPageUrl(appBaseUrl, event, { invite: c.req.param("token"), source: "speaker_invite" })
-    : null;
+  const registrationUrl =
+    event && invite.invite_type === "attendee"
+      ? registrationPageUrl(appBaseUrl, event, { invite: c.req.param("token"), source: "invite" })
+      : null;
+  const proposalUrl =
+    event && invite.invite_type === "speaker"
+      ? proposalPageUrl(appBaseUrl, event, { invite: c.req.param("token"), source: "speaker_invite" })
+      : null;
 
   // Fetch all named inviters for social proof.  Only expose first/last name.
   const allInviters = await getInviteInviters(c.env.DB, invite.id);

@@ -55,18 +55,13 @@ export async function onRequestPost(c: any): Promise<Response> {
 
     c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
 
-    await writeAuditLog(
-      c.env.DB,
-      "admin",
-      magic.admin.id,
-      "admin_magic_link_requested",
-      "admin_user",
-      magic.admin.id,
-      { email: magic.admin.email },
-    );
+    await writeAuditLog(c.env.DB, "admin", magic.admin.id, "admin_magic_link_requested", "admin_user", magic.admin.id, {
+      email: magic.admin.email,
+    });
   } else {
     logInfo("admin_magic_link_skipped", {
-      reason: "No active admin user found for the requested email address. " +
+      reason:
+        "No active admin user found for the requested email address. " +
         "Check that the user exists in the database with role='admin' and active=1.",
       email: body.email,
     });

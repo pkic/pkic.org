@@ -1,23 +1,40 @@
 import { clearFieldErrors, findFieldErrorTarget } from "./validation-map";
 import { normalizedEmailSchema } from "../../../shared/schemas/api";
 
-
 // Domains that are common personal / consumer email providers.
 // When detected, we show an inline advisory — we do NOT block the submission.
 const PERSONAL_EMAIL_DOMAINS = new Set([
-  "gmail.com", "googlemail.com",
-  "hotmail.com", "hotmail.co.uk", "hotmail.fr", "hotmail.de",
-  "outlook.com", "outlook.co.uk",
-  "live.com", "live.co.uk", "live.nl", "live.de",
+  "gmail.com",
+  "googlemail.com",
+  "hotmail.com",
+  "hotmail.co.uk",
+  "hotmail.fr",
+  "hotmail.de",
+  "outlook.com",
+  "outlook.co.uk",
+  "live.com",
+  "live.co.uk",
+  "live.nl",
+  "live.de",
   "msn.com",
-  "yahoo.com", "yahoo.co.uk", "yahoo.fr", "yahoo.de",
-  "icloud.com", "me.com", "mac.com",
+  "yahoo.com",
+  "yahoo.co.uk",
+  "yahoo.fr",
+  "yahoo.de",
+  "icloud.com",
+  "me.com",
+  "mac.com",
   "aol.com",
-  "protonmail.com", "proton.me",
-  "tutanota.com", "tuta.io",
-  "gmx.com", "gmx.de", "gmx.net",
+  "protonmail.com",
+  "proton.me",
+  "tutanota.com",
+  "tuta.io",
+  "gmx.com",
+  "gmx.de",
+  "gmx.net",
   "mail.com",
-  "yandex.com", "yandex.ru",
+  "yandex.com",
+  "yandex.ru",
   "zoho.com",
 ]);
 
@@ -53,7 +70,7 @@ function applyEmailValidity(field: HTMLInputElement): void {
   }
 
   const result = normalizedEmailSchema.safeParse(value);
-  field.setCustomValidity(result.success ? "" : result.error.issues[0]?.message ?? "Invalid email address");
+  field.setCustomValidity(result.success ? "" : (result.error.issues[0]?.message ?? "Invalid email address"));
 }
 
 function writeFieldError(form: HTMLFormElement, name: string, message: string): void {
@@ -86,10 +103,16 @@ function validateNativeFields(form: HTMLFormElement): boolean {
   return allValid;
 }
 
-export function installLiveValidation(form: HTMLFormElement, statusEl: HTMLElement): void {
+export function installLiveValidation(form: HTMLFormElement, _statusEl: HTMLElement): void {
   const handler = (event: Event) => {
     const target = event.target;
-    if (!(target instanceof HTMLInputElement || target instanceof HTMLSelectElement || target instanceof HTMLTextAreaElement)) {
+    if (
+      !(
+        target instanceof HTMLInputElement ||
+        target instanceof HTMLSelectElement ||
+        target instanceof HTMLTextAreaElement
+      )
+    ) {
       return;
     }
     if (!target.name) {
@@ -133,7 +156,7 @@ export function clearStatus(target: HTMLElement): void {
   }
 }
 
-export function validateBeforeSubmit(form: HTMLFormElement, statusEl: HTMLElement): boolean {
+export function validateBeforeSubmit(form: HTMLFormElement, _statusEl: HTMLElement): boolean {
   if (form.checkValidity() && validateNativeFields(form)) {
     return true;
   }

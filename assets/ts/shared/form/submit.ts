@@ -36,11 +36,7 @@ export async function withLoadingButton(
  *     handleSubmitError(error, form, statusEl);
  *   }
  */
-export function handleSubmitError(
-  error: unknown,
-  form: HTMLFormElement | null,
-  statusEl: HTMLElement | null,
-): void {
+export function handleSubmitError(error: unknown, form: HTMLFormElement | null, statusEl: HTMLElement | null): void {
   const normalized = normalizeValidation(error);
   if (statusEl) setStatus(statusEl, normalized.globalMessage, true);
   if (form) applyFieldErrors(form, normalized.fields);

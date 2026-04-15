@@ -11,7 +11,10 @@ import { render } from "preact";
 const savedNodes = new WeakMap<HTMLButtonElement, Node[]>();
 
 export function setButtonLoading(btn: HTMLButtonElement): void {
-  savedNodes.set(btn, Array.from(btn.childNodes).map((n) => n.cloneNode(true)));
+  savedNodes.set(
+    btn,
+    Array.from(btn.childNodes).map((n) => n.cloneNode(true)),
+  );
   btn.disabled = true;
   const label = btn.textContent?.trim() ?? "";
   render(

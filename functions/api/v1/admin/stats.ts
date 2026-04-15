@@ -37,11 +37,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       `SELECT attendance_type, COUNT(*) AS count FROM registrations GROUP BY attendance_type`,
       [],
     ),
-    all<{ status: string; count: number }>(
-      db,
-      `SELECT status, COUNT(*) AS count FROM invites GROUP BY status`,
-      [],
-    ),
+    all<{ status: string; count: number }>(db, `SELECT status, COUNT(*) AS count FROM invites GROUP BY status`, []),
     all<{ status: string; count: number }>(
       db,
       `SELECT status, COUNT(*) AS count FROM email_outbox GROUP BY status`,
@@ -76,7 +72,14 @@ export async function onRequestGet(c: any): Promise<Response> {
        ORDER BY date ASC`,
       [],
     ),
-    all<{ status: string; currency: string; count: number; total_gross: number; avg_gross: number; total_net: number | null }>(
+    all<{
+      status: string;
+      currency: string;
+      count: number;
+      total_gross: number;
+      avg_gross: number;
+      total_net: number | null;
+    }>(
       db,
       `SELECT status, currency,
               COUNT(*)                   AS count,
@@ -88,7 +91,15 @@ export async function onRequestGet(c: any): Promise<Response> {
        ORDER BY status, total_gross DESC`,
       [],
     ),
-    all<{ month: string; count: number; completed: number; pending: number; failed: number; expired: number; gross: number }>(
+    all<{
+      month: string;
+      count: number;
+      completed: number;
+      pending: number;
+      failed: number;
+      expired: number;
+      gross: number;
+    }>(
       db,
       `SELECT strftime('%Y-%m', created_at) AS month,
               COUNT(*) AS count,
@@ -103,7 +114,15 @@ export async function onRequestGet(c: any): Promise<Response> {
        ORDER BY month ASC`,
       [],
     ),
-    all<{ date: string; count: number; completed: number; pending: number; failed: number; expired: number; gross: number }>(
+    all<{
+      date: string;
+      count: number;
+      completed: number;
+      pending: number;
+      failed: number;
+      expired: number;
+      gross: number;
+    }>(
       db,
       `SELECT date(created_at) AS date,
               COUNT(*) AS count,
@@ -118,7 +137,15 @@ export async function onRequestGet(c: any): Promise<Response> {
        ORDER BY date ASC`,
       [],
     ),
-    all<{ week: string; count: number; completed: number; pending: number; failed: number; expired: number; gross: number }>(
+    all<{
+      week: string;
+      count: number;
+      completed: number;
+      pending: number;
+      failed: number;
+      expired: number;
+      gross: number;
+    }>(
       db,
       `SELECT strftime('%Y-W%W', created_at) AS week,
               COUNT(*) AS count,

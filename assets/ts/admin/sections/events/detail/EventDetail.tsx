@@ -13,19 +13,14 @@ import { Promoters } from "./Promoters";
 import { EventStats } from "./EventStats";
 import { currentEvent } from "../../../state";
 
-type EventDetailTab =
-  | "registrations"
-  | "proposals"
-  | "promoters"
-  | "stats"
-  | "settings";
+type EventDetailTab = "registrations" | "proposals" | "promoters" | "stats" | "settings";
 
 const TABS: Array<{ key: EventDetailTab; label: string }> = [
   { key: "registrations", label: "Registrations" },
-  { key: "proposals",     label: "Proposals" },
-  { key: "promoters",     label: "Promoters" },
-  { key: "stats",         label: "Stats" },
-  { key: "settings",      label: "Settings" },
+  { key: "proposals", label: "Proposals" },
+  { key: "promoters", label: "Promoters" },
+  { key: "stats", label: "Stats" },
+  { key: "settings", label: "Settings" },
 ];
 
 export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; tab?: string; subTab?: string }) {
@@ -33,7 +28,7 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
   const [error, setError] = useState<string | null>(null);
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [, navigate] = useHashLocation();
-  const tab: EventDetailTab = (TABS.find((t) => t.key === tabProp)?.key ?? "registrations") as EventDetailTab;
+  const tab: EventDetailTab = TABS.find((t) => t.key === tabProp)?.key ?? "registrations";
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,7 +44,9 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
     }
   }, [slug]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   function handleUpdated(updated: EventDetail) {
     setEvent(updated);
@@ -73,18 +70,25 @@ export function EventDetailView({ slug, tab: tabProp, subTab }: { slug: string; 
             {event.venue && <> · {event.venue}</>}
           </div>
         </div>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void load()}>↺ Refresh</button>
+        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void load()}>
+          ↺ Refresh
+        </button>
       </div>
 
       {/* Tabs */}
-      <Tabs items={TABS} active={tab} onChange={(key) => navigate(`/events/${slug}/${key}`)} className="mb-3 flex-wrap" />
+      <Tabs
+        items={TABS}
+        active={tab}
+        onChange={(key) => navigate(`/events/${slug}/${key}`)}
+        className="mb-3 flex-wrap"
+      />
 
       {/* Tab content */}
       {tab === "registrations" && <Registrations slug={slug} subTab={subTab} />}
-      {tab === "proposals"     && <Proposals slug={slug} subTab={subTab} />}
-      {tab === "promoters"     && <Promoters slug={slug} subTab={subTab} />}
-      {tab === "stats"         && <EventStats slug={slug} />}
-      {tab === "settings"      && <Settings event={event} onUpdated={handleUpdated} subTab={subTab} />}
+      {tab === "proposals" && <Proposals slug={slug} subTab={subTab} />}
+      {tab === "promoters" && <Promoters slug={slug} subTab={subTab} />}
+      {tab === "stats" && <EventStats slug={slug} />}
+      {tab === "settings" && <Settings event={event} onUpdated={handleUpdated} subTab={subTab} />}
     </div>
   );
 }

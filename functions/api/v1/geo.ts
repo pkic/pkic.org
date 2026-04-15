@@ -74,14 +74,10 @@ export async function onRequest(c: any): Promise<Response> {
   const cf = (request as Request & { cf?: { country?: string } }).cf;
   const country: string | null = cf?.country ?? null;
 
-  return json(
-    { country },
-    200,
-    {
-      // Private: must not be stored by shared caches / CDNs.
-      // Short TTL: valid for one minute so a user toggling a VPN gets
-      // a fresh result quickly without hammering the endpoint.
-      "cache-control": "private, max-age=60, stale-while-revalidate=0",
-    },
-  );
+  return json({ country }, 200, {
+    // Private: must not be stored by shared caches / CDNs.
+    // Short TTL: valid for one minute so a user toggling a VPN gets
+    // a fresh result quickly without hammering the endpoint.
+    "cache-control": "private, max-age=60, stale-while-revalidate=0",
+  });
 }

@@ -105,14 +105,10 @@ export function captureSendgridRequests(): {
   const originalFetch = globalThis.fetch.bind(globalThis);
 
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = typeof input === "string"
-      ? input
-      : input instanceof URL
-        ? input.toString()
-        : input.url;
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
 
     const payloadText = typeof init?.body === "string" ? init.body : "";
-    const payload = payloadText ? JSON.parse(payloadText) as Record<string, unknown> : {};
+    const payload = payloadText ? (JSON.parse(payloadText) as Record<string, unknown>) : {};
 
     requests.push({ url, payload });
 
@@ -161,7 +157,7 @@ export function findCapturedSendgridRequest(
     const entry = requests[index];
     const categories = Array.isArray(entry.payload.categories) ? entry.payload.categories : [];
     const personalizations = Array.isArray(entry.payload.personalizations)
-      ? entry.payload.personalizations as Array<{ to?: Array<{ email?: string }> }>
+      ? (entry.payload.personalizations as Array<{ to?: Array<{ email?: string }> }>)
       : [];
     const email = personalizations[0]?.to?.[0]?.email;
 
@@ -192,12 +188,9 @@ export async function waitForCapturedSendgridRequest(
   return findCapturedSendgridRequest(requests, templateKey, recipientEmail);
 }
 
-export function expectRenderedMessageToContainLinks(
-  request: CapturedSendgridRequest,
-  links: string[],
-): void {
+export function expectRenderedMessageToContainLinks(request: CapturedSendgridRequest, links: string[]): void {
   const content = Array.isArray(request.payload.content)
-    ? request.payload.content as Array<{ type?: string; value?: string }>
+    ? (request.payload.content as Array<{ type?: string; value?: string }>)
     : [];
   const html = content.find((part) => part.type === "text/html")?.value ?? "";
   const text = (content.find((part) => part.type === "text/plain")?.value ?? "").replaceAll("&amp;", "&");

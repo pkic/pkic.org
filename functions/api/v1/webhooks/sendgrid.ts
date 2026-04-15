@@ -147,22 +147,22 @@ async function cancelRegistrationDueToBounce(
   providerMessageId: string,
   reason: string,
 ): Promise<void> {
-  const outbox = await db.prepare(
-    `SELECT recipient_user_id, event_id FROM email_outbox WHERE provider_message_id = ?`,
-  ).bind(providerMessageId).first<{ recipient_user_id: string | null; event_id: string | null }>();
+  const outbox = await db
+    .prepare(`SELECT recipient_user_id, event_id FROM email_outbox WHERE provider_message_id = ?`)
+    .bind(providerMessageId)
+    .first<{ recipient_user_id: string | null; event_id: string | null }>();
 
   if (!outbox?.recipient_user_id || !outbox?.event_id) return;
 
-  const reg = await db.prepare(
-    `SELECT id FROM registrations WHERE event_id = ? AND user_id = ? AND status != 'cancelled'`,
-  ).bind(outbox.event_id, outbox.recipient_user_id).first<{ id: string }>();
+  const reg = await db
+    .prepare(`SELECT id FROM registrations WHERE event_id = ? AND user_id = ? AND status != 'cancelled'`)
+    .bind(outbox.event_id, outbox.recipient_user_id)
+    .first<{ id: string }>();
 
   if (!reg) return;
 
   await db.batch([
-    db.prepare(
-      `UPDATE registrations SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?`,
-    ).bind(reg.id),
+    db.prepare(`UPDATE registrations SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?`).bind(reg.id),
     prepareAuditLog(db, "system", null, "cancelled_bounce", "registration", reg.id, { reason }),
   ]);
   logInfo("REGISTRATION_CANCELLED_BOUNCE", { registrationId: reg.id, reason });
@@ -182,9 +182,9 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
   logInfo("SENDGRID_EVENT", { eventType, baseId, bounceType: event.type });
 
   // Resolve the outbox row ID once for audit logging
-  const outboxRow = await env.DB!.prepare(
-    `SELECT id FROM email_outbox WHERE provider_message_id = ?`,
-  ).bind(baseId).first<{ id: string }>();
+  const outboxRow = await env.DB.prepare(`SELECT id FROM email_outbox WHERE provider_message_id = ?`)
+    .bind(baseId)
+    .first<{ id: string }>();
   const outboxId = outboxRow?.id ?? null;
 
   switch (eventType) {
@@ -192,60 +192,75 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
       const isHard = event.type !== "soft";
       const reason = event.reason ?? event.status ?? "no reason given";
       if (isHard) {
-        await env.DB!.prepare(
+        await env.DB.prepare(
           `UPDATE email_outbox
            SET status = 'bounced', last_error = ?, updated_at = datetime('now')
            WHERE provider_message_id = ?`,
-        ).bind(`Hard bounce: ${reason}`, baseId).run();
-        await writeAuditLog(env.DB!, "system", null, "email_hard_bounce", "email_outbox", outboxId, { reason, baseId });
-        await cancelRegistrationDueToBounce(env.DB!, baseId, `Hard bounce: ${reason}`);
+        )
+          .bind(`Hard bounce: ${reason}`, baseId)
+          .run();
+        await writeAuditLog(env.DB, "system", null, "email_hard_bounce", "email_outbox", outboxId, { reason, baseId });
+        await cancelRegistrationDueToBounce(env.DB, baseId, `Hard bounce: ${reason}`);
       } else {
-        await env.DB!.prepare(
+        await env.DB.prepare(
           `UPDATE email_outbox
            SET last_error = ?, updated_at = datetime('now')
            WHERE provider_message_id = ? AND status != 'bounced'`,
-        ).bind(`Soft bounce: ${reason}`, baseId).run();
-        await writeAuditLog(env.DB!, "system", null, "email_soft_bounce", "email_outbox", outboxId, { reason, baseId });
+        )
+          .bind(`Soft bounce: ${reason}`, baseId)
+          .run();
+        await writeAuditLog(env.DB, "system", null, "email_soft_bounce", "email_outbox", outboxId, { reason, baseId });
       }
       break;
     }
 
     case "deferred": {
       const reason = event.response ?? event.reason ?? "no reason given";
-      await env.DB!.prepare(
+      await env.DB.prepare(
         `UPDATE email_outbox
          SET last_error = ?, updated_at = datetime('now')
          WHERE provider_message_id = ? AND status != 'bounced'`,
-      ).bind(`Delivery deferred: ${reason}`, baseId).run();
-      await writeAuditLog(env.DB!, "system", null, "email_deferred", "email_outbox", outboxId, { reason, baseId });
+      )
+        .bind(`Delivery deferred: ${reason}`, baseId)
+        .run();
+      await writeAuditLog(env.DB, "system", null, "email_deferred", "email_outbox", outboxId, { reason, baseId });
       break;
     }
 
     case "dropped": {
       const reason = event.reason ?? "no reason given";
-      await env.DB!.prepare(
+      await env.DB.prepare(
         `UPDATE email_outbox
          SET status = 'bounced', last_error = ?, updated_at = datetime('now')
          WHERE provider_message_id = ?`,
-      ).bind(`Dropped: ${reason}`, baseId).run();
-      await writeAuditLog(env.DB!, "system", null, "email_dropped", "email_outbox", outboxId, { reason, baseId });
-      await cancelRegistrationDueToBounce(env.DB!, baseId, `Dropped: ${reason}`);
+      )
+        .bind(`Dropped: ${reason}`, baseId)
+        .run();
+      await writeAuditLog(env.DB, "system", null, "email_dropped", "email_outbox", outboxId, { reason, baseId });
+      await cancelRegistrationDueToBounce(env.DB, baseId, `Dropped: ${reason}`);
       break;
     }
 
     case "spamreport": {
-      await env.DB!.prepare(
+      await env.DB.prepare(
         `UPDATE email_outbox
          SET status = 'bounced', last_error = 'Spam report received', updated_at = datetime('now')
          WHERE provider_message_id = ?`,
-      ).bind(baseId).run();
-      await writeAuditLog(env.DB!, "system", null, "email_spam_report", "email_outbox", outboxId, { email: event.email, baseId });
-      await cancelRegistrationDueToBounce(env.DB!, baseId, "Spam report received");
+      )
+        .bind(baseId)
+        .run();
+      await writeAuditLog(env.DB, "system", null, "email_spam_report", "email_outbox", outboxId, {
+        email: event.email,
+        baseId,
+      });
+      await cancelRegistrationDueToBounce(env.DB, baseId, "Spam report received");
       if (event.email) {
-        await env.DB!.prepare(
+        await env.DB.prepare(
           `INSERT OR IGNORE INTO unsubscribes (id, email, channel, scope_type, scope_ref, reason, created_at)
            VALUES (?, ?, 'email', 'global', NULL, 'spam_report', datetime('now'))`,
-        ).bind(crypto.randomUUID(), event.email).run();
+        )
+          .bind(crypto.randomUUID(), event.email)
+          .run();
       }
       break;
     }
@@ -253,25 +268,32 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
     case "unsubscribe":
     case "group_unsubscribe": {
       if (event.email) {
-        const channel = eventType === "group_unsubscribe" && event.asm_group_id
-          ? `email_group_${event.asm_group_id}`
-          : "email";
-        await env.DB!.prepare(
+        const channel =
+          eventType === "group_unsubscribe" && event.asm_group_id ? `email_group_${event.asm_group_id}` : "email";
+        await env.DB.prepare(
           `INSERT OR IGNORE INTO unsubscribes (id, email, channel, scope_type, scope_ref, reason, created_at)
            VALUES (?, ?, ?, 'global', NULL, 'unsubscribed', datetime('now'))`,
-        ).bind(crypto.randomUUID(), event.email, channel).run();
-        await writeAuditLog(env.DB!, "system", null, "email_unsubscribe", "email_outbox", outboxId, { email: event.email, channel, baseId });
+        )
+          .bind(crypto.randomUUID(), event.email, channel)
+          .run();
+        await writeAuditLog(env.DB, "system", null, "email_unsubscribe", "email_outbox", outboxId, {
+          email: event.email,
+          channel,
+          baseId,
+        });
       }
       break;
     }
 
     case "delivered": {
-      await env.DB!.prepare(
+      await env.DB.prepare(
         `UPDATE email_outbox
          SET status = 'delivered', updated_at = datetime('now')
          WHERE provider_message_id = ? AND status = 'sent'`,
-      ).bind(baseId).run();
-      await writeAuditLog(env.DB!, "system", null, "email_delivered", "email_outbox", outboxId, { baseId });
+      )
+        .bind(baseId)
+        .run();
+      await writeAuditLog(env.DB, "system", null, "email_delivered", "email_outbox", outboxId, { baseId });
       break;
     }
   }
@@ -291,12 +313,7 @@ async function onRequestPost(c: any): Promise<Response> {
       return json({ error: "Missing signature headers" }, 400);
     }
 
-    const valid = await verifySendgridSignature(
-      rawBody,
-      sig,
-      ts,
-      env.SENDGRID_WEBHOOK_VERIFICATION_KEY,
-    );
+    const valid = await verifySendgridSignature(rawBody, sig, ts, env.SENDGRID_WEBHOOK_VERIFICATION_KEY);
     if (!valid) {
       return json({ error: "Invalid signature" }, 403);
     }
@@ -335,6 +352,6 @@ export class WebhooksSendgridPost extends OpenAPIRoute {
   schema = {};
 
   async handle(c: any) {
-    return onRequestPost(c as any);
+    return onRequestPost(c);
   }
 }

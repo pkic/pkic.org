@@ -14,9 +14,7 @@ interface RetentionPolicyRow {
   user_retention_days: number;
 }
 
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
@@ -50,9 +48,7 @@ export async function onRequestGet(
   });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

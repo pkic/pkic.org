@@ -16,8 +16,9 @@ async function verifyMagicLink(token: string): Promise<void> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
   });
-  const d: { token?: string; admin?: { email?: string }; error?: { message?: string } } =
-    await res.json().catch(() => ({}));
+  const d: { token?: string; admin?: { email?: string }; error?: { message?: string } } = await res
+    .json()
+    .catch(() => ({}));
   if (!res.ok) {
     throw new Error(d.error?.message ?? "The link may have expired or already been used.");
   }
@@ -27,9 +28,7 @@ async function verifyMagicLink(token: string): Promise<void> {
 
 export function Login() {
   const [sent, setSent] = useState(false);
-  const [verifying, setVerifying] = useState(() =>
-    Boolean(new URLSearchParams(window.location.search).get("token")),
-  );
+  const [verifying, setVerifying] = useState(() => Boolean(new URLSearchParams(window.location.search).get("token")));
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -69,9 +68,16 @@ export function Login() {
             ✓ If this address is registered, you'll receive a sign-in link shortly.
           </div>
         ) : (
-          <form id="form-magic" onSubmit={(e) => { void handleSubmit(e); }}>
+          <form
+            id="form-magic"
+            onSubmit={(e) => {
+              void handleSubmit(e);
+            }}
+          >
             <div class="mb-3">
-              <label class="form-label fw-semibold" for="inp-email">Admin email</label>
+              <label class="form-label fw-semibold" for="inp-email">
+                Admin email
+              </label>
               <input
                 class="form-control"
                 type="email"

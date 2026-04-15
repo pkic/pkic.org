@@ -73,29 +73,29 @@ function sniffImageAttachmentFormat(contentType: string, bytes: Uint8Array): { c
   }
 
   if (
-    bytes.length >= 8
-    && bytes[0] === 0x89
-    && bytes[1] === 0x50
-    && bytes[2] === 0x4e
-    && bytes[3] === 0x47
-    && bytes[4] === 0x0d
-    && bytes[5] === 0x0a
-    && bytes[6] === 0x1a
-    && bytes[7] === 0x0a
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47 &&
+    bytes[4] === 0x0d &&
+    bytes[5] === 0x0a &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0x0a
   ) {
     return { contentType: "image/png", ext: "png" };
   }
 
   if (
-    bytes.length >= 12
-    && bytes[0] === 0x52
-    && bytes[1] === 0x49
-    && bytes[2] === 0x46
-    && bytes[3] === 0x46
-    && bytes[8] === 0x57
-    && bytes[9] === 0x45
-    && bytes[10] === 0x42
-    && bytes[11] === 0x50
+    bytes.length >= 12 &&
+    bytes[0] === 0x52 &&
+    bytes[1] === 0x49 &&
+    bytes[2] === 0x46 &&
+    bytes[3] === 0x46 &&
+    bytes[8] === 0x57 &&
+    bytes[9] === 0x45 &&
+    bytes[10] === 0x42 &&
+    bytes[11] === 0x50
   ) {
     return { contentType: "image/webp", ext: "webp" };
   }
@@ -153,9 +153,10 @@ export async function queueEmail(
     data.__bounceAddress = payload.bounceAddress;
   }
 
-  const sendAfter = payload.sendAfterSeconds && payload.sendAfterSeconds > 0
-    ? new Date(Date.now() + payload.sendAfterSeconds * 1000).toISOString()
-    : nowIso();
+  const sendAfter =
+    payload.sendAfterSeconds && payload.sendAfterSeconds > 0
+      ? new Date(Date.now() + payload.sendAfterSeconds * 1000).toISOString()
+      : nowIso();
 
   await run(
     db,
@@ -279,9 +280,10 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
     const partials = await loadEmailPartials(db);
     const layoutHtml = await loadEmailLayout(db);
     const dataWithPartials = { ...payload, _partials: partials };
-    const bodyOverride = typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent
-      ? payload.__adminCampaignBodyContent
-      : null;
+    const bodyOverride =
+      typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent
+        ? payload.__adminCampaignBodyContent
+        : null;
 
     let templateVersion = 0;
     let subject: string;
@@ -297,13 +299,18 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
       const template = await resolveTemplate(db, row.template_key);
       templateVersion = template.version;
       resolvedContentType = template.contentType as "markdown" | "html" | "text";
-      const customText = typeof payload.__adminCampaignCustomText === "string"
-        ? payload.__adminCampaignCustomText
-        : null;
+      const customText =
+        typeof payload.__adminCampaignCustomText === "string" ? payload.__adminCampaignCustomText : null;
       contentWithCustom = applyCampaignCustomText(template.content, resolvedContentType, customText);
       subject = renderSubject(template.subjectTemplate, row.subject ?? "PKI Consortium Update", dataWithPartials);
     }
-    const rendered = await renderEmail(contentWithCustom, dataWithPartials, layoutHtml, resolvedContentType, emailBaseUrl);
+    const rendered = await renderEmail(
+      contentWithCustom,
+      dataWithPartials,
+      layoutHtml,
+      resolvedContentType,
+      emailBaseUrl,
+    );
 
     let attachments: Array<{ filename: string; contentType: string; base64Content: string }> | undefined;
     const calendar = payload.__calendarInvite as CalendarPayload | undefined;
@@ -328,11 +335,11 @@ async function processOutboxRow(db: DatabaseLike, env: Env, row: OutboxRow): Pro
             continue;
           }
 
-          const declaredType  = badgeObj.httpMetadata?.contentType ?? "image/jpeg";
-          const buf           = await badgeObj.arrayBuffer();
-          const bytes         = new Uint8Array(buf);
-          const format        = sniffImageAttachmentFormat(declaredType, bytes);
-          const base64        = uint8ToBase64(bytes);
+          const declaredType = badgeObj.httpMetadata?.contentType ?? "image/jpeg";
+          const buf = await badgeObj.arrayBuffer();
+          const bytes = new Uint8Array(buf);
+          const format = sniffImageAttachmentFormat(declaredType, bytes);
+          const base64 = uint8ToBase64(bytes);
           const badgeFilename = `${badgeAttachment.filenameBase}.${format.ext}`;
           attachments = [
             ...(attachments ?? []),
@@ -378,11 +385,7 @@ export async function processOutboxById(db: DatabaseLike, env: Env, outboxId: st
   await processOutboxRow(db, env, row);
 }
 
-export async function processOutboxByIdBackground(
-  db: DatabaseLike,
-  env: Env,
-  outboxId: string,
-): Promise<void> {
+export async function processOutboxByIdBackground(db: DatabaseLike, env: Env, outboxId: string): Promise<void> {
   try {
     await processOutboxById(db, env, outboxId);
   } catch (error) {
@@ -479,11 +482,7 @@ export async function processSelectedOutbox(
   };
 }
 
-export async function processPendingOutboxBackground(
-  db: DatabaseLike,
-  env: Env,
-  limit = 20,
-): Promise<void> {
+export async function processPendingOutboxBackground(db: DatabaseLike, env: Env, limit = 20): Promise<void> {
   try {
     await processPendingOutbox(db, env, limit);
   } catch (error) {
@@ -500,10 +499,7 @@ export async function processPendingOutboxBackground(
  * @param ids   - Optional list of outbox IDs to reset. If omitted, resets ALL failed rows.
  * @returns     - Number of rows reset.
  */
-export async function resetFailedOutbox(
-  db: DatabaseLike,
-  ids?: string[],
-): Promise<{ reset: number }> {
+export async function resetFailedOutbox(db: DatabaseLike, ids?: string[]): Promise<{ reset: number }> {
   const now = nowIso();
   if (ids && ids.length > 0) {
     const placeholders = ids.map(() => "?").join(", ");

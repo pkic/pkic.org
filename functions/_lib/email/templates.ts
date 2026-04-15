@@ -127,17 +127,14 @@ export async function activateTemplateVersion(
     throw new AppError(404, "EMAIL_TEMPLATE_VERSION_NOT_FOUND", "Template version not found");
   }
 
-  await run(
-    db,
-    "UPDATE email_template_versions SET status = 'archived' WHERE template_key = ? AND status = 'active'",
-    [payload.templateKey],
-  );
+  await run(db, "UPDATE email_template_versions SET status = 'archived' WHERE template_key = ? AND status = 'active'", [
+    payload.templateKey,
+  ]);
 
-  await run(
-    db,
-    "UPDATE email_template_versions SET status = 'active' WHERE template_key = ? AND version = ?",
-    [payload.templateKey, payload.version],
-  );
+  await run(db, "UPDATE email_template_versions SET status = 'active' WHERE template_key = ? AND version = ?", [
+    payload.templateKey,
+    payload.version,
+  ]);
 
   invalidateTemplateCache(payload.templateKey);
 }
@@ -168,7 +165,11 @@ export async function resolveTemplate(
   }
 
   if (!active.body) {
-    throw new AppError(500, "EMAIL_TEMPLATE_MISSING_BODY", `Template '${templateKey}' v${active.version} has no body content`);
+    throw new AppError(
+      500,
+      "EMAIL_TEMPLATE_MISSING_BODY",
+      `Template '${templateKey}' v${active.version} has no body content`,
+    );
   }
 
   const resolved = {
@@ -185,5 +186,3 @@ export async function resolveTemplate(
 
   return resolved;
 }
-
-

@@ -30,7 +30,9 @@ async function callAdmin(path: string, init: RequestInit = {}): Promise<Response
 
 async function setupAdmin(): Promise<{ baseEventId: string }> {
   const { eventId } = await seedEventAndAdmin(env.DB);
-  const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1"))[0];
+  const adminRow = (
+    await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+  )[0];
   await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
   return { baseEventId: eventId };
 }
@@ -59,7 +61,9 @@ describe("admin event management endpoints", () => {
     });
 
     expect(createResponse.status).toBe(201);
-    const createdPayload = await createResponse.json() as { event: { slug: string; settings: Record<string, unknown> } };
+    const createdPayload = (await createResponse.json()) as {
+      event: { slug: string; settings: Record<string, unknown> };
+    };
     expect(createdPayload.event.slug).toBe("pqc-2027");
     expect(createdPayload.event.settings.venue).toBe("Amsterdam Congress Center");
 
@@ -75,12 +79,12 @@ describe("admin event management endpoints", () => {
     });
 
     expect(duplicateResponse.status).toBe(409);
-    const duplicatePayload = await duplicateResponse.json() as { error?: { code?: string } };
+    const duplicatePayload = (await duplicateResponse.json()) as { error?: { code?: string } };
     expect(duplicatePayload.error?.code).toBe("SLUG_TAKEN");
 
     const listResponse = await callAdmin("/api/v1/admin/events");
     expect(listResponse.status).toBe(200);
-    const listPayload = await listResponse.json() as { events: Array<{ slug: string }> };
+    const listPayload = (await listResponse.json()) as { events: Array<{ slug: string }> };
     expect(listPayload.events.map((event) => event.slug)).toEqual(expect.arrayContaining(["pqc-2026", "pqc-2027"]));
   });
 
@@ -89,7 +93,9 @@ describe("admin event management endpoints", () => {
 
     const detailResponse = await callAdmin("/api/v1/admin/events/pqc-2026");
     expect(detailResponse.status).toBe(200);
-    const detailPayload = await detailResponse.json() as { event: { slug: string; settings: Record<string, unknown> } };
+    const detailPayload = (await detailResponse.json()) as {
+      event: { slug: string; settings: Record<string, unknown> };
+    };
     expect(detailPayload.event.slug).toBe("pqc-2026");
 
     const patchResponse = await callAdmin("/api/v1/admin/events/pqc-2026/settings", {
@@ -104,13 +110,24 @@ describe("admin event management endpoints", () => {
     });
 
     expect(patchResponse.status).toBe(200);
-    const patchPayload = await patchResponse.json() as { success: boolean; event: { name: string; venue: string | null; user_retention_days: number | null; settings: Record<string, unknown> } };
+    const patchPayload = (await patchResponse.json()) as {
+      success: boolean;
+      event: {
+        name: string;
+        venue: string | null;
+        user_retention_days: number | null;
+        settings: Record<string, unknown>;
+      };
+    };
     expect(patchPayload.success).toBe(true);
     expect(patchPayload.event.name).toBe("PQC Conference 2026 - Updated");
     expect(patchPayload.event.settings.venue).toBe("The Hague Conference Center");
     expect(patchPayload.event.settings.virtualUrl).toBe("https://pkic.org/live/pqc-2026/");
     expect(patchPayload.event.user_retention_days).toBe(180);
-    expect((patchPayload.event.settings.proposal as { sessionTypes?: string[] } | undefined)?.sessionTypes).toEqual(["talk", "panel"]);
+    expect((patchPayload.event.settings.proposal as { sessionTypes?: string[] } | undefined)?.sessionTypes).toEqual([
+      "talk",
+      "panel",
+    ]);
   });
 
   it("replaces event days and exposes permission grants", async () => {
@@ -137,16 +154,17 @@ describe("admin event management endpoints", () => {
             startTime: "10:00",
             endTime: "16:00",
             sortOrder: 1,
-            attendanceOptions: [
-              { value: "in_person", label: "In person", capacity: 20 },
-            ],
+            attendanceOptions: [{ value: "in_person", label: "In person", capacity: 20 }],
           },
         ],
       }),
     });
 
     expect(daysResponse.status).toBe(200);
-    const daysPayload = await daysResponse.json() as { success: boolean; days: Array<{ date: string; label: string }> };
+    const daysPayload = (await daysResponse.json()) as {
+      success: boolean;
+      days: Array<{ date: string; label: string }>;
+    };
     expect(daysPayload.success).toBe(true);
     expect(daysPayload.days.map((day) => day.date)).toEqual(["2026-12-01", "2026-12-02"]);
 
@@ -159,7 +177,9 @@ describe("admin event management endpoints", () => {
     });
 
     expect(permissionResponse.status).toBe(201);
-    const permissionPayload = await permissionResponse.json() as { permission: { user_email: string; permission: string } };
+    const permissionPayload = (await permissionResponse.json()) as {
+      permission: { user_email: string; permission: string };
+    };
     expect(permissionPayload.permission.user_email).toBe("organizer@example.test");
     expect(permissionPayload.permission.permission).toBe("organizer");
 
@@ -175,7 +195,9 @@ describe("admin event management endpoints", () => {
 
     const permissionListResponse = await callAdmin("/api/v1/admin/events/pqc-2026/permissions");
     expect(permissionListResponse.status).toBe(200);
-    const permissionListPayload = await permissionListResponse.json() as { permissions: Array<{ user_email: string; permission: string }> };
+    const permissionListPayload = (await permissionListResponse.json()) as {
+      permissions: Array<{ user_email: string; permission: string }>;
+    };
     expect(permissionListPayload.permissions).toEqual(
       expect.arrayContaining([
         expect.objectContaining({ user_email: "organizer@example.test", permission: "organizer" }),

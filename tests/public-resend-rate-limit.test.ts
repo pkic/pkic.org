@@ -18,20 +18,21 @@ describe("public resend rate limits", () => {
     };
     const email = `speaker-rate-limit-${crypto.randomUUID()}@example.test`;
 
-    const makeRequest = () => resendSpeakerManageLink(
-      createContext(
-        limitedEnv,
-        new Request("https://app.test/api/v1/events/pqc-2026/proposals/resend-speaker-manage-link", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "cf-connecting-ip": "203.0.113.40",
-          },
-          body: JSON.stringify({ email }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const makeRequest = () =>
+      resendSpeakerManageLink(
+        createContext(
+          limitedEnv,
+          new Request("https://app.test/api/v1/events/pqc-2026/proposals/resend-speaker-manage-link", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "cf-connecting-ip": "203.0.113.40",
+            },
+            body: JSON.stringify({ email }),
+          }),
+          { eventSlug: "pqc-2026" },
+        ),
+      );
 
     expect((await makeRequest()).status).toBe(200);
     expect((await makeRequest()).status).toBe(200);

@@ -26,9 +26,13 @@ function SpeakerList({ speakers }: { speakers: ProposalManageResponse["speakers"
             <span class="badge bg-secondary text-capitalize">{roleLabel}</span>
             <span>{name}</span>
             <span class="text-muted">&lt;{s.email}&gt;</span>
-            <span class={`badge rounded-pill px-2 py-1 ${statusBadgeClass(s.status)}`}>{formatStatusLabel(s.status)}</span>
+            <span class={`badge rounded-pill px-2 py-1 ${statusBadgeClass(s.status)}`}>
+              {formatStatusLabel(s.status)}
+            </span>
             {s.status === "invited" && (
-              <button type="button" class="btn btn-outline-secondary btn-sm" data-remind-user-id={s.userId}>Send reminder</button>
+              <button type="button" class="btn btn-outline-secondary btn-sm" data-remind-user-id={s.userId}>
+                Send reminder
+              </button>
             )}
           </div>
         );
@@ -56,10 +60,12 @@ async function main(): Promise<void> {
     return;
   }
 
-  let proposalData: ProposalManageResponse | null = null;
+  let proposalData: ProposalManageResponse | null;
 
   try {
-    proposalData = await getJson<ProposalManageResponse>(`${boot.apiBase}/proposals/manage/${encodeURIComponent(token)}`);
+    proposalData = await getJson<ProposalManageResponse>(
+      `${boot.apiBase}/proposals/manage/${encodeURIComponent(token)}`,
+    );
     setField(boot.form, "proposalType", proposalData.proposal.proposal_type);
     setField(boot.form, "title", proposalData.proposal.title);
     setField(boot.form, "abstract", proposalData.proposal.abstract);
@@ -119,27 +125,41 @@ async function main(): Promise<void> {
     const role = q<HTMLSelectElement>("#cs-role", boot.root)?.value ?? "speaker";
 
     if (!email) {
-      if (csStatus) { csStatus.textContent = "Please enter an email address."; csStatus.className = "mt-2 small text-danger"; }
+      if (csStatus) {
+        csStatus.textContent = "Please enter an email address.";
+        csStatus.className = "mt-2 small text-danger";
+      }
       return;
     }
 
     await withLoadingButton(inviteBtn, async () => {
       try {
         await postJson(`${boot.apiBase}/proposals/manage/${encodeURIComponent(token)}/speakers`, {
-          email, firstName, lastName, role,
+          email,
+          firstName,
+          lastName,
+          role,
         });
-        if (csStatus) { csStatus.textContent = `Invite sent to ${email}.`; csStatus.className = "mt-2 small text-success"; }
+        if (csStatus) {
+          csStatus.textContent = `Invite sent to ${email}.`;
+          csStatus.className = "mt-2 small text-success";
+        }
         const emailEl = q<HTMLInputElement>("#cs-email", boot.root);
         const firstEl = q<HTMLInputElement>("#cs-first-name", boot.root);
         const lastEl = q<HTMLInputElement>("#cs-last-name", boot.root);
         if (emailEl) emailEl.value = "";
         if (firstEl) firstEl.value = "";
         if (lastEl) lastEl.value = "";
-        const refreshed = await getJson<ProposalManageResponse>(`${boot.apiBase}/proposals/manage/${encodeURIComponent(token)}`);
+        const refreshed = await getJson<ProposalManageResponse>(
+          `${boot.apiBase}/proposals/manage/${encodeURIComponent(token)}`,
+        );
         renderSpeakerList(refreshed.speakers);
       } catch (error) {
         const normalized = normalizeValidation(error);
-        if (csStatus) { csStatus.textContent = normalized.globalMessage; csStatus.className = "mt-2 small text-danger"; }
+        if (csStatus) {
+          csStatus.textContent = normalized.globalMessage;
+          csStatus.className = "mt-2 small text-danger";
+        }
       }
     });
   });

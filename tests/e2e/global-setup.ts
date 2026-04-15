@@ -19,4 +19,3 @@ export interface CapturedEmail {
 export default async function globalSetup(): Promise<void> {
   process.env.E2E_SENDGRID_API_BASE = `http://127.0.0.1:${E2E_INTERCEPT_PORT}`;
 }
-

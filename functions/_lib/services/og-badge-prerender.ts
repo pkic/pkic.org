@@ -20,14 +20,17 @@ import type { Env } from "../types";
 
 type StaticAssetEnv = Pick<Env, "ASSETS" | "ASSETS_PUBLIC">;
 type BadgeRenderEnv = Pick<Env, "DB" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">;
-type BadgeCacheEnv = Pick<Env, "DB" | "ASSETS_BUCKET" | "IMAGES" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC">;
+type BadgeCacheEnv = Pick<
+  Env,
+  "DB" | "ASSETS_BUCKET" | "IMAGES" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC"
+>;
 type DonationRenderEnv = Pick<Env, "DB" | "ASSETS" | "ASSETS_PUBLIC">;
 
 // ─── WASM + font singletons (shared for the lifetime of the worker isolate) ──
 
-let wasmReady: Promise<typeof import("@resvg/resvg-wasm")["Resvg"]> | null = null;
+let wasmReady: Promise<(typeof import("@resvg/resvg-wasm"))["Resvg"]> | null = null;
 
-function ensureWasm(): Promise<typeof import("@resvg/resvg-wasm")["Resvg"]> {
+function ensureWasm(): Promise<(typeof import("@resvg/resvg-wasm"))["Resvg"]> {
   if (!wasmReady) {
     wasmReady = (async () => {
       const [{ initWasm, Resvg }, wasmModule] = await Promise.all([
@@ -48,7 +51,7 @@ function isLoopbackHostname(hostname: string): boolean {
   return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
 }
 
-function getAssetBinding(env: StaticAssetEnv): Env["ASSETS"] | Env["ASSETS_PUBLIC"] | undefined {
+function getAssetBinding(env: StaticAssetEnv): Env["ASSETS"] | undefined {
   return env.ASSETS ?? env.ASSETS_PUBLIC;
 }
 
@@ -128,8 +131,10 @@ function extractLocation(settingsJson: string): string | null {
   try {
     const s = JSON.parse(settingsJson) as Record<string, unknown>;
     if (typeof s.location === "string" && s.location) return s.location;
-    if (typeof s.city    === "string" && s.city)     return s.city;
-  } catch { /* ignore */ }
+    if (typeof s.city === "string" && s.city) return s.city;
+  } catch {
+    /* ignore */
+  }
   return null;
 }
 
@@ -137,11 +142,17 @@ function extractHeroImageUrl(settingsJson: string): string | null {
   try {
     const s = JSON.parse(settingsJson) as Record<string, unknown>;
     if (typeof s.heroImageUrl === "string" && s.heroImageUrl) return s.heroImageUrl;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return null;
 }
 
-async function fetchHeroImage(settingsJson: string, origin: string, env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">): Promise<string | null> {
+async function fetchHeroImage(
+  settingsJson: string,
+  origin: string,
+  env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">,
+): Promise<string | null> {
   const raw = extractHeroImageUrl(settingsJson);
   if (!raw) return null;
   const source = resolveHeroImageSource(raw, origin);
@@ -169,8 +180,8 @@ async function fetchHeroImage(settingsJson: string, origin: string, env: Pick<En
       } as unknown as RequestInit);
     }
     if (!res.ok) return null;
-    const buf  = await res.arrayBuffer();
-    const ct   = res.headers.get("content-type") ?? "image/jpeg";
+    const buf = await res.arrayBuffer();
+    const ct = res.headers.get("content-type") ?? "image/jpeg";
     const mime = ct.split(";")[0].trim();
     return `data:${mime};base64,${uint8ToBase64(new Uint8Array(buf))}`;
   } catch {
@@ -178,16 +189,13 @@ async function fetchHeroImage(settingsJson: string, origin: string, env: Pick<En
   }
 }
 
-async function fetchHeadshot(
-  r2Key: string | null,
-  bucket: Env["SPEAKER_UPLOADS_BUCKET"],
-): Promise<string | null> {
+async function fetchHeadshot(r2Key: string | null, bucket: Env["SPEAKER_UPLOADS_BUCKET"]): Promise<string | null> {
   if (!r2Key || !bucket) return null;
   try {
     const obj = await bucket.get(r2Key);
     if (!obj) return null;
-    const buf  = await obj.arrayBuffer();
-    const ext  = r2Key.split(".").pop()?.toLowerCase() ?? "";
+    const buf = await obj.arrayBuffer();
+    const ext = r2Key.split(".").pop()?.toLowerCase() ?? "";
     const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
     return `data:${mime};base64,${uint8ToBase64(new Uint8Array(buf))}`;
   } catch {
@@ -235,11 +243,7 @@ const R2_KEY_PREFIX = "og-badges/";
  * PNG. Returns `null` when the code is not found in the database.
  *
  */
-export async function generateBadgePng(
-  code: string,
-  env: BadgeRenderEnv,
-  origin: string,
-): Promise<Uint8Array | null> {
+export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin: string): Promise<Uint8Array | null> {
   // Kick off wasm init + fonts + referral lookup together.
   const [, fontBuffers, ref] = await Promise.all([
     ensureWasm(),
@@ -301,15 +305,15 @@ export async function generateBadgePng(
     ]);
 
     svg = renderBadgeSvg({
-      firstName:       row.first_name ?? "",
-      lastName:        row.last_name  ?? "",
-      role:            (row.effective_role as BadgeRole) ?? "attendee",
-      eventName:       row.event_name,
-      startsAt:        row.starts_at,
-      endsAt:          row.ends_at,
-      location:        extractLocation(row.settings_json),
-      organization:    row.organization_name,
-      jobTitle:        row.job_title,
+      firstName: row.first_name ?? "",
+      lastName: row.last_name ?? "",
+      role: (row.effective_role as BadgeRole) ?? "attendee",
+      eventName: row.event_name,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      location: extractLocation(row.settings_json),
+      organization: row.organization_name,
+      jobTitle: row.job_title,
       headshotDataUrl,
       heroImageDataUrl,
     });
@@ -341,15 +345,15 @@ export async function generateBadgePng(
     ]);
 
     svg = renderBadgeSvg({
-      firstName:       row.first_name ?? "",
-      lastName:        row.last_name  ?? "",
-      role:            (row.speaker_role as BadgeRole) ?? "speaker",
-      eventName:       row.event_name,
-      startsAt:        row.starts_at,
-      endsAt:          row.ends_at,
-      location:        extractLocation(row.settings_json),
-      organization:    row.organization_name,
-      jobTitle:        row.job_title,
+      firstName: row.first_name ?? "",
+      lastName: row.last_name ?? "",
+      role: (row.speaker_role as BadgeRole) ?? "speaker",
+      eventName: row.event_name,
+      startsAt: row.starts_at,
+      endsAt: row.ends_at,
+      location: extractLocation(row.settings_json),
+      organization: row.organization_name,
+      jobTitle: row.job_title,
       headshotDataUrl,
       heroImageDataUrl,
     });
@@ -384,9 +388,12 @@ async function pngToR2(
 
   if (env.IMAGES) {
     const pngStream = new ReadableStream<Uint8Array>({
-      start(ctrl) { ctrl.enqueue(png); ctrl.close(); },
+      start(ctrl) {
+        ctrl.enqueue(png);
+        ctrl.close();
+      },
     });
-    const result  = await env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 95 });
+    const result = await env.IMAGES.input(pngStream).transform({}).output({ format: "image/jpeg", quality: 95 });
     const jpegBuf = await (await result.response()).arrayBuffer();
     await env.ASSETS_BUCKET.put(r2Key, jpegBuf, {
       httpMetadata: { contentType: "image/jpeg" },
@@ -409,16 +416,14 @@ async function pngToR2(
  * Stored key: og-badges/{code} — 1200×630 JPEG served to social crawlers and
  *             attached to confirmation emails.
  */
-export async function prerenderAndCache(
-  code: string,
-  env: BadgeCacheEnv,
-  origin: string,
-): Promise<void> {
+export async function prerenderAndCache(code: string, env: BadgeCacheEnv, origin: string): Promise<void> {
   try {
     const png = await generateBadgePng(code, env, origin);
     if (!png || !env.ASSETS_BUCKET) return;
     await pngToR2(png, `${R2_KEY_PREFIX}${code}`, { referralCode: code }, env);
-  } catch { /* silent — badge pre-render must never break the primary flow */ }
+  } catch {
+    /* silent — badge pre-render must never break the primary flow */
+  }
 }
 
 /**
@@ -428,19 +433,13 @@ export async function prerenderAndCache(
  *
  * Silently swallows errors.
  */
-export async function invalidateAndRerender(
-  userId: string,
-  env: BadgeCacheEnv,
-  origin: string,
-): Promise<void> {
+export async function invalidateAndRerender(userId: string, env: BadgeCacheEnv, origin: string): Promise<void> {
   try {
-    const rows = await all<CodeRow>(
-      env.DB,
-      "SELECT code FROM referral_codes WHERE created_by_user_id = ?",
-      [userId],
-    );
+    const rows = await all<CodeRow>(env.DB, "SELECT code FROM referral_codes WHERE created_by_user_id = ?", [userId]);
     await Promise.all(rows.map((r) => prerenderAndCache(r.code, env, origin)));
-  } catch { /* silent */ }
+  } catch {
+    /* silent */
+  }
 }
 
 /**
@@ -459,7 +458,9 @@ export async function trySeedGravatarThenPrerender(
   try {
     await fetchGravatar(userId, email, env); // skips if headshot already exists
     await prerenderAndCache(referralCode, env, origin);
-  } catch { /* silent */ }
+  } catch {
+    /* silent */
+  }
 }
 
 // ─── Donation badge generation ────────────────────────────────────────────────
@@ -499,9 +500,26 @@ export async function generateDonationBadgePng(
 
   // Format the amount using the same logic as the thank-you page TS.
   // We do it server-side here — Intl is available in Workers.
-  const currency   = donationRow.currency.toUpperCase();
+  const currency = donationRow.currency.toUpperCase();
   // Zero-decimal currencies (JPY, KRW, …) store amounts in major units already.
-  const zeroDecimal = ["BIF","CLP","DJF","GNF","JPY","KMF","KRW","MGA","PYG","RWF","UGX","VND","VUV","XAF","XOF","XPF"].includes(currency);
+  const zeroDecimal = [
+    "BIF",
+    "CLP",
+    "DJF",
+    "GNF",
+    "JPY",
+    "KMF",
+    "KRW",
+    "MGA",
+    "PYG",
+    "RWF",
+    "UGX",
+    "VND",
+    "VUV",
+    "XAF",
+    "XOF",
+    "XPF",
+  ].includes(currency);
   const majorAmount = zeroDecimal ? donationRow.gross_amount : donationRow.gross_amount / 100;
   let formattedAmount: string;
   try {
@@ -515,12 +533,12 @@ export async function generateDonationBadgePng(
     formattedAmount = `${currency} ${majorAmount}`;
   }
 
-  const fullName    = (donationRow.name ?? "").trim();
+  const fullName = (donationRow.name ?? "").trim();
   const [firstName, ...rest] = fullName.split(" ");
 
   const svg = renderDonationBadgeSvg({
-    firstName:      firstName || "A supporter",
-    lastName:       rest.length > 0 ? rest.join(" ") : null,
+    firstName: firstName || "A supporter",
+    lastName: rest.length > 0 ? rest.join(" ") : null,
     formattedAmount,
   });
 

@@ -18,7 +18,7 @@
   "include": [
     "functions/**/*.ts",
     "tests/**/*.ts",
-    "shared/**/*.ts"
+    "assets/shared/**/*.ts"
   ],
   "exclude": [
     "tests/frontend/**"

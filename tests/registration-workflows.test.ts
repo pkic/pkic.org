@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach} from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
@@ -7,7 +7,10 @@ import { onRequestPost as createInvites } from "../functions/api/v1/events/[even
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
-import { createRegistration as createRegistrationService, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
+import {
+  createRegistration as createRegistrationService,
+  confirmRegistrationByToken,
+} from "../functions/_lib/services/registrations";
 
 function extractConfirmationToken(payloadJson: string): string {
   const payload = JSON.parse(payloadJson) as { confirmationUrl: string };
@@ -16,7 +19,9 @@ function extractConfirmationToken(payloadJson: string): string {
 }
 
 describe("registration workflows", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it("enforces consent and supports double opt-in", async () => {
     await seedEventAndAdmin(env.DB);
 
@@ -25,14 +30,14 @@ describe("registration workflows", () => {
         createContext(
           env,
           new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-              method: "POST",
-              headers: { "content-type": "application/json" },
-              body: JSON.stringify({
-                firstName: "Alice",
-                lastName: "Doe",
-                email: "alice@company.test",
-                attendanceType: "virtual",
-                sourceType: "direct",
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              firstName: "Alice",
+              lastName: "Doe",
+              email: "alice@company.test",
+              attendanceType: "virtual",
+              sourceType: "direct",
               consents: [{ termKey: "privacy-policy", version: "v1" }],
             }),
           }),
@@ -64,10 +69,11 @@ describe("registration workflows", () => {
     );
 
     expect(createResponse.status).toBe(200);
-    const createdPayload = await createResponse.json() as { status: string };
+    const createdPayload = (await createResponse.json()) as { status: string };
     expect(createdPayload.status).toBe("pending_email_confirmation");
 
-    const outbox = await queryAll<{ payload_json: string }>(env.DB, 
+    const outbox = await queryAll<{ payload_json: string }>(
+      env.DB,
       "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
     );
     const token = extractConfirmationToken(outbox[0].payload_json);
@@ -85,7 +91,7 @@ describe("registration workflows", () => {
     );
 
     expect(confirmResponse.status).toBe(200);
-    const confirmedPayload = await confirmResponse.json() as { status: string };
+    const confirmedPayload = (await confirmResponse.json()) as { status: string };
     expect(confirmedPayload.status).toBe("registered");
   });
 
@@ -191,7 +197,7 @@ describe("registration workflows", () => {
     );
 
     expect(confirmResponse.status).toBe(200);
-    const payload = await confirmResponse.json() as {
+    const payload = (await confirmResponse.json()) as {
       status: string;
       dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
       dayWaitlist: Array<{
@@ -204,9 +210,7 @@ describe("registration workflows", () => {
     };
 
     expect(payload.status).toBe("registered");
-    expect(payload.dayAttendance).toEqual([
-      { dayDate: "2026-12-01", attendanceType: "in_person", label: "Day 1" },
-    ]);
+    expect(payload.dayAttendance).toEqual([{ dayDate: "2026-12-01", attendanceType: "in_person", label: "Day 1" }]);
     expect(payload.dayWaitlist).toEqual([
       {
         dayDate: "2026-12-01",

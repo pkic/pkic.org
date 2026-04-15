@@ -20,7 +20,7 @@
   "include": [
     "assets/ts/**/*.ts",
     "assets/ts/**/*.tsx",
-    "shared/constants/**/*.ts",
+    "assets/shared/**/*.ts",
     "tests/frontend/**/*.ts"
   ]
 }

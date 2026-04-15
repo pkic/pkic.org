@@ -34,13 +34,7 @@ function toUtcTuple(value: string): IcsDateTuple {
     throw new AppError(400, "CALENDAR_INVALID_DATE", `Invalid calendar date: ${value}`);
   }
 
-  return [
-    date.getUTCFullYear(),
-    date.getUTCMonth() + 1,
-    date.getUTCDate(),
-    date.getUTCHours(),
-    date.getUTCMinutes(),
-  ];
+  return [date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate(), date.getUTCHours(), date.getUTCMinutes()];
 }
 
 /**
@@ -257,7 +251,7 @@ export async function buildRegistrationIcs(
         };
 
         return { dayDate: day.dayDate, eventUid, calEvent };
-      })
+      }),
     );
 
     // Single combined VCALENDAR with all VEVENTs as attachment.

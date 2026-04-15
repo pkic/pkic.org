@@ -29,9 +29,9 @@ export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
   const url = new URL(c.req.raw.url);
-  const role   = url.searchParams.get("role")   ?? "";
+  const role = url.searchParams.get("role") ?? "";
   const search = (url.searchParams.get("search") ?? "").trim();
-  const limit  = Math.min(parseInt(url.searchParams.get("limit") ?? "100") || 100, 500);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "100") || 100, 500);
   const offset = parseInt(url.searchParams.get("offset") ?? "0") || 0;
 
   const conditions: string[] = [];

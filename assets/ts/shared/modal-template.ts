@@ -1,8 +1,4 @@
-export function mountModalTemplate(
-  templateId: string,
-  modalId: string,
-  errorLabel: string,
-): HTMLElement | null {
+export function mountModalTemplate(templateId: string, modalId: string, errorLabel: string): HTMLElement | null {
   const existing = document.getElementById(modalId);
   if (existing instanceof HTMLElement) {
     return existing;

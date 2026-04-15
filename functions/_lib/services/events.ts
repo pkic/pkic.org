@@ -78,9 +78,8 @@ export interface EventFrontendRoutes {
   fallbackKeys: string[];
 }
 
-type EventEmailSource =
-  Pick<EventRecord, "name" | "slug" | "base_path" | "starts_at" | "settings_json">
-  & Partial<Pick<EventRecord, "timezone" | "ends_at">>;
+type EventEmailSource = Pick<EventRecord, "name" | "slug" | "base_path" | "starts_at" | "settings_json"> &
+  Partial<Pick<EventRecord, "timezone" | "ends_at">>;
 
 export interface EventEmailVariables {
   eventName: string;
@@ -114,7 +113,9 @@ function getEventBasePath(event: Pick<EventRecord, "slug" | "base_path" | "start
   return `/events/${event.slug}/`;
 }
 
-function defaultFrontendPaths(event: Pick<EventRecord, "slug" | "base_path" | "starts_at">): Omit<EventFrontendRoutes, "usedFallback" | "fallbackKeys"> {
+function defaultFrontendPaths(
+  event: Pick<EventRecord, "slug" | "base_path" | "starts_at">,
+): Omit<EventFrontendRoutes, "usedFallback" | "fallbackKeys"> {
   const base = getEventBasePath(event);
   return {
     registrationPath: `${base}register/`,
@@ -157,7 +158,9 @@ function normalizeFrontendPath(value: string | undefined, basePath?: string): st
   return resolved.endsWith("/") ? resolved : `${resolved}/`;
 }
 
-export function resolveEventFrontendRoutes(event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json">): EventFrontendRoutes {
+export function resolveEventFrontendRoutes(
+  event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json">,
+): EventFrontendRoutes {
   const basePath = getEventBasePath(event);
   const defaults = defaultFrontendPaths(event);
   const settings = parseJsonSafe<EventSettings>(event.settings_json, {});
@@ -165,9 +168,11 @@ export function resolveEventFrontendRoutes(event: Pick<EventRecord, "slug" | "ba
 
   const resolved = {
     registrationPath: normalizeFrontendPath(routes.registration, basePath) ?? defaults.registrationPath,
-    registrationConfirmPath: normalizeFrontendPath(routes.registrationConfirm, basePath) ?? defaults.registrationConfirmPath,
+    registrationConfirmPath:
+      normalizeFrontendPath(routes.registrationConfirm, basePath) ?? defaults.registrationConfirmPath,
     proposalPath: normalizeFrontendPath(routes.proposal, basePath) ?? defaults.proposalPath,
-    registrationManagePath: normalizeFrontendPath(routes.registrationManage, basePath) ?? defaults.registrationManagePath,
+    registrationManagePath:
+      normalizeFrontendPath(routes.registrationManage, basePath) ?? defaults.registrationManagePath,
     proposalManagePath: normalizeFrontendPath(routes.proposalManage, basePath) ?? defaults.proposalManagePath,
     speakerManagePath: normalizeFrontendPath(routes.speakerManage, basePath) ?? defaults.speakerManagePath,
     inviteDeclinePath: normalizeFrontendPath(routes.inviteDecline, basePath) ?? defaults.inviteDeclinePath,
@@ -232,9 +237,7 @@ export function resolveSponsorsImageUrl(
  *   - A full URL string → hero image is shown below the brand stripe in emails
  *   - null or ""        → no hero image (default)
  */
-export function resolveHeroImageUrl(
-  event: Pick<EventRecord, "settings_json">,
-): string | null {
+export function resolveHeroImageUrl(event: Pick<EventRecord, "settings_json">): string | null {
   const settings = parseJsonSafe<{ heroImageUrl?: string | null }>(event.settings_json, {});
   if ("heroImageUrl" in settings) {
     const explicit = settings.heroImageUrl;
@@ -279,9 +282,7 @@ export function normalizeEventHeroImageUrl(value: string, siteBaseUrl: string): 
  * Returns the physical venue address for in-person attendees, or null if not configured.
  * Reads from settings_json.venue.
  */
-export function resolveEventVenue(
-  event: Pick<EventRecord, "settings_json">,
-): string | null {
+export function resolveEventVenue(event: Pick<EventRecord, "settings_json">): string | null {
   const settings = parseJsonSafe<EventSettings>(event.settings_json, {});
   return settings.venue?.trim() || null;
 }
@@ -324,10 +325,7 @@ export function resolveEventUrl(
  * Templates can rely on these keys being present across all event email flows,
  * even when a specific template does not currently use each field.
  */
-export function buildEventEmailVariables(
-  event: EventEmailSource,
-  siteBaseUrl: string,
-): EventEmailVariables {
+export function buildEventEmailVariables(event: EventEmailSource, siteBaseUrl: string): EventEmailVariables {
   return {
     eventName: event.name,
     eventSlug: event.slug,
@@ -472,11 +470,7 @@ export async function updateEventBasePath(
   if (!rawPath) return;
   const path = rawPath.trim();
   if (!BASE_PATH_RE.test(path)) return; // reject malformed or external paths
-  await run(
-    db,
-    "UPDATE events SET base_path = ? WHERE id = ? AND base_path IS NULL",
-    [path, eventId],
-  );
+  await run(db, "UPDATE events SET base_path = ? WHERE id = ? AND base_path IS NULL", [path, eventId]);
 }
 
 export async function replaceEventTerms(
@@ -485,11 +479,7 @@ export async function replaceEventTerms(
   audienceType: "attendee" | "speaker",
   terms: Array<{ termKey: string; version: string; required?: boolean; contentRef?: string; displayText?: string }>,
 ): Promise<void> {
-  await run(
-    db,
-    "UPDATE event_terms SET active = 0 WHERE event_id = ? AND audience_type = ?",
-    [eventId, audienceType],
-  );
+  await run(db, "UPDATE event_terms SET active = 0 WHERE event_id = ? AND audience_type = ?", [eventId, audienceType]);
 
   const now = nowIso();
   for (const term of terms) {

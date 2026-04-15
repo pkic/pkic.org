@@ -107,9 +107,9 @@ export async function verifyAttendeeInvitePreviewToken(payload: {
   }
 
   if (
-    claims.eventId !== payload.eventId
-    || claims.adminId !== payload.adminId
-    || claims.inviteDigest !== payload.inviteDigest
+    claims.eventId !== payload.eventId ||
+    claims.adminId !== payload.adminId ||
+    claims.inviteDigest !== payload.inviteDigest
   ) {
     return { ok: false, reason: "mismatch" };
   }

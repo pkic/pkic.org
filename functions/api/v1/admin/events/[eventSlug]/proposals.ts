@@ -25,7 +25,9 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   if (search) {
-    conditions.push("(LOWER(sp.title) LIKE ? OR LOWER(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '') || ' ' || u.email) LIKE ?)");
+    conditions.push(
+      "(LOWER(sp.title) LIKE ? OR LOWER(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '') || ' ' || u.email) LIKE ?)",
+    );
     const pattern = `%${search}%`;
     params.push(pattern, pattern);
   }

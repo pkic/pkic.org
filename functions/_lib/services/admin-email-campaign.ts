@@ -79,7 +79,14 @@ export async function listCampaignRecipients(
            AND (? = 'all' OR rda.attendance_type = ?)
            AND u.email IS NOT NULL
          ORDER BY lower(u.email) ASC`,
-        [eventId, attendeeStatus, attendeeStatus, filter.dayDate, filter.attendanceType ?? "all", filter.attendanceType ?? "all"],
+        [
+          eventId,
+          attendeeStatus,
+          attendeeStatus,
+          filter.dayDate,
+          filter.attendanceType ?? "all",
+          filter.attendanceType ?? "all",
+        ],
       );
       return rows.map((row) => ({
         email: row.email.trim().toLowerCase(),

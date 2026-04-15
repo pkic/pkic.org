@@ -31,19 +31,21 @@ export async function resolveManageToken(
   if (secret && token.split(".").length === 3) {
     const result = await verifyAdminManageJwt(secret, token);
     if (!result.ok) {
-      const message = result.reason === "expired"
-        ? "This manage link has expired. Please open the manage page again from the admin panel."
-        : "Invalid manage token.";
+      const message =
+        result.reason === "expired"
+          ? "This manage link has expired. Please open the manage page again from the admin panel."
+          : "Invalid manage token.";
       return json({ error: { code: "AUTH_INVALID", message } }, 401);
     }
     const ip =
-      request.headers.get("cf-connecting-ip") ??
-      request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-      "";
+      request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
     const ua = request.headers.get("user-agent") ?? "";
     const [iphash, uahash] = await Promise.all([sha256Hex(ip), sha256Hex(ua)]);
     if (iphash !== result.claims.iphash || uahash !== result.claims.uahash) {
-      return json({ error: { code: "AUTH_INVALID", message: "This link is not valid from your current browser or network." } }, 403);
+      return json(
+        { error: { code: "AUTH_INVALID", message: "This link is not valid from your current browser or network." } },
+        403,
+      );
     }
     const registration = await getRegistrationById(env.DB, result.claims.sub);
     return { registration, isJwt: true };

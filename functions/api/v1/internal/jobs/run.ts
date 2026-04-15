@@ -20,34 +20,42 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const reminders = body.runReminders
     ? await runReminderCycle(c.env.DB, {
-      appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
-      reminderIntervalDays: config.reminderIntervalDays,
-      maxInviteReminders: config.maxInviteReminders,
-      maxPresentationReminders: config.maxPresentationReminders,
-      limit: body.reminderLimit,
-      dryRun: body.dryRun,
-    })
-    : { inviteRemindersQueued: 0, speakerInviteRemindersQueued: 0, presentationRemindersQueued: 0, processed: 0, preview: emptyReminderPreview };
+        appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
+        reminderIntervalDays: config.reminderIntervalDays,
+        maxInviteReminders: config.maxInviteReminders,
+        maxPresentationReminders: config.maxPresentationReminders,
+        limit: body.reminderLimit,
+        dryRun: body.dryRun,
+      })
+    : {
+        inviteRemindersQueued: 0,
+        speakerInviteRemindersQueued: 0,
+        presentationRemindersQueued: 0,
+        processed: 0,
+        preview: emptyReminderPreview,
+      };
 
   const currentHourUtc = new Date().getUTCHours();
-  const shouldRunRetention = body.runRetention
-    && (body.runRetentionMode === "always" || currentHourUtc === body.retentionHourUtc);
+  const shouldRunRetention =
+    body.runRetention && (body.runRetentionMode === "always" || currentHourUtc === body.retentionHourUtc);
 
   const retentionPreview = shouldRunRetention
     ? await summarizeRetentionJob(c.env.DB)
     : { dueEvents: [], totalEvents: 0, totalRegistrations: 0, totalUsers: 0 };
 
-  const retention = shouldRunRetention && !body.dryRun
-    ? await runRetentionJob(c.env.DB)
-    : { redactedRegistrations: 0, redactedUsers: 0, affectedEvents: 0 };
+  const retention =
+    shouldRunRetention && !body.dryRun
+      ? await runRetentionJob(c.env.DB)
+      : { redactedRegistrations: 0, redactedUsers: 0, affectedEvents: 0 };
 
   const outboxPreview = body.runOutbox
     ? await summarizePendingOutbox(c.env.DB)
     : { dueNow: 0, dueByStatus: {}, nextSendAfter: null };
 
-  const outboxResult = body.runOutbox && !body.dryRun
-    ? await processPendingOutbox(c.env.DB, c.env, body.outboxLimit)
-    : { processed: 0, failed: 0 };
+  const outboxResult =
+    body.runOutbox && !body.dryRun
+      ? await processPendingOutbox(c.env.DB, c.env, body.outboxLimit)
+      : { processed: 0, failed: 0 };
 
   return json({
     success: true,

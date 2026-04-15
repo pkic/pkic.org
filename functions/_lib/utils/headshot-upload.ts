@@ -12,16 +12,14 @@ export const MAX_HEADSHOT_BYTES = 5 * 1024 * 1024; // 5 MB
  * It eagerly consumes the request body as an ArrayBuffer to prevent stream timeout
  * drops in Wrangler dev when async DB operations follow.
  */
-export async function readUploadedImage(
-  request: Request
-): Promise<{ buffer: ArrayBuffer; contentType: string }> {
+export async function readUploadedImage(request: Request): Promise<{ buffer: ArrayBuffer; contentType: string }> {
   // EAGERLY consume the body as an ArrayBuffer.
   // This must be done BEFORE any async database queries (like reading from D1)
   // to prevent Wrangler from dropping the TCP stream.
   let arrayBuffer: ArrayBuffer;
   try {
     arrayBuffer = await request.arrayBuffer();
-  } catch (err) {
+  } catch {
     throw new AppError(400, "BODY_READ_ERROR", "Failed to receive upload body");
   }
 
@@ -54,13 +52,13 @@ export async function readUploadedImage(
  */
 export async function resizeHeadshot(
   buffer: ArrayBuffer,
-  envImages?: ImagesBinding
+  envImages?: ImagesBinding,
 ): Promise<{ buffer: ArrayBuffer; contentType: string }> {
   if (!envImages) {
     // Fallback: If not configured, just store raw
     return { buffer, contentType: "image/jpeg" };
   }
-  
+
   try {
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -68,13 +66,14 @@ export async function resizeHeadshot(
         controller.close();
       },
     });
-    const result = await envImages.input(stream)
+    const result = await envImages
+      .input(stream)
       .transform({ width: 1024, height: 1024, fit: "cover" })
       .output({ format: "image/jpeg", quality: 95 });
     // We resize it to 1024x1024 JPEG for safety, same as client side.
     return {
       buffer: await (await result.response()).arrayBuffer(),
-      contentType: "image/jpeg"
+      contentType: "image/jpeg",
     };
   } catch (err) {
     // Log error, but still return original raw file so the user doesn't get blocked

@@ -48,10 +48,7 @@ interface OgPersonRow {
 
 type EventFormat = "conference" | "webinar" | "other";
 
-async function lookupOgPerson(
-  db: DatabaseLike,
-  code: string,
-): Promise<OgPersonRow | null> {
+async function lookupOgPerson(db: DatabaseLike, code: string): Promise<OgPersonRow | null> {
   // registration owners
   const registration = await first<OgPersonRow>(
     db,
@@ -113,11 +110,7 @@ async function lookupOgPerson(
 // ─── OG HTML ──────────────────────────────────────────────────────────────────
 
 function escapeHtml(s: string): string {
-  return s
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
 }
 
 function detectEventFormat(eventName: string, sourcePath: string | null): EventFormat {
@@ -243,20 +236,20 @@ function buildOgHtml(
   eventFormat: EventFormat,
   ogImageType: string,
 ): string {
-  const name      = person ? `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim() : "";
+  const name = person ? `${person.first_name ?? ""} ${person.last_name ?? ""}`.trim() : "";
   const eventName = person?.event_name ?? "PKI Consortium Event";
-  const role      = person?.role ?? "attendee";
-  const action    = person ? roleToAction(role) : "is attending";
+  const role = person?.role ?? "attendee";
+  const action = person ? roleToAction(role) : "is attending";
 
-  const ogTitle       = name ? `${escapeHtml(name)} ${escapeHtml(action)} ${escapeHtml(eventName)}` : escapeHtml(eventName);
+  const ogTitle = name ? `${escapeHtml(name)} ${escapeHtml(action)} ${escapeHtml(eventName)}` : escapeHtml(eventName);
   const ogDescription = escapeHtml(buildOgDescription(name, eventName, role, eventFormat));
-  const ogImageAlt    = escapeHtml(buildOgImageAlt(name, eventName, role, eventFormat));
+  const ogImageAlt = escapeHtml(buildOgImageAlt(name, eventName, role, eventFormat));
 
-  const ogImage    = `${appBaseUrl}/api/v1/og/${encodeURIComponent(code)}`;
-  const ogUrl      = `${appBaseUrl}/r/${encodeURIComponent(code)}`;
-  const canonical  = escapeHtml(redirectUrl);
+  const ogImage = `${appBaseUrl}/api/v1/og/${encodeURIComponent(code)}`;
+  const ogUrl = `${appBaseUrl}/r/${encodeURIComponent(code)}`;
+  const canonical = escapeHtml(redirectUrl);
   const ogImageEsc = escapeHtml(ogImage);
-  const ogUrlEsc   = escapeHtml(ogUrl);
+  const ogUrlEsc = escapeHtml(ogUrl);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -303,16 +296,14 @@ function buildOgHtml(
 
 export async function onRequestGet(c: any): Promise<Response> {
   const signingSecret = requireInternalSecret(c.env);
-  const appBaseUrl   = resolveAppBaseUrl(c.env, c.req.raw);
-  const code         = c.req.param("code");
-  const userAgent    = getUserAgent(c.req.raw);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+  const code = c.req.param("code");
+  const userAgent = getUserAgent(c.req.raw);
 
   // ── Validate the code exists and get its event_id ─────────────────────────
-  const refRow = await first<{ event_id: string }>(
-    c.env.DB,
-    "SELECT event_id FROM referral_codes WHERE code = ?",
-    [code],
-  );
+  const refRow = await first<{ event_id: string }>(c.env.DB, "SELECT event_id FROM referral_codes WHERE code = ?", [
+    code,
+  ]);
 
   if (!refRow) {
     return json({ error: { code: "REFERRAL_NOT_FOUND", message: "Unknown referral code" } }, 404);
@@ -326,16 +317,23 @@ export async function onRequestGet(c: any): Promise<Response> {
       ip: getClientIp(c.req.raw),
       userAgent,
       secret: signingSecret,
-    }).catch(() => { /* ignore */ });
+    }).catch(() => {
+      /* ignore */
+    });
   }
 
   // ── Resolve redirect URL and person data in parallel ──────────────────────
   const [eventRow, person] = await Promise.all([
-    first<{ name: string; slug: string; base_path: string | null; starts_at: string | null; source_path: string | null; settings_json: string }>(
-      c.env.DB,
-      "SELECT name, slug, base_path, starts_at, source_path, settings_json FROM events WHERE id = ?",
-      [refRow.event_id],
-    ),
+    first<{
+      name: string;
+      slug: string;
+      base_path: string | null;
+      starts_at: string | null;
+      source_path: string | null;
+      settings_json: string;
+    }>(c.env.DB, "SELECT name, slug, base_path, starts_at, source_path, settings_json FROM events WHERE id = ?", [
+      refRow.event_id,
+    ]),
     lookupOgPerson(c.env.DB, code),
   ]);
 
@@ -354,4 +352,3 @@ export async function onRequestGet(c: any): Promise<Response> {
     },
   });
 }
-

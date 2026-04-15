@@ -82,15 +82,18 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
   return (
     <div class={`adm-promoter-card ${RANK_CARD[rank] ?? (rank <= 10 ? "top-ten" : "")}`}>
       <div class="adm-promoter-avatar-wrap">
-        {p.headshot_url
-          ? <img class="adm-promoter-avatar" src={p.headshot_url} alt={name} />
-          : <div class="adm-promoter-avatar adm-promoter-avatar-initials">{initials}</div>
-        }
+        {p.headshot_url ? (
+          <img class="adm-promoter-avatar" src={p.headshot_url} alt={name} />
+        ) : (
+          <div class="adm-promoter-avatar adm-promoter-avatar-initials">{initials}</div>
+        )}
         <span class={`adm-promoter-rank-badge ${rankTier(rank)}`}>{rank}</span>
       </div>
 
       <div class="adm-promoter-info">
-        <a href={`mailto:${p.email}`} class="name text-decoration-none" title={p.email}>{name}</a>
+        <a href={`mailto:${p.email}`} class="name text-decoration-none" title={p.email}>
+          {name}
+        </a>
         {subtitle && <div class="subtitle">{subtitle}</div>}
       </div>
 
@@ -152,7 +155,8 @@ function PromoterCard({ p, rank }: { p: PromoterEntry; rank: number }) {
 
 export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
   const { data, loading, error } = useData<PromotersResponse>(
-    () => api<PromotersResponse>(`/api/v1/admin/events/${slug}/promoters`), [slug],
+    () => api<PromotersResponse>(`/api/v1/admin/events/${slug}/promoters`),
+    [slug],
   );
   const [, navigate] = useHashLocation();
   const tab = subTab === "codes" ? "codes" : "promoters";
@@ -211,20 +215,21 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
         onChange={(key) => navigate(`/events/${slug}/promoters/${key === "promoters" ? "" : key}`)}
       />
 
-      {tab === "promoters" && (
-        promoters.length === 0
-          ? <div class="text-muted text-center py-4">No promoter activity yet</div>
-          : <div class="d-flex flex-column gap-2 mt-2">
-              {promoters.slice(0, 100).map((p, i) => (
-                <PromoterCard key={p.user_id} p={p} rank={i + 1} />
-              ))}
-              {promoters.length > 100 && (
-                <div class="text-muted text-center small py-2">
-                  Showing top 100 of {promoters.length} promoters — stats above reflect all.
-                </div>
-              )}
-            </div>
-      )}
+      {tab === "promoters" &&
+        (promoters.length === 0 ? (
+          <div class="text-muted text-center py-4">No promoter activity yet</div>
+        ) : (
+          <div class="d-flex flex-column gap-2 mt-2">
+            {promoters.slice(0, 100).map((p, i) => (
+              <PromoterCard key={p.user_id} p={p} rank={i + 1} />
+            ))}
+            {promoters.length > 100 && (
+              <div class="text-muted text-center small py-2">
+                Showing top 100 of {promoters.length} promoters — stats above reflect all.
+              </div>
+            )}
+          </div>
+        ))}
 
       {tab === "codes" && (
         <DataTable
@@ -232,8 +237,16 @@ export function Promoters({ slug, subTab }: { slug: string; subTab?: string }) {
             { header: "Code", cell: (c) => <span class="adm-referral-code">{c.code}</span> },
             { header: "Owner", cell: (c) => c.user_email },
             { header: { label: "Clicks", className: "text-end" }, cell: (c) => c.clicks, className: "mono text-end" },
-            { header: { label: "Conversions", className: "text-end" }, cell: (c) => c.conversions, className: "mono text-end" },
-            { header: "Created", cell: (c) => c.created_at ? c.created_at.substring(0, 10) : "—", className: "mono small" },
+            {
+              header: { label: "Conversions", className: "text-end" },
+              cell: (c) => c.conversions,
+              className: "mono text-end",
+            },
+            {
+              header: "Created",
+              cell: (c) => (c.created_at ? c.created_at.substring(0, 10) : "—"),
+              className: "mono small",
+            },
           ]}
           data={referralCodes}
           empty="No referral codes issued"

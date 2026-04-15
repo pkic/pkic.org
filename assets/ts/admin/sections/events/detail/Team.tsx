@@ -60,15 +60,32 @@ export function Team({ slug }: { slug: string }) {
           <form onSubmit={handleAdd} class="d-flex gap-2 align-items-end flex-wrap">
             <div>
               <label class="form-label small fw-semibold">Email</label>
-              <input class="form-control form-control-sm" type="email" value={newEmail} onInput={(e) => setNewEmail((e.target as HTMLInputElement).value)} placeholder="user@example.com" required />
+              <input
+                class="form-control form-control-sm"
+                type="email"
+                value={newEmail}
+                onInput={(e) => setNewEmail((e.target as HTMLInputElement).value)}
+                placeholder="user@example.com"
+                required
+              />
             </div>
             <div>
               <label class="form-label small fw-semibold">Permission</label>
-              <select class="form-select form-select-sm" value={newPerm} onChange={(e) => setNewPerm((e.target as HTMLSelectElement).value)}>
-                {Object.entries(PERM_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              <select
+                class="form-select form-select-sm"
+                value={newPerm}
+                onChange={(e) => setNewPerm((e.target as HTMLSelectElement).value)}
+              >
+                {Object.entries(PERM_LABELS).map(([v, l]) => (
+                  <option key={v} value={v}>
+                    {l}
+                  </option>
+                ))}
               </select>
             </div>
-            <button type="submit" class="btn btn-sm btn-success" disabled={adding}>Add</button>
+            <button type="submit" class="btn btn-sm btn-success" disabled={adding}>
+              Add
+            </button>
             {addStatus && <span class="small text-danger">{addStatus}</span>}
           </form>
         </div>
@@ -81,10 +98,24 @@ export function Team({ slug }: { slug: string }) {
         deps={[slug]}
         columns={[
           { header: "Email", cell: (p) => p.user_email },
-          { header: "Permission", cell: (p) => <span class="badge text-bg-secondary">{PERM_LABELS[p.permission] ?? p.permission}</span> },
+          {
+            header: "Permission",
+            cell: (p) => <span class="badge text-bg-secondary">{PERM_LABELS[p.permission] ?? p.permission}</span>,
+          },
           { header: "Added by", cell: (p) => p.granter_email ?? "—", className: "small text-muted" },
-          { header: "Added", cell: (p) => p.created_at ? p.created_at.substring(0, 10) : "—", className: "mono small" },
-          { header: "", cell: (p) => <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(p.id)}>Revoke</button> },
+          {
+            header: "Added",
+            cell: (p) => (p.created_at ? p.created_at.substring(0, 10) : "—"),
+            className: "mono small",
+          },
+          {
+            header: "",
+            cell: (p) => (
+              <button class="btn btn-sm btn-outline-danger" onClick={() => void handleRevoke(p.id)}>
+                Revoke
+              </button>
+            ),
+          },
         ]}
         empty="No team members"
         rowKey={(p) => p.id}

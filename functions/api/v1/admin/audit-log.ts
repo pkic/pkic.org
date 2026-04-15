@@ -113,7 +113,15 @@ export async function onRequestGet(c: any): Promise<Response> {
   const total = countRow?.total ?? 0;
   const entries = rows.map((e) => ({
     ...e,
-    details: e.details_json ? (() => { try { return JSON.parse(e.details_json); } catch { return null; } })() : null,
+    details: e.details_json
+      ? (() => {
+          try {
+            return JSON.parse(e.details_json);
+          } catch {
+            return null;
+          }
+        })()
+      : null,
     details_json: undefined,
   }));
 

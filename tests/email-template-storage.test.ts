@@ -1,11 +1,13 @@
-import { describe, it, expect, beforeEach} from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createTemplateVersion, activateTemplateVersion, resolveTemplate } from "../functions/_lib/email/templates";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 
 describe("email template storage", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it.skip("supports versioning, activation, and fallback when active object is missing", async () => {
     // SKIPPED: This test was written for R2-primary template storage.
     // After migration 0007, templates are now DB-first (body column) with R2 as optional fallback.
@@ -14,7 +16,9 @@ describe("email template storage", () => {
     // For DB-based template tests, see email-template-engine.test.ts.
     await seedEventAndAdmin(env.DB);
 
-    const admin = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")))[0];
+    const admin = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
 
     // Test with a custom template key not pre-seeded in migrations
     const v1 = await createTemplateVersion(env.DB, {

@@ -42,7 +42,7 @@ async function registerAttendee(): Promise<{ confirmationToken: string; email: s
   );
 
   expect(response.status).toBe(200);
-  const payload = await response.json() as { manageToken: string };
+  const payload = (await response.json()) as { manageToken: string };
 
   // Get the confirmation token from the outbox
   const outbox = await queryAll<{ payload_json: string }>(
@@ -61,9 +61,7 @@ describe("confirm-info endpoint", () => {
 
   beforeEach(async () => {
     await resetDb();
-    fetchMock = vi.fn().mockResolvedValue(
-      new Response(null, { status: 202, headers: { "x-message-id": "msg-1" } }),
-    );
+    fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "msg-1" } }));
     vi.stubGlobal("fetch", fetchMock);
   });
 
@@ -81,13 +79,15 @@ describe("confirm-info endpoint", () => {
     const response = await confirmInfo(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(confirmationToken)}`),
+        new Request(
+          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-info?token=${encodeURIComponent(confirmationToken)}`,
+        ),
         { eventSlug: "pqc-2026" },
       ),
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       firstName: string | null;
       lastName: string | null;
       email: string | null;
@@ -113,7 +113,7 @@ describe("confirm-info endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       firstName: null;
       eventName: null;
       expired: boolean;
@@ -127,15 +127,13 @@ describe("confirm-info endpoint", () => {
     await seedEventAndAdmin(env.DB);
 
     const response = await confirmInfo(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-info"),
-        { eventSlug: "pqc-2026" },
-      ),
+      createContext(env, new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-info"), {
+        eventSlug: "pqc-2026",
+      }),
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { firstName: null; eventName: null };
+    const body = (await response.json()) as { firstName: null; eventName: null };
     expect(body.firstName).toBeNull();
     expect(body.eventName).toBeNull();
   });
@@ -146,9 +144,7 @@ describe("resend-confirmation endpoint", () => {
 
   beforeEach(async () => {
     await resetDb();
-    fetchMock = vi.fn().mockResolvedValue(
-      new Response(null, { status: 202, headers: { "x-message-id": "msg-1" } }),
-    );
+    fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "msg-1" } }));
     vi.stubGlobal("fetch", fetchMock);
   });
 
@@ -176,7 +172,7 @@ describe("resend-confirmation endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { ok: boolean };
+    const body = (await response.json()) as { ok: boolean };
     expect(body.ok).toBe(true);
 
     // Verify a new confirmation email was queued
@@ -213,9 +209,7 @@ describe("resend-manage-link endpoint", () => {
 
   beforeEach(async () => {
     await resetDb();
-    fetchMock = vi.fn().mockResolvedValue(
-      new Response(null, { status: 202, headers: { "x-message-id": "msg-1" } }),
-    );
+    fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "msg-1" } }));
     vi.stubGlobal("fetch", fetchMock);
   });
 
@@ -238,9 +232,9 @@ describe("resend-manage-link endpoint", () => {
       "SELECT id FROM registrations WHERE confirmation_token_hash = ? LIMIT 1",
       [tokenHash],
     );
-    await env.DB.prepare(
-      "UPDATE registrations SET status = 'registered', confirmation_token_hash = NULL WHERE id = ?",
-    ).bind(reg[0].id).run();
+    await env.DB.prepare("UPDATE registrations SET status = 'registered', confirmation_token_hash = NULL WHERE id = ?")
+      .bind(reg[0].id)
+      .run();
 
     const response = await resendManageLink(
       createContext(
@@ -255,7 +249,7 @@ describe("resend-manage-link endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { success: boolean };
+    const body = (await response.json()) as { success: boolean };
     expect(body.success).toBe(true);
   });
 
@@ -275,7 +269,7 @@ describe("resend-manage-link endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { success: boolean };
+    const body = (await response.json()) as { success: boolean };
     expect(body.success).toBe(true);
   });
 
@@ -306,20 +300,21 @@ describe("resend-manage-link endpoint", () => {
     };
     const email = `rate-limit-${crypto.randomUUID()}@example.test`;
 
-    const makeRequest = () => resendManageLink(
-      createContext(
-        limitedEnv,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations/resend-manage-link", {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            "cf-connecting-ip": "203.0.113.20",
-          },
-          body: JSON.stringify({ email }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const makeRequest = () =>
+      resendManageLink(
+        createContext(
+          limitedEnv,
+          new Request("https://app.test/api/v1/events/pqc-2026/registrations/resend-manage-link", {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              "cf-connecting-ip": "203.0.113.20",
+            },
+            body: JSON.stringify({ email }),
+          }),
+          { eventSlug: "pqc-2026" },
+        ),
+      );
 
     expect((await makeRequest()).status).toBe(200);
     expect((await makeRequest()).status).toBe(200);

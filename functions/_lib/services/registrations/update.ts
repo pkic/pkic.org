@@ -3,7 +3,11 @@ import { first, run } from "../../db/queries";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { claimWaitlistOffer } from "./waitlist";
-import { deriveEventAttendanceType, replaceRegistrationDayAttendance, type DayAttendanceSelection } from "../event-days";
+import {
+  deriveEventAttendanceType,
+  replaceRegistrationDayAttendance,
+  type DayAttendanceSelection,
+} from "../event-days";
 import {
   claimOfferedDayWaitlist,
   listInPersonEventDayIdsForRegistration,
@@ -63,7 +67,9 @@ async function applyRegistrationUpdate(
         claimWindowHours: payload.waitlistClaimWindowHours,
       });
     }
-    const cancelled = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
+    const cancelled = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [
+      registration.id,
+    ]);
     if (!cancelled) {
       throw new AppError(500, "REGISTRATION_CANCEL_FAILED", "Unable to cancel registration");
     }

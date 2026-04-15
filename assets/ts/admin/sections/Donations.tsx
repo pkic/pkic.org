@@ -67,7 +67,21 @@ interface PromoterRow {
 }
 
 const ZERO_DECIMAL_CURRENCIES = new Set([
-  "bif", "clp", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "ugx", "vnd", "vuv", "xaf", "xof", "xpf",
+  "bif",
+  "clp",
+  "gnf",
+  "jpy",
+  "kmf",
+  "krw",
+  "mga",
+  "pyg",
+  "rwf",
+  "ugx",
+  "vnd",
+  "vuv",
+  "xaf",
+  "xof",
+  "xpf",
 ]);
 const FILTERS = ["", "pending", "awaiting_payment", "completed", "expired", "failed"] as const;
 
@@ -105,12 +119,12 @@ function DonorPromoterCard({ p, rank }: { p: PromoterRow; rank: number }) {
 
   return (
     <div class={`adm-promoter-card ${RANK_CARD[rank] ?? (rank <= 10 ? "top-ten" : "")}`}>
-      <div class={`adm-promoter-rank ${rankTier(rank)}`}>
-        {rank}
-      </div>
+      <div class={`adm-promoter-rank ${rankTier(rank)}`}>{rank}</div>
       <div class="adm-promoter-info">
         <div class="name">{p.name ?? <span class="fst-italic text-muted">anonymous</span>}</div>
-        <a href={`${appBase}/donate/r/${p.code}`} target="_blank" rel="noopener" class="email mono">/donate/r/{p.code}</a>
+        <a href={`${appBase}/donate/r/${p.code}`} target="_blank" rel="noopener" class="email mono">
+          /donate/r/{p.code}
+        </a>
       </div>
       <div class="adm-promoter-stats">
         <div class="adm-promoter-group">
@@ -169,18 +183,20 @@ function PromotersTab() {
     }
   }
 
-  useEffect(() => { void load(); }, []);
+  useEffect(() => {
+    void load();
+  }, []);
 
   // Sort by total impact (own + attributed)
-  const sorted = [...promoters].sort((a, b) => (b.own_gross + b.attributed_gross) - (a.own_gross + a.attributed_gross));
+  const sorted = [...promoters].sort((a, b) => b.own_gross + b.attributed_gross - (a.own_gross + a.attributed_gross));
 
   // Summary stats
   const totalOwn = sorted.reduce((s, p) => s + p.own_gross, 0);
   const totalReferred = sorted.reduce((s, p) => s + p.attributed_gross, 0);
   const totalClicks = sorted.reduce((s, p) => s + p.clicks, 0);
   const totalDonated = sorted.reduce((s, p) => s + p.attributed_completed, 0);
-  const mainCurrency = sorted.find((p) => p.own_currency ?? p.currency)?.own_currency
-    ?? sorted.find((p) => p.currency)?.currency ?? "USD";
+  const mainCurrency =
+    sorted.find((p) => p.own_currency ?? p.currency)?.own_currency ?? sorted.find((p) => p.currency)?.currency ?? "USD";
 
   return (
     <div>
@@ -210,19 +226,23 @@ function PromotersTab() {
       )}
 
       <div class="d-flex justify-content-end mb-2">
-        <button class="btn btn-sm btn-outline-secondary" onClick={load}>↺ Refresh</button>
+        <button class="btn btn-sm btn-outline-secondary" onClick={load}>
+          ↺ Refresh
+        </button>
       </div>
       {loading && <Spinner />}
       {!loading && <ErrorAlert error={error} />}
-      {!loading && !error && (
-        sorted.length === 0
-          ? <div class="text-muted text-center py-4">No promoter links yet</div>
-          : <div class="d-flex flex-column gap-2">
-              {sorted.map((p, i) => (
-                <DonorPromoterCard key={p.code} p={p} rank={i + 1} />
-              ))}
-            </div>
-      )}
+      {!loading &&
+        !error &&
+        (sorted.length === 0 ? (
+          <div class="text-muted text-center py-4">No promoter links yet</div>
+        ) : (
+          <div class="d-flex flex-column gap-2">
+            {sorted.map((p, i) => (
+              <DonorPromoterCard key={p.code} p={p} rank={i + 1} />
+            ))}
+          </div>
+        ))}
     </div>
   );
 }
@@ -248,8 +268,13 @@ export function Donations({ subTab }: { subTab?: string }) {
         res.failed ? `${res.failed} failed` : "",
         res.expired ? `${res.expired} expired` : "",
         res.errors ? `${res.errors} errors` : "",
-      ].filter(Boolean).join(", ");
-      toast(`Synced ${res.synced}${parts ? `: ${parts}` : "."}`, res.errors > 0 || res.failed > 0 ? "error" : "success");
+      ]
+        .filter(Boolean)
+        .join(", ");
+      toast(
+        `Synced ${res.synced}${parts ? `: ${parts}` : "."}`,
+        res.errors > 0 || res.failed > 0 ? "error" : "success",
+      );
       actionsRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -267,8 +292,13 @@ export function Donations({ subTab }: { subTab?: string }) {
         res.failed ? `${res.failed} failed` : "",
         res.expired ? `${res.expired} expired` : "",
         res.errors ? `${res.errors} errors` : "",
-      ].filter(Boolean).join(", ");
-      toast(`Synced ${res.synced}${parts ? `: ${parts}` : "."}`, res.errors > 0 || res.failed > 0 ? "error" : "success");
+      ]
+        .filter(Boolean)
+        .join(", ");
+      toast(
+        `Synced ${res.synced}${parts ? `: ${parts}` : "."}`,
+        res.errors > 0 || res.failed > 0 ? "error" : "success",
+      );
       actionsRef.current?.reload();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -317,7 +347,7 @@ export function Donations({ subTab }: { subTab?: string }) {
     },
     {
       header: "Method",
-      cell: (d) => d.payment_method_type ? asyncPaymentWindow(d.payment_method_type).label : "—",
+      cell: (d) => (d.payment_method_type ? asyncPaymentWindow(d.payment_method_type).label : "—"),
       className: "small",
     },
     {
@@ -369,7 +399,10 @@ export function Donations({ subTab }: { subTab?: string }) {
                       <button
                         key={f}
                         class={`btn btn-sm btn-outline-secondary${statusFilter === f ? " active" : ""}`}
-                        onClick={() => { setStatusFilter(f); resetPage(); }}
+                        onClick={() => {
+                          setStatusFilter(f);
+                          resetPage();
+                        }}
                       >
                         {label} <span class="badge text-bg-secondary">{count}</span>
                       </button>
@@ -377,19 +410,11 @@ export function Donations({ subTab }: { subTab?: string }) {
                   })}
                 </div>
                 {pending > 0 && (
-                  <button
-                    class="btn btn-sm btn-outline-success"
-                    disabled={syncingAll}
-                    onClick={handleSyncPending}
-                  >
+                  <button class="btn btn-sm btn-outline-success" disabled={syncingAll} onClick={handleSyncPending}>
                     {syncingAll ? "Syncing…" : `↺ Sync pending (${pending})`}
                   </button>
                 )}
-                <button
-                  class="btn btn-sm btn-success"
-                  disabled={syncingAll || syncable === 0}
-                  onClick={handleSyncAll}
-                >
+                <button class="btn btn-sm btn-success" disabled={syncingAll || syncable === 0} onClick={handleSyncAll}>
                   {syncingAll ? "Syncing…" : `↺ Sync all (${syncable})`}
                 </button>
                 {failed > 0 && (

@@ -80,11 +80,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   );
 
   // Retrieve the attendee so we can personalise the email.
-  const user = await first<UserRecord>(
-    c.env.DB,
-    "SELECT * FROM users WHERE id = ?",
-    [registration.user_id],
-  );
+  const user = await first<UserRecord>(c.env.DB, "SELECT * FROM users WHERE id = ?", [registration.user_id]);
   if (!user) {
     throw new AppError(500, "USER_NOT_FOUND", "Associated user record is missing");
   }

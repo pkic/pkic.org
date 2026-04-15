@@ -21,9 +21,7 @@ import { json } from "../../../../../../../_lib/http";
 
 const ADMIN_MANAGE_SESSION_MINUTES = 15;
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const secret = c.env.INTERNAL_SIGNING_SECRET;
   if (!secret) {
     return json({ error: { code: "SERVER_ERROR", message: "Signing secret not configured" } }, 500);
@@ -43,9 +41,7 @@ export async function onRequestPost(
   }
 
   const ip =
-    c.req.raw.headers.get("cf-connecting-ip") ??
-    c.req.raw.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ??
-    "";
+    c.req.raw.headers.get("cf-connecting-ip") ?? c.req.raw.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
   const ua = c.req.raw.headers.get("user-agent") ?? "";
   const [iphash, uahash] = await Promise.all([sha256Hex(ip), sha256Hex(ua)]);
 

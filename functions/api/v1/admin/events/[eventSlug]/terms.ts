@@ -44,18 +44,14 @@ async function listTerms(db: DatabaseLike, eventId: string): Promise<{ attendee:
   };
 }
 
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const terms = await listTerms(c.env.DB, event.id);
   return json({ terms });
 }
 
-export async function onRequestPut(
-  c: any,
-): Promise<Response> {
+export async function onRequestPut(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEventTermsReplaceSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
@@ -64,11 +60,10 @@ export async function onRequestPut(
   for (const audienceType of ["attendee", "speaker"] as const) {
     const termList = audienceType === "attendee" ? body.attendee : body.speaker;
 
-    await run(
-      c.env.DB,
-      "UPDATE event_terms SET active = 0 WHERE event_id = ? AND audience_type = ?",
-      [event.id, audienceType],
-    );
+    await run(c.env.DB, "UPDATE event_terms SET active = 0 WHERE event_id = ? AND audience_type = ?", [
+      event.id,
+      audienceType,
+    ]);
 
     const now = nowIso();
     for (const term of termList) {
@@ -100,23 +95,16 @@ export async function onRequestPut(
     }
   }
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "event_terms_replaced",
-    "event",
-    event.id,
-    { attendeeCount: body.attendee.length, speakerCount: body.speaker.length },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "event_terms_replaced", "event", event.id, {
+    attendeeCount: body.attendee.length,
+    speakerCount: body.speaker.length,
+  });
 
   const updatedTerms = await listTerms(c.env.DB, event.id);
   return json({ success: true, terms: updatedTerms });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "PUT") return onRequestPut(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

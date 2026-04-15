@@ -106,7 +106,7 @@ export function wireHeadshotController(options: HeadshotControllerOptions): void
       fileInput!.value = "";
 
       const result = await options.uploadHeadshot(cropped);
-      const nextUrl = result && "headshotUrl" in result ? result.headshotUrl ?? null : currentUrl;
+      const nextUrl = result && "headshotUrl" in result ? (result.headshotUrl ?? null) : currentUrl;
       if (result && "headshotUrl" in result) updatePreview(nextUrl);
       setStatusText(options.status, options.uploadSuccessStatus ?? "Headshot uploaded.");
       await options.onUploaded?.(nextUrl);

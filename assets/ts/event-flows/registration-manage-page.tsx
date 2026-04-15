@@ -14,11 +14,7 @@ import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
 import { wireHeadshotSection } from "./registration-manage-headshot";
 import { registrationManageSchema } from "../../shared/schemas/api";
-import {
-  buildManageLinkRecoveryMessage,
-  showPostAction,
-  showResendManageLinkForm,
-} from "./registration-manage-panels";
+import { buildManageLinkRecoveryMessage, showPostAction, showResendManageLinkForm } from "./registration-manage-panels";
 import { setField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 
 const CANCELLED_STATUSES = new Set(["cancelled", "cancelled_unauthorized"]);
@@ -58,13 +54,12 @@ function RegistrationStatusBanner({
       <strong>Registration status:</strong>{" "}
       {isRegistrationWaitlisted ? (
         <>
-          <span class="badge text-bg-warning">Waitlisted</span>{" "}
-          Your registration is active, but one or more seats are still pending confirmation.
+          <span class="badge text-bg-warning">Waitlisted</span> Your registration is active, but one or more seats are
+          still pending confirmation.
         </>
       ) : (
         <>
-          <span class="badge text-bg-success">Confirmed</span>{" "}
-          Your registration is active and confirmed.
+          <span class="badge text-bg-success">Confirmed</span> Your registration is active and confirmed.
         </>
       )}
       {dayAttendance.length > 0 && (
@@ -75,11 +70,15 @@ function RegistrationStatusBanner({
               const dayLabel = day.label ?? day.dayDate;
               const attLabel = attendanceTypeLabel(day.attendanceType);
               const waitlistStatus = waitlistByDay.get(day.dayDate);
-              const confirmationLabel = waitlistStatus === "waiting" || waitlistStatus === "offered" ? "Waitlisted" : "Confirmed";
-              const statusClass = waitlistStatus === "waiting" || waitlistStatus === "offered" ? "text-bg-warning" : "text-bg-success";
+              const confirmationLabel =
+                waitlistStatus === "waiting" || waitlistStatus === "offered" ? "Waitlisted" : "Confirmed";
+              const statusClass =
+                waitlistStatus === "waiting" || waitlistStatus === "offered" ? "text-bg-warning" : "text-bg-success";
               return (
                 <li key={day.dayDate} class="d-flex flex-wrap align-items-center gap-2 mb-1">
-                  <span><strong>{dayLabel}:</strong> {attLabel}</span>
+                  <span>
+                    <strong>{dayLabel}:</strong> {attLabel}
+                  </span>
                   <span class={`badge ${statusClass}`}>{confirmationLabel}</span>
                 </li>
               );
@@ -89,8 +88,8 @@ function RegistrationStatusBanner({
       )}
       {!isRegistrationWaitlisted && dayWaitlist.length > 0 && (
         <div class="mt-2 small">
-          Some day-specific entries are still pending, so those days are marked <strong>waitlisted</strong> below.
-          If that no longer works for you, update the selections below or cancel the registration.
+          Some day-specific entries are still pending, so those days are marked <strong>waitlisted</strong> below. If
+          that no longer works for you, update the selections below or cancel the registration.
         </div>
       )}
     </>
@@ -123,9 +122,8 @@ async function main(): Promise<void> {
   const { form, statusEl, eventSlug, apiBase, query, root } = boot;
   installLiveValidation(form, statusEl);
 
-  const token: string | null = (root as HTMLElement & { dataset: DOMStringMap }).dataset.manageToken?.trim()
-    ?? query.token
-    ?? null;
+  const token: string | null =
+    (root as HTMLElement & { dataset: DOMStringMap }).dataset.manageToken?.trim() ?? query.token ?? null;
 
   if (!token) {
     showResendManageLinkForm(root, apiBase, eventSlug);
@@ -151,7 +149,7 @@ async function main(): Promise<void> {
 
   // ── Load data (manage API + forms API in parallel) ───────────────────────
   let manageData: RegistrationManageResponse;
-  let formsData: EventFormsResponse | null = null;
+  let formsData: EventFormsResponse | null;
 
   try {
     [manageData, formsData] = await Promise.all([
@@ -160,12 +158,7 @@ async function main(): Promise<void> {
     ]);
   } catch (error) {
     const normalized = normalizeValidation(error);
-    showResendManageLinkForm(
-      root,
-      apiBase,
-      eventSlug,
-      buildManageLinkRecoveryMessage(normalized.globalMessage),
-    );
+    showResendManageLinkForm(root, apiBase, eventSlug, buildManageLinkRecoveryMessage(normalized.globalMessage));
     return;
   }
 
@@ -225,7 +218,7 @@ async function main(): Promise<void> {
     customFields = renderCustomFields(customFieldsContainer, formsData.form.fields);
     customFieldsRendered = true;
     if (registration.custom_answers) {
-      customFields.setValues(registration.custom_answers as Record<string, unknown>);
+      customFields.setValues(registration.custom_answers);
     }
     // Apply visibility rules based on current day attendance selections.
     const currentDayAttendance = dayAttendance.map((d) => ({ attendanceType: d.attendanceType }));
@@ -256,15 +249,14 @@ async function main(): Promise<void> {
               ? `, offer expires ${new Date(entry.offerExpiresAt).toLocaleString()}`
               : "";
             const dayLabel = labelByDayDate.get(entry.dayDate) ?? entry.dayDate;
-            const statusText = entry.status === "offered"
-              ? "In-person spot available"
-              : "Waiting for in-person seat";
+            const statusText = entry.status === "offered" ? "In-person spot available" : "Waiting for in-person seat";
             return (
               <span
                 key={entry.dayDate}
                 class={`badge text-bg-${entry.status === "offered" ? "warning" : entry.status === "accepted" ? "success" : "secondary"}`}
               >
-                {dayLabel}: {statusText} ({entry.priorityLane}{expiry})
+                {dayLabel}: {statusText} ({entry.priorityLane}
+                {expiry})
               </span>
             );
           })}
@@ -351,15 +343,17 @@ async function main(): Promise<void> {
           `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
           registrationManageSchema.parse({
             action: "update",
-            attendanceType: dayAttendancePayload.length === 0
-              ? (registration.attendance_type as "in_person" | "virtual" | "on_demand")
-              : undefined,
+            attendanceType:
+              dayAttendancePayload.length === 0
+                ? (registration.attendance_type as "in_person" | "virtual" | "on_demand")
+                : undefined,
             dayAttendance: dayAttendancePayload,
             customAnswers: customFieldsRendered ? readCustomFieldValues(form) : undefined,
             email: emailIsChanged ? emailValue : undefined,
             firstName: (form.elements.namedItem("firstName") as HTMLInputElement | null)?.value.trim() || undefined,
             lastName: (form.elements.namedItem("lastName") as HTMLInputElement | null)?.value.trim() || undefined,
-            organizationName: (form.elements.namedItem("organizationName") as HTMLInputElement | null)?.value.trim() || undefined,
+            organizationName:
+              (form.elements.namedItem("organizationName") as HTMLInputElement | null)?.value.trim() || undefined,
             jobTitle: (form.elements.namedItem("jobTitle") as HTMLInputElement | null)?.value.trim() || undefined,
           }),
         );
@@ -399,16 +393,14 @@ async function main(): Promise<void> {
 
     await withLoadingButton(yesBtn, async () => {
       try {
-        await patchJson<{ success: boolean }>(
-          `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
-          { action: "cancel" },
-        );
+        await patchJson<{ success: boolean }>(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, {
+          action: "cancel",
+        });
         cancelConfirmPanel?.classList.add("d-none");
         if (manageFormEl) {
           showPostAction(root, manageFormEl, {
             title: "Registration cancelled",
-            message:
-              "Your registration has been cancelled. You can re-register at any time if you change your mind.",
+            message: "Your registration has been cancelled. You can re-register at any time if you change your mind.",
           });
         }
       } catch (error) {
@@ -440,10 +432,9 @@ async function main(): Promise<void> {
 
     await withLoadingButton(yesBtn, async () => {
       try {
-        await patchJson<{ success: boolean }>(
-          `${apiBase}/registrations/manage/${encodeURIComponent(token)}`,
-          { action: "report_unauthorized" },
-        );
+        await patchJson<{ success: boolean }>(`${apiBase}/registrations/manage/${encodeURIComponent(token)}`, {
+          action: "report_unauthorized",
+        });
         unauthorizedPanel?.classList.add("d-none");
         if (manageFormEl) {
           showPostAction(root, manageFormEl, {

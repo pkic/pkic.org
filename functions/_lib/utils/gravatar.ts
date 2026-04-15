@@ -9,9 +9,9 @@
  */
 export async function gravatarHash(email: string): Promise<string> {
   const input = email.trim().toLowerCase();
-  const buf   = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(input));
   return Array.from(new Uint8Array(buf))
-    .map(b => b.toString(16).padStart(2, "0"))
+    .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
 }
 
@@ -54,10 +54,10 @@ export async function fetchGravatar(
     const res = await fetch(url);
     if (!res.ok) return null; // 404 = no Gravatar for this email
 
-    const buf  = await res.arrayBuffer();
-    const ct   = res.headers.get("content-type") ?? "image/jpeg";
+    const buf = await res.arrayBuffer();
+    const ct = res.headers.get("content-type") ?? "image/jpeg";
     const mime = ct.split(";")[0].trim();
-    const ext  = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
+    const ext = mime === "image/png" ? "png" : mime === "image/webp" ? "webp" : "jpg";
     const r2Key = `headshots/${userId}/${Date.now()}-gravatar.${ext}`;
 
     await env.SPEAKER_UPLOADS_BUCKET.put(r2Key, buf, {
@@ -65,15 +65,15 @@ export async function fetchGravatar(
     });
 
     const now = nowIso();
-    await run(
-      env.DB,
-      "UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ? WHERE id = ?",
-      [r2Key, now, now, userId],
-    );
+    await run(env.DB, "UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ? WHERE id = ?", [
+      r2Key,
+      now,
+      now,
+      userId,
+    ]);
 
     return r2Key;
   } catch {
     return null;
   }
 }
-

@@ -2,7 +2,12 @@ import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { AppError } from "../../../../_lib/errors";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
-import { buildEventEmailVariables, getEventBySlug, getRequiredTerms, updateEventBasePath } from "../../../../_lib/services/events";
+import {
+  buildEventEmailVariables,
+  getEventBySlug,
+  getRequiredTerms,
+  updateEventBasePath,
+} from "../../../../_lib/services/events";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
 import { findOrCreateUser } from "../../../../_lib/services/users";
 import { acceptInvite, findInviteByToken } from "../../../../_lib/services/invites";
@@ -31,11 +36,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   // Record the Hugo page URL sent by the browser so base_path is always the
   // real event page location, not a hardcoded pattern.
-  await updateEventBasePath(
-    c.env.DB,
-    event.id,
-    c.req.raw.headers.get("x-event-base-path"),
-  );
+  await updateEventBasePath(c.env.DB, event.id, c.req.raw.headers.get("x-event-base-path"));
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
@@ -58,11 +59,11 @@ export async function onRequestPost(c: any): Promise<Response> {
   // fields (sortable, required/optional per event) without losing the ability
   // to store them on the user profile for personalised future communications.
   const profileFromCustom: { organizationName?: string; jobTitle?: string } = {};
-  if (typeof body.customAnswers?.organization_name === "string" && (body.customAnswers.organization_name as string).trim()) {
-    profileFromCustom.organizationName = (body.customAnswers.organization_name as string).trim();
+  if (typeof body.customAnswers?.organization_name === "string" && body.customAnswers.organization_name.trim()) {
+    profileFromCustom.organizationName = body.customAnswers.organization_name.trim();
   }
-  if (typeof body.customAnswers?.job_title === "string" && (body.customAnswers.job_title as string).trim()) {
-    profileFromCustom.jobTitle = (body.customAnswers.job_title as string).trim();
+  if (typeof body.customAnswers?.job_title === "string" && body.customAnswers.job_title.trim()) {
+    profileFromCustom.jobTitle = body.customAnswers.job_title.trim();
   }
 
   const user = await findOrCreateUser(c.env.DB, {
@@ -84,7 +85,10 @@ export async function onRequestPost(c: any): Promise<Response> {
   const created = await createRegistration(c.env.DB, {
     event,
     userId: user.id,
-    attendanceType: (body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance)) as "in_person" | "virtual" | "on_demand",
+    attendanceType: (body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance)) as
+      | "in_person"
+      | "virtual"
+      | "on_demand",
     dayAttendance: body.dayAttendance,
     sourceType: inviteId ? "invite" : body.sourceType,
     sourceRef: body.sourceRef,
@@ -172,8 +176,19 @@ export async function onRequestPost(c: any): Promise<Response> {
 
     c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
   } else {
-    const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET ? await generateSignedRsvpAddress(created.registration.id, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL) : undefined;
-    const calendar = await buildRegistrationIcs(event, created.registration.id, manageUrl, dayAttendanceRaw, appBaseUrl, rsvpEmail, user.email, c.env.INTERNAL_SIGNING_SECRET);
+    const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET
+      ? await generateSignedRsvpAddress(created.registration.id, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL)
+      : undefined;
+    const calendar = await buildRegistrationIcs(
+      event,
+      created.registration.id,
+      manageUrl,
+      dayAttendanceRaw,
+      appBaseUrl,
+      rsvpEmail,
+      user.email,
+      c.env.INTERNAL_SIGNING_SECRET,
+    );
     const outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
       baseUrl: appBaseUrl,
@@ -184,9 +199,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       subject: `Registration confirmed for ${event.name}`,
       // Delay so the OG badge has time to render before we try to attach it.
       // EMAIL_BADGE_DELAY_SECONDS=0 in .dev.vars skips the delay for local/e2e.
-      sendAfterSeconds: c.env.ASSETS_BUCKET
-        ? Number(c.env.EMAIL_BADGE_DELAY_SECONDS ?? 90)
-        : 0,
+      sendAfterSeconds: c.env.ASSETS_BUCKET ? Number(c.env.EMAIL_BADGE_DELAY_SECONDS ?? 90) : 0,
       attachments: [
         buildBadgeAttachment({
           badgeCode: referralCode,
@@ -234,15 +247,10 @@ export async function onRequestPost(c: any): Promise<Response> {
     c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
   }
 
-  await writeAuditLog(
-    c.env.DB,
-    "user",
-    user.id,
-    "registration_created",
-    "registration",
-    created.registration.id,
-    { eventId: event.id, status: created.registration.status },
-  );
+  await writeAuditLog(c.env.DB, "user", user.id, "registration_created", "registration", created.registration.id, {
+    eventId: event.id,
+    status: created.registration.status,
+  });
 
   return json({
     success: true,

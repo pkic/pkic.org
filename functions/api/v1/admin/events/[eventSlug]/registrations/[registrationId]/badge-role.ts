@@ -37,7 +37,11 @@ const VALID_ROLES = ["attendee", "speaker", "moderator", "panelist", "organizer"
 type ParticipantRole = (typeof VALID_ROLES)[number];
 
 const ROLE_PRIORITY: Record<string, number> = {
-  speaker: 1, moderator: 2, panelist: 3, organizer: 4, staff: 5,
+  speaker: 1,
+  moderator: 2,
+  panelist: 3,
+  organizer: 4,
+  staff: 5,
 };
 
 const patchSchema = z.object({
@@ -96,12 +100,10 @@ async function fetchData(db: DatabaseLike, eventId: string, registrationId: stri
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const data  = await fetchData(c.env.DB, event.id, c.req.param("registrationId"));
+  const data = await fetchData(c.env.DB, event.id, c.req.param("registrationId"));
 
   if (!data) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
@@ -110,11 +112,11 @@ export async function onRequestGet(
   const { participantRows } = data;
 
   // admin_override: the role explicitly set by an admin (source_type = 'admin')
-  const adminRow      = participantRows.find((r) => r.source_type === "admin" && r.role !== "attendee");
+  const adminRow = participantRows.find((r) => r.source_type === "admin" && r.role !== "attendee");
   const admin_override = adminRow?.role ?? null;
 
   // auto_detected: effective role ignoring any admin-sourced rows
-  const nonAdminRows  = participantRows.filter((r) => r.source_type !== "admin");
+  const nonAdminRows = participantRows.filter((r) => r.source_type !== "admin");
   const auto_detected = resolveEffectiveRole(nonAdminRows);
 
   // effective_role: best role considering all rows
@@ -130,26 +132,22 @@ export async function onRequestGet(
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
 
-export async function onRequestPatch(
-  c: any,
-): Promise<Response> {
+export async function onRequestPatch(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const body  = await parseJsonBody(c.req, patchSchema);
-  const data  = await fetchData(c.env.DB, event.id, c.req.param("registrationId"));
+  const body = await parseJsonBody(c.req, patchSchema);
+  const data = await fetchData(c.env.DB, event.id, c.req.param("registrationId"));
 
   if (!data) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
 
   const { registration, participantRows } = data;
-  const db  = c.env.DB;
+  const db = c.env.DB;
   const now = nowIso();
 
   // Remove any existing admin-sourced non-attendee participant row
-  const existingAdminRow = participantRows.find(
-    (r) => r.source_type === "admin" && r.role !== "attendee",
-  );
+  const existingAdminRow = participantRows.find((r) => r.source_type === "admin" && r.role !== "attendee");
   const previousRole = existingAdminRow?.role ?? null;
 
   if (existingAdminRow) {
@@ -171,36 +169,28 @@ export async function onRequestPatch(
     );
   }
 
-  await writeAuditLog(
-    db,
-    "admin",
-    admin.id,
-    "admin_badge_role_set",
-    "event_participant",
-    registration.id,
-    {
-      eventId:        event.id,
-      registrationId: registration.id,
-      userId:         registration.user_id,
-      previousRole,
-      newRole,
-    },
-  );
+  await writeAuditLog(db, "admin", admin.id, "admin_badge_role_set", "event_participant", registration.id, {
+    eventId: event.id,
+    registrationId: registration.id,
+    userId: registration.user_id,
+    previousRole,
+    newRole,
+  });
 
   // Re-render cached badge PNGs with the new role
   const origin = resolveAppBaseUrl(c.env, c.req.raw);
   c.executionCtx.waitUntil(invalidateAndRerender(registration.user_id, c.env, origin));
 
   // Re-fetch to compute the fresh effective role
-  const refreshed     = await fetchData(db, event.id, registration.id);
-  const rows          = refreshed?.participantRows ?? participantRows;
-  const adminRow      = rows.find((r) => r.source_type === "admin" && r.role !== "attendee");
-  const nonAdminRows  = rows.filter((r) => r.source_type !== "admin");
+  const refreshed = await fetchData(db, event.id, registration.id);
+  const rows = refreshed?.participantRows ?? participantRows;
+  const adminRow = rows.find((r) => r.source_type === "admin" && r.role !== "attendee");
+  const nonAdminRows = rows.filter((r) => r.source_type !== "admin");
   const effective_role = resolveEffectiveRole(rows);
-  const auto_detected  = resolveEffectiveRole(nonAdminRows);
+  const auto_detected = resolveEffectiveRole(nonAdminRows);
 
   return json({
-    success:        true,
+    success: true,
     admin_override: adminRow?.role ?? null,
     auto_detected,
     effective_role,
@@ -209,10 +199,8 @@ export async function onRequestPatch(
 
 // ── Catch-all ─────────────────────────────────────────────────────────────────
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
-  if (c.req.raw.method === "GET")   return onRequestGet(c);
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "PATCH") return onRequestPatch(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

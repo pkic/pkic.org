@@ -5,11 +5,9 @@ import { resetDb } from "./helpers/reset-db";
 import { seedEventAndAdmin } from "./helpers/context";
 
 function callApp(request: Request): Promise<Response> {
-  return Promise.resolve(app.fetch(
-    request,
-    env as any,
-    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
-  ));
+  return Promise.resolve(
+    app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any),
+  );
 }
 
 describe("public and internal router smoke tests", () => {
@@ -44,7 +42,7 @@ describe("public and internal router smoke tests", () => {
     const response = await callApp(new Request("https://app.test/api/v1/events/pqc-2026/terms"));
 
     expect(response.status).toBe(200);
-    const payload = await response.json() as { terms: unknown[] };
+    const payload = (await response.json()) as { terms: unknown[] };
     expect(Array.isArray(payload.terms)).toBe(true);
   });
 
@@ -53,12 +51,18 @@ describe("public and internal router smoke tests", () => {
       new Request("https://app.test/api/v1/internal/calendar/rsvp", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ provider: "cloudflare_email_route", sourceMessageId: "msg-1", uid: "x", partstat: "DECLINED", attendeeEmail: "a@example.test" }),
+        body: JSON.stringify({
+          provider: "cloudflare_email_route",
+          sourceMessageId: "msg-1",
+          uid: "x",
+          partstat: "DECLINED",
+          attendeeEmail: "a@example.test",
+        }),
       }),
     );
 
     expect(response.status).toBe(401);
-    const payload = await response.json() as { error?: { code?: string } };
+    const payload = (await response.json()) as { error?: { code?: string } };
     expect(payload.error?.code).toBe("INVALID_SIGNATURE");
   });
 });

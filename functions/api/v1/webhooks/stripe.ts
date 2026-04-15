@@ -37,11 +37,7 @@ const TOLERANCE_SECONDS = 300;
  * Verify a Stripe webhook signature using HMAC-SHA256.
  * https://stripe.com/docs/webhooks/signatures
  */
-async function verifyStripeSignature(
-  rawBody: string,
-  signatureHeader: string,
-  secret: string,
-): Promise<boolean> {
+async function verifyStripeSignature(rawBody: string, signatureHeader: string, secret: string): Promise<boolean> {
   const parts: Record<string, string> = {};
   for (const part of signatureHeader.split(",")) {
     const idx = part.indexOf("=");
@@ -65,13 +61,7 @@ async function verifyStripeSignature(
   const keyData = encoder.encode(secret);
   const msgData = encoder.encode(signedPayload);
 
-  const key = await crypto.subtle.importKey(
-    "raw",
-    keyData,
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
+  const key = await crypto.subtle.importKey("raw", keyData, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signatureBuffer = await crypto.subtle.sign("HMAC", key, msgData);
   const computed = Array.from(new Uint8Array(signatureBuffer))
     .map((b) => b.toString(16).padStart(2, "0"))
@@ -164,14 +154,15 @@ function isStripePaymentConfirmed(session: StripeCheckoutSession, eventType: str
 }
 
 async function loadCompletedDonor(db: Env["DB"], sessionId: string): Promise<DonorRow | null> {
-  return db.prepare(
-    `SELECT name, email, organization, currency, gross_amount
+  return db
+    .prepare(
+      `SELECT name, email, organization, currency, gross_amount
      FROM donations
      WHERE checkout_session_id = ?
        AND status = 'completed'
        AND completed_at IS NOT NULL
      LIMIT 1`,
-  )
+    )
     .bind(sessionId)
     .first<DonorRow>();
 }
@@ -250,9 +241,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   if (event.type === "checkout.session.expired") {
     const expiredSession = event.data.object as StripeCheckoutSession;
-    await env.DB.prepare(
-      `UPDATE donations SET status = 'expired' WHERE checkout_session_id = ? AND status = 'pending'`,
-    )
+    await env.DB.prepare(`UPDATE donations SET status = 'expired' WHERE checkout_session_id = ? AND status = 'pending'`)
       .bind(expiredSession.id)
       .run();
 
@@ -429,21 +418,21 @@ export async function onRequestPost(c: any): Promise<Response> {
       .run();
   }
 
-  donor = donor ?? await loadCompletedDonor(env.DB, session.id);
+  donor = donor ?? (await loadCompletedDonor(env.DB, session.id));
 
   // ── Send thank-you email ─────────────────────────────────────────────────
   if (donor?.email) {
-      try {
-        const formattedAmount = formatMajorAmount(donor.gross_amount, donor.currency);
-        const firstName = donor.name !== "Unknown" ? (donor.name.split(" ")[0] ?? "") : "";
-        const bcc = env.DONATION_NOTIFICATION_EMAIL ? [env.DONATION_NOTIFICATION_EMAIL] : [];
-        const origin = resolveAppBaseUrl(env, c.req.raw);
+    try {
+      const formattedAmount = formatMajorAmount(donor.gross_amount, donor.currency);
+      const firstName = donor.name !== "Unknown" ? (donor.name.split(" ")[0] ?? "") : "";
+      const bcc = env.DONATION_NOTIFICATION_EMAIL ? [env.DONATION_NOTIFICATION_EMAIL] : [];
+      const origin = resolveAppBaseUrl(env, c.req.raw);
 
-        // Pre-render the donation badge to R2 so the outbox can attach it
-        await prerenderDonationBadge(session.id, env, origin);
+      // Pre-render the donation badge to R2 so the outbox can attach it
+      await prerenderDonationBadge(session.id, env, origin);
 
-        // Create the personalised share link so we can include it in the email
-        const promoter = await getOrCreatePromoterCode(env.DB, session.id, origin);
+      // Create the personalised share link so we can include it in the email
+      const promoter = await getOrCreatePromoterCode(env.DB, session.id, origin);
 
       const outboxId = await queueEmail(env.DB, {
         templateKey: "donation_thank_you",
@@ -487,8 +476,21 @@ export async function onRequestPost(c: any): Promise<Response> {
 function formatMajorAmount(smallestUnit: number, currencyCode: string): string {
   // Zero-decimal currencies (JPY, KRW, …) — amount is already in major units
   const zeroDecimalCurrencies = new Set([
-    "bif", "clp", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf",
-    "ugx", "vnd", "vuv", "xaf", "xof", "xpf",
+    "bif",
+    "clp",
+    "gnf",
+    "jpy",
+    "kmf",
+    "krw",
+    "mga",
+    "pyg",
+    "rwf",
+    "ugx",
+    "vnd",
+    "vuv",
+    "xaf",
+    "xof",
+    "xpf",
   ]);
   const isZeroDecimal = zeroDecimalCurrencies.has(currencyCode.toLowerCase());
   const majorAmount = isZeroDecimal ? smallestUnit : smallestUnit / 100;
@@ -508,8 +510,16 @@ function formatMajorAmount(smallestUnit: number, currencyCode: string): string {
  * Fetches net amount and actual payment method type for a payment intent using
  * expand[] to get charge + balance_transaction in a single API call.
  */
-async function fetchPaymentDetails(stripeKey: string, paymentIntentId: string): Promise<{ netAmount: number | null; paymentMethodType: string | null; settledAmount: number | null; settledCurrency: string | null }> {
-  const headers = { "Authorization": `Bearer ${stripeKey}` };
+async function fetchPaymentDetails(
+  stripeKey: string,
+  paymentIntentId: string,
+): Promise<{
+  netAmount: number | null;
+  paymentMethodType: string | null;
+  settledAmount: number | null;
+  settledCurrency: string | null;
+}> {
+  const headers = { Authorization: `Bearer ${stripeKey}` };
   const url = `https://api.stripe.com/v1/payment_intents/${paymentIntentId}?expand[]=latest_charge.balance_transaction`;
   const piRes = await fetch(url, { headers });
   if (!piRes.ok) {
@@ -532,7 +542,12 @@ async function fetchPaymentDetails(stripeKey: string, paymentIntentId: string): 
   }
 
   const bt = charge.balance_transaction;
-  return { netAmount: bt.net ?? null, paymentMethodType, settledAmount: bt.amount ?? null, settledCurrency: bt.currency ?? null };
+  return {
+    netAmount: bt.net ?? null,
+    paymentMethodType,
+    settledAmount: bt.amount ?? null,
+    settledCurrency: bt.currency ?? null,
+  };
 }
 
 export class WebhooksStripePost extends OpenAPIRoute {

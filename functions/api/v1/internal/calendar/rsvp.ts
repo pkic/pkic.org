@@ -36,10 +36,7 @@ const rsvpRequestSchema = z.union([
   }),
 ]);
 
-async function validateSignature(
-  request: Request,
-  secret: string,
-): Promise<{ valid: boolean; error?: AppError }> {
+async function validateSignature(request: Request, secret: string): Promise<{ valid: boolean; error?: AppError }> {
   const timestamp = request.headers.get("x-pkic-timestamp");
   const signature = request.headers.get("x-pkic-signature");
 
@@ -98,7 +95,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       : partstatLine.includes("DECLINED")
         ? "DECLINED"
         : "TENTATIVE";
-    
+
     // Extract email from ATTENDEE line (e.g., "ATTENDEE;PARTSTAT=DECLINED:mailto:alice@example.com")
     const emailMatch = attendeeLine?.match(/mailto:(.+)$/);
     attendeeEmail = emailMatch ? emailMatch[1] : body.fromEmail || "";
@@ -115,7 +112,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       const registrationId = registrationIdMatch[1];
       // Deduplicate by sourceMessageId to avoid processing same email multiple times
       const dedupeKey = `${registrationId}#${body.sourceMessageId}`;
-      
+
       await c.env.DB.prepare(
         `INSERT INTO calendar_rsvp_events 
          (id, registration_id, ics_uid, attendee_email, response_status, provider, 
@@ -148,7 +145,7 @@ export class InternalCalendarRsvpPost extends OpenAPIRoute {
 
   async handle(c: any) {
     try {
-      return await onRequestPost(c as any);
+      return await onRequestPost(c);
     } catch (error) {
       return handleError(error);
     }

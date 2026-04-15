@@ -35,17 +35,13 @@ interface UserEmailRow {
 
 // ── Handler ─────────────────────────────────────────────────────────────────
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const userId = c.req.param("userId");
 
-  const user = await first<UserEmailRow>(
-    c.env.DB,
-    "SELECT id, email, headshot_r2_key FROM users WHERE id = ?",
-    [userId],
-  );
+  const user = await first<UserEmailRow>(c.env.DB, "SELECT id, email, headshot_r2_key FROM users WHERE id = ?", [
+    userId,
+  ]);
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
 
   const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
@@ -55,21 +51,13 @@ export async function onRequestPost(
   const r2Key = await fetchGravatar(user.id, user.email, c.env, { force: true });
 
   if (!r2Key) {
-    return json(
-      { error: { code: "NO_GRAVATAR", message: "No Gravatar found for this email address" } },
-      404,
-    );
+    return json({ error: { code: "NO_GRAVATAR", message: "No Gravatar found for this email address" } }, 404);
   }
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "headshot_imported_gravatar",
-    "user",
-    user.id,
-    { r2Key, gravatarHash: emailHash },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "headshot_imported_gravatar", "user", user.id, {
+    r2Key,
+    gravatarHash: emailHash,
+  });
 
   const origin = resolveAppBaseUrl(c.env, c.req.raw);
   c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, origin));

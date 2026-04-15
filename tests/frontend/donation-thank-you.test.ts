@@ -38,12 +38,14 @@ describe("donation thank-you page", () => {
     await vi.runAllTimersAsync();
 
     expect(fetchMock).toHaveBeenCalled();
-    expect(fetchMock.mock.calls.every(([input]) => String(input).includes("/api/v1/donations/session?session_id="))).toBe(true);
+    expect(
+      fetchMock.mock.calls.every(([input]) => String(input).includes("/api/v1/donations/session?session_id=")),
+    ).toBe(true);
     expect(fetchMock.mock.calls.some(([input]) => String(input).includes("/api/v1/donations/promoter"))).toBe(false);
     expect(
       fetchMock.mock.calls.some((call) => {
         const [, init] = call as unknown as [RequestInfo | URL, RequestInit | undefined];
-        return ((init?.method ?? "GET").toUpperCase() !== "GET");
+        return (init?.method ?? "GET").toUpperCase() !== "GET";
       }),
     ).toBe(false);
   });
@@ -96,23 +98,29 @@ describe("donation thank-you page", () => {
           });
         }
         // Third call: payment confirmed
-        return new Response(JSON.stringify({
-          grossAmount: 5000,
-          currency: "usd",
-          donorFirstName: "Alice",
-          source: null,
-          completedAt: "2026-04-10T10:00:00Z",
-        }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({
+            grossAmount: 5000,
+            currency: "usd",
+            donorFirstName: "Alice",
+            source: null,
+            completedAt: "2026-04-10T10:00:00Z",
+          }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
       }
       // Promoter POST — expected after confirmation
       if (url.includes("/api/v1/donations/promoter")) {
-        return new Response(JSON.stringify({ code: "abc123", shareUrl: "https://pkic.org/donate/r/abc123", ogImageUrl: "" }), {
-          status: 200,
-          headers: { "content-type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ code: "abc123", shareUrl: "https://pkic.org/donate/r/abc123", ogImageUrl: "" }),
+          {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          },
+        );
       }
       throw new Error(`Unexpected fetch: ${url}`);
     });

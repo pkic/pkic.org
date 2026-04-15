@@ -7,13 +7,9 @@ export async function sha256Hex(input: string): Promise<string> {
 }
 
 export async function hmacSha256Hex(secret: string, payload: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
+    "sign",
+  ]);
 
   const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
   return [...new Uint8Array(signature)].map((b) => b.toString(16).padStart(2, "0")).join("");
@@ -22,5 +18,8 @@ export async function hmacSha256Hex(secret: string, payload: string): Promise<st
 export function randomToken(byteLength = 32): string {
   const bytes = new Uint8Array(byteLength);
   crypto.getRandomValues(bytes);
-  return btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
 }

@@ -29,10 +29,7 @@ export async function confirmRegistrationByToken(
     throw new AppError(404, "CONFIRM_TOKEN_INVALID", "Invalid or already-used confirmation token");
   }
   const now = nowIso();
-  if (
-    registration.confirmation_token_expires_at &&
-    registration.confirmation_token_expires_at < now
-  ) {
+  if (registration.confirmation_token_expires_at && registration.confirmation_token_expires_at < now) {
     throw new AppError(410, "CONFIRM_TOKEN_EXPIRED", "Confirmation link has expired — please request a new one");
   }
   const dayEventIds = await listInPersonEventDayIdsForRegistration(db, registration.id);
@@ -43,11 +40,7 @@ export async function confirmRegistrationByToken(
   });
   const hasPerDayAttendance = dayEventIds.length > 0;
   let newStatus = "registered";
-  if (
-    registration.attendance_type === "in_person"
-    && !hasPerDayAttendance
-    && !capacityExemptReason
-  ) {
+  if (registration.attendance_type === "in_person" && !hasPerDayAttendance && !capacityExemptReason) {
     const event = await first<{ capacity_in_person: number | null }>(
       db,
       "SELECT capacity_in_person FROM events WHERE id = ?",
@@ -84,11 +77,19 @@ export async function confirmRegistrationByToken(
     ...registration,
     status: newStatus,
   });
-  await writeAuditLog(db, "user", registration.user_id, "registration_email_confirmed", "registration", registration.id, {
-    eventId: registration.event_id,
-    status: newStatus,
-    attendanceType: registration.attendance_type,
-  });
+  await writeAuditLog(
+    db,
+    "user",
+    registration.user_id,
+    "registration_email_confirmed",
+    "registration",
+    registration.id,
+    {
+      eventId: registration.event_id,
+      status: newStatus,
+      attendanceType: registration.attendance_type,
+    },
+  );
   if (newStatus === "waitlisted") {
     await addToWaitlist(db, registration.event_id, registration.id);
   }
@@ -119,7 +120,11 @@ export async function confirmRegistrationByToken(
   // Rotate the manage token so the confirmed email always contains a valid, active link.
   const freshManageToken = randomToken(24);
   const freshManageHash = await sha256Hex(freshManageToken);
-  await run(db, "UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?", [freshManageHash, nowIso(), updated.id]);
+  await run(db, "UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?", [
+    freshManageHash,
+    nowIso(),
+    updated.id,
+  ]);
 
   return { registration: { ...updated, manage_token_hash: freshManageHash }, manageToken: freshManageToken };
 }

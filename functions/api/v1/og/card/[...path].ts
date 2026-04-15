@@ -65,15 +65,10 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   // 2. Render the og-card.html page with Browser Rendering
   if (!c.env.BROWSER) {
-    return json(
-      { error: { code: "SERVICE_UNAVAILABLE", message: "Browser Rendering not available" } },
-      503,
-    );
+    return json({ error: { code: "SERVICE_UNAVAILABLE", message: "Browser Rendering not available" } }, 503);
   }
 
-  const ogCardUrl = pagePath
-    ? `${origin}/${pagePath}/og-card.html`
-    : `${origin}/og-card.html`;
+  const ogCardUrl = pagePath ? `${origin}/${pagePath}/og-card.html` : `${origin}/og-card.html`;
   let jpegBuf: ArrayBuffer;
 
   const browser = await puppeteer.launch(c.env.BROWSER);
@@ -90,7 +85,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     });
     // Puppeteer returns a Buffer; convert to ArrayBuffer for R2 / Response
     const bytes = new Uint8Array(screenshot);
-    jpegBuf = bytes.buffer as ArrayBuffer;
+    jpegBuf = bytes.buffer;
   } finally {
     await browser.close();
   }

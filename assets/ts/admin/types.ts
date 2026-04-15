@@ -77,7 +77,10 @@ export interface AdminFormDetailField {
   sortOrder: number;
 }
 
-export type ApiFn = <T = unknown>(path: string, opts?: RequestInit & { headers?: Record<string, string> }) => Promise<T>;
+export type ApiFn = <T = unknown>(
+  path: string,
+  opts?: RequestInit & { headers?: Record<string, string> },
+) => Promise<T>;
 
 export interface Registration {
   id: string;
@@ -419,7 +422,14 @@ export interface StatsResponse {
   recentActivity: Array<{ date: string; registrations: number; invites: number }>;
   donations: {
     byStatus: Record<string, number>;
-    byCurrency: Array<{ status: string; currency: string; count: number; total_gross: number; avg_gross: number; total_net: number | null }>;
+    byCurrency: Array<{
+      status: string;
+      currency: string;
+      count: number;
+      total_gross: number;
+      avg_gross: number;
+      total_net: number | null;
+    }>;
     daily: Array<{ date: string } & DonationPeriod>;
     weekly: Array<{ week: string } & DonationPeriod>;
     monthly: Array<{ month: string } & DonationPeriod>;
@@ -437,10 +447,25 @@ export interface EventStatsResponse {
     total: number;
     growthByDay: Array<{ date: string; attendance_type: string; count: number }>;
   };
-  registrationsByEventDay: Array<{ day_date: string; label: string | null; sort_order: number; attendance_type: string; status: string; count: number }>;
+  registrationsByEventDay: Array<{
+    day_date: string;
+    label: string | null;
+    sort_order: number;
+    attendance_type: string;
+    status: string;
+    count: number;
+  }>;
   invites: {
-    attendee: { byStatus: Record<string, number>; total: number; declineReasons: Array<{ reason_code: string | null; count: number; unsubscribed: number }> };
-    speaker: { byStatus: Record<string, number>; total: number; declineReasons: Array<{ reason_code: string | null; count: number; unsubscribed: number }> };
+    attendee: {
+      byStatus: Record<string, number>;
+      total: number;
+      declineReasons: Array<{ reason_code: string | null; count: number; unsubscribed: number }>;
+    };
+    speaker: {
+      byStatus: Record<string, number>;
+      total: number;
+      declineReasons: Array<{ reason_code: string | null; count: number; unsubscribed: number }>;
+    };
   };
   proposals: { byStatus: Record<string, number>; total: number };
   rsvp: {

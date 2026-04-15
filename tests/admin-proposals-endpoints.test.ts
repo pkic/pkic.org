@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach} from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
@@ -7,11 +7,16 @@ import { onRequestGet as getProposalReviews } from "../functions/api/v1/admin/pr
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 
-async function seedProposalWithReviews(_db: DatabaseLike, eventId: string): Promise<{ proposalId: string; adminId: string }> {
+async function seedProposalWithReviews(
+  _db: DatabaseLike,
+  eventId: string,
+): Promise<{ proposalId: string; adminId: string }> {
   const proposalId = crypto.randomUUID();
   const proposerId = crypto.randomUUID();
 
-  const adminRow = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")))[0];
+  const adminRow = (
+    await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+  )[0];
   const adminId = adminRow.id;
 
   await env.DB.batch([
@@ -53,7 +58,9 @@ async function seedProposalWithReviews(_db: DatabaseLike, eventId: string): Prom
 }
 
 describe("admin proposal endpoints", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it("returns proposal list with proposer, review and decision metadata", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { adminId } = await seedProposalWithReviews(env.DB, eventId);

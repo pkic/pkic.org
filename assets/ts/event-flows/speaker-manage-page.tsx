@@ -70,7 +70,8 @@ function showResendSpeakerManageLinkForm(
     statusSelector: "[data-resend-speaker-manage-status]",
     emailSelector: "[data-resend-speaker-manage-email]",
     endpoint: `${apiBase}/events/${eventSlug}/proposals/resend-speaker-manage-link`,
-    successMessage: "If the details match an invited speaker, you will receive an email shortly. Please check your inbox (and spam folder).",
+    successMessage:
+      "If the details match an invited speaker, you will receive an email shortly. Please check your inbox (and spam folder).",
     introMessage,
   });
 }
@@ -299,7 +300,11 @@ async function main(): Promise<void> {
           method: "PUT",
           body: form,
         });
-        const json = await response.json() as { success?: boolean; headshotUrl?: string; error?: { message?: string } };
+        const json = (await response.json()) as {
+          success?: boolean;
+          headshotUrl?: string;
+          error?: { message?: string };
+        };
         if (!response.ok) throw new Error(json.error?.message ?? `HTTP ${response.status}`);
         return { headshotUrl: json.headshotUrl ?? null };
       },
@@ -333,11 +338,12 @@ async function main(): Promise<void> {
           method: "PUT",
           body: formData,
         });
-        const json = await response.json() as { success?: boolean; error?: { message?: string } };
+        const json = (await response.json()) as { success?: boolean; error?: { message?: string } };
         if (!response.ok) throw new Error(json.error?.message ?? `HTTP ${response.status}`);
         if (presentationUploadStatus) presentationUploadStatus.textContent = "Presentation uploaded.";
       } catch (error) {
-        if (presentationUploadStatus) presentationUploadStatus.textContent = `Upload failed: ${(error as Error).message}`;
+        if (presentationUploadStatus)
+          presentationUploadStatus.textContent = `Upload failed: ${(error as Error).message}`;
       }
     })();
   });

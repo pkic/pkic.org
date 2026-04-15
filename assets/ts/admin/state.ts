@@ -7,11 +7,11 @@
 import { signal, computed } from "@preact/signals";
 import type { EventSummary, EventDetail } from "./types";
 
-export const authToken    = signal<string | null>(localStorage.getItem("pkic_at"));
-export const authEmail    = signal<string | null>(localStorage.getItem("pkic_ae"));
-export const isAuthed     = computed(() => Boolean(authToken.value));
+export const authToken = signal<string | null>(localStorage.getItem("pkic_at"));
+export const authEmail = signal<string | null>(localStorage.getItem("pkic_ae"));
+export const isAuthed = computed(() => Boolean(authToken.value));
 
-export const eventList    = signal<EventSummary[]>([]);
+export const eventList = signal<EventSummary[]>([]);
 export const currentEvent = signal<EventDetail | null>(null);
 
 export function saveAuth(token: string, email: string | null): void {

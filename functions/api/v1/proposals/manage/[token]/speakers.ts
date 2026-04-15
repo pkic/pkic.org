@@ -23,11 +23,7 @@ import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { first } from "../../../../../_lib/db/queries";
 import type { EventRecord } from "../../../../../_lib/services/events";
 import { z } from "zod";
-import {
-  normalizedEmailSchema,
-  firstNameSchema,
-  lastNameSchema,
-} from "../../../../../../assets/shared/schemas/api";
+import { normalizedEmailSchema, firstNameSchema, lastNameSchema } from "../../../../../../assets/shared/schemas/api";
 
 const coSpeakerInviteSchema = z.object({
   email: normalizedEmailSchema,
@@ -41,17 +37,10 @@ export async function onRequestPost(c: any): Promise<Response> {
   const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"));
 
   if (proposal.status === "withdrawn" || proposal.status === "rejected") {
-    return json(
-      { error: { code: "PROPOSAL_CLOSED", message: "Cannot invite speakers to a closed proposal" } },
-      400,
-    );
+    return json({ error: { code: "PROPOSAL_CLOSED", message: "Cannot invite speakers to a closed proposal" } }, 400);
   }
 
-  const event = await first<EventRecord>(
-    c.env.DB,
-    "SELECT * FROM events WHERE id = ?",
-    [proposal.event_id],
-  );
+  const event = await first<EventRecord>(c.env.DB, "SELECT * FROM events WHERE id = ?", [proposal.event_id]);
   if (!event) {
     return json({ error: { code: "EVENT_NOT_FOUND", message: "Event not found" } }, 404);
   }
@@ -71,11 +60,9 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, speakerToken);
 
-  const proposer = await first<{ first_name: string | null }>(
-    c.env.DB,
-    "SELECT first_name FROM users WHERE id = ?",
-    [proposal.proposer_user_id],
-  );
+  const proposer = await first<{ first_name: string | null }>(c.env.DB, "SELECT first_name FROM users WHERE id = ?", [
+    proposal.proposer_user_id,
+  ]);
 
   const inviteContext = await buildProposalInviteEmailContext(c.env.DB, {
     proposalId: proposal.id,

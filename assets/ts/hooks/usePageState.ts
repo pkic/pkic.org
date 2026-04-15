@@ -31,7 +31,10 @@ export function usePageState() {
       onPrev: () => setOffset((o) => Math.max(0, o - pageSize)),
       onNext: () => setOffset((o) => o + pageSize),
       onJump: (p: number) => setOffset((p - 1) * pageSize),
-      onPageSizeChange: (s: number) => { setPageSize(s); setOffset(0); },
+      onPageSizeChange: (s: number) => {
+        setPageSize(s);
+        setOffset(0);
+      },
     };
   }
 

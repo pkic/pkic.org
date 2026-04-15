@@ -17,10 +17,7 @@ import { adminBulkAttendeeInvitesSchema } from "../../../../../../../../assets/s
 // Outcome buckets returned to the admin UI.
 type BulkItemResult = { email: string; inviteToken?: string };
 
-
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminBulkAttendeeInvitesSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
@@ -30,7 +27,7 @@ export async function onRequestPost(
   // When sending a large list in chunks the frontend supplies the digest of the
   // full invite list (matching what was committed at preview time).  For single-
   // batch sends the digest is computed directly from the current invites.
-  const inviteDigest = body.inviteDigest ?? await computeAttendeeInviteDigest(body.invites);
+  const inviteDigest = body.inviteDigest ?? (await computeAttendeeInviteDigest(body.invites));
   const previewValidation = await verifyAttendeeInvitePreviewToken({
     secret,
     token: body.previewToken,
@@ -41,10 +38,18 @@ export async function onRequestPost(
 
   if (!previewValidation.ok) {
     if (previewValidation.reason === "expired") {
-      throw new AppError(409, "INVITE_PREVIEW_EXPIRED", "Invite preview expired. Render a fresh preview before sending.");
+      throw new AppError(
+        409,
+        "INVITE_PREVIEW_EXPIRED",
+        "Invite preview expired. Render a fresh preview before sending.",
+      );
     }
     if (previewValidation.reason === "mismatch") {
-      throw new AppError(409, "INVITE_PREVIEW_STALE", "Invite list changed after preview. Render preview again before sending.");
+      throw new AppError(
+        409,
+        "INVITE_PREVIEW_STALE",
+        "Invite list changed after preview. Render preview again before sending.",
+      );
     }
     throw new AppError(400, "INVITE_PREVIEW_INVALID", "Invalid invite preview token. Render preview before sending.");
   }
@@ -84,12 +89,8 @@ export async function onRequestPost(
   const created: BulkItemResult[] = outcomes
     .filter((o) => o.status === "created")
     .map((o) => ({ email: o.email, inviteToken: o.token }));
-  const endorsed: BulkItemResult[] = outcomes
-    .filter((o) => o.status === "endorsed")
-    .map((o) => ({ email: o.email }));
-  const skipped: BulkItemResult[] = outcomes
-    .filter((o) => o.status === "skipped")
-    .map((o) => ({ email: o.email }));
+  const endorsed: BulkItemResult[] = outcomes.filter((o) => o.status === "endorsed").map((o) => ({ email: o.email }));
+  const skipped: BulkItemResult[] = outcomes.filter((o) => o.status === "skipped").map((o) => ({ email: o.email }));
 
   return json({ success: true, created, endorsed, skipped });
 }

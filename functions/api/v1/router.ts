@@ -19,12 +19,11 @@ const app = new Hono();
 export const openapi = fromHono(app);
 
 app.onError((error, c) => {
-	const request = c.req.raw;
-	const requestId = ((c as any).get("requestId") as string | undefined)
-		?? request.headers.get("x-request-id")
-		?? crypto.randomUUID();
-	const sensitive = (c as any).get("sensitive") === true;
-	return finalizeApiResponse(request, handleError(error), sensitive, requestId);
+  const request = c.req.raw;
+  const requestId =
+    ((c as any).get("requestId") as string | undefined) ?? request.headers.get("x-request-id") ?? crypto.randomUUID();
+  const sensitive = (c as any).get("sensitive") === true;
+  return finalizeApiResponse(request, handleError(error), sensitive, requestId);
 });
 app.use("*", middleware_l);
 app.get("/geo", GeoGet_l);

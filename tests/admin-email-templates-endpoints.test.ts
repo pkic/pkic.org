@@ -31,7 +31,9 @@ async function callAdmin(path: string, init: RequestInit = {}): Promise<Response
 
 async function setupAdminTemplates(): Promise<{ adminId: string }> {
   await seedEventAndAdmin(env.DB);
-  const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1"))[0];
+  const adminRow = (
+    await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+  )[0];
   await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
   await seedWorkflowEmailTemplates(env.DB, adminRow.id);
   return { adminId: adminRow.id };
@@ -48,9 +50,17 @@ describe("admin email template endpoints", () => {
     const response = await callAdmin("/api/v1/admin/email-templates");
     expect(response.status).toBe(200);
 
-    const payload = await response.json() as { templates: Array<{ template_key: string; status: string; version: number }> };
-    expect(payload.templates.some((template) => template.template_key === "email_layout" && template.status === "active")).toBe(true);
-    expect(payload.templates.some((template) => template.template_key === "registration_confirm_email" && template.status === "active")).toBe(true);
+    const payload = (await response.json()) as {
+      templates: Array<{ template_key: string; status: string; version: number }>;
+    };
+    expect(
+      payload.templates.some((template) => template.template_key === "email_layout" && template.status === "active"),
+    ).toBe(true);
+    expect(
+      payload.templates.some(
+        (template) => template.template_key === "registration_confirm_email" && template.status === "active",
+      ),
+    ).toBe(true);
   });
 
   it("renders preview HTML and text with seeded partials and layout", async () => {
@@ -70,7 +80,7 @@ describe("admin email template endpoints", () => {
     });
 
     expect(response.status).toBe(200);
-    const payload = await response.json() as { success: boolean; subject: string; html: string; text: string };
+    const payload = (await response.json()) as { success: boolean; subject: string; html: string; text: string };
     expect(payload.success).toBe(true);
     expect(payload.subject).toBe("Preview for Demo Day");
     expect(payload.html).toContain("Jordan");
@@ -90,7 +100,7 @@ describe("admin email template endpoints", () => {
     });
 
     expect(versionsResponse.status).toBe(200);
-    const versionsPayload = await versionsResponse.json() as {
+    const versionsPayload = (await versionsResponse.json()) as {
       success: boolean;
       version: { template_key: string; version: number; status: string };
     };
@@ -105,7 +115,7 @@ describe("admin email template endpoints", () => {
     });
 
     expect(activateResponse.status).toBe(200);
-    const activatePayload = await activateResponse.json() as { success: boolean };
+    const activatePayload = (await activateResponse.json()) as { success: boolean };
     expect(activatePayload.success).toBe(true);
 
     const rows = await queryAll<{ version: number; status: string }>(
@@ -123,7 +133,7 @@ describe("admin email template endpoints", () => {
       body: JSON.stringify({ version: 999 }),
     });
     expect(missingResponse.status).toBe(404);
-    const missingPayload = await missingResponse.json() as { error?: { code?: string } };
+    const missingPayload = (await missingResponse.json()) as { error?: { code?: string } };
     expect(missingPayload.error?.code).toBe("EMAIL_TEMPLATE_VERSION_NOT_FOUND");
   });
 });

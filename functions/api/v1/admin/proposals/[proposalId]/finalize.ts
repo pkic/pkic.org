@@ -14,9 +14,7 @@ import { speakerManagePageUrl } from "../../../../../_lib/services/frontend-link
 import { buildEventEmailVariables } from "../../../../../_lib/services/events";
 import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
   const proposalId = c.req.param("proposalId");
 
@@ -61,19 +59,22 @@ export async function onRequestPost(
     event_id: string;
     proposer_user_id: string;
     presentation_deadline: string | null;
-  }>(
-    c.env.DB,
-    "SELECT title, event_id, proposer_user_id, presentation_deadline FROM session_proposals WHERE id = ?",
-    [proposalId],
-  );
+  }>(c.env.DB, "SELECT title, event_id, proposer_user_id, presentation_deadline FROM session_proposals WHERE id = ?", [
+    proposalId,
+  ]);
 
   if (proposal) {
     const [event, speakers] = await Promise.all([
-      first<{ id: string; name: string; slug: string; base_path: string | null; starts_at: string | null; settings_json: string }>(
-        c.env.DB,
-        "SELECT id, name, slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
-        [proposal.event_id],
-      ),
+      first<{
+        id: string;
+        name: string;
+        slug: string;
+        base_path: string | null;
+        starts_at: string | null;
+        settings_json: string;
+      }>(c.env.DB, "SELECT id, name, slug, base_path, starts_at, settings_json FROM events WHERE id = ?", [
+        proposal.event_id,
+      ]),
       listProposalSpeakersWithStatus(c.env.DB, proposalId),
     ]);
 
@@ -108,11 +109,7 @@ export async function onRequestPost(
 
         if (isActive) {
           // Refresh the speaker's manage token so the acceptance emails contain valid links.
-          const freshToken = await refreshSpeakerManageToken(
-            c.env.DB,
-            proposalId,
-            speaker.user_id,
-          );
+          const freshToken = await refreshSpeakerManageToken(c.env.DB, proposalId, speaker.user_id);
           const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, freshToken);
 
           await queueEmail(c.env.DB, {

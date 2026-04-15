@@ -24,15 +24,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     await replaceEventTerms(c.env.DB, event.id, "speaker", body.terms.speaker);
   }
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "event_synced_from_hugo",
-    "event",
-    event.id,
-    { slug: event.slug },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "event_synced_from_hugo", "event", event.id, { slug: event.slug });
 
   return json({ success: true, event });
 }

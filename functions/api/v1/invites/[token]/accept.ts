@@ -20,11 +20,16 @@ export async function onRequestPost(c: any): Promise<Response> {
   const signingSecret = requireInternalSecret(c.env);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const invite = await findInviteByToken(c.env.DB, c.req.param("token"));
-  const event = await first<{ id: string; slug: string; base_path: string | null; starts_at: string | null; name: string; settings_json: string }>(
-    c.env.DB,
-    "SELECT id, slug, base_path, starts_at, name, settings_json FROM events WHERE id = ?",
-    [invite.event_id],
-  );
+  const event = await first<{
+    id: string;
+    slug: string;
+    base_path: string | null;
+    starts_at: string | null;
+    name: string;
+    settings_json: string;
+  }>(c.env.DB, "SELECT id, slug, base_path, starts_at, name, settings_json FROM events WHERE id = ?", [
+    invite.event_id,
+  ]);
 
   if (!event) {
     return json({ error: { code: "EVENT_NOT_FOUND", message: "Invite event not found" } }, 404);
@@ -66,7 +71,10 @@ export async function onRequestPost(c: any): Promise<Response> {
       id: event.id,
     },
     userId: user.id,
-    attendanceType: (body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance)) as "in_person" | "virtual" | "on_demand",
+    attendanceType: (body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance)) as
+      | "in_person"
+      | "virtual"
+      | "on_demand",
     dayAttendance: body.dayAttendance,
     sourceType: "invite",
     customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,

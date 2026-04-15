@@ -31,7 +31,18 @@ interface PagerProps {
   onPageSizeChange: (size: number) => void;
 }
 
-export function Pager({ page, hasMore, pageSize, offset, rowCount, total, onPrev, onNext, onJump, onPageSizeChange }: PagerProps) {
+export function Pager({
+  page,
+  hasMore,
+  pageSize,
+  offset,
+  rowCount,
+  total,
+  onPrev,
+  onNext,
+  onJump,
+  onPageSizeChange,
+}: PagerProps) {
   if (rowCount === 0 && !hasMore && offset === 0) return null;
   const max = total > 0 ? Math.ceil(total / pageSize) : page + (hasMore ? 1 : 0);
 
@@ -41,19 +52,27 @@ export function Pager({ page, hasMore, pageSize, offset, rowCount, total, onPrev
       <nav>
         <ul class="pagination pagination-sm mb-0">
           <li class={`page-item${page <= 1 ? " disabled" : ""}`}>
-            <button class="page-link" onClick={onPrev} disabled={page <= 1}>&laquo;</button>
+            <button class="page-link" onClick={onPrev} disabled={page <= 1}>
+              &laquo;
+            </button>
           </li>
           {pageItems(page, max).map((item, i) =>
             item === "…" ? (
-              <li key={`e${i}`} class="page-item disabled"><span class="page-link">…</span></li>
+              <li key={`e${i}`} class="page-item disabled">
+                <span class="page-link">…</span>
+              </li>
             ) : (
               <li key={item} class={`page-item${item === page ? " active" : ""}`}>
-                <button class="page-link" onClick={() => onJump(item as number)}>{item}</button>
+                <button class="page-link" onClick={() => onJump(item)}>
+                  {item}
+                </button>
               </li>
             ),
           )}
           <li class={`page-item${!hasMore ? " disabled" : ""}`}>
-            <button class="page-link" onClick={onNext} disabled={!hasMore}>&raquo;</button>
+            <button class="page-link" onClick={onNext} disabled={!hasMore}>
+              &raquo;
+            </button>
           </li>
         </ul>
       </nav>
@@ -62,9 +81,12 @@ export function Pager({ page, hasMore, pageSize, offset, rowCount, total, onPrev
         value={pageSize}
         onChange={(e) => onPageSizeChange(Number((e.target as HTMLSelectElement).value))}
       >
-        {PAGE_SIZE_OPTIONS.map((o) => <option key={o} value={o}>{o} / page</option>)}
+        {PAGE_SIZE_OPTIONS.map((o) => (
+          <option key={o} value={o}>
+            {o} / page
+          </option>
+        ))}
       </select>
     </div>
   );
 }
-

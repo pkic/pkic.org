@@ -37,7 +37,9 @@ export interface DayAttendanceSelection {
  * Falls back to a legacy default (in_person + on_demand) using the
  * in_person_capacity column when no options have been configured.
  */
-export function resolveAttendanceOptions(day: Pick<EventDayRecord, "attendance_options_json" | "in_person_capacity">): AttendanceOption[] {
+export function resolveAttendanceOptions(
+  day: Pick<EventDayRecord, "attendance_options_json" | "in_person_capacity">,
+): AttendanceOption[] {
   if (day.attendance_options_json) {
     try {
       const parsed = JSON.parse(day.attendance_options_json);
@@ -174,16 +176,27 @@ export async function enforceDayCapacity(
          AND rda.attendance_type = ?
          AND r.status IN ('pending_email_confirmation', 'registered')
          AND (? IS NULL OR r.id <> ?)`,
-      [payload.eventId, day.id, selection.attendanceType, payload.excludeRegistrationId ?? null, payload.excludeRegistrationId ?? null],
+      [
+        payload.eventId,
+        day.id,
+        selection.attendanceType,
+        payload.excludeRegistrationId ?? null,
+        payload.excludeRegistrationId ?? null,
+      ],
     );
 
     const total = Number(row?.total ?? 0);
     if (total >= capacity) {
-      throw new AppError(409, "DAY_CAPACITY_REACHED", `Capacity reached for '${selection.attendanceType}' on ${selection.dayDate}`, {
-        dayDate: selection.dayDate,
-        attendanceType: selection.attendanceType,
-        capacity,
-      });
+      throw new AppError(
+        409,
+        "DAY_CAPACITY_REACHED",
+        `Capacity reached for '${selection.attendanceType}' on ${selection.dayDate}`,
+        {
+          dayDate: selection.dayDate,
+          attendanceType: selection.attendanceType,
+          capacity,
+        },
+      );
     }
   }
 }

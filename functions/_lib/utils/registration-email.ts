@@ -77,10 +77,7 @@ export function buildAcceptedTermsText(
  * Use in flows where the original consent list is no longer in scope (e.g.
  * confirm-email, resend, update).
  */
-export async function getAcceptedTermsTextForRegistration(
-  db: DatabaseLike,
-  registrationId: string,
-): Promise<string> {
+export async function getAcceptedTermsTextForRegistration(db: DatabaseLike, registrationId: string): Promise<string> {
   const rows = await all<{ title: string | null }>(
     db,
     `SELECT et.display_text AS title

@@ -33,7 +33,11 @@ function CostAnchor({ days }: { days: number | null }) {
   if (days) {
     return (
       <span>
-        roughly <strong>${150 * days}–${300 * days} per attendee</strong> for this {days}-day event
+        roughly{" "}
+        <strong>
+          ${150 * days}–${300 * days} per attendee
+        </strong>{" "}
+        for this {days}-day event
       </span>
     );
   }
@@ -73,17 +77,19 @@ function DonationCtaInner({ options }: { options: DonationCtaOptions }) {
       <div class="event-flow-donation-cta-inner">
         <p class="event-flow-donation-cta-heading">Help welcome more attendees</p>
         <p class="event-flow-donation-cta-body">
-          Our events — and membership — are completely free. We run on sponsors and voluntary donations.
-          Hosting you at this event costs us <CostAnchor days={days} />.
-          A donation of any size helps us keep the doors open to everyone.
+          Our events — and membership — are completely free. We run on sponsors and voluntary donations. Hosting you at
+          this event costs us <CostAnchor days={days} />. A donation of any size helps us keep the doors open to
+          everyone.
         </p>
         <div ref={widgetRef} />
         <p class="event-flow-donation-cta-disclaimer">
-          PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are not deductible as charitable contributions for federal income tax purposes in the United States. This payment is voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor regarding any possible business-expense treatment or other tax consequences.
+          PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are
+          not deductible as charitable contributions for federal income tax purposes in the United States. This payment
+          is voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor
+          regarding any possible business-expense treatment or other tax consequences.
         </p>
         <p class="event-flow-donation-cta-sponsor">
-          Interested in sponsoring our events?{" "}
-          <a href="/sponsors/sponsor/">Enquire about sponsor options &rarr;</a>
+          Interested in sponsoring our events? <a href="/sponsors/sponsor/">Enquire about sponsor options &rarr;</a>
         </p>
       </div>
     </div>

@@ -22,7 +22,7 @@ export class AdminEmailTemplatesKeyActivatePost extends OpenAPIRoute {
 
   async handle(c: any) {
     try {
-      return await onRequestPost(c as any);
+      return await onRequestPost(c);
     } catch (error) {
       return handleError(error);
     }

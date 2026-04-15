@@ -10,9 +10,7 @@ export async function queryAll<T = Record<string, unknown>>(
   sql: string,
   ...values: unknown[]
 ): Promise<T[]> {
-  const boundValues = values.length === 1 && Array.isArray(values[0])
-    ? values[0]
-    : values;
+  const boundValues = values.length === 1 && Array.isArray(values[0]) ? values[0] : values;
   const stmt = boundValues.length > 0 ? db.prepare(sql).bind(...boundValues) : db.prepare(sql);
   const { results } = await stmt.all<T>();
   return results;

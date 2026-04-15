@@ -47,14 +47,16 @@ export class TermsGet extends OpenAPIRoute {
                 name: z.string(),
               }),
               audience: z.enum(["attendee", "speaker"]),
-              terms: z.array(z.object({
-                termKey: z.string(),
-                version: z.string(),
-                required: z.boolean(),
-                contentRef: z.string(),
-                displayText: z.string(),
-                helpText: z.string().nullable(),
-              })),
+              terms: z.array(
+                z.object({
+                  termKey: z.string(),
+                  version: z.string(),
+                  required: z.boolean(),
+                  contentRef: z.string(),
+                  displayText: z.string(),
+                  helpText: z.string().nullable(),
+                }),
+              ),
             }),
           },
         },
@@ -64,10 +66,10 @@ export class TermsGet extends OpenAPIRoute {
 
   async handle(c: any) {
     const data = await this.getValidatedData<typeof this.schema>();
-    const audience = data.query.audience as "attendee" | "speaker";
+    const audience = data.query.audience;
     const event = await getEventBySlug(c.env.DB, data.params.eventSlug);
     const terms = await getRequiredTerms(c.env.DB, event.id, audience);
-    
+
     return c.json({
       event: { id: event.id, slug: event.slug, name: event.name },
       audience,

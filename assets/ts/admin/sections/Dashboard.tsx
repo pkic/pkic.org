@@ -10,9 +10,7 @@ import { useData } from "../../hooks/useData";
 
 export function Dashboard() {
   const [, navigate] = useHashLocation();
-  const { data: stats, loading, error } = useData<StatsResponse>(
-    () => api<StatsResponse>("/api/v1/admin/stats"), [],
-  );
+  const { data: stats, loading, error } = useData<StatsResponse>(() => api<StatsResponse>("/api/v1/admin/stats"), []);
 
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
@@ -27,8 +25,18 @@ export function Dashboard() {
 
   const activityChart = svgLineChart(
     [
-      { label: "Registrations", values: stats.recentActivity.map((d) => d.registrations), stroke: "#198754", area: "rgba(25,135,84,.07)" },
-      { label: "Invites", values: stats.recentActivity.map((d) => d.invites), stroke: "#fd7e14", area: "rgba(253,126,20,.07)" },
+      {
+        label: "Registrations",
+        values: stats.recentActivity.map((d) => d.registrations),
+        stroke: "#198754",
+        area: "rgba(25,135,84,.07)",
+      },
+      {
+        label: "Invites",
+        values: stats.recentActivity.map((d) => d.invites),
+        stroke: "#fd7e14",
+        area: "rgba(253,126,20,.07)",
+      },
     ],
     stats.recentActivity.map((d) => d.date.slice(5)),
   );
@@ -54,7 +62,11 @@ export function Dashboard() {
         <StatCard
           label="Pending Donations"
           value={donPending}
-          note={[donFailed > 0 ? `${donFailed} failed` : "", donExpired > 0 ? `${donExpired} expired` : ""].filter(Boolean).join(" · ") || "none failed"}
+          note={
+            [donFailed > 0 ? `${donFailed} failed` : "", donExpired > 0 ? `${donExpired} expired` : ""]
+              .filter(Boolean)
+              .join(" · ") || "none failed"
+          }
           variant={donFailed > 0 ? "danger" : undefined}
         />
       </div>
@@ -77,9 +89,27 @@ export function Dashboard() {
               <h6 class="text-uppercase small fw-bold text-muted mb-3">Top Events</h6>
               <DataTable
                 columns={[
-                  { header: "Event", cell: (e) => <button class="btn btn-link p-0 small text-start" onClick={() => navigate(`/events/${encodeURIComponent(e.slug)}`)}>{e.name}</button> },
-                  { header: { label: "Conf.", className: "text-end" }, cell: (e) => e.confirmed, className: "mono text-end" },
-                  { header: { label: "Total", className: "text-end" }, cell: (e) => e.total, className: "mono text-end" },
+                  {
+                    header: "Event",
+                    cell: (e) => (
+                      <button
+                        class="btn btn-link p-0 small text-start"
+                        onClick={() => navigate(`/events/${encodeURIComponent(e.slug)}`)}
+                      >
+                        {e.name}
+                      </button>
+                    ),
+                  },
+                  {
+                    header: { label: "Conf.", className: "text-end" },
+                    cell: (e) => e.confirmed,
+                    className: "mono text-end",
+                  },
+                  {
+                    header: { label: "Total", className: "text-end" },
+                    cell: (e) => e.total,
+                    className: "mono text-end",
+                  },
                 ]}
                 data={stats.topEvents}
                 empty="No events"

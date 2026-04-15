@@ -30,11 +30,9 @@ interface HeadshotRow {
 async function onGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
-  const user = await first<HeadshotRow>(
-    c.env.DB,
-    "SELECT id, headshot_r2_key FROM users WHERE id = ?",
-    [c.req.param("userId")],
-  );
+  const user = await first<HeadshotRow>(c.env.DB, "SELECT id, headshot_r2_key FROM users WHERE id = ?", [
+    c.req.param("userId"),
+  ]);
 
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
   if (!user.headshot_r2_key) {
@@ -65,11 +63,9 @@ async function onGet(c: any): Promise<Response> {
 async function onPut(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
-  const user = await first<HeadshotRow>(
-    c.env.DB,
-    "SELECT id, headshot_r2_key FROM users WHERE id = ?",
-    [c.req.param("userId")],
-  );
+  const user = await first<HeadshotRow>(c.env.DB, "SELECT id, headshot_r2_key FROM users WHERE id = ?", [
+    c.req.param("userId"),
+  ]);
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
 
   const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
@@ -86,7 +82,9 @@ async function onPut(c: any): Promise<Response> {
 
   if (buffer.byteLength > MAX_HEADSHOT_BYTES) {
     return json(
-      { error: { code: "FILE_TOO_LARGE", message: `Headshot must be under ${MAX_HEADSHOT_BYTES / (1024 * 1024)} MB.` } },
+      {
+        error: { code: "FILE_TOO_LARGE", message: `Headshot must be under ${MAX_HEADSHOT_BYTES / (1024 * 1024)} MB.` },
+      },
       413,
     );
   }
@@ -111,21 +109,17 @@ async function onPut(c: any): Promise<Response> {
   }
 
   const now = nowIso();
-  await run(
-    c.env.DB,
-    "UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ? WHERE id = ?",
-    [r2Key, now, now, user.id],
-  );
-
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "headshot_uploaded",
-    "user",
+  await run(c.env.DB, "UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ? WHERE id = ?", [
+    r2Key,
+    now,
+    now,
     user.id,
-    { r2Key, uploadedBy: "admin" },
-  );
+  ]);
+
+  await writeAuditLog(c.env.DB, "admin", admin.id, "headshot_uploaded", "user", user.id, {
+    r2Key,
+    uploadedBy: "admin",
+  });
 
   const origin = resolveAppBaseUrl(c.env, c.req.raw);
   c.executionCtx.waitUntil(invalidateAndRerender(user.id, c.env, origin));
@@ -138,18 +132,14 @@ async function onPut(c: any): Promise<Response> {
 async function onDelete(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
-  const user = await first<HeadshotRow>(
-    c.env.DB,
-    "SELECT id, headshot_r2_key FROM users WHERE id = ?",
-    [c.req.param("userId")],
-  );
+  const user = await first<HeadshotRow>(c.env.DB, "SELECT id, headshot_r2_key FROM users WHERE id = ?", [
+    c.req.param("userId"),
+  ]);
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
 
   if (user.headshot_r2_key && c.env.SPEAKER_UPLOADS_BUCKET) {
     // We don't await deletion from R2 — it's best-effort
-    c.executionCtx.waitUntil(
-      c.env.SPEAKER_UPLOADS_BUCKET.put(user.headshot_r2_key, "").catch(() => {}),
-    );
+    c.executionCtx.waitUntil(c.env.SPEAKER_UPLOADS_BUCKET.put(user.headshot_r2_key, "").catch(() => {}));
   }
 
   const now = nowIso();
@@ -159,15 +149,9 @@ async function onDelete(c: any): Promise<Response> {
     [now, user.id],
   );
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "headshot_removed",
-    "user",
-    user.id,
-    { previousKey: user.headshot_r2_key },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "headshot_removed", "user", user.id, {
+    previousKey: user.headshot_r2_key,
+  });
 
   return json({ success: true });
 }
@@ -176,9 +160,12 @@ async function onDelete(c: any): Promise<Response> {
 
 export async function onRequest(c: any): Promise<Response> {
   switch (c.req.raw.method) {
-    case "GET":    return onGet(c);
-    case "PUT":    return onPut(c);
-    case "DELETE": return onDelete(c);
+    case "GET":
+      return onGet(c);
+    case "PUT":
+      return onPut(c);
+    case "DELETE":
+      return onDelete(c);
     default:
       return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
@@ -188,7 +175,7 @@ export class AdminUsersUserIdHeadshotGet extends OpenAPIRoute {
   schema = {};
 
   async handle(c: any) {
-    return onGet(c as any);
+    return onGet(c);
   }
 }
 
@@ -196,7 +183,7 @@ export class AdminUsersUserIdHeadshotPut extends OpenAPIRoute {
   schema = {};
 
   async handle(c: any) {
-    return onPut(c as any);
+    return onPut(c);
   }
 }
 
@@ -204,6 +191,6 @@ export class AdminUsersUserIdHeadshotDelete extends OpenAPIRoute {
   schema = {};
 
   async handle(c: any) {
-    return onDelete(c as any);
+    return onDelete(c);
   }
 }

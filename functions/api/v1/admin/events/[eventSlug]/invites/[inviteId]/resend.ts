@@ -5,7 +5,11 @@ import { first, run } from "../../../../../../../_lib/db/queries";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
-import { proposalPageUrl, registrationPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
+import {
+  proposalPageUrl,
+  registrationPageUrl,
+  inviteDeclineUrl,
+} from "../../../../../../../_lib/services/frontend-links";
 import { refreshInviteToken } from "../../../../../../../_lib/services/invites";
 import { addHours, nowIso } from "../../../../../../../_lib/utils/time";
 
@@ -20,9 +24,7 @@ type InviteRow = {
   created_at: string;
 };
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
@@ -76,14 +78,13 @@ export async function onRequestPost(
     [freshExpiry, now, invite.id],
   );
 
-  const actionUrl = invite.invite_type === "attendee"
-    ? registrationPageUrl(appBaseUrl, event, { invite: token, source: "invite_resend" })
-    : proposalPageUrl(appBaseUrl, event, { invite: token, source: "speaker_invite_resend" });
+  const actionUrl =
+    invite.invite_type === "attendee"
+      ? registrationPageUrl(appBaseUrl, event, { invite: token, source: "invite_resend" })
+      : proposalPageUrl(appBaseUrl, event, { invite: token, source: "speaker_invite_resend" });
 
   const templateKey = invite.invite_type === "attendee" ? "attendee_invite" : "speaker_invite";
-  const subject = invite.invite_type === "attendee"
-    ? `Invitation: ${event.name}`
-    : `Speaker invitation: ${event.name}`;
+  const subject = invite.invite_type === "attendee" ? `Invitation: ${event.name}` : `Speaker invitation: ${event.name}`;
 
   const outboxId = await queueEmail(c.env.DB, {
     eventId: event.id,
@@ -108,9 +109,7 @@ export async function onRequestPost(
   return json({ success: true, inviteId: invite.id, resentAt: now, inviteType: invite.invite_type });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

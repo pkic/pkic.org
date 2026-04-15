@@ -50,24 +50,20 @@ export async function onRequestPost(c: any): Promise<Response> {
   const maxAllowed = event.invite_limit_speaker_nomination ?? config.inviteLimitSpeakerNomination;
 
   // Look up nominator's full name — the key social-proof ingredient.
-  const nominatorUser = await first<{ first_name: string | null; last_name: string | null; organization_name: string | null }>(
-    c.env.DB,
-    "SELECT first_name, last_name, organization_name FROM users WHERE id = ?",
-    [registration.user_id],
-  );
+  const nominatorUser = await first<{
+    first_name: string | null;
+    last_name: string | null;
+    organization_name: string | null;
+  }>(c.env.DB, "SELECT first_name, last_name, organization_name FROM users WHERE id = ?", [registration.user_id]);
   const nominatorBaseName = nominatorUser
     ? [nominatorUser.first_name, nominatorUser.last_name].filter(Boolean).join(" ")
     : "";
-  const inviterName = nominatorBaseName && nominatorUser?.organization_name
-    ? `${nominatorBaseName} (${nominatorUser.organization_name})`
-    : nominatorBaseName;
+  const inviterName =
+    nominatorBaseName && nominatorUser?.organization_name
+      ? `${nominatorBaseName} (${nominatorUser.organization_name})`
+      : nominatorBaseName;
 
-  let nominationCount = await countInvitesByInviter(
-    c.env.DB,
-    event.id,
-    registration.user_id,
-    "speaker",
-  );
+  let nominationCount = await countInvitesByInviter(c.env.DB, event.id, registration.user_id, "speaker");
 
   const created: Array<{ email: string }> = [];
   const endorsed: Array<{ email: string }> = [];
@@ -80,7 +76,11 @@ export async function onRequestPost(c: any): Promise<Response> {
     }
 
     try {
-      const { invite, token: inviteToken, isNew } = await createInvite(c.env.DB, {
+      const {
+        invite,
+        token: inviteToken,
+        isNew,
+      } = await createInvite(c.env.DB, {
         eventId: event.id,
         inviterUserId: registration.user_id,
         inviterRegistrationId: registration.id,
@@ -120,11 +120,12 @@ export async function onRequestPost(c: any): Promise<Response> {
         endorsed.push({ email: invite.invitee_email });
       }
     } catch (err) {
-      if (err instanceof AppError && (
-        err.code === "INVITEE_ALREADY_REGISTERED"
-        || err.code === "INVITEE_ALREADY_PROPOSED"
-        || err.code === "INVITEE_UNSUBSCRIBED"
-      )) {
+      if (
+        err instanceof AppError &&
+        (err.code === "INVITEE_ALREADY_REGISTERED" ||
+          err.code === "INVITEE_ALREADY_PROPOSED" ||
+          err.code === "INVITEE_UNSUBSCRIBED")
+      ) {
         skipped.push({ email: item.email, reason: err.code.toLowerCase() });
       } else {
         throw err;

@@ -17,9 +17,7 @@ import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { adminEventSettingsSchema } from "../../../../../../assets/shared/schemas/api";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 
-export async function onRequestPatch(
-  c: any,
-): Promise<Response> {
+export async function onRequestPatch(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEventSettingsSchema);
 
@@ -30,27 +28,45 @@ export async function onRequestPatch(
   const updatedSettings: Record<string, unknown> = { ...existingSettings };
 
   if (body.venue !== undefined) {
-    if (body.venue === null) { delete updatedSettings["venue"]; }
-    else { updatedSettings["venue"] = body.venue; }
+    if (body.venue === null) {
+      delete updatedSettings["venue"];
+    } else {
+      updatedSettings["venue"] = body.venue;
+    }
   }
   if (body.virtualUrl !== undefined) {
-    if (body.virtualUrl === null) { delete updatedSettings["virtualUrl"]; }
-    else { updatedSettings["virtualUrl"] = body.virtualUrl; }
+    if (body.virtualUrl === null) {
+      delete updatedSettings["virtualUrl"];
+    } else {
+      updatedSettings["virtualUrl"] = body.virtualUrl;
+    }
   }
   if (body.heroImageUrl !== undefined) {
-    if (body.heroImageUrl === null) { delete updatedSettings["heroImageUrl"]; }
-    else { updatedSettings["heroImageUrl"] = normalizeEventHeroImageUrl(body.heroImageUrl, resolveAppBaseUrl(c.env, c.req.raw)); }
+    if (body.heroImageUrl === null) {
+      delete updatedSettings["heroImageUrl"];
+    } else {
+      updatedSettings["heroImageUrl"] = normalizeEventHeroImageUrl(
+        body.heroImageUrl,
+        resolveAppBaseUrl(c.env, c.req.raw),
+      );
+    }
   }
   if (body.location !== undefined) {
-    if (body.location === null) { delete updatedSettings["location"]; }
-    else { updatedSettings["location"] = body.location; }
+    if (body.location === null) {
+      delete updatedSettings["location"];
+    } else {
+      updatedSettings["location"] = body.location;
+    }
   }
   if (body.sessionTypes !== undefined) {
     const proposal = (updatedSettings["proposal"] as Record<string, unknown> | undefined) ?? {};
     if (body.sessionTypes === null || body.sessionTypes.length === 0) {
       delete proposal["sessionTypes"];
-      if (Object.keys(proposal).length === 0) { delete updatedSettings["proposal"]; }
-      else { updatedSettings["proposal"] = proposal; }
+      if (Object.keys(proposal).length === 0) {
+        delete updatedSettings["proposal"];
+      } else {
+        updatedSettings["proposal"] = proposal;
+      }
     } else {
       updatedSettings["proposal"] = { ...proposal, sessionTypes: body.sessionTypes };
     }
@@ -77,8 +93,10 @@ export async function onRequestPatch(
       body.name ?? null,
       body.timezone ?? null,
       // starts_at sentinel: 1 = omitted (keep existing), 0 = explicit value
-      body.startsAt === undefined ? 1 : 0, body.startsAt ?? null,
-      body.endsAt   === undefined ? 1 : 0, body.endsAt   ?? null,
+      body.startsAt === undefined ? 1 : 0,
+      body.startsAt ?? null,
+      body.endsAt === undefined ? 1 : 0,
+      body.endsAt ?? null,
       body.registrationMode ?? null,
       body.inviteLimitAttendee ?? null,
       stringifyJson(updatedSettings),
@@ -98,15 +116,7 @@ export async function onRequestPatch(
     );
   }
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "event_settings_updated",
-    "event",
-    event.id,
-    body,
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "event_settings_updated", "event", event.id, body);
 
   const updated = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const retention = await first<{ user_retention_days: number }>(

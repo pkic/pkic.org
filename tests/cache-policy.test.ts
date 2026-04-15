@@ -4,11 +4,7 @@ import { onRequest as apiMiddlewareOnRequest } from "../functions/api/v1/_middle
 import { onRequest as redirectMiddlewareOnRequest } from "../functions/r/_middleware";
 import type { PagesContext } from "../functions/_lib/types";
 
-function createMiddlewareContext(
-  request: Request,
-  nextResponse: Response,
-): PagesContext {
-
+function createMiddlewareContext(request: Request, nextResponse: Response): PagesContext {
   return {
     request,
     env,
@@ -46,12 +42,8 @@ describe("cache policy middleware", () => {
 
   it("adds no-store to referral/redirect routes", async () => {
     const referralResponse = await redirectMiddlewareOnRequest(
-      createMiddlewareContext(
-        new Request("https://app.test/r/abc1234"),
-        new Response(null, { status: 302 }),
-      ),
+      createMiddlewareContext(new Request("https://app.test/r/abc1234"), new Response(null, { status: 302 })),
     );
     expect(referralResponse.headers.get("cache-control")).toContain("no-store");
   });
-
 });

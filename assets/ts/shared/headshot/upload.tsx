@@ -30,13 +30,17 @@ async function readImage(blob: Blob): Promise<HTMLImageElement> {
 
 function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
   return new Promise((resolve, reject) => {
-    canvas.toBlob((blob) => {
-      if (!blob) {
-        reject(new Error("Failed to encode image"));
-        return;
-      }
-      resolve(blob);
-    }, "image/jpeg", quality);
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Failed to encode image"));
+          return;
+        }
+        resolve(blob);
+      },
+      "image/jpeg",
+      quality,
+    );
   });
 }
 
@@ -47,11 +51,7 @@ export interface HeadshotDisclaimerOptions {
 }
 
 export function showHeadshotDisclaimer(opts: HeadshotDisclaimerOptions = {}): Promise<boolean> {
-  const {
-    title = "Before you upload a photo",
-    texts = HEADSHOT_DISCLAIMER_TEXT,
-    confirmText = "Upload photo"
-  } = opts;
+  const { title = "Before you upload a photo", texts = HEADSHOT_DISCLAIMER_TEXT, confirmText = "Upload photo" } = opts;
 
   return new Promise((resolve) => {
     const modal = mountModalTemplate(
@@ -82,7 +82,11 @@ export function showHeadshotDisclaimer(opts: HeadshotDisclaimerOptions = {}): Pr
 
     titleEl.textContent = title;
     render(
-      <>{texts.map((text, i) => <li key={i}>{text}</li>)}</>,
+      <>
+        {texts.map((text, i) => (
+          <li key={i}>{text}</li>
+        ))}
+      </>,
       listEl,
     );
     confirmBtn.textContent = confirmText;
@@ -122,10 +126,7 @@ export function showHeadshotDisclaimer(opts: HeadshotDisclaimerOptions = {}): Pr
   });
 }
 
-export async function prepareHeadshotUploadBlob(
-  croppedBlob: Blob,
-  maxBytes: number,
-): Promise<Blob> {
+export async function prepareHeadshotUploadBlob(croppedBlob: Blob, maxBytes: number): Promise<Blob> {
   if (croppedBlob.size <= maxBytes) {
     return croppedBlob;
   }

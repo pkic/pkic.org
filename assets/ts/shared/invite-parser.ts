@@ -38,13 +38,17 @@ function splitCsvLine(line: string): string[] {
   for (let i = 0; i < line.length; i++) {
     const ch = line[i];
     if (inQuotes) {
-      if (ch === '"' && line[i + 1] === '"') { current += '"'; i++; }
-      else if (ch === '"') inQuotes = false;
+      if (ch === '"' && line[i + 1] === '"') {
+        current += '"';
+        i++;
+      } else if (ch === '"') inQuotes = false;
       else current += ch;
     } else {
       if (ch === '"') inQuotes = true;
-      else if (ch === "," || ch === "\t" || ch === ";") { fields.push(current.trim()); current = ""; }
-      else current += ch;
+      else if (ch === "," || ch === "\t" || ch === ";") {
+        fields.push(current.trim());
+        current = "";
+      } else current += ch;
     }
   }
   fields.push(current.trim());
@@ -53,13 +57,21 @@ function splitCsvLine(line: string): string[] {
 
 const EMAIL_COL = /^e[\s_-]?mail$/i;
 const FIRST_COL = /^first[\s_-]?name$|^given[\s_-]?name$|^first$|^voornaam$/i;
-const LAST_COL  = /^last[\s_-]?name$|^family[\s_-]?name$|^surname$|^last$|^achternaam$/i;
-const NAME_COL  = /^name$|^full[\s_-]?name$|^naam$/i;
+const LAST_COL = /^last[\s_-]?name$|^family[\s_-]?name$|^surname$|^last$|^achternaam$/i;
+const NAME_COL = /^name$|^full[\s_-]?name$|^naam$/i;
 
-interface CsvMapping { email: number; first: number; last: number; fullName: number }
+interface CsvMapping {
+  email: number;
+  first: number;
+  last: number;
+  fullName: number;
+}
 
 function detectHeaderMapping(fields: string[]): CsvMapping | null {
-  let email = -1, first = -1, last = -1, fullName = -1;
+  let email = -1,
+    first = -1,
+    last = -1,
+    fullName = -1;
   for (let i = 0; i < fields.length; i++) {
     const f = fields[i].replace(/^["']|["']$/g, "").trim();
     if (EMAIL_COL.test(f)) email = i;
@@ -72,7 +84,10 @@ function detectHeaderMapping(fields: string[]): CsvMapping | null {
 
 export function parseContactText(raw: string): ParsedContact[] {
   const results: ParsedContact[] = [];
-  const lines = raw.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = raw
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
   if (!lines.length) return [];
 
   // Try to detect header row
@@ -108,8 +123,10 @@ export function parseContactText(raw: string): ParsedContact[] {
         const entry: ParsedContact = { email };
         if (namePart) {
           const parts = namePart.split(/\s+/).filter(Boolean);
-          if (parts.length >= 2) { entry.firstName = parts[0]; entry.lastName = parts.slice(1).join(" "); }
-          else if (parts.length === 1) entry.firstName = parts[0];
+          if (parts.length >= 2) {
+            entry.firstName = parts[0];
+            entry.lastName = parts.slice(1).join(" ");
+          } else if (parts.length === 1) entry.firstName = parts[0];
         }
         results.push(entry);
         continue;
@@ -133,7 +150,10 @@ export function parseContactText(raw: string): ParsedContact[] {
       }
 
       // Plain email list (comma/semicolon separated)
-      const atoms = line.split(/[,;]+/).map((s) => s.trim()).filter(Boolean);
+      const atoms = line
+        .split(/[,;]+/)
+        .map((s) => s.trim())
+        .filter(Boolean);
       for (const atom of atoms) {
         if (!atom.includes("@")) continue;
         const entry: ParsedContact = { email: atom.toLowerCase() };

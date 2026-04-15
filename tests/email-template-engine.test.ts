@@ -74,10 +74,9 @@ describe("email template engine (compileSimpleTemplate)", () => {
     });
 
     it("prefers if block over else when truthy", () => {
-      const result = compileSimpleTemplate(
-        "{{#if attending}}Will attend{{else}}Cannot attend{{/if}}",
-        { attending: true }
-      );
+      const result = compileSimpleTemplate("{{#if attending}}Will attend{{else}}Cannot attend{{/if}}", {
+        attending: true,
+      });
       expect(result).toBe("Will attend");
     });
   });
@@ -101,38 +100,37 @@ describe("email template engine (compileSimpleTemplate)", () => {
   describe("comparison operators", () => {
     describe("eq (equal)", () => {
       it("renders if strings match", () => {
-        const result = compileSimpleTemplate("{{#if eq status \"confirmed\"}}Confirmed{{/if}}", {
+        const result = compileSimpleTemplate('{{#if eq status "confirmed"}}Confirmed{{/if}}', {
           status: "confirmed",
         });
         expect(result).toBe("Confirmed");
       });
 
       it("does not render if strings differ", () => {
-        const result = compileSimpleTemplate("{{#if eq status \"confirmed\"}}Yes{{/if}}", {
+        const result = compileSimpleTemplate('{{#if eq status "confirmed"}}Yes{{/if}}', {
           status: "pending",
         });
         expect(result).toBe("");
       });
 
       it("supports else block", () => {
-        const result = compileSimpleTemplate(
-          "{{#if eq attendance \"remote\"}}Online{{else}}In-person{{/if}}",
-          { attendance: "remote" }
-        );
+        const result = compileSimpleTemplate('{{#if eq attendance "remote"}}Online{{else}}In-person{{/if}}', {
+          attendance: "remote",
+        });
         expect(result).toBe("Online");
       });
     });
 
     describe("ne (not equal)", () => {
       it("renders when strings differ", () => {
-        const result = compileSimpleTemplate("{{#if ne status \"cancelled\"}}Still active{{/if}}", {
+        const result = compileSimpleTemplate('{{#if ne status "cancelled"}}Still active{{/if}}', {
           status: "confirmed",
         });
         expect(result).toBe("Still active");
       });
 
       it("does not render when strings match", () => {
-        const result = compileSimpleTemplate("{{#if ne status \"cancelled\"}}Active{{/if}}", {
+        const result = compileSimpleTemplate('{{#if ne status "cancelled"}}Active{{/if}}', {
           status: "cancelled",
         });
         expect(result).toBe("");
@@ -141,40 +139,37 @@ describe("email template engine (compileSimpleTemplate)", () => {
 
     describe("numeric comparisons (gt, gte, lt, lte)", () => {
       it("gt: renders when value > literal", () => {
-        const result = compileSimpleTemplate("{{#if gt count \"5\"}}Many{{/if}}", { count: "10" });
+        const result = compileSimpleTemplate('{{#if gt count "5"}}Many{{/if}}', { count: "10" });
         expect(result).toBe("Many");
       });
 
       it("gt: does not render when value <= literal", () => {
-        const result = compileSimpleTemplate("{{#if gt count \"5\"}}Many{{/if}}", { count: "3" });
+        const result = compileSimpleTemplate('{{#if gt count "5"}}Many{{/if}}', { count: "3" });
         expect(result).toBe("");
       });
 
       it("gte: renders when value >= literal", () => {
-        const result = compileSimpleTemplate("{{#if gte rating \"4.5\"}}Good{{/if}}", { rating: "4.5" });
+        const result = compileSimpleTemplate('{{#if gte rating "4.5"}}Good{{/if}}', { rating: "4.5" });
         expect(result).toBe("Good");
       });
 
       it("lt: renders when value < literal", () => {
-        const result = compileSimpleTemplate("{{#if lt daysLeft \"3\"}}Hurry{{/if}}", { daysLeft: "1" });
+        const result = compileSimpleTemplate('{{#if lt daysLeft "3"}}Hurry{{/if}}', { daysLeft: "1" });
         expect(result).toBe("Hurry");
       });
 
       it("lte: renders when value <= literal", () => {
-        const result = compileSimpleTemplate("{{#if lte slots \"0\"}}Sold out{{/if}}", { slots: "0" });
+        const result = compileSimpleTemplate('{{#if lte slots "0"}}Sold out{{/if}}', { slots: "0" });
         expect(result).toBe("Sold out");
       });
 
       it("handles decimal numbers", () => {
-        const result = compileSimpleTemplate(
-          "{{#if gt discount \"0.25\"}}High discount{{/if}}",
-          { discount: "0.5" }
-        );
+        const result = compileSimpleTemplate('{{#if gt discount "0.25"}}High discount{{/if}}', { discount: "0.5" });
         expect(result).toBe("High discount");
       });
 
       it("does not render if strings cannot parse as numbers", () => {
-        const result = compileSimpleTemplate("{{#if gt score \"100\"}}Perfect{{/if}}", {
+        const result = compileSimpleTemplate('{{#if gt score "100"}}Perfect{{/if}}', {
           score: "abc",
         });
         expect(result).toBe("");
@@ -212,18 +207,16 @@ describe("email template engine (compileSimpleTemplate)", () => {
     });
 
     it("provides {{@first}} for first iteration", () => {
-      const result = compileSimpleTemplate(
-        "{{#each items}}{{#if @first}}FIRST:{{/if}}{{this}} {{/each}}",
-        { items: ["a", "b"] }
-      );
+      const result = compileSimpleTemplate("{{#each items}}{{#if @first}}FIRST:{{/if}}{{this}} {{/each}}", {
+        items: ["a", "b"],
+      });
       expect(result).toBe("FIRST:a b ");
     });
 
     it("helps resolve last iteration properly in conditionals", () => {
-      const result = compileSimpleTemplate(
-        "{{#each items}}{{this}}{{#if @last}} <-- END{{/if}} {{/each}}",
-        { items: ["a", "b", "c"] }
-      );
+      const result = compileSimpleTemplate("{{#each items}}{{this}}{{#if @last}} <-- END{{/if}} {{/each}}", {
+        items: ["a", "b", "c"],
+      });
       expect(result).toBe("a b c <-- END ");
     });
 
@@ -238,15 +231,9 @@ describe("email template engine (compileSimpleTemplate)", () => {
     });
 
     it("can access array of objects", () => {
-      const result = compileSimpleTemplate(
-        "{{#each attendees}}Name: {{name}}, {{/each}}",
-        {
-          attendees: [
-            { name: "Alice" },
-            { name: "Bob" },
-          ],
-        }
-      );
+      const result = compileSimpleTemplate("{{#each attendees}}Name: {{name}}, {{/each}}", {
+        attendees: [{ name: "Alice" }, { name: "Bob" }],
+      });
       expect(result).toBe("Name: Alice, Name: Bob, ");
     });
   });
@@ -270,26 +257,20 @@ describe("email template engine (compileSimpleTemplate)", () => {
       });
 
       it("supports more than 2 conditions", () => {
-        const result = compileSimpleTemplate(
-          "{{#if and a b c}}All three{{/if}}",
-          { a: true, b: true, c: true }
-        );
+        const result = compileSimpleTemplate("{{#if and a b c}}All three{{/if}}", { a: true, b: true, c: true });
         expect(result).toBe("All three");
       });
 
       it("fails if any of 3+ conditions is falsy", () => {
-        const result = compileSimpleTemplate(
-          "{{#if and a b c}}All three{{/if}}",
-          { a: true, b: true, c: false }
-        );
+        const result = compileSimpleTemplate("{{#if and a b c}}All three{{/if}}", { a: true, b: true, c: false });
         expect(result).toBe("");
       });
 
       it("supports else block", () => {
-        const result = compileSimpleTemplate(
-          "{{#if and admin confirmed}}Approve{{else}}No access{{/if}}",
-          { admin: true, confirmed: false }
-        );
+        const result = compileSimpleTemplate("{{#if and admin confirmed}}Approve{{else}}No access{{/if}}", {
+          admin: true,
+          confirmed: false,
+        });
         expect(result).toBe("No access");
       });
     });
@@ -312,18 +293,15 @@ describe("email template engine (compileSimpleTemplate)", () => {
       });
 
       it("supports multiple conditions", () => {
-        const result = compileSimpleTemplate(
-          "{{#if or x y z}}Any true{{/if}}",
-          { x: false, y: false, z: true }
-        );
+        const result = compileSimpleTemplate("{{#if or x y z}}Any true{{/if}}", { x: false, y: false, z: true });
         expect(result).toBe("Any true");
       });
 
       it("supports else block", () => {
-        const result = compileSimpleTemplate(
-          "{{#if or premium vip}}Special rates{{else}}Regular price{{/if}}",
-          { premium: false, vip: false }
-        );
+        const result = compileSimpleTemplate("{{#if or premium vip}}Special rates{{else}}Regular price{{/if}}", {
+          premium: false,
+          vip: false,
+        });
         expect(result).toBe("Regular price");
       });
     });
@@ -455,7 +433,7 @@ Please confirm your attendance.
 Line 1
 Line 2
 {{/if}}`,
-        { active: true }
+        { active: true },
       );
       expect(result).toContain("Line 1");
       expect(result).toContain("Line 2");
@@ -491,7 +469,7 @@ Line 2
   describe("subject rendering (renderSubject)", () => {
     it("renders conditional subject templates", () => {
       const subject = renderSubject(
-        "{{#if isReminder}}{{#if lte daysUntilExpiry \"2\"}}Last chance{{else}}Friendly reminder{{/if}}{{else}}Welcome{{/if}}",
+        '{{#if isReminder}}{{#if lte daysUntilExpiry "2"}}Last chance{{else}}Friendly reminder{{/if}}{{else}}Welcome{{/if}}',
         "Fallback Subject",
         { isReminder: true, daysUntilExpiry: "1" },
       );
@@ -504,11 +482,10 @@ Line 2
     });
 
     it("honors explicit subject override", () => {
-      const subject = renderSubject(
-        "{{#if isReminder}}Reminder{{else}}Welcome{{/if}}",
-        "Fallback",
-        { isReminder: true, __subjectOverride: "Custom subject variant" },
-      );
+      const subject = renderSubject("{{#if isReminder}}Reminder{{else}}Welcome{{/if}}", "Fallback", {
+        isReminder: true,
+        __subjectOverride: "Custom subject variant",
+      });
       expect(subject).toBe("Custom subject variant");
     });
   });
