@@ -41,7 +41,9 @@ async function callAdmin(path: string, init: RequestInit = {}): Promise<Response
 
 async function setupAdmin(): Promise<{ eventId: string }> {
   const { eventId } = await seedEventAndAdmin(env.DB);
-  const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1"))[0];
+  const adminRow = (
+    await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+  )[0];
   await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
   return { eventId };
 }
@@ -126,13 +128,7 @@ async function insertForm(opts: {
         `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
          VALUES (?, ?, ?, ?, ?)`,
       )
-        .bind(
-          crypto.randomUUID(),
-          submissionId,
-          fieldKey,
-          JSON.stringify(value),
-          timestamp,
-        )
+        .bind(crypto.randomUUID(), submissionId, fieldKey, JSON.stringify(value), timestamp)
         .run();
     }
   }
@@ -185,8 +181,12 @@ describe("admin forms endpoints", () => {
     const response = await callAdmin("/api/v1/admin/events/pqc-2026/forms");
 
     expect(response.status).toBe(200);
-    const payload = await response.json() as { forms: Array<{ key: string; field_count: number; submission_count: number }> };
-    expect(payload.forms.map((form) => form.key)).toEqual(expect.arrayContaining(["pqc-registration-form", "global-feedback-form"]));
+    const payload = (await response.json()) as {
+      forms: Array<{ key: string; field_count: number; submission_count: number }>;
+    };
+    expect(payload.forms.map((form) => form.key)).toEqual(
+      expect.arrayContaining(["pqc-registration-form", "global-feedback-form"]),
+    );
     const eventForm = payload.forms.find((form) => form.key === "pqc-registration-form");
     expect(eventForm?.field_count).toBe(1);
     expect(eventForm?.submission_count).toBe(0);
@@ -224,10 +224,12 @@ describe("admin forms endpoints", () => {
     });
 
     expect(createResponse.status).toBe(201);
-    const created = await createResponse.json() as { formId: string; key: string };
+    const created = (await createResponse.json()) as { formId: string; key: string };
     expect(created.key).toBe("event-workshop-form");
 
-    const [detailRow] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM forms WHERE key = ?", ["event-workshop-form"]);
+    const [detailRow] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM forms WHERE key = ?", [
+      "event-workshop-form",
+    ]);
     await env.DB.prepare(
       `INSERT INTO form_submissions (id, form_id, status, submitted_at)
        VALUES (?, ?, 'submitted', ?)`,
@@ -235,26 +237,44 @@ describe("admin forms endpoints", () => {
       .bind(crypto.randomUUID(), detailRow.id, nowIso())
       .run();
 
-    const [submission] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM form_submissions WHERE form_id = ? ORDER BY submitted_at DESC LIMIT 1", [detailRow.id]);
+    const [submission] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM form_submissions WHERE form_id = ? ORDER BY submitted_at DESC LIMIT 1",
+      [detailRow.id],
+    );
     await env.DB.prepare(
       `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
        VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
     )
       .bind(
-        crypto.randomUUID(), submission.id, "company", JSON.stringify("Example Org"), nowIso(),
-        crypto.randomUUID(), submission.id, "tracks", JSON.stringify(["PKI", "PQC"]), nowIso(),
+        crypto.randomUUID(),
+        submission.id,
+        "company",
+        JSON.stringify("Example Org"),
+        nowIso(),
+        crypto.randomUUID(),
+        submission.id,
+        "tracks",
+        JSON.stringify(["PKI", "PQC"]),
+        nowIso(),
       )
       .run();
 
     const detailResponse = await callAdmin("/api/v1/admin/forms/event-workshop-form");
     expect(detailResponse.status).toBe(200);
-    const detailPayload = await detailResponse.json() as { form: { key: string; title: string }; fields: Array<{ key: string }> };
+    const detailPayload = (await detailResponse.json()) as {
+      form: { key: string; title: string };
+      fields: Array<{ key: string }>;
+    };
     expect(detailPayload.form.key).toBe("event-workshop-form");
     expect(detailPayload.fields.map((field) => field.key)).toEqual(["company", "tracks"]);
 
     const submissionsResponse = await callAdmin("/api/v1/admin/forms/event-workshop-form/submissions");
     expect(submissionsResponse.status).toBe(200);
-    const submissionsPayload = await submissionsResponse.json() as { total: number; submissions: Array<{ answers: Record<string, unknown> }> };
+    const submissionsPayload = (await submissionsResponse.json()) as {
+      total: number;
+      submissions: Array<{ answers: Record<string, unknown> }>;
+    };
     expect(submissionsPayload.total).toBe(1);
     expect(submissionsPayload.submissions[0]?.answers.company).toBe("Example Org");
     expect(submissionsPayload.submissions[0]?.answers.tracks).toEqual(["PKI", "PQC"]);
@@ -310,16 +330,18 @@ describe("admin forms endpoints", () => {
     });
 
     expect(patchResponse.status).toBe(200);
-    const patchPayload = await patchResponse.json() as { success: boolean; fields: Array<{ key: string }> };
+    const patchPayload = (await patchResponse.json()) as { success: boolean; fields: Array<{ key: string }> };
     expect(patchPayload.success).toBe(true);
     expect(patchPayload.fields.map((field) => field.key)).toEqual(["new_field", "topics"]);
 
     const deleteResponse = await callAdmin("/api/v1/admin/forms/mutable-form", { method: "DELETE" });
     expect(deleteResponse.status).toBe(200);
-    const deletePayload = await deleteResponse.json() as { action: string; message?: string };
+    const deletePayload = (await deleteResponse.json()) as { action: string; message?: string };
     expect(deletePayload.action).toBe("archived");
 
-    const archived = await queryAll<{ status: string }>(env.DB, "SELECT status FROM forms WHERE key = ?", ["mutable-form"]);
+    const archived = await queryAll<{ status: string }>(env.DB, "SELECT status FROM forms WHERE key = ?", [
+      "mutable-form",
+    ]);
     expect(archived[0]?.status).toBe("archived");
   });
 
@@ -336,12 +358,12 @@ describe("admin forms endpoints", () => {
 
     const deleteResponse = await callAdmin("/api/v1/admin/forms/empty-form", { method: "DELETE" });
     expect(deleteResponse.status).toBe(200);
-    const deletePayload = await deleteResponse.json() as { action: string };
+    const deletePayload = (await deleteResponse.json()) as { action: string };
     expect(deletePayload.action).toBe("deleted");
 
     const missingResponse = await callAdmin("/api/v1/admin/forms/does-not-exist");
     expect(missingResponse.status).toBe(404);
-    const missingPayload = await missingResponse.json() as { error?: { code?: string } };
+    const missingPayload = (await missingResponse.json()) as { error?: { code?: string } };
     expect(missingPayload.error?.code).toBe("FORM_NOT_FOUND");
   });
 });

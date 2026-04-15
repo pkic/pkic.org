@@ -24,7 +24,10 @@ function IdentityFields() {
     <div class="donation-form-identity">
       <div class="mb-2">
         <label for="donation-donor-name" class="form-label donation-form-label">
-          Full name <span class="text-danger" aria-hidden="true">*</span>
+          Full name{" "}
+          <span class="text-danger" aria-hidden="true">
+            *
+          </span>
         </label>
         <input
           type="text"
@@ -38,7 +41,9 @@ function IdentityFields() {
         />
       </div>
       <div class="mb-2">
-        <label for="donation-donor-email" class="form-label donation-form-label">Email</label>
+        <label for="donation-donor-email" class="form-label donation-form-label">
+          Email
+        </label>
         <input
           type="email"
           id="donation-donor-email"
@@ -69,7 +74,9 @@ function CurrencyRow({ visible }: { visible: boolean }) {
   if (!visible) return null;
   return (
     <div class="donation-form-currency-row">
-      <label for="donation-currency" class="form-label donation-form-currency-label">Currency</label>
+      <label for="donation-currency" class="form-label donation-form-currency-label">
+        Currency
+      </label>
       <select
         id="donation-currency"
         class="form-select form-select-sm donation-form-currency-select"
@@ -95,15 +102,27 @@ function SharedControls() {
   return (
     <>
       <div data-donation-presets class="donation-form-presets">
-        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="50">$50</button>
-        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="100">$100</button>
-        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="250">$250</button>
-        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="500">$500</button>
-        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="1000">$1,000</button>
+        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="50">
+          $50
+        </button>
+        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="100">
+          $100
+        </button>
+        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="250">
+          $250
+        </button>
+        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="500">
+          $500
+        </button>
+        <button type="button" class="btn btn-outline-secondary donation-preset-btn" data-preset-amount="1000">
+          $1,000
+        </button>
       </div>
       <div class="donation-form-custom mt-2">
         <div class="input-group input-group-sm">
-          <span class="input-group-text" data-donation-currency-prefix>$</span>
+          <span class="input-group-text" data-donation-currency-prefix>
+            $
+          </span>
           <input
             type="number"
             class="form-control"
@@ -134,7 +153,11 @@ function CheckoutOverlay() {
   );
 }
 
-function DonationWidgetInner({ opts }: { opts: Required<Pick<DonationWidgetOptions, "hideIdentityFields">> & DonationWidgetOptions }) {
+function DonationWidgetInner({
+  opts,
+}: {
+  opts: Required<Pick<DonationWidgetOptions, "hideIdentityFields">> & DonationWidgetOptions;
+}) {
   const {
     extraClasses = "",
     successPath = "/donate/complete/",

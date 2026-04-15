@@ -36,7 +36,7 @@ export async function generateSignedRsvpAddress(
   if (baseLocal.length > MAX_BASE_LOCAL) {
     throw new Error(
       `RSVP base email local part "${baseLocal}" is ${baseLocal.length} chars; ` +
-      `max allowed is ${MAX_BASE_LOCAL} to stay within the 64-char RFC 5321 limit.`
+        `max allowed is ${MAX_BASE_LOCAL} to stay within the 64-char RFC 5321 limit.`,
     );
   }
 
@@ -57,7 +57,7 @@ export interface VerifiedRsvpAddress {
 export async function verifySignedRsvpAddress(
   emailAddress: string,
   secret: string,
-  baseEmail: string = "rsvp@mail.pkic.org"
+  baseEmail: string = "rsvp@mail.pkic.org",
 ): Promise<string | null> {
   const result = await verifySignedRsvpAddressFull(emailAddress, secret, baseEmail);
   return result ? result.registrationId : null;
@@ -76,7 +76,7 @@ function expandDate(d: string): string {
 export async function verifySignedRsvpAddressFull(
   emailAddress: string,
   secret: string,
-  baseEmail: string = "rsvp@mail.pkic.org"
+  baseEmail: string = "rsvp@mail.pkic.org",
 ): Promise<VerifiedRsvpAddress | null> {
   const [baseLocal, baseDomain] = baseEmail.split("@");
   if (!baseDomain) return null;
@@ -86,15 +86,12 @@ export async function verifySignedRsvpAddressFull(
   if (parts[1].toLowerCase() !== baseDomain.toLowerCase()) return null;
 
   // Escape only the base local part (before any +)
-  const escapedLocal = baseLocal.split("+")[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const escapedLocal = baseLocal.split("+")[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
   // ── Compact formats ────────────────────────────────────────────────────────
 
   // Per-day: [base]+[hex32]-[YYYYMMDD]-[hex8]
-  const compactPerDayRegex = new RegExp(
-    `^${escapedLocal}\\+([a-f0-9]{32})-(\\d{8})-([a-f0-9]{8})$`,
-    "i"
-  );
+  const compactPerDayRegex = new RegExp(`^${escapedLocal}\\+([a-f0-9]{32})-(\\d{8})-([a-f0-9]{8})$`, "i");
   const compactPerDayMatch = parts[0].match(compactPerDayRegex);
   if (compactPerDayMatch) {
     const registrationId = expandUuid(compactPerDayMatch[1].toLowerCase());
@@ -107,10 +104,7 @@ export async function verifySignedRsvpAddressFull(
   }
 
   // Single: [base]+[hex32]-[hex8]
-  const compactSingleRegex = new RegExp(
-    `^${escapedLocal}\\+([a-f0-9]{32})-([a-f0-9]{8})$`,
-    "i"
-  );
+  const compactSingleRegex = new RegExp(`^${escapedLocal}\\+([a-f0-9]{32})-([a-f0-9]{8})$`, "i");
   const compactSingleMatch = parts[0].match(compactSingleRegex);
   if (compactSingleMatch) {
     const registrationId = expandUuid(compactSingleMatch[1].toLowerCase());

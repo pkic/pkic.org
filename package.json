@@ -23,7 +23,11 @@
     "test:e2e": "playwright test",
     "test:watch": "vitest",
     "check:max-lines": "node scripts/check-max-lines.mjs",
-    "check": "npm run typecheck && npm run test && npm run check:max-lines",
+    "lint": "eslint functions/ assets/ts/ assets/shared/ tests/",
+    "lint:fix": "eslint --fix functions/ assets/ts/ assets/shared/ tests/",
+    "format": "prettier --write \"functions/**/*.ts\" \"assets/ts/**/*.{ts,tsx}\" \"assets/shared/**/*.ts\" \"tests/**/*.ts\"",
+    "format:check": "prettier --check \"functions/**/*.ts\" \"assets/ts/**/*.{ts,tsx}\" \"assets/shared/**/*.ts\" \"tests/**/*.ts\"",
+    "check": "npm run typecheck && npm run lint && npm run format:check && npm run test && npm run check:max-lines",
     "migrate:local": "npx wrangler d1 migrations apply DB --env local --local",
     "migrate:preview": "npx wrangler d1 migrations apply DB --env preview --remote",
     "migrate:production": "npx wrangler d1 migrations apply DB --env production --remote",
@@ -50,11 +54,17 @@
     "@cloudflare/vite-plugin": "^1.31.2",
     "@cloudflare/vitest-pool-workers": "^0.13.5",
     "@cloudflare/workers-types": "^4.20260411.1",
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.59.1",
     "@types/node": "^24.12.2",
+    "eslint": "^10.2.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.5",
     "jsdom": "^27.4.0",
     "pagefind": "^1.5.0",
+    "prettier": "^3.8.3",
     "typescript": "^5.9.3",
+    "typescript-eslint": "^8.58.2",
     "vite": "^8.0.8",
     "vitest": "^4.1.4",
     "wrangler": "^4.81.1"
@@ -63,6 +73,9 @@
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "sharp"
+    ],
+    "ignoredBuiltDependencies": [
+      "workerd"
     ]
   }
 }

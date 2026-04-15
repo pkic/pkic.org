@@ -45,7 +45,9 @@ function renderSessionTypes(root: HTMLElement, types: string[]): void {
         return (
           <>
             <input class="btn-check" type="radio" name="proposalType" id={id} value={type} checked={i === 0} />
-            <label class="btn btn-outline-secondary btn-sm" htmlFor={id}>{label}</label>
+            <label class="btn btn-outline-secondary btn-sm" htmlFor={id}>
+              {label}
+            </label>
           </>
         );
       })}
@@ -115,7 +117,10 @@ function createProposerCard(): { el: HTMLElement; linksRef: ReturnType<typeof cr
  * Builds a speaker card for an additional (non-proposer) speaker.
  * Index must be >= 1; index 0 is reserved for the proposer card.
  */
-function createSpeakerCard(index: number): { el: HTMLElement; linksRef: ReturnType<typeof createRef<ProfileLinksHandle>> } {
+function createSpeakerCard(index: number): {
+  el: HTMLElement;
+  linksRef: ReturnType<typeof createRef<ProfileLinksHandle>>;
+} {
   const container = document.createElement("div");
   const linksRef = createRef<ProfileLinksHandle>();
   const handleRemove = () => {
@@ -205,8 +210,7 @@ function showSuccessPanel(
   render(
     <SuccessPanel icon="📋" title={title}>
       <p class="event-flow-success-body">
-        Your proposal is now under review. The programme committee will be in touch by email
-        with a decision.
+        Your proposal is now under review. The programme committee will be in touch by email with a decision.
       </p>
       {result.manageUrl && (
         <p>
@@ -216,9 +220,9 @@ function showSuccessPanel(
         </p>
       )}
       <p class="text-muted small">
-        Speakers you listed will each receive a personal email with a private link to confirm
-        their participation, complete their profile, and upload a headshot once accepted.
-        If there is context about additional potential speakers, include that in your proposal notes or follow up with the programme team.
+        Speakers you listed will each receive a personal email with a private link to confirm their participation,
+        complete their profile, and upload a headshot once accepted. If there is context about additional potential
+        speakers, include that in your proposal notes or follow up with the programme team.
       </p>
       <div ref={shareRef} />
     </SuccessPanel>,
@@ -319,9 +323,7 @@ async function main(): Promise<void> {
   // ── Load form metadata ────────────────────────────────────────────────────
 
   try {
-    const forms = await getJson<EventFormsResponse>(
-      `${apiBase}/events/${eventSlug}/forms?purpose=proposal_submission`,
-    );
+    const forms = await getJson<EventFormsResponse>(`${apiBase}/events/${eventSlug}/forms?purpose=proposal_submission`);
     eventName = forms.event.name;
     if (consentsContainer) renderConsentInputs(consentsContainer, forms.requiredTerms);
     renderSessionTypes(boot.root, forms.allowedSessionTypes ?? ["talk", "keynote", "panel"]);
@@ -388,4 +390,3 @@ async function main(): Promise<void> {
 }
 
 void main();
-

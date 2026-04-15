@@ -32,17 +32,10 @@ export async function onRequestPost(c: any): Promise<Response> {
   const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"));
 
   if (proposal.status === "withdrawn" || proposal.status === "rejected") {
-    return json(
-      { error: { code: "PROPOSAL_CLOSED", message: "Cannot send reminders for a closed proposal" } },
-      400,
-    );
+    return json({ error: { code: "PROPOSAL_CLOSED", message: "Cannot send reminders for a closed proposal" } }, 400);
   }
 
-  const event = await first<EventRecord>(
-    c.env.DB,
-    "SELECT * FROM events WHERE id = ?",
-    [proposal.event_id],
-  );
+  const event = await first<EventRecord>(c.env.DB, "SELECT * FROM events WHERE id = ?", [proposal.event_id]);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
 
   const speakerRow = await first<{
@@ -66,27 +59,18 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   if (speakerRow.status === "confirmed" || speakerRow.status === "declined") {
-    return json(
-      { error: { code: "ALREADY_RESPONDED", message: `Speaker has already ${speakerRow.status}` } },
-      400,
-    );
+    return json({ error: { code: "ALREADY_RESPONDED", message: `Speaker has already ${speakerRow.status}` } }, 400);
   }
 
   // Rotate the manage token — we cannot reconstruct the original from its hash.
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const newToken = await refreshSpeakerManageToken(
-    c.env.DB,
-    proposal.id,
-    speakerRow.user_id,
-  );
+  const newToken = await refreshSpeakerManageToken(c.env.DB, proposal.id, speakerRow.user_id);
 
   const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, newToken);
 
-  const proposer = await first<{ first_name: string | null }>(
-    c.env.DB,
-    "SELECT first_name FROM users WHERE id = ?",
-    [proposal.proposer_user_id],
-  );
+  const proposer = await first<{ first_name: string | null }>(c.env.DB, "SELECT first_name FROM users WHERE id = ?", [
+    proposal.proposer_user_id,
+  ]);
 
   const inviteContext = await buildProposalInviteEmailContext(c.env.DB, {
     proposalId: proposal.id,

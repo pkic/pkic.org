@@ -61,18 +61,14 @@ async function getDaysWithCounts(db: DatabaseLike, eventId: string) {
   }));
 }
 
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const days = await getDaysWithCounts(c.env.DB, event.id);
   return json({ days });
 }
 
-export async function onRequestPut(
-  c: any,
-): Promise<Response> {
+export async function onRequestPut(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEventDaysReplaceSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
@@ -102,8 +98,7 @@ export async function onRequestPut(
 
   // Upsert incoming days
   for (const day of body.days) {
-    const inPersonCap =
-      day.attendanceOptions.find((o) => o.value === "in_person")?.capacity ?? null;
+    const inPersonCap = day.attendanceOptions.find((o) => o.value === "in_person")?.capacity ?? null;
     const optionsJson = stringifyJson(day.attendanceOptions);
     const label = day.label ?? null;
     const startsAt = day.startTime ? localDateTimeInTimeZoneToIso(day.date, day.startTime, event.timezone) : null;
@@ -111,12 +106,15 @@ export async function onRequestPut(
     const sortOrder = day.sortOrder ?? 0;
 
     if (startsAt && endsAt && new Date(endsAt).getTime() <= new Date(startsAt).getTime()) {
-      return json({
-        error: {
-          code: "INVALID_EVENT_DAY_RANGE",
-          message: `End time must be after start time for ${day.date} in ${event.timezone}`,
+      return json(
+        {
+          error: {
+            code: "INVALID_EVENT_DAY_RANGE",
+            message: `End time must be after start time for ${day.date} in ${event.timezone}`,
+          },
         },
-      }, 400);
+        400,
+      );
     }
 
     const existing_day = existingByDate.get(day.date);
@@ -139,23 +137,16 @@ export async function onRequestPut(
     }
   }
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "event_days_updated",
-    "event",
-    event.id,
-    { dayCount: body.days.length, skipped },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "event_days_updated", "event", event.id, {
+    dayCount: body.days.length,
+    skipped,
+  });
 
   const updatedDays = await getDaysWithCounts(c.env.DB, event.id);
   return json({ success: true, days: updatedDays, skipped });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "PUT") return onRequestPut(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

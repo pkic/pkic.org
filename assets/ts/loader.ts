@@ -20,17 +20,17 @@
 // import() into a separate chunk. Only the chunk requested by the page is
 // ever fetched by the browser.
 const modules: Record<string, () => Promise<unknown>> = {
-  "admin/index":                           () => import("./admin/index"),
-  "invite-decline":                        () => import("./invite-decline"),
-  "event-flows/registration-page":         () => import("./event-flows/registration-page"),
+  "admin/index": () => import("./admin/index"),
+  "invite-decline": () => import("./invite-decline"),
+  "event-flows/registration-page": () => import("./event-flows/registration-page"),
   "event-flows/registration-confirm-page": () => import("./event-flows/registration-confirm-page"),
-  "event-flows/registration-manage-page":  () => import("./event-flows/registration-manage-page"),
-  "event-flows/proposal-page":             () => import("./event-flows/proposal-page"),
-  "event-flows/proposal-manage-page":      () => import("./event-flows/proposal-manage-page"),
-  "event-flows/speaker-manage-page":       () => import("./event-flows/speaker-manage-page"),
-  "modules/photo-grid":                    () => import("./modules/photo-grid"),
-  "shared/donation-form":                  () => import("./shared/donation/form"),
-  "shared/donation-thank-you":             () => import("./shared/donation/thank-you"),
+  "event-flows/registration-manage-page": () => import("./event-flows/registration-manage-page"),
+  "event-flows/proposal-page": () => import("./event-flows/proposal-page"),
+  "event-flows/proposal-manage-page": () => import("./event-flows/proposal-manage-page"),
+  "event-flows/speaker-manage-page": () => import("./event-flows/speaker-manage-page"),
+  "modules/photo-grid": () => import("./modules/photo-grid"),
+  "shared/donation-form": () => import("./shared/donation/form"),
+  "shared/donation-thank-you": () => import("./shared/donation/thank-you"),
 };
 
 async function loadModule(name: string): Promise<void> {
@@ -43,12 +43,10 @@ async function loadModule(name: string): Promise<void> {
 }
 
 function init(): void {
-  document
-    .querySelectorAll<HTMLElement>("[data-module]")
-    .forEach((el) => {
-      const name = el.dataset.module;
-      if (name) void loadModule(name);
-    });
+  document.querySelectorAll<HTMLElement>("[data-module]").forEach((el) => {
+    const name = el.dataset.module;
+    if (name) void loadModule(name);
+  });
 }
 
 if (document.readyState === "loading") {

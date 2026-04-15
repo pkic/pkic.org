@@ -267,10 +267,7 @@ export interface SpeakerWithContext {
   };
 }
 
-export async function getSpeakerByManageToken(
-  db: DatabaseLike,
-  manageToken: string,
-): Promise<SpeakerWithContext> {
+export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: string): Promise<SpeakerWithContext> {
   const hash = await sha256Hex(manageToken);
   const row = await first<{
     // proposal_speakers
@@ -419,7 +416,11 @@ export async function confirmSpeakerParticipation(
     return; // idempotent
   }
   if (speaker.status === "declined") {
-    throw new AppError(409, "SPEAKER_ALREADY_DECLINED", "You have already declined participation. Please contact the organiser if you changed your mind.");
+    throw new AppError(
+      409,
+      "SPEAKER_ALREADY_DECLINED",
+      "You have already declined participation. Please contact the organiser if you changed your mind.",
+    );
   }
   if (!payload.termsAccepted) {
     throw new AppError(400, "TERMS_NOT_ACCEPTED", "You must accept the participation terms to confirm.");
@@ -506,11 +507,7 @@ export async function updateSpeakerProfile(
   );
 }
 
-export async function recordPresentationUpload(
-  db: DatabaseLike,
-  proposalId: string,
-  r2Key: string,
-): Promise<void> {
+export async function recordPresentationUpload(db: DatabaseLike, proposalId: string, r2Key: string): Promise<void> {
   const now = nowIso();
   await run(
     db,
@@ -527,18 +524,14 @@ export async function recordPresentationUpload(
  * reminder) where the original raw token is no longer available.
  * The old token is invalidated — existing links will stop working.
  */
-export async function refreshSpeakerManageToken(
-  db: DatabaseLike,
-  proposalId: string,
-  userId: string,
-): Promise<string> {
+export async function refreshSpeakerManageToken(db: DatabaseLike, proposalId: string, userId: string): Promise<string> {
   const token = randomToken(24);
   const hash = await sha256Hex(token);
-  await run(
-    db,
-    `UPDATE proposal_speakers SET manage_token_hash = ? WHERE proposal_id = ? AND user_id = ?`,
-    [hash, proposalId, userId],
-  );
+  await run(db, `UPDATE proposal_speakers SET manage_token_hash = ? WHERE proposal_id = ? AND user_id = ?`, [
+    hash,
+    proposalId,
+    userId,
+  ]);
   return token;
 }
 
@@ -562,7 +555,12 @@ export interface ProposalSpeakerWithUser {
   headshot_updated_at: string | null;
 }
 
-function formatInvitePerson(firstName: string | null, lastName: string | null, organizationName: string | null, fallback: string): string {
+function formatInvitePerson(
+  firstName: string | null,
+  lastName: string | null,
+  organizationName: string | null,
+  fallback: string,
+): string {
   const fullName = [firstName, lastName].filter(Boolean).join(" ").trim();
   if (fullName && organizationName?.trim()) {
     return `${fullName} (${organizationName.trim()})`;
@@ -592,11 +590,7 @@ export async function buildProposalInviteEmailContext(
     title: string;
     abstract: string;
     proposer_user_id: string;
-  }>(
-    db,
-    "SELECT id, title, abstract, proposer_user_id FROM session_proposals WHERE id = ?",
-    [payload.proposalId],
-  );
+  }>(db, "SELECT id, title, abstract, proposer_user_id FROM session_proposals WHERE id = ?", [payload.proposalId]);
 
   if (!proposal) {
     throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
@@ -608,11 +602,7 @@ export async function buildProposalInviteEmailContext(
     first_name: string | null;
     last_name: string | null;
     organization_name: string | null;
-  }>(
-    db,
-    "SELECT email, first_name, last_name, organization_name FROM users WHERE id = ?",
-    [inviterUserId],
-  );
+  }>(db, "SELECT email, first_name, last_name, organization_name FROM users WHERE id = ?", [inviterUserId]);
 
   const speakers = await all<{
     email: string;
@@ -677,11 +667,9 @@ export async function listProposalSpeakersWithStatus(
 
 export async function getProposalByManageToken(db: DatabaseLike, manageToken: string): Promise<ProposalRecord> {
   const hash = await sha256Hex(manageToken);
-  const proposal = await first<ProposalRecord>(
-    db,
-    "SELECT * FROM session_proposals WHERE manage_token_hash = ?",
-    [hash],
-  );
+  const proposal = await first<ProposalRecord>(db, "SELECT * FROM session_proposals WHERE manage_token_hash = ?", [
+    hash,
+  ]);
 
   if (!proposal) {
     throw new AppError(404, "PROPOSAL_NOT_FOUND", "Invalid proposal manage token");
@@ -708,11 +696,11 @@ export async function updateProposalByManageToken(
   }
 
   if (payload.action === "withdraw") {
-    await run(
-      db,
-      "UPDATE session_proposals SET status = 'withdrawn', withdrawn_at = ?, updated_at = ? WHERE id = ?",
-      [nowIso(), nowIso(), proposal.id],
-    );
+    await run(db, "UPDATE session_proposals SET status = 'withdrawn', withdrawn_at = ?, updated_at = ? WHERE id = ?", [
+      nowIso(),
+      nowIso(),
+      proposal.id,
+    ]);
 
     await run(
       db,
@@ -731,7 +719,14 @@ export async function updateProposalByManageToken(
            details_json = COALESCE(?, details_json),
            updated_at = ?
        WHERE id = ?`,
-      [payload.proposalType ?? null, payload.title ?? null, payload.abstract ?? null, payload.detailsJson ?? null, nowIso(), proposal.id],
+      [
+        payload.proposalType ?? null,
+        payload.title ?? null,
+        payload.abstract ?? null,
+        payload.detailsJson ?? null,
+        nowIso(),
+        proposal.id,
+      ],
     );
   }
 
@@ -887,11 +882,9 @@ export async function finalizeProposalDecision(
     minReviewsRequired: number;
   },
 ): Promise<{ reviewCount: number }> {
-  const existingDecision = await first<{ id: string }>(
-    db,
-    "SELECT id FROM proposal_decisions WHERE proposal_id = ?",
-    [payload.proposalId],
-  );
+  const existingDecision = await first<{ id: string }>(db, "SELECT id FROM proposal_decisions WHERE proposal_id = ?", [
+    payload.proposalId,
+  ]);
 
   if (existingDecision) {
     throw new AppError(409, "PROPOSAL_ALREADY_FINALIZED", "Proposal already has a final decision");
@@ -913,7 +906,9 @@ export async function finalizeProposalDecision(
     );
   }
 
-  const proposal = await first<ProposalRecord>(db, "SELECT * FROM session_proposals WHERE id = ?", [payload.proposalId]);
+  const proposal = await first<ProposalRecord>(db, "SELECT * FROM session_proposals WHERE id = ?", [
+    payload.proposalId,
+  ]);
   if (!proposal) {
     throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
   }
@@ -939,11 +934,11 @@ export async function finalizeProposalDecision(
   );
 
   const mappedStatus = payload.finalStatus === "needs_work" ? "needs_work" : payload.finalStatus;
-  await run(
-    db,
-    "UPDATE session_proposals SET status = ?, updated_at = ? WHERE id = ?",
-    [mappedStatus, now, payload.proposalId],
-  );
+  await run(db, "UPDATE session_proposals SET status = ?, updated_at = ? WHERE id = ?", [
+    mappedStatus,
+    now,
+    payload.proposalId,
+  ]);
 
   await run(
     db,
@@ -958,7 +953,13 @@ export async function finalizeProposalDecision(
          WHERE proposal_id = ?
            AND status != 'declined'
        )`,
-    [payload.finalStatus === "accepted" ? "active" : "inactive", now, proposal.event_id, payload.proposalId, payload.proposalId],
+    [
+      payload.finalStatus === "accepted" ? "active" : "inactive",
+      now,
+      proposal.event_id,
+      payload.proposalId,
+      payload.proposalId,
+    ],
   );
 
   return { reviewCount };

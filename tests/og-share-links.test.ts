@@ -38,7 +38,10 @@ function pngBytes(): Uint8Array {
   return new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 }
 
-function cachedImage(contentType: string): { httpMetadata: { contentType: string }; arrayBuffer: () => Promise<ArrayBuffer> } {
+function cachedImage(contentType: string): {
+  httpMetadata: { contentType: string };
+  arrayBuffer: () => Promise<ArrayBuffer>;
+} {
   return {
     httpMetadata: { contentType },
     arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array([0x52, 0x49, 0x46, 0x46]).buffer),
@@ -77,16 +80,15 @@ async function seedEventReferral(): Promise<string> {
 }
 
 async function seedCompletedDonation(sessionId: string, name = "Ada Lovelace", grossAmount = 10000): Promise<void> {
-  await baseEnv.DB.prepare(`
+  await baseEnv.DB.prepare(
+    `
     INSERT INTO donations (
       id, checkout_session_id, status, name, email, currency, gross_amount, completed_at, created_at
     ) VALUES (?, ?, 'completed', ?, 'ada@example.test', 'usd', ?, datetime('now'), datetime('now'))
-  `).bind(
-    crypto.randomUUID(),
-    sessionId,
-    name,
-    grossAmount,
-  ).run();
+  `,
+  )
+    .bind(crypto.randomUUID(), sessionId, name, grossAmount)
+    .run();
 }
 
 describe("OG share links", () => {
@@ -120,10 +122,12 @@ describe("OG share links", () => {
   });
 
   it("declares donation share badges as PNG when the image pipeline is unavailable", async () => {
-    await baseEnv.DB.prepare(`
+    await baseEnv.DB.prepare(
+      `
       INSERT INTO donation_promoters (code, checkout_session_id, name, clicks, created_at)
       VALUES ('don1234', 'cs_test_share', 'Ada', 0, datetime('now'))
-    `).run();
+    `,
+    ).run();
 
     const envWithoutImages = { ...baseEnv, IMAGES: undefined } as Env;
     const response = await donationSharePage(
@@ -163,7 +167,7 @@ describe("OG share links", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/png");
-    expect(response.headers.get("content-disposition")).toBe("attachment; filename=\"event-badge.png\"");
+    expect(response.headers.get("content-disposition")).toBe('attachment; filename="event-badge.png"');
   });
 
   it("downloads donation badge fallbacks with a png filename", async () => {
@@ -183,7 +187,7 @@ describe("OG share links", () => {
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toBe("image/png");
-    expect(response.headers.get("content-disposition")).toBe("attachment; filename=\"donation-badge.png\"");
+    expect(response.headers.get("content-disposition")).toBe('attachment; filename="donation-badge.png"');
   });
 
   it("preserves cached webp badge filenames for event and donation cards", async () => {
@@ -206,7 +210,7 @@ describe("OG share links", () => {
 
     expect(eventResponse.status).toBe(200);
     expect(eventResponse.headers.get("content-type")).toBe("image/webp");
-    expect(eventResponse.headers.get("content-disposition")).toBe("attachment; filename=\"event-badge.webp\"");
+    expect(eventResponse.headers.get("content-disposition")).toBe('attachment; filename="event-badge.webp"');
 
     const donationResponse = await donationBadgeImage(
       createContext(
@@ -218,6 +222,6 @@ describe("OG share links", () => {
 
     expect(donationResponse.status).toBe(200);
     expect(donationResponse.headers.get("content-type")).toBe("image/webp");
-    expect(donationResponse.headers.get("content-disposition")).toBe("attachment; filename=\"donation-badge.webp\"");
+    expect(donationResponse.headers.get("content-disposition")).toBe('attachment; filename="donation-badge.webp"');
   });
 });

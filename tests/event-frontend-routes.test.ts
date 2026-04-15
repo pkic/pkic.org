@@ -8,7 +8,9 @@ import { onRequestGet as referralRedirect } from "../functions/r/[code]";
 import app from "../functions/router";
 
 describe("event frontend routes and hydration contracts", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it("resolves configured frontend routes and fallback defaults", () => {
     const configured = resolveEventFrontendRoutes({
       slug: "pqc-2026",
@@ -29,7 +31,12 @@ describe("event frontend routes and hydration contracts", () => {
     expect(configured.usedFallback).toBe(true);
     expect(configured.fallbackKeys).toContain("registrationConfirm");
 
-    const defaults = resolveEventFrontendRoutes({ slug: "pqc-2026", base_path: null, starts_at: null, settings_json: "{}" });
+    const defaults = resolveEventFrontendRoutes({
+      slug: "pqc-2026",
+      base_path: null,
+      starts_at: null,
+      settings_json: "{}",
+    });
     expect(defaults.registrationPath).toBe("/events/pqc-2026/register/");
     expect(defaults.proposalManagePath).toBe("/events/pqc-2026/propose-manage/");
     expect(defaults.usedFallback).toBe(true);
@@ -98,11 +105,13 @@ describe("event frontend routes and hydration contracts", () => {
   it("redirects referral links to configured event registration route", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
-    await env.DB.prepare(`
+    await env.DB.prepare(
+      `
       UPDATE events
       SET settings_json = '{"frontend":{"routes":{"registration":"/events/pilot/register/"}}}'
       WHERE id = '${eventId}';
-    `).run();
+    `,
+    ).run();
 
     const code = await createReferralCode(env.DB, {
       eventId,
@@ -124,7 +133,11 @@ describe("event frontend routes and hydration contracts", () => {
   it("returns required terms in forms hydration response", async () => {
     await seedEventAndAdmin(env.DB);
 
-    const response = await app.fetch(new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=event_registration"), env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+    const response = await app.fetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=event_registration"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {

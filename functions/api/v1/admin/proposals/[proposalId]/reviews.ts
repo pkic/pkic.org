@@ -7,16 +7,12 @@ import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { first } from "../../../../../_lib/db/queries";
 import { reviewUpsertSchema } from "../../../../../../assets/shared/schemas/api";
 
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
   const proposalId = c.req.param("proposalId");
-  const proposal = await first<{ event_id: string }>(
-    c.env.DB,
-    "SELECT event_id FROM session_proposals WHERE id = ?",
-    [proposalId],
-  );
+  const proposal = await first<{ event_id: string }>(c.env.DB, "SELECT event_id FROM session_proposals WHERE id = ?", [
+    proposalId,
+  ]);
   if (!proposal) {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
@@ -30,16 +26,12 @@ export async function onRequestGet(
   return json({ proposalId, reviews });
 }
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
   const proposalId = c.req.param("proposalId");
-  const proposal = await first<{ event_id: string }>(
-    c.env.DB,
-    "SELECT event_id FROM session_proposals WHERE id = ?",
-    [proposalId],
-  );
+  const proposal = await first<{ event_id: string }>(c.env.DB, "SELECT event_id FROM session_proposals WHERE id = ?", [
+    proposalId,
+  ]);
   if (!proposal) {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
@@ -60,15 +52,9 @@ export async function onRequestPost(
     applicantNote: body.applicantNote,
   });
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "proposal_review_upserted",
-    "proposal_review",
-    review.id,
-    { proposalId },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "proposal_review_upserted", "proposal_review", review.id, {
+    proposalId,
+  });
 
   return json({ success: true, review });
 }

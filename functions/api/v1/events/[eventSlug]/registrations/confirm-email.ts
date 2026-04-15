@@ -17,10 +17,7 @@ import { registrationManagePageUrl } from "../../../../../_lib/services/frontend
 import type { UserRecord } from "../../../../../_lib/services/users";
 import { registrationConfirmSchema } from "../../../../../../assets/shared/schemas/api";
 
-async function confirmRegistration(
-  c: any,
-  token: string,
-): Promise<Response> {
+async function confirmRegistration(c: any, token: string): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
@@ -52,8 +49,19 @@ async function confirmRegistration(
       );
       const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, registration.custom_answers_json);
       const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, registration.id);
-      const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET ? await generateSignedRsvpAddress(registration.id, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL) : undefined;
-      const calendar = await buildRegistrationIcs(event, registration.id, manageUrl, dayAttendanceRaw, appBaseUrl, rsvpEmail, user.email, c.env.INTERNAL_SIGNING_SECRET);
+      const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET
+        ? await generateSignedRsvpAddress(registration.id, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL)
+        : undefined;
+      const calendar = await buildRegistrationIcs(
+        event,
+        registration.id,
+        manageUrl,
+        dayAttendanceRaw,
+        appBaseUrl,
+        rsvpEmail,
+        user.email,
+        c.env.INTERNAL_SIGNING_SECRET,
+      );
       const outboxId = await queueEmail(c.env.DB, {
         eventId: event.id,
         baseUrl: appBaseUrl,
@@ -62,14 +70,16 @@ async function confirmRegistration(
         recipientUserId: registration.user_id,
         messageType: "transactional",
         subject: `Registration confirmed for ${event.name}`,
-        attachments: referralRow ? [
-          buildBadgeAttachment({
-            badgeCode: referralRow.code,
-            badgeType: "attendee",
-            firstName: user.first_name ?? "",
-            lastName: user.last_name ?? "",
-          }),
-        ] : undefined,
+        attachments: referralRow
+          ? [
+              buildBadgeAttachment({
+                badgeCode: referralRow.code,
+                badgeType: "attendee",
+                firstName: user.first_name ?? "",
+                lastName: user.last_name ?? "",
+              }),
+            ]
+          : undefined,
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
           // User
@@ -90,13 +100,15 @@ async function confirmRegistration(
           // URLs
           manageUrl,
           shareUrl,
-          ...(referralRow ? {
-            badgeImageUrl: `${appBaseUrl}/api/v1/og/${referralRow.code}`,
-            linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl as string)}`,
-            twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${event.name} — join me! ${shareUrl}`)}`,
-            blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${event.name} — join me!\n${shareUrl}`)}`,
-            redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl as string)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
-          } : {}),
+          ...(referralRow
+            ? {
+                badgeImageUrl: `${appBaseUrl}/api/v1/og/${referralRow.code}`,
+                linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl as string)}`,
+                twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${event.name} — join me! ${shareUrl}`)}`,
+                blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${event.name} — join me!\n${shareUrl}`)}`,
+                redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl as string)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
+              }
+            : {}),
         },
         bounceAddress: rsvpEmail,
         calendar: {

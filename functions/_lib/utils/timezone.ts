@@ -17,8 +17,14 @@ function getZonedParts(date: Date, timeZone: string): Record<string, number> {
   const parts = getFormatter(timeZone).formatToParts(date);
   const out: Record<string, number> = {};
   for (const part of parts) {
-    if (part.type === "year" || part.type === "month" || part.type === "day"
-      || part.type === "hour" || part.type === "minute" || part.type === "second") {
+    if (
+      part.type === "year" ||
+      part.type === "month" ||
+      part.type === "day" ||
+      part.type === "hour" ||
+      part.type === "minute" ||
+      part.type === "second"
+    ) {
       out[part.type] = parseInt(part.value, 10);
     }
   }
@@ -71,11 +77,7 @@ export function localDateTimeInTimeZoneToIso(date: string, time: string, timeZon
 
   const iso = new Date(utcMs).toISOString();
   if (isoToDateInTimeZone(iso, timeZone) !== date || isoToTimeInTimeZone(iso, timeZone) !== time) {
-    throw new AppError(
-      400,
-      "INVALID_EVENT_DAY_TIME",
-      `Time '${time}' is not valid on ${date} in timezone ${timeZone}`,
-    );
+    throw new AppError(400, "INVALID_EVENT_DAY_TIME", `Time '${time}' is not valid on ${date} in timezone ${timeZone}`);
   }
 
   return iso;

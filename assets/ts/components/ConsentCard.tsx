@@ -68,7 +68,9 @@ export function ConsentCard({ term }: ConsentCardProps) {
     .join(" ");
 
   const indicator = (
-    <span class="event-flow-consent-indicator" aria-hidden="true"><IconCheckmark /></span>
+    <span class="event-flow-consent-indicator" aria-hidden="true">
+      <IconCheckmark />
+    </span>
   );
 
   const optionalBadge = !term.required ? <span class="event-flow-consent-optional-badge">Optional</span> : null;
@@ -80,7 +82,9 @@ export function ConsentCard({ term }: ConsentCardProps) {
       target="_blank"
       rel="noopener noreferrer"
       aria-label={`Read: ${label}`}
-    ><IconExternalLink /> Read</a>
+    >
+      <IconExternalLink /> Read
+    </a>
   ) : null;
 
   const hiddenInput = (
@@ -113,10 +117,7 @@ export function ConsentCard({ term }: ConsentCardProps) {
         onKeyDown={handleKeyDown}
       >
         <div class="event-flow-consent-card-context">
-          <span
-            class="event-flow-consent-card-icon"
-            aria-hidden="true"
-          >
+          <span class="event-flow-consent-card-icon" aria-hidden="true">
             <IconInfoCircle />
           </span>
           <p class="event-flow-consent-card-context-text">{term.helpText!.trim()}</p>

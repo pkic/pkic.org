@@ -5,7 +5,10 @@ export interface QueuedEmailAttachment {
 }
 
 function slugifyAttachmentPart(value: string): string {
-  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 function resolveAttachmentNamePart(
@@ -46,10 +49,12 @@ export function parseQueuedEmailAttachments(payload: Record<string, unknown>): Q
     }
 
     const candidate = item as Record<string, unknown>;
-    return candidate.kind === "r2-badge-image"
-      && typeof candidate.r2Key === "string"
-      && candidate.r2Key.length > 0
-      && typeof candidate.filenameBase === "string"
-      && candidate.filenameBase.length > 0;
+    return (
+      candidate.kind === "r2-badge-image" &&
+      typeof candidate.r2Key === "string" &&
+      candidate.r2Key.length > 0 &&
+      typeof candidate.filenameBase === "string" &&
+      candidate.filenameBase.length > 0
+    );
   });
 }

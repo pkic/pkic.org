@@ -155,7 +155,8 @@ async function buildPreviewSubject(
   payload: Record<string, unknown>,
   cache: Map<string, string | null>,
 ): Promise<string> {
-  const directBody = typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent.length > 0;
+  const directBody =
+    typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent.length > 0;
   const fallbackSubject = row.subject ?? "PKI Consortium Update";
 
   if (directBody) {
@@ -273,46 +274,50 @@ export async function onRequestGet(c: any): Promise<Response> {
   ]);
 
   const subjectTemplateCache = new Map<string, string | null>();
-  const outbox = await Promise.all(rows.map(async (row) => {
-    const payload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
-    const firstName = typeof payload.firstName === "string" ? payload.firstName.trim() : "";
-    const lastName = typeof payload.lastName === "string" ? payload.lastName.trim() : "";
-    const recipientName = [firstName, lastName].filter(Boolean).join(" ") || null;
-    const bccRecipients = Array.isArray(payload.__bccRecipients)
-      ? payload.__bccRecipients.filter((item): item is string => typeof item === "string" && item.includes("@"))
-      : [];
-    const previewSubject = await buildPreviewSubject(c, row, payload, subjectTemplateCache);
-    const directBody = typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent.length > 0;
-    const customText = typeof payload.__adminCampaignCustomText === "string" && payload.__adminCampaignCustomText.trim().length > 0;
-    const payloadEventName = typeof payload.eventName === "string" ? payload.eventName : null;
-    const queuedAttachments = parseQueuedEmailAttachments(payload);
+  const outbox = await Promise.all(
+    rows.map(async (row) => {
+      const payload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
+      const firstName = typeof payload.firstName === "string" ? payload.firstName.trim() : "";
+      const lastName = typeof payload.lastName === "string" ? payload.lastName.trim() : "";
+      const recipientName = [firstName, lastName].filter(Boolean).join(" ") || null;
+      const bccRecipients = Array.isArray(payload.__bccRecipients)
+        ? payload.__bccRecipients.filter((item): item is string => typeof item === "string" && item.includes("@"))
+        : [];
+      const previewSubject = await buildPreviewSubject(c, row, payload, subjectTemplateCache);
+      const directBody =
+        typeof payload.__adminCampaignBodyContent === "string" && payload.__adminCampaignBodyContent.length > 0;
+      const customText =
+        typeof payload.__adminCampaignCustomText === "string" && payload.__adminCampaignCustomText.trim().length > 0;
+      const payloadEventName = typeof payload.eventName === "string" ? payload.eventName : null;
+      const queuedAttachments = parseQueuedEmailAttachments(payload);
 
-    return {
-      id: row.id,
-      eventSlug: row.event_slug,
-      eventName: row.event_name ?? payloadEventName,
-      templateKey: row.template_key,
-      templateVersion: row.template_version,
-      recipientEmail: row.recipient_email,
-      recipientName,
-      subject: previewSubject,
-      messageType: row.message_type,
-      provider: row.provider,
-      providerMessageId: row.provider_message_id,
-      status: row.status,
-      attempts: row.attempts,
-      sendAfter: row.send_after,
-      lastError: row.last_error,
-      createdAt: row.created_at,
-      updatedAt: row.updated_at,
-      sentAt: row.sent_at,
-      bccRecipientCount: bccRecipients.length,
-      hasCalendarInvite: Boolean(payload.__calendarInvite),
-      hasBadgeAttachment: queuedAttachments.length > 0,
-      usesDirectBody: directBody,
-      hasCustomText: customText,
-    };
-  }));
+      return {
+        id: row.id,
+        eventSlug: row.event_slug,
+        eventName: row.event_name ?? payloadEventName,
+        templateKey: row.template_key,
+        templateVersion: row.template_version,
+        recipientEmail: row.recipient_email,
+        recipientName,
+        subject: previewSubject,
+        messageType: row.message_type,
+        provider: row.provider,
+        providerMessageId: row.provider_message_id,
+        status: row.status,
+        attempts: row.attempts,
+        sendAfter: row.send_after,
+        lastError: row.last_error,
+        createdAt: row.created_at,
+        updatedAt: row.updated_at,
+        sentAt: row.sent_at,
+        bccRecipientCount: bccRecipients.length,
+        hasCalendarInvite: Boolean(payload.__calendarInvite),
+        hasBadgeAttachment: queuedAttachments.length > 0,
+        usesDirectBody: directBody,
+        hasCustomText: customText,
+      };
+    }),
+  );
 
   return json({
     outbox,
@@ -338,6 +343,6 @@ export class AdminEmailOutboxGet extends OpenAPIRoute {
   schema = {};
 
   async handle(c: any) {
-    return onRequestGet(c as any);
+    return onRequestGet(c);
   }
 }

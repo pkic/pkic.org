@@ -15,13 +15,9 @@ function b64urlDecode(input: string): string {
 }
 
 async function hmacSign(secret: string, payload: string): Promise<string> {
-  const key = await crypto.subtle.importKey(
-    "raw",
-    encoder.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"],
-  );
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
+    "sign",
+  ]);
   const sig = await crypto.subtle.sign("HMAC", key, encoder.encode(payload));
   return b64url(String.fromCharCode(...new Uint8Array(sig)));
 }
@@ -50,22 +46,25 @@ export interface AdminManageClaims {
   exp: number;
 }
 
-export async function signAdminManageJwt(secret: string, claims: Omit<AdminManageClaims, "exp"> & { ttlSeconds: number }): Promise<string> {
+export async function signAdminManageJwt(
+  secret: string,
+  claims: Omit<AdminManageClaims, "exp"> & { ttlSeconds: number },
+): Promise<string> {
   const header = b64url(JSON.stringify({ alg: "HS256", typ: "JWT" }));
-  const payload = b64url(JSON.stringify({
-    sub: claims.sub,
-    event: claims.event,
-    iphash: claims.iphash,
-    uahash: claims.uahash,
-    exp: Math.floor(Date.now() / 1000) + claims.ttlSeconds,
-  }));
+  const payload = b64url(
+    JSON.stringify({
+      sub: claims.sub,
+      event: claims.event,
+      iphash: claims.iphash,
+      uahash: claims.uahash,
+      exp: Math.floor(Date.now() / 1000) + claims.ttlSeconds,
+    }),
+  );
   const sig = await hmacSign(secret, `${header}.${payload}`);
   return `${header}.${payload}.${sig}`;
 }
 
-export type JwtVerifyResult =
-  | { ok: true; claims: AdminManageClaims }
-  | { ok: false; reason: "invalid" | "expired" };
+export type JwtVerifyResult = { ok: true; claims: AdminManageClaims } | { ok: false; reason: "invalid" | "expired" };
 
 export async function verifyAdminManageJwt(secret: string, token: string): Promise<JwtVerifyResult> {
   const parts = token.split(".");

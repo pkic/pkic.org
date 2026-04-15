@@ -44,7 +44,21 @@ interface DonationSyncResponse {
 }
 
 const ZERO_DECIMAL_CURRENCIES = new Set([
-  "bif", "clp", "gnf", "jpy", "kmf", "krw", "mga", "pyg", "rwf", "ugx", "vnd", "vuv", "xaf", "xof", "xpf",
+  "bif",
+  "clp",
+  "gnf",
+  "jpy",
+  "kmf",
+  "krw",
+  "mga",
+  "pyg",
+  "rwf",
+  "ugx",
+  "vnd",
+  "vuv",
+  "xaf",
+  "xof",
+  "xpf",
 ]);
 
 function fmtAmount(smallestUnit: number, currency: string): string {
@@ -111,12 +125,14 @@ export function DonationDetailPage({ donationId }: { donationId: string }) {
   const net = d.net_amount !== null ? fmtAmount(d.net_amount, netCurrency) : "—";
   const methodLabel = d.payment_method_type ? asyncPaymentWindow(d.payment_method_type).label : "—";
   const showSettled =
-    d.settled_amount !== null &&
-    d.settled_currency &&
-    d.settled_currency.toLowerCase() !== d.currency.toLowerCase();
+    d.settled_amount !== null && d.settled_currency && d.settled_currency.toLowerCase() !== d.currency.toLowerCase();
   const deadline =
     d.status === "awaiting_payment" && d.session_expires_at
-      ? new Date(d.session_expires_at * 1000).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })
+      ? new Date(d.session_expires_at * 1000).toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        })
       : null;
   const needsSync =
     d.status === "pending" ||
@@ -138,7 +154,9 @@ export function DonationDetailPage({ donationId }: { donationId: string }) {
 
       <div class="adm-donation-detail">
         <div class="adm-donation-detail-grid">
-          <Field label="Email"><a href={`mailto:${d.email}`}>{d.email}</a></Field>
+          <Field label="Email">
+            <a href={`mailto:${d.email}`}>{d.email}</a>
+          </Field>
           {d.organization && <Field label="Organization">{d.organization}</Field>}
           <Field label="Gross">
             {gross}
@@ -150,8 +168,14 @@ export function DonationDetailPage({ donationId }: { donationId: string }) {
             {deadline && <span class="text-muted"> (due {deadline})</span>}
           </Field>
           <Field label="Source">{d.source ?? "—"}</Field>
-          <Field label="Session ID"><span class="mono small">{d.checkout_session_id}</span></Field>
-          {d.payment_intent_id && <Field label="Payment Intent"><span class="mono small">{d.payment_intent_id}</span></Field>}
+          <Field label="Session ID">
+            <span class="mono small">{d.checkout_session_id}</span>
+          </Field>
+          {d.payment_intent_id && (
+            <Field label="Payment Intent">
+              <span class="mono small">{d.payment_intent_id}</span>
+            </Field>
+          )}
           <Field label="Created">{fmt(d.created_at)}</Field>
           <Field label="Completed">{fmt(d.completed_at)}</Field>
         </div>

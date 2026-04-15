@@ -11,24 +11,19 @@ export async function onRequestPost(c: any): Promise<Response> {
   const resolved = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
 
   if (body.action === "resume") {
-    await run(
-      c.env.DB,
-      "UPDATE proposal_speakers SET presentation_reminders_paused_until = NULL WHERE id = ?",
-      [resolved.speaker.id],
-    );
+    await run(c.env.DB, "UPDATE proposal_speakers SET presentation_reminders_paused_until = NULL WHERE id = ?", [
+      resolved.speaker.id,
+    ]);
     return json({ success: true, state: "active", pausedUntil: null });
   }
 
   const now = nowIso();
-  const pausedUntil = body.action === "postpone_7d"
-    ? addHours(now, 24 * 7)
-    : addHours(now, 24 * 30);
+  const pausedUntil = body.action === "postpone_7d" ? addHours(now, 24 * 7) : addHours(now, 24 * 30);
 
-  await run(
-    c.env.DB,
-    "UPDATE proposal_speakers SET presentation_reminders_paused_until = ? WHERE id = ?",
-    [pausedUntil, resolved.speaker.id],
-  );
+  await run(c.env.DB, "UPDATE proposal_speakers SET presentation_reminders_paused_until = ? WHERE id = ?", [
+    pausedUntil,
+    resolved.speaker.id,
+  ]);
 
   return json({
     success: true,

@@ -10,10 +10,10 @@ export async function onRequestPatch(c: any): Promise<Response> {
   const existing = await getProposalByManageToken(c.env.DB, c.req.param("token"));
   const proposalDetails = body.details
     ? await validateCustomAnswersByPurpose(c.env.DB, {
-      eventId: existing.event_id,
-      purpose: "proposal_submission",
-      customAnswers: body.details,
-    })
+        eventId: existing.event_id,
+        purpose: "proposal_submission",
+        customAnswers: body.details,
+      })
     : {};
 
   const proposal = await updateProposalByManageToken(c.env.DB, {
@@ -45,7 +45,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     links_json: string | null;
   }>(
     c.env.DB,
-        `SELECT ps.user_id, ps.role, ps.status, ps.confirmed_at, ps.declined_at,
+    `SELECT ps.user_id, ps.role, ps.status, ps.confirmed_at, ps.declined_at,
           u.email, u.first_name, u.last_name, u.organization_name, u.job_title, u.biography, u.links_json
      FROM proposal_speakers ps
      JOIN users u ON u.id = ps.user_id

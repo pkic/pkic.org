@@ -4,7 +4,6 @@ import { queryAll } from "./helpers/context";
 
 describe("members model", () => {
   it("supports individual and organization members with strict subject constraints", async () => {
-
     const userId = crypto.randomUUID();
     const organizationId = crypto.randomUUID();
     const individualMemberId = crypto.randomUUID();
@@ -29,23 +28,30 @@ describe("members model", () => {
       `),
     ]);
 
-    const counts = ((await queryAll<{ total: number }>(env.DB, 
-      "SELECT COUNT(*) AS total FROM members WHERE member_type IN ('individual', 'organization')",
-    )))[0];
+    const counts = (
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM members WHERE member_type IN ('individual', 'organization')",
+      )
+    )[0];
     expect(Number(counts.total)).toBe(2);
 
     await expect(
-      env.DB.prepare(`
+      env.DB.prepare(
+        `
         INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
         VALUES ('${crypto.randomUUID()}', 'individual', '${userId}', '${organizationId}', 'active', datetime('now'), datetime('now'));
-      `).run(),
+      `,
+      ).run(),
     ).rejects.toThrow();
 
     await expect(
-      env.DB.prepare(`
+      env.DB.prepare(
+        `
         INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
         VALUES ('${crypto.randomUUID()}', 'individual', '${userId}', NULL, 'active', datetime('now'), datetime('now'));
-      `).run(),
+      `,
+      ).run(),
     ).rejects.toThrow();
   });
 });

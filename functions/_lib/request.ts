@@ -3,7 +3,9 @@ import { hmacSha256Hex } from "./utils/crypto";
 import type { Env } from "./types";
 
 export function getClientIp(request: Request): string | null {
-  return request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  return (
+    request.headers.get("cf-connecting-ip") ?? request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null
+  );
 }
 
 export function getUserAgent(request: Request): string | null {

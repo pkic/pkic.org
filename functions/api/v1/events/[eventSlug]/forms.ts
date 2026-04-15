@@ -1,7 +1,11 @@
 import { json } from "../../../../_lib/http";
 import { getActiveFormByPurpose } from "../../../../_lib/services/forms";
 import { getEventBySlug, getRequiredTerms } from "../../../../_lib/services/events";
-import { countRegisteredByEventDay, listEventDays, resolveAttendanceOptions } from "../../../../_lib/services/event-days";
+import {
+  countRegisteredByEventDay,
+  listEventDays,
+  resolveAttendanceOptions,
+} from "../../../../_lib/services/event-days";
 import { parseJsonSafe } from "../../../../_lib/utils/json";
 import { logError } from "../../../../_lib/logging";
 
@@ -36,9 +40,9 @@ export async function onRequestGet(c: any): Promise<Response> {
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const audience = purpose === "proposal_submission" ? "speaker" : "attendee";
 
-  let form = null;
-  let requiredTerms = [] as Awaited<ReturnType<typeof getRequiredTerms>>;
-  let eventDays = [] as Awaited<ReturnType<typeof listEventDays>>;
+  let form: Awaited<ReturnType<typeof getActiveFormByPurpose>> | null;
+  let requiredTerms: Awaited<ReturnType<typeof getRequiredTerms>>;
+  let eventDays: Awaited<ReturnType<typeof listEventDays>>;
 
   try {
     form = await getActiveFormByPurpose(c.env.DB, event.id, purpose);
@@ -124,9 +128,7 @@ export async function onRequestGet(c: any): Promise<Response> {
         const capacity = option.capacity ?? null;
         const registered = registeredCounts.get(day.id)?.get(option.value) ?? 0;
         const spotsRemainingPercent =
-          capacity != null && capacity > 0
-            ? Math.round(((capacity - registered) / capacity) * 100)
-            : null;
+          capacity != null && capacity > 0 ? Math.round(((capacity - registered) / capacity) * 100) : null;
         return { value: option.value, label: option.label, spotsRemainingPercent };
       }),
     })),

@@ -10,7 +10,12 @@ import { all, first } from "../../../../../_lib/db/queries";
 import { parseJsonSafe } from "../../../../../_lib/utils/json";
 import { AppError } from "../../../../../_lib/errors";
 
-interface FormRow { id: string; key: string; title: string; purpose: string; }
+interface FormRow {
+  id: string;
+  key: string;
+  title: string;
+  purpose: string;
+}
 interface SubmissionRow {
   id: string;
   form_id: string;
@@ -30,18 +35,12 @@ interface AnswerRow {
   data_json: string | null;
 }
 
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
   const formKey = c.req.param("formKey");
 
-  const form = await first<FormRow>(
-    c.env.DB,
-    "SELECT id, key, title, purpose FROM forms WHERE key = ?",
-    [formKey],
-  );
+  const form = await first<FormRow>(c.env.DB, "SELECT id, key, title, purpose FROM forms WHERE key = ?", [formKey]);
   if (!form) throw new AppError(404, "FORM_NOT_FOUND", `Form '${formKey}' not found`);
 
   const url = new URL(c.req.raw.url);
@@ -120,9 +119,7 @@ export async function onRequestGet(
   });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

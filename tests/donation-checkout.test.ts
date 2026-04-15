@@ -226,7 +226,7 @@ describe("POST /api/v1/donations/checkout", () => {
     const ctx = makeContext(env, makeRequest({ amount: 5000, currency: "usd", name: "Test Donor" }));
     const response = await callEndpoint(ctx);
     expect(response.status).toBe(503);
-    const body = await response.json() as Record<string, unknown>;
+    const body = (await response.json()) as Record<string, unknown>;
     expect((body.error as Record<string, unknown>).code).toBe("SERVICE_UNAVAILABLE");
   });
 
@@ -247,7 +247,7 @@ describe("POST /api/v1/donations/checkout", () => {
     const ctx = makeContext(env, makeRequest({}));
     const response = await callEndpoint(ctx);
     expect(response.status).toBe(400);
-    const body = await response.json() as Record<string, unknown>;
+    const body = (await response.json()) as Record<string, unknown>;
     expect((body.error as Record<string, unknown>).code).toBe("VALIDATION_ERROR");
   });
 
@@ -257,7 +257,7 @@ describe("POST /api/v1/donations/checkout", () => {
     const response = await callEndpoint(ctx);
 
     expect(response.status).toBe(400);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       error: { code: string; details?: { fieldErrors?: Record<string, string[]> } };
     };
     expect(body.error.code).toBe("VALIDATION_ERROR");
@@ -274,7 +274,7 @@ describe("POST /api/v1/donations/checkout", () => {
     const response = await callEndpoint(ctx);
 
     expect(response.status).toBe(400);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       error: { code: string; details?: { fieldErrors?: Record<string, string[]> } };
     };
     expect(body.error.code).toBe("VALIDATION_ERROR");
@@ -287,16 +287,19 @@ describe("POST /api/v1/donations/checkout", () => {
 
   it("returns 400 when email is invalid and does not call Stripe or D1", async () => {
     const env = makeEnv();
-    const ctx = makeContext(env, makeRequest({
-      amount: 5000,
-      currency: "usd",
-      name: "Valid Donor",
-      email: "not-an-email",
-    }));
+    const ctx = makeContext(
+      env,
+      makeRequest({
+        amount: 5000,
+        currency: "usd",
+        name: "Valid Donor",
+        email: "not-an-email",
+      }),
+    );
     const response = await callEndpoint(ctx);
 
     expect(response.status).toBe(400);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       error: { code: string; details?: { fieldErrors?: Record<string, string[]> } };
     };
     expect(body.error.code).toBe("VALIDATION_ERROR");
@@ -309,16 +312,19 @@ describe("POST /api/v1/donations/checkout", () => {
 
   it("returns 400 when successPath is invalid and does not call Stripe or D1", async () => {
     const env = makeEnv();
-    const ctx = makeContext(env, makeRequest({
-      amount: 5000,
-      currency: "usd",
-      name: "Valid Donor",
-      successPath: "https://evil.com/steal",
-    }));
+    const ctx = makeContext(
+      env,
+      makeRequest({
+        amount: 5000,
+        currency: "usd",
+        name: "Valid Donor",
+        successPath: "https://evil.com/steal",
+      }),
+    );
     const response = await callEndpoint(ctx);
 
     expect(response.status).toBe(400);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       error: { code: string; details?: { fieldErrors?: Record<string, string[]> } };
     };
     expect(body.error.code).toBe("VALIDATION_ERROR");
@@ -331,16 +337,19 @@ describe("POST /api/v1/donations/checkout", () => {
 
   it("returns 400 when cancelPath contains open-redirect pattern and does not call Stripe or D1", async () => {
     const env = makeEnv();
-    const ctx = makeContext(env, makeRequest({
-      amount: 5000,
-      currency: "usd",
-      name: "Valid Donor",
-      cancelPath: "/foo//bar",
-    }));
+    const ctx = makeContext(
+      env,
+      makeRequest({
+        amount: 5000,
+        currency: "usd",
+        name: "Valid Donor",
+        cancelPath: "/foo//bar",
+      }),
+    );
     const response = await callEndpoint(ctx);
 
     expect(response.status).toBe(400);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       error: { code: string; details?: { fieldErrors?: Record<string, string[]> } };
     };
     expect(body.error.code).toBe("VALIDATION_ERROR");
@@ -353,9 +362,12 @@ describe("POST /api/v1/donations/checkout", () => {
 
   it("returns 403 for cross-origin requests", async () => {
     const env = makeEnv();
-    const request = makeRequest({ amount: 5000, currency: "usd", name: "Test Donor" }, {
-      "sec-fetch-site": "cross-site",
-    });
+    const request = makeRequest(
+      { amount: 5000, currency: "usd", name: "Test Donor" },
+      {
+        "sec-fetch-site": "cross-site",
+      },
+    );
     const ctx = makeContext(env, request);
     const response = await callEndpoint(ctx);
     expect(response.status).toBe(403);
@@ -371,16 +383,19 @@ describe("POST /api/v1/donations/checkout", () => {
     );
 
     const env = makeEnv();
-    const ctx = makeContext(env, makeRequest({
-      amount: 10000,
-      currency: "usd",
-      name: "Alice Donor",
-      embedded: true,
-    }));
+    const ctx = makeContext(
+      env,
+      makeRequest({
+        amount: 10000,
+        currency: "usd",
+        name: "Alice Donor",
+        embedded: true,
+      }),
+    );
     const response = await callEndpoint(ctx);
     expect(response.status).toBe(200);
 
-    const body = await response.json() as { clientSecret: string; publishableKey: string };
+    const body = (await response.json()) as { clientSecret: string; publishableKey: string };
     expect(body.clientSecret).toBe("cs_test_embedded123_secret_fake");
     expect(body.publishableKey).toBe("pk_test_fake");
 
@@ -403,24 +418,32 @@ describe("POST /api/v1/donations/checkout", () => {
     );
 
     const env = makeEnv();
-    const ctx = makeContext(env, makeRequest({
-      amount: 10000,
-      currency: "eur",
-      name: "Alice Donor",
-      email: "donor@example.com",
-    }));
+    const ctx = makeContext(
+      env,
+      makeRequest({
+        amount: 10000,
+        currency: "eur",
+        name: "Alice Donor",
+        email: "donor@example.com",
+      }),
+    );
     const response = await callEndpoint(ctx);
     expect(response.status).toBe(200);
 
-    const body = await response.json() as { url: string };
+    const body = (await response.json()) as { url: string };
     expect(body.url).toBe("https://checkout.stripe.com/c/pay_fake123");
 
     // Verify Stripe was called correctly
-    const [stripeUrl, stripeInit] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
+    const [stripeUrl, stripeInit] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [
+      string,
+      RequestInit,
+    ];
     expect(stripeUrl).toBe("https://api.stripe.com/v1/checkout/sessions");
-    expect(stripeInit.headers).toEqual(expect.objectContaining({
-      "Authorization": "Bearer sk_test_fake",
-    }));
+    expect(stripeInit.headers).toEqual(
+      expect.objectContaining({
+        Authorization: "Bearer sk_test_fake",
+      }),
+    );
 
     const params = new URLSearchParams(stripeInit.body as string);
     expect(params.get("mode")).toBe("payment");
@@ -440,17 +463,26 @@ describe("POST /api/v1/donations/checkout", () => {
 
   it("uses the configured app base URL for preview deployments", async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      new Response(JSON.stringify({ id: "cs_test_branch", url: "https://checkout.stripe.com/c/pay_branch" }), { status: 200 }),
+      new Response(JSON.stringify({ id: "cs_test_branch", url: "https://checkout.stripe.com/c/pay_branch" }), {
+        status: 200,
+      }),
     );
 
     const env = makeEnv({ APP_BASE_URL: "https://events.pkic.pages.dev" });
-    const ctx = makeContext(env, makeRequest({
-      amount: 10000,
-      currency: "usd",
-      name: "Branch Alias Donor",
-    }, {
-      origin: "https://events.pkic.pages.dev",
-    }, "https://events.pkic.pages.dev/api/v1/donations/checkout"));
+    const ctx = makeContext(
+      env,
+      makeRequest(
+        {
+          amount: 10000,
+          currency: "usd",
+          name: "Branch Alias Donor",
+        },
+        {
+          origin: "https://events.pkic.pages.dev",
+        },
+        "https://events.pkic.pages.dev/api/v1/donations/checkout",
+      ),
+    );
 
     const response = await callEndpoint(ctx);
     expect(response.status).toBe(200);
@@ -463,18 +495,23 @@ describe("POST /api/v1/donations/checkout", () => {
 
   it("passes custom success/cancel paths and metadata", async () => {
     (globalThis.fetch as ReturnType<typeof vi.fn>).mockResolvedValue(
-      new Response(JSON.stringify({ id: "cs_test_fake", url: "https://checkout.stripe.com/c/pay_fake" }), { status: 200 }),
+      new Response(JSON.stringify({ id: "cs_test_fake", url: "https://checkout.stripe.com/c/pay_fake" }), {
+        status: 200,
+      }),
     );
 
     const env = makeEnv();
-    const ctx = makeContext(env, makeRequest({
-      amount: 25000,
-      currency: "gbp",
-      name: "Bob Donor",
-      successPath: "/events/2026/pqc/confirm/",
-      cancelPath: "/events/2026/pqc/register/",
-      metadata: { source: "/events/2026/pqc/" },
-    }));
+    const ctx = makeContext(
+      env,
+      makeRequest({
+        amount: 25000,
+        currency: "gbp",
+        name: "Bob Donor",
+        successPath: "/events/2026/pqc/confirm/",
+        cancelPath: "/events/2026/pqc/register/",
+        metadata: { source: "/events/2026/pqc/" },
+      }),
+    );
     const response = await callEndpoint(ctx);
     expect(response.status).toBe(200);
 
@@ -516,12 +553,15 @@ describe("POST /api/v1/donations/checkout", () => {
     );
 
     const env = makeEnv();
-    const ctx = makeContext(env, makeRequest({
-      amount: 5000,
-      currency: "usd",
-      name: "Carol Donor",
-      organizationName: "ACME Corp",
-    }));
+    const ctx = makeContext(
+      env,
+      makeRequest({
+        amount: 5000,
+        currency: "usd",
+        name: "Carol Donor",
+        organizationName: "ACME Corp",
+      }),
+    );
     await callEndpoint(ctx);
 
     const [, stripeInit] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
@@ -535,14 +575,17 @@ describe("POST /api/v1/donations/checkout", () => {
     );
 
     const env = makeEnv();
-    const ctx = makeContext(env, makeRequest({
-      amount: 5000,
-      currency: "usd",
-      name: "Dana Donor",
-      email: "dana@example.com",
-      organizationName: "Example Org",
-      metadata: { source: "/donate/" },
-    }));
+    const ctx = makeContext(
+      env,
+      makeRequest({
+        amount: 5000,
+        currency: "usd",
+        name: "Dana Donor",
+        email: "dana@example.com",
+        organizationName: "Example Org",
+        metadata: { source: "/donate/" },
+      }),
+    );
     await callEndpoint(ctx);
 
     const [, stripeInit] = (globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls[0] as [string, RequestInit];
@@ -569,13 +612,9 @@ describe("POST /api/v1/webhooks/stripe", () => {
   async function signStripePayload(body: string, secret: string): Promise<string> {
     const timestamp = Math.floor(Date.now() / 1000);
     const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"],
-    );
+    const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
+      "sign",
+    ]);
     const signature = await crypto.subtle.sign("HMAC", key, encoder.encode(`${timestamp}.${body}`));
     const digest = Array.from(new Uint8Array(signature))
       .map((value) => value.toString(16).padStart(2, "0"))
@@ -612,7 +651,9 @@ describe("POST /api/v1/webhooks/stripe", () => {
     };
   }
 
-  beforeEach(() => { globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 404 })); });
+  beforeEach(() => {
+    globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 404 }));
+  });
   afterEach(() => {
     globalThis.fetch = originalFetch;
   });
@@ -677,7 +718,7 @@ describe("POST /api/v1/webhooks/stripe", () => {
     });
 
     const response = await webhookOnRequest(createContext(env, request, {}));
-    const payload = await response.json() as { pending?: boolean };
+    const payload = (await response.json()) as { pending?: boolean };
 
     expect(response.status).toBe(200);
     expect(payload.pending).toBe(true);
@@ -714,7 +755,7 @@ describe("POST /api/v1/webhooks/stripe", () => {
     });
 
     const response = await webhookOnRequest(createContext(env, request, {}));
-    const payload = await response.json() as { pending?: boolean };
+    const payload = (await response.json()) as { pending?: boolean };
 
     expect(response.status).toBe(200);
     expect(payload.pending).toBe(true);
@@ -725,7 +766,8 @@ describe("POST /api/v1/webhooks/stripe", () => {
   it("uses donor metadata instead of storing Unknown when the donation row must be created from the webhook", async () => {
     const stmt = {
       bind: vi.fn().mockReturnThis(),
-      run: vi.fn()
+      run: vi
+        .fn()
         .mockResolvedValueOnce({ success: true, meta: { changes: 0 } })
         .mockResolvedValueOnce({ success: true, meta: { changes: 1 } })
         .mockResolvedValue({ success: true, meta: { changes: 1 } }),
@@ -835,7 +877,7 @@ describe("GET /api/v1/donations/session", () => {
     const ctx = createContext(env, request, {});
     const response = await sessionOnRequest(ctx);
     expect(response.status).toBe(202);
-    const body = await response.json() as { pending: boolean };
+    const body = (await response.json()) as { pending: boolean };
     expect(body.pending).toBe(true);
   });
 
@@ -853,7 +895,7 @@ describe("GET /api/v1/donations/session", () => {
     const ctx = createContext(env, request, {});
     const response = await sessionOnRequest(ctx);
     expect(response.status).toBe(202);
-    const body = await response.json() as { pending: boolean; asyncPayment?: boolean };
+    const body = (await response.json()) as { pending: boolean; asyncPayment?: boolean };
     expect(body.pending).toBe(true);
     expect(body.asyncPayment).toBe(true);
   });
@@ -872,7 +914,7 @@ describe("GET /api/v1/donations/session", () => {
     const ctx = createContext(env, request, {});
     const response = await sessionOnRequest(ctx);
     expect(response.status).toBe(200);
-    const body = await response.json() as Record<string, unknown>;
+    const body = (await response.json()) as Record<string, unknown>;
     expect(body.grossAmount).toBe(5000);
     expect(body.currency).toBe("usd");
     expect(body.donorFirstName).toBe("Alice");

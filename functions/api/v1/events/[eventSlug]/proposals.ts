@@ -1,8 +1,17 @@
 import { OpenAPIRoute } from "chanfana";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
-import { buildEventEmailVariables, getEventBySlug, getRequiredTerms, updateEventBasePath } from "../../../../_lib/services/events";
-import { createProposal, addProposalSpeaker, buildProposalInviteEmailContext } from "../../../../_lib/services/proposals";
+import {
+  buildEventEmailVariables,
+  getEventBySlug,
+  getRequiredTerms,
+  updateEventBasePath,
+} from "../../../../_lib/services/events";
+import {
+  createProposal,
+  addProposalSpeaker,
+  buildProposalInviteEmailContext,
+} from "../../../../_lib/services/proposals";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
 import { createReferralCode } from "../../../../_lib/services/referrals";
 import { trySeedGravatarThenPrerender } from "../../../../_lib/services/og-badge-prerender";
@@ -24,11 +33,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   // Record the Hugo page URL sent by the browser so base_path is always the
   // real event page location, not a hardcoded pattern.
-  await updateEventBasePath(
-    c.env.DB,
-    event.id,
-    c.req.raw.headers.get("x-event-base-path"),
-  );
+  await updateEventBasePath(c.env.DB, event.id, c.req.raw.headers.get("x-event-base-path"));
 
   let inviteId: string | null = null;
   if (body.inviteToken) {

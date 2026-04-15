@@ -9,25 +9,42 @@ function isTruthy(value: unknown): boolean {
 function evaluateIfCondition(condition: string, data: Record<string, unknown>): boolean {
   // {{#if and var1 var2 ...}}
   if (condition.startsWith("and ")) {
-    return condition.slice(4).trim().split(/\s+/).filter(Boolean).every(c => isTruthy(data[c]));
+    return condition
+      .slice(4)
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .every((c) => isTruthy(data[c]));
   }
   // {{#if or var1 var2 ...}}
   if (condition.startsWith("or ")) {
-    return condition.slice(3).trim().split(/\s+/).filter(Boolean).some(c => isTruthy(data[c]));
+    return condition
+      .slice(3)
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .some((c) => isTruthy(data[c]));
   }
   // {{#if eq|ne|gt|gte|lt|lte var "literal"}}
   const cmpMatch = /^(eq|ne|gt|gte|lt|lte)\s+(\w+)\s+"([^"]*)"$/.exec(condition);
   if (cmpMatch) {
     const [, op, variable, literal] = cmpMatch;
     const value = String(data[variable] ?? "");
-    const n = parseFloat(value), nl = parseFloat(literal);
+    const n = parseFloat(value),
+      nl = parseFloat(literal);
     switch (op) {
-      case "eq":  return value === literal;
-      case "ne":  return value !== literal;
-      case "gt":  return !isNaN(n) && !isNaN(nl) && n > nl;
-      case "gte": return !isNaN(n) && !isNaN(nl) && n >= nl;
-      case "lt":  return !isNaN(n) && !isNaN(nl) && n < nl;
-      case "lte": return !isNaN(n) && !isNaN(nl) && n <= nl;
+      case "eq":
+        return value === literal;
+      case "ne":
+        return value !== literal;
+      case "gt":
+        return !isNaN(n) && !isNaN(nl) && n > nl;
+      case "gte":
+        return !isNaN(n) && !isNaN(nl) && n >= nl;
+      case "lt":
+        return !isNaN(n) && !isNaN(nl) && n < nl;
+      case "lte":
+        return !isNaN(n) && !isNaN(nl) && n <= nl;
     }
   }
   // {{#if var}} — truthy check
@@ -43,14 +60,14 @@ function evaluateIfCondition(condition: string, data: Record<string, unknown>): 
 function findMatchingCloseTag(
   template: string,
   searchFrom: number,
-  openPrefix: string,   // e.g., "{{#if "  — increments depth
-  closeTag: string,     // e.g., "{{/if}}" — decrements depth
+  openPrefix: string, // e.g., "{{#if "  — increments depth
+  closeTag: string, // e.g., "{{/if}}" — decrements depth
 ): number {
   let depth = 1;
   let pos = searchFrom;
   while (pos < template.length) {
-    const nextOpen  = template.indexOf(openPrefix, pos);
-    const nextClose = template.indexOf(closeTag,  pos);
+    const nextOpen = template.indexOf(openPrefix, pos);
+    const nextClose = template.indexOf(closeTag, pos);
     if (nextClose === -1) return -1; // unmatched open
     if (nextOpen !== -1 && nextOpen < nextClose) {
       depth++;
@@ -71,21 +88,17 @@ function findMatchingCloseTag(
  * (i.e., not inside a nested {{#if}} / {{#unless}} block).
  * Returns -1 if not found.
  */
-function findElseAtDepth0(
-  content: string,
-  openPrefix: string,
-  closeTag: string,
-): number {
+function findElseAtDepth0(content: string, openPrefix: string, closeTag: string): number {
   let depth = 0;
   let pos = 0;
   while (pos < content.length) {
-    const nextOpen  = content.indexOf(openPrefix, pos);
-    const nextClose = content.indexOf(closeTag,   pos);
-    const nextElse  = content.indexOf("{{else}}", pos);
+    const nextOpen = content.indexOf(openPrefix, pos);
+    const nextClose = content.indexOf(closeTag, pos);
+    const nextElse = content.indexOf("{{else}}", pos);
 
-    const openAt  = nextOpen  !== -1 ? nextOpen  : Infinity;
+    const openAt = nextOpen !== -1 ? nextOpen : Infinity;
     const closeAt = nextClose !== -1 ? nextClose : Infinity;
-    const elseAt  = nextElse  !== -1 ? nextElse  : Infinity;
+    const elseAt = nextElse !== -1 ? nextElse : Infinity;
 
     const earliest = Math.min(openAt, closeAt, elseAt);
     if (!isFinite(earliest)) break;
@@ -113,7 +126,7 @@ function resolveAllConditionals(template: string, data: Record<string, unknown>)
   let pos = 0;
 
   while (pos < template.length) {
-    const ifIdx     = template.indexOf("{{#if ", pos);
+    const ifIdx = template.indexOf("{{#if ", pos);
     const unlessIdx = template.indexOf("{{#unless ", pos);
 
     // No more conditional tags — append remainder and stop.
@@ -122,10 +135,10 @@ function resolveAllConditionals(template: string, data: Record<string, unknown>)
       break;
     }
 
-    const isUnless  = unlessIdx !== -1 && (ifIdx === -1 || unlessIdx < ifIdx);
-    const tagIdx    = isUnless ? unlessIdx : ifIdx;
-    const openPfx   = isUnless ? "{{#unless " : "{{#if ";
-    const closeTag  = isUnless ? "{{/unless}}" : "{{/if}}";
+    const isUnless = unlessIdx !== -1 && (ifIdx === -1 || unlessIdx < ifIdx);
+    const tagIdx = isUnless ? unlessIdx : ifIdx;
+    const openPfx = isUnless ? "{{#unless " : "{{#if ";
+    const closeTag = isUnless ? "{{/unless}}" : "{{/if}}";
 
     // Append literal text before this tag.
     result += template.slice(pos, tagIdx);
@@ -138,7 +151,7 @@ function resolveAllConditionals(template: string, data: Record<string, unknown>)
       break;
     }
 
-    const condition  = template.slice(tagIdx + openPfx.length, condEnd).trim();
+    const condition = template.slice(tagIdx + openPfx.length, condEnd).trim();
     const openTagEnd = condEnd + 2;
 
     // Find the matching close tag (depth-aware).
@@ -151,17 +164,15 @@ function resolveAllConditionals(template: string, data: Record<string, unknown>)
     }
 
     const blockContent = template.slice(openTagEnd, closeAt);
-    const afterBlock   = closeAt + closeTag.length;
+    const afterBlock = closeAt + closeTag.length;
 
     // Find {{else}} at depth 0 within the block.
-    const elseAt      = findElseAtDepth0(blockContent, openPfx, closeTag);
-    const ifContent   = elseAt !== -1 ? blockContent.slice(0, elseAt) : blockContent;
+    const elseAt = findElseAtDepth0(blockContent, openPfx, closeTag);
+    const ifContent = elseAt !== -1 ? blockContent.slice(0, elseAt) : blockContent;
     const elseContent = elseAt !== -1 ? blockContent.slice(elseAt + "{{else}}".length) : "";
 
     // Evaluate and recursively process the chosen branch.
-    const isTrue  = isUnless
-      ? !isTruthy(data[condition])
-      : evaluateIfCondition(condition, data);
+    const isTrue = isUnless ? !isTruthy(data[condition]) : evaluateIfCondition(condition, data);
     result += resolveAllConditionals(isTrue ? ifContent : elseContent, data);
 
     pos = afterBlock;
@@ -259,39 +270,36 @@ export function compileSimpleTemplate(template: string, data: Record<string, unk
   // 1. LOOPS: {{#each array}}...{{/each}}
   //    Processes nested conditionals inside loop content.
   // ────────────────────────────────────────────────────────────────────────────
-  result = result.replace(
-    /\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g,
-    (match, arrayVar, content) => {
-      const array = data[arrayVar];
-      if (!Array.isArray(array)) {
-        return ""; // Not an array, skip loop
-      }
-
-      return array
-        .map((item, index) => {
-          let loopContent = content;
-          
-          // Create a temporary data object with loop variables + item properties
-          const loopData = { ...data };
-          loopData["this"] = item;
-          loopData["."] = item;
-          loopData["@index"] = index;
-          loopData["@first"] = index === 0;
-          loopData["@last"] = index === array.length - 1;
-          
-          // If item is an object, merge its properties into loopData
-          if (item !== null && typeof item === "object" && !(item instanceof Array)) {
-            Object.assign(loopData, item);
-          }
-
-          // Recursively process the loop content (handles nested conditionals)
-          loopContent = compileSimpleTemplate(loopContent, loopData);
-          
-          return loopContent;
-        })
-        .join("");
+  result = result.replace(/\{\{#each\s+(\w+)\}\}([\s\S]*?)\{\{\/each\}\}/g, (match, arrayVar, content) => {
+    const array = data[arrayVar];
+    if (!Array.isArray(array)) {
+      return ""; // Not an array, skip loop
     }
-  );
+
+    return array
+      .map((item, index) => {
+        let loopContent = content;
+
+        // Create a temporary data object with loop variables + item properties
+        const loopData = { ...data };
+        loopData["this"] = item;
+        loopData["."] = item;
+        loopData["@index"] = index;
+        loopData["@first"] = index === 0;
+        loopData["@last"] = index === array.length - 1;
+
+        // If item is an object, merge its properties into loopData
+        if (item !== null && typeof item === "object" && !(item instanceof Array)) {
+          Object.assign(loopData, item);
+        }
+
+        // Recursively process the loop content (handles nested conditionals)
+        loopContent = compileSimpleTemplate(loopContent, loopData);
+
+        return loopContent;
+      })
+      .join("");
+  });
 
   // ────────────────────────────────────────────────────────────────────────────
   // 2–4. CONDITIONALS — depth-counting scanner (handles arbitrary nesting)
@@ -306,7 +314,7 @@ export function compileSimpleTemplate(template: string, data: Record<string, unk
   // ────────────────────────────────────────────────────────────────────────────
   // 5. VARIABLE SUBSTITUTION: {{variable}}, {{this}}, {{@special}}
   // ────────────────────────────────────────────────────────────────────────────
-  result = result.replace(/\{\{([@\w\.]+)\}\}/g, (match, key) => {
+  result = result.replace(/\{\{([@\w.]+)\}\}/g, (match, key) => {
     const value = data[key];
     if (value === null || value === undefined) {
       return match; // Leave unresolved placeholders as-is

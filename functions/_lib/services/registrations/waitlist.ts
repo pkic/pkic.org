@@ -56,11 +56,7 @@ export async function addToWaitlist(db: DatabaseLike, eventId: string, registrat
   return entry;
 }
 
-export async function claimWaitlistOffer(
-  db: DatabaseLike,
-  registrationId: string,
-  eventId: string,
-): Promise<boolean> {
+export async function claimWaitlistOffer(db: DatabaseLike, registrationId: string, eventId: string): Promise<boolean> {
   const entry = await first<WaitlistRow>(
     db,
     "SELECT * FROM waitlist_entries WHERE registration_id = ? AND event_id = ?",
@@ -76,19 +72,11 @@ export async function claimWaitlistOffer(
   }
 
   if (entry.offer_expires_at && isPast(entry.offer_expires_at)) {
-    await run(
-      db,
-      "UPDATE waitlist_entries SET status = 'expired', updated_at = ? WHERE id = ?",
-      [nowIso(), entry.id],
-    );
+    await run(db, "UPDATE waitlist_entries SET status = 'expired', updated_at = ? WHERE id = ?", [nowIso(), entry.id]);
     throw new AppError(410, "WAITLIST_OFFER_EXPIRED", "Waitlist offer expired");
   }
 
-  await run(
-    db,
-    "UPDATE waitlist_entries SET status = 'accepted', updated_at = ? WHERE id = ?",
-    [nowIso(), entry.id],
-  );
+  await run(db, "UPDATE waitlist_entries SET status = 'accepted', updated_at = ? WHERE id = ?", [nowIso(), entry.id]);
 
   return true;
 }
@@ -134,9 +122,5 @@ export async function promoteWaitlistIfCapacity(
 }
 
 export async function listWaitlistForEvent(db: DatabaseLike, eventId: string): Promise<WaitlistRow[]> {
-  return all<WaitlistRow>(
-    db,
-    "SELECT * FROM waitlist_entries WHERE event_id = ? ORDER BY position ASC",
-    [eventId],
-  );
+  return all<WaitlistRow>(db, "SELECT * FROM waitlist_entries WHERE event_id = ? ORDER BY position ASC", [eventId]);
 }

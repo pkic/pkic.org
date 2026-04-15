@@ -50,7 +50,7 @@ interface DonationConfig {
  */
 export function initDonationForms(): void {
   document.querySelectorAll<HTMLElement>("[data-donation-form]").forEach((root) => {
-    initForm(root);
+    void initForm(root);
   });
 }
 
@@ -221,8 +221,7 @@ async function initForm(root: HTMLElement): Promise<void> {
       );
       await mountEmbeddedCheckout(res.clientSecret, res.publishableKey);
     } catch (err: unknown) {
-      const message =
-        err instanceof Error ? err.message : "Something went wrong. Please try again.";
+      const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
       showStatus(message, true);
       donateBtn.disabled = false;
       donateBtn.textContent = originalText;
@@ -323,14 +322,14 @@ function populateCurrencySelect(select: HTMLSelectElement, defaultCode: string):
  * Used when converting USD preset amounts to other currencies.
  */
 function niceRound(amount: number): number {
-  if (amount < 10)      return Math.max(1, Math.round(amount));
-  if (amount < 50)      return Math.round(amount / 5) * 5;
-  if (amount < 250)     return Math.round(amount / 10) * 10;
-  if (amount < 1000)    return Math.round(amount / 50) * 50;
-  if (amount < 5000)    return Math.round(amount / 100) * 100;
-  if (amount < 25000)   return Math.round(amount / 500) * 500;
-  if (amount < 100000)  return Math.round(amount / 1000) * 1000;
-  if (amount < 500000)  return Math.round(amount / 5000) * 5000;
+  if (amount < 10) return Math.max(1, Math.round(amount));
+  if (amount < 50) return Math.round(amount / 5) * 5;
+  if (amount < 250) return Math.round(amount / 10) * 10;
+  if (amount < 1000) return Math.round(amount / 50) * 50;
+  if (amount < 5000) return Math.round(amount / 100) * 100;
+  if (amount < 25000) return Math.round(amount / 500) * 500;
+  if (amount < 100000) return Math.round(amount / 1000) * 1000;
+  if (amount < 500000) return Math.round(amount / 5000) * 5000;
   return Math.round(amount / 10000) * 10000;
 }
 
@@ -441,4 +440,3 @@ if (document.readyState === "loading") {
 } else {
   initDonationForms();
 }
-

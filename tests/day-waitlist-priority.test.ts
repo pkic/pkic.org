@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach} from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
@@ -6,7 +6,11 @@ import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, updateRegistrationByManageToken } from "../functions/_lib/services/registrations";
 
-async function seedUsersAndInvites(_db: DatabaseLike, eventId: string, emails: string[]): Promise<Record<string, { userId: string; inviteId: string }>> {
+async function seedUsersAndInvites(
+  _db: DatabaseLike,
+  eventId: string,
+  emails: string[],
+): Promise<Record<string, { userId: string; inviteId: string }>> {
   const map: Record<string, { userId: string; inviteId: string }> = {};
 
   for (const email of emails) {
@@ -34,16 +38,20 @@ async function seedUsersAndInvites(_db: DatabaseLike, eventId: string, emails: s
 }
 
 describe("day waitlist priorities", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it("promotes continuity lane before general lane", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
-    await env.DB.prepare(`
+    await env.DB.prepare(
+      `
       INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
       VALUES
         ('day-1', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now')),
         ('day-2', '${eventId}', '2026-12-02', 'Day 2', 1, 20, datetime('now'), datetime('now'));
-    `).run();
+    `,
+    ).run();
 
     const seeded = await seedUsersAndInvites(env.DB, eventId, [
       "holder@example.test",
@@ -86,7 +94,8 @@ describe("day waitlist priorities", () => {
       confirmationTtlHours: 48,
     });
 
-    const lanes = await queryAll<{ registration_id: string; priority_lane: string }>(env.DB, 
+    const lanes = await queryAll<{ registration_id: string; priority_lane: string }>(
+      env.DB,
       "SELECT registration_id, priority_lane FROM event_day_waitlist_entries WHERE event_day_id = 'day-1' ORDER BY position ASC",
     );
     expect(lanes).toHaveLength(2);
@@ -99,7 +108,8 @@ describe("day waitlist priorities", () => {
       waitlistClaimWindowHours: 24,
     });
 
-    const statuses = await queryAll<{ registration_id: string; status: string }>(env.DB, 
+    const statuses = await queryAll<{ registration_id: string; status: string }>(
+      env.DB,
       "SELECT registration_id, status FROM event_day_waitlist_entries WHERE event_day_id = 'day-1'",
     );
 
@@ -110,12 +120,14 @@ describe("day waitlist priorities", () => {
   it("allows only one active offer per user across event days", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
-    await env.DB.prepare(`
+    await env.DB.prepare(
+      `
       INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
       VALUES
         ('d1', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now')),
         ('d2', '${eventId}', '2026-12-02', 'Day 2', 1, 20, datetime('now'), datetime('now'));
-    `).run();
+    `,
+    ).run();
 
     const seeded = await seedUsersAndInvites(env.DB, eventId, [
       "holder-one@example.test",
@@ -181,11 +193,13 @@ describe("day waitlist priorities", () => {
       waitlistClaimWindowHours: 24,
     });
 
-    const multiStatuses = await queryAll<{ event_day_id: string; status: string }>(env.DB, 
+    const multiStatuses = await queryAll<{ event_day_id: string; status: string }>(
+      env.DB,
       "SELECT event_day_id, status FROM event_day_waitlist_entries WHERE registration_id = ? ORDER BY event_day_id",
       [multi.registration.id],
     );
-    const backupStatuses = await queryAll<{ event_day_id: string; status: string }>(env.DB, 
+    const backupStatuses = await queryAll<{ event_day_id: string; status: string }>(
+      env.DB,
       "SELECT event_day_id, status FROM event_day_waitlist_entries WHERE registration_id = ? ORDER BY event_day_id",
       [backup.registration.id],
     );
@@ -198,24 +212,25 @@ describe("day waitlist priorities", () => {
   it("marks organizer registrations as capacity exempt", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
-    await env.DB.prepare(`
+    await env.DB.prepare(
+      `
       INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
       VALUES ('day-1', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now'));
-    `).run();
+    `,
+    ).run();
 
-    const seeded = await seedUsersAndInvites(env.DB, eventId, [
-      "holder@example.test",
-      "organizer@example.test",
-    ]);
+    const seeded = await seedUsersAndInvites(env.DB, eventId, ["holder@example.test", "organizer@example.test"]);
 
-    await env.DB.prepare(`
+    await env.DB.prepare(
+      `
       INSERT INTO event_participants (
         id, event_id, user_id, role, subrole, status, source_type, source_ref, created_at, updated_at
       ) VALUES (
         '${crypto.randomUUID()}', '${eventId}', '${seeded["organizer@example.test"].userId}',
         'organizer', NULL, 'active', 'system', 'seed', datetime('now'), datetime('now')
       );
-    `).run();
+    `,
+    ).run();
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
 
@@ -239,18 +254,24 @@ describe("day waitlist priorities", () => {
       confirmationTtlHours: 48,
     });
 
-    const registration = ((await queryAll<{ capacity_exempt_in_person: number; capacity_exempt_reason: string | null }>(env.DB, 
-      "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?",
-      [organizer.registration.id],
-    )))[0];
+    const registration = (
+      await queryAll<{ capacity_exempt_in_person: number; capacity_exempt_reason: string | null }>(
+        env.DB,
+        "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?",
+        [organizer.registration.id],
+      )
+    )[0];
 
     expect(registration.capacity_exempt_in_person).toBe(1);
     expect(registration.capacity_exempt_reason).toBe("role:organizer");
 
-    const dayWaitlist = ((await queryAll<{ total: number }>(env.DB, 
-      "SELECT COUNT(*) AS total FROM event_day_waitlist_entries WHERE registration_id = ? AND status IN ('waiting', 'offered')",
-      [organizer.registration.id],
-    )))[0];
+    const dayWaitlist = (
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM event_day_waitlist_entries WHERE registration_id = ? AND status IN ('waiting', 'offered')",
+        [organizer.registration.id],
+      )
+    )[0];
 
     expect(Number(dayWaitlist.total)).toBe(0);
   });

@@ -30,9 +30,7 @@ interface UserRow {
   pii_redacted_at: string | null;
 }
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const userId = c.req.param("userId");
 
@@ -89,22 +87,15 @@ export async function onRequestPost(
     [now, user.id, now],
   );
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "user_anonymized",
-    "user",
-    user.id,
-    { previousEmail: user.email, previousRole: user.role },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "user_anonymized", "user", user.id, {
+    previousEmail: user.email,
+    previousRole: user.role,
+  });
 
   return json({ success: true, userId: user.id });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

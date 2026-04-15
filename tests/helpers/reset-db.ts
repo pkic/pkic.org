@@ -4,19 +4,15 @@ interface TableNameRow {
   name: string;
 }
 
-const EXCLUDED_TABLES = new Set([
-  "d1_migrations",
-]);
+const EXCLUDED_TABLES = new Set(["d1_migrations"]);
 
 async function listResettableTables(): Promise<string[]> {
-  const { results } = await env.DB
-    .prepare(
-      `SELECT name
+  const { results } = await env.DB.prepare(
+    `SELECT name
        FROM sqlite_master
        WHERE type = 'table'
          AND name NOT LIKE 'sqlite_%'`,
-    )
-    .all<TableNameRow>();
+  ).all<TableNameRow>();
 
   return results
     .map((row: TableNameRow) => row.name)

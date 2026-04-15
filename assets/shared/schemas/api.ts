@@ -41,7 +41,11 @@ export const attendanceTypeSchema = z.enum(["in_person", "virtual", "on_demand"]
 // are now configurable per event day (e.g. 'in_person', 'on_demand', 'virtual').
 // Application-layer validation in enforceDayCapacity checks the value against
 // the event's configured options.
-export const dayAttendanceTypeSchema = z.string().min(1).max(64).regex(/^[a-z_][a-z0-9_]*$/, "Invalid attendance type");
+export const dayAttendanceTypeSchema = z
+  .string()
+  .min(1)
+  .max(64)
+  .regex(/^[a-z_][a-z0-9_]*$/, "Invalid attendance type");
 export const sourceTypeSchema = z.enum(SOURCE_TYPES);
 export const inviteTypeSchema = z.enum(["attendee", "speaker"]);
 export const declineReasonCodeSchema = z.enum([
@@ -59,25 +63,30 @@ export const consentItemSchema = z.object({
   version: z.string().trim().regex(versionPattern),
 });
 
-const dayDateSchema = z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/);
+const dayDateSchema = z
+  .string()
+  .trim()
+  .regex(/^\d{4}-\d{2}-\d{2}$/);
 export const dayAttendanceItemSchema = z.object({
   dayDate: dayDateSchema,
   attendanceType: dayAttendanceTypeSchema,
 });
 
 const customAnswerScalarSchema = z.union([z.string().trim().max(500), z.number().finite(), z.boolean()]);
-const customAnswerDateRangeSchema = z.object({
-  start: dayDateSchema,
-  end: dayDateSchema,
-}).superRefine((value, ctx) => {
-  if (value.start > value.end) {
-    ctx.addIssue({
-      code: "custom",
-      message: "start must be less than or equal to end",
-      path: ["start"],
-    });
-  }
-});
+const customAnswerDateRangeSchema = z
+  .object({
+    start: dayDateSchema,
+    end: dayDateSchema,
+  })
+  .superRefine((value, ctx) => {
+    if (value.start > value.end) {
+      ctx.addIssue({
+        code: "custom",
+        message: "start must be less than or equal to end",
+        path: ["start"],
+      });
+    }
+  });
 const customAnswerValueSchema = z.union([
   customAnswerScalarSchema,
   z.array(customAnswerScalarSchema).max(25),
@@ -137,29 +146,35 @@ export const inviteeSchema = z.object({
   lastName: lastNameSchema.optional(),
 });
 
-export const registrationCreateSchema = z.object({
-  firstName: firstNameSchema,
-  lastName: lastNameSchema,
-  email: normalizedEmailSchema,
-  organizationName: organizationNameSchema.optional(),
-  jobTitle: jobTitleSchema.optional(),
-  attendanceType: attendanceTypeSchema.optional(),
-  dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
-  sourceType: sourceTypeSchema.catch("direct").default("direct"),
-  sourceRef: trimmedString(2, 200).optional(),
-  customAnswers: customAnswersSchema.optional(),
-  inviteToken: tokenSchema.optional(),
-  referralCode: z.string().trim().regex(/^[A-Za-z0-9]{6,12}$/).optional(),
-  consents: z.array(consentItemSchema).min(1).max(20),
-}).superRefine((value, ctx) => {
-  if (!value.attendanceType && (!value.dayAttendance || value.dayAttendance.length === 0)) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["attendanceType"],
-      message: "attendanceType or dayAttendance is required",
-    });
-  }
-});
+export const registrationCreateSchema = z
+  .object({
+    firstName: firstNameSchema,
+    lastName: lastNameSchema,
+    email: normalizedEmailSchema,
+    organizationName: organizationNameSchema.optional(),
+    jobTitle: jobTitleSchema.optional(),
+    attendanceType: attendanceTypeSchema.optional(),
+    dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
+    sourceType: sourceTypeSchema.catch("direct").default("direct"),
+    sourceRef: trimmedString(2, 200).optional(),
+    customAnswers: customAnswersSchema.optional(),
+    inviteToken: tokenSchema.optional(),
+    referralCode: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9]{6,12}$/)
+      .optional(),
+    consents: z.array(consentItemSchema).min(1).max(20),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.attendanceType && (!value.dayAttendance || value.dayAttendance.length === 0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["attendanceType"],
+        message: "attendanceType or dayAttendance is required",
+      });
+    }
+  });
 
 export const registrationConfirmSchema = z.object({
   token: tokenSchema,
@@ -201,25 +216,27 @@ export const inviteDeclineSchema = z
     }
   });
 
-export const inviteAcceptAttendeeSchema = z.object({
-  firstName: firstNameSchema,
-  lastName: lastNameSchema,
-  email: normalizedEmailSchema,
-  organizationName: organizationNameSchema.optional(),
-  jobTitle: jobTitleSchema.optional(),
-  attendanceType: attendanceTypeSchema.optional(),
-  dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
-  customAnswers: customAnswersSchema.optional(),
-  consents: z.array(consentItemSchema).min(1).max(20),
-}).superRefine((value, ctx) => {
-  if (!value.attendanceType && (!value.dayAttendance || value.dayAttendance.length === 0)) {
-    ctx.addIssue({
-      code: "custom",
-      path: ["attendanceType"],
-      message: "attendanceType or dayAttendance is required",
-    });
-  }
-});
+export const inviteAcceptAttendeeSchema = z
+  .object({
+    firstName: firstNameSchema,
+    lastName: lastNameSchema,
+    email: normalizedEmailSchema,
+    organizationName: organizationNameSchema.optional(),
+    jobTitle: jobTitleSchema.optional(),
+    attendanceType: attendanceTypeSchema.optional(),
+    dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
+    customAnswers: customAnswersSchema.optional(),
+    consents: z.array(consentItemSchema).min(1).max(20),
+  })
+  .superRefine((value, ctx) => {
+    if (!value.attendanceType && (!value.dayAttendance || value.dayAttendance.length === 0)) {
+      ctx.addIssue({
+        code: "custom",
+        path: ["attendanceType"],
+        message: "attendanceType or dayAttendance is required",
+      });
+    }
+  });
 
 export const proposalTypeSchema = z.enum([
   "keynote",
@@ -242,7 +259,11 @@ export const proposalCreateSchema = boundedJsonObject(
     inviteToken: tokenSchema.optional(),
     sourceType: sourceTypeSchema.catch("direct").default("direct"),
     sourceRef: trimmedString(2, 200).optional(),
-    referralCode: z.string().trim().regex(/^[A-Za-z0-9]{6,12}$/).optional(),
+    referralCode: z
+      .string()
+      .trim()
+      .regex(/^[A-Za-z0-9]{6,12}$/)
+      .optional(),
     proposer: proposerProfileSchema,
     proposal: z.object({
       type: proposalTypeSchema,
@@ -369,30 +390,32 @@ export const adminRunJobsSchema = z.object({
   dryRun: z.boolean().default(false),
 });
 
-export const internalCalendarRsvpIngestSchema = z.object({
-  provider: z.string().trim().min(2).max(80).default("cloudflare_email_route"),
-  sourceMessageId: z.string().trim().min(1).max(500).optional(),
-  receivedAt: z.string().datetime().optional(),
-  fromEmail: normalizedEmailSchema.optional(),
-  toEmail: normalizedEmailSchema.optional(),
-  subject: z.string().trim().min(1).max(500).optional(),
-  uid: z.string().trim().min(1).max(500).optional(),
-  partstat: z.string().trim().min(1).max(64).optional(),
-  attendeeEmail: normalizedEmailSchema.optional(),
-  method: z.string().trim().min(1).max(40).optional(),
-  sequence: z.number().int().min(0).max(100_000).optional(),
-  calendarIcs: z.string().min(1).max(300_000).optional(),
-  rawPayload: z.unknown().optional(),
-}).superRefine((value, ctx) => {
-  const hasDirectRsvp = Boolean(value.uid && value.partstat);
-  if (!hasDirectRsvp && !value.calendarIcs) {
-    ctx.addIssue({
-      code: "custom",
-      message: "Either uid+partstat or calendarIcs is required",
-      path: ["uid"],
-    });
-  }
-});
+export const internalCalendarRsvpIngestSchema = z
+  .object({
+    provider: z.string().trim().min(2).max(80).default("cloudflare_email_route"),
+    sourceMessageId: z.string().trim().min(1).max(500).optional(),
+    receivedAt: z.string().datetime().optional(),
+    fromEmail: normalizedEmailSchema.optional(),
+    toEmail: normalizedEmailSchema.optional(),
+    subject: z.string().trim().min(1).max(500).optional(),
+    uid: z.string().trim().min(1).max(500).optional(),
+    partstat: z.string().trim().min(1).max(64).optional(),
+    attendeeEmail: normalizedEmailSchema.optional(),
+    method: z.string().trim().min(1).max(40).optional(),
+    sequence: z.number().int().min(0).max(100_000).optional(),
+    calendarIcs: z.string().min(1).max(300_000).optional(),
+    rawPayload: z.unknown().optional(),
+  })
+  .superRefine((value, ctx) => {
+    const hasDirectRsvp = Boolean(value.uid && value.partstat);
+    if (!hasDirectRsvp && !value.calendarIcs) {
+      ctx.addIssue({
+        code: "custom",
+        message: "Either uid+partstat or calendarIcs is required",
+        path: ["uid"],
+      });
+    }
+  });
 
 export const inviteReminderPreferenceSchema = z.object({
   action: z.enum(["postpone_7d", "pause_30d", "resume", "unsubscribe"]),
@@ -477,16 +500,32 @@ export const adminEventTermsReplaceSchema = z.object({
 // ── Admin: event days management ──────────────────────────────────────────────
 
 export const adminAttendanceOptionSchema = z.object({
-  value: z.string().trim().min(1).max(64).regex(/^[a-z_][a-z0-9_]*$/),
+  value: z
+    .string()
+    .trim()
+    .min(1)
+    .max(64)
+    .regex(/^[a-z_][a-z0-9_]*$/),
   label: trimmedString(1, 80),
   capacity: z.number().int().positive().nullable().optional(),
 });
 
 export const adminEventDayInputSchema = z.object({
-  date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/),
+  date: z
+    .string()
+    .trim()
+    .regex(/^\d{4}-\d{2}-\d{2}$/),
   label: trimmedString(1, 200).optional(),
-  startTime: z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
-  endTime: z.string().trim().regex(/^([01]\d|2[0-3]):[0-5]\d$/).optional(),
+  startTime: z
+    .string()
+    .trim()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .optional(),
+  endTime: z
+    .string()
+    .trim()
+    .regex(/^([01]\d|2[0-3]):[0-5]\d$/)
+    .optional(),
   sortOrder: z.number().int().min(0).max(9999).optional(),
   attendanceOptions: z.array(adminAttendanceOptionSchema).max(20).default([]),
 });
@@ -498,7 +537,12 @@ export const adminEventDaysReplaceSchema = z.object({
 // ── Admin: forms management ───────────────────────────────────────────────────
 
 export const adminFormFieldInputSchema = z.object({
-  key: z.string().trim().min(1).max(80).regex(/^[a-z][a-z0-9_]*$/),
+  key: z
+    .string()
+    .trim()
+    .min(1)
+    .max(80)
+    .regex(/^[a-z][a-z0-9_]*$/),
   label: trimmedString(1, 200),
   fieldType: z.enum(["text", "textarea", "select", "multi_select", "boolean", "number", "date", "email", "url"]),
   required: z.boolean().default(false),
@@ -508,7 +552,12 @@ export const adminFormFieldInputSchema = z.object({
 });
 
 export const adminFormCreateSchema = z.object({
-  key: z.string().trim().min(1).max(120).regex(/^[a-z][a-z0-9-]*$/),
+  key: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z][a-z0-9-]*$/),
   purpose: z.enum(["event_registration", "proposal_submission", "survey", "feedback", "application"]),
   title: trimmedString(2, 200),
   description: trimmedString(2, 1000).optional(),
@@ -560,8 +609,7 @@ export const adminUserAnonymizeSchema = z.object({}).strict();
 // Names in admin-uploaded CSVs may contain any Unicode characters (including
 // characters from non-UTF-8 encoded files, unusual punctuation, etc.).  We
 // only enforce a length bound here — rendering templates HTML-escape the values.
-const bulkInviteNameSchema = (max: number) =>
-  z.string().trim().min(1).max(max).optional();
+const bulkInviteNameSchema = (max: number) => z.string().trim().min(1).max(max).optional();
 
 export const adminBulkAttendeeInvitesSchema = z.object({
   previewToken: z.string().trim().min(16).max(2048),

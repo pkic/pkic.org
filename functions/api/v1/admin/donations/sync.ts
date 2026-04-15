@@ -86,7 +86,23 @@ interface DonorRow {
 }
 
 function formatMajorAmount(smallestUnit: number, currencyCode: string): string {
-  const zeroDecimal = new Set(["bif","clp","gnf","jpy","kmf","krw","mga","pyg","rwf","ugx","vnd","vuv","xaf","xof","xpf"]);
+  const zeroDecimal = new Set([
+    "bif",
+    "clp",
+    "gnf",
+    "jpy",
+    "kmf",
+    "krw",
+    "mga",
+    "pyg",
+    "rwf",
+    "ugx",
+    "vnd",
+    "vuv",
+    "xaf",
+    "xof",
+    "xpf",
+  ]);
   const isZeroDecimal = zeroDecimal.has(currencyCode.toLowerCase());
   const majorAmount = isZeroDecimal ? smallestUnit : smallestUnit / 100;
   try {
@@ -103,7 +119,7 @@ function formatMajorAmount(smallestUnit: number, currencyCode: string): string {
 
 async function fetchStripeSession(stripeKey: string, sessionId: string): Promise<StripeSession | null> {
   const res = await fetch(`https://api.stripe.com/v1/checkout/sessions/${sessionId}`, {
-    headers: { "Authorization": `Bearer ${stripeKey}` },
+    headers: { Authorization: `Bearer ${stripeKey}` },
   });
   if (!res.ok) return null;
   return (await res.json()) as StripeSession;
@@ -119,12 +135,18 @@ interface PaymentDetails {
 }
 
 async function fetchPaymentDetails(stripeKey: string, paymentIntentId: string): Promise<PaymentDetails> {
-  const headers = { "Authorization": `Bearer ${stripeKey}` };
+  const headers = { Authorization: `Bearer ${stripeKey}` };
   const url = `https://api.stripe.com/v1/payment_intents/${paymentIntentId}?expand[]=latest_charge.balance_transaction`;
   const piRes = await fetch(url, { headers });
   if (!piRes.ok) {
     console.error("fetchPaymentDetails: payment_intent fetch failed", piRes.status, await piRes.text());
-    return { netAmount: null, settledAmount: null, settledCurrency: null, paymentMethodType: null, paymentFailed: false };
+    return {
+      netAmount: null,
+      settledAmount: null,
+      settledCurrency: null,
+      paymentMethodType: null,
+      paymentFailed: false,
+    };
   }
   const pi = (await piRes.json()) as StripePaymentIntent;
 
@@ -132,16 +154,27 @@ async function fetchPaymentDetails(stripeKey: string, paymentIntentId: string): 
   // creating a charge — the PI status returns to requires_payment_method with
   // last_payment_error set instead.
   if (!pi.latest_charge || typeof pi.latest_charge === "string") {
-    const committedMethod = (pi.status === "requires_action" || pi.status === "processing")
-      ? (pi.payment_method_types?.[0] ?? null)
-      : null;
+    const committedMethod =
+      pi.status === "requires_action" || pi.status === "processing" ? (pi.payment_method_types?.[0] ?? null) : null;
     if (pi.status === "requires_payment_method" && pi.last_payment_error) {
-      return { netAmount: null, settledAmount: null, settledCurrency: null, paymentMethodType: committedMethod ?? pi.payment_method_types?.[0] ?? null, paymentFailed: true };
+      return {
+        netAmount: null,
+        settledAmount: null,
+        settledCurrency: null,
+        paymentMethodType: committedMethod ?? pi.payment_method_types?.[0] ?? null,
+        paymentFailed: true,
+      };
     }
     if (!pi.latest_charge) {
       console.warn("fetchPaymentDetails: no latest_charge on", paymentIntentId, "pi.status:", pi.status);
     }
-    return { netAmount: null, settledAmount: null, settledCurrency: null, paymentMethodType: committedMethod, paymentFailed: false };
+    return {
+      netAmount: null,
+      settledAmount: null,
+      settledCurrency: null,
+      paymentMethodType: committedMethod,
+      paymentFailed: false,
+    };
   }
 
   const charge = pi.latest_charge;
@@ -166,11 +199,17 @@ async function fetchPaymentDetails(stripeKey: string, paymentIntentId: string): 
   };
 }
 
-async function sendPaymentFailedEmail(db: D1Database, env: any, sessionId: string, executionCtx: ExecutionContext): Promise<void> {
+async function sendPaymentFailedEmail(
+  db: D1Database,
+  env: any,
+  sessionId: string,
+  executionCtx: ExecutionContext,
+): Promise<void> {
   try {
-    const donor = await db.prepare(
-      `SELECT name, email, currency, gross_amount FROM donations WHERE checkout_session_id = ?`,
-    ).bind(sessionId).first() as DonorRow | null;
+    const donor = (await db
+      .prepare(`SELECT name, email, currency, gross_amount FROM donations WHERE checkout_session_id = ?`)
+      .bind(sessionId)
+      .first()) as DonorRow | null;
     if (!donor?.email) return;
     const firstName = donor.name !== "Unknown" ? (donor.name.split(" ")[0] ?? "") : "";
     const formattedAmount = formatMajorAmount(donor.gross_amount, donor.currency);
@@ -207,7 +246,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const contentType = c.req.raw.headers.get("content-type") ?? "";
   if (contentType.includes("application/json")) {
     try {
-      const body = await c.req.raw.json() as { sessionIds?: unknown; pendingOnly?: unknown };
+      const body = (await c.req.raw.json()) as { sessionIds?: unknown; pendingOnly?: unknown };
       if (Array.isArray(body.sessionIds) && body.sessionIds.every((s) => typeof s === "string")) {
         targetIds = body.sessionIds as string[];
       }
@@ -281,7 +320,13 @@ export async function onRequestPost(c: any): Promise<Response> {
 
       // ── Already-completed row: backfill net_amount / payment_method_type only
       if (currentStatus === "completed") {
-        let details: PaymentDetails = { netAmount: null, settledAmount: null, settledCurrency: null, paymentMethodType: null, paymentFailed: false };
+        let details: PaymentDetails = {
+          netAmount: null,
+          settledAmount: null,
+          settledCurrency: null,
+          paymentMethodType: null,
+          paymentFailed: false,
+        };
         if (session.payment_intent) {
           details = await fetchPaymentDetails(env.STRIPE_SECRET_KEY, session.payment_intent);
         }
@@ -294,7 +339,14 @@ export async function onRequestPost(c: any): Promise<Response> {
                settled_currency     = COALESCE(settled_currency, ?)
            WHERE checkout_session_id = ?`,
         )
-          .bind(details.netAmount, details.paymentMethodType, session.payment_intent ?? null, details.settledAmount, details.settledCurrency, sessionId)
+          .bind(
+            details.netAmount,
+            details.paymentMethodType,
+            session.payment_intent ?? null,
+            details.settledAmount,
+            details.settledCurrency,
+            sessionId,
+          )
           .run();
         results.push({ sessionId, outcome: "completed" });
         continue;
@@ -302,7 +354,13 @@ export async function onRequestPost(c: any): Promise<Response> {
 
       if (session.status === "complete" && session.payment_status === "paid") {
         const completedAt = new Date().toISOString();
-        let details: PaymentDetails = { netAmount: null, settledAmount: null, settledCurrency: null, paymentMethodType: null, paymentFailed: false };
+        let details: PaymentDetails = {
+          netAmount: null,
+          settledAmount: null,
+          settledCurrency: null,
+          paymentMethodType: null,
+          paymentFailed: false,
+        };
         if (session.payment_intent) {
           details = await fetchPaymentDetails(env.STRIPE_SECRET_KEY, session.payment_intent);
         }
@@ -317,16 +375,26 @@ export async function onRequestPost(c: any): Promise<Response> {
                settled_currency     = ?
            WHERE checkout_session_id = ?`,
         )
-          .bind(session.payment_intent ?? null, details.netAmount, completedAt, details.paymentMethodType, details.settledAmount, details.settledCurrency, sessionId)
+          .bind(
+            session.payment_intent ?? null,
+            details.netAmount,
+            completedAt,
+            details.paymentMethodType,
+            details.settledAmount,
+            details.settledCurrency,
+            sessionId,
+          )
           .run();
         results.push({ sessionId, outcome: "completed" });
 
         // Send thank-you email (same as webhook would send)
         try {
-          const donor = await env.DB.prepare(
+          const donor = (await env.DB.prepare(
             `SELECT name, email, organization, currency, gross_amount
              FROM donations WHERE checkout_session_id = ?`,
-          ).bind(sessionId).first() as DonorRow | null;
+          )
+            .bind(sessionId)
+            .first()) as DonorRow | null;
           if (donor?.email) {
             const firstName = donor.name !== "Unknown" ? (donor.name.split(" ")[0] ?? "") : "";
             const formattedAmount = formatMajorAmount(donor.gross_amount, donor.currency);
@@ -369,11 +437,16 @@ export async function onRequestPost(c: any): Promise<Response> {
         } catch (err) {
           console.error("Failed to queue donation thank-you email during sync", err);
         }
-
       } else if (session.status === "complete" && session.payment_status !== "paid") {
         // Checkout completed but bank transfer / ACH / SEPA not yet settled.
         // First check whether the payment actually failed (e.g. SEPA bounce, bank rejection).
-        let details: PaymentDetails = { netAmount: null, settledAmount: null, settledCurrency: null, paymentMethodType: session.payment_method_types?.[0] ?? null, paymentFailed: false };
+        let details: PaymentDetails = {
+          netAmount: null,
+          settledAmount: null,
+          settledCurrency: null,
+          paymentMethodType: session.payment_method_types?.[0] ?? null,
+          paymentFailed: false,
+        };
         if (session.payment_intent) {
           details = await fetchPaymentDetails(env.STRIPE_SECRET_KEY, session.payment_intent);
         }
@@ -404,21 +477,20 @@ export async function onRequestPost(c: any): Promise<Response> {
             .run();
           results.push({ sessionId, outcome: "awaiting_payment" });
         }
-
       } else if (session.status === "expired") {
-        await env.DB.prepare(
-          `UPDATE donations SET status = 'expired' WHERE checkout_session_id = ?`,
-        )
+        await env.DB.prepare(`UPDATE donations SET status = 'expired' WHERE checkout_session_id = ?`)
           .bind(sessionId)
           .run();
         results.push({ sessionId, outcome: "expired" });
 
         // Send expired email (same as webhook would send)
         try {
-          const donor = await env.DB.prepare(
+          const donor = (await env.DB.prepare(
             `SELECT name, email, currency, gross_amount
              FROM donations WHERE checkout_session_id = ?`,
-          ).bind(sessionId).first() as DonorRow | null;
+          )
+            .bind(sessionId)
+            .first()) as DonorRow | null;
           if (donor?.email) {
             const firstName = donor.name !== "Unknown" ? (donor.name.split(" ")[0] ?? "") : "";
             const formattedAmount = formatMajorAmount(donor.gross_amount, donor.currency);
@@ -439,7 +511,6 @@ export async function onRequestPost(c: any): Promise<Response> {
         } catch (err) {
           console.error("Failed to queue donation expired email during sync", err);
         }
-
       } else {
         // "open" session — payment not yet made, or was declined (which keeps the session open for retry)
         let isFailed = false;
@@ -476,11 +547,11 @@ export async function onRequestPost(c: any): Promise<Response> {
     }
   }
 
-  const completed        = results.filter((r) => r.outcome === "completed").length;
-  const awaitingPayment  = results.filter((r) => r.outcome === "awaiting_payment").length;
-  const expired          = results.filter((r) => r.outcome === "expired").length;
-  const failed           = results.filter((r) => r.outcome === "failed").length;
-  const errors           = results.filter((r) => r.outcome === "error").length;
+  const completed = results.filter((r) => r.outcome === "completed").length;
+  const awaitingPayment = results.filter((r) => r.outcome === "awaiting_payment").length;
+  const expired = results.filter((r) => r.outcome === "expired").length;
+  const failed = results.filter((r) => r.outcome === "failed").length;
+  const errors = results.filter((r) => r.outcome === "error").length;
 
   return json({ synced: pending.length, completed, awaitingPayment, expired, failed, errors, results });
 }

@@ -26,18 +26,39 @@ function NewEventForm({ onCreated, onCancel }: { onCreated: (slug: string) => vo
   // auto-slug from name
   function handleNameChange(val: string) {
     setName(val);
-    if (!slug || slug === name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")) {
-      setSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, ""));
+    if (
+      !slug ||
+      slug ===
+        name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")
+    ) {
+      setSlug(
+        val
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, ""),
+      );
     }
   }
 
   async function handleSubmit(e: Event) {
     e.preventDefault();
-    if (!name.trim() || !slug.trim()) { setStatus("Name and slug are required."); return; }
+    if (!name.trim() || !slug.trim()) {
+      setStatus("Name and slug are required.");
+      return;
+    }
     setSaving(true);
     setStatus("Creating…");
     try {
-      const body: Record<string, unknown> = { name: name.trim(), slug: slug.trim(), timezone: timezone.trim() || "UTC", registration_mode: mode, invite_limit_attendee: inviteLimit };
+      const body: Record<string, unknown> = {
+        name: name.trim(),
+        slug: slug.trim(),
+        timezone: timezone.trim() || "UTC",
+        registration_mode: mode,
+        invite_limit_attendee: inviteLimit,
+      };
       if (startsAt) body.starts_at = new Date(startsAt).toISOString();
       if (endsAt) body.ends_at = new Date(endsAt).toISOString();
       if (venue.trim()) body.venue = venue.trim();
@@ -59,31 +80,67 @@ function NewEventForm({ onCreated, onCancel }: { onCreated: (slug: string) => vo
       <div class="row g-2 mb-2">
         <div class="col-md-6">
           <label class="form-label small fw-semibold">Event Name *</label>
-          <input class="form-control form-control-sm" type="text" value={name} onInput={(e) => handleNameChange((e.target as HTMLInputElement).value)} placeholder="PKI Maturity Model Summit 2026" required />
+          <input
+            class="form-control form-control-sm"
+            type="text"
+            value={name}
+            onInput={(e) => handleNameChange((e.target as HTMLInputElement).value)}
+            placeholder="PKI Maturity Model Summit 2026"
+            required
+          />
         </div>
         <div class="col-md-6">
           <label class="form-label small fw-semibold">Slug *</label>
-          <input class="form-control form-control-sm mono" type="text" value={slug} onInput={(e) => setSlug((e.target as HTMLInputElement).value)} placeholder="pki-summit-2026" pattern="[a-z0-9][a-z0-9-]*[a-z0-9]" required />
+          <input
+            class="form-control form-control-sm mono"
+            type="text"
+            value={slug}
+            onInput={(e) => setSlug((e.target as HTMLInputElement).value)}
+            placeholder="pki-summit-2026"
+            pattern="[a-z0-9][a-z0-9-]*[a-z0-9]"
+            required
+          />
         </div>
       </div>
       <div class="row g-2 mb-2">
         <div class="col-md-4">
           <label class="form-label small fw-semibold">Start date</label>
-          <input class="form-control form-control-sm" type="datetime-local" value={startsAt} onInput={(e) => setStartsAt((e.target as HTMLInputElement).value)} />
+          <input
+            class="form-control form-control-sm"
+            type="datetime-local"
+            value={startsAt}
+            onInput={(e) => setStartsAt((e.target as HTMLInputElement).value)}
+          />
         </div>
         <div class="col-md-4">
           <label class="form-label small fw-semibold">End date</label>
-          <input class="form-control form-control-sm" type="datetime-local" value={endsAt} onInput={(e) => setEndsAt((e.target as HTMLInputElement).value)} />
+          <input
+            class="form-control form-control-sm"
+            type="datetime-local"
+            value={endsAt}
+            onInput={(e) => setEndsAt((e.target as HTMLInputElement).value)}
+          />
         </div>
         <div class="col-md-4">
           <label class="form-label small fw-semibold">Timezone</label>
-          <input class="form-control form-control-sm" type="text" value={timezone} onInput={(e) => setTimezone((e.target as HTMLInputElement).value)} placeholder="UTC" required />
+          <input
+            class="form-control form-control-sm"
+            type="text"
+            value={timezone}
+            onInput={(e) => setTimezone((e.target as HTMLInputElement).value)}
+            placeholder="UTC"
+            required
+          />
         </div>
       </div>
       <div class="row g-2 mb-2">
         <div class="col-md-6">
           <label class="form-label small fw-semibold">Registration Mode</label>
-          <select class="form-select form-select-sm" value={mode} onChange={(e) => setMode((e.target as HTMLSelectElement).value)}>
+          <select
+            class="form-select form-select-sm"
+            value={mode}
+            onChange={(e) => setMode((e.target as HTMLSelectElement).value)}
+          >
             <option value="invite_or_open">Invite or Open</option>
             <option value="invite_only">Invite Only</option>
             <option value="open">Open</option>
@@ -91,22 +148,45 @@ function NewEventForm({ onCreated, onCancel }: { onCreated: (slug: string) => vo
         </div>
         <div class="col-md-6">
           <label class="form-label small fw-semibold">Invite Limit</label>
-          <input class="form-control form-control-sm" type="number" value={inviteLimit} min={1} max={50} onInput={(e) => setInviteLimit(Number((e.target as HTMLInputElement).value))} />
+          <input
+            class="form-control form-control-sm"
+            type="number"
+            value={inviteLimit}
+            min={1}
+            max={50}
+            onInput={(e) => setInviteLimit(Number((e.target as HTMLInputElement).value))}
+          />
         </div>
       </div>
       <div class="row g-2 mb-3">
         <div class="col-md-6">
           <label class="form-label small fw-semibold">Venue</label>
-          <input class="form-control form-control-sm" type="text" value={venue} onInput={(e) => setVenue((e.target as HTMLInputElement).value)} placeholder="Amsterdam, Netherlands" />
+          <input
+            class="form-control form-control-sm"
+            type="text"
+            value={venue}
+            onInput={(e) => setVenue((e.target as HTMLInputElement).value)}
+            placeholder="Amsterdam, Netherlands"
+          />
         </div>
         <div class="col-md-6">
           <label class="form-label small fw-semibold">Virtual URL</label>
-          <input class="form-control form-control-sm" type="url" value={virtualUrl} onInput={(e) => setVirtualUrl((e.target as HTMLInputElement).value)} placeholder="https://..." />
+          <input
+            class="form-control form-control-sm"
+            type="url"
+            value={virtualUrl}
+            onInput={(e) => setVirtualUrl((e.target as HTMLInputElement).value)}
+            placeholder="https://..."
+          />
         </div>
       </div>
       <div class="d-flex gap-2 align-items-center">
-        <button type="submit" class="btn btn-sm btn-success" disabled={saving}>Create Event</button>
-        <button type="button" class="btn btn-sm btn-secondary" onClick={onCancel}>Cancel</button>
+        <button type="submit" class="btn btn-sm btn-success" disabled={saving}>
+          Create Event
+        </button>
+        <button type="button" class="btn btn-sm btn-secondary" onClick={onCancel}>
+          Cancel
+        </button>
         {status && <span class="small text-muted">{status}</span>}
       </div>
     </form>
@@ -150,13 +230,48 @@ export function EventList() {
         resolve={(d) => (d as { events: EventSummary[] }).events}
         actionsRef={tableRef}
         columns={[
-          { header: "Event", cell: (e) => <><strong class="adm-cell-name">{e.name}</strong><br /><span class="mono text-muted small">{e.slug}</span></> },
-          { header: "Dates", cell: (e) => e.starts_at ? e.starts_at.substring(0, 10) : "—", className: "mono small text-nowrap" },
+          {
+            header: "Event",
+            cell: (e) => (
+              <>
+                <strong class="adm-cell-name">{e.name}</strong>
+                <br />
+                <span class="mono text-muted small">{e.slug}</span>
+              </>
+            ),
+          },
+          {
+            header: "Dates",
+            cell: (e) => (e.starts_at ? e.starts_at.substring(0, 10) : "—"),
+            className: "mono small text-nowrap",
+          },
           { header: "Mode", cell: (e) => <Badge status={e.registration_mode} /> },
-          { header: { label: "Confirmed", className: "text-end" }, cell: (e) => e.confirmed_registrations ?? 0, className: "mono text-end" },
-          { header: { label: "Total", className: "text-end" }, cell: (e) => e.total_registrations ?? 0, className: "mono text-end" },
-          { header: { label: "Pending", className: "text-end" }, cell: (e) => e.pending_invites ?? 0, className: "mono text-end" },
-          { header: "", cell: (e) => <button class="btn btn-sm btn-outline-success" onClick={() => navigate(`/events/${encodeURIComponent(e.slug)}`)}>Manage →</button> },
+          {
+            header: { label: "Confirmed", className: "text-end" },
+            cell: (e) => e.confirmed_registrations ?? 0,
+            className: "mono text-end",
+          },
+          {
+            header: { label: "Total", className: "text-end" },
+            cell: (e) => e.total_registrations ?? 0,
+            className: "mono text-end",
+          },
+          {
+            header: { label: "Pending", className: "text-end" },
+            cell: (e) => e.pending_invites ?? 0,
+            className: "mono text-end",
+          },
+          {
+            header: "",
+            cell: (e) => (
+              <button
+                class="btn btn-sm btn-outline-success"
+                onClick={() => navigate(`/events/${encodeURIComponent(e.slug)}`)}
+              >
+                Manage →
+              </button>
+            ),
+          },
         ]}
         empty="No events found"
         rowKey={(e) => e.slug}

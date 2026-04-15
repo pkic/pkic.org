@@ -29,9 +29,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   const now = nowIso();
-  const pausedUntil = body.action === "postpone_7d"
-    ? addHours(now, 24 * 7)
-    : addHours(now, 24 * 30);
+  const pausedUntil = body.action === "postpone_7d" ? addHours(now, 24 * 7) : addHours(now, 24 * 30);
 
   await setInviteRemindersPausedUntil(c.env.DB, invite.id, pausedUntil);
 

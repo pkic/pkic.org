@@ -59,12 +59,12 @@ export interface BadgeData {
 
 // ─── Exact website palette (from _theme-and-bootstrap.scss) ─────────────────
 
-const PKI_GREEN  = "#198754"; // $green
-const PKI_TEAL   = "#20c997"; // $teal
-const PKI_BLUE   = "#5a9bd5"; // $blue
+const PKI_GREEN = "#198754"; // $green
+const PKI_TEAL = "#20c997"; // $teal
+const PKI_BLUE = "#5a9bd5"; // $blue
 const PKI_YELLOW = "#ffc000"; // $yellow
 const PKI_ORANGE = "#ed7d31"; // $orange
-const PKI_RED    = "#dc3545"; // $red
+const PKI_RED = "#dc3545"; // $red
 
 // Background matches pkic-og.png dark slate
 const BG = "#0f1923";
@@ -76,23 +76,19 @@ interface RoleStyle {
 }
 
 const ROLE_STYLES: Record<BadgeRole, RoleStyle> = {
-  attendee:  { accent: PKI_BLUE,   action: "is attending",    chip: "Attendee"  },
-  speaker:   { accent: PKI_YELLOW, action: "is speaking at",  chip: "Speaker"   },
-  co_speaker:{ accent: PKI_YELLOW, action: "is speaking at",  chip: "Speaker"   },
-  moderator: { accent: PKI_RED,    action: "is moderating",   chip: "Moderator" },
-  panelist:  { accent: PKI_RED,    action: "is a panelist at", chip: "Panelist" },
+  attendee: { accent: PKI_BLUE, action: "is attending", chip: "Attendee" },
+  speaker: { accent: PKI_YELLOW, action: "is speaking at", chip: "Speaker" },
+  co_speaker: { accent: PKI_YELLOW, action: "is speaking at", chip: "Speaker" },
+  moderator: { accent: PKI_RED, action: "is moderating", chip: "Moderator" },
+  panelist: { accent: PKI_RED, action: "is a panelist at", chip: "Panelist" },
   organizer: { accent: PKI_ORANGE, action: "is an organizer", chip: "Organizer" },
-  staff:     { accent: PKI_GREEN,  action: "is on the team",  chip: "Staff"     },
-  proposer:  { accent: PKI_TEAL,   action: "submitted a proposal", chip: "Proposer" },
+  staff: { accent: PKI_GREEN, action: "is on the team", chip: "Staff" },
+  proposer: { accent: PKI_TEAL, action: "submitted a proposal", chip: "Proposer" },
 };
 
 // ─── Date formatting ─────────────────────────────────────────────────────────
 
-function formatDateRange(
-  startsAt: string | null,
-  endsAt: string | null,
-  timeZone = "UTC",
-): string {
+function formatDateRange(startsAt: string | null, endsAt: string | null, timeZone = "UTC"): string {
   if (!startsAt) return "";
 
   const fmt = (d: Date, opts: Intl.DateTimeFormatOptions) =>
@@ -101,15 +97,15 @@ function formatDateRange(
   const start = new Date(startsAt);
   const end = endsAt ? new Date(endsAt) : null;
 
-  const startDay   = fmt(start, { day: "numeric" });
+  const startDay = fmt(start, { day: "numeric" });
   const startMonth = fmt(start, { month: "long" });
-  const startYear  = fmt(start, { year: "numeric" });
+  const startYear = fmt(start, { year: "numeric" });
 
   if (!end) return `${startMonth} ${startDay}, ${startYear}`;
 
-  const endDay   = fmt(end, { day: "numeric" });
+  const endDay = fmt(end, { day: "numeric" });
   const endMonth = fmt(end, { month: "long" });
-  const endYear  = fmt(end, { year: "numeric" });
+  const endYear = fmt(end, { year: "numeric" });
 
   if (startYear !== endYear) {
     return `${startMonth} ${startDay}, ${startYear} – ${endMonth} ${endDay}, ${endYear}`;
@@ -141,7 +137,7 @@ function clampText(s: string, max: number): string {
  */
 function nameFontSize(fullName: string, contentMaxX: number): number {
   const budget = contentMaxX - 60;
-  const len    = fullName.length;
+  const len = fullName.length;
   // Rough px-per-char for Roboto Bold at each size
   if (len * 50 <= budget) return 84;
   if (len * 43 <= budget) return 72;
@@ -201,13 +197,13 @@ function pkiIconColor(x: number, y: number, height: number): string {
  * resvg so text renders correctly.
  */
 export function renderBadgeSvg(data: BadgeData): string {
-  const style    = ROLE_STYLES[data.role] ?? ROLE_STYLES.attendee;
+  const style = ROLE_STYLES[data.role] ?? ROLE_STYLES.attendee;
   const hasPhoto = Boolean(data.headshotDataUrl);
-  const hasHero  = Boolean(data.heroImageDataUrl);
+  const hasHero = Boolean(data.heroImageDataUrl);
 
   const W = 1200;
   const H = 630;
-  const STRIPE_H = 6;          // rainbow stripe height
+  const STRIPE_H = 6; // rainbow stripe height
 
   // ── Safe zone (10 % inset from all edges) ──────────────────────────────
   // Platforms crop differently:
@@ -216,29 +212,29 @@ export function renderBadgeSvg(data: BadgeData): string {
   //   LinkedIn:  ~5 %
   //   WhatsApp:  ~5 %
   // We use 10 % as a good middle ground for critical content.
-  const SAFE_L = 120;          // 10 % of 1200
+  const SAFE_L = 120; // 10 % of 1200
   const SAFE_R = W - 120;
-  const SAFE_T = 63;           // 10 % of 630
+  const SAFE_T = 63; // 10 % of 630
 
   // ── Bottom branding bar (solid black like website footer) ──────────────
-  const BRAND_H   = 56;
+  const BRAND_H = 56;
   const BRAND_TOP = H - STRIPE_H - BRAND_H;
 
   // ── Text column — leaves room for headshot when present ────────────────
   const TEXT_R = hasPhoto ? 720 : SAFE_R;
 
   // ── Prepare text ───────────────────────────────────────────────────────
-  const fullName    = `${data.firstName} ${data.lastName}`.trim();
-  const nameSize    = nameFontSize(fullName, TEXT_R);
-  const dateStr     = formatDateRange(data.startsAt, data.endsAt);
-  const eventName   = escapeXml(clampText(data.eventName, 50));
-  const personName  = escapeXml(fullName);
-  const actionStr   = escapeXml(style.action);
-  const chipLabel   = escapeXml(style.chip);
+  const fullName = `${data.firstName} ${data.lastName}`.trim();
+  const nameSize = nameFontSize(fullName, TEXT_R);
+  const dateStr = formatDateRange(data.startsAt, data.endsAt);
+  const eventName = escapeXml(clampText(data.eventName, 50));
+  const personName = escapeXml(fullName);
+  const actionStr = escapeXml(style.action);
+  const chipLabel = escapeXml(style.chip);
   const locationStr = data.location ? escapeXml(data.location) : "";
-  const dateEsc     = escapeXml(dateStr);
-  const orgStr      = data.organization ? escapeXml(clampText(data.organization, 40)) : "";
-  const titleStr    = data.jobTitle ? escapeXml(clampText(data.jobTitle, 40)) : "";
+  const dateEsc = escapeXml(dateStr);
+  const orgStr = data.organization ? escapeXml(clampText(data.organization, 40)) : "";
+  const titleStr = data.jobTitle ? escapeXml(clampText(data.jobTitle, 40)) : "";
 
   // Build subtitle line: "Job Title · Organization" or just one
   const subtitleParts: string[] = [];
@@ -248,7 +244,7 @@ export function renderBadgeSvg(data: BadgeData): string {
 
   // ── Event info (top of safe zone) ──────────────────────────────────────
   const EVENT_SIZE = 26;
-  const META_SIZE  = 15;
+  const META_SIZE = 15;
 
   // Event date + location line
   const metaParts: string[] = [];
@@ -257,34 +253,34 @@ export function renderBadgeSvg(data: BadgeData): string {
   const metaLine = metaParts.join("  ·  ");
 
   // ── Role chip — upper-right in safe zone ───────────────────────────────
-  const chipPadX  = 18;
+  const chipPadX = 18;
   const chipCharW = 8;
-  const chipW     = Math.round(chipLabel.length * chipCharW + chipPadX * 2);
-  const chipX     = SAFE_R - chipW;
-  const chipY     = SAFE_T;
-  const chipH     = 28;
+  const chipW = Math.round(chipLabel.length * chipCharW + chipPadX * 2);
+  const chipX = SAFE_R - chipW;
+  const chipY = SAFE_T;
+  const chipH = 28;
 
   // ── Person area — vertically centred between event info and brand bar ──
-  const personAreaTop    = SAFE_T + EVENT_SIZE + 10 + META_SIZE + 40;
+  const personAreaTop = SAFE_T + EVENT_SIZE + 10 + META_SIZE + 40;
   const personAreaBottom = BRAND_TOP - 20;
-  const personAreaMid    = Math.round((personAreaTop + personAreaBottom) / 2);
+  const personAreaMid = Math.round((personAreaTop + personAreaBottom) / 2);
 
   // Stack: name + subtitle + action — centred vertically
-  const GAP_SUB    = 8;
+  const GAP_SUB = 8;
   const GAP_ACTION = 14;
-  const SUB_SIZE   = 20;
+  const SUB_SIZE = 20;
   const ACTION_SIZE = 22;
   const totalStack = nameSize + (subtitle ? GAP_SUB + SUB_SIZE : 0) + GAP_ACTION + ACTION_SIZE;
-  const stackTop   = personAreaMid - Math.round(totalStack / 2);
+  const stackTop = personAreaMid - Math.round(totalStack / 2);
 
-  const nameY    = stackTop + nameSize;
-  const subY     = subtitle ? nameY + GAP_SUB + SUB_SIZE : nameY;
-  const actionY  = subY + GAP_ACTION + ACTION_SIZE;
+  const nameY = stackTop + nameSize;
+  const subY = subtitle ? nameY + GAP_SUB + SUB_SIZE : nameY;
+  const actionY = subY + GAP_ACTION + ACTION_SIZE;
 
   // ── Headshot circle — centred in person area, right side ───────────────
   const HS_CX = 960;
   const HS_CY = personAreaMid;
-  const HS_R  = Math.min(110, Math.round((personAreaBottom - personAreaTop) / 2 - 10));
+  const HS_R = Math.min(110, Math.round((personAreaBottom - personAreaTop) / 2 - 10));
 
   // ── Watermark — large PKI icon, faint colour ──────────────────────────
   const wmH = 380;
@@ -293,7 +289,7 @@ export function renderBadgeSvg(data: BadgeData): string {
 
   // ── Bottom branding ────────────────────────────────────────────────────
   const LOGO_H = 34;
-  const logoY  = BRAND_TOP + Math.round((BRAND_H - LOGO_H) / 2);
+  const logoY = BRAND_TOP + Math.round((BRAND_H - LOGO_H) / 2);
 
   // ── CTA pill (psychology: personal invitation + button affordance) ──────
   // "Join me, register now!" activates mimetic desire (the sharer is the
@@ -301,17 +297,17 @@ export function renderBadgeSvg(data: BadgeData): string {
   // The pill shape primes click behaviour in a static image (button affordance).
   // Arrow drawn as SVG path — Unicode arrows are not in Roboto so fall back to
   // a box glyph; a path always renders correctly.
-  const PILL_H  = LOGO_H;                      // matches logo height (34)
-  const PILL_W  = 248;
-  const PILL_X  = SAFE_R - PILL_W;
-  const PILL_Y  = logoY;
+  const PILL_H = LOGO_H; // matches logo height (34)
+  const PILL_W = 248;
+  const PILL_X = SAFE_R - PILL_W;
+  const PILL_Y = logoY;
   const PILL_CY = PILL_Y + Math.round(PILL_H / 2);
   const PILL_TX = PILL_X + Math.round(PILL_W / 2) - 10; // slightly left of centre — room for arrow
   const PILL_TY = PILL_CY + 5; // baseline
   // Arrow drawn as SVG path — a proper right-pointing arrow (→) with line
   // and arrowhead, not a chevron. Centred vertically in the pill.
-  const ARW_X   = PILL_X + PILL_W - 30;
-  const ARW_CY  = PILL_CY;
+  const ARW_X = PILL_X + PILL_W - 30;
+  const ARW_CY = PILL_CY;
 
   const FONT = "Roboto";
 
@@ -342,13 +338,17 @@ export function renderBadgeSvg(data: BadgeData): string {
   <rect width="${W}" height="${H}" fill="${BG}"/>
 
   <!-- ═══ FULL-BLEED HERO IMAGE / GRADIENT ═══ -->
-  ${hasHero ? `<!-- Hero image covers full card -->
+  ${
+    hasHero
+      ? `<!-- Hero image covers full card -->
   <image href="${data.heroImageDataUrl}" x="0" y="0" width="${W}" height="${H}"
          preserveAspectRatio="xMidYMid slice"/>
   <!-- Dark overlay (matches website bg-dark bg-opacity-50) -->
   <rect width="${W}" height="${H}" fill="#000" opacity="0.20"/>
   <!-- Bottom fade to BG for readability -->
-  <rect width="${W}" height="${H}" fill="url(#fadeDown)"/>` : `<!-- No hero — solid dark background (already set above) -->`}
+  <rect width="${W}" height="${H}" fill="url(#fadeDown)"/>`
+      : `<!-- No hero — solid dark background (already set above) -->`
+  }
 
   <!-- ═══ EVENT INFO (top of safe zone) ═══ -->
 
@@ -358,9 +358,13 @@ export function renderBadgeSvg(data: BadgeData): string {
         fill="#ffffff">${eventName}</text>
 
   <!-- Event date + location -->
-  ${metaLine ? `<text x="${SAFE_L}" y="${SAFE_T + EVENT_SIZE + 8 + META_SIZE}"
+  ${
+    metaLine
+      ? `<text x="${SAFE_L}" y="${SAFE_T + EVENT_SIZE + 8 + META_SIZE}"
         font-family="${FONT}" font-size="${META_SIZE}" font-weight="400"
-        fill="rgba(255,255,255,0.65)">${escapeXml(metaLine)}</text>` : ""}
+        fill="rgba(255,255,255,0.65)">${escapeXml(metaLine)}</text>`
+      : ""
+  }
 
   <!-- Role chip -->
   <rect x="${chipX}" y="${chipY}" width="${chipW}" height="${chipH}" rx="${chipH / 2}"
@@ -379,23 +383,31 @@ export function renderBadgeSvg(data: BadgeData): string {
         font-family="${FONT}" font-size="${nameSize}" font-weight="700"
         fill="#ffffff" letter-spacing="-0.5">${personName}</text>
 
-  ${subtitle ? `<!-- Organization / Job title -->
+  ${
+    subtitle
+      ? `<!-- Organization / Job title -->
   <text x="${SAFE_L}" y="${subY}"
         font-family="${FONT}" font-size="${SUB_SIZE}" font-weight="400"
-        fill="rgba(255,255,255,0.55)">${escapeXml(subtitle)}</text>` : ""}
+        fill="rgba(255,255,255,0.55)">${escapeXml(subtitle)}</text>`
+      : ""
+  }
 
   <!-- Action phrase -->
   <text x="${SAFE_L}" y="${actionY}"
         font-family="${FONT}" font-size="${ACTION_SIZE}" font-weight="400"
         fill="${style.accent}">${actionStr}</text>
 
-  ${hasPhoto ? `<!-- Headshot -->
+  ${
+    hasPhoto
+      ? `<!-- Headshot -->
   <circle cx="${HS_CX}" cy="${HS_CY}" r="${HS_R + 3}" fill="#ffffff" opacity="0.15"/>
   <image href="${data.headshotDataUrl}" x="${HS_CX - HS_R}" y="${HS_CY - HS_R}"
          width="${HS_R * 2}" height="${HS_R * 2}"
          clip-path="url(#hsClip)" preserveAspectRatio="xMidYMid slice"/>
   <circle cx="${HS_CX}" cy="${HS_CY}" r="${HS_R}"
-          fill="none" stroke="#ffffff" stroke-width="2"/>` : ""}
+          fill="none" stroke="#ffffff" stroke-width="2"/>`
+      : ""
+  }
 
   <!-- ═══ BOTTOM BAR (solid black like website footer) ═══ -->
   <rect x="0" y="${BRAND_TOP}" width="${W}" height="${BRAND_H + STRIPE_H}" fill="#000"/>
@@ -453,59 +465,59 @@ export function renderDonationBadgeSvg(data: DonationBadgeData): string {
   const SAFE_R = W - 120;
   const SAFE_T = 63;
 
-  const BRAND_H   = 56;
+  const BRAND_H = 56;
   const BRAND_TOP = H - STRIPE_H - BRAND_H;
 
   // ── Text ──────────────────────────────────────────────────────────────────
-  const fullName   = [data.firstName, data.lastName].filter(Boolean).join(" ").trim() || "A supporter";
-  const nameSize   = nameFontSize(fullName, SAFE_R);
-  const nameEsc    = escapeXml(fullName);
-  const amountEsc  = escapeXml(data.formattedAmount);
+  const fullName = [data.firstName, data.lastName].filter(Boolean).join(" ").trim() || "A supporter";
+  const nameSize = nameFontSize(fullName, SAFE_R);
+  const nameEsc = escapeXml(fullName);
+  const amountEsc = escapeXml(data.formattedAmount);
 
   // ── Chip ──────────────────────────────────────────────────────────────────
   const chipLabel = "Supporter";
-  const chipPadX  = 18;
+  const chipPadX = 18;
   const chipCharW = 8;
-  const chipW     = Math.round(chipLabel.length * chipCharW + chipPadX * 2);
-  const chipX     = SAFE_R - chipW;
-  const chipH     = 28;
+  const chipW = Math.round(chipLabel.length * chipCharW + chipPadX * 2);
+  const chipX = SAFE_R - chipW;
+  const chipH = 28;
 
   // ── Content area — below chip row to above brand bar ─────────────────────
-  const personAreaTop    = SAFE_T + chipH + 20;
+  const personAreaTop = SAFE_T + chipH + 20;
   const personAreaBottom = BRAND_TOP - 20;
-  const personAreaMid    = Math.round((personAreaTop + personAreaBottom) / 2);
+  const personAreaMid = Math.round((personAreaTop + personAreaBottom) / 2);
 
   // ── Vertical stack ────────────────────────────────────────────────────────
-  const GAP_S    = 8;
-  const GAP_M    = 14;
-  const ACT_SIZE = 22;    // "donated"
-  const AMT_SIZE = 96;    // amount — hero number
-  const CTX_SIZE = 26;    // "to the PKI Consortium"
-  const SUB_SIZE = 18;    // caption
+  const GAP_S = 8;
+  const GAP_M = 14;
+  const ACT_SIZE = 22; // "donated"
+  const AMT_SIZE = 96; // amount — hero number
+  const CTX_SIZE = 26; // "to the PKI Consortium"
+  const SUB_SIZE = 18; // caption
 
   const totalStack = nameSize + GAP_S + ACT_SIZE + GAP_M + AMT_SIZE + GAP_S + CTX_SIZE + GAP_S + SUB_SIZE;
-  const stackTop   = personAreaMid - Math.round(totalStack / 2);
+  const stackTop = personAreaMid - Math.round(totalStack / 2);
 
-  const nameY    = stackTop + nameSize;
-  const actY     = nameY  + GAP_S + ACT_SIZE;
-  const amtY     = actY   + GAP_M + AMT_SIZE;
-  const ctxY     = amtY   + GAP_S + CTX_SIZE;
-  const subY     = ctxY   + GAP_S + SUB_SIZE;
+  const nameY = stackTop + nameSize;
+  const actY = nameY + GAP_S + ACT_SIZE;
+  const amtY = actY + GAP_M + AMT_SIZE;
+  const ctxY = amtY + GAP_S + CTX_SIZE;
+  const subY = ctxY + GAP_S + SUB_SIZE;
 
   // ── Bottom bar ────────────────────────────────────────────────────────────
   const LOGO_H = 34;
-  const logoY  = BRAND_TOP + Math.round((BRAND_H - LOGO_H) / 2);
+  const logoY = BRAND_TOP + Math.round((BRAND_H - LOGO_H) / 2);
 
   // ── CTA pill ──────────────────────────────────────────────────────────────
-  const PILL_H  = LOGO_H;
-  const PILL_W  = 260;
-  const PILL_X  = SAFE_R - PILL_W;
-  const PILL_Y  = logoY;
+  const PILL_H = LOGO_H;
+  const PILL_W = 260;
+  const PILL_X = SAFE_R - PILL_W;
+  const PILL_Y = logoY;
   const PILL_CY = PILL_Y + Math.round(PILL_H / 2);
   const PILL_TX = PILL_X + Math.round(PILL_W / 2) - 10;
   const PILL_TY = PILL_CY + 5;
-  const ARW_X   = PILL_X + PILL_W - 30;
-  const ARW_CY  = PILL_CY;
+  const ARW_X = PILL_X + PILL_W - 30;
+  const ARW_CY = PILL_CY;
 
   // ── Watermark ─────────────────────────────────────────────────────────────
   const wmH = 380;

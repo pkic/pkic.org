@@ -10,8 +10,12 @@ import type { Registration, AdminEventDay, BadgeRoleInfo } from "../../../types"
 import { useData } from "../../../../hooks/useData";
 
 const ROLE_BADGE_COLOUR: Record<string, string> = {
-  attendee: "primary", speaker: "success", moderator: "warning",
-  panelist: "warning", organizer: "info", staff: "secondary",
+  attendee: "primary",
+  speaker: "success",
+  moderator: "warning",
+  panelist: "warning",
+  organizer: "info",
+  staff: "secondary",
 };
 
 function attendanceTypeLabel(t: string): string {
@@ -20,14 +24,27 @@ function attendanceTypeLabel(t: string): string {
 
 // ─── Day attendance table ─────────────────────────────────────────────────────
 
-function DayAttendanceTable({ dayAttendance }: { dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }> }) {
+function DayAttendanceTable({
+  dayAttendance,
+}: {
+  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+}) {
   if (!dayAttendance.length) return <p class="small text-muted fst-italic mb-0">No day attendance records.</p>;
   return (
     <DataTable
       columns={[
         { header: "Date", cell: (d) => d.dayDate, className: "mono small" },
         { header: "Day", cell: (d) => d.label ?? "—", className: "small" },
-        { header: "Attendance", cell: (d) => <span class={`badge text-bg-${d.attendanceType === "in_person" ? "success" : d.attendanceType === "virtual" ? "info" : "secondary"}`}>{attendanceTypeLabel(d.attendanceType)}</span> },
+        {
+          header: "Attendance",
+          cell: (d) => (
+            <span
+              class={`badge text-bg-${d.attendanceType === "in_person" ? "success" : d.attendanceType === "virtual" ? "info" : "secondary"}`}
+            >
+              {attendanceTypeLabel(d.attendanceType)}
+            </span>
+          ),
+        },
       ]}
       data={dayAttendance}
       className="align-middle"
@@ -38,16 +55,32 @@ function DayAttendanceTable({ dayAttendance }: { dayAttendance: Array<{ dayDate:
 
 // ─── Day waitlist table ───────────────────────────────────────────────────────
 
-function DayWaitlistTable({ dayWaitlist }: { dayWaitlist: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }> }) {
+function DayWaitlistTable({
+  dayWaitlist,
+}: {
+  dayWaitlist: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
+}) {
   if (!dayWaitlist.length) return <p class="small text-muted fst-italic mb-0">No waitlist entries.</p>;
-  const statusColour: Record<string, string> = { waiting: "warning", offered: "info", accepted: "success", expired: "secondary" };
+  const statusColour: Record<string, string> = {
+    waiting: "warning",
+    offered: "info",
+    accepted: "success",
+    expired: "secondary",
+  };
   return (
     <DataTable
       columns={[
         { header: "Date", cell: (w) => w.dayDate, className: "mono small" },
-        { header: "Status", cell: (w) => <span class={`badge text-bg-${statusColour[w.status] ?? "secondary"}`}>{w.status}</span> },
+        {
+          header: "Status",
+          cell: (w) => <span class={`badge text-bg-${statusColour[w.status] ?? "secondary"}`}>{w.status}</span>,
+        },
         { header: "Priority", cell: (w) => w.priorityLane, className: "small" },
-        { header: "Offer expires", cell: (w) => w.offerExpiresAt ? fmt(w.offerExpiresAt) : "—", className: "mono small" },
+        {
+          header: "Offer expires",
+          cell: (w) => (w.offerExpiresAt ? fmt(w.offerExpiresAt) : "—"),
+          className: "mono small",
+        },
       ]}
       data={dayWaitlist}
       className="align-middle"
@@ -64,9 +97,13 @@ function BadgeRolePanel({ slug, regId }: { slug: string; regId: string }) {
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
 
-  const { loading } = useData(() =>
-    api<BadgeRoleInfo>(`/api/v1/admin/events/${slug}/registrations/${regId}/badge-role`)
-      .then((d) => { setInfo(d); setSelectedRole(d.admin_override ?? ""); return d; }),
+  const { loading } = useData(
+    () =>
+      api<BadgeRoleInfo>(`/api/v1/admin/events/${slug}/registrations/${regId}/badge-role`).then((d) => {
+        setInfo(d);
+        setSelectedRole(d.admin_override ?? "");
+        return d;
+      }),
     [slug, regId],
   );
 
@@ -96,16 +133,28 @@ function BadgeRolePanel({ slug, regId }: { slug: string; regId: string }) {
       <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
         <span class="small text-muted">Effective:</span>
         <span class={`badge text-bg-${colour}`}>{info.effective_role}</span>
-        {info.admin_override
-          ? <span class="small text-muted ms-1">(forced; auto would be {info.auto_detected})</span>
-          : <span class="small text-muted fst-italic ms-1">(auto-detected)</span>}
+        {info.admin_override ? (
+          <span class="small text-muted ms-1">(forced; auto would be {info.auto_detected})</span>
+        ) : (
+          <span class="small text-muted fst-italic ms-1">(auto-detected)</span>
+        )}
       </div>
       <div class="d-flex align-items-center gap-2">
-        <select class="form-select form-select-sm adm-filter-select" value={selectedRole} onChange={(e) => setSelectedRole((e.target as HTMLSelectElement).value)}>
+        <select
+          class="form-select form-select-sm adm-filter-select"
+          value={selectedRole}
+          onChange={(e) => setSelectedRole((e.target as HTMLSelectElement).value)}
+        >
           <option value="">Auto ({info.auto_detected})</option>
-          {info.available_roles.map((r) => <option key={r} value={r}>{r.charAt(0).toUpperCase() + r.slice(1).replace("_", "-")}</option>)}
+          {info.available_roles.map((r) => (
+            <option key={r} value={r}>
+              {r.charAt(0).toUpperCase() + r.slice(1).replace("_", "-")}
+            </option>
+          ))}
         </select>
-        <button class="btn btn-sm btn-primary" onClick={() => void handleSave()} disabled={saving}>Save</button>
+        <button class="btn btn-sm btn-primary" onClick={() => void handleSave()} disabled={saving}>
+          Save
+        </button>
         {saveStatus && <span class="small text-danger">{saveStatus}</span>}
       </div>
     </div>
@@ -115,10 +164,18 @@ function BadgeRolePanel({ slug, regId }: { slug: string; regId: string }) {
 // ─── Audit log ────────────────────────────────────────────────────────────────
 
 function AuditLogSection({ slug, regId }: { slug: string; regId: string }) {
-  const { data: entries, loading } = useData(() =>
-    api<{ auditLog: Array<{ created_at: string; actor_type: string; actor_display?: string; actor_id?: string; action: string; details?: Record<string, unknown> }> }>(
-      `/api/v1/admin/events/${slug}/registrations/${regId}/audit-log`,
-    ).then((d) => d.auditLog ?? []),
+  const { data: entries, loading } = useData(
+    () =>
+      api<{
+        auditLog: Array<{
+          created_at: string;
+          actor_type: string;
+          actor_display?: string;
+          actor_id?: string;
+          action: string;
+          details?: Record<string, unknown>;
+        }>;
+      }>(`/api/v1/admin/events/${slug}/registrations/${regId}/audit-log`).then((d) => d.auditLog ?? []),
     [slug, regId],
   );
 
@@ -128,10 +185,37 @@ function AuditLogSection({ slug, regId }: { slug: string; regId: string }) {
   return (
     <DataTable
       columns={[
-        { header: "When", cell: (entry) => new Date(entry.created_at).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "medium" }), className: "text-nowrap small text-muted" },
-        { header: "Actor", cell: (entry) => { const actor = entry.actor_type === "system" ? <span class="text-muted">System</span> : entry.actor_display ? <>{entry.actor_display}</> : entry.actor_id ? <span class="text-muted small">{entry.actor_id}</span> : <span class="text-muted">{entry.actor_type}</span>; return actor; }, className: "small" },
+        {
+          header: "When",
+          cell: (entry) =>
+            new Date(entry.created_at).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "medium" }),
+          className: "text-nowrap small text-muted",
+        },
+        {
+          header: "Actor",
+          cell: (entry) => {
+            const actor =
+              entry.actor_type === "system" ? (
+                <span class="text-muted">System</span>
+              ) : entry.actor_display ? (
+                <>{entry.actor_display}</>
+              ) : entry.actor_id ? (
+                <span class="text-muted small">{entry.actor_id}</span>
+              ) : (
+                <span class="text-muted">{entry.actor_type}</span>
+              );
+            return actor;
+          },
+          className: "small",
+        },
         { header: "Action", cell: (entry) => <code class="small">{entry.action}</code> },
-        { header: "Details", cell: (entry) => entry.details ? <pre class="mb-0 small text-body-secondary">{JSON.stringify(entry.details, null, 2)}</pre> : null },
+        {
+          header: "Details",
+          cell: (entry) =>
+            entry.details ? (
+              <pre class="mb-0 small text-body-secondary">{JSON.stringify(entry.details, null, 2)}</pre>
+            ) : null,
+        },
       ]}
       data={entries}
       className="align-middle"
@@ -141,7 +225,17 @@ function AuditLogSection({ slug, regId }: { slug: string; regId: string }) {
 
 // ─── Inline email editor ──────────────────────────────────────────────────────
 
-function EmailEditor({ email, slug, regId, onSaved }: { email: string; slug: string; regId: string; onSaved: () => void }) {
+function EmailEditor({
+  email,
+  slug,
+  regId,
+  onSaved,
+}: {
+  email: string;
+  slug: string;
+  regId: string;
+  onSaved: () => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [value, setValue] = useState(email);
   const [saving, setSaving] = useState(false);
@@ -154,8 +248,14 @@ function EmailEditor({ email, slug, regId, onSaved }: { email: string; slug: str
         <button
           class="btn btn-link btn-sm p-0 ms-1"
           title="Change email"
-          onClick={() => { setValue(email); setEditing(true); setError(""); }}
-        >✏️</button>
+          onClick={() => {
+            setValue(email);
+            setEditing(true);
+            setError("");
+          }}
+        >
+          ✏️
+        </button>
       </div>
     );
   }
@@ -191,7 +291,13 @@ function EmailEditor({ email, slug, regId, onSaved }: { email: string; slug: str
           class="form-control form-control-sm"
           value={value}
           onInput={(e) => setValue((e.target as HTMLInputElement).value)}
-          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleSave(); } if (e.key === "Escape") setEditing(false); }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              void handleSave();
+            }
+            if (e.key === "Escape") setEditing(false);
+          }}
           disabled={saving}
           autoFocus
         />
@@ -202,9 +308,7 @@ function EmailEditor({ email, slug, regId, onSaved }: { email: string; slug: str
           Cancel
         </button>
       </div>
-      <div class="form-text text-warning mt-1">
-        Changing the email will require re-confirmation.
-      </div>
+      <div class="form-text text-warning mt-1">Changing the email will require re-confirmation.</div>
       {error && <div class="small text-danger mt-1">{error}</div>}
     </div>
   );
@@ -249,7 +353,10 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   async function handleResend() {
     setResendStatus("Sending…");
     try {
-      await api(`/api/v1/admin/events/${slug}/registrations/${regId}/resend-confirmation`, { method: "POST", body: "{}" });
+      await api(`/api/v1/admin/events/${slug}/registrations/${regId}/resend-confirmation`, {
+        method: "POST",
+        body: "{}",
+      });
       toast("Confirmation email queued", "success");
       setResendStatus("✓ Queued");
     } catch (e) {
@@ -262,7 +369,10 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   async function handleOpenManage() {
     setOpeningManage(true);
     try {
-      const { manageUrl } = await api<{ manageUrl: string }>(`/api/v1/admin/events/${slug}/registrations/${regId}/open-manage`, { method: "POST", body: "{}" });
+      const { manageUrl } = await api<{ manageUrl: string }>(
+        `/api/v1/admin/events/${slug}/registrations/${regId}/open-manage`,
+        { method: "POST", body: "{}" },
+      );
       window.open(manageUrl, "_blank", "noopener");
     } catch (e) {
       toast((e as Error).message, "error");
@@ -284,12 +394,19 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   }
 
   async function handleAdmit() {
-    if (!admitDays.length) { toast("Select at least one day", "error"); return; }
+    if (!admitDays.length) {
+      toast("Select at least one day", "error");
+      return;
+    }
     setAdmitting(true);
     try {
       await api(`/api/v1/admin/events/${slug}/registrations/${regId}/admit`, {
         method: "POST",
-        body: JSON.stringify({ mode: "capacity_exempt", reason: "Admin approved in-person admission", dayDates: admitDays }),
+        body: JSON.stringify({
+          mode: "capacity_exempt",
+          reason: "Admin approved in-person admission",
+          dayDates: admitDays,
+        }),
       });
       toast("Registration admitted", "success");
       void reload();
@@ -312,10 +429,14 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
     <div>
       {/* Back + header */}
       <div class="d-flex align-items-center gap-2 mb-3">
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => navigate(`/events/${slug}/registrations`)}>← Back</button>
+        <button class="btn btn-sm btn-outline-secondary" onClick={() => navigate(`/events/${slug}/registrations`)}>
+          ← Back
+        </button>
         <h5 class="mb-0">{name}</h5>
         <Badge status={reg.status} />
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void reload()}>↺ Refresh</button>
+        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void reload()}>
+          ↺ Refresh
+        </button>
       </div>
 
       {/* Summary row */}
@@ -348,7 +469,9 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
 
       {/* Day attendance */}
       <div class="card mb-3">
-        <div class="card-header"><h6 class="mb-0">Day Attendance</h6></div>
+        <div class="card-header">
+          <h6 class="mb-0">Day Attendance</h6>
+        </div>
         <div class="card-body">
           <DayAttendanceTable dayAttendance={dayAttendance} />
         </div>
@@ -357,7 +480,9 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
       {/* Day waitlist (only if entries exist) */}
       {dayWaitlist.length > 0 && (
         <div class="card mb-3">
-          <div class="card-header"><h6 class="mb-0">Day Waitlist</h6></div>
+          <div class="card-header">
+            <h6 class="mb-0">Day Waitlist</h6>
+          </div>
           <div class="card-body">
             <DayWaitlistTable dayWaitlist={dayWaitlist} />
           </div>
@@ -369,7 +494,9 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
         {/* Manage */}
         <div class="col-md-4">
           <div class="card h-100">
-            <div class="card-header"><h6 class="mb-0">Manage</h6></div>
+            <div class="card-header">
+              <h6 class="mb-0">Manage</h6>
+            </div>
             <div class="card-body">
               <p class="small text-muted mb-2">Opens the registrant-facing manage page in a new tab.</p>
               <button class="btn btn-sm btn-primary" onClick={() => void handleOpenManage()} disabled={openingManage}>
@@ -387,11 +514,19 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
         {/* Resend */}
         <div class="col-md-4">
           <div class="card h-100">
-            <div class="card-header"><h6 class="mb-0">Confirmation Email</h6></div>
+            <div class="card-header">
+              <h6 class="mb-0">Confirmation Email</h6>
+            </div>
             <div class="card-body">
               <p class="small text-muted mb-2">Rotates the token and re-queues the email.</p>
-              <button class="btn btn-sm btn-outline-primary" onClick={() => void handleResend()}>Resend Email</button>
-              {resendStatus && <div class={`mt-2 small ${resendStatus.startsWith("✓") ? "text-success" : "text-danger"}`}>{resendStatus}</div>}
+              <button class="btn btn-sm btn-outline-primary" onClick={() => void handleResend()}>
+                Resend Email
+              </button>
+              {resendStatus && (
+                <div class={`mt-2 small ${resendStatus.startsWith("✓") ? "text-success" : "text-danger"}`}>
+                  {resendStatus}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -399,7 +534,9 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
         {/* Social promo */}
         <div class="col-md-4">
           <div class="card h-100">
-            <div class="card-header"><h6 class="mb-0">Social Promo Kit</h6></div>
+            <div class="card-header">
+              <h6 class="mb-0">Social Promo Kit</h6>
+            </div>
             <div class="card-body">
               {shareUrl ? (
                 <>
@@ -407,17 +544,31 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
                     <label class="form-label small fw-semibold mb-1">Referral Link</label>
                     <div class="input-group input-group-sm">
                       <input type="text" class="form-control form-control-sm mono" value={shareUrl} readOnly />
-                      <button class="btn btn-outline-secondary" onClick={() => void navigator.clipboard.writeText(shareUrl)} title="Copy link">📋</button>
+                      <button
+                        class="btn btn-outline-secondary"
+                        onClick={() => void navigator.clipboard.writeText(shareUrl)}
+                        title="Copy link"
+                      >
+                        📋
+                      </button>
                     </div>
                   </div>
                   <div class="d-flex flex-wrap gap-1">
-                    <a href={ogBadgeUrl!} target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">View Badge 📷</a>
-                    <button class="btn btn-sm btn-outline-secondary" onClick={() => void handleRegenerateBadge()} disabled={regenerating}>
+                    <a href={ogBadgeUrl!} target="_blank" rel="noopener" class="btn btn-sm btn-outline-secondary">
+                      View Badge 📷
+                    </a>
+                    <button
+                      class="btn btn-sm btn-outline-secondary"
+                      onClick={() => void handleRegenerateBadge()}
+                      disabled={regenerating}
+                    >
                       {regenerating ? "Regenerating…" : "Regenerate Badge 🔄"}
                     </button>
                   </div>
                 </>
-              ) : <p class="small text-muted fst-italic mb-0">No referral code.</p>}
+              ) : (
+                <p class="small text-muted fst-italic mb-0">No referral code.</p>
+              )}
             </div>
           </div>
         </div>
@@ -426,7 +577,9 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
       {/* Admit days */}
       {eventDays.length > 0 && (
         <div class="card mb-3">
-          <div class="card-header"><h6 class="mb-0">Admit Selected Days</h6></div>
+          <div class="card-header">
+            <h6 class="mb-0">Admit Selected Days</h6>
+          </div>
           <div class="card-body">
             <p class="small text-body-secondary mb-2">Tick the days to convert to in-person attendance.</p>
             <div class="d-flex flex-column gap-2 mb-2">
@@ -439,10 +592,15 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
                     checked={admitDays.includes(d.date)}
                     onChange={(e) => {
                       const v = (e.target as HTMLInputElement).value;
-                      setAdmitDays((prev) => (e.target as HTMLInputElement).checked ? [...prev, v] : prev.filter((x) => x !== v));
+                      setAdmitDays((prev) =>
+                        (e.target as HTMLInputElement).checked ? [...prev, v] : prev.filter((x) => x !== v),
+                      );
                     }}
                   />
-                  <span class="form-check-label">{d.date}{d.label ? ` — ${d.label}` : ""}</span>
+                  <span class="form-check-label">
+                    {d.date}
+                    {d.label ? ` — ${d.label}` : ""}
+                  </span>
                 </label>
               ))}
             </div>
@@ -455,7 +613,9 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
 
       {/* Badge role */}
       <div class="card mb-3">
-        <div class="card-header"><h6 class="mb-0">Badge Role</h6></div>
+        <div class="card-header">
+          <h6 class="mb-0">Badge Role</h6>
+        </div>
         <div class="card-body">
           <p class="small text-muted mb-2">Set the role shown on the attendee's promotional badge.</p>
           <BadgeRolePanel slug={slug} regId={regId} />
@@ -464,7 +624,9 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
 
       {/* Audit log */}
       <div class="card mb-3">
-        <div class="card-header"><h6 class="mb-0">Audit Log</h6></div>
+        <div class="card-header">
+          <h6 class="mb-0">Audit Log</h6>
+        </div>
         <div class="card-body">
           <AuditLogSection slug={slug} regId={regId} />
         </div>

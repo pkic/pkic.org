@@ -6,18 +6,14 @@ import { first } from "../../../../../../_lib/db/queries";
 import { updateReviewById } from "../../../../../../_lib/services/proposals";
 import { reviewPatchSchema } from "../../../../../../../assets/shared/schemas/api";
 
-export async function onRequestPatch(
-  c: any,
-): Promise<Response> {
+export async function onRequestPatch(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
   const proposalId = c.req.param("proposalId");
   const reviewId = c.req.param("reviewId");
 
-  const proposal = await first<{ event_id: string }>(
-    c.env.DB,
-    "SELECT event_id FROM session_proposals WHERE id = ?",
-    [proposalId],
-  );
+  const proposal = await first<{ event_id: string }>(c.env.DB, "SELECT event_id FROM session_proposals WHERE id = ?", [
+    proposalId,
+  ]);
   if (!proposal) {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
@@ -42,9 +38,7 @@ export async function onRequestPatch(
   return json({ success: true, review });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method !== "PATCH") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

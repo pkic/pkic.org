@@ -26,33 +26,38 @@ async function insertDonation(opts: {
   await env.DB.prepare(
     `INSERT INTO donations (id, checkout_session_id, status, name, email, currency, gross_amount, completed_at, created_at)
      VALUES (?, ?, ?, ?, ?, 'usd', ?, ${opts.status === "completed" ? "datetime('now')" : "NULL"}, datetime('now'))`,
-  ).bind(
-    id,
-    opts.sessionId,
-    opts.status,
-    opts.name ?? "Alice Donor",
-    opts.email ?? "alice@example.test",
-    opts.grossAmount ?? 5000,
-  ).run();
+  )
+    .bind(
+      id,
+      opts.sessionId,
+      opts.status,
+      opts.name ?? "Alice Donor",
+      opts.email ?? "alice@example.test",
+      opts.grossAmount ?? 5000,
+    )
+    .run();
   return id;
 }
 
 describe("GET /api/v1/donations/session", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
 
   it("returns badge data for a completed donation", async () => {
-    await insertDonation({ sessionId: "cs_test_completed", status: "completed", name: "Bob Smith", grossAmount: 10000 });
+    await insertDonation({
+      sessionId: "cs_test_completed",
+      status: "completed",
+      name: "Bob Smith",
+      grossAmount: 10000,
+    });
 
     const response = await donationSession(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/donations/session?session_id=cs_test_completed"),
-        {},
-      ),
+      createContext(env, new Request("https://app.test/api/v1/donations/session?session_id=cs_test_completed"), {}),
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       grossAmount: number;
       currency: string;
       donorFirstName: string;
@@ -66,25 +71,17 @@ describe("GET /api/v1/donations/session", () => {
     await insertDonation({ sessionId: "cs_test_pending", status: "pending" });
 
     const response = await donationSession(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/donations/session?session_id=cs_test_pending"),
-        {},
-      ),
+      createContext(env, new Request("https://app.test/api/v1/donations/session?session_id=cs_test_pending"), {}),
     );
 
     expect(response.status).toBe(202);
-    const body = await response.json() as { pending: boolean };
+    const body = (await response.json()) as { pending: boolean };
     expect(body.pending).toBe(true);
   });
 
   it("returns 400 for an invalid session_id", async () => {
     const response = await donationSession(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/donations/session?session_id=invalid"),
-        {},
-      ),
+      createContext(env, new Request("https://app.test/api/v1/donations/session?session_id=invalid"), {}),
     );
 
     expect(response.status).toBe(400);
@@ -92,11 +89,7 @@ describe("GET /api/v1/donations/session", () => {
 
   it("returns 400 for missing session_id", async () => {
     const response = await donationSession(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/donations/session"),
-        {},
-      ),
+      createContext(env, new Request("https://app.test/api/v1/donations/session"), {}),
     );
 
     expect(response.status).toBe(400);
@@ -104,11 +97,7 @@ describe("GET /api/v1/donations/session", () => {
 
   it("returns 202 for non-existent session_id", async () => {
     const response = await donationSession(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/donations/session?session_id=cs_nonexistent"),
-        {},
-      ),
+      createContext(env, new Request("https://app.test/api/v1/donations/session?session_id=cs_nonexistent"), {}),
     );
 
     expect(response.status).toBe(202);
@@ -116,7 +105,9 @@ describe("GET /api/v1/donations/session", () => {
 });
 
 describe("POST /api/v1/donations/promoter", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
 
   it("creates a share code for a completed donation", async () => {
     await insertDonation({ sessionId: "cs_test_promo", status: "completed" });
@@ -134,7 +125,7 @@ describe("POST /api/v1/donations/promoter", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { code: string; shareUrl: string; ogImageUrl: string };
+    const body = (await response.json()) as { code: string; shareUrl: string; ogImageUrl: string };
     expect(body.code).toBeTruthy();
     expect(body.shareUrl).toContain("/donate/");
     expect(body.ogImageUrl).toContain("cs_test_promo");
@@ -153,7 +144,7 @@ describe("POST /api/v1/donations/promoter", () => {
       {},
     );
     const response1 = await donationPromoter(ctx1);
-    const body1 = await response1.json() as { code: string };
+    const body1 = (await response1.json()) as { code: string };
 
     const ctx2 = createContext(
       env,
@@ -165,7 +156,7 @@ describe("POST /api/v1/donations/promoter", () => {
       {},
     );
     const response2 = await donationPromoter(ctx2);
-    const body2 = await response2.json() as { code: string };
+    const body2 = (await response2.json()) as { code: string };
 
     expect(body1.code).toBe(body2.code);
   });
@@ -186,7 +177,7 @@ describe("POST /api/v1/donations/promoter", () => {
     );
 
     expect(response.status).toBe(404);
-    const body = await response.json() as { error: { code: string } };
+    const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("NOT_FOUND");
   });
 
@@ -204,7 +195,7 @@ describe("POST /api/v1/donations/promoter", () => {
     );
 
     expect(response.status).toBe(400);
-    const body = await response.json() as { error: { code: string } };
+    const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("BAD_REQUEST");
   });
 
@@ -226,7 +217,9 @@ describe("POST /api/v1/donations/promoter", () => {
 });
 
 describe("POST /api/v1/webhooks/stripe", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
 
   it("returns 503 when STRIPE_WEBHOOK_SECRET is not configured", async () => {
     const envWithoutSecret = { ...env, STRIPE_WEBHOOK_SECRET: "" } as typeof env;

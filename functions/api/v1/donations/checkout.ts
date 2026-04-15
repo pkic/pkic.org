@@ -101,9 +101,14 @@ export async function onRequestPost(c: any): Promise<Response> {
   const info = currencyInfo(currency);
   const minSmallest = minDonationSmallestUnits(info);
   if (amount < minSmallest) {
-    throw new AppError(400, "VALIDATION_ERROR", `Donation amount is below the minimum for ${currency.toUpperCase()} (${info.symbol}${minSmallest / (info.zeroDecimal ? 1 : 100)})`, {
-      fieldErrors: { amount: [`Must be at least ${info.symbol}${minSmallest / (info.zeroDecimal ? 1 : 100)}`] },
-    });
+    throw new AppError(
+      400,
+      "VALIDATION_ERROR",
+      `Donation amount is below the minimum for ${currency.toUpperCase()} (${info.symbol}${minSmallest / (info.zeroDecimal ? 1 : 100)})`,
+      {
+        fieldErrors: { amount: [`Must be at least ${info.symbol}${minSmallest / (info.zeroDecimal ? 1 : 100)}`] },
+      },
+    );
   }
 
   // ── Build redirect URLs ──────────────────────────────────────────────────
@@ -155,7 +160,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const stripeResponse = await fetch(STRIPE_API, {
     method: "POST",
     headers: {
-      "Authorization": `Bearer ${env.STRIPE_SECRET_KEY}`,
+      Authorization: `Bearer ${env.STRIPE_SECRET_KEY}`,
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: params.toString(),
@@ -207,4 +212,3 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
   return json({ url: session.url });
 }
-

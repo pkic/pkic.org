@@ -32,10 +32,15 @@ import { z } from "zod";
 const speakerActionSchema = z.discriminatedUnion("action", [
   z.object({
     action: z.literal("confirm"),
-    consents: z.array(z.object({
-      termKey: z.string().trim().min(1).max(128),
-      version: z.string().trim().min(1).max(64),
-    })).min(1).max(20),
+    consents: z
+      .array(
+        z.object({
+          termKey: z.string().trim().min(1).max(128),
+          version: z.string().trim().min(1).max(64),
+        }),
+      )
+      .min(1)
+      .max(20),
   }),
   z.object({
     action: z.literal("decline"),
@@ -59,10 +64,7 @@ const speakerProfileSchema = z.object({
 export async function onRequestGet(c: any): Promise<Response> {
   try {
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-    const { speaker, proposal, user } = await getSpeakerByManageToken(
-      c.env.DB,
-      c.req.param("token"),
-    );
+    const { speaker, proposal, user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
 
     return json({
       speaker: {
@@ -146,10 +148,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
     const { speaker, user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
 
     if (speaker.status === "declined") {
-      return json(
-        { error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } },
-        403,
-      );
+      return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
     }
 
     await updateSpeakerProfile(c.env.DB, user.id, {

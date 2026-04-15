@@ -25,6 +25,6 @@ export class InternalEmailRetryPost extends OpenAPIRoute {
   schema = {};
 
   async handle(c: any) {
-    return onRequestPost(c as any);
+    return onRequestPost(c);
   }
 }

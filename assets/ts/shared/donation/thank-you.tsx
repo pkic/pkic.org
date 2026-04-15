@@ -48,7 +48,7 @@ function Loading() {
   );
 }
 
-function BadgeImage({ badgeUrl, badgeFilename }: { badgeUrl: string; badgeFilename: string }) {
+function BadgeImage({ badgeUrl, badgeFilename: _badgeFilename }: { badgeUrl: string; badgeFilename: string }) {
   const imgRef = useRef<HTMLImageElement>(null);
   const loadingRef = useRef<HTMLDivElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -109,8 +109,8 @@ function DonationBadge({
       <div class="donation-badge-amount">{formattedAmount}</div>
       <h2 class="donation-badge-title">{greeting} you for your donation!</h2>
       <p class="donation-badge-body">
-        Your generous contribution helps the PKI Consortium keep its memberships, resources, and events free,
-        open, and accessible to more of the global PKI community.
+        Your generous contribution helps the PKI Consortium keep its memberships, resources, and events free, open, and
+        accessible to more of the global PKI community.
       </p>
 
       <BadgeImage badgeUrl={badgeUrl} badgeFilename={badgeFilename} />
@@ -121,7 +121,9 @@ function DonationBadge({
           download={badgeFilename}
           class="btn btn-sm btn-outline-secondary"
           aria-label="Download your donation badge"
-        >⬇ Download badge</a>
+        >
+          ⬇ Download badge
+        </a>
       </div>
 
       <p class="donation-badge-share-label">Spread the word:</p>
@@ -133,7 +135,9 @@ function DonationBadge({
           target="_blank"
           rel="noopener"
           aria-label="Share on X / Twitter"
-        >𝕏 Share</a>
+        >
+          𝕏 Share
+        </a>
         <a
           href={linkedinHref}
           class="btn btn-outline-secondary donation-badge-share-btn"
@@ -141,7 +145,9 @@ function DonationBadge({
           target="_blank"
           rel="noopener"
           aria-label="Share on LinkedIn"
-        >in Share</a>
+        >
+          in Share
+        </a>
       </div>
 
       <div class="donation-badge-share-link-row" data-share-link-row hidden>
@@ -160,29 +166,26 @@ function DonationBadge({
             class="btn btn-sm btn-outline-secondary flex-shrink-0"
             data-share-copy
             aria-label="Copy link"
-          >Copy</button>
+          >
+            Copy
+          </button>
         </div>
-        <p class="text-muted small mt-1">Sharing this link lets us track who is driving donations — even without donating yourself.</p>
+        <p class="text-muted small mt-1">
+          Sharing this link lets us track who is driving donations — even without donating yourself.
+        </p>
       </div>
 
       <p class="donation-badge-disclaimer">
-        PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts
-        to PKI Consortium are not deductible as charitable contributions for federal income tax
-        purposes in the United States. This payment is voluntary and is not a ticket, fee, or
-        payment for goods or services. Please consult your tax advisor regarding any possible
-        business-expense treatment or other tax consequences.
+        PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are
+        not deductible as charitable contributions for federal income tax purposes in the United States. This payment is
+        voluntary and is not a ticket, fee, or payment for goods or services. Please consult your tax advisor regarding
+        any possible business-expense treatment or other tax consequences.
       </p>
     </div>
   );
 }
 
-function AsyncPending({
-  methodType,
-  expiresAt,
-}: {
-  methodType?: string | null;
-  expiresAt?: number | null;
-}) {
+function AsyncPending({ methodType, expiresAt }: { methodType?: string | null; expiresAt?: number | null }) {
   const info = asyncPaymentWindow(methodType ?? null);
   const deadline = expiresAt
     ? new Date(expiresAt * 1000).toLocaleString(undefined, { dateStyle: "long", timeStyle: "short" })
@@ -197,13 +200,13 @@ function AsyncPending({
       </p>
       {deadline && (
         <p class="donation-badge-body">
-          Please ensure your payment is received by <strong>{deadline}</strong>.
-          After this deadline Stripe will close the payment window.
+          Please ensure your payment is received by <strong>{deadline}</strong>. After this deadline Stripe will close
+          the payment window.
         </p>
       )}
       <p class="donation-badge-body">
-        Once your bank confirms the payment you will receive a receipt and your
-        personalised badge by email. No further action is needed on your part.
+        Once your bank confirms the payment you will receive a receipt and your personalised badge by email. No further
+        action is needed on your part.
       </p>
       <p class="donation-badge-body text-muted small">
         Thank you for your patience and generous support of the PKI Consortium!
@@ -216,12 +219,9 @@ function FailedBadge() {
   return (
     <div class="donation-badge donation-badge--failed">
       <h2 class="donation-badge-title">Payment not completed</h2>
+      <p class="donation-badge-body">Your bank was unable to process the payment. No funds have been charged.</p>
       <p class="donation-badge-body">
-        Your bank was unable to process the payment. No funds have been charged.
-      </p>
-      <p class="donation-badge-body">
-        If you would like to try again, please{" "}
-        <a href="/donate/">return to the donation page</a> and use a different
+        If you would like to try again, please <a href="/donate/">return to the donation page</a> and use a different
         payment method.
       </p>
     </div>
@@ -232,12 +232,9 @@ function ExpiredBadge() {
   return (
     <div class="donation-badge donation-badge--expired">
       <h2 class="donation-badge-title">Checkout session expired</h2>
+      <p class="donation-badge-body">The payment window for this checkout has closed and no payment was taken.</p>
       <p class="donation-badge-body">
-        The payment window for this checkout has closed and no payment was taken.
-      </p>
-      <p class="donation-badge-body">
-        Please return to the donation page to{" "}
-        <a href="/donate/">try again</a>, we really appreciate your support.
+        Please return to the donation page to <a href="/donate/">try again</a>, we really appreciate your support.
       </p>
     </div>
   );
@@ -245,12 +242,7 @@ function ExpiredBadge() {
 
 function GenericThankYou({ pendingHtml }: { pendingHtml: string }) {
   // SAFETY: pendingHtml is read from Hugo-rendered static markup (data-donation-pending-content)
-  return (
-    <div
-      class="donation-badge donation-badge--generic"
-      dangerouslySetInnerHTML={{ __html: pendingHtml }}
-    />
-  );
+  return <div class="donation-badge donation-badge--generic" dangerouslySetInnerHTML={{ __html: pendingHtml }} />;
 }
 
 // ── Render helpers ────────────────────────────────────────────────────────
@@ -293,8 +285,14 @@ export async function initDonationThankYou(): Promise<void> {
         asyncExpiresAt = data.sessionExpiresAt;
         break;
       }
-      if ("failed" in data) { renderTo(container, <FailedBadge />); return; }
-      if ("expired" in data) { renderTo(container, <ExpiredBadge />); return; }
+      if ("failed" in data) {
+        renderTo(container, <FailedBadge />);
+        return;
+      }
+      if ("expired" in data) {
+        renderTo(container, <ExpiredBadge />);
+        return;
+      }
       if (!("pending" in data)) {
         session = data as DonationSession;
         break;
@@ -325,9 +323,10 @@ export async function initDonationThankYou(): Promise<void> {
   renderTo(container, <AsyncPending methodType={asyncMethodType} expiresAt={asyncExpiresAt} />);
 
   const msUntilExpiry = asyncExpiresAt ? Math.max(0, asyncExpiresAt * 1000 - Date.now()) : null;
-  const asyncPolls = msUntilExpiry !== null
-    ? Math.min(ASYNC_MAX_POLLS, Math.ceil(msUntilExpiry / ASYNC_POLL_INTERVAL_MS))
-    : ASYNC_MAX_POLLS;
+  const asyncPolls =
+    msUntilExpiry !== null
+      ? Math.min(ASYNC_MAX_POLLS, Math.ceil(msUntilExpiry / ASYNC_POLL_INTERVAL_MS))
+      : ASYNC_MAX_POLLS;
 
   for (let i = 0; i < asyncPolls; i++) {
     await sleep(ASYNC_POLL_INTERVAL_MS);
@@ -335,8 +334,14 @@ export async function initDonationThankYou(): Promise<void> {
       const data = await getJson<DonationSession | PendingSession | TerminalSession>(
         `/api/v1/donations/session?session_id=${encodeURIComponent(sessionId)}`,
       );
-      if ("failed" in data) { renderTo(container, <FailedBadge />); return; }
-      if ("expired" in data) { renderTo(container, <ExpiredBadge />); return; }
+      if ("failed" in data) {
+        renderTo(container, <FailedBadge />);
+        return;
+      }
+      if ("expired" in data) {
+        renderTo(container, <ExpiredBadge />);
+        return;
+      }
       if (!("pending" in data)) {
         session = data as DonationSession;
         break;
@@ -362,9 +367,10 @@ function renderBadge(container: HTMLElement, session: DonationSession, sessionId
   const shareUrl = "https://pkic.org/donate/";
   const shareText = `I just made a voluntary donation of ${formattedAmount} to the PKI Consortium to keep our memberships, resources, and events free! 🎉`;
 
-  renderTo(container, (
-    <DonationBadge session={session} sessionId={sessionId} shareUrl={shareUrl} shareText={shareText} />
-  ));
+  renderTo(
+    container,
+    <DonationBadge session={session} sessionId={sessionId} shareUrl={shareUrl} shareText={shareText} />,
+  );
 }
 
 function renderStaticThankYou(container: HTMLElement): void {
@@ -402,7 +408,12 @@ function formattedAmountFor(session: DonationSession): string {
 }
 
 /** Swap the generic donate URL for the personalized /donate/r/:code URL. */
-function updateShareLinks(container: HTMLElement, shareUrl: string, session: DonationSession, formattedAmount: string): void {
+function updateShareLinks(
+  container: HTMLElement,
+  shareUrl: string,
+  session: DonationSession,
+  formattedAmount: string,
+): void {
   const shareText = `I just made a voluntary donation of ${formattedAmount} to the PKI Consortium to keep our memberships, resources, and events free! 🎉`;
   const twitterHref = `https://twitter.com/intent/tweet?${new URLSearchParams({ text: shareText, url: shareUrl })}`;
   const linkedinHref = `https://www.linkedin.com/sharing/share-offsite/?${new URLSearchParams({ url: shareUrl })}`;
@@ -426,7 +437,9 @@ function updateShareLinks(container: HTMLElement, shareUrl: string, session: Don
       void navigator.clipboard?.writeText(shareUrl).then(() => {
         const orig = copyBtn.textContent;
         copyBtn.textContent = "Copied!";
-        setTimeout(() => { copyBtn.textContent = orig; }, 2000);
+        setTimeout(() => {
+          copyBtn.textContent = orig;
+        }, 2000);
       });
     });
   }

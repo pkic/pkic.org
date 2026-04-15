@@ -31,7 +31,12 @@ export interface SharePanelOptions {
 
 function nameSlug(firstName?: string | null, lastName?: string | null): string {
   const raw = [firstName, lastName].filter(Boolean).join("-");
-  return raw.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "attendee";
+  return (
+    raw
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "attendee"
+  );
 }
 
 const MAX_INVITES = 10;
@@ -49,7 +54,11 @@ function extractOgBadgeUrl(shareUrl: string): string | null {
 
 // ── Components ────────────────────────────────────────────────────────────────
 
-function OgBadge({ ogBadgeUrl, eventName, badgeFilename }: {
+function OgBadge({
+  ogBadgeUrl,
+  eventName,
+  badgeFilename,
+}: {
   ogBadgeUrl: string;
   eventName: string;
   badgeFilename: string;
@@ -60,11 +69,17 @@ function OgBadge({ ogBadgeUrl, eventName, badgeFilename }: {
   useEffect(() => {
     const img = imgRef.current;
     if (!img) return;
-    if (img.complete) { setLoading(false); return; }
+    if (img.complete) {
+      setLoading(false);
+      return;
+    }
     const hide = () => setLoading(false);
     img.addEventListener("load", hide, { once: true });
     img.addEventListener("error", hide, { once: true });
-    return () => { img.removeEventListener("load", hide); img.removeEventListener("error", hide); };
+    return () => {
+      img.removeEventListener("load", hide);
+      img.removeEventListener("error", hide);
+    };
   }, []);
 
   return (
@@ -90,7 +105,9 @@ function OgBadge({ ogBadgeUrl, eventName, badgeFilename }: {
           download={badgeFilename}
           class="btn btn-sm btn-outline-secondary"
           aria-label="Download your personal badge image"
-        >⬇ Download badge</a>
+        >
+          ⬇ Download badge
+        </a>
       </div>
     </>
   );
@@ -101,8 +118,13 @@ function CopyLinkRow({ shareUrl }: { shareUrl: string }) {
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(shareUrl).then(
-      () => { setCopied(true); setTimeout(() => setCopied(null), 2000); },
-      () => { setCopied(false); },
+      () => {
+        setCopied(true);
+        setTimeout(() => setCopied(null), 2000);
+      },
+      () => {
+        setCopied(false);
+      },
     );
   }, [shareUrl]);
 
@@ -115,14 +137,25 @@ function CopyLinkRow({ shareUrl }: { shareUrl: string }) {
         readOnly
         aria-label="Your unique sharing link"
       />
-      <button type="button" class="btn btn-outline-secondary btn-sm event-flow-share-copy-btn" onClick={handleCopy} data-share-copy aria-label="Copy sharing link">
+      <button
+        type="button"
+        class="btn btn-outline-secondary btn-sm event-flow-share-copy-btn"
+        onClick={handleCopy}
+        data-share-copy
+        aria-label="Copy sharing link"
+      >
         {copied === true ? "Copied!" : copied === false ? "Copy failed" : "Copy link"}
       </button>
     </div>
   );
 }
 
-function SocialLinks({ linkedinUrl, twitterUrl, blueskyUrl, redditUrl }: {
+function SocialLinks({
+  linkedinUrl: _linkedinUrl,
+  twitterUrl,
+  blueskyUrl,
+  redditUrl,
+}: {
   linkedinUrl: string;
   twitterUrl: string;
   blueskyUrl: string;
@@ -131,14 +164,34 @@ function SocialLinks({ linkedinUrl, twitterUrl, blueskyUrl, redditUrl }: {
   return (
     <div class="event-flow-share-socials">
       <span class="event-flow-share-socials-label">Share on:</span>
-      <a href={twitterUrl} target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary event-flow-share-social-btn" aria-label="Share on X / Twitter">
+      <a
+        href={twitterUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="btn btn-sm btn-outline-secondary event-flow-share-social-btn"
+        aria-label="Share on X / Twitter"
+      >
         <IconXTwitter />X
       </a>
-      <a href={blueskyUrl} target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary event-flow-share-social-btn" aria-label="Share on Bluesky">
-        <IconBluesky />Bluesky
+      <a
+        href={blueskyUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="btn btn-sm btn-outline-secondary event-flow-share-social-btn"
+        aria-label="Share on Bluesky"
+      >
+        <IconBluesky />
+        Bluesky
       </a>
-      <a href={redditUrl} target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary event-flow-share-social-btn" aria-label="Share on Reddit">
-        <IconReddit />Reddit
+      <a
+        href={redditUrl}
+        target="_blank"
+        rel="noopener noreferrer"
+        class="btn btn-sm btn-outline-secondary event-flow-share-social-btn"
+        aria-label="Share on Reddit"
+      >
+        <IconReddit />
+        Reddit
       </a>
     </div>
   );
@@ -153,19 +206,28 @@ interface InviteRowData {
   lastName: string;
 }
 
-function InviteRow({ row, showRemove, onChange, onRemove, onPasteEmail }: {
+function InviteRow({
+  row,
+  showRemove,
+  onChange,
+  onRemove,
+  onPasteEmail,
+}: {
   row: InviteRowData;
   showRemove: boolean;
   onChange: (id: number, field: keyof Omit<InviteRowData, "id">, value: string) => void;
   onRemove: (id: number) => void;
   onPasteEmail: (id: number, text: string) => void;
 }) {
-  const handlePaste = useCallback((e: ClipboardEvent) => {
-    const pasted = e.clipboardData?.getData("text") ?? "";
-    if (!pasted.includes("<") && !pasted.includes(",") && !pasted.includes("\n")) return;
-    e.preventDefault();
-    onPasteEmail(row.id, pasted);
-  }, [row.id, onPasteEmail]);
+  const handlePaste = useCallback(
+    (e: ClipboardEvent) => {
+      const pasted = e.clipboardData?.getData("text") ?? "";
+      if (!pasted.includes("<") && !pasted.includes(",") && !pasted.includes("\n")) return;
+      e.preventDefault();
+      onPasteEmail(row.id, pasted);
+    },
+    [row.id, onPasteEmail],
+  );
 
   return (
     <div class="event-flow-invite-row">
@@ -198,7 +260,12 @@ function InviteRow({ row, showRemove, onChange, onRemove, onPasteEmail }: {
         autocomplete="off"
       />
       {showRemove && (
-        <button type="button" class="event-flow-invite-remove-btn" onClick={() => onRemove(row.id)} aria-label="Remove row">
+        <button
+          type="button"
+          class="event-flow-invite-remove-btn"
+          onClick={() => onRemove(row.id)}
+          aria-label="Remove row"
+        >
           ×
         </button>
       )}
@@ -237,7 +304,7 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
   }, []);
 
   const updateRow = useCallback((id: number, field: keyof Omit<InviteRowData, "id">, value: string) => {
-    setRows((prev) => prev.map((r) => r.id === id ? { ...r, [field]: value } : r));
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, [field]: value } : r)));
     setStatus(null);
   }, []);
 
@@ -259,7 +326,12 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
       const idx = prev.findIndex((r) => r.id === rowId);
       if (idx === -1) return prev;
       const updated = [...prev];
-      updated[idx] = { ...updated[idx], email: entries[0].email, firstName: entries[0].firstName ?? "", lastName: entries[0].lastName ?? "" };
+      updated[idx] = {
+        ...updated[idx],
+        email: entries[0].email,
+        firstName: entries[0].firstName ?? "",
+        lastName: entries[0].lastName ?? "",
+      };
       for (const entry of entries.slice(1)) {
         if (updated.length >= MAX_INVITES) break;
         updated.push(makeRow(entry));
@@ -282,7 +354,12 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
         // Fill existing empty rows first
         for (let i = 0; i < updated.length && entryIdx < entries.length; i++) {
           if (!updated[i].email.trim()) {
-            updated[i] = { ...updated[i], email: entries[entryIdx].email, firstName: entries[entryIdx].firstName ?? "", lastName: entries[entryIdx].lastName ?? "" };
+            updated[i] = {
+              ...updated[i],
+              email: entries[entryIdx].email,
+              firstName: entries[entryIdx].firstName ?? "",
+              lastName: entries[entryIdx].lastName ?? "",
+            };
             entryIdx++;
           }
         }
@@ -298,7 +375,11 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
 
   const handleSend = useCallback(async () => {
     const invites = rows
-      .map((r) => ({ email: r.email.trim(), firstName: r.firstName.trim() || undefined, lastName: r.lastName.trim() || undefined }))
+      .map((r) => ({
+        email: r.email.trim(),
+        firstName: r.firstName.trim() || undefined,
+        lastName: r.lastName.trim() || undefined,
+      }))
       .filter((i) => i.email);
 
     if (!invites.length) {
@@ -317,17 +398,22 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
     try {
       const response = await fetch(`/api/v1/events/${eventSlug}/invites`, {
         method: "POST",
-        headers: { "content-type": "application/json", "authorization": `Bearer ${manageToken}` },
+        headers: { "content-type": "application/json", authorization: `Bearer ${manageToken}` },
         body: JSON.stringify({ invites }),
       });
-      const data = await response.json() as Record<string, unknown>;
+      const data = (await response.json()) as Record<string, unknown>;
       if (!response.ok) {
-        const msg = ((data?.error as Record<string, unknown>)?.message as string | undefined) ?? "Something went wrong. Please try again.";
+        const msg =
+          ((data?.error as Record<string, unknown>)?.message as string | undefined) ??
+          "Something went wrong. Please try again.";
         setStatus({ message: msg, type: "danger" });
         return;
       }
       const count = (data?.created as unknown[])?.length ?? invites.length;
-      setStatus({ message: `✓ Sent ${count} invitation${count !== 1 ? "s" : ""}! They'll receive a registration link shortly.`, type: "success" });
+      setStatus({
+        message: `✓ Sent ${count} invitation${count !== 1 ? "s" : ""}! They'll receive a registration link shortly.`,
+        type: "success",
+      });
       setRows([makeRow()]);
     } catch {
       setStatus({ message: "Could not send invites. Please try again later.", type: "danger" });
@@ -345,12 +431,20 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
         aria-expanded={expanded}
         aria-controls="event-flow-invite-fields"
         data-invite-toggle
-      >✉️ Invite by email</button>
+      >
+        ✉️ Invite by email
+      </button>
 
-      <div id="event-flow-invite-fields" class="event-flow-invite-fields" hidden={!expanded} ref={fieldsRef} data-invite-fields>
+      <div
+        id="event-flow-invite-fields"
+        class="event-flow-invite-fields"
+        hidden={!expanded}
+        ref={fieldsRef}
+        data-invite-fields
+      >
         <p class="event-flow-invite-copy">
-          We'll send a personal invitation on your behalf — they'll receive a direct registration link.
-          Paste a list below or fill in rows one by one.
+          We'll send a personal invitation on your behalf — they'll receive a direct registration link. Paste a list
+          below or fill in rows one by one.
         </p>
         <div class="event-flow-invite-paste-zone">
           <textarea
@@ -360,7 +454,9 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
             aria-label="Paste email addresses to add"
             onPaste={handlePasteArea}
           />
-          <p class="event-flow-invite-paste-hint">Names inferred from dotted addresses or &ldquo;Name &lt;email&gt;&rdquo; format.</p>
+          <p class="event-flow-invite-paste-hint">
+            Names inferred from dotted addresses or &ldquo;Name &lt;email&gt;&rdquo; format.
+          </p>
         </div>
         <div class="event-flow-invite-thead" aria-hidden="true">
           <span>First name</span>
@@ -382,9 +478,17 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
         </div>
         <div class="event-flow-invite-actions mt-2 d-flex gap-2 flex-wrap align-items-center">
           {rows.length < MAX_INVITES && (
-            <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => addRow()} data-invite-add>+ Add row</button>
+            <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => addRow()} data-invite-add>
+              + Add row
+            </button>
           )}
-          <button type="button" class="btn btn-sm btn-page-accent" onClick={handleSend} disabled={sending} data-invite-send>
+          <button
+            type="button"
+            class="btn btn-sm btn-page-accent"
+            onClick={handleSend}
+            disabled={sending}
+            data-invite-send
+          >
             {sending ? "Sending…" : "Send invites"}
           </button>
         </div>
@@ -409,24 +513,22 @@ function SharePanelInner({ options }: { options: SharePanelOptions }) {
   const redditTitle = encodeURIComponent(`Join me at ${eventName}`);
 
   const linkedinUrl = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl)}`;
-  const twitterUrl  = `https://twitter.com/intent/tweet?text=${twitterText}`;
-  const blueskyUrl  = `https://bsky.app/intent/compose?text=${blueskyText}`;
-  const redditUrl   = `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${redditTitle}`;
-  const ogBadgeUrl  = extractOgBadgeUrl(shareUrl);
+  const twitterUrl = `https://twitter.com/intent/tweet?text=${twitterText}`;
+  const blueskyUrl = `https://bsky.app/intent/compose?text=${blueskyText}`;
+  const redditUrl = `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${redditTitle}`;
+  const ogBadgeUrl = extractOgBadgeUrl(shareUrl);
   const badgeFilename = `attendee-badge-${nameSlug(options.firstName, options.lastName)}.png`;
 
   const canInvite = Boolean(manageToken && eventSlug);
 
   return (
     <div class="event-flow-share">
-      {ogBadgeUrl && (
-        <OgBadge ogBadgeUrl={ogBadgeUrl} eventName={eventName} badgeFilename={badgeFilename} />
-      )}
+      {ogBadgeUrl && <OgBadge ogBadgeUrl={ogBadgeUrl} eventName={eventName} badgeFilename={badgeFilename} />}
 
       <p class="event-flow-share-heading">Invite a colleague — seats are limited</p>
       <p class="event-flow-share-copy">
-        In-person spots fill fast. Every registration through your personal link
-        helps us prioritise attendees and shape the programme.
+        In-person spots fill fast. Every registration through your personal link helps us prioritise attendees and shape
+        the programme.
       </p>
 
       <div class="event-flow-share-ctas">
@@ -437,11 +539,10 @@ function SharePanelInner({ options }: { options: SharePanelOptions }) {
           class="btn btn-page-accent event-flow-share-primary-btn"
           aria-label="Share on LinkedIn"
         >
-          <IconLinkedIn />Share on LinkedIn
+          <IconLinkedIn />
+          Share on LinkedIn
         </a>
-        {canInvite && (
-          <InvitePanel manageToken={manageToken as string} eventSlug={eventSlug as string} />
-        )}
+        {canInvite && <InvitePanel manageToken={manageToken as string} eventSlug={eventSlug as string} />}
       </div>
 
       <CopyLinkRow shareUrl={shareUrl} />
@@ -466,7 +567,9 @@ export function refreshSharePanelBadge(panelContainer: HTMLElement): void {
   const baseUrl = img.src.split("?")[0];
   if (loader) loader.hidden = false;
 
-  const hideLoader = (): void => { if (loader) loader.hidden = true; };
+  const hideLoader = (): void => {
+    if (loader) loader.hidden = true;
+  };
   img.addEventListener("load", hideLoader, { once: true });
   img.addEventListener("error", hideLoader, { once: true });
   img.src = `${baseUrl}?t=${Date.now()}`;

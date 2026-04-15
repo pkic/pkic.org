@@ -41,9 +41,7 @@ interface UserDetailRow {
 
 // ── GET ─────────────────────────────────────────────────────────────────────
 
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const userId = c.req.param("userId");
 
@@ -79,9 +77,7 @@ export async function onRequestGet(
 
 // ── PATCH ───────────────────────────────────────────────────────────────────
 
-export async function onRequestPatch(
-  c: any,
-): Promise<Response> {
+export async function onRequestPatch(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminUserUpdateSchema);
   const userId = c.req.param("userId");
@@ -106,14 +102,15 @@ export async function onRequestPatch(
     throw new AppError(404, "NOT_FOUND", "User not found");
   }
 
-  const newRole   = body.role   ?? user.role;
+  const newRole = body.role ?? user.role;
   const newActive = body.active ?? Boolean(user.active);
 
-  await run(
-    c.env.DB,
-    "UPDATE users SET role = ?, active = ?, updated_at = ? WHERE id = ?",
-    [newRole, newActive ? 1 : 0, nowIso(), user.id],
-  );
+  await run(c.env.DB, "UPDATE users SET role = ?, active = ?, updated_at = ? WHERE id = ?", [
+    newRole,
+    newActive ? 1 : 0,
+    nowIso(),
+    user.id,
+  ]);
 
   const changes: Record<string, unknown> = {};
   if (body.role !== undefined && body.role !== user.role) {
@@ -124,15 +121,7 @@ export async function onRequestPatch(
   }
 
   if (Object.keys(changes).length > 0) {
-    await writeAuditLog(
-      c.env.DB,
-      "admin",
-      admin.id,
-      "user_updated",
-      "user",
-      user.id,
-      changes,
-    );
+    await writeAuditLog(c.env.DB, "admin", admin.id, "user_updated", "user", user.id, changes);
   }
 
   return json({
@@ -141,10 +130,8 @@ export async function onRequestPatch(
   });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
-  if (c.req.raw.method === "GET")   return onRequestGet(c);
+export async function onRequest(c: any): Promise<Response> {
+  if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "PATCH") return onRequestPatch(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

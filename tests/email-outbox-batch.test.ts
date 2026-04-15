@@ -21,7 +21,13 @@ function makeSendgridMock(statusCode = 202, messageIdSuffix = ""): ReturnType<ty
   });
 }
 
-async function seedTemplate(db: typeof env.DB, adminId: string, templateKey: string, content: string, subjectTemplate: string): Promise<void> {
+async function seedTemplate(
+  db: typeof env.DB,
+  adminId: string,
+  templateKey: string,
+  content: string,
+  subjectTemplate: string,
+): Promise<void> {
   const t = await createTemplateVersion(db, { templateKey, content, createdByUserId: adminId, subjectTemplate });
   await activateTemplateVersion(db, { templateKey, version: t.version });
 }
@@ -92,10 +98,16 @@ describe("email outbox batch processing", () => {
     expect(result.processed).toBe(2);
     expect(fetchMock).toHaveBeenCalledTimes(2);
 
-    const sentRows = await queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE status = 'sent'");
+    const sentRows = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM email_outbox WHERE status = 'sent'",
+    );
     expect(sentRows).toHaveLength(2);
 
-    const queuedRows = await queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE status = 'queued'");
+    const queuedRows = await queryAll<{ status: string }>(
+      env.DB,
+      "SELECT status FROM email_outbox WHERE status = 'queued'",
+    );
     expect(queuedRows).toHaveLength(3);
   });
 
@@ -107,9 +119,7 @@ describe("email outbox batch processing", () => {
       if (callCount === 2) {
         return Promise.resolve(new Response('{"errors":[{"message":"fail"}]}', { status: 400 }));
       }
-      return Promise.resolve(
-        new Response(null, { status: 202, headers: { "x-message-id": `msg-${callCount}` } }),
-      );
+      return Promise.resolve(new Response(null, { status: 202, headers: { "x-message-id": `msg-${callCount}` } }));
     });
     vi.stubGlobal("fetch", fetchMock);
 

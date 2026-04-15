@@ -115,25 +115,13 @@ function shuffled<T>(arr: T[]): T[] {
 // ── Widget components ─────────────────────────────────────────────────────
 
 function BooleanInput({ field }: { field: FormField; initialValue?: unknown }) {
-  return (
-    <input
-      type="checkbox"
-      name={`custom.${field.key}`}
-      class="form-check-input"
-      id={`custom-${field.key}`}
-    />
-  );
+  return <input type="checkbox" name={`custom.${field.key}`} class="form-check-input" id={`custom-${field.key}`} />;
 }
 
 function SelectInput({ field, rules }: { field: FormField; rules: FieldRules }) {
   const firstLabel = rules.placeholder?.trim() || "Please select";
   return (
-    <select
-      name={`custom.${field.key}`}
-      class="form-select"
-      id={`custom-${field.key}`}
-      required={field.required}
-    >
+    <select name={`custom.${field.key}`} class="form-select" id={`custom-${field.key}`} required={field.required}>
       <option value="">{firstLabel}</option>
       {optionsFor(field).map((opt) => (
         <option key={opt.value} value={opt.value}>
@@ -166,15 +154,7 @@ function MultiSelectCheckboxes({ field }: { field: FormField }) {
   );
 }
 
-function TagPicker({
-  field,
-  rules,
-  initialValue,
-}: {
-  field: FormField;
-  rules: FieldRules;
-  initialValue?: unknown;
-}) {
+function TagPicker({ field, rules, initialValue }: { field: FormField; rules: FieldRules; initialValue?: unknown }) {
   const options = optionsFor(field);
   const shuffledOptions = useMemo(() => shuffled(options), [options]);
 
@@ -260,7 +240,14 @@ function TagPicker({
               aria-label={`Remove ${value}`}
               onClick={() => removeValue(value)}
             >
-              <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                width="10"
+                height="10"
+                viewBox="0 0 16 16"
+                fill="currentColor"
+                aria-hidden="true"
+              >
                 <path d="M2.146 2.854a.5.5 0 1 1 .708-.708L8 7.293l5.146-5.147a.5.5 0 0 1 .708.708L8.707 8l5.147 5.146a.5.5 0 0 1-.708.708L8 8.707l-5.146 5.147a.5.5 0 0 1-.708-.708L7.293 8z" />
               </svg>
             </button>
@@ -289,11 +276,7 @@ function TagPicker({
             }
           }}
         />
-        <button
-          type="button"
-          class="btn btn-outline-secondary btn-sm"
-          onClick={() => addValue(inputValue)}
-        >
+        <button type="button" class="btn btn-outline-secondary btn-sm" onClick={() => addValue(inputValue)}>
           Add
         </button>
       </div>
@@ -374,15 +357,7 @@ function RatingButtons({
   );
 }
 
-function CountrySelect({
-  field,
-  rules,
-  geoHint,
-}: {
-  field: FormField;
-  rules: FieldRules;
-  geoHint?: string | null;
-}) {
+function CountrySelect({ field, rules, geoHint }: { field: FormField; rules: FieldRules; geoHint?: string | null }) {
   const selectRef = useRef<HTMLSelectElement>(null);
   const [hintVisible, setHintVisible] = useState(false);
   const hintApplied = useRef(false);
@@ -417,11 +392,7 @@ function CountrySelect({
           </option>
         ))}
       </select>
-      <div
-        class="event-flow-country-hint form-text"
-        hidden={!hintVisible}
-        aria-live="polite"
-      >
+      <div class="event-flow-country-hint form-text" hidden={!hintVisible} aria-live="polite">
         {hintVisible && "Detected from your network — change if needed"}
       </div>
     </div>

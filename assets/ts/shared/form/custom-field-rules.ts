@@ -66,8 +66,8 @@ export function readRules(field: FormField): FieldRules {
       );
     }
     if (
-      (showWhen.dayAttendanceIn && showWhen.dayAttendanceIn.length > 0)
-      || (showWhen.eventAttendanceTypeIn && showWhen.eventAttendanceTypeIn.length > 0)
+      (showWhen.dayAttendanceIn && showWhen.dayAttendanceIn.length > 0) ||
+      (showWhen.eventAttendanceTypeIn && showWhen.eventAttendanceTypeIn.length > 0)
     ) {
       rules.showWhen = showWhen;
     }
@@ -126,4 +126,3 @@ export function optionsFor(field: FormField): FieldOption[] {
 
   return options;
 }
-

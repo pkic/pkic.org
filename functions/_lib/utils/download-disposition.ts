@@ -31,14 +31,19 @@ export function contentTypeToFileExtension(contentType: string): string {
   }
 }
 
-export function buildDownloadDisposition(rawName: string, contentType: string | null, fallbackBaseName: string): string {
+export function buildDownloadDisposition(
+  rawName: string,
+  contentType: string | null,
+  fallbackBaseName: string,
+): string {
   const baseName = rawName.split(/[/\\]/).pop() || "";
-  const safeName = baseName
-    .replace(/[^a-zA-Z0-9_.\- ]/g, "") // Strictly whitelist safe characters
-    .replace(/^\.+|\.+$/g, "") // Remove leading/trailing dots to prevent hidden files/extension trickery
-    .replace(/\.+/g, ".") // Collapse multiple dots
-    .trim()
-    .replace(KNOWN_IMAGE_EXTENSION_RE, "") || fallbackBaseName;
+  const safeName =
+    baseName
+      .replace(/[^a-zA-Z0-9_.\- ]/g, "") // Strictly whitelist safe characters
+      .replace(/^\.+|\.+$/g, "") // Remove leading/trailing dots to prevent hidden files/extension trickery
+      .replace(/\.+/g, ".") // Collapse multiple dots
+      .trim()
+      .replace(KNOWN_IMAGE_EXTENSION_RE, "") || fallbackBaseName;
 
   const normalizedType = contentType?.split(";")[0]?.trim().toLowerCase() ?? "image/jpeg";
   const ext = contentTypeToFileExtension(normalizedType);
@@ -46,6 +51,9 @@ export function buildDownloadDisposition(rawName: string, contentType: string | 
 }
 
 export function applyDownloadDisposition(response: Response, rawName: string, fallbackBaseName: string): Response {
-  response.headers.set("Content-Disposition", buildDownloadDisposition(rawName, response.headers.get("Content-Type"), fallbackBaseName));
+  response.headers.set(
+    "Content-Disposition",
+    buildDownloadDisposition(rawName, response.headers.get("Content-Type"), fallbackBaseName),
+  );
   return response;
 }

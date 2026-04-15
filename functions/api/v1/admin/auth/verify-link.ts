@@ -20,15 +20,9 @@ export async function onRequestPost(c: any): Promise<Response> {
     userAgentHash,
   });
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    verified.admin.id,
-    "admin_magic_link_verified",
-    "admin_session",
-    null,
-    { expiresAt: verified.expiresAt },
-  );
+  await writeAuditLog(c.env.DB, "admin", verified.admin.id, "admin_magic_link_verified", "admin_session", null, {
+    expiresAt: verified.expiresAt,
+  });
 
   return json({
     success: true,

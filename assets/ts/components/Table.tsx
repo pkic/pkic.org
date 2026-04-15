@@ -10,7 +10,11 @@ type HeadCell = string | { label: string; className?: string };
 
 function renderHead(h: HeadCell, i: number) {
   const cell = typeof h === "string" ? { label: h } : h;
-  return <th key={i} class={cell.className}>{cell.label}</th>;
+  return (
+    <th key={i} class={cell.className}>
+      {cell.label}
+    </th>
+  );
 }
 
 // ─── Children-based Table (for complex row rendering) ─────────────────────────
@@ -64,7 +68,15 @@ interface DataTableProps<T> {
   onRowClick?: (row: T) => void;
 }
 
-export function DataTable<T>({ columns, data, empty = "No data", className, rowKey, rowClass, onRowClick }: DataTableProps<T>) {
+export function DataTable<T>({
+  columns,
+  data,
+  empty = "No data",
+  className,
+  rowKey,
+  rowClass,
+  onRowClick,
+}: DataTableProps<T>) {
   return (
     <div class="tbl-wrap">
       <table class={`table table-sm table-hover mb-0${className ? ` ${className}` : ""}`}>
@@ -78,17 +90,21 @@ export function DataTable<T>({ columns, data, empty = "No data", className, rowK
                 {empty}
               </td>
             </tr>
-          ) : data.map((row, i) => (
-            <tr
-              key={rowKey ? rowKey(row, i) : i}
-              class={[rowClass?.(row, i), onRowClick ? "tbl-row-link" : ""].filter(Boolean).join(" ") || undefined}
-              onClick={onRowClick ? () => onRowClick(row) : undefined}
-            >
-              {columns.map((col, ci) => (
-                <td key={ci} class={col.className}>{col.cell(row, i)}</td>
-              ))}
-            </tr>
-          ))}
+          ) : (
+            data.map((row, i) => (
+              <tr
+                key={rowKey ? rowKey(row, i) : i}
+                class={[rowClass?.(row, i), onRowClick ? "tbl-row-link" : ""].filter(Boolean).join(" ") || undefined}
+                onClick={onRowClick ? () => onRowClick(row) : undefined}
+              >
+                {columns.map((col, ci) => (
+                  <td key={ci} class={col.className}>
+                    {col.cell(row, i)}
+                  </td>
+                ))}
+              </tr>
+            ))
+          )}
         </tbody>
       </table>
     </div>
@@ -161,12 +177,17 @@ export function ApiDataTable<T>({
   const [offset, setOffset] = useState(0);
   const [pageSize, setPageSize] = useState(ADMIN_LIST_PAGE_SIZE_DEFAULT);
   const page = pageSize > 0 ? Math.floor(offset / pageSize) + 1 : 1;
-  function resetPage() { setOffset(0); }
+  function resetPage() {
+    setOffset(0);
+  }
 
   // ── search state ────────────────────────────────────────────────────────
   const [search, setSearch] = useState("");
   const [pendingSearch, setPendingSearch] = useState("");
-  function applySearch() { setSearch(pendingSearch); setOffset(0); }
+  function applySearch() {
+    setSearch(pendingSearch);
+    setOffset(0);
+  }
 
   // ── data fetching ───────────────────────────────────────────────────────
   const [data, setData] = useState<unknown>(null);
@@ -194,10 +215,11 @@ export function ApiDataTable<T>({
       setError((e as Error).message);
       setLoading(false);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [endpoint, search, pageSize, offset, JSON.stringify(params), ...deps]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   // ── expose actions to parent ────────────────────────────────────────────
   const actions: ApiTableActions = { reload: load, resetPage };
@@ -219,7 +241,10 @@ export function ApiDataTable<T>({
     onPrev: () => setOffset((o) => Math.max(0, o - pageSize)),
     onNext: () => setOffset((o) => o + pageSize),
     onJump: (p: number) => setOffset((p - 1) * pageSize),
-    onPageSizeChange: (s: number) => { setPageSize(s); setOffset(0); },
+    onPageSizeChange: (s: number) => {
+      setPageSize(s);
+      setOffset(0);
+    },
   };
 
   // ── render ──────────────────────────────────────────────────────────────
@@ -236,15 +261,23 @@ export function ApiDataTable<T>({
               placeholder={searchPlaceholder}
               value={pendingSearch}
               onInput={(e) => setPendingSearch((e.target as HTMLInputElement).value)}
-              onKeyDown={(e) => { if (e.key === "Enter") applySearch(); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") applySearch();
+              }}
             />
           )}
           {toolbar?.(actions)}
-          <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void load()}>↺ Refresh</button>
+          <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void load()}>
+            ↺ Refresh
+          </button>
         </div>
       )}
 
-      {loading ? <Spinner /> : error ? <ErrorAlert error={error} /> : (
+      {loading ? (
+        <Spinner />
+      ) : error ? (
+        <ErrorAlert error={error} />
+      ) : (
         <>
           <DataTable
             columns={columns}

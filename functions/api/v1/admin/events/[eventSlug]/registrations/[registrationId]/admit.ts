@@ -4,7 +4,10 @@ import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { first, run } from "../../../../../../../_lib/db/queries";
 import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { getRegistrationDayAttendance, listEventDays } from "../../../../../../../_lib/services/event-days";
-import { setRegistrationCapacityExempt, syncRegistrationDayWaitlist } from "../../../../../../../_lib/services/registrations/day-waitlist";
+import {
+  setRegistrationCapacityExempt,
+  syncRegistrationDayWaitlist,
+} from "../../../../../../../_lib/services/registrations/day-waitlist";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { nowIso } from "../../../../../../../_lib/utils/time";
 import { uuid } from "../../../../../../../_lib/utils/ids";
@@ -21,9 +24,7 @@ interface RegistrationRow {
   attendance_type: "in_person" | "virtual" | "on_demand";
 }
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
   const body = await parseJsonBody(c.req, adminRegistrationAdmitSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
@@ -40,7 +41,10 @@ export async function onRequestPost(
   }
 
   if (registration.status === "cancelled") {
-    return json({ error: { code: "REGISTRATION_CANCELLED", message: "Cancelled registrations cannot be admitted" } }, 409);
+    return json(
+      { error: { code: "REGISTRATION_CANCELLED", message: "Cancelled registrations cannot be admitted" } },
+      409,
+    );
   }
 
   const reason = `${body.mode}:${body.reason}`;
@@ -51,11 +55,10 @@ export async function onRequestPost(
   });
 
   if (registration.status === "waitlisted") {
-    await run(
-      c.env.DB,
-      "UPDATE registrations SET status = 'registered', updated_at = ? WHERE id = ?",
-      [nowIso(), registration.id],
-    );
+    await run(c.env.DB, "UPDATE registrations SET status = 'registered', updated_at = ? WHERE id = ?", [
+      nowIso(),
+      registration.id,
+    ]);
     await run(
       c.env.DB,
       `UPDATE waitlist_entries
@@ -75,7 +78,10 @@ export async function onRequestPost(
     for (const dayDate of admittedDayDates) {
       const day = dayByDate.get(dayDate);
       if (!day) {
-        return json({ error: { code: "DAY_NOT_CONFIGURED", message: `Day '${dayDate}' is not configured for this event` } }, 400);
+        return json(
+          { error: { code: "DAY_NOT_CONFIGURED", message: `Day '${dayDate}' is not configured for this event` } },
+          400,
+        );
       }
 
       await run(
@@ -103,20 +109,12 @@ export async function onRequestPost(
     capacityExemptReason: reason,
   });
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "registration_admitted",
-    "registration",
-    registration.id,
-    {
-      mode: body.mode,
-      reason: body.reason,
-      admittedDayDates,
-      capacityExemptReason: reason,
-    },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "registration_admitted", "registration", registration.id, {
+    mode: body.mode,
+    reason: body.reason,
+    admittedDayDates,
+    capacityExemptReason: reason,
+  });
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const outbox = await queueRegistrationStatusEmail(c.env.DB, {
@@ -128,11 +126,9 @@ export async function onRequestPost(
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outbox.outboxId));
 
-  const updated = await first<Record<string, unknown>>(
-    c.env.DB,
-    "SELECT * FROM registrations WHERE id = ?",
-    [registration.id],
-  );
+  const updated = await first<Record<string, unknown>>(c.env.DB, "SELECT * FROM registrations WHERE id = ?", [
+    registration.id,
+  ]);
 
   return json({
     success: true,
@@ -141,9 +137,7 @@ export async function onRequestPost(
   });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

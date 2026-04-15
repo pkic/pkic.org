@@ -286,7 +286,13 @@ export async function syncRegistrationDayWaitlist(
 
     const confirmed = await countConfirmedInPersonForDay(db, day.id, payload.registrationId);
     if (confirmed < day.in_person_capacity) {
-      if (existing && (existing.status === "waiting" || existing.status === "offered" || existing.status === "expired" || existing.status === "removed")) {
+      if (
+        existing &&
+        (existing.status === "waiting" ||
+          existing.status === "offered" ||
+          existing.status === "expired" ||
+          existing.status === "removed")
+      ) {
         await setWaitlistStatus(db, existing.id, "accepted");
       }
       continue;
@@ -300,11 +306,11 @@ export async function syncRegistrationDayWaitlist(
           excludeEventDayId: day.id,
         });
 
-        await run(
-          db,
-          "UPDATE event_day_waitlist_entries SET priority_lane = ?, updated_at = ? WHERE id = ?",
-          [lane, nowIso(), existing.id],
-        );
+        await run(db, "UPDATE event_day_waitlist_entries SET priority_lane = ?, updated_at = ? WHERE id = ?", [
+          lane,
+          nowIso(),
+          existing.id,
+        ]);
       }
       continue;
     }
@@ -366,11 +372,10 @@ export async function claimOfferedDayWaitlist(
   await expireDayWaitlistOffers(db, payload.eventId);
 
   for (const selection of selections) {
-    const day = await first<{ id: string }>(
-      db,
-      "SELECT id FROM event_days WHERE event_id = ? AND day_date = ?",
-      [payload.eventId, selection.dayDate],
-    );
+    const day = await first<{ id: string }>(db, "SELECT id FROM event_days WHERE event_id = ? AND day_date = ?", [
+      payload.eventId,
+      selection.dayDate,
+    ]);
     if (!day) {
       continue;
     }
@@ -458,7 +463,10 @@ export async function promoteDayWaitlistForEventDays(
   }
 }
 
-export async function listInPersonEventDayIdsForRegistration(db: DatabaseLike, registrationId: string): Promise<string[]> {
+export async function listInPersonEventDayIdsForRegistration(
+  db: DatabaseLike,
+  registrationId: string,
+): Promise<string[]> {
   const rows = await all<{ event_day_id: string }>(
     db,
     `SELECT event_day_id

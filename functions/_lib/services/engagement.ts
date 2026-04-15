@@ -29,7 +29,7 @@ export async function recordEngagement(
   },
 ): Promise<void> {
   const subjectType = payload.subjectType ?? (payload.eventId ? "event" : "community");
-  const subjectRef = payload.subjectRef ?? (subjectType === "event" ? payload.eventId ?? null : null);
+  const subjectRef = payload.subjectRef ?? (subjectType === "event" ? (payload.eventId ?? null) : null);
   const data = payload.data ?? payload.metadata ?? null;
 
   await run(

@@ -12,7 +12,7 @@ export interface HeadshotPreviewOptions {
 
 function classNames(...inputs: ClassListInput[]): string {
   return inputs
-    .flatMap((c) => (Array.isArray(c) ? c : c?.split(/\s+/) ?? []))
+    .flatMap((c) => (Array.isArray(c) ? c : (c?.split(/\s+/) ?? [])))
     .filter(Boolean)
     .join(" ");
 }
@@ -28,13 +28,7 @@ function HeadshotPreviewContent({
   const emptyLabel = options?.emptyLabel ?? "No headshot uploaded yet.";
 
   if (headshotUrl) {
-    return (
-      <img
-        src={headshotUrl}
-        alt={alt}
-        class={classNames("pkic-headshot-preview__image", options?.imageClass)}
-      />
-    );
+    return <img src={headshotUrl} alt={alt} class={classNames("pkic-headshot-preview__image", options?.imageClass)} />;
   }
 
   return (

@@ -1,11 +1,21 @@
 import { parseJsonBody } from "../../../../_lib/validation";
 import { handleError, json } from "../../../../_lib/http";
-import { updateRegistrationByManageToken, updateRegistrationById, changeRegistrationEmail } from "../../../../_lib/services/registrations";
+import {
+  updateRegistrationByManageToken,
+  updateRegistrationById,
+  changeRegistrationEmail,
+} from "../../../../_lib/services/registrations";
 import { resolveManageToken } from "../../../../_lib/services/manage-token";
 import { first } from "../../../../_lib/db/queries";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
-import { countRegisteredByEventDay, deriveEventAttendanceType, getRegistrationDayAttendance, listEventDays, resolveAttendanceOptions } from "../../../../_lib/services/event-days";
+import {
+  countRegisteredByEventDay,
+  deriveEventAttendanceType,
+  getRegistrationDayAttendance,
+  listEventDays,
+  resolveAttendanceOptions,
+} from "../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../_lib/services/registrations/day-waitlist";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
 import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../_lib/services/frontend-links";
@@ -26,37 +36,49 @@ export async function onRequestPatch(c: any): Promise<Response> {
     const { registration: current, isJwt } = resolved;
 
     const event = current
-      ? await first<{ id: string; slug: string; name: string; base_path: string | null; starts_at: string | null; settings_json: string }>(
-        c.env.DB,
-        "SELECT id, slug, name, base_path, starts_at, settings_json FROM events WHERE id = ?",
-        [current.event_id],
-      )
+      ? await first<{
+          id: string;
+          slug: string;
+          name: string;
+          base_path: string | null;
+          starts_at: string | null;
+          settings_json: string;
+        }>(c.env.DB, "SELECT id, slug, name, base_path, starts_at, settings_json FROM events WHERE id = ?", [
+          current.event_id,
+        ])
       : null;
-    const customAnswers = body.customAnswers && event
-      ? await validateCustomAnswersByPurpose(c.env.DB, {
-        eventId: event.id,
-        purpose: "event_registration",
-        customAnswers: body.customAnswers,
-      })
-      : {};
+    const customAnswers =
+      body.customAnswers && event
+        ? await validateCustomAnswersByPurpose(c.env.DB, {
+            eventId: event.id,
+            purpose: "event_registration",
+            customAnswers: body.customAnswers,
+          })
+        : {};
 
     const updated = isJwt
-      ? await updateRegistrationById(c.env.DB, { registrationId: current.id, action: body.action,
+      ? await updateRegistrationById(
+          c.env.DB,
+          {
+            registrationId: current.id,
+            action: body.action,
+            attendanceType: body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined,
+            dayAttendance: body.dayAttendance,
+            customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,
+            sourceRef: body.sourceRef,
+            waitlistClaimWindowHours: config.waitlistClaimWindowHours,
+          },
+          "admin",
+        )
+      : await updateRegistrationByManageToken(c.env.DB, {
+          manageToken: token,
+          action: body.action,
           attendanceType: body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined,
           dayAttendance: body.dayAttendance,
           customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,
           sourceRef: body.sourceRef,
           waitlistClaimWindowHours: config.waitlistClaimWindowHours,
-        }, "admin")
-      : await updateRegistrationByManageToken(c.env.DB, {
-      manageToken: token,
-      action: body.action,
-      attendanceType: body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined,
-      dayAttendance: body.dayAttendance,
-      customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,
-      sourceRef: body.sourceRef,
-      waitlistClaimWindowHours: config.waitlistClaimWindowHours,
-    });
+        });
 
     // Audit log — capture what changed, including status transitions
     await writeAuditLog(
@@ -78,15 +100,27 @@ export async function onRequestPatch(c: any): Promise<Response> {
     if (body.action === "update" && (body.firstName || body.lastName || body.organizationName || body.jobTitle)) {
       const setParts: string[] = [];
       const setValues: unknown[] = [];
-      if (body.firstName !== undefined) { setParts.push("first_name = ?"); setValues.push(body.firstName); }
-      if (body.lastName !== undefined) { setParts.push("last_name = ?"); setValues.push(body.lastName); }
-      if (body.organizationName !== undefined) { setParts.push("organization_name = ?"); setValues.push(body.organizationName); }
-      if (body.jobTitle !== undefined) { setParts.push("job_title = ?"); setValues.push(body.jobTitle); }
+      if (body.firstName !== undefined) {
+        setParts.push("first_name = ?");
+        setValues.push(body.firstName);
+      }
+      if (body.lastName !== undefined) {
+        setParts.push("last_name = ?");
+        setValues.push(body.lastName);
+      }
+      if (body.organizationName !== undefined) {
+        setParts.push("organization_name = ?");
+        setValues.push(body.organizationName);
+      }
+      if (body.jobTitle !== undefined) {
+        setParts.push("job_title = ?");
+        setValues.push(body.jobTitle);
+      }
       if (setParts.length > 0) {
         setValues.push(updated.user_id);
-        await c.env.DB.prepare(
-          `UPDATE users SET ${setParts.join(", ")} WHERE id = ?`
-        ).bind(...setValues).run();
+        await c.env.DB.prepare(`UPDATE users SET ${setParts.join(", ")} WHERE id = ?`)
+          .bind(...setValues)
+          .run();
       }
     }
 
@@ -109,15 +143,27 @@ export async function onRequestPatch(c: any): Promise<Response> {
         if (body.firstName || body.lastName || body.organizationName || body.jobTitle) {
           const setParts: string[] = [];
           const setValues: unknown[] = [];
-          if (body.firstName !== undefined) { setParts.push("first_name = ?"); setValues.push(body.firstName); }
-          if (body.lastName !== undefined) { setParts.push("last_name = ?"); setValues.push(body.lastName); }
-          if (body.organizationName !== undefined) { setParts.push("organization_name = ?"); setValues.push(body.organizationName); }
-          if (body.jobTitle !== undefined) { setParts.push("job_title = ?"); setValues.push(body.jobTitle); }
+          if (body.firstName !== undefined) {
+            setParts.push("first_name = ?");
+            setValues.push(body.firstName);
+          }
+          if (body.lastName !== undefined) {
+            setParts.push("last_name = ?");
+            setValues.push(body.lastName);
+          }
+          if (body.organizationName !== undefined) {
+            setParts.push("organization_name = ?");
+            setValues.push(body.organizationName);
+          }
+          if (body.jobTitle !== undefined) {
+            setParts.push("job_title = ?");
+            setValues.push(body.jobTitle);
+          }
           if (setParts.length > 0) {
             setValues.push(emailResult.newUserId);
-            await c.env.DB.prepare(
-              `UPDATE users SET ${setParts.join(", ")} WHERE id = ?`
-            ).bind(...setValues).run();
+            await c.env.DB.prepare(`UPDATE users SET ${setParts.join(", ")} WHERE id = ?`)
+              .bind(...setValues)
+              .run();
           }
         }
 
@@ -135,13 +181,22 @@ export async function onRequestPatch(c: any): Promise<Response> {
         const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
         const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, emailResult.confirmationToken);
         const newUser = await first<{
-          email: string; first_name: string | null; last_name: string | null;
-          organization_name: string | null; job_title: string | null;
-        }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [emailResult.newUserId]);
+          email: string;
+          first_name: string | null;
+          last_name: string | null;
+          organization_name: string | null;
+          job_title: string | null;
+        }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [
+          emailResult.newUserId,
+        ]);
         if (newUser) {
           const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
           const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, updated.id);
-          const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
+          const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
+            updated.attendance_type,
+            dayAttendanceRaw,
+            dayWaitlist,
+          );
           const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, updated.custom_answers_json);
           const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, updated.id);
           const outboxId = await queueEmail(c.env.DB, {
@@ -184,29 +239,37 @@ export async function onRequestPatch(c: any): Promise<Response> {
         last_name: string | null;
         organization_name: string | null;
         job_title: string | null;
-      }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [updated.user_id]);
+      }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [
+        updated.user_id,
+      ]);
       if (event && user) {
         const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
         const manageUrl = registrationManagePageUrl(appBaseUrl, event, token);
-        const templateKey = body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated";
+        const templateKey =
+          body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated";
         const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
         const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, updated.id);
-        const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
-        const customAnswerRows = body.action !== "report_unauthorized"
-          ? await getCustomAnswerRows(c.env.DB, event.id, updated.custom_answers_json)
-          : [];
-        const acceptedTermsText = body.action !== "report_unauthorized"
-          ? await getAcceptedTermsTextForRegistration(c.env.DB, updated.id)
-          : "";
+        const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
+          updated.attendance_type,
+          dayAttendanceRaw,
+          dayWaitlist,
+        );
+        const customAnswerRows =
+          body.action !== "report_unauthorized"
+            ? await getCustomAnswerRows(c.env.DB, event.id, updated.custom_answers_json)
+            : [];
+        const acceptedTermsText =
+          body.action !== "report_unauthorized" ? await getAcceptedTermsTextForRegistration(c.env.DB, updated.id) : "";
         const outboxId = await queueEmail(c.env.DB, {
           eventId: event.id,
           templateKey,
           recipientEmail: user.email,
           recipientUserId: updated.user_id,
           messageType: "transactional",
-          subject: body.action === "report_unauthorized"
-            ? `Your registration for ${event.name} has been cancelled and your data removed`
-            : `Registration updated for ${event.name}`,
+          subject:
+            body.action === "report_unauthorized"
+              ? `Your registration for ${event.name} has been cancelled and your data removed`
+              : `Registration updated for ${event.name}`,
           data: {
             ...buildEventEmailVariables(event, appBaseUrl),
             firstName: user.first_name ?? "",
@@ -259,9 +322,11 @@ export async function onRequestGet(c: any): Promise<Response> {
       organization_name: string | null;
       job_title: string | null;
       headshot_r2_key: string | null;
-    }>(c.env.DB, "SELECT id, email, first_name, last_name, organization_name, job_title, headshot_r2_key FROM users WHERE id = ?", [
-      registration.user_id,
-    ]);
+    }>(
+      c.env.DB,
+      "SELECT id, email, first_name, last_name, organization_name, job_title, headshot_r2_key FROM users WHERE id = ?",
+      [registration.user_id],
+    );
     const eventDays = await listEventDays(c.env.DB, registration.event_id);
     const dayAttendance = await getRegistrationDayAttendance(c.env.DB, registration.id);
     const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
@@ -308,9 +373,7 @@ export async function onRequestGet(c: any): Promise<Response> {
             const capacity = option.capacity ?? null;
             const registered = registeredCounts.get(day.id)?.get(option.value) ?? 0;
             const spotsRemainingPercent =
-              capacity != null && capacity > 0
-                ? Math.round(((capacity - registered) / capacity) * 100)
-                : null;
+              capacity != null && capacity > 0 ? Math.round(((capacity - registered) / capacity) * 100) : null;
             return { value: option.value, label: option.label, spotsRemainingPercent };
           }),
         }));

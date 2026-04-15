@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach} from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { onRequestPost as requestLink } from "../functions/api/v1/admin/auth/request-link";
@@ -94,21 +94,22 @@ describe("admin magic-link auth", () => {
     };
     const email = `rate-limit-${crypto.randomUUID()}@example.test`;
 
-    const makeRequest = () => requestLink(
-      createContext(
-        limitedEnv,
-        new Request("https://app.test/api/v1/admin/auth/request-link", {
-          method: "POST",
-          body: JSON.stringify({ email }),
-          headers: {
-            "content-type": "application/json",
-            "cf-connecting-ip": "203.0.113.10",
-            "user-agent": "test-browser",
-          },
-        }),
-        {},
-      ),
-    );
+    const makeRequest = () =>
+      requestLink(
+        createContext(
+          limitedEnv,
+          new Request("https://app.test/api/v1/admin/auth/request-link", {
+            method: "POST",
+            body: JSON.stringify({ email }),
+            headers: {
+              "content-type": "application/json",
+              "cf-connecting-ip": "203.0.113.10",
+              "user-agent": "test-browser",
+            },
+          }),
+          {},
+        ),
+      );
 
     expect((await makeRequest()).status).toBe(200);
     expect((await makeRequest()).status).toBe(200);

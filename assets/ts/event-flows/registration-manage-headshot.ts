@@ -36,7 +36,7 @@ export function wireHeadshotSection(
         method: "PUT",
         body: form,
       });
-      const data = await res.json() as { success?: boolean; headshotUrl?: string; error?: { message?: string } };
+      const data = (await res.json()) as { success?: boolean; headshotUrl?: string; error?: { message?: string } };
       if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`);
       return { headshotUrl: data.headshotUrl ?? null };
     },
@@ -45,7 +45,7 @@ export function wireHeadshotSection(
         method: "DELETE",
       });
       if (!res.ok) {
-        const data = await res.json() as { error?: { message?: string } };
+        const data = (await res.json()) as { error?: { message?: string } };
         throw new Error(data.error?.message ?? `HTTP ${res.status}`);
       }
     },

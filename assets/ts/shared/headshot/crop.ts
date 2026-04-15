@@ -30,11 +30,7 @@ export function cropHeadshot(file: File): Promise<Blob | null> {
 
 function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void): void {
   // ── Get or create modal from template ──────────────────────────────────────
-  const modal = mountModalTemplate(
-    "crop-headshot-template",
-    "crop-headshot-modal",
-    "Crop headshot",
-  );
+  const modal = mountModalTemplate("crop-headshot-template", "crop-headshot-modal", "Crop headshot");
   if (!modal) {
     done(null);
     return;
@@ -92,12 +88,17 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void)
 
   // ── Drag to pan ───────────────────────────────────────────────────────────
   let dragging = false;
-  let dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0;
+  let dragStartX = 0,
+    dragStartY = 0,
+    panStartX = 0,
+    panStartY = 0;
 
   viewport.addEventListener("pointerdown", (e) => {
     dragging = true;
-    dragStartX = e.clientX; dragStartY = e.clientY;
-    panStartX = panX; panStartY = panY;
+    dragStartX = e.clientX;
+    dragStartY = e.clientY;
+    panStartX = panX;
+    panStartY = panY;
     viewport.classList.add("dragging");
     viewport.setPointerCapture((e as PointerEvent).pointerId);
   });
@@ -128,20 +129,24 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void)
   });
 
   // ── Mouse-wheel zoom ──────────────────────────────────────────────────────
-  viewport.addEventListener("wheel", (e) => {
-    e.preventDefault();
-    const delta = e.deltaY > 0 ? -0.05 : 0.05;
-    const newScale = Math.min(maxScale, Math.max(minScale, scale * (1 + delta)));
-    const rect = viewport.getBoundingClientRect();
-    const cx = e.clientX - rect.left;
-    const cy = e.clientY - rect.top;
-    panX = cx - ((cx - panX) / scale) * newScale;
-    panY = cy - ((cy - panY) / scale) * newScale;
-    scale = newScale;
-    clampPan();
-    applyTransform();
-    slider.value = String(((scale - minScale) / (maxScale - minScale)) * 100);
-  }, { passive: false });
+  viewport.addEventListener(
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      const delta = e.deltaY > 0 ? -0.05 : 0.05;
+      const newScale = Math.min(maxScale, Math.max(minScale, scale * (1 + delta)));
+      const rect = viewport.getBoundingClientRect();
+      const cx = e.clientX - rect.left;
+      const cy = e.clientY - rect.top;
+      panX = cx - ((cx - panX) / scale) * newScale;
+      panY = cy - ((cy - panY) / scale) * newScale;
+      scale = newScale;
+      clampPan();
+      applyTransform();
+      slider.value = String(((scale - minScale) / (maxScale - minScale)) * 100);
+    },
+    { passive: false },
+  );
 
   // ── Event handlers ────────────────────────────────────────────────────────
   function dismiss(blob: Blob | null): void {
@@ -150,23 +155,29 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void)
   }
 
   cancelBtn.addEventListener("click", () => dismiss(null), { once: true });
-  overlay.addEventListener("click", (e) => { if (e.target === overlay) dismiss(null); });
+  overlay.addEventListener("click", (e) => {
+    if (e.target === overlay) dismiss(null);
+  });
 
-  confirmBtn.addEventListener("click", () => {
-    confirmBtn.disabled = true;
-    confirmBtn.textContent = "Processing…";
+  confirmBtn.addEventListener(
+    "click",
+    () => {
+      confirmBtn.disabled = true;
+      confirmBtn.textContent = "Processing…";
 
-    const canvas = document.createElement("canvas");
-    canvas.width = CROP_OUTPUT_SIZE;
-    canvas.height = CROP_OUTPUT_SIZE;
-    const ctx = canvas.getContext("2d")!;
+      const canvas = document.createElement("canvas");
+      canvas.width = CROP_OUTPUT_SIZE;
+      canvas.height = CROP_OUTPUT_SIZE;
+      const ctx = canvas.getContext("2d")!;
 
-    const srcX = -panX / scale;
-    const srcY = -panY / scale;
-    const srcSize = viewportSize / scale;
+      const srcX = -panX / scale;
+      const srcY = -panY / scale;
+      const srcSize = viewportSize / scale;
 
-    ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, CROP_OUTPUT_SIZE, CROP_OUTPUT_SIZE);
+      ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, CROP_OUTPUT_SIZE, CROP_OUTPUT_SIZE);
 
-    canvas.toBlob((blob) => dismiss(blob), "image/jpeg", 0.92);
-  }, { once: true });
+      canvas.toBlob((blob) => dismiss(blob), "image/jpeg", 0.92);
+    },
+    { once: true },
+  );
 }

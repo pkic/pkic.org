@@ -39,10 +39,7 @@ async function onPut(c: any): Promise<Response> {
 
   const contentType = c.req.raw.headers.get("content-type") ?? "";
   if (!contentType.includes("multipart/form-data")) {
-    return json(
-      { error: { code: "INVALID_CONTENT_TYPE", message: "Request must be multipart/form-data" } },
-      400,
-    );
+    return json({ error: { code: "INVALID_CONTENT_TYPE", message: "Request must be multipart/form-data" } }, 400);
   }
 
   const formData = await c.req.raw.formData();
@@ -112,21 +109,17 @@ async function onPut(c: any): Promise<Response> {
     customMetadata: { source: "attendee_self_upload" },
   });
 
-  await run(
-    c.env.DB,
-    "UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ? WHERE id = ?",
-    [r2Key, nowIso(), nowIso(), user.id],
-  );
+  await run(c.env.DB, "UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ? WHERE id = ?", [
+    r2Key,
+    nowIso(),
+    nowIso(),
+    user.id,
+  ]);
 
-  await writeAuditLog(
-    c.env.DB,
-    "user",
-    user.id,
-    "headshot_uploaded_by_attendee",
-    "user",
-    user.id,
-    { r2Key, registrationId: registration.id },
-  );
+  await writeAuditLog(c.env.DB, "user", user.id, "headshot_uploaded_by_attendee", "user", user.id, {
+    r2Key,
+    registrationId: registration.id,
+  });
 
   const appOrigin = resolveAppBaseUrl(c.env, c.req.raw);
   await invalidateAndRerender(user.id, c.env, appOrigin);
@@ -167,15 +160,9 @@ async function onDelete(c: any): Promise<Response> {
     [nowIso(), user.id],
   );
 
-  await writeAuditLog(
-    c.env.DB,
-    "user",
-    user.id,
-    "headshot_deleted_by_attendee",
-    "user",
-    user.id,
-    { registrationId: registration.id },
-  );
+  await writeAuditLog(c.env.DB, "user", user.id, "headshot_deleted_by_attendee", "user", user.id, {
+    registrationId: registration.id,
+  });
 
   const origin = resolveAppBaseUrl(c.env, c.req.raw);
   await invalidateAndRerender(user.id, c.env, origin);
@@ -195,7 +182,7 @@ export class RegistrationsManageTokenHeadshotPut extends OpenAPIRoute {
   schema = {};
 
   async handle(c: any) {
-    return onPut(c as any);
+    return onPut(c);
   }
 }
 
@@ -203,6 +190,6 @@ export class RegistrationsManageTokenHeadshotDelete extends OpenAPIRoute {
   schema = {};
 
   async handle(c: any) {
-    return onDelete(c as any);
+    return onDelete(c);
   }
 }

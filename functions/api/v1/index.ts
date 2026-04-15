@@ -18,6 +18,6 @@ export class RouteGet extends OpenAPIRoute {
   schema = {};
 
   async handle(c: any) {
-    return onRequest(c as any);
+    return onRequest(c);
   }
 }

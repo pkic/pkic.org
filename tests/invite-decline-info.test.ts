@@ -1,15 +1,15 @@
-import { describe, it, expect, beforeEach} from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createInvite } from "../functions/_lib/services/invites";
 import { onRequestGet as declineInfoGet } from "../functions/api/v1/invites/[token]/decline-info";
-import {
-  onRequestPost as declinePost,
-} from "../functions/api/v1/invites/[token]/decline";
+import { onRequestPost as declinePost } from "../functions/api/v1/invites/[token]/decline";
 
 describe("invite decline-info", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it("returns valid status with event name and first name for an active invite", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -26,7 +26,7 @@ describe("invite decline-info", () => {
     );
 
     expect(response.status).toBe(200);
-    const data = await response.json() as { status: string; inviteeFirstName: string | null };
+    const data = (await response.json()) as { status: string; inviteeFirstName: string | null };
     expect(data.status).toBe("valid");
     expect(data.inviteeFirstName).toBe("Alice");
   });
@@ -58,7 +58,7 @@ describe("invite decline-info", () => {
     );
 
     expect(response.status).toBe(200);
-    const data = await response.json() as { status: string };
+    const data = (await response.json()) as { status: string };
     expect(data.status).toBe("already_processed");
   });
 
@@ -66,15 +66,13 @@ describe("invite decline-info", () => {
     await seedEventAndAdmin(env.DB);
 
     const response = await declineInfoGet(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/invites/notarealtoken12345/decline-info"),
-        { token: "notarealtoken12345" },
-      ),
+      createContext(env, new Request("https://app.test/api/v1/invites/notarealtoken12345/decline-info"), {
+        token: "notarealtoken12345",
+      }),
     );
 
     expect(response.status).toBe(200);
-    const data = await response.json() as { status: string };
+    const data = (await response.json()) as { status: string };
     expect(data.status).toBe("invalid");
   });
 
@@ -105,10 +103,11 @@ describe("invite decline-info", () => {
 
     expect(response.status).toBe(200);
 
-    const row = ((await queryAll<{ nps_score: number }>(env.DB, 
-      "SELECT nps_score FROM invites WHERE invitee_email = ?",
-      ["nps-test@example.test"],
-    )))[0];
+    const row = (
+      await queryAll<{ nps_score: number }>(env.DB, "SELECT nps_score FROM invites WHERE invitee_email = ?", [
+        "nps-test@example.test",
+      ])
+    )[0];
 
     expect(row.nps_score).toBe(8);
   });

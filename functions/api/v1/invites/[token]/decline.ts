@@ -46,30 +46,36 @@ export async function onRequestPost(c: any): Promise<Response> {
     if (event) {
       for (const contact of body.forwards) {
         try {
-            const { invite: newInvite, token: inviteToken, isNew } = await createInvite(c.env.DB, {
-              eventId: invite.event_id,
-              inviteeEmail: contact.email,
-              inviteeFirstName: contact.firstName ?? null,
-              inviteeLastName: contact.lastName ?? null,
-              inviteType: invite.invite_type,
-              sourceType: "declined-forward",
-              ttlHours: invite.invite_type === "speaker" ? 24 * 21 : 24 * 14,
-            });
+          const {
+            invite: newInvite,
+            token: inviteToken,
+            isNew,
+          } = await createInvite(c.env.DB, {
+            eventId: invite.event_id,
+            inviteeEmail: contact.email,
+            inviteeFirstName: contact.firstName ?? null,
+            inviteeLastName: contact.lastName ?? null,
+            inviteType: invite.invite_type,
+            sourceType: "declined-forward",
+            ttlHours: invite.invite_type === "speaker" ? 24 * 21 : 24 * 14,
+          });
 
-            // Do not send a new email if the contact already has an active invite.
-            if (!isNew) continue;
-          const registrationUrl = invite.invite_type === "attendee"
-            ? registrationPageUrl(appBaseUrl, event, {
-              invite: inviteToken,
-              source: "invite",
-            })
-            : undefined;
-          const proposalUrl = invite.invite_type === "speaker"
-            ? proposalPageUrl(appBaseUrl, event, {
-              invite: inviteToken,
-              source: "speaker_invite_forward",
-            })
-            : undefined;
+          // Do not send a new email if the contact already has an active invite.
+          if (!isNew) continue;
+          const registrationUrl =
+            invite.invite_type === "attendee"
+              ? registrationPageUrl(appBaseUrl, event, {
+                  invite: inviteToken,
+                  source: "invite",
+                })
+              : undefined;
+          const proposalUrl =
+            invite.invite_type === "speaker"
+              ? proposalPageUrl(appBaseUrl, event, {
+                  invite: inviteToken,
+                  source: "speaker_invite_forward",
+                })
+              : undefined;
           const declineUrl = inviteDeclineUrl(appBaseUrl, event, inviteToken);
 
           const outboxId = await queueEmail(c.env.DB, {
@@ -77,9 +83,8 @@ export async function onRequestPost(c: any): Promise<Response> {
             templateKey: invite.invite_type === "speaker" ? "speaker_invite" : "attendee_invite",
             recipientEmail: newInvite.invitee_email,
             messageType: "transactional",
-            subject: invite.invite_type === "speaker"
-              ? `Speaker invitation: ${event.name}`
-              : `Invitation: ${event.name}`,
+            subject:
+              invite.invite_type === "speaker" ? `Speaker invitation: ${event.name}` : `Invitation: ${event.name}`,
             data: {
               ...buildEventEmailVariables(event, appBaseUrl),
               firstName: newInvite.invitee_first_name ?? "",

@@ -80,9 +80,10 @@ export function normalizeValidation(error: unknown): ValidationState {
   );
 
   const formError = details?.formErrors?.[0] ?? error.message;
-  const globalMessage = formError === "Invalid custom answers" && Object.keys(flattened).length > 0
-    ? "Please correct the highlighted custom fields."
-    : formError;
+  const globalMessage =
+    formError === "Invalid custom answers" && Object.keys(flattened).length > 0
+      ? "Please correct the highlighted custom fields."
+      : formError;
   return {
     globalMessage,
     fields: flattened,

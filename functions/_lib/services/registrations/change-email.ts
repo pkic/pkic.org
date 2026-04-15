@@ -36,11 +36,9 @@ export async function changeRegistrationEmail(
     confirmationTtlHours: number;
   },
 ): Promise<ChangeEmailResult> {
-  const registration = await first<RegistrationRecord>(
-    db,
-    "SELECT * FROM registrations WHERE id = ?",
-    [params.registrationId],
-  );
+  const registration = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [
+    params.registrationId,
+  ]);
   if (!registration) {
     throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
   }
@@ -58,7 +56,11 @@ export async function changeRegistrationEmail(
     last_name: string | null;
     organization_name: string | null;
     job_title: string | null;
-  }>(db, "SELECT id, email, normalized_email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [registration.user_id]);
+  }>(
+    db,
+    "SELECT id, email, normalized_email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?",
+    [registration.user_id],
+  );
   if (!currentUser) {
     throw new AppError(500, "USER_NOT_FOUND", "Associated user record is missing");
   }
@@ -76,7 +78,11 @@ export async function changeRegistrationEmail(
     last_name: string | null;
     organization_name: string | null;
     job_title: string | null;
-  }>(db, "SELECT id, email, first_name, last_name, organization_name, job_title FROM users WHERE normalized_email = ?", [newNormalized]);
+  }>(
+    db,
+    "SELECT id, email, first_name, last_name, organization_name, job_title FROM users WHERE normalized_email = ?",
+    [newNormalized],
+  );
 
   let newUserId: string;
   const now = nowIso();
@@ -89,11 +95,7 @@ export async function changeRegistrationEmail(
       [registration.event_id, existingUser.id, registration.id],
     );
     if (conflict) {
-      throw new AppError(
-        409,
-        "REGISTRATION_EXISTS",
-        "A registration with this email already exists for this event",
-      );
+      throw new AppError(409, "REGISTRATION_EXISTS", "A registration with this email already exists for this event");
     }
     newUserId = existingUser.id;
   } else {
@@ -138,11 +140,7 @@ export async function changeRegistrationEmail(
     [newUserId, confirmationTokenHash, confirmationExpiresAt, now, registration.id],
   );
 
-  const updated = await first<RegistrationRecord>(
-    db,
-    "SELECT * FROM registrations WHERE id = ?",
-    [registration.id],
-  );
+  const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
   if (!updated) {
     throw new AppError(500, "EMAIL_CHANGE_FAILED", "Failed to update registration");
   }

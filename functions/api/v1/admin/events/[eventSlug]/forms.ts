@@ -32,9 +32,7 @@ interface FormRow {
   submission_count: number;
 }
 
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
@@ -57,9 +55,7 @@ export async function onRequestGet(
   return json({ forms });
 }
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminFormCreateSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
@@ -71,17 +67,7 @@ export async function onRequestPost(
     c.env.DB,
     `INSERT INTO forms (id, key, scope_type, scope_ref, purpose, status, title, description, created_at, updated_at)
      VALUES (?, ?, 'event', ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      formId,
-      body.key,
-      event.id,
-      body.purpose,
-      body.status,
-      body.title,
-      body.description ?? null,
-      now,
-      now,
-    ],
+    [formId, body.key, event.id, body.purpose, body.status, body.title, body.description ?? null, now, now],
   );
 
   for (const field of body.fields) {
@@ -104,22 +90,16 @@ export async function onRequestPost(
     );
   }
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "event_form_created",
-    "form",
-    formId,
-    { eventSlug: event.slug, key: body.key, purpose: body.purpose },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "event_form_created", "form", formId, {
+    eventSlug: event.slug,
+    key: body.key,
+    purpose: body.purpose,
+  });
 
   return json({ success: true, formId, key: body.key }, 201);
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "POST") return onRequestPost(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

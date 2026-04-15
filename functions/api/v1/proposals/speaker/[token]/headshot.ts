@@ -14,10 +14,7 @@
 import { json } from "../../../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
-import {
-  getSpeakerByManageToken,
-  updateSpeakerProfile,
-} from "../../../../../_lib/services/proposals";
+import { getSpeakerByManageToken, updateSpeakerProfile } from "../../../../../_lib/services/proposals";
 import { AppError } from "../../../../../_lib/errors";
 
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
@@ -55,10 +52,7 @@ export async function onRequestPut(c: any): Promise<Response> {
   const { speaker, user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
 
   if (speaker.status === "declined") {
-    return json(
-      { error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } },
-      403,
-    );
+    return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
   }
 
   const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
@@ -69,10 +63,7 @@ export async function onRequestPut(c: any): Promise<Response> {
 
   const contentType = c.req.raw.headers.get("content-type") ?? "";
   if (!contentType.includes("multipart/form-data")) {
-    return json(
-      { error: { code: "INVALID_CONTENT_TYPE", message: "Request must be multipart/form-data" } },
-      400,
-    );
+    return json({ error: { code: "INVALID_CONTENT_TYPE", message: "Request must be multipart/form-data" } }, 400);
   }
 
   const formData = await c.req.raw.formData();
@@ -97,10 +88,7 @@ export async function onRequestPut(c: any): Promise<Response> {
   }
 
   if (blob.size > MAX_HEADSHOT_BYTES) {
-    return json(
-      { error: { code: "FILE_TOO_LARGE", message: "Headshot must be under 20 MB." } },
-      413,
-    );
+    return json({ error: { code: "FILE_TOO_LARGE", message: "Headshot must be under 20 MB." } }, 413);
   }
 
   const ext = blob.type === "image/png" ? "png" : blob.type === "image/webp" ? "webp" : "jpg";

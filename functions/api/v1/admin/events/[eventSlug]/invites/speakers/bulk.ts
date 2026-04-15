@@ -8,9 +8,7 @@ import { bulkQueueInviteEmails } from "../../../../../../../_lib/email/outbox";
 import { proposalPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
 import { adminBulkSpeakerInvitesSchema } from "../../../../../../../../assets/shared/schemas/api";
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw);
   const body = await parseJsonBody(c.req, adminBulkSpeakerInvitesSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));

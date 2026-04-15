@@ -31,10 +31,7 @@ function CustomFieldRow({
   initialValue?: unknown;
 }) {
   const isBoolean = field.fieldType === "boolean";
-  const className = [
-    isBoolean ? "form-check mb-3" : "mb-3",
-    !visible ? "visually-hidden" : "",
-  ]
+  const className = [isBoolean ? "form-check mb-3" : "mb-3", !visible ? "visually-hidden" : ""]
     .filter(Boolean)
     .join(" ");
 
@@ -67,19 +64,10 @@ function CustomFieldRow({
     }
   }, [visible]);
 
-  const widget = (
-    <CustomFieldInput
-      field={field}
-      geoHint={geoHint}
-      initialValue={initialValue}
-    />
-  );
+  const widget = <CustomFieldInput field={field} geoHint={geoHint} initialValue={initialValue} />;
 
   const label = (
-    <label
-      class={isBoolean ? "form-check-label" : "form-label"}
-      for={`custom-${field.key}`}
-    >
+    <label class={isBoolean ? "form-check-label" : "form-label"} for={`custom-${field.key}`}>
       {field.label}
     </label>
   );
@@ -163,10 +151,7 @@ export interface CustomFieldsController {
  * Returns a controller that lets callers update visibility context, apply geo
  * hints, or pre-fill values — all via Preact re-renders.
  */
-export function renderCustomFields(
-  container: HTMLElement,
-  fields: FormField[],
-): CustomFieldsController {
+export function renderCustomFields(container: HTMLElement, fields: FormField[]): CustomFieldsController {
   // Clear any server-rendered placeholder (e.g. "Loading…") before Preact
   // takes over. CustomFieldList returns a Fragment, so Preact's first diff
   // may not remove pre-existing children reliably.
@@ -178,12 +163,7 @@ export function renderCustomFields(
 
   function update() {
     render(
-      <CustomFieldList
-        fields={fields}
-        context={ctx}
-        geoHint={geoHint}
-        initialValues={initialValues}
-      />,
+      <CustomFieldList fields={fields} context={ctx} geoHint={geoHint} initialValues={initialValues} />,
       container,
     );
   }
@@ -225,9 +205,7 @@ function writeValuesToDOM(container: HTMLElement, answers: Record<string, unknow
 
     // Checkbox groups (multi_select with checkboxes widget)
     if (Array.isArray(value)) {
-      const checkboxes = container.querySelectorAll<HTMLInputElement>(
-        `input[type='checkbox'][name='custom.${key}[]']`,
-      );
+      const checkboxes = container.querySelectorAll<HTMLInputElement>(`input[type='checkbox'][name='custom.${key}[]']`);
       if (checkboxes.length > 0) {
         const strValues = value.map(String);
         for (const cb of Array.from(checkboxes)) {
@@ -325,7 +303,9 @@ export function readCustomFieldValues(form: HTMLFormElement): Record<string, Fie
     handled.add(key);
   }
 
-  const checkboxes = form.querySelectorAll<HTMLInputElement>("input[type='checkbox'][name^='custom.']:not([name$='[]'])");
+  const checkboxes = form.querySelectorAll<HTMLInputElement>(
+    "input[type='checkbox'][name^='custom.']:not([name$='[]'])",
+  );
   for (const checkbox of Array.from(checkboxes)) {
     const key = checkbox.name.replace(/^custom\./, "");
     payload[key] = checkbox.checked;

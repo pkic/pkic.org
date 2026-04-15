@@ -37,22 +37,12 @@ export async function onRequestPost(c: any): Promise<Response> {
     ...(body.data ?? {}),
   };
   const partials = await loadEmailPartials(c.env.DB);
-  const layoutHtml = body.layoutHtml ?? await loadEmailLayout(c.env.DB);
+  const layoutHtml = body.layoutHtml ?? (await loadEmailLayout(c.env.DB));
   const dataWithPartials = { ...data, _partials: partials };
 
-  const subject = renderSubject(
-    body.subjectTemplate ?? null,
-    "PKI Consortium Preview Subject",
-    dataWithPartials,
-  );
+  const subject = renderSubject(body.subjectTemplate ?? null, "PKI Consortium Preview Subject", dataWithPartials);
 
-  const rendered = await renderEmail(
-    body.content,
-    dataWithPartials,
-    layoutHtml,
-    body.contentType,
-    appBaseUrl,
-  );
+  const rendered = await renderEmail(body.content, dataWithPartials, layoutHtml, body.contentType, appBaseUrl);
 
   return json({
     success: true,

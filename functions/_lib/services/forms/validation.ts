@@ -96,8 +96,10 @@ function parseValidationRules(value: JsonValue | null): ValidationRules {
       );
     }
 
-    if ((showWhen.dayAttendanceIn && showWhen.dayAttendanceIn.length > 0)
-      || (showWhen.eventAttendanceTypeIn && showWhen.eventAttendanceTypeIn.length > 0)) {
+    if (
+      (showWhen.dayAttendanceIn && showWhen.dayAttendanceIn.length > 0) ||
+      (showWhen.eventAttendanceTypeIn && showWhen.eventAttendanceTypeIn.length > 0)
+    ) {
       rules.showWhen = showWhen;
     }
   }
@@ -208,7 +210,11 @@ function hostAllowed(urlString: string, allowedDomains: string[]): boolean {
   }
 }
 
-function normalizeAnswer(field: FormFieldDefinition, value: unknown, rules: ValidationRules): CustomAnswerValue | undefined {
+function normalizeAnswer(
+  field: FormFieldDefinition,
+  value: unknown,
+  rules: ValidationRules,
+): CustomAnswerValue | undefined {
   if (rules.format === "date_range") return toDateRange(value);
 
   switch (field.fieldType) {
@@ -264,9 +270,12 @@ function validateAnswer(
   }
 
   if (typeof value === "number") {
-    if (rules.format === "integer" && !Number.isInteger(value)) addFieldError(errors, field.key, `${field.label} must be an integer`);
-    if (rules.min !== undefined && value < rules.min) addFieldError(errors, field.key, `${field.label} must be at least ${rules.min}`);
-    if (rules.max !== undefined && value > rules.max) addFieldError(errors, field.key, `${field.label} must be at most ${rules.max}`);
+    if (rules.format === "integer" && !Number.isInteger(value))
+      addFieldError(errors, field.key, `${field.label} must be an integer`);
+    if (rules.min !== undefined && value < rules.min)
+      addFieldError(errors, field.key, `${field.label} must be at least ${rules.min}`);
+    if (rules.max !== undefined && value > rules.max)
+      addFieldError(errors, field.key, `${field.label} must be at most ${rules.max}`);
     return;
   }
 
@@ -300,30 +309,39 @@ function validateAnswer(
   }
 
   if (typeof value === "string") {
-    if (rules.minLength !== undefined && value.length < rules.minLength) addFieldError(errors, field.key, `${field.label} must be at least ${rules.minLength} characters`);
-    if (rules.maxLength !== undefined && value.length > rules.maxLength) addFieldError(errors, field.key, `${field.label} must be at most ${rules.maxLength} characters`);
+    if (rules.minLength !== undefined && value.length < rules.minLength)
+      addFieldError(errors, field.key, `${field.label} must be at least ${rules.minLength} characters`);
+    if (rules.maxLength !== undefined && value.length > rules.maxLength)
+      addFieldError(errors, field.key, `${field.label} must be at most ${rules.maxLength} characters`);
 
     if (rules.pattern) {
       try {
         const regex = new RegExp(rules.pattern);
-        if (!regex.test(value)) addFieldError(errors, field.key, rules.patternMessage ?? `${field.label} has invalid format`);
+        if (!regex.test(value))
+          addFieldError(errors, field.key, rules.patternMessage ?? `${field.label} has invalid format`);
       } catch {
         addFieldError(errors, field.key, `${field.label} has invalid validation pattern configuration`);
       }
     }
 
-    if (rules.format === "email" && !isEmailString(value)) addFieldError(errors, field.key, `${field.label} must be a valid email address`);
-    if (rules.format === "phone" && !isPhoneString(value)) addFieldError(errors, field.key, `${field.label} must be a valid phone number`);
-    if (rules.format === "date" && !isDateString(value)) addFieldError(errors, field.key, `${field.label} must be a valid date`);
+    if (rules.format === "email" && !isEmailString(value))
+      addFieldError(errors, field.key, `${field.label} must be a valid email address`);
+    if (rules.format === "phone" && !isPhoneString(value))
+      addFieldError(errors, field.key, `${field.label} must be a valid phone number`);
+    if (rules.format === "date" && !isDateString(value))
+      addFieldError(errors, field.key, `${field.label} must be a valid date`);
 
     if (rules.format === "professional_profile") {
-      const allowed = rules.allowedDomains && rules.allowedDomains.length > 0 ? rules.allowedDomains : PROFESSIONAL_DOMAINS;
-      if (!hostAllowed(value, allowed)) addFieldError(errors, field.key, `${field.label} must be a supported professional profile URL`);
+      const allowed =
+        rules.allowedDomains && rules.allowedDomains.length > 0 ? rules.allowedDomains : PROFESSIONAL_DOMAINS;
+      if (!hostAllowed(value, allowed))
+        addFieldError(errors, field.key, `${field.label} must be a supported professional profile URL`);
     }
 
     if ((field.fieldType === "select" || field.fieldType === "multi_select") && rules.allowCustom !== true) {
       const options = optionValues(field.options);
-      if (options.length > 0 && !options.includes(value)) addFieldError(errors, field.key, `${field.label} must be one of the configured options`);
+      if (options.length > 0 && !options.includes(value))
+        addFieldError(errors, field.key, `${field.label} must be one of the configured options`);
     }
   }
 }

@@ -56,7 +56,7 @@ async function inviteSpeakerAndSubmitProposal(): Promise<{ speakerManageToken: s
     ),
   );
   expect(inviteResponse.status).toBe(200);
-  const { created } = await inviteResponse.json() as { created: Array<{ inviteToken: string }> };
+  const { created } = (await inviteResponse.json()) as { created: Array<{ inviteToken: string }> };
   const inviteToken = created[0].inviteToken;
 
   // Submit a proposal with the invite
@@ -89,7 +89,7 @@ async function inviteSpeakerAndSubmitProposal(): Promise<{ speakerManageToken: s
     ),
   );
   expect(proposalResponse.status).toBe(200);
-  const { proposalId } = await proposalResponse.json() as { proposalId: string };
+  const { proposalId } = (await proposalResponse.json()) as { proposalId: string };
 
   // Get the proposer's user ID
   const users = await queryAll<{ id: string }>(
@@ -121,9 +121,7 @@ async function inviteSpeakerAndSubmitProposal(): Promise<{ speakerManageToken: s
 describe("speaker self-management endpoints", () => {
   beforeEach(async () => {
     await resetDb();
-    fetchMock = vi.fn().mockResolvedValue(
-      new Response(null, { status: 202, headers: { "x-message-id": "msg-1" } }),
-    );
+    fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "msg-1" } }));
     vi.stubGlobal("fetch", fetchMock);
   });
 
@@ -136,15 +134,13 @@ describe("speaker self-management endpoints", () => {
     const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
 
     const response = await speakerGet(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`),
-        { token: speakerManageToken },
-      ),
+      createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`), {
+        token: speakerManageToken,
+      }),
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       speaker: { role: string; status: string };
       proposal: { title: string; status: string };
       profile: { firstName: string; email: string };
@@ -159,15 +155,13 @@ describe("speaker self-management endpoints", () => {
     await setupWorkflow();
 
     const response = await speakerGet(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/proposals/speaker/bogus-token"),
-        { token: "bogus-token" },
-      ),
+      createContext(env, new Request("https://app.test/api/v1/proposals/speaker/bogus-token"), {
+        token: "bogus-token",
+      }),
     );
 
     expect(response.status).toBe(404);
-    const body = await response.json() as { error: { code: string; message: string } };
+    const body = (await response.json()) as { error: { code: string; message: string } };
     expect(body.error.code).toBe("SPEAKER_TOKEN_NOT_FOUND");
   });
 
@@ -191,7 +185,7 @@ describe("speaker self-management endpoints", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { success: boolean; status: string };
+    const body = (await response.json()) as { success: boolean; status: string };
     expect(body.success).toBe(true);
     expect(body.status).toBe("confirmed");
   });
@@ -216,7 +210,7 @@ describe("speaker self-management endpoints", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { success: boolean; status: string };
+    const body = (await response.json()) as { success: boolean; status: string };
     expect(body.success).toBe(true);
     expect(body.status).toBe("declined");
   });
@@ -233,9 +227,7 @@ describe("speaker self-management endpoints", () => {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             biography: "Updated bio with post-quantum expertise.",
-            links: [
-              { label: "LinkedIn", url: "https://linkedin.com/in/speaker" },
-            ],
+            links: [{ label: "LinkedIn", url: "https://linkedin.com/in/speaker" }],
           }),
         }),
         { token: speakerManageToken },
@@ -246,13 +238,11 @@ describe("speaker self-management endpoints", () => {
 
     // Verify the profile was updated
     const getResponse = await speakerGet(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`),
-        { token: speakerManageToken },
-      ),
+      createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`), {
+        token: speakerManageToken,
+      }),
     );
-    const profile = await getResponse.json() as { profile: { biography: string } };
+    const profile = (await getResponse.json()) as { profile: { biography: string } };
     expect(profile.profile.biography).toBe("Updated bio with post-quantum expertise.");
   });
 });
@@ -260,9 +250,7 @@ describe("speaker self-management endpoints", () => {
 describe("speaker nomination by attendees", () => {
   beforeEach(async () => {
     await resetDb();
-    fetchMock = vi.fn().mockResolvedValue(
-      new Response(null, { status: 202, headers: { "x-message-id": "msg-1" } }),
-    );
+    fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "msg-1" } }));
     vi.stubGlobal("fetch", fetchMock);
   });
 
@@ -309,11 +297,13 @@ describe("speaker nomination by attendees", () => {
     const confirmResponse = await confirmRegistrationEmail(
       createContext(
         env,
-        new Request(`https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(confirmToken)}`),
+        new Request(
+          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(confirmToken)}`,
+        ),
         { eventSlug: "pqc-2026" },
       ),
     );
-    const confirmPayload = await confirmResponse.json() as { manageToken: string };
+    const confirmPayload = (await confirmResponse.json()) as { manageToken: string };
     return confirmPayload.manageToken;
   }
 
@@ -338,7 +328,7 @@ describe("speaker nomination by attendees", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       success: boolean;
       created: Array<{ email: string }>;
     };
@@ -365,7 +355,7 @@ describe("speaker nomination by attendees", () => {
     );
 
     expect(response.status).toBe(401);
-    const body = await response.json() as { error: { code: string } };
+    const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("AUTH_REQUIRED");
   });
 });

@@ -18,7 +18,9 @@ import { onRequestPost as inviteAccept } from "../functions/api/v1/invites/[toke
 import { onRequestPost as inviteReminders } from "../functions/api/v1/invites/[token]/reminders";
 
 describe("invite info endpoint", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
 
   it("returns invite metadata for a valid pending attendee invite", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
@@ -36,7 +38,7 @@ describe("invite info endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       status: string;
       eventName: string | null;
       inviteeFirstName: string | null;
@@ -66,7 +68,7 @@ describe("invite info endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       status: string;
       inviteType: string;
       proposalUrl: string | null;
@@ -84,7 +86,7 @@ describe("invite info endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { status: string };
+    const body = (await response.json()) as { status: string };
     expect(body.status).toBe("invalid");
   });
 
@@ -105,7 +107,7 @@ describe("invite info endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { status: string };
+    const body = (await response.json()) as { status: string };
     expect(body.status).toBe("already_processed");
   });
 
@@ -126,7 +128,7 @@ describe("invite info endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { status: string };
+    const body = (await response.json()) as { status: string };
     expect(body.status).toBe("already_processed");
   });
 
@@ -138,7 +140,9 @@ describe("invite info endpoint", () => {
     await env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, role, active, created_at, updated_at)
        VALUES (?, 'inviter@example.test', 'inviter@example.test', 'Jane', 'Smith', 'Acme Corp', 'user', 1, datetime('now'), datetime('now'))`,
-    ).bind(inviterUserId).run();
+    )
+      .bind(inviterUserId)
+      .run();
 
     const { token } = await createInvite(env.DB, {
       eventId,
@@ -154,7 +158,7 @@ describe("invite info endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       inviters: Array<{ firstName: string; lastName: string }>;
       totalInviters: number;
     };
@@ -169,9 +173,7 @@ describe("invite accept endpoint", () => {
 
   beforeEach(async () => {
     await resetDb();
-    fetchMock = vi.fn().mockResolvedValue(
-      new Response(null, { status: 202, headers: { "x-message-id": "msg-1" } }),
-    );
+    fetchMock = vi.fn().mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "msg-1" } }));
     vi.stubGlobal("fetch", fetchMock);
   });
 
@@ -202,7 +204,7 @@ describe("invite accept endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { success: boolean; inviteType: string; next: string };
+    const body = (await response.json()) as { success: boolean; inviteType: string; next: string };
     expect(body.success).toBe(true);
     expect(body.inviteType).toBe("speaker");
     expect(body.next).toContain("propose");
@@ -243,7 +245,7 @@ describe("invite accept endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as {
+    const body = (await response.json()) as {
       success: boolean;
       registrationId: string;
       status: string;
@@ -286,7 +288,7 @@ describe("invite accept endpoint", () => {
     );
 
     expect(response.status).toBe(400);
-    const body = await response.json() as { error: { code: string } };
+    const body = (await response.json()) as { error: { code: string } };
     expect(body.error.code).toBe("EMAIL_MISMATCH");
   });
 
@@ -310,7 +312,9 @@ describe("invite accept endpoint", () => {
 });
 
 describe("invite reminders endpoint", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
 
   it("postpones reminders for 7 days", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
@@ -335,7 +339,7 @@ describe("invite reminders endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { success: boolean; state: string; pausedUntil: string };
+    const body = (await response.json()) as { success: boolean; state: string; pausedUntil: string };
     expect(body.success).toBe(true);
     expect(body.state).toBe("postponed");
     expect(body.pausedUntil).toBeTruthy();
@@ -364,7 +368,7 @@ describe("invite reminders endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { success: boolean; state: string };
+    const body = (await response.json()) as { success: boolean; state: string };
     expect(body.success).toBe(true);
     expect(body.state).toBe("paused");
   });
@@ -406,7 +410,7 @@ describe("invite reminders endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { success: boolean; state: string };
+    const body = (await response.json()) as { success: boolean; state: string };
     expect(body.success).toBe(true);
     expect(body.state).toBe("active");
   });
@@ -434,7 +438,7 @@ describe("invite reminders endpoint", () => {
     );
 
     expect(response.status).toBe(200);
-    const body = await response.json() as { success: boolean; state: string };
+    const body = (await response.json()) as { success: boolean; state: string };
     expect(body.success).toBe(true);
     expect(body.state).toBe("unsubscribed");
 

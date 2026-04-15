@@ -1,13 +1,19 @@
-import { describe, expect, it, beforeEach} from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
-import { createRegistration, confirmRegistrationByToken, updateRegistrationByManageToken } from "../functions/_lib/services/registrations";
+import {
+  createRegistration,
+  confirmRegistrationByToken,
+  updateRegistrationByManageToken,
+} from "../functions/_lib/services/registrations";
 import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
 
 describe("day attendance capacity", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it("waitlists only the full day instead of rejecting registration", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -26,8 +32,12 @@ describe("day attendance capacity", () => {
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
 
-    const firstUser = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'attendee-one@example.test'")))[0];
-    const secondUser = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'attendee-two@example.test'")))[0];
+    const firstUser = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'attendee-one@example.test'")
+    )[0];
+    const secondUser = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'attendee-two@example.test'")
+    )[0];
 
     await createRegistration(env.DB, {
       event,
@@ -48,7 +58,8 @@ describe("day attendance capacity", () => {
     });
 
     expect(second.registration.status).toBe("pending_email_confirmation");
-    const waitlist = await queryAll<{ status: string; priority_lane: string }>(env.DB, 
+    const waitlist = await queryAll<{ status: string; priority_lane: string }>(
+      env.DB,
       "SELECT status, priority_lane FROM event_day_waitlist_entries WHERE registration_id = ?",
       [second.registration.id],
     );
@@ -109,7 +120,8 @@ describe("day attendance capacity", () => {
 
     expect(cancelled.status).toBe("cancelled");
 
-    const waitlist = await queryAll<{ status: string }>(env.DB,
+    const waitlist = await queryAll<{ status: string }>(
+      env.DB,
       "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?",
       [second.registration.id],
     );
@@ -160,7 +172,9 @@ describe("day attendance capacity", () => {
       waitlistClaimWindowHours: 24,
     });
 
-    await env.DB.prepare("UPDATE event_days SET in_person_capacity = 2, updated_at = datetime('now') WHERE id = 'day-1'").run();
+    await env.DB.prepare(
+      "UPDATE event_days SET in_person_capacity = 2, updated_at = datetime('now') WHERE id = 'day-1'",
+    ).run();
 
     const promoted = await promoteDayWaitlistIfCapacity(env.DB, {
       eventId,
@@ -171,7 +185,8 @@ describe("day attendance capacity", () => {
     expect(promoted?.registration_id).toBe(second.registration.id);
     expect(promoted?.status).toBe("offered");
 
-    const beforeClaim = await queryAll<{ status: string }>(env.DB,
+    const beforeClaim = await queryAll<{ status: string }>(
+      env.DB,
       "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?",
       [second.registration.id],
     );
@@ -185,7 +200,8 @@ describe("day attendance capacity", () => {
       waitlistClaimWindowHours: 24,
     });
 
-    const afterClaim = await queryAll<{ status: string }>(env.DB,
+    const afterClaim = await queryAll<{ status: string }>(
+      env.DB,
       "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?",
       [second.registration.id],
     );

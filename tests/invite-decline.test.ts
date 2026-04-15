@@ -1,15 +1,14 @@
-import { describe, it, expect, beforeEach} from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createInvite } from "../functions/_lib/services/invites";
-import {
-  onRequestGet as declineGet,
-  onRequestPost as declinePost,
-} from "../functions/api/v1/invites/[token]/decline";
+import { onRequestGet as declineGet, onRequestPost as declinePost } from "../functions/api/v1/invites/[token]/decline";
 
 describe("invite decline", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it("GET redirects to the Hugo-managed decline page", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -113,17 +112,23 @@ describe("invite decline", () => {
     const data = await response.json();
     expect(data).toMatchObject({ success: true, forwarded: [] });
 
-    const invite = ((await queryAll<{ decline_reason_code: string; decline_reason_note: string | null }>(env.DB, 
-      "SELECT decline_reason_code, decline_reason_note FROM invites WHERE invitee_email = ?",
-      ["reason-store@example.test"],
-    )))[0];
+    const invite = (
+      await queryAll<{ decline_reason_code: string; decline_reason_note: string | null }>(
+        env.DB,
+        "SELECT decline_reason_code, decline_reason_note FROM invites WHERE invitee_email = ?",
+        ["reason-store@example.test"],
+      )
+    )[0];
     expect(invite.decline_reason_code).toBe("schedule_conflict");
     expect(invite.decline_reason_note).toBeNull();
 
-    const unsub = ((await queryAll<{ total: number }>(env.DB, 
-      "SELECT COUNT(*) AS total FROM unsubscribes WHERE email = ? AND channel = 'invites'",
-      ["reason-store@example.test"],
-    )))[0];
+    const unsub = (
+      await queryAll<{ total: number }>(
+        env.DB,
+        "SELECT COUNT(*) AS total FROM unsubscribes WHERE email = ? AND channel = 'invites'",
+        ["reason-store@example.test"],
+      )
+    )[0];
     expect(Number(unsub.total)).toBe(1);
   });
 
@@ -145,10 +150,7 @@ describe("invite decline", () => {
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             reasonCode: "travel_not_possible",
-            forwards: [
-              { email: "colleague1@example.test", firstName: "Alice" },
-              { email: "colleague2@example.test" },
-            ],
+            forwards: [{ email: "colleague1@example.test", firstName: "Alice" }, { email: "colleague2@example.test" }],
           }),
         }),
         { token },
@@ -156,22 +158,26 @@ describe("invite decline", () => {
     );
 
     expect(response.status).toBe(200);
-  const data = (await response.json()) as { success: boolean; forwarded: string[] };
+    const data = (await response.json()) as { success: boolean; forwarded: string[] };
     expect(data.success).toBe(true);
     expect(data.forwarded).toContain("colleague1@example.test");
     expect(data.forwarded).toContain("colleague2@example.test");
 
-    const fwd1 = ((await queryAll<{ source_type: string; invitee_first_name: string }>(env.DB, 
-      "SELECT source_type, invitee_first_name FROM invites WHERE invitee_email = ?",
-      ["colleague1@example.test"],
-    )))[0];
+    const fwd1 = (
+      await queryAll<{ source_type: string; invitee_first_name: string }>(
+        env.DB,
+        "SELECT source_type, invitee_first_name FROM invites WHERE invitee_email = ?",
+        ["colleague1@example.test"],
+      )
+    )[0];
     expect(fwd1.source_type).toBe("declined-forward");
     expect(fwd1.invitee_first_name).toBe("Alice");
 
-    const fwd2 = ((await queryAll<{ source_type: string }>(env.DB, 
-      "SELECT source_type FROM invites WHERE invitee_email = ?",
-      ["colleague2@example.test"],
-    )))[0];
+    const fwd2 = (
+      await queryAll<{ source_type: string }>(env.DB, "SELECT source_type FROM invites WHERE invitee_email = ?", [
+        "colleague2@example.test",
+      ])
+    )[0];
     expect(fwd2.source_type).toBe("declined-forward");
   });
 

@@ -23,10 +23,7 @@ interface AuditLogRow {
   created_at: string;
 }
 
-async function fetchAuditLog(
-  db: DatabaseLike,
-  registrationId: string,
-): Promise<AuditLogRow[]> {
+async function fetchAuditLog(db: DatabaseLike, registrationId: string): Promise<AuditLogRow[]> {
   return all<AuditLogRow>(
     db,
     `SELECT
@@ -54,11 +51,10 @@ export async function onRequestGet(c: any): Promise<Response> {
   const registrationId = c.req.param("registrationId");
 
   // Verify the registration belongs to this event
-  const reg = await first<{ id: string }>(
-    c.env.DB,
-    "SELECT id FROM registrations WHERE id = ? AND event_id = ?",
-    [registrationId, event.id],
-  );
+  const reg = await first<{ id: string }>(c.env.DB, "SELECT id FROM registrations WHERE id = ? AND event_id = ?", [
+    registrationId,
+    event.id,
+  ]);
   if (!reg) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
@@ -68,7 +64,15 @@ export async function onRequestGet(c: any): Promise<Response> {
   // Parse details_json for the caller so it does not have to JSON.parse each row
   const parsed = entries.map((e) => ({
     ...e,
-    details: e.details_json ? (() => { try { return JSON.parse(e.details_json); } catch { return null; } })() : null,
+    details: e.details_json
+      ? (() => {
+          try {
+            return JSON.parse(e.details_json);
+          } catch {
+            return null;
+          }
+        })()
+      : null,
     details_json: undefined,
   }));
 

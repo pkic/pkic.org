@@ -2,7 +2,11 @@ import { render, createRef } from "preact";
 import type { ComponentChildren } from "preact";
 import { getJson, postJson } from "../shared/api-client";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
-import { renderCustomFields, readCustomFieldValues, type CustomFieldsController } from "../shared/widgets/custom-fields";
+import {
+  renderCustomFields,
+  readCustomFieldValues,
+  type CustomFieldsController,
+} from "../shared/widgets/custom-fields";
 import { readDayAttendance, renderDayAttendance } from "../shared/widgets/day-attendance";
 import { renderSharePanel } from "../shared/widgets/share-panel";
 import { renderDonationCta } from "../shared/donation/cta";
@@ -49,12 +53,11 @@ function showSuccessPanel(
     body = (
       <>
         <p class="event-flow-success-body">
-          We've sent a confirmation link to your email address. Click it to
-          complete your registration — it takes just one click.
+          We've sent a confirmation link to your email address. Click it to complete your registration — it takes just
+          one click.
         </p>
         <p class="text-muted small mb-0">
-          Can't find it? Check your spam folder, or contact us if it doesn't
-          arrive within a few minutes.
+          Can't find it? Check your spam folder, or contact us if it doesn't arrive within a few minutes.
         </p>
       </>
     );
@@ -64,10 +67,12 @@ function showSuccessPanel(
     showShare = !!result.shareUrl;
     body = (
       <p class="event-flow-success-body">
-        In-person spots are fully booked. We've added you to the waitlist
-        and will notify you by email if a spot becomes available.
+        In-person spots are fully booked. We've added you to the waitlist and will notify you by email if a spot becomes
+        available.
         {result.manageUrl && (
-          <a href={result.manageUrl} class="d-block mt-2">Manage your waitlist entry</a>
+          <a href={result.manageUrl} class="d-block mt-2">
+            Manage your waitlist entry
+          </a>
         )}
       </p>
     );
@@ -77,8 +82,7 @@ function showSuccessPanel(
     showShare = !!result.shareUrl;
     body = (
       <p class="event-flow-success-body">
-        A confirmation email with your calendar invite is on its way.
-        {" "}
+        A confirmation email with your calendar invite is on its way.{" "}
         {result.manageUrl && <a href={result.manageUrl}>Manage your registration</a>}
       </p>
     );
@@ -174,7 +178,6 @@ async function main(): Promise<void> {
     // Apply Cloudflare geo hint to any country-select widgets.
     // Fire-and-forget: we don't block form load on this.
     if (customFields) void applyGeoHint(customFields, apiBase);
-
   } catch {
     setStatus(statusEl, "Could not load registration form details.", true);
   }
@@ -228,9 +231,24 @@ async function main(): Promise<void> {
           consents: readConsentValues(form),
         });
 
-        const result = await postJson<RegistrationSubmitResponse>(`${apiBase}/events/${eventSlug}/registrations`, payload, eventPathHeaders);
+        const result = await postJson<RegistrationSubmitResponse>(
+          `${apiBase}/events/${eventSlug}/registrations`,
+          payload,
+          eventPathHeaders,
+        );
         clearReferralSession();
-        showSuccessPanel(boot.root, form, result, firstName, payload.lastName, payload.email, "", eventName, boot.eventSlug, eventDayCount || undefined);
+        showSuccessPanel(
+          boot.root,
+          form,
+          result,
+          firstName,
+          payload.lastName,
+          payload.email,
+          "",
+          eventName,
+          boot.eventSlug,
+          eventDayCount || undefined,
+        );
       } catch (error) {
         handleSubmitError(error, form, statusEl);
       }
@@ -239,4 +257,3 @@ async function main(): Promise<void> {
 }
 
 void main();
-

@@ -26,9 +26,7 @@ interface ExistingPermRow {
   id: string;
 }
 
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
@@ -47,9 +45,7 @@ export async function onRequestGet(
   return json({ permissions });
 }
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEventPermissionSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
@@ -68,11 +64,9 @@ export async function onRequestPost(
   }
 
   // Resolve user_id if the person has an account
-  const userRow = await first<{ id: string }>(
-    c.env.DB,
-    "SELECT id FROM users WHERE normalized_email = ?",
-    [normalizedEmail],
-  );
+  const userRow = await first<{ id: string }>(c.env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
+    normalizedEmail,
+  ]);
 
   const id = uuid();
   const now = nowIso();
@@ -84,22 +78,15 @@ export async function onRequestPost(
     [id, event.id, normalizedEmail, userRow?.id ?? null, body.permission, admin.id, now],
   );
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "event_permission_granted",
-    "event",
-    event.id,
-    { email: normalizedEmail, permission: body.permission },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "event_permission_granted", "event", event.id, {
+    email: normalizedEmail,
+    permission: body.permission,
+  });
 
   return json({ permission: { id, user_email: normalizedEmail, permission: body.permission, created_at: now } }, 201);
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "POST") return onRequestPost(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

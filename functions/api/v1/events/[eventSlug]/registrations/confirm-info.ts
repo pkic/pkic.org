@@ -38,7 +38,14 @@ export async function onRequestGet(c: any): Promise<Response> {
   c.set("sensitive", true);
   const token = new URL(c.req.raw.url).searchParams.get("token");
 
-  const empty: ConfirmInfoResponse = { firstName: null, lastName: null, email: null, organizationName: null, eventName: null, expired: false };
+  const empty: ConfirmInfoResponse = {
+    firstName: null,
+    lastName: null,
+    email: null,
+    organizationName: null,
+    eventName: null,
+    expired: false,
+  };
 
   if (!token || token.trim().length === 0) {
     return json(empty);
@@ -63,9 +70,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   const now = nowIso();
-  const expired = Boolean(
-    row.confirmation_token_expires_at && row.confirmation_token_expires_at < now,
-  );
+  const expired = Boolean(row.confirmation_token_expires_at && row.confirmation_token_expires_at < now);
 
   return json({
     firstName: row.first_name ?? null,

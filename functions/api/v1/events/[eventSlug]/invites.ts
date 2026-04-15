@@ -37,17 +37,16 @@ export async function onRequestPost(c: any): Promise<Response> {
   const maxAllowed = event.invite_limit_attendee ?? config.inviteLimitPerAttendee;
 
   // Look up inviter name once — used to personalise invite emails.
-  const inviterUser = await first<{ first_name: string | null; last_name: string | null; organization_name: string | null }>(
-    c.env.DB,
-    "SELECT first_name, last_name, organization_name FROM users WHERE id = ?",
-    [registration.user_id],
-  );
-  const inviterBaseName = inviterUser
-    ? [inviterUser.first_name, inviterUser.last_name].filter(Boolean).join(" ")
-    : "";
-  const inviterName = inviterBaseName && inviterUser?.organization_name
-    ? `${inviterBaseName} (${inviterUser.organization_name})`
-    : inviterBaseName;
+  const inviterUser = await first<{
+    first_name: string | null;
+    last_name: string | null;
+    organization_name: string | null;
+  }>(c.env.DB, "SELECT first_name, last_name, organization_name FROM users WHERE id = ?", [registration.user_id]);
+  const inviterBaseName = inviterUser ? [inviterUser.first_name, inviterUser.last_name].filter(Boolean).join(" ") : "";
+  const inviterName =
+    inviterBaseName && inviterUser?.organization_name
+      ? `${inviterBaseName} (${inviterUser.organization_name})`
+      : inviterBaseName;
 
   let referralCode = await first<{ code: string }>(
     c.env.DB,
@@ -72,12 +71,15 @@ export async function onRequestPost(c: any): Promise<Response> {
   let inviteCount = await countInvitesByInviter(c.env.DB, event.id, registration.user_id);
 
   if (inviteCount + body.invites.length > maxAllowed) {
-    return json({
-      error: {
-        code: "INVITE_LIMIT_EXCEEDED",
-        message: `Invite limit reached. You can send up to ${maxAllowed} invitations for this event.`,
+    return json(
+      {
+        error: {
+          code: "INVITE_LIMIT_EXCEEDED",
+          message: `Invite limit reached. You can send up to ${maxAllowed} invitations for this event.`,
+        },
       },
-    }, 429);
+      429,
+    );
   }
 
   const created: Array<{ email: string }> = [];
@@ -95,7 +97,11 @@ export async function onRequestPost(c: any): Promise<Response> {
     }
 
     try {
-      const { invite, token: inviteToken, isNew } = await createInvite(c.env.DB, {
+      const {
+        invite,
+        token: inviteToken,
+        isNew,
+      } = await createInvite(c.env.DB, {
         eventId: event.id,
         inviterUserId: registration.user_id,
         inviterRegistrationId: registration.id,
@@ -136,11 +142,12 @@ export async function onRequestPost(c: any): Promise<Response> {
         endorsed.push({ email: invite.invitee_email });
       }
     } catch (err) {
-      if (err instanceof AppError && (
-        err.code === "INVITEE_ALREADY_REGISTERED"
-        || err.code === "INVITEE_ALREADY_PROPOSED"
-        || err.code === "INVITEE_UNSUBSCRIBED"
-      )) {
+      if (
+        err instanceof AppError &&
+        (err.code === "INVITEE_ALREADY_REGISTERED" ||
+          err.code === "INVITEE_ALREADY_PROPOSED" ||
+          err.code === "INVITEE_UNSUBSCRIBED")
+      ) {
         skipped.push({ email: item.email, reason: err.code.toLowerCase() });
       } else {
         throw err;

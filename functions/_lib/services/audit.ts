@@ -34,9 +34,11 @@ export function prepareAuditLog(
   entityId: string | null,
   details: unknown,
 ): StatementLike {
-  return db.prepare(
-    `INSERT INTO audit_log (
+  return db
+    .prepare(
+      `INSERT INTO audit_log (
       id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-  ).bind(uuid(), actorType, actorId, action, entityType, entityId, stringifyJson(details), nowIso());
+    )
+    .bind(uuid(), actorType, actorId, action, entityType, entityId, stringifyJson(details), nowIso());
 }

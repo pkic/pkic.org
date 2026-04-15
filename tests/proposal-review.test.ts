@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach} from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
@@ -7,11 +7,17 @@ import { onRequestPost as finalizeProposal } from "../functions/api/v1/admin/pro
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 
-async function seedProposal(_db: DatabaseLike, eventId: string): Promise<{ proposalId: string; admin1Id: string; admin2Id: string }> {
+async function seedProposal(
+  _db: DatabaseLike,
+  eventId: string,
+): Promise<{ proposalId: string; admin1Id: string; admin2Id: string }> {
   const proposalId = crypto.randomUUID();
   const proposerId = crypto.randomUUID();
 
-  const adminRows = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1");
+  const adminRows = await queryAll<{ id: string }>(
+    env.DB,
+    "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
+  );
   const admin1Id = adminRows[0].id;
   const admin2Id = crypto.randomUUID();
 
@@ -39,7 +45,9 @@ async function seedProposal(_db: DatabaseLike, eventId: string): Promise<{ propo
 }
 
 describe("proposal review and finalize", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it("enforces minimum reviews before final decision", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id, admin2Id } = await seedProposal(env.DB, eventId);
@@ -111,10 +119,16 @@ describe("proposal review and finalize", () => {
 
     expect(finalizeResponse.status).toBe(200);
 
-    const decisions = await queryAll<{ total: number }>(env.DB, "SELECT COUNT(*) AS total FROM proposal_decisions WHERE proposal_id = ?", [proposalId]);
+    const decisions = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM proposal_decisions WHERE proposal_id = ?",
+      [proposalId],
+    );
     expect(Number(decisions[0].total)).toBe(1);
 
-    const status = await queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [proposalId]);
+    const status = await queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [
+      proposalId,
+    ]);
     expect(status[0].status).toBe("accepted");
   });
 });

@@ -6,7 +6,11 @@ import { nowIso, addHours } from "../../utils/time";
 import { addToWaitlist } from "./waitlist";
 import { recordReferralConversion } from "../referrals";
 import { recordEngagement } from "../engagement";
-import { deriveEventAttendanceType, replaceRegistrationDayAttendance, type DayAttendanceSelection } from "../event-days";
+import {
+  deriveEventAttendanceType,
+  replaceRegistrationDayAttendance,
+  type DayAttendanceSelection,
+} from "../event-days";
 import { roleBasedCapacityExemptReason, syncRegistrationDayWaitlist } from "./day-waitlist";
 import { upsertAttendeeParticipant } from "./participant-registration";
 import type { DatabaseLike } from "../../types";

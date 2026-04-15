@@ -9,8 +9,19 @@ import { useData } from "../../../../hooks/useData";
 const ATT_LABELS: Record<string, string> = { in_person: "In-person", virtual: "Virtual", on_demand: "On-demand" };
 const ATT_COLORS: Record<string, string> = { in_person: "#0d6efd", virtual: "#198754", on_demand: "#fd7e14" };
 const ATT_LIGHT_COLORS: Record<string, string> = { in_person: "#9ec5fe", virtual: "#a3cfbb", on_demand: "#fed8b1" };
-const STATUS_COLORS: Record<string, string> = { registered: "#198754", pending_email_confirmation: "#fd7e14", waitlisted: "#0dcaf0", cancelled: "#dc3545" };
-const INVITE_BADGE: Record<string, [string, string]> = { sent: ["info", "Pending"], accepted: ["success", "Accepted"], declined: ["danger", "Declined"], expired: ["secondary", "Expired"], revoked: ["warning", "Revoked"] };
+const STATUS_COLORS: Record<string, string> = {
+  registered: "#198754",
+  pending_email_confirmation: "#fd7e14",
+  waitlisted: "#0dcaf0",
+  cancelled: "#dc3545",
+};
+const INVITE_BADGE: Record<string, [string, string]> = {
+  sent: ["info", "Pending"],
+  accepted: ["success", "Accepted"],
+  declined: ["danger", "Declined"],
+  expired: ["secondary", "Expired"],
+  revoked: ["warning", "Revoked"],
+};
 
 function inviteBadge(status: string) {
   const [colour, label] = INVITE_BADGE[status] ?? ["secondary", status];
@@ -18,9 +29,12 @@ function inviteBadge(status: string) {
 }
 
 export function EventStats({ slug }: { slug: string }) {
-  const { data: stats, loading, error, reload } = useData<EventStatsResponse>(
-    () => api<EventStatsResponse>(`/api/v1/admin/events/${slug}/stats`), [slug],
-  );
+  const {
+    data: stats,
+    loading,
+    error,
+    reload,
+  } = useData<EventStatsResponse>(() => api<EventStatsResponse>(`/api/v1/admin/events/${slug}/stats`), [slug]);
 
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
@@ -68,8 +82,16 @@ export function EventStats({ slug }: { slug: string }) {
   }
   const daySeries = dayAttTypes
     .flatMap((at) => [
-      { label: `${ATT_LABELS[at] ?? at} – Confirmed`, color: ATT_COLORS[at] ?? "#6c757d", values: dayLabels.map((lbl) => dayIdx[lbl]?.[at]?.confirmed ?? 0) },
-      { label: `${ATT_LABELS[at] ?? at} – Pending`, color: ATT_LIGHT_COLORS[at] ?? "#ced4da", values: dayLabels.map((lbl) => dayIdx[lbl]?.[at]?.pending ?? 0) },
+      {
+        label: `${ATT_LABELS[at] ?? at} – Confirmed`,
+        color: ATT_COLORS[at] ?? "#6c757d",
+        values: dayLabels.map((lbl) => dayIdx[lbl]?.[at]?.confirmed ?? 0),
+      },
+      {
+        label: `${ATT_LABELS[at] ?? at} – Pending`,
+        color: ATT_LIGHT_COLORS[at] ?? "#ced4da",
+        values: dayLabels.map((lbl) => dayIdx[lbl]?.[at]?.pending ?? 0),
+      },
     ])
     .filter((sr) => sr.values.some((v) => v > 0));
 
@@ -77,34 +99,69 @@ export function EventStats({ slug }: { slug: string }) {
   const crossStatuses = [...new Set(byStatusAndType.map((r) => r.status))];
   const crossAttTypes = [...new Set(byStatusAndType.map((r) => r.attendance_type))];
   const crossIdx: Record<string, Record<string, number>> = {};
-  for (const r of byStatusAndType) { crossIdx[r.status] ??= {}; crossIdx[r.status][r.attendance_type] = r.count; }
-  const statusSeries = crossStatuses.map((st) => ({ label: st, color: STATUS_COLORS[st] ?? "#6c757d", values: crossAttTypes.map((at) => crossIdx[st]?.[at] ?? 0) }));
+  for (const r of byStatusAndType) {
+    crossIdx[r.status] ??= {};
+    crossIdx[r.status][r.attendance_type] = r.count;
+  }
+  const statusSeries = crossStatuses.map((st) => ({
+    label: st,
+    color: STATUS_COLORS[st] ?? "#6c757d",
+    values: crossAttTypes.map((at) => crossIdx[st]?.[at] ?? 0),
+  }));
 
   return (
     <div>
       <div class="d-flex justify-content-end mb-3">
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => void reload()}>↺ Refresh</button>
+        <button class="btn btn-sm btn-outline-secondary" onClick={() => void reload()}>
+          ↺ Refresh
+        </button>
       </div>
 
       {/* Stat cards */}
       <div class="row g-3 mb-3">
-        <div class="col-6 col-md-3"><StatCard label="Confirmed" value={confirmed} note="registered" /></div>
-        <div class="col-6 col-md-3"><StatCard label="Waitlisted" value={waitlisted} note="waiting" /></div>
-        <div class="col-6 col-md-3"><StatCard label="Total Registrations" value={s.registrations?.total ?? 0} note="all statuses" /></div>
-        <div class="col-6 col-md-3"><StatCard label="Proposals" value={s.proposals?.total ?? 0} note="submitted" /></div>
-        <div class="col-6 col-md-3"><StatCard label="Attendee Invites Pending" value={attendeePending} note="sent, not accepted" /></div>
-        <div class="col-6 col-md-3"><StatCard label="Attendee Invites Accepted" value={attendeeAccepted} note="" /></div>
-        <div class="col-6 col-md-3"><StatCard label="Speaker Invites Pending" value={speakerPending} note="" /></div>
-        <div class="col-6 col-md-3"><StatCard label="Speaker Invites Accepted" value={speakerAccepted} note="" /></div>
+        <div class="col-6 col-md-3">
+          <StatCard label="Confirmed" value={confirmed} note="registered" />
+        </div>
+        <div class="col-6 col-md-3">
+          <StatCard label="Waitlisted" value={waitlisted} note="waiting" />
+        </div>
+        <div class="col-6 col-md-3">
+          <StatCard label="Total Registrations" value={s.registrations?.total ?? 0} note="all statuses" />
+        </div>
+        <div class="col-6 col-md-3">
+          <StatCard label="Proposals" value={s.proposals?.total ?? 0} note="submitted" />
+        </div>
+        <div class="col-6 col-md-3">
+          <StatCard label="Attendee Invites Pending" value={attendeePending} note="sent, not accepted" />
+        </div>
+        <div class="col-6 col-md-3">
+          <StatCard label="Attendee Invites Accepted" value={attendeeAccepted} note="" />
+        </div>
+        <div class="col-6 col-md-3">
+          <StatCard label="Speaker Invites Pending" value={speakerPending} note="" />
+        </div>
+        <div class="col-6 col-md-3">
+          <StatCard label="Speaker Invites Accepted" value={speakerAccepted} note="" />
+        </div>
       </div>
 
       {/* Registration growth chart */}
       <div class="card border-0 shadow-sm mb-3">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-2">Registration Growth</h6>
-          {growthDates.length > 0
-            ? <div dangerouslySetInnerHTML={{ __html: svgStackedBarChart(growthDates.map((d) => `${d.slice(8)}/${d.slice(5, 7)}`), growthSeries, { isoLabels: growthDates }) }} />
-            : <p class="text-muted fst-italic small">No registrations yet.</p>}
+          {growthDates.length > 0 ? (
+            <div
+              dangerouslySetInnerHTML={{
+                __html: svgStackedBarChart(
+                  growthDates.map((d) => `${d.slice(8)}/${d.slice(5, 7)}`),
+                  growthSeries,
+                  { isoLabels: growthDates },
+                ),
+              }}
+            />
+          ) : (
+            <p class="text-muted fst-italic small">No registrations yet.</p>
+          )}
         </div>
       </div>
 
@@ -112,14 +169,27 @@ export function EventStats({ slug }: { slug: string }) {
       <div class="card border-0 shadow-sm mb-3">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-2">Status × Attendance Type</h6>
-          {crossStatuses.length > 0 && <div dangerouslySetInnerHTML={{ __html: svgStackedBarChart(crossAttTypes.map((at) => ATT_LABELS[at] ?? at), statusSeries) }} />}
+          {crossStatuses.length > 0 && (
+            <div
+              dangerouslySetInnerHTML={{
+                __html: svgStackedBarChart(
+                  crossAttTypes.map((at) => ATT_LABELS[at] ?? at),
+                  statusSeries,
+                ),
+              }}
+            />
+          )}
           {crossStatuses.length > 0 ? (
             <div class="tbl-wrap mt-3">
               <table class="table table-sm align-middle mb-0">
                 <thead class="table-dark">
                   <tr>
                     <th class="small">Status</th>
-                    {crossAttTypes.map((at) => <th key={at} class="text-end small">{ATT_LABELS[at] ?? at}</th>)}
+                    {crossAttTypes.map((at) => (
+                      <th key={at} class="text-end small">
+                        {ATT_LABELS[at] ?? at}
+                      </th>
+                    ))}
                     <th class="text-end small">Total</th>
                   </tr>
                 </thead>
@@ -128,8 +198,14 @@ export function EventStats({ slug }: { slug: string }) {
                     const rowTotal = crossAttTypes.reduce((sum, at) => sum + (crossIdx[st]?.[at] ?? 0), 0);
                     return (
                       <tr key={st}>
-                        <td><span class="badge text-bg-secondary">{st}</span></td>
-                        {crossAttTypes.map((at) => <td key={at} class="text-end mono">{crossIdx[st]?.[at] ?? 0}</td>)}
+                        <td>
+                          <span class="badge text-bg-secondary">{st}</span>
+                        </td>
+                        {crossAttTypes.map((at) => (
+                          <td key={at} class="text-end mono">
+                            {crossIdx[st]?.[at] ?? 0}
+                          </td>
+                        ))}
                         <td class="text-end mono fw-semibold">{rowTotal}</td>
                       </tr>
                     );
@@ -138,13 +214,19 @@ export function EventStats({ slug }: { slug: string }) {
                 <tfoot>
                   <tr class="table-light fw-semibold">
                     <td class="small">Total</td>
-                    {crossAttTypes.map((at) => <td key={at} class="text-end mono">{crossStatuses.reduce((sum, st) => sum + (crossIdx[st]?.[at] ?? 0), 0)}</td>)}
+                    {crossAttTypes.map((at) => (
+                      <td key={at} class="text-end mono">
+                        {crossStatuses.reduce((sum, st) => sum + (crossIdx[st]?.[at] ?? 0), 0)}
+                      </td>
+                    ))}
                     <td class="text-end mono">{s.registrations?.total ?? 0}</td>
                   </tr>
                 </tfoot>
               </table>
             </div>
-          ) : <p class="text-muted fst-italic small">No data</p>}
+          ) : (
+            <p class="text-muted fst-italic small">No data</p>
+          )}
         </div>
       </div>
 
@@ -153,7 +235,10 @@ export function EventStats({ slug }: { slug: string }) {
         <div class="card border-0 shadow-sm mb-3">
           <div class="card-body">
             <h6 class="text-uppercase small fw-bold text-muted mb-2">Registrations by Event Day</h6>
-            <div class="text-muted small mb-2"><span class="text-success fw-semibold">solid = confirmed</span>, <span class="text-secondary fw-semibold">light = pending/waitlisted</span></div>
+            <div class="text-muted small mb-2">
+              <span class="text-success fw-semibold">solid = confirmed</span>,{" "}
+              <span class="text-secondary fw-semibold">light = pending/waitlisted</span>
+            </div>
             <div dangerouslySetInnerHTML={{ __html: svgStackedBarChart(dayLabels, daySeries) }} />
           </div>
         </div>
@@ -169,7 +254,9 @@ export function EventStats({ slug }: { slug: string }) {
             <div key={type} class="col-md-6">
               <div class="card border-0 shadow-sm h-100">
                 <div class="card-body">
-                  <h6 class="text-uppercase small fw-bold text-muted mb-2">{type === "attendee" ? "Attendee" : "Speaker"} Invites</h6>
+                  <h6 class="text-uppercase small fw-bold text-muted mb-2">
+                    {type === "attendee" ? "Attendee" : "Speaker"} Invites
+                  </h6>
                   <div class="tbl-wrap">
                     <table class="table table-sm mb-0">
                       <tbody>
@@ -190,7 +277,13 @@ export function EventStats({ slug }: { slug: string }) {
                     <>
                       <div class="small fw-semibold mt-2 mb-1">Decline reasons</div>
                       <table class="table table-sm mb-0">
-                        <thead><tr><th class="small">Reason</th><th class="text-end small">Count</th><th class="text-end small">Unsub</th></tr></thead>
+                        <thead>
+                          <tr>
+                            <th class="small">Reason</th>
+                            <th class="text-end small">Count</th>
+                            <th class="text-end small">Unsub</th>
+                          </tr>
+                        </thead>
                         <tbody>
                           {declineReasons.map((dr, i) => (
                             <tr key={i}>
@@ -221,7 +314,10 @@ export function EventStats({ slug }: { slug: string }) {
                 <table class="table table-sm mb-0">
                   <tbody>
                     {Object.entries(s.rsvp.byStatus ?? {}).map(([st, cnt]) => (
-                      <tr key={st}><td class="small">{st}</td><td class="mono text-end">{cnt}</td></tr>
+                      <tr key={st}>
+                        <td class="small">{st}</td>
+                        <td class="mono text-end">{cnt}</td>
+                      </tr>
                     ))}
                   </tbody>
                 </table>
@@ -232,7 +328,10 @@ export function EventStats({ slug }: { slug: string }) {
                   <table class="table table-sm mb-0">
                     <tbody>
                       {Object.entries(s.rsvp.actionsTaken ?? {}).map(([action, cnt]) => (
-                        <tr key={action}><td class="small">{action}</td><td class="mono text-end">{cnt}</td></tr>
+                        <tr key={action}>
+                          <td class="small">{action}</td>
+                          <td class="mono text-end">{cnt}</td>
+                        </tr>
                       ))}
                     </tbody>
                   </table>

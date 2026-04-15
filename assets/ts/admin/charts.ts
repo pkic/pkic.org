@@ -29,7 +29,9 @@ export function svgStatusSegmentBar(byStatus: Record<string, number>, total: num
     waitlisted: "Waitlisted",
     cancelled: "Cancelled",
   };
-  const W = 460, barH = 20, radius = 4;
+  const W = 460,
+    barH = 20,
+    radius = 4;
   let x = 0;
   let segments = "";
   const sorted = [...STATUS_ORDER, ...Object.keys(byStatus).filter((k) => !STATUS_ORDER.includes(k))];
@@ -40,7 +42,8 @@ export function svgStatusSegmentBar(byStatus: Record<string, number>, total: num
     const lbl = STATUS_LABELS[k] ?? k;
     const pct = Math.round((v / total) * 100);
     const title = `${lbl}: ${v} (${pct}%)`;
-    const isFirst = idx === 0, isLast = idx === items.length - 1;
+    const isFirst = idx === 0,
+      isLast = idx === items.length - 1;
     if (isFirst && isLast) {
       segments += `<rect x="${x.toFixed(2)}" y="0" width="${segW.toFixed(2)}" height="${barH}" fill="${color}" rx="${radius}"><title>${esc(title)}</title></rect>`;
     } else if (isFirst) {
@@ -59,9 +62,11 @@ export function svgStatusSegmentBar(byStatus: Record<string, number>, total: num
       const pct = Math.round((v / total) * 100);
       const color = STATUS_COLORS[k] ?? "#6c757d";
       const lbl = STATUS_LABELS[k] ?? k;
-      return `<span class="adm-chart-legend-item">` +
+      return (
+        `<span class="adm-chart-legend-item">` +
         `<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="${color}"/></svg>` +
-        `${esc(lbl)}: <strong>${v}</strong> <span class="text-muted">(${pct}%)</span></span>`;
+        `${esc(lbl)}: <strong>${v}</strong> <span class="text-muted">(${pct}%)</span></span>`
+      );
     })
     .join("");
   return (
@@ -78,16 +83,17 @@ export function fmtMoney(cents: number, currency: string): string {
   });
 }
 
-export function svgBarChart(
-  labels: string[],
-  values: number[],
-  opts: { color?: string } = {},
-): string {
+export function svgBarChart(labels: string[], values: number[], opts: { color?: string } = {}): string {
   const n = labels.length;
   if (!n) return '<p class="text-muted fst-italic small">No data</p>';
-  const W = 460, H = 140;
-  const pL = 26, pR = 8, pT = 18, pB = 24;
-  const chartW = W - pL - pR, chartH = H - pT - pB;
+  const W = 460,
+    H = 140;
+  const pL = 26,
+    pR = 8,
+    pT = 18,
+    pB = 24;
+  const chartW = W - pL - pR,
+    chartH = H - pT - pB;
   const maxVal = Math.max(...values, 1);
   const slotW = chartW / n;
   const barW = Math.max(2, slotW - 3);
@@ -123,9 +129,14 @@ export function svgLineChart(
   if (!n || series.every((s) => s.values.every((v) => v === 0))) {
     return '<p class="text-muted fst-italic small">No data</p>';
   }
-  const W = 460, H = 120;
-  const pL = 28, pR = 8, pT = 12, pB = 24;
-  const chartW = W - pL - pR, chartH = H - pT - pB;
+  const W = 460,
+    H = 120;
+  const pL = 28,
+    pR = 8,
+    pT = 12,
+    pB = 24;
+  const chartW = W - pL - pR,
+    chartH = H - pT - pB;
   const maxVal = Math.max(...series.flatMap((s) => s.values), 1);
   const step = Math.max(1, Math.ceil(n / 12));
   const px = (i: number) => pL + (i / Math.max(1, n - 1)) * chartW;
@@ -184,7 +195,9 @@ export function svgStackedBarChart(
   const hasIso = (opts?.isoLabels?.length ?? 0) === n;
   const WKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
   const W = 460;
-  const pL = 30, pR = 8, pT = 18;
+  const pL = 30,
+    pR = 8,
+    pT = 18;
   const pB = hasIso ? 40 : 28;
   const H = pT + 114 + pB;
   const chartH = 114;
@@ -223,7 +236,7 @@ export function svgStackedBarChart(
       out += `<rect x="${x.toFixed(1)}" y="${yBase.toFixed(1)}" width="${barW.toFixed(1)}" height="${segH.toFixed(1)}" fill="${sr.color}" rx="1"/>`;
     }
     const total = totals[i];
-    if (total > 0 && (pT + chartH - yBase) > 14) {
+    if (total > 0 && pT + chartH - yBase > 14) {
       out += `<text x="${cx}" y="${(yBase - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="#212529" font-family="inherit">${total}</text>`;
     }
     if (i % step === 0 || i === n - 1) {
@@ -253,8 +266,9 @@ export function svgStackedBarChart(
     }
   }
   const legend = series
-    .map((sr) =>
-      `<span class="adm-chart-legend-item"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="${sr.color}"/></svg>${esc(sr.label)}</span>`,
+    .map(
+      (sr) =>
+        `<span class="adm-chart-legend-item"><svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><rect width="10" height="10" rx="2" fill="${sr.color}"/></svg>${esc(sr.label)}</span>`,
     )
     .join("");
   return (

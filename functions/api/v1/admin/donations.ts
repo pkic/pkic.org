@@ -42,7 +42,7 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   const url = new URL(c.req.raw.url);
   const status = url.searchParams.get("status") ?? "";
-  const limit  = Math.min(parseInt(url.searchParams.get("limit") ?? "100") || 100, 500);
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "100") || 100, 500);
   const offset = parseInt(url.searchParams.get("offset") ?? "0") || 0;
 
   const conditions: string[] = [];
@@ -69,16 +69,8 @@ export async function onRequestGet(c: any): Promise<Response> {
        LIMIT ? OFFSET ?`,
       [...params, limit, offset],
     ),
-    all<StatusCount>(
-      c.env.DB,
-      `SELECT status, COUNT(*) AS count FROM donations GROUP BY status`,
-      [],
-    ),
-    all<{ total: number }>(
-      c.env.DB,
-      `SELECT COUNT(*) AS total FROM donations ${where}`,
-      [...params],
-    ),
+    all<StatusCount>(c.env.DB, `SELECT status, COUNT(*) AS count FROM donations GROUP BY status`, []),
+    all<{ total: number }>(c.env.DB, `SELECT COUNT(*) AS total FROM donations ${where}`, [...params]),
   ]);
 
   const summary = Object.fromEntries(counts.map((r) => [r.status, r.count]));

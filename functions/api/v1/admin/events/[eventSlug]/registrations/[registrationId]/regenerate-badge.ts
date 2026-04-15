@@ -21,9 +21,7 @@ import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 
 const R2_KEY_PREFIX = "og-badges/";
 
-export async function onRequestPost(
-  c: any,
-): Promise<Response> {
+export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
@@ -41,10 +39,7 @@ export async function onRequestPost(
   );
 
   if (!row) {
-    return json(
-      { error: { code: "NO_REFERRAL_CODE", message: "No referral code found for this registration" } },
-      404,
-    );
+    return json({ error: { code: "NO_REFERRAL_CODE", message: "No referral code found for this registration" } }, 404);
   }
 
   // Purge the cached OG badge from R2 so it will be re-rendered fresh.
@@ -57,15 +52,9 @@ export async function onRequestPost(
   // opens the badge URL immediately on success, so background-queue isn't safe here.
   await prerenderAndCache(row.code, c.env, appBaseUrl);
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "og_badge_regenerated",
-    "registration",
-    registrationId,
-    { referralCode: row.code },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "og_badge_regenerated", "registration", registrationId, {
+    referralCode: row.code,
+  });
 
   const badgeUrl = `${appBaseUrl}/api/v1/og/${row.code}`;
   return json({ success: true, referralCode: row.code, badgeUrl });

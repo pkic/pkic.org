@@ -65,7 +65,14 @@ export async function onRequestGet(c: any): Promise<Response> {
       [event.id],
     ),
     // Per-event-day attendance (all non-cancelled statuses, split by status)
-    all<{ day_date: string; label: string | null; sort_order: number; attendance_type: string; status: string; count: number }>(
+    all<{
+      day_date: string;
+      label: string | null;
+      sort_order: number;
+      attendance_type: string;
+      status: string;
+      count: number;
+    }>(
       db,
       `SELECT ed.day_date,
               COALESCE(ed.label, ed.day_date) AS label,

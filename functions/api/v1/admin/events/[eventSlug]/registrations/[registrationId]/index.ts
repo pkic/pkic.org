@@ -29,7 +29,10 @@ import { z } from "zod";
 import { queueRegistrationStatusEmail } from "../../../../../../../_lib/services/registrations/status-notifications";
 import { registrationConfirmPageUrl } from "../../../../../../../_lib/services/frontend-links";
 import { buildAttendanceEmailData } from "../../../../../../../_lib/utils/attendance";
-import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../../../_lib/utils/registration-email";
+import {
+  getAcceptedTermsTextForRegistration,
+  getCustomAnswerRows,
+} from "../../../../../../../_lib/utils/registration-email";
 
 // ── Shared query ──────────────────────────────────────────────────────────────
 
@@ -71,9 +74,7 @@ async function fetchRegistrationWithDetails(
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const registration = await fetchRegistrationWithDetails(c.env.DB, event.id, c.req.param("registrationId"));
@@ -92,16 +93,12 @@ export async function onRequestGet(
 // ── PATCH ─────────────────────────────────────────────────────────────────────
 
 // Extend the shared manage schema with an admin-only "force_status" action.
-const adminRegistrationUpdateSchema = registrationManageSchema
-  .omit({ action: true })
-  .extend({
-    action: z.enum(["update", "cancel", "report_unauthorized", "force_status"]),
-    status: z.enum(["pending_email_confirmation", "registered", "waitlisted", "cancelled"]).optional(),
-  });
+const adminRegistrationUpdateSchema = registrationManageSchema.omit({ action: true }).extend({
+  action: z.enum(["update", "cancel", "report_unauthorized", "force_status"]),
+  status: z.enum(["pending_email_confirmation", "registered", "waitlisted", "cancelled"]).optional(),
+});
 
-export async function onRequestPatch(
-  c: any,
-): Promise<Response> {
+export async function onRequestPatch(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const config = getConfig(c.env, c.req.raw);
@@ -118,14 +115,22 @@ export async function onRequestPatch(
     if (!current) {
       return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
     }
-    await c.env.DB.prepare(
-      "UPDATE registrations SET status = ?, updated_at = ? WHERE id = ?",
-    ).bind(body.status, nowIso(), registrationId).run();
-    await writeAuditLog(c.env.DB, "admin", admin.id, "admin_registration_force_status", "registration", registrationId, {
-      eventId: event.id,
-      from: current.status,
-      to: body.status,
-    });
+    await c.env.DB.prepare("UPDATE registrations SET status = ?, updated_at = ? WHERE id = ?")
+      .bind(body.status, nowIso(), registrationId)
+      .run();
+    await writeAuditLog(
+      c.env.DB,
+      "admin",
+      admin.id,
+      "admin_registration_force_status",
+      "registration",
+      registrationId,
+      {
+        eventId: event.id,
+        from: current.status,
+        to: body.status,
+      },
+    );
 
     if (current.status !== body.status) {
       const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
@@ -134,9 +139,10 @@ export async function onRequestPatch(
         registrationId,
         appBaseUrl,
         templateKey: body.status === "cancelled" ? "registration_unauthorized" : "registration_updated",
-        subject: body.status === "cancelled"
-          ? `Registration cancelled and data removed — ${event.name}`
-          : `Registration updated for ${event.name}`,
+        subject:
+          body.status === "cancelled"
+            ? `Registration cancelled and data removed — ${event.name}`
+            : `Registration updated for ${event.name}`,
       });
       c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outbox.outboxId));
     }
@@ -158,7 +164,7 @@ export async function onRequestPatch(
     c.env.DB,
     {
       registrationId,
-      action: body.action as "update" | "cancel" | "report_unauthorized",
+      action: body.action,
       attendanceType: body.attendanceType,
       dayAttendance: body.dayAttendance,
       waitlistClaimWindowHours: config.waitlistClaimWindowHours,
@@ -172,15 +178,27 @@ export async function onRequestPatch(
   if (body.action === "update" && (body.firstName || body.lastName || body.organizationName || body.jobTitle)) {
     const setParts: string[] = [];
     const setValues: unknown[] = [];
-    if (body.firstName !== undefined) { setParts.push("first_name = ?"); setValues.push(body.firstName); }
-    if (body.lastName !== undefined) { setParts.push("last_name = ?"); setValues.push(body.lastName); }
-    if (body.organizationName !== undefined) { setParts.push("organization_name = ?"); setValues.push(body.organizationName); }
-    if (body.jobTitle !== undefined) { setParts.push("job_title = ?"); setValues.push(body.jobTitle); }
+    if (body.firstName !== undefined) {
+      setParts.push("first_name = ?");
+      setValues.push(body.firstName);
+    }
+    if (body.lastName !== undefined) {
+      setParts.push("last_name = ?");
+      setValues.push(body.lastName);
+    }
+    if (body.organizationName !== undefined) {
+      setParts.push("organization_name = ?");
+      setValues.push(body.organizationName);
+    }
+    if (body.jobTitle !== undefined) {
+      setParts.push("job_title = ?");
+      setValues.push(body.jobTitle);
+    }
     if (setParts.length > 0) {
       setValues.push(updated.user_id);
-      await c.env.DB.prepare(
-        `UPDATE users SET ${setParts.join(", ")} WHERE id = ?`,
-      ).bind(...setValues).run();
+      await c.env.DB.prepare(`UPDATE users SET ${setParts.join(", ")} WHERE id = ?`)
+        .bind(...setValues)
+        .run();
     }
   }
 
@@ -205,15 +223,27 @@ export async function onRequestPatch(
       if (body.firstName || body.lastName || body.organizationName || body.jobTitle) {
         const setParts: string[] = [];
         const setValues: unknown[] = [];
-        if (body.firstName !== undefined) { setParts.push("first_name = ?"); setValues.push(body.firstName); }
-        if (body.lastName !== undefined) { setParts.push("last_name = ?"); setValues.push(body.lastName); }
-        if (body.organizationName !== undefined) { setParts.push("organization_name = ?"); setValues.push(body.organizationName); }
-        if (body.jobTitle !== undefined) { setParts.push("job_title = ?"); setValues.push(body.jobTitle); }
+        if (body.firstName !== undefined) {
+          setParts.push("first_name = ?");
+          setValues.push(body.firstName);
+        }
+        if (body.lastName !== undefined) {
+          setParts.push("last_name = ?");
+          setValues.push(body.lastName);
+        }
+        if (body.organizationName !== undefined) {
+          setParts.push("organization_name = ?");
+          setValues.push(body.organizationName);
+        }
+        if (body.jobTitle !== undefined) {
+          setParts.push("job_title = ?");
+          setValues.push(body.jobTitle);
+        }
         if (setParts.length > 0) {
           setValues.push(emailResult.newUserId);
-          await c.env.DB.prepare(
-            `UPDATE users SET ${setParts.join(", ")} WHERE id = ?`,
-          ).bind(...setValues).run();
+          await c.env.DB.prepare(`UPDATE users SET ${setParts.join(", ")} WHERE id = ?`)
+            .bind(...setValues)
+            .run();
         }
       }
 
@@ -226,13 +256,22 @@ export async function onRequestPatch(
       // Send confirmation email to the new address
       const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, emailResult.confirmationToken);
       const newUser = await first<{
-        email: string; first_name: string | null; last_name: string | null;
-        organization_name: string | null; job_title: string | null;
-      }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [emailResult.newUserId]);
+        email: string;
+        first_name: string | null;
+        last_name: string | null;
+        organization_name: string | null;
+        job_title: string | null;
+      }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [
+        emailResult.newUserId,
+      ]);
       if (newUser) {
         const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
         const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, updated.id);
-        const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
+        const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
+          updated.attendance_type,
+          dayAttendanceRaw,
+          dayWaitlist,
+        );
         const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, updated.custom_answers_json);
         const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, updated.id);
         const outboxId = await queueEmail(c.env.DB, {
@@ -274,9 +313,10 @@ export async function onRequestPatch(
       registrationId: updated.id,
       appBaseUrl,
       templateKey: body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated",
-      subject: body.action === "report_unauthorized"
-        ? `Registration cancelled and data removed — ${event.name}`
-        : `Registration updated for ${event.name}`,
+      subject:
+        body.action === "report_unauthorized"
+          ? `Registration cancelled and data removed — ${event.name}`
+          : `Registration updated for ${event.name}`,
     });
     c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outbox.outboxId));
   }
@@ -292,9 +332,7 @@ export async function onRequestPatch(
 
 // ── Router ────────────────────────────────────────────────────────────────────
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "PATCH") return onRequestPatch(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

@@ -15,9 +15,7 @@ interface PermRow {
   permission: string;
 }
 
-export async function onRequestDelete(
-  c: any,
-): Promise<Response> {
+export async function onRequestDelete(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
@@ -31,28 +29,17 @@ export async function onRequestDelete(
     return json({ error: { code: "NOT_FOUND", message: "Permission grant not found" } }, 404);
   }
 
-  await run(
-    c.env.DB,
-    "DELETE FROM event_permissions WHERE id = ?",
-    [perm.id],
-  );
+  await run(c.env.DB, "DELETE FROM event_permissions WHERE id = ?", [perm.id]);
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "event_permission_revoked",
-    "event",
-    event.id,
-    { email: perm.user_email, permission: perm.permission },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "event_permission_revoked", "event", event.id, {
+    email: perm.user_email,
+    permission: perm.permission,
+  });
 
   return json({ success: true });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method !== "DELETE") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

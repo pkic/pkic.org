@@ -77,17 +77,15 @@ function buildPromoterOgHtml(
   donateUrl: string,
   ogImageType: string,
 ): string {
-  const sharerName  = promoter.name ? esc(promoter.name) : null;
-  const ogTitle     = sharerName
-    ? `${sharerName} is supporting the PKI Consortium`
-    : "Support the PKI Consortium";
-  const ogDesc      = esc(buildPromoterOgDescription(promoter.name));
-  const ogImageAlt  = esc(buildPromoterOgImageAlt(promoter.name));
-  const ogUrl       = esc(`${appBaseUrl}/donate/r/${encodeURIComponent(code)}`);
-  const ogImage     = promoter.checkout_session_id
+  const sharerName = promoter.name ? esc(promoter.name) : null;
+  const ogTitle = sharerName ? `${sharerName} is supporting the PKI Consortium` : "Support the PKI Consortium";
+  const ogDesc = esc(buildPromoterOgDescription(promoter.name));
+  const ogImageAlt = esc(buildPromoterOgImageAlt(promoter.name));
+  const ogUrl = esc(`${appBaseUrl}/donate/r/${encodeURIComponent(code)}`);
+  const ogImage = promoter.checkout_session_id
     ? esc(`${appBaseUrl}/api/v1/og/donation/${encodeURIComponent(promoter.checkout_session_id)}`)
     : esc(`${appBaseUrl}/images/donate-og.jpg`); // fallback static image
-  const canonical   = esc(donateUrl);
+  const canonical = esc(donateUrl);
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -133,8 +131,8 @@ export async function onRequestGet(c: any): Promise<Response> {
   const env = c.env;
   const request = c.req.raw;
   const params = c.req.param();
-  const code      = params.code;
-  const appBase   = resolveAppBaseUrl(env, request);
+  const code = params.code;
+  const appBase = resolveAppBaseUrl(env, request);
   const userAgent = getUserAgent(request);
 
   const promoter = await first<PromoterRow>(
@@ -170,4 +168,3 @@ export async function onRequestGet(c: any): Promise<Response> {
     },
   });
 }
-

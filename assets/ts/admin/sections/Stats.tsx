@@ -18,11 +18,9 @@ const ATTENDANCE_LABELS: Record<string, string> = {
 };
 
 export function Stats({ subTab }: { subTab?: string }) {
-  const { data: stats, loading, error } = useData<StatsResponse>(
-    () => api<StatsResponse>("/api/v1/admin/stats"), [],
-  );
+  const { data: stats, loading, error } = useData<StatsResponse>(() => api<StatsResponse>("/api/v1/admin/stats"), []);
   const [, navigate] = useHashLocation();
-  const tab: StatsTab = (subTab === "registrations" || subTab === "donations") ? subTab : "overview";
+  const tab: StatsTab = subTab === "registrations" || subTab === "donations" ? subTab : "overview";
 
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
@@ -48,8 +46,18 @@ export function Stats({ subTab }: { subTab?: string }) {
 function OverviewTab({ stats }: { stats: StatsResponse }) {
   const activityChart = svgLineChart(
     [
-      { label: "Registrations", values: stats.recentActivity.map((d) => d.registrations), stroke: "#198754", area: "rgba(25,135,84,.07)" },
-      { label: "Invites", values: stats.recentActivity.map((d) => d.invites), stroke: "#fd7e14", area: "rgba(253,126,20,.07)" },
+      {
+        label: "Registrations",
+        values: stats.recentActivity.map((d) => d.registrations),
+        stroke: "#198754",
+        area: "rgba(25,135,84,.07)",
+      },
+      {
+        label: "Invites",
+        values: stats.recentActivity.map((d) => d.invites),
+        stroke: "#fd7e14",
+        area: "rgba(253,126,20,.07)",
+      },
     ],
     stats.recentActivity.map((d) => d.date.slice(5)),
   );
@@ -64,7 +72,10 @@ function OverviewTab({ stats }: { stats: StatsResponse }) {
               <StatusTable entries={Object.entries(stats.registrations.byStatus)} />
               <h6 class="text-uppercase small fw-bold text-muted mb-3 mt-3">By Attendance Type</h6>
               <SimpleTable
-                rows={Object.entries(stats.registrations.byAttendanceType ?? {}).map(([k, v]) => [ATTENDANCE_LABELS[k] ?? k, String(v)])}
+                rows={Object.entries(stats.registrations.byAttendanceType ?? {}).map(([k, v]) => [
+                  ATTENDANCE_LABELS[k] ?? k,
+                  String(v),
+                ])}
               />
             </div>
           </div>
@@ -90,15 +101,23 @@ function OverviewTab({ stats }: { stats: StatsResponse }) {
 
 function RegistrationsTab({ stats }: { stats: StatsResponse }) {
   const r = stats.registrations;
-  const weeklyChart = svgBarChart(r.weekly.map((d) => d.week.slice(5)), r.weekly.map((d) => d.count));
-  const monthlyChart = svgBarChart(r.monthly.map((d) => d.month.slice(0, 7)), r.monthly.map((d) => d.count));
+  const weeklyChart = svgBarChart(
+    r.weekly.map((d) => d.week.slice(5)),
+    r.weekly.map((d) => d.count),
+  );
+  const monthlyChart = svgBarChart(
+    r.monthly.map((d) => d.month.slice(0, 7)),
+    r.monthly.map((d) => d.count),
+  );
 
   return (
     <div>
       <div class="card border-0 shadow-sm">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-3">By Attendance Type</h6>
-          <SimpleTable rows={Object.entries(r.byAttendanceType ?? {}).map(([k, v]) => [ATTENDANCE_LABELS[k] ?? k, String(v)])} />
+          <SimpleTable
+            rows={Object.entries(r.byAttendanceType ?? {}).map(([k, v]) => [ATTENDANCE_LABELS[k] ?? k, String(v)])}
+          />
         </div>
       </div>
       <div class="card border-0 shadow-sm mt-3">
@@ -139,7 +158,11 @@ function DonationsTab({ stats }: { stats: StatsResponse }) {
     { header: { label: "Pend.", className: "text-end" }, cell: (d) => d.pending, className: "mono text-end" },
     { header: { label: "Failed", className: "text-end" }, cell: (d) => d.failed, className: "mono text-end" },
     { header: { label: "Expd.", className: "text-end" }, cell: (d) => d.expired, className: "mono text-end" },
-    { header: { label: `Gross (${primaryCurrency.toUpperCase()})`, className: "text-end" }, cell: (d) => d.gross > 0 ? fmtMoney(d.gross, primaryCurrency) : "—", className: "mono text-end" },
+    {
+      header: { label: `Gross (${primaryCurrency.toUpperCase()})`, className: "text-end" },
+      cell: (d) => (d.gross > 0 ? fmtMoney(d.gross, primaryCurrency) : "—"),
+      className: "mono text-end",
+    },
   ];
 
   return (
@@ -152,9 +175,21 @@ function DonationsTab({ stats }: { stats: StatsResponse }) {
               { header: "Status", cell: (d) => <Badge status={d.status} /> },
               { header: "Currency", cell: (d) => d.currency.toUpperCase(), className: "mono" },
               { header: { label: "Count", className: "text-end" }, cell: (d) => d.count, className: "mono text-end" },
-              { header: { label: "Gross", className: "text-end" }, cell: (d) => fmtMoney(d.total_gross, d.currency), className: "mono text-end" },
-              { header: { label: "Avg Gross", className: "text-end" }, cell: (d) => fmtMoney(d.avg_gross, d.currency), className: "mono text-end" },
-              { header: { label: "Net Total", className: "text-end" }, cell: (d) => d.total_net != null ? fmtMoney(d.total_net, d.currency) : `— (${d.status})`, className: "mono text-end" },
+              {
+                header: { label: "Gross", className: "text-end" },
+                cell: (d) => fmtMoney(d.total_gross, d.currency),
+                className: "mono text-end",
+              },
+              {
+                header: { label: "Avg Gross", className: "text-end" },
+                cell: (d) => fmtMoney(d.avg_gross, d.currency),
+                className: "mono text-end",
+              },
+              {
+                header: { label: "Net Total", className: "text-end" },
+                cell: (d) => (d.total_net != null ? fmtMoney(d.total_net, d.currency) : `— (${d.status})`),
+                className: "mono text-end",
+              },
             ]}
             data={don.byCurrency}
             empty="No donations"

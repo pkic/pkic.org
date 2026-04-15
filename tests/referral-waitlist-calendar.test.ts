@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach} from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env as workerEnv } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll, createContext } from "./helpers/context";
@@ -14,7 +14,9 @@ import type { Env } from "../functions/_lib/types";
 const env = workerEnv as unknown as Env;
 
 describe("referral, waitlist, and calendar flows", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it("creates short referral redirect and tracks click", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -27,9 +29,7 @@ describe("referral, waitlist, and calendar flows", () => {
 
     expect(code.length).toBe(7);
 
-    const response = await referralRedirect(
-      createContext(env, new Request(`https://app.test/r/${code}`), { code }),
-    );
+    const response = await referralRedirect(createContext(env, new Request(`https://app.test/r/${code}`), { code }));
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");
@@ -39,7 +39,9 @@ describe("referral, waitlist, and calendar flows", () => {
     expect(html).toContain(`ref=${code}`);
     expect(html).toContain("source=referral_link");
 
-    const stats = await queryAll<{ clicks: number }>(env.DB, "SELECT clicks FROM referral_codes WHERE code = ?", [code]);
+    const stats = await queryAll<{ clicks: number }>(env.DB, "SELECT clicks FROM referral_codes WHERE code = ?", [
+      code,
+    ]);
     expect(Number(stats[0].clicks)).toBe(1);
   });
 
@@ -52,12 +54,14 @@ describe("referral, waitlist, and calendar flows", () => {
     const regB = crypto.randomUUID();
     const manageTokenA = "manage-a";
 
-    await env.DB.prepare(`
+    await env.DB.prepare(
+      `
       INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
       VALUES
         ('${personA}', 'a@example.test', 'a@example.test', 'A', NULL, NULL, NULL, NULL, datetime('now'), datetime('now')),
         ('${personB}', 'b@example.test', 'b@example.test', 'B', NULL, NULL, NULL, NULL, datetime('now'), datetime('now'));
-    `).run();
+    `,
+    ).run();
 
     const hashA = await sha256Hex(manageTokenA);
 
@@ -83,7 +87,8 @@ describe("referral, waitlist, and calendar flows", () => {
       waitlistClaimWindowHours: 24,
     });
 
-    const waitlist = await queryAll<{ status: string }>(env.DB, 
+    const waitlist = await queryAll<{ status: string }>(
+      env.DB,
       "SELECT status FROM waitlist_entries WHERE registration_id = ?",
       [regB],
     );
@@ -93,7 +98,7 @@ describe("referral, waitlist, and calendar flows", () => {
   it("logs calendar delivery after send", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
-    const admin = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users LIMIT 1")))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users LIMIT 1"))[0];
 
     const layout = await createTemplateVersion(env.DB, {
       templateKey: "email_layout",
@@ -168,7 +173,9 @@ describe("referral, waitlist, and calendar flows", () => {
         registrationId,
         eventId,
         icsUid: `${registrationId}@pkic.org`,
-        icsFiles: [{ uid: `${registrationId}@pkic.org`, filename: "invite.ics", content: "BEGIN:VCALENDAR\nEND:VCALENDAR" }],
+        icsFiles: [
+          { uid: `${registrationId}@pkic.org`, filename: "invite.ics", content: "BEGIN:VCALENDAR\nEND:VCALENDAR" },
+        ],
         inlineContent: "BEGIN:VCALENDAR\nEND:VCALENDAR",
       },
     });
@@ -192,17 +199,16 @@ describe("referral, waitlist, and calendar flows", () => {
     };
 
     const calendarContent = (sendgridPayload.content ?? []).find((item) =>
-      (item.type ?? "").toLowerCase().includes("text/calendar")
+      (item.type ?? "").toLowerCase().includes("text/calendar"),
     );
     expect(calendarContent?.type).toBe("text/calendar; method=REQUEST");
     expect(calendarContent?.value).toContain("BEGIN:VCALENDAR");
 
-    const calendarAttachment = (sendgridPayload.attachments ?? []).find((item) =>
-      item.filename === "invite.ics"
-    );
+    const calendarAttachment = (sendgridPayload.attachments ?? []).find((item) => item.filename === "invite.ics");
     expect(calendarAttachment?.type).toBe("application/ics");
 
-    const outboxRows = await queryAll<{ status: string; provider_message_id: string | null }>(env.DB, 
+    const outboxRows = await queryAll<{ status: string; provider_message_id: string | null }>(
+      env.DB,
       "SELECT status, provider_message_id FROM email_outbox WHERE id = ?",
       [outboxId],
     );
@@ -215,7 +221,7 @@ describe("referral, waitlist, and calendar flows", () => {
   it("uses the payload URL origin for email layout assets during background send", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
-    const admin = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users LIMIT 1")))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users LIMIT 1"))[0];
 
     const layout = await createTemplateVersion(env.DB, {
       templateKey: "email_layout",
@@ -262,7 +268,7 @@ describe("referral, waitlist, and calendar flows", () => {
       baseUrl: "https://preview.pkic.org",
       templateKey: "registration_confirm_email",
       recipientEmail: "confirm@example.test",
-       recipientUserId: null,
+      recipientUserId: null,
       subject: "Confirm",
       messageType: "transactional",
       data: {
@@ -288,14 +294,14 @@ describe("referral, waitlist, and calendar flows", () => {
     };
     const htmlContent = (sendgridPayload.content ?? []).find((item) => item.type === "text/html")?.value ?? "";
 
-    expect(htmlContent).toContain('https://preview.pkic.org/img/logo-white.png');
-    expect(htmlContent).toContain('https://preview.pkic.org/events/test/confirm/?token=abc');
-    expect(htmlContent).not.toContain('http://localhost/img/logo-white.png');
+    expect(htmlContent).toContain("https://preview.pkic.org/img/logo-white.png");
+    expect(htmlContent).toContain("https://preview.pkic.org/events/test/confirm/?token=abc");
+    expect(htmlContent).not.toContain("http://localhost/img/logo-white.png");
   });
 
   it("attaches donation badges with a donation-specific filename and corrected jpeg extension", async () => {
     await seedEventAndAdmin(env.DB);
-    const admin = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users LIMIT 1")))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users LIMIT 1"))[0];
 
     const layout = await createTemplateVersion(env.DB, {
       templateKey: "email_layout",
@@ -389,7 +395,7 @@ describe("referral, waitlist, and calendar flows", () => {
 
   it("attaches attendee badges from queued attachment descriptors", async () => {
     await seedEventAndAdmin(env.DB);
-    const admin = ((await queryAll<{ id: string }>(env.DB, "SELECT id FROM users LIMIT 1")))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users LIMIT 1"))[0];
 
     const layout = await createTemplateVersion(env.DB, {
       templateKey: "email_layout",
@@ -461,7 +467,9 @@ describe("referral, waitlist, and calendar flows", () => {
       ASSETS_BUCKET: {
         get: vi.fn().mockResolvedValue({
           httpMetadata: { contentType: "image/png" },
-          arrayBuffer: vi.fn().mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer),
+          arrayBuffer: vi
+            .fn()
+            .mockResolvedValue(new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]).buffer),
         }),
       },
     };

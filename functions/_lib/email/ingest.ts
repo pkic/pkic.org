@@ -15,9 +15,9 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
       messageId: emailData.messageId,
       subject: emailData.subject,
       attachmentsCount: emailData.attachments?.length || 0,
-      attachmentTypes: emailData.attachments?.map(a => a.mimeType).join(', ') || "none",
+      attachmentTypes: emailData.attachments?.map((a) => a.mimeType).join(", ") || "none",
       hasText: !!emailData.text,
-      hasHtml: !!emailData.html
+      hasHtml: !!emailData.html,
     });
 
     if (!env.INTERNAL_SIGNING_SECRET) {
@@ -44,52 +44,56 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
       logInfo("EMAIL_IGNORED_INVALID_MAC", {
         messageId: emailData.messageId,
         subject: emailData.subject,
-        to: message.to
+        to: message.to,
       });
       return;
     }
 
     // Handle RSVP addresses
-    const isBounce = emailData.subject && (
-      emailData.subject.toLowerCase().includes('undeliverable') || 
-      emailData.subject.toLowerCase().includes('bounce') ||
-      emailData.subject.toLowerCase().includes('delivery status') ||
-      emailData.subject.toLowerCase().includes('failure notice')
-    ) || message.from.toLowerCase().includes('mailer-daemon');
+    const isBounce =
+      (emailData.subject &&
+        (emailData.subject.toLowerCase().includes("undeliverable") ||
+          emailData.subject.toLowerCase().includes("bounce") ||
+          emailData.subject.toLowerCase().includes("delivery status") ||
+          emailData.subject.toLowerCase().includes("failure notice"))) ||
+      message.from.toLowerCase().includes("mailer-daemon");
 
     if (isBounce) {
-       const sourceMessageId = emailData.messageId || `inbound-${Date.now()}`;
-       const dedupeKey = `${rsvpRegistrationId}#${sourceMessageId}`;
+      const sourceMessageId = emailData.messageId || `inbound-${Date.now()}`;
+      const dedupeKey = `${rsvpRegistrationId}#${sourceMessageId}`;
 
-       await env.DB.prepare(
+      await env.DB.prepare(
         `INSERT INTO calendar_rsvp_events 
          (id, registration_id, ics_uid, attendee_email, response_status, provider, 
           source_message_id, dedupe_key, raw_payload_json, received_at, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
          ON CONFLICT(dedupe_key) DO UPDATE SET 
-         response_status = excluded.response_status, raw_payload_json = excluded.raw_payload_json, updated_at = datetime('now')`
-      ).bind(
-        crypto.randomUUID(),
-        rsvpRegistrationId,
-        `bounce-${rsvpRegistrationId}`,
-        message.from,
-        "bounced", // Specifically categorize bounces so they don't look like intentional declines
-        "cloudflare_email_routing_bounce",
-        sourceMessageId,
-        dedupeKey,
-        JSON.stringify({ subject: emailData.subject || "" })
-      ).run();
+         response_status = excluded.response_status, raw_payload_json = excluded.raw_payload_json, updated_at = datetime('now')`,
+      )
+        .bind(
+          crypto.randomUUID(),
+          rsvpRegistrationId,
+          `bounce-${rsvpRegistrationId}`,
+          message.from,
+          "bounced", // Specifically categorize bounces so they don't look like intentional declines
+          "cloudflare_email_routing_bounce",
+          sourceMessageId,
+          dedupeKey,
+          JSON.stringify({ subject: emailData.subject || "" }),
+        )
+        .run();
 
       logInfo("BOUNCE_PROCESSED", { registrationId: rsvpRegistrationId, subject: emailData.subject });
       return;
     }
 
     let icsContent = "";
-    
+
     // Look for calendar attachments or text/calendar parts
     for (const attachment of emailData.attachments || []) {
       if (attachment.mimeType === "text/calendar" || attachment.mimeType === "application/ics") {
-        icsContent = typeof attachment.content === "string" ? attachment.content : new TextDecoder().decode(attachment.content);
+        icsContent =
+          typeof attachment.content === "string" ? attachment.content : new TextDecoder().decode(attachment.content);
         break;
       }
     }
@@ -99,9 +103,10 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
     if (!icsContent) {
       for (const attachment of emailData.attachments || []) {
         if (attachment.mimeType === "application/ms-tnef" || attachment.mimeType === "application/vnd.ms-tnef") {
-          const raw = typeof attachment.content === "string"
-            ? attachment.content
-            : new TextDecoder("utf-8", { fatal: false }).decode(attachment.content as Uint8Array);
+          const raw =
+            typeof attachment.content === "string"
+              ? attachment.content
+              : new TextDecoder("utf-8", { fatal: false }).decode(attachment.content as Uint8Array);
           const calStart = raw.indexOf("BEGIN:VCALENDAR");
           const calEnd = raw.indexOf("END:VCALENDAR");
           if (calStart !== -1 && calEnd !== -1) {
@@ -128,37 +133,39 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
       else if (subjectLower.startsWith("tentative:")) implicitStatus = "tentative";
 
       if (implicitStatus) {
-         const sourceMessageId = emailData.messageId || `inbound-${Date.now()}`;
-         const dedupeKey = `${rsvpRegistrationId}#${sourceMessageId}`;
+        const sourceMessageId = emailData.messageId || `inbound-${Date.now()}`;
+        const dedupeKey = `${rsvpRegistrationId}#${sourceMessageId}`;
 
-         await env.DB.prepare(
+        await env.DB.prepare(
           `INSERT INTO calendar_rsvp_events 
            (id, registration_id, ics_uid, attendee_email, response_status, provider, 
             source_message_id, dedupe_key, raw_payload_json, received_at, created_at, updated_at)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), datetime('now'))
            ON CONFLICT(dedupe_key) DO UPDATE SET 
-           response_status = excluded.response_status, raw_payload_json = excluded.raw_payload_json, updated_at = datetime('now')`
-        ).bind(
-          crypto.randomUUID(),
-          rsvpRegistrationId,
-          rsvpDayDate ? `${rsvpRegistrationId}-${rsvpDayDate}@pkic.org` : `implicit-${rsvpRegistrationId}`,
-          message.from,
-          implicitStatus,
-          "cloudflare_email_routing_subject",
-          sourceMessageId,
-          dedupeKey,
-          JSON.stringify({ subject: emailData.subject || "" })
-        ).run();
+           response_status = excluded.response_status, raw_payload_json = excluded.raw_payload_json, updated_at = datetime('now')`,
+        )
+          .bind(
+            crypto.randomUUID(),
+            rsvpRegistrationId,
+            rsvpDayDate ? `${rsvpRegistrationId}-${rsvpDayDate}@pkic.org` : `implicit-${rsvpRegistrationId}`,
+            message.from,
+            implicitStatus,
+            "cloudflare_email_routing_subject",
+            sourceMessageId,
+            dedupeKey,
+            JSON.stringify({ subject: emailData.subject || "" }),
+          )
+          .run();
 
         logInfo("RSVP_PROCESSED_IMPLICIT", { registrationId: rsvpRegistrationId, status: implicitStatus });
         return;
       }
 
-      logInfo("EMAIL_IGNORED_NO_CALENDAR", { 
+      logInfo("EMAIL_IGNORED_NO_CALENDAR", {
         messageId: emailData.messageId,
         subject: emailData.subject,
         from: message.from,
-        to: message.to
+        to: message.to,
       });
       return;
     }
@@ -183,10 +190,10 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
     }
 
     if (!partstatLine) {
-      logInfo("EMAIL_IGNORED_INVALID_CALENDAR", { 
+      logInfo("EMAIL_IGNORED_INVALID_CALENDAR", {
         messageId: emailData.messageId,
         subject: emailData.subject,
-        partstatFound: false
+        partstatFound: false,
       });
       return;
     }
@@ -196,14 +203,14 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
       : partstatLine.includes("DECLINED")
         ? "DECLINED"
         : "TENTATIVE";
-    
+
     let attendeeEmail: string;
     if (attendeeLine) {
       const emailMatch = attendeeLine.match(/mailto:(.+?)(?:;|$)/i);
       if (emailMatch) {
-         attendeeEmail = emailMatch[1];
+        attendeeEmail = emailMatch[1];
       } else {
-         attendeeEmail = message.from;
+        attendeeEmail = message.from;
       }
     } else {
       attendeeEmail = message.from;
@@ -224,7 +231,7 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
     )
       .bind(
         crypto.randomUUID(),
-        rsvpRegistrationId, // Securely mapped from the HMAC matched address! 
+        rsvpRegistrationId, // Securely mapped from the HMAC matched address!
         icsUid,
         attendeeEmail,
         partstat.toLowerCase(),
@@ -233,12 +240,12 @@ export async function processIncomingEmail(message: any, env: Env): Promise<void
         dedupeKey,
       )
       .run();
-      
+
     logInfo("RSVP_PROCESSED_ICS", { registrationId: rsvpRegistrationId, status: partstat });
   } catch (err) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     logError("EMAIL_PROCESSING_FAILED", { error: errorMsg });
     throw err; // Workers might need this to signal bounce or error but usually we catch to drop it gracefully
-    // message.setReject("Failed to parse") 
+    // message.setReject("Failed to parse")
   }
 }

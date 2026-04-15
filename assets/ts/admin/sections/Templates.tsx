@@ -23,11 +23,17 @@ function highlightTemplateSyntax(source: string): string {
 
   while (pos < source.length) {
     const start = source.indexOf("{{", pos);
-    if (start === -1) { out.push(esc(source.slice(pos))); break; }
+    if (start === -1) {
+      out.push(esc(source.slice(pos)));
+      break;
+    }
     if (start > pos) out.push(esc(source.slice(pos, start)));
 
     const end = source.indexOf("}}", start + 2);
-    if (end === -1) { out.push(esc(source.slice(start))); break; }
+    if (end === -1) {
+      out.push(esc(source.slice(start)));
+      break;
+    }
 
     const token = source.slice(start, end + 2);
     const inner = source.slice(start + 2, end).trim();
@@ -151,7 +157,10 @@ function TemplateEditor({
   }
 
   async function doPreview() {
-    if (!body.trim()) { toast("Body cannot be empty", "error"); return; }
+    if (!body.trim()) {
+      toast("Body cannot be empty", "error");
+      return;
+    }
     let data: Record<string, unknown> | undefined;
     if (previewData.trim()) {
       try {
@@ -194,13 +203,23 @@ function TemplateEditor({
   }
 
   async function doSave() {
-    if (!body.trim()) { toast("Body cannot be empty", "error"); return; }
+    if (!body.trim()) {
+      toast("Body cannot be empty", "error");
+      return;
+    }
     setSaving(true);
     try {
       const effectiveContentType = isLayout ? "html" : contentType;
       const result = await api<{ success: boolean; version: number }>(
         `/api/v1/admin/email-templates/${encodeURIComponent(templateKey)}/versions`,
-        { method: "POST", body: JSON.stringify({ content: body, subjectTemplate: subject || undefined, contentType: effectiveContentType }) },
+        {
+          method: "POST",
+          body: JSON.stringify({
+            content: body,
+            subjectTemplate: subject || undefined,
+            contentType: effectiveContentType,
+          }),
+        },
       );
       toast(`Saved as draft v${result.version}`, "success");
       await onReload();
@@ -232,7 +251,9 @@ function TemplateEditor({
             Edit: <span class="mono">{templateKey}</span>
             {isLayout && <span class="badge text-bg-info ms-2">shared shell</span>}
           </span>
-          <button class="btn btn-sm btn-secondary" onClick={onBack}>← Back to list</button>
+          <button class="btn btn-sm btn-secondary" onClick={onBack}>
+            ← Back to list
+          </button>
         </div>
         <div class="card-body">
           <div class="row g-3">
@@ -249,7 +270,9 @@ function TemplateEditor({
                   <select
                     class="form-select form-select-sm"
                     value={contentType}
-                    onChange={(e) => setContentType((e.target as HTMLSelectElement).value as "markdown" | "html" | "text")}
+                    onChange={(e) =>
+                      setContentType((e.target as HTMLSelectElement).value as "markdown" | "html" | "text")
+                    }
                   >
                     <option value="markdown">Markdown</option>
                     <option value="html">HTML</option>
@@ -264,14 +287,20 @@ function TemplateEditor({
                   Subject template <span class="text-muted fw-normal">(supports conditions and variables)</span>
                 </label>
                 <div class="adm-template-overlay-wrap">
-                  <pre ref={subjectPreRef} aria-hidden="true" class="adm-template-backdrop adm-template-backdrop-subject"></pre>
+                  <pre
+                    ref={subjectPreRef}
+                    aria-hidden="true"
+                    class="adm-template-backdrop adm-template-backdrop-subject"
+                  ></pre>
                   <input
                     type="text"
                     class={`form-control form-control-sm font-monospace adm-template-input-overlay${subject ? " adm-template-input-hidden-text" : ""}`}
                     value={subject}
                     placeholder="e.g. Your invitation to {{eventName}}"
                     onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
-                    onFocus={() => { editorFocusRef.current = "subject"; }}
+                    onFocus={() => {
+                      editorFocusRef.current = "subject";
+                    }}
                   />
                 </div>
               </div>
@@ -279,17 +308,26 @@ function TemplateEditor({
               {/* Body with highlight backdrop */}
               <div class="mb-3">
                 <label class="form-label small fw-semibold mb-1">
-                  Body <span class="text-muted fw-normal">(supports {"{{variables}}"}, {"{{#if}}...{{/if}}"}, {"{{#each}}...{{/each}}"})</span>
+                  Body{" "}
+                  <span class="text-muted fw-normal">
+                    (supports {"{{variables}}"}, {"{{#if}}...{{/if}}"}, {"{{#each}}...{{/each}}"})
+                  </span>
                 </label>
                 <div class="adm-template-overlay-wrap">
-                  <pre ref={bodyPreRef} aria-hidden="true" class="adm-template-backdrop adm-template-backdrop-body"></pre>
+                  <pre
+                    ref={bodyPreRef}
+                    aria-hidden="true"
+                    class="adm-template-backdrop adm-template-backdrop-body"
+                  ></pre>
                   <textarea
                     ref={bodyTextareaRef}
                     class="form-control font-monospace adm-template-input-overlay adm-template-body-input"
                     rows={16}
                     value={body}
                     onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
-                    onFocus={() => { editorFocusRef.current = "body"; }}
+                    onFocus={() => {
+                      editorFocusRef.current = "body";
+                    }}
                     onScroll={handleBodyScroll}
                   />
                 </div>
@@ -333,11 +371,15 @@ function TemplateEditor({
               </div>
 
               <div class="d-flex gap-2 align-items-center flex-wrap">
-                <button class="btn btn-outline-primary" onClick={() => void doPreview()}>Render Preview</button>
+                <button class="btn btn-outline-primary" onClick={() => void doPreview()}>
+                  Render Preview
+                </button>
                 <button class="btn btn-success" onClick={() => void doSave()} disabled={saving}>
                   {saving ? "Saving…" : "Save as Draft"}
                 </button>
-                <span class="text-muted small">Saving creates a new draft version. Activate it below to put it in use.</span>
+                <span class="text-muted small">
+                  Saving creates a new draft version. Activate it below to put it in use.
+                </span>
               </div>
             </div>
 
@@ -351,15 +393,19 @@ function TemplateEditor({
                     <div class="fw-semibold">{previewSubject}</div>
                   </div>
                   <Tabs
-                    items={[{ key: "html", label: "HTML" }, { key: "text", label: "Text" }]}
+                    items={[
+                      { key: "html", label: "HTML" },
+                      { key: "text", label: "Text" },
+                    ]}
                     active={previewTab}
                     onChange={(key) => setPreviewTab(key as "html" | "text")}
                     className="mb-2"
                   />
-                  {previewTab === "html"
-                    ? <iframe ref={iframeRef} sandbox="" class="adm-template-preview-frame" />
-                    : <pre class="json-out adm-template-preview-text">{previewText}</pre>
-                  }
+                  {previewTab === "html" ? (
+                    <iframe ref={iframeRef} sandbox="" class="adm-template-preview-frame" />
+                  ) : (
+                    <pre class="json-out adm-template-preview-text">{previewText}</pre>
+                  )}
                   <div class="small text-muted mt-2">{previewStatus}</div>
                 </div>
               </div>
@@ -376,9 +422,34 @@ function TemplateEditor({
             columns={[
               { header: "Version", cell: (v) => `v${v.version}`, className: "mono" },
               { header: "Status", cell: (v) => <Badge status={v.status} /> },
-              { header: "Checksum", cell: (v) => <>{v.checksum_sha256.substring(0, 12)}…</>, className: "mono adm-template-checksum" },
-              { header: "Created", cell: (v) => v.created_at ? new Date(v.created_at).toLocaleString("en-GB") : "—", className: "mono" },
-              { header: "", cell: (v) => <>{v.status !== "active" ? <button class="btn btn-sm btn-outline-success me-1" onClick={() => void doActivate(v.version)}>Activate</button> : <span class="badge text-bg-success me-1">In use</span>}<button class="btn btn-sm btn-outline-secondary" onClick={() => loadVersion(v)}>Load</button></>, className: "text-nowrap" },
+              {
+                header: "Checksum",
+                cell: (v) => <>{v.checksum_sha256.substring(0, 12)}…</>,
+                className: "mono adm-template-checksum",
+              },
+              {
+                header: "Created",
+                cell: (v) => (v.created_at ? new Date(v.created_at).toLocaleString("en-GB") : "—"),
+                className: "mono",
+              },
+              {
+                header: "",
+                cell: (v) => (
+                  <>
+                    {v.status !== "active" ? (
+                      <button class="btn btn-sm btn-outline-success me-1" onClick={() => void doActivate(v.version)}>
+                        Activate
+                      </button>
+                    ) : (
+                      <span class="badge text-bg-success me-1">In use</span>
+                    )}
+                    <button class="btn btn-sm btn-outline-secondary" onClick={() => loadVersion(v)}>
+                      Load
+                    </button>
+                  </>
+                ),
+                className: "text-nowrap",
+              },
             ]}
             data={versions}
             empty="No versions yet"
@@ -408,15 +479,22 @@ function CreateTemplate({
   const [contentType, setContentType] = useState<"markdown" | "html" | "text">("markdown");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
-  const keyError = key && !/^[a-z][a-z0-9_]*$/.test(key)
-    ? "Use lowercase letters, digits, and underscores only (must start with a letter)"
-    : key && existingKeys.includes(key)
-      ? "A template with this key already exists"
-      : null;
+  const keyError =
+    key && !/^[a-z][a-z0-9_]*$/.test(key)
+      ? "Use lowercase letters, digits, and underscores only (must start with a letter)"
+      : key && existingKeys.includes(key)
+        ? "A template with this key already exists"
+        : null;
 
   async function doCreate() {
-    if (!key || keyError) { toast("Fix the template key first", "error"); return; }
-    if (!body.trim()) { toast("Body cannot be empty", "error"); return; }
+    if (!key || keyError) {
+      toast("Fix the template key first", "error");
+      return;
+    }
+    if (!body.trim()) {
+      toast("Body cannot be empty", "error");
+      return;
+    }
     setSaving(true);
     try {
       await api<{ success: boolean; version: number }>(
@@ -436,7 +514,9 @@ function CreateTemplate({
     <div class="card border-0 shadow-sm">
       <div class="card-header bg-white d-flex align-items-center justify-content-between">
         <span class="fw-semibold">Create New Template</span>
-        <button class="btn btn-sm btn-secondary" onClick={onCancel}>← Back to list</button>
+        <button class="btn btn-sm btn-secondary" onClick={onCancel}>
+          ← Back to list
+        </button>
       </div>
       <div class="card-body" style="max-width:640px">
         <div class="mb-3">
@@ -526,7 +606,9 @@ export function Templates() {
     }
   }, []);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function reloadAndKeepKey(key: string) {
     const data = await api<{ templates: EmailTemplateVersion[] }>("/api/v1/admin/email-templates");
@@ -593,10 +675,36 @@ export function Templates() {
       <DataTable
         columns={[
           { header: "Template Key", cell: (e) => e[0], className: "mono adm-template-key" },
-          { header: "Active", cell: (e) => { const av = e[1].find((v) => v.status === "active"); return av ? `v${av.version}` : "—"; }, className: "mono" },
-          { header: "Status", cell: (e) => { const av = e[1].find((v) => v.status === "active"); const hasDraft = e[1].some((v) => v.status === "draft"); return <><Badge status={av ? "active" : "draft"} />{hasDraft && av && <span class="badge text-bg-warning ms-1">draft pending</span>}</>; } },
+          {
+            header: "Active",
+            cell: (e) => {
+              const av = e[1].find((v) => v.status === "active");
+              return av ? `v${av.version}` : "—";
+            },
+            className: "mono",
+          },
+          {
+            header: "Status",
+            cell: (e) => {
+              const av = e[1].find((v) => v.status === "active");
+              const hasDraft = e[1].some((v) => v.status === "draft");
+              return (
+                <>
+                  <Badge status={av ? "active" : "draft"} />
+                  {hasDraft && av && <span class="badge text-bg-warning ms-1">draft pending</span>}
+                </>
+              );
+            },
+          },
           { header: "Versions", cell: (e) => e[1].length, className: "mono" },
-          { header: "", cell: (e) => <button class="btn btn-sm btn-outline-success" onClick={() => setView({ key: e[0], versions: e[1] })}>Edit →</button> },
+          {
+            header: "",
+            cell: (e) => (
+              <button class="btn btn-sm btn-outline-success" onClick={() => setView({ key: e[0], versions: e[1] })}>
+                Edit →
+              </button>
+            ),
+          },
         ]}
         data={entries}
         empty="No templates"

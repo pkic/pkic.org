@@ -51,7 +51,15 @@ export async function onRequestGet(c: any): Promise<Response> {
   if (row.status === "awaiting_payment") {
     // Async payment method (bank transfer / ACH / SEPA) initiated:
     // checkout completed but settlement takes 1–5 business days.
-    return json({ pending: true, asyncPayment: true, paymentMethodType: row.payment_method_type, sessionExpiresAt: row.session_expires_at }, 202);
+    return json(
+      {
+        pending: true,
+        asyncPayment: true,
+        paymentMethodType: row.payment_method_type,
+        sessionExpiresAt: row.session_expires_at,
+      },
+      202,
+    );
   }
 
   if (row.status === "failed") {
@@ -80,6 +88,6 @@ export class DonationsSessionGet extends OpenAPIRoute {
   schema = {};
 
   async handle(c: any) {
-    return onRequestGet(c as any);
+    return onRequestGet(c);
   }
 }

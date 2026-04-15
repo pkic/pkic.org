@@ -50,28 +50,70 @@ const ON_DEMAND_REASONS = new Set(["schedule_conflict"]);
 type CopyVariants = Record<string, { attendee: string; speaker: string }>;
 
 const COPY_TARGETS: CopyVariants = {
-  heading:          { attendee: "Not able to make it?",                                             speaker: "Not able to submit a proposal?" },
-  intro:            { attendee: "Please let us know why. It helps us improve future events and make them more relevant to people like you.",
-                      speaker: "Please let us know why. It helps us improve future calls for proposals and make the event more relevant to speakers like you." },
-  "topic-label":    { attendee: "What topic would make this event a must-attend for you?",          speaker: "What theme, topic, or format would make this call for proposals compelling for you?" },
-  "topic-help":     { attendee: "helps us shape the agenda",                                       speaker: "helps us shape the call for proposals and speaker experience" },
-  "nps-question":   { attendee: "On a scale of 1-10, how likely are you to attend our next PKI Consortium event?",
-                      speaker: "On a scale of 1-10, how likely are you to submit to a future PKI Consortium call for proposals?" },
-  unsubscribe:      { attendee: "Don't send me invitations to future events",                      speaker: "Don't send me proposal invitations to future events" },
-  "forward-toggle": { attendee: "Know someone who should attend? Make sure they get an invitation", speaker: "Know someone who should submit a proposal? Make sure they get an invitation" },
-  "forward-copy":   { attendee: "They'll receive a personal invitation by email.",                  speaker: "They'll receive a personal proposal invitation by email." },
-  submit:           { attendee: "Decline this invitation",                                          speaker: "Decline this proposal invitation" },
-  "success-title":  { attendee: "Thank you for letting us know",                                    speaker: "Thank you for letting us know" },
-  "success-body":   { attendee: "We hope to see you at a future event!",                            speaker: "We hope to hear from you in a future call for proposals!" },
+  heading: { attendee: "Not able to make it?", speaker: "Not able to submit a proposal?" },
+  intro: {
+    attendee:
+      "Please let us know why. It helps us improve future events and make them more relevant to people like you.",
+    speaker:
+      "Please let us know why. It helps us improve future calls for proposals and make the event more relevant to speakers like you.",
+  },
+  "topic-label": {
+    attendee: "What topic would make this event a must-attend for you?",
+    speaker: "What theme, topic, or format would make this call for proposals compelling for you?",
+  },
+  "topic-help": {
+    attendee: "helps us shape the agenda",
+    speaker: "helps us shape the call for proposals and speaker experience",
+  },
+  "nps-question": {
+    attendee: "On a scale of 1-10, how likely are you to attend our next PKI Consortium event?",
+    speaker: "On a scale of 1-10, how likely are you to submit to a future PKI Consortium call for proposals?",
+  },
+  unsubscribe: {
+    attendee: "Don't send me invitations to future events",
+    speaker: "Don't send me proposal invitations to future events",
+  },
+  "forward-toggle": {
+    attendee: "Know someone who should attend? Make sure they get an invitation",
+    speaker: "Know someone who should submit a proposal? Make sure they get an invitation",
+  },
+  "forward-copy": {
+    attendee: "They'll receive a personal invitation by email.",
+    speaker: "They'll receive a personal proposal invitation by email.",
+  },
+  submit: { attendee: "Decline this invitation", speaker: "Decline this proposal invitation" },
+  "success-title": { attendee: "Thank you for letting us know", speaker: "Thank you for letting us know" },
+  "success-body": {
+    attendee: "We hope to see you at a future event!",
+    speaker: "We hope to hear from you in a future call for proposals!",
+  },
 };
 
 const REASON_LABELS: CopyVariants = {
-  schedule_conflict:  { attendee: "Schedule conflict - I have another commitment",                    speaker: "I won't be able to prepare or submit in time" },
-  travel_not_possible:{ attendee: "Travel is not possible for me",                                    speaker: "Travel to the event is not realistic for me as a speaker" },
-  content_not_relevant:{ attendee: "Content is not relevant to my role",                              speaker: "This call for proposals is not a fit for what I would present" },
-  organization_policy:{ attendee: "Organisation policy prevents me from attending",                   speaker: "Organisation policy prevents me from speaking or submitting" },
-  not_interested:     { attendee: "This event doesn't match my current focus",                        speaker: "Speaking at this event doesn't match my current focus" },
-  already_registered: { attendee: "I'm already registered through another link",                      speaker: "I'm already involved in a proposal or already submitted" },
+  schedule_conflict: {
+    attendee: "Schedule conflict - I have another commitment",
+    speaker: "I won't be able to prepare or submit in time",
+  },
+  travel_not_possible: {
+    attendee: "Travel is not possible for me",
+    speaker: "Travel to the event is not realistic for me as a speaker",
+  },
+  content_not_relevant: {
+    attendee: "Content is not relevant to my role",
+    speaker: "This call for proposals is not a fit for what I would present",
+  },
+  organization_policy: {
+    attendee: "Organisation policy prevents me from attending",
+    speaker: "Organisation policy prevents me from speaking or submitting",
+  },
+  not_interested: {
+    attendee: "This event doesn't match my current focus",
+    speaker: "Speaking at this event doesn't match my current focus",
+  },
+  already_registered: {
+    attendee: "I'm already registered through another link",
+    speaker: "I'm already involved in a proposal or already submitted",
+  },
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -152,12 +194,18 @@ function boot(): void {
     }
 
     if (info.status === "expired") {
-      showStatus("Invitation expired", "This invitation link is no longer valid. Please contact us if you need a new one.");
+      showStatus(
+        "Invitation expired",
+        "This invitation link is no longer valid. Please contact us if you need a new one.",
+      );
       return;
     }
 
     if (info.status === "invalid") {
-      showStatus("Invalid invitation link", "This link doesn\u2019t appear to be valid. Please use the link from your original email.");
+      showStatus(
+        "Invalid invitation link",
+        "This link doesn\u2019t appear to be valid. Please use the link from your original email.",
+      );
       return;
     }
 
@@ -178,9 +226,11 @@ function boot(): void {
 
     // Wire registration link for virtual pivot
     if (info.registrationUrl) {
-      root!.querySelectorAll<HTMLAnchorElement>("[data-registration-link], [data-registration-link-boss]").forEach((a) => {
-        a.href = info.registrationUrl!;
-      });
+      root!
+        .querySelectorAll<HTMLAnchorElement>("[data-registration-link], [data-registration-link-boss]")
+        .forEach((a) => {
+          a.href = info.registrationUrl!;
+        });
     }
 
     if (info.proposalUrl) {
@@ -252,13 +302,29 @@ function boot(): void {
         const isOnDemand = ON_DEMAND_REASONS.has(val);
 
         // Virtual pivot offer
-        isVirtualPivot ? show(virtualPivot) : hide(virtualPivot);
+        if (isVirtualPivot) {
+          show(virtualPivot);
+        } else {
+          hide(virtualPivot);
+        }
         // On-demand recordings offer (schedule conflict)
-        isOnDemand ? show(onDemandPivot) : hide(onDemandPivot);
+        if (isOnDemand) {
+          show(onDemandPivot);
+        } else {
+          hide(onDemandPivot);
+        }
         // Convince-my-boss variant
-        isConvinceBoss ? show(convinceBoss) : hide(convinceBoss);
+        if (isConvinceBoss) {
+          show(convinceBoss);
+        } else {
+          hide(convinceBoss);
+        }
         // Topic gap analysis
-        isTopicGap ? show(topicSuggestion) : hide(topicSuggestion);
+        if (isTopicGap) {
+          show(topicSuggestion);
+        } else {
+          hide(topicSuggestion);
+        }
 
         // Note field: required for "other", optional otherwise
         if (noteOptional) {
@@ -274,7 +340,7 @@ function boot(): void {
   // ── Forward section ─────────────────────────────────────────────────────────
 
   /** Maximum number of forward contacts. Read from data-forward-max; defaults to 10. */
-  const MAX_FORWARDS = parseInt(root!.dataset.forwardMax ?? "", 10) || 10;
+  const MAX_FORWARDS = parseInt(root.dataset.forwardMax ?? "", 10) || 10;
   let forwardCount = 0;
 
   function wireForwardToggle(): void {
@@ -322,10 +388,33 @@ function boot(): void {
     row.dataset.forwardRow = "";
     render(
       <>
-        <input type="text" class="form-control form-control-sm" placeholder="First name" data-fw="firstName" autocomplete="off" value={prefill?.firstName ?? ""} />
-        <input type="text" class="form-control form-control-sm" placeholder="Last name" data-fw="lastName" autocomplete="off" value={prefill?.lastName ?? ""} />
-        <input type="email" class="form-control form-control-sm" placeholder="Email *" data-fw="email" autocomplete="off" value={prefill?.email ?? ""} />
-        <button type="button" class="event-flow-invite-remove-btn" aria-label="Remove contact" data-remove-row>&times;</button>
+        <input
+          type="text"
+          class="form-control form-control-sm"
+          placeholder="First name"
+          data-fw="firstName"
+          autocomplete="off"
+          value={prefill?.firstName ?? ""}
+        />
+        <input
+          type="text"
+          class="form-control form-control-sm"
+          placeholder="Last name"
+          data-fw="lastName"
+          autocomplete="off"
+          value={prefill?.lastName ?? ""}
+        />
+        <input
+          type="email"
+          class="form-control form-control-sm"
+          placeholder="Email *"
+          data-fw="email"
+          autocomplete="off"
+          value={prefill?.email ?? ""}
+        />
+        <button type="button" class="event-flow-invite-remove-btn" aria-label="Remove contact" data-remove-row>
+          &times;
+        </button>
       </>,
       row,
     );
@@ -402,8 +491,8 @@ function boot(): void {
         } else {
           forwards.push({
             email,
-            firstName: (row.querySelector<HTMLInputElement>("[data-fw='firstName']"))?.value.trim() || undefined,
-            lastName: (row.querySelector<HTMLInputElement>("[data-fw='lastName']"))?.value.trim() || undefined,
+            firstName: row.querySelector<HTMLInputElement>("[data-fw='firstName']")?.value.trim() || undefined,
+            lastName: row.querySelector<HTMLInputElement>("[data-fw='lastName']")?.value.trim() || undefined,
           });
         }
       });
@@ -440,8 +529,7 @@ function boot(): void {
         if (result.success) {
           const forwardedMsg = $("[data-success-forwarded]", root!);
           if (forwardedMsg && result.forwarded?.length) {
-            forwardedMsg.textContent =
-              `We\u2019ve sent an invitation to ${result.forwarded.join(", ")}. We hope to see them there!`;
+            forwardedMsg.textContent = `We\u2019ve sent an invitation to ${result.forwarded.join(", ")}. We hope to see them there!`;
           }
           hide(formWrapEl);
           show(successEl);

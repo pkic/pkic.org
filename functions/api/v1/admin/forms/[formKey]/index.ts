@@ -47,11 +47,7 @@ interface FieldRow {
 }
 
 async function getFormWithFields(db: DatabaseLike, formKey: string): Promise<{ form: FormRow; fields: FieldRow[] }> {
-  const form = await first<FormRow>(
-    db,
-    "SELECT * FROM forms WHERE key = ?",
-    [formKey],
-  );
+  const form = await first<FormRow>(db, "SELECT * FROM forms WHERE key = ?", [formKey]);
   if (!form) throw new AppError(404, "FORM_NOT_FOUND", `Form '${formKey}' not found`);
 
   const fields = await all<FieldRow>(
@@ -131,15 +127,10 @@ export async function onRequestPatch(c: any): Promise<Response> {
     await run(c.env.DB, "UPDATE forms SET updated_at = ? WHERE id = ?", [now, form.id]);
   }
 
-  await writeAuditLog(
-    c.env.DB,
-    "admin",
-    admin.id,
-    "form_updated",
-    "form",
-    form.id,
-    { key: form.key, fieldsReplaced: body.fields !== undefined },
-  );
+  await writeAuditLog(c.env.DB, "admin", admin.id, "form_updated", "form", form.id, {
+    key: form.key,
+    fieldsReplaced: body.fields !== undefined,
+  });
 
   const updated = await getFormWithFields(c.env.DB, c.req.param("formKey"));
   return json({ success: true, form: updated.form, fields: mapFields(updated.fields) });
@@ -156,11 +147,7 @@ export async function onRequestDelete(c: any): Promise<Response> {
   );
 
   if ((subCount?.n ?? 0) > 0) {
-    await run(
-      c.env.DB,
-      "UPDATE forms SET status = 'archived', updated_at = ? WHERE id = ?",
-      [nowIso(), form.id],
-    );
+    await run(c.env.DB, "UPDATE forms SET status = 'archived', updated_at = ? WHERE id = ?", [nowIso(), form.id]);
     await writeAuditLog(c.env.DB, "admin", admin.id, "form_archived", "form", form.id, { key: form.key });
     return json({ success: true, action: "archived", message: "Form archived — submissions preserved." });
   }
@@ -176,7 +163,7 @@ export class AdminFormsFormKeyGet extends OpenAPIRoute {
 
   async handle(c: any) {
     try {
-      return await onRequestGet(c as any);
+      return await onRequestGet(c);
     } catch (error) {
       return handleError(error);
     }
@@ -188,7 +175,7 @@ export class AdminFormsFormKeyPatch extends OpenAPIRoute {
 
   async handle(c: any) {
     try {
-      return await onRequestPatch(c as any);
+      return await onRequestPatch(c);
     } catch (error) {
       return handleError(error);
     }
@@ -200,7 +187,7 @@ export class AdminFormsFormKeyDelete extends OpenAPIRoute {
 
   async handle(c: any) {
     try {
-      return await onRequestDelete(c as any);
+      return await onRequestDelete(c);
     } catch (error) {
       return handleError(error);
     }

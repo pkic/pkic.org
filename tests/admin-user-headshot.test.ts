@@ -16,7 +16,11 @@ interface StoredObject {
 class FakeUploadsBucket {
   private readonly objects = new Map<string, StoredObject>();
 
-  async put(key: string, value: string | ArrayBuffer | ReadableStream, options?: Record<string, unknown>): Promise<void> {
+  async put(
+    key: string,
+    value: string | ArrayBuffer | ReadableStream,
+    options?: Record<string, unknown>,
+  ): Promise<void> {
     let body: ArrayBuffer;
 
     if (typeof value === "string") {
@@ -64,7 +68,9 @@ async function setup(): Promise<{ adminId: string; targetUserId: string }> {
   await env.DB.prepare(
     `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
      VALUES (?, ?, ?, 'Upload', 'Target', 'user', 1, datetime('now'), datetime('now'))`,
-  ).bind(targetUserId, "upload-target@example.test", "upload-target@example.test").run();
+  )
+    .bind(targetUserId, "upload-target@example.test", "upload-target@example.test")
+    .run();
 
   return { adminId, targetUserId };
 }
@@ -97,11 +103,9 @@ describe("admin user headshot upload", () => {
     expect(payload.r2Key.startsWith(`headshots/${targetUserId}/`)).toBe(true);
 
     const row = (
-      await queryAll<{ headshot_r2_key: string | null }>(
-        env.DB,
-        "SELECT headshot_r2_key FROM users WHERE id = ?",
-        [targetUserId],
-      )
+      await queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", [
+        targetUserId,
+      ])
     )[0];
     expect(row.headshot_r2_key).toBe(payload.r2Key);
   });
@@ -122,7 +126,9 @@ describe("admin user headshot upload", () => {
       body: formData,
     });
 
-    const context = createContext({ ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket }, request, { userId: targetUserId });
+    const context = createContext({ ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket }, request, {
+      userId: targetUserId,
+    });
     context.req!.parseBody = async () => ({ file });
 
     const response = await adminUserHeadshotRequest(context);
@@ -169,11 +175,10 @@ describe("admin user headshot upload", () => {
       body: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]),
     });
 
-    const response = await app.fetch(
-      request,
-      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
-      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
-    );
+    const response = await app.fetch(request, { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket }, {
+      passThroughOnException: () => {},
+      waitUntil: () => {},
+    } as any);
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { success: boolean; r2Key: string };

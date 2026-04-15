@@ -71,11 +71,11 @@ export async function queueRegistrationStatusEmail(
 
   const manageToken = randomToken(24);
   const manageTokenHash = await sha256Hex(manageToken);
-  await run(
-    db,
-    "UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?",
-    [manageTokenHash, nowIso(), registration.id],
-  );
+  await run(db, "UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?", [
+    manageTokenHash,
+    nowIso(),
+    registration.id,
+  ]);
 
   const manageUrl = registrationManagePageUrl(params.appBaseUrl, params.event, manageToken);
   const outboxId = await queueEmail(db, {

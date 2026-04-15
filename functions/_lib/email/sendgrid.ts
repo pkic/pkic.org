@@ -26,12 +26,12 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
   const fromName = env.FROM_NAME ?? env.SENDGRID_FROM_NAME ?? "PKI Consortium";
 
   const payload: Record<string, unknown> = {
-    personalizations: [{
-      to: [{ email: message.to }],
-      ...(message.bcc && message.bcc.length > 0
-        ? { bcc: message.bcc.map((email) => ({ email })) }
-        : {}),
-    }],
+    personalizations: [
+      {
+        to: [{ email: message.to }],
+        ...(message.bcc && message.bcc.length > 0 ? { bcc: message.bcc.map((email) => ({ email })) } : {}),
+      },
+    ],
     from: { email: fromEmail, name: fromName },
     ...(message.replyTo ? { reply_to: { email: message.replyTo } } : {}),
     subject: message.subject,
@@ -39,10 +39,12 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
       { type: "text/plain", value: message.text },
       { type: "text/html", value: message.html },
       ...(message.calendarIcsContent
-        ? [{
-          type: "text/calendar; method=REQUEST",
-          value: message.calendarIcsContent,
-        }]
+        ? [
+            {
+              type: "text/calendar; method=REQUEST",
+              value: message.calendarIcsContent,
+            },
+          ]
         : []),
     ],
     categories: message.categories ?? [],

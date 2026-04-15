@@ -137,14 +137,18 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
           const label = detectLabel(url);
           return (
             <span key={url} class="profile-links-pill" title={url}>
-              <span class="profile-links-pill-icon"><IconLink /></span>
+              <span class="profile-links-pill-icon">
+                <IconLink />
+              </span>
               <span class="profile-links-pill-label">{label}</span>
               <button
                 type="button"
                 class="profile-links-pill-remove"
                 aria-label={`Remove ${label}`}
                 onClick={() => remove(i)}
-              ><IconRemove /></button>
+              >
+                <IconRemove />
+              </button>
             </span>
           );
         })}
@@ -166,7 +170,9 @@ export const ProfileLinksInput = forwardRef(function ProfileLinksInput(
             class="btn btn-outline-secondary btn-sm profile-links-add-btn"
             aria-label="Add profile link"
             onClick={tryAdd}
-          ><IconPlus /></button>
+          >
+            <IconPlus />
+          </button>
         </div>
       )}
 

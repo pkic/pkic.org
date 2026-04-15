@@ -68,11 +68,15 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
     }
   }, [userId]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   useEffect(() => {
     if (!user) return;
-    setHeadshotStatus(user.headshot_updated_at ? `Updated: ${new Date(user.headshot_updated_at).toLocaleString("en-GB")}` : "");
+    setHeadshotStatus(
+      user.headshot_updated_at ? `Updated: ${new Date(user.headshot_updated_at).toLocaleString("en-GB")}` : "",
+    );
 
     wireHeadshotController({
       preview: headshotPreviewRef.current,
@@ -85,7 +89,16 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
         emptyLabel: "User",
         containerClass: "adm-headshot-preview",
         imageClass: ["rounded-circle", "border", "shadow-sm", "adm-headshot-preview-img"],
-        placeholderClass: ["rounded-circle", "border", "bg-light", "d-flex", "align-items-center", "justify-content-center", "mx-auto", "adm-headshot-placeholder"],
+        placeholderClass: [
+          "rounded-circle",
+          "border",
+          "bg-light",
+          "d-flex",
+          "align-items-center",
+          "justify-content-center",
+          "mx-auto",
+          "adm-headshot-placeholder",
+        ],
       },
       disclaimerOptions: {
         title: "Before uploading a photo",
@@ -117,7 +130,7 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
     const token = authToken.value;
     if (token) headers["Authorization"] = `Bearer ${token}`;
     const res = await fetch(`/api/v1/admin/users/${uid}/headshot`, { method: "PUT", headers, body: file });
-    const data = await res.json().catch(() => ({})) as { error?: { message?: string } };
+    const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
     if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`);
   }
 
@@ -127,7 +140,11 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
 
   async function fetchGravatar() {
     if (!user) return;
-    const accepted = await confirmHeadshotUsage({ title: "Before uploading a photo", texts: HEADSHOT_DISCLAIMER, confirmText: "Proceed" });
+    const accepted = await confirmHeadshotUsage({
+      title: "Before uploading a photo",
+      texts: HEADSHOT_DISCLAIMER,
+      confirmText: "Proceed",
+    });
     if (!accepted) return;
     setHeadshotStatus("Looking up Gravatar...");
     try {
@@ -149,7 +166,9 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
   return (
     <div>
       <div class="d-flex align-items-center gap-2 mb-3">
-        <button class="btn btn-sm btn-outline-secondary" onClick={onBack}>← Back to list</button>
+        <button class="btn btn-sm btn-outline-secondary" onClick={onBack}>
+          ← Back to list
+        </button>
         <span class="page-heading mb-0">{displayName}</span>
       </div>
       <div class="row g-4">
@@ -161,7 +180,10 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
                 📷 Upload headshot
                 <input ref={headshotFileRef} type="file" accept="image/jpeg,image/png,image/webp" class="d-none" />
               </label>
-              <button class="btn btn-sm btn-outline-secondary w-100 adm-headshot-btn" onClick={() => void fetchGravatar()}>
+              <button
+                class="btn btn-sm btn-outline-secondary w-100 adm-headshot-btn"
+                onClick={() => void fetchGravatar()}
+              >
                 🌐 Fetch from Gravatar
               </button>
               <button ref={headshotDeleteRef} class="btn btn-sm btn-outline-danger w-100 adm-headshot-btn d-none">
@@ -193,11 +215,19 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
                   ))}
                   <tr>
                     <th class="text-muted small adm-user-info-label">Role</th>
-                    <td><span class={`badge text-bg-${ROLE_COLOR[user.role] ?? "secondary"}`}>{user.role}</span></td>
+                    <td>
+                      <span class={`badge text-bg-${ROLE_COLOR[user.role] ?? "secondary"}`}>{user.role}</span>
+                    </td>
                   </tr>
                   <tr>
                     <th class="text-muted small adm-user-info-label">Active</th>
-                    <td>{user.active ? <span class="badge text-bg-success">Yes</span> : <span class="badge text-bg-danger">No</span>}</td>
+                    <td>
+                      {user.active ? (
+                        <span class="badge text-bg-success">Yes</span>
+                      ) : (
+                        <span class="badge text-bg-danger">No</span>
+                      )}
+                    </td>
                   </tr>
                   <tr>
                     <th class="text-muted small adm-user-info-label">Created</th>
@@ -257,7 +287,11 @@ function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
       searchPlaceholder="email or name"
       params={roleFilter ? { role: roleFilter } : {}}
       toolbar={() => (
-        <select class="form-select form-select-sm w-auto" value={roleFilter} onChange={(e) => setRoleFilter((e.target as HTMLSelectElement).value)}>
+        <select
+          class="form-select form-select-sm w-auto"
+          value={roleFilter}
+          onChange={(e) => setRoleFilter((e.target as HTMLSelectElement).value)}
+        >
           <option value="">All roles</option>
           <option value="admin">Admin</option>
           <option value="user">User</option>
@@ -265,12 +299,46 @@ function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
         </select>
       )}
       columns={[
-        { header: "Email", cell: (user) => <a href={`mailto:${user.email}`} class="text-decoration-none" onClick={(e) => e.stopPropagation()}>{user.email}</a>, className: "mono adm-user-email" },
-        { header: "Name", cell: (user) => [user.first_name, user.last_name].filter(Boolean).join(" ") || "—", className: "fw-semibold" },
+        {
+          header: "Email",
+          cell: (user) => (
+            <a href={`mailto:${user.email}`} class="text-decoration-none" onClick={(e) => e.stopPropagation()}>
+              {user.email}
+            </a>
+          ),
+          className: "mono adm-user-email",
+        },
+        {
+          header: "Name",
+          cell: (user) => [user.first_name, user.last_name].filter(Boolean).join(" ") || "—",
+          className: "fw-semibold",
+        },
         { header: "Organisation", cell: (user) => user.organization_name ?? "—", className: "small text-muted" },
-        { header: "Role", cell: (user) => <span class={`badge text-bg-${ROLE_COLOR[user.role] ?? "secondary"}`}>{user.role}</span> },
+        {
+          header: "Role",
+          cell: (user) => <span class={`badge text-bg-${ROLE_COLOR[user.role] ?? "secondary"}`}>{user.role}</span>,
+        },
         { header: "Since", cell: (user) => fmt(user.created_at), className: "mono" },
-        { header: "", cell: (user) => <div onClick={(e) => e.stopPropagation()}><select class="form-select form-select-sm d-inline-block adm-user-role-select" value={user.role} data-current-role={user.role} onChange={(e) => { e.stopPropagation(); void updateRole(user.id, (e.target as HTMLSelectElement).value, e.target as HTMLSelectElement); }}><option value="admin">admin</option><option value="user">user</option><option value="guest">guest</option></select></div> },
+        {
+          header: "",
+          cell: (user) => (
+            <div onClick={(e) => e.stopPropagation()}>
+              <select
+                class="form-select form-select-sm d-inline-block adm-user-role-select"
+                value={user.role}
+                data-current-role={user.role}
+                onChange={(e) => {
+                  e.stopPropagation();
+                  void updateRole(user.id, (e.target as HTMLSelectElement).value, e.target as HTMLSelectElement);
+                }}
+              >
+                <option value="admin">admin</option>
+                <option value="user">user</option>
+                <option value="guest">guest</option>
+              </select>
+            </div>
+          ),
+        },
       ]}
       empty="No users found"
       rowKey={(user) => user.id}

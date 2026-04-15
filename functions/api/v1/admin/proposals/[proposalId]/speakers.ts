@@ -12,14 +12,10 @@
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
-import {
-  listProposalSpeakersWithStatus,
-} from "../../../../../_lib/services/proposals";
+import { listProposalSpeakersWithStatus } from "../../../../../_lib/services/proposals";
 import { first } from "../../../../../_lib/db/queries";
 
-export async function onRequestGet(
-  c: any,
-): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
   const proposalId = c.req.param("proposalId");
 
@@ -92,9 +88,7 @@ export async function onRequestGet(
   });
 }
 
-export async function onRequest(
-  c: any,
-): Promise<Response> {
+export async function onRequest(c: any): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

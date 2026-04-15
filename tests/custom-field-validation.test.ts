@@ -1,4 +1,4 @@
-import { describe, expect, it, beforeEach} from "vitest";
+import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
@@ -78,7 +78,9 @@ async function seedRegistrationForm(_db: DatabaseLike, eventId: string): Promise
 }
 
 describe("custom field validation", () => {
-  beforeEach(async () => { await resetDb(); });
+  beforeEach(async () => {
+    await resetDb();
+  });
   it("rejects invalid registration custom answers", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await seedRegistrationForm(env.DB, eventId);
@@ -155,10 +157,13 @@ describe("custom field validation", () => {
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { registrationId: string };
-    const row = ((await queryAll<{ custom_answers_json: string | null }>(env.DB, 
-      "SELECT custom_answers_json FROM registrations WHERE id = ?",
-      [payload.registrationId],
-    )))[0];
+    const row = (
+      await queryAll<{ custom_answers_json: string | null }>(
+        env.DB,
+        "SELECT custom_answers_json FROM registrations WHERE id = ?",
+        [payload.registrationId],
+      )
+    )[0];
 
     expect(row.custom_answers_json).toBeTruthy();
     const parsed = JSON.parse(String(row.custom_answers_json)) as Record<string, unknown>;

@@ -16,8 +16,18 @@ function highlightBody(src: string): string {
 
 // ─── Variable snippet button ──────────────────────────────────────────────────
 
-function SnippetBtn({ snippet, label, personal, personalOnly, onInsert }: {
-  snippet: string; label: string; personal: boolean; personalOnly?: boolean; onInsert: (s: string) => void;
+function SnippetBtn({
+  snippet,
+  label,
+  personal,
+  personalOnly,
+  onInsert,
+}: {
+  snippet: string;
+  label: string;
+  personal: boolean;
+  personalOnly?: boolean;
+  onInsert: (s: string) => void;
 }) {
   const disabled = personalOnly && !personal;
   return (
@@ -34,7 +44,12 @@ function SnippetBtn({ snippet, label, personal, personalOnly, onInsert }: {
 
 // ─── Template selector ────────────────────────────────────────────────────────
 
-interface TemplateOption { key: string; label: string; subject: string; body: string }
+interface TemplateOption {
+  key: string;
+  label: string;
+  subject: string;
+  body: string;
+}
 
 function useTemplates(): { templates: TemplateOption[]; loading: boolean } {
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
@@ -61,7 +76,9 @@ function useTemplates(): { templates: TemplateOption[]; loading: boolean } {
 function useDays(slug: string) {
   const [days, setDays] = useState<Array<{ day_date?: string; date?: string; label?: string | null }>>([]);
   useEffect(() => {
-    api<{ days: Array<{ day_date?: string; date?: string; label?: string | null }> }>(`/api/v1/admin/events/${slug}/days`)
+    api<{ days: Array<{ day_date?: string; date?: string; label?: string | null }> }>(
+      `/api/v1/admin/events/${slug}/days`,
+    )
       .then((d) => setDays(d.days ?? []))
       .catch(() => {});
   }, [slug]);
@@ -70,7 +87,13 @@ function useDays(slug: string) {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { slug: string; audience?: "attendees" | "speakers" }) {
+export function EventEmail({
+  slug,
+  audience: defaultAudience = "attendees",
+}: {
+  slug: string;
+  audience?: "attendees" | "speakers";
+}) {
   const { templates, loading: templatesLoading } = useTemplates();
   const days = useDays(slug);
 
@@ -90,7 +113,13 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
   const [speakerStatus, setSpeakerStatus] = useState("confirmed");
 
   // preview state
-  const [preview, setPreview] = useState<{ subject: string; html: string; text: string; recipientCount?: number; token?: string } | null>(null);
+  const [preview, setPreview] = useState<{
+    subject: string;
+    html: string;
+    text: string;
+    recipientCount?: number;
+    token?: string;
+  } | null>(null);
   const [previewTab, setPreviewTab] = useState<"html" | "text">("html");
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
   const [status, setStatus] = useState("Preview required before sending.");
@@ -129,7 +158,10 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
     setTemplateKey(key);
     if (!key) return;
     const tpl = templates.find((t) => t.key === key);
-    if (tpl) { setSubject(tpl.subject); setBody(tpl.body); }
+    if (tpl) {
+      setSubject(tpl.subject);
+      setBody(tpl.body);
+    }
   }
 
   function buildPayload(withToken?: string) {
@@ -147,7 +179,10 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
   }
 
   async function handlePreview() {
-    if (!subject.trim() || !body.trim()) { toast("Subject and body are required.", "error"); return; }
+    if (!subject.trim() || !body.trim()) {
+      toast("Subject and body are required.", "error");
+      return;
+    }
     setStatus("Generating preview…");
     setPreview(null);
     setPreviewConfirmed(false);
@@ -158,7 +193,9 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
       );
       setPreview(res);
       if (iframeRef.current) iframeRef.current.srcdoc = res.html;
-      setStatus(`Preview ready — ${res.recipientCount != null ? `${res.recipientCount} recipients` : "confirm to send"}.`);
+      setStatus(
+        `Preview ready — ${res.recipientCount != null ? `${res.recipientCount} recipients` : "confirm to send"}.`,
+      );
     } catch (e) {
       const msg = (e as Error).message;
       setStatus(msg);
@@ -167,7 +204,10 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
   }
 
   async function handleSend() {
-    if (!previewConfirmed) { toast("Review the preview and tick the confirmation checkbox.", "error"); return; }
+    if (!previewConfirmed) {
+      toast("Review the preview and tick the confirmation checkbox.", "error");
+      return;
+    }
     if (!preview) return;
     setSending(true);
     setStatus("Sending…");
@@ -201,14 +241,27 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
       <div class="row g-2 mb-2">
         <div class="col-md-6">
           <label class="form-label small mb-1">Template</label>
-          <select class="form-select form-select-sm" value={templateKey} onChange={(e) => handleTemplateChange((e.target as HTMLSelectElement).value)} disabled={templatesLoading}>
+          <select
+            class="form-select form-select-sm"
+            value={templateKey}
+            onChange={(e) => handleTemplateChange((e.target as HTMLSelectElement).value)}
+            disabled={templatesLoading}
+          >
             <option value="">— write from scratch —</option>
-            {templates.map((t) => <option key={t.key} value={t.key}>{t.key}</option>)}
+            {templates.map((t) => (
+              <option key={t.key} value={t.key}>
+                {t.key}
+              </option>
+            ))}
           </select>
         </div>
         <div class="col-md-3">
           <label class="form-label small mb-1">Delivery mode</label>
-          <select class="form-select form-select-sm" value={mode} onChange={(e) => setMode((e.target as HTMLSelectElement).value as "personal" | "bcc_batch")}>
+          <select
+            class="form-select form-select-sm"
+            value={mode}
+            onChange={(e) => setMode((e.target as HTMLSelectElement).value as "personal" | "bcc_batch")}
+          >
             <option value="personal">Personal (1:1)</option>
             <option value="bcc_batch">Broadcast BCC</option>
           </select>
@@ -216,7 +269,14 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
         {!personal && (
           <div class="col-md-3">
             <label class="form-label small mb-1">BCC batch size</label>
-            <input class="form-control form-control-sm" type="number" min={1} max={500} value={batchSize} onInput={(e) => setBatchSize(parseInt((e.target as HTMLInputElement).value) || 500)} />
+            <input
+              class="form-control form-control-sm"
+              type="number"
+              min={1}
+              max={500}
+              value={batchSize}
+              onInput={(e) => setBatchSize(parseInt((e.target as HTMLInputElement).value) || 500)}
+            />
           </div>
         )}
       </div>
@@ -224,19 +284,23 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
       {/* Subject */}
       <div class="mb-2">
         <label class="form-label small mb-1">Subject</label>
-        <input class="form-control form-control-sm" type="text" placeholder="Email subject" value={subject} onInput={(e) => setSubject((e.target as HTMLInputElement).value)} />
+        <input
+          class="form-control form-control-sm"
+          type="text"
+          placeholder="Email subject"
+          value={subject}
+          onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
+        />
       </div>
 
       {/* Body + variables sidebar */}
       <div class="row g-2 mb-2">
         <div class="col-md-8">
-          <label class="form-label small mb-1">Message <span class="text-muted fw-normal">(Markdown, {"{{variables}}"})</span></label>
+          <label class="form-label small mb-1">
+            Message <span class="text-muted fw-normal">(Markdown, {"{{variables}}"})</span>
+          </label>
           <div class="adm-email-editor-wrap">
-            <pre
-              ref={bodyPreRef}
-              aria-hidden="true"
-              class="adm-email-backdrop"
-            />
+            <pre ref={bodyPreRef} aria-hidden="true" class="adm-email-backdrop" />
             <textarea
               ref={bodyTextareaRef}
               class="form-control font-monospace adm-email-body-input"
@@ -252,21 +316,57 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
           <div class="card border-0 bg-light h-100 p-2">
             <div class="small fw-semibold mb-1">Variables</div>
             <div class="d-flex gap-1 flex-wrap mb-3">
-              <SnippetBtn snippet="{{firstName}}" label="firstName" personal={personal} personalOnly onInsert={insertSnippet} />
-              <SnippetBtn snippet="{{lastName}}" label="lastName" personal={personal} personalOnly onInsert={insertSnippet} />
+              <SnippetBtn
+                snippet="{{firstName}}"
+                label="firstName"
+                personal={personal}
+                personalOnly
+                onInsert={insertSnippet}
+              />
+              <SnippetBtn
+                snippet="{{lastName}}"
+                label="lastName"
+                personal={personal}
+                personalOnly
+                onInsert={insertSnippet}
+              />
               <SnippetBtn snippet="{{eventName}}" label="eventName" personal={personal} onInsert={insertSnippet} />
               <SnippetBtn snippet="{{eventUrl}}" label="eventUrl" personal={personal} onInsert={insertSnippet} />
-              <SnippetBtn snippet="{{proposalTitle}}" label="proposalTitle" personal={personal} personalOnly onInsert={insertSnippet} />
-              <SnippetBtn snippet="{{registrationUrl}}" label="registrationUrl" personal={personal} onInsert={insertSnippet} />
+              <SnippetBtn
+                snippet="{{proposalTitle}}"
+                label="proposalTitle"
+                personal={personal}
+                personalOnly
+                onInsert={insertSnippet}
+              />
+              <SnippetBtn
+                snippet="{{registrationUrl}}"
+                label="registrationUrl"
+                personal={personal}
+                onInsert={insertSnippet}
+              />
               <SnippetBtn snippet="{{proposalUrl}}" label="proposalUrl" personal={personal} onInsert={insertSnippet} />
             </div>
             <div class="small fw-semibold mb-1">Partials</div>
             <div class="d-flex gap-1 flex-wrap mb-2">
-              <SnippetBtn snippet="{{> reg_details}}" label="reg_details" personal={personal} personalOnly onInsert={insertSnippet} />
-              <SnippetBtn snippet="{{> sponsors_block}}" label="sponsors_block" personal={personal} onInsert={insertSnippet} />
+              <SnippetBtn
+                snippet="{{> reg_details}}"
+                label="reg_details"
+                personal={personal}
+                personalOnly
+                onInsert={insertSnippet}
+              />
+              <SnippetBtn
+                snippet="{{> sponsors_block}}"
+                label="sponsors_block"
+                personal={personal}
+                onInsert={insertSnippet}
+              />
               <SnippetBtn snippet="{{> about_pkic}}" label="about_pkic" personal={personal} onInsert={insertSnippet} />
             </div>
-            {!personal && <div class="small text-muted mt-1">Recipient-specific tags are disabled in Broadcast BCC mode.</div>}
+            {!personal && (
+              <div class="small text-muted mt-1">Recipient-specific tags are disabled in Broadcast BCC mode.</div>
+            )}
           </div>
         </div>
       </div>
@@ -276,7 +376,11 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
         <div class="row g-2 mb-2">
           <div class="col-md-4">
             <label class="form-label small mb-1">Registration status</label>
-            <select class="form-select form-select-sm" value={attendeeStatus} onChange={(e) => setAttendeeStatus((e.target as HTMLSelectElement).value)}>
+            <select
+              class="form-select form-select-sm"
+              value={attendeeStatus}
+              onChange={(e) => setAttendeeStatus((e.target as HTMLSelectElement).value)}
+            >
               <option value="registered">Registered</option>
               <option value="all">All</option>
               <option value="pending_email_confirmation">Pending confirmation</option>
@@ -286,7 +390,11 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
           </div>
           <div class="col-md-4">
             <label class="form-label small mb-1">Attendance type</label>
-            <select class="form-select form-select-sm" value={attendanceType} onChange={(e) => setAttendanceType((e.target as HTMLSelectElement).value)}>
+            <select
+              class="form-select form-select-sm"
+              value={attendanceType}
+              onChange={(e) => setAttendanceType((e.target as HTMLSelectElement).value)}
+            >
               <option value="all">All types</option>
               <option value="in_person">In-person</option>
               <option value="virtual">Virtual</option>
@@ -295,11 +403,19 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
           </div>
           <div class="col-md-4">
             <label class="form-label small mb-1">Specific day</label>
-            <select class="form-select form-select-sm" value={dayFilter} onChange={(e) => setDayFilter((e.target as HTMLSelectElement).value)}>
+            <select
+              class="form-select form-select-sm"
+              value={dayFilter}
+              onChange={(e) => setDayFilter((e.target as HTMLSelectElement).value)}
+            >
               <option value="">All days</option>
               {days.map((d) => {
                 const dateKey = d.day_date ?? d.date ?? "";
-                return <option key={dateKey} value={dateKey}>{d.label ?? dateKey}</option>;
+                return (
+                  <option key={dateKey} value={dateKey}>
+                    {d.label ?? dateKey}
+                  </option>
+                );
               })}
             </select>
           </div>
@@ -308,7 +424,11 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
         <div class="row g-2 mb-2">
           <div class="col-md-4">
             <label class="form-label small mb-1">Speaker status</label>
-            <select class="form-select form-select-sm" value={speakerStatus} onChange={(e) => setSpeakerStatus((e.target as HTMLSelectElement).value)}>
+            <select
+              class="form-select form-select-sm"
+              value={speakerStatus}
+              onChange={(e) => setSpeakerStatus((e.target as HTMLSelectElement).value)}
+            >
               <option value="confirmed">Confirmed</option>
               <option value="all">All active</option>
               <option value="invited">Invited</option>
@@ -320,8 +440,17 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
 
       {/* Action bar */}
       <div class="d-flex gap-2 align-items-center flex-wrap mb-2">
-        <button type="button" class="btn btn-sm btn-outline-primary" onClick={() => void handlePreview()}>Preview Email</button>
-        <button type="button" class="btn btn-sm btn-primary" onClick={() => void handleSend()} disabled={sending || !previewConfirmed}>Send Email</button>
+        <button type="button" class="btn btn-sm btn-outline-primary" onClick={() => void handlePreview()}>
+          Preview Email
+        </button>
+        <button
+          type="button"
+          class="btn btn-sm btn-primary"
+          onClick={() => void handleSend()}
+          disabled={sending || !previewConfirmed}
+        >
+          Send Email
+        </button>
         <span class="small text-muted">{status}</span>
       </div>
 
@@ -332,9 +461,14 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
           <div class="card-body">
             <div class="small text-muted">Subject</div>
             <div class="fw-semibold mb-2">{preview.subject}</div>
-            {preview.recipientCount != null && <div class="small text-muted mb-1">{preview.recipientCount} recipients</div>}
+            {preview.recipientCount != null && (
+              <div class="small text-muted mb-1">{preview.recipientCount} recipients</div>
+            )}
             <Tabs
-              items={[{ key: "html", label: "HTML" }, { key: "text", label: "Text" }]}
+              items={[
+                { key: "html", label: "HTML" },
+                { key: "text", label: "Text" },
+              ]}
               active={previewTab}
               onChange={(key) => setPreviewTab(key as "html" | "text")}
               className="mb-2"
@@ -342,8 +476,16 @@ export function EventEmail({ slug, audience: defaultAudience = "attendees" }: { 
             {previewTab === "html" && <iframe ref={iframeRef} sandbox="" class="adm-email-preview-frame" />}
             {previewTab === "text" && <pre class="json-out adm-email-preview-text">{preview.text}</pre>}
             <div class="form-check mt-2">
-              <input class="form-check-input" type="checkbox" id="em-confirm" checked={previewConfirmed} onChange={(e) => setPreviewConfirmed((e.target as HTMLInputElement).checked)} />
-              <label class="form-check-label small" for="em-confirm">I reviewed this email preview and confirm sending.</label>
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="em-confirm"
+                checked={previewConfirmed}
+                onChange={(e) => setPreviewConfirmed((e.target as HTMLInputElement).checked)}
+              />
+              <label class="form-check-label small" for="em-confirm">
+                I reviewed this email preview and confirm sending.
+              </label>
             </div>
           </div>
         </div>

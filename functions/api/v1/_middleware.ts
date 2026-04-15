@@ -12,24 +12,14 @@ function isPublicCacheableGet(pathname: string): boolean {
  * the top of their handler so the middleware reads it from context.data.
  */
 function isAdminPath(pathname: string): boolean {
-  return (
-    pathname.startsWith("/api/v1/admin/") ||
-    pathname.startsWith("/api/v1/internal/")
-  );
+  return pathname.startsWith("/api/v1/admin/") || pathname.startsWith("/api/v1/internal/");
 }
 
-function applyCachePolicy(
-  request: Request,
-  response: Response,
-  sensitive?: boolean,
-): void {
+function applyCachePolicy(request: Request, response: Response, sensitive?: boolean): void {
   const pathname = new URL(request.url).pathname.replace(/\/+$/, "") || "/";
   const method = request.method.toUpperCase();
   const hasAuthHeader = Boolean(request.headers.get("authorization"));
-  const isSensitive =
-    hasAuthHeader ||
-    isAdminPath(pathname) ||
-    sensitive === true;
+  const isSensitive = hasAuthHeader || isAdminPath(pathname) || sensitive === true;
 
   if (isSensitive || !["GET", "HEAD"].includes(method)) {
     response.headers.set("cache-control", NO_STORE_CACHE_CONTROL);
@@ -75,12 +65,14 @@ export async function onRequest(c: any, next?: () => Promise<void>): Promise<Res
     c.data = c.data ?? {};
     c.data.requestId = requestId;
   }
-  const runNext = next ?? (async () => {
-    const response = await c.next?.();
-    if (isHonoContext && response) {
-      c.res = response;
-    }
-  });
+  const runNext =
+    next ??
+    (async () => {
+      const response = await c.next?.();
+      if (isHonoContext && response) {
+        c.res = response;
+      }
+    });
 
   await runNext();
   return finalizeApiResponse(

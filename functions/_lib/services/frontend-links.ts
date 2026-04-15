@@ -1,13 +1,9 @@
 import { logInfo } from "../logging";
 import { resolveEventFrontendRoutes, type EventRecord } from "./events";
 
-type EventRouteSource = Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json">;;
+type EventRouteSource = Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json">;
 
-function buildUrl(
-  appBaseUrl: string,
-  path: string,
-  query: Record<string, string | undefined | null>,
-): string {
+function buildUrl(appBaseUrl: string, path: string, query: Record<string, string | undefined | null>): string {
   const url = new URL(path, appBaseUrl);
   for (const [key, value] of Object.entries(query)) {
     if (value && value.trim().length > 0) {
@@ -47,11 +43,7 @@ export function registrationPageUrl(
   });
 }
 
-export function registrationConfirmPageUrl(
-  appBaseUrl: string,
-  event: EventRouteSource,
-  token: string,
-): string {
+export function registrationConfirmPageUrl(appBaseUrl: string, event: EventRouteSource, token: string): string {
   const routes = routesForEvent(event);
   return buildUrl(appBaseUrl, routes.registrationConfirmPath, {
     event: event.slug,
@@ -59,11 +51,7 @@ export function registrationConfirmPageUrl(
   });
 }
 
-export function registrationManagePageUrl(
-  appBaseUrl: string,
-  event: EventRouteSource,
-  token: string,
-): string {
+export function registrationManagePageUrl(appBaseUrl: string, event: EventRouteSource, token: string): string {
   const routes = routesForEvent(event);
   return buildUrl(appBaseUrl, routes.registrationManagePath, {
     event: event.slug,
@@ -71,11 +59,7 @@ export function registrationManagePageUrl(
   });
 }
 
-export function inviteDeclineUrl(
-  appBaseUrl: string,
-  event: EventRouteSource,
-  inviteToken: string,
-): string {
+export function inviteDeclineUrl(appBaseUrl: string, event: EventRouteSource, inviteToken: string): string {
   const routes = routesForEvent(event);
   return buildUrl(appBaseUrl, routes.inviteDeclinePath, { token: inviteToken });
 }
@@ -99,11 +83,7 @@ export function proposalPageUrl(
   });
 }
 
-export function proposalManagePageUrl(
-  appBaseUrl: string,
-  event: EventRouteSource,
-  token: string,
-): string {
+export function proposalManagePageUrl(appBaseUrl: string, event: EventRouteSource, token: string): string {
   const routes = routesForEvent(event);
   return buildUrl(appBaseUrl, routes.proposalManagePath, {
     event: event.slug,
@@ -111,11 +91,7 @@ export function proposalManagePageUrl(
   });
 }
 
-export function speakerManagePageUrl(
-  appBaseUrl: string,
-  event: EventRouteSource,
-  token: string,
-): string {
+export function speakerManagePageUrl(appBaseUrl: string, event: EventRouteSource, token: string): string {
   const routes = routesForEvent(event);
   return buildUrl(appBaseUrl, routes.speakerManagePath, {
     event: event.slug,

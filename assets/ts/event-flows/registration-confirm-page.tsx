@@ -103,7 +103,10 @@ function DayStatusSummary({
           );
         })}
       </ul>
-      <p class="small mb-0">If this mix of confirmed and pending days no longer works for you, use the manage page to switch days, move to on-demand, or cancel the registration.</p>
+      <p class="small mb-0">
+        If this mix of confirmed and pending days no longer works for you, use the manage page to switch days, move to
+        on-demand, or cancel the registration.
+      </p>
     </div>
   );
 }
@@ -131,12 +134,19 @@ function showConfirmedPanel(
 ): void {
   form.classList.add("d-none");
 
-  const successTitle  = root.dataset["successTitle"]  ?? "{firstName}, you're registered{forEvent}!";
-  const successBody   = root.dataset["successBody"]   ?? "Your calendar invite is on its way. Use the link in your confirmation email to manage your registration.";
+  const successTitle = root.dataset["successTitle"] ?? "{firstName}, you're registered{forEvent}!";
+  const successBody =
+    root.dataset["successBody"] ??
+    "Your calendar invite is on its way. Use the link in your confirmation email to manage your registration.";
   const waitlistTitle = root.dataset["waitlistTitle"] ?? "{firstName}, you're on the waitlist{forEvent}!";
-  const waitlistBody  = root.dataset["waitlistBody"]  ?? "We have your email confirmed. We'll notify you as soon as an in-person spot becomes available. Check the email we sent you for your manage link.";
-  const partialWaitlistTitle = root.dataset["partialWaitlistTitle"] ?? "{firstName}, your registration is in place{forEvent}!";
-  const partialWaitlistBody = root.dataset["partialWaitlistBody"] ?? "Your overall registration is confirmed, but one or more selected in-person days are still pending because those rooms are at capacity right now.";
+  const waitlistBody =
+    root.dataset["waitlistBody"] ??
+    "We have your email confirmed. We'll notify you as soon as an in-person spot becomes available. Check the email we sent you for your manage link.";
+  const partialWaitlistTitle =
+    root.dataset["partialWaitlistTitle"] ?? "{firstName}, your registration is in place{forEvent}!";
+  const partialWaitlistBody =
+    root.dataset["partialWaitlistBody"] ??
+    "Your overall registration is confirmed, but one or more selected in-person days are still pending because those rooms are at capacity right now.";
   const activeDayWaitlist = (result.dayWaitlist ?? []).filter((entry) => isPendingDayWaitlistStatus(entry.status));
   const hasPartialDayWaitlist = result.status === "registered" && activeDayWaitlist.length > 0;
 
@@ -147,9 +157,7 @@ function showConfirmedPanel(
   if (result.status === "waitlisted") {
     icon = "📋";
     title = interpolate(waitlistTitle, firstName, eventName);
-    bodyContent = (
-      <p class="event-flow-success-body">{interpolate(waitlistBody, firstName, eventName)}</p>
-    );
+    bodyContent = <p class="event-flow-success-body">{interpolate(waitlistBody, firstName, eventName)}</p>;
   } else if (hasPartialDayWaitlist) {
     icon = "🗓️";
     title = interpolate(partialWaitlistTitle, firstName, eventName);
@@ -162,14 +170,14 @@ function showConfirmedPanel(
   } else {
     icon = "🎉";
     title = interpolate(successTitle, firstName, eventName);
-    bodyContent = (
-      <p class="event-flow-success-body">{interpolate(successBody, firstName, eventName)}</p>
-    );
+    bodyContent = <p class="event-flow-success-body">{interpolate(successBody, firstName, eventName)}</p>;
   }
 
-  const effectiveManageUrl = manageUrl ?? (manageToken
-    ? `/events/${encodeURIComponent(eventSlug)}/register/manage/?event=${encodeURIComponent(eventSlug)}&token=${encodeURIComponent(manageToken)}`
-    : null);
+  const effectiveManageUrl =
+    manageUrl ??
+    (manageToken
+      ? `/events/${encodeURIComponent(eventSlug)}/register/manage/?event=${encodeURIComponent(eventSlug)}&token=${encodeURIComponent(manageToken)}`
+      : null);
 
   const container = document.createElement("div");
   const shareRef = createRef<HTMLDivElement>();
@@ -180,18 +188,29 @@ function showConfirmedPanel(
       {bodyContent}
       {effectiveManageUrl && (
         <div class="alert alert-light mt-3">
-          <p class="mb-2"><strong>Next steps</strong></p>
+          <p class="mb-2">
+            <strong>Next steps</strong>
+          </p>
           {hasPartialDayWaitlist ? (
             <>
-              <p class="small mb-2">Review your confirmed and pending days, then decide whether to keep this registration, change attendance for a day, or cancel entirely.</p>
+              <p class="small mb-2">
+                Review your confirmed and pending days, then decide whether to keep this registration, change attendance
+                for a day, or cancel entirely.
+              </p>
               <div class="d-flex gap-2 flex-wrap">
-                <a class="btn btn-sm btn-outline-primary" href={effectiveManageUrl}>Review or change registration</a>
+                <a class="btn btn-sm btn-outline-primary" href={effectiveManageUrl}>
+                  Review or change registration
+                </a>
               </div>
             </>
           ) : (
             <div class="d-flex gap-2 flex-wrap">
-              <a class="btn btn-sm btn-outline-primary" href={effectiveManageUrl}>Manage registration</a>
-              <a class="btn btn-sm btn-outline-secondary" href={`${effectiveManageUrl}#manage-headshot-file`}>Upload headshot</a>
+              <a class="btn btn-sm btn-outline-primary" href={effectiveManageUrl}>
+                Manage registration
+              </a>
+              <a class="btn btn-sm btn-outline-secondary" href={`${effectiveManageUrl}#manage-headshot-file`}>
+                Upload headshot
+              </a>
             </div>
           )}
         </div>
@@ -244,10 +263,7 @@ function ResendButton({
   const handleClick = async () => {
     setState("sending");
     try {
-      await postJson(
-        `${apiBase}/events/${eventSlug}/registrations/resend-confirmation`,
-        { token },
-      );
+      await postJson(`${apiBase}/events/${eventSlug}/registrations/resend-confirmation`, { token });
       setState("sent");
     } catch (error) {
       const normalized = normalizeValidation(error);
@@ -265,12 +281,7 @@ function ResendButton({
   }
 
   return (
-    <button
-      type="button"
-      class="btn btn-primary px-4"
-      onClick={handleClick}
-      disabled={state === "sending"}
-    >
+    <button type="button" class="btn btn-primary px-4" onClick={handleClick} disabled={state === "sending"}>
       {state === "error" ? "Try again" : "Send me a new link"}
     </button>
   );
@@ -289,7 +300,9 @@ function showExpiredPanel(
   form.classList.add("d-none");
 
   const expiredTitle = root.dataset["expiredTitle"] ?? "Your confirmation link has expired";
-  const expiredBody  = root.dataset["expiredBody"]  ?? "The verification link{forEvent} is no longer valid — these links expire after 48 hours for security. Click the button below and we'll send a fresh one to the same email address.";
+  const expiredBody =
+    root.dataset["expiredBody"] ??
+    "The verification link{forEvent} is no longer valid — these links expire after 48 hours for security. Click the button below and we'll send a fresh one to the same email address.";
 
   const greeting = firstName ? `Hi ${firstName}!` : "Hi there!";
   const title = interpolate(expiredTitle, firstName, eventName);
@@ -353,16 +366,7 @@ async function main(): Promise<void> {
     // We need the form reference — reveal content briefly to get the element
     // then let showExpiredPanel hide it again.
     contentEl?.classList.remove("d-none");
-    showExpiredPanel(
-      boot.root,
-      boot.form,
-      boot.apiBase,
-      boot.eventSlug,
-      token,
-      boot.statusEl,
-      firstName,
-      eventName,
-    );
+    showExpiredPanel(boot.root, boot.form, boot.apiBase, boot.eventSlug, token, boot.statusEl, firstName, eventName);
     return;
   }
 
@@ -384,7 +388,20 @@ async function main(): Promise<void> {
           `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-email`,
           { token },
         );
-        showConfirmedPanel(boot.root, boot.form, result, firstName, lastName, eventName, email, organizationName, result.shareUrl, result.manageUrl, result.manageToken, boot.eventSlug);
+        showConfirmedPanel(
+          boot.root,
+          boot.form,
+          result,
+          firstName,
+          lastName,
+          eventName,
+          email,
+          organizationName,
+          result.shareUrl,
+          result.manageUrl,
+          result.manageToken,
+          boot.eventSlug,
+        );
       } catch (error) {
         const normalized = normalizeValidation(error);
         if (error instanceof ApiClientError && error.code === "CONFIRM_TOKEN_EXPIRED") {
@@ -407,4 +424,3 @@ async function main(): Promise<void> {
 }
 
 void main();
-

@@ -69,11 +69,11 @@ export async function onRequestPost(c: any): Promise<Response> {
     const newToken = randomToken(24);
     const newHash = await sha256Hex(newToken);
 
-    await run(
-      c.env.DB,
-      `UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?`,
-      [newHash, now, row.reg_id],
-    );
+    await run(c.env.DB, `UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?`, [
+      newHash,
+      now,
+      row.reg_id,
+    ]);
 
     const manageUrl = registrationManagePageUrl(appBaseUrl, event, newToken);
 

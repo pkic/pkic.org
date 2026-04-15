@@ -6,7 +6,13 @@ import { Pager } from "../../components/Pager";
 import { DataTable } from "../../components/Table";
 import { api } from "../api";
 import { fmt, toast } from "../ui";
-import type { AdminDueWorkRow, AdminDueWorkTab, AdminEmailOutboxResponse, AdminJobsRunResponse, AdminReminderPreviewRow } from "../types";
+import type {
+  AdminDueWorkRow,
+  AdminDueWorkTab,
+  AdminEmailOutboxResponse,
+  AdminJobsRunResponse,
+  AdminReminderPreviewRow,
+} from "../types";
 
 // ────────────────────────────────────────────────────────
 // Data transformation helpers
@@ -42,7 +48,9 @@ function collectDueWorkRows(
           typeLabel: section.label,
           title: row.recipientName || row.recipientEmail,
           subtitle: row.recipientName ? row.recipientEmail : null,
-          context: [row.eventName, row.eventSlug, row.templateKey, `#${row.reminderNumber}`].filter(Boolean).join(" | "),
+          context: [row.eventName, row.eventSlug, row.templateKey, `#${row.reminderNumber}`]
+            .filter(Boolean)
+            .join(" | "),
           detail: row.proposalTitle ? `${row.subject} | ${row.proposalTitle}` : row.subject,
           dueAt: row.dueAt,
           statusKey: "pending",
@@ -78,13 +86,7 @@ function collectDueWorkRows(
 
 const BUCKET_COLORS: Record<string, string> = { outbox: "primary", reminders: "info", cleanup: "warning" };
 
-function DueWorkTable({
-  allRows,
-  preview,
-}: {
-  allRows: AdminDueWorkRow[];
-  preview: AdminJobsRunResponse | null;
-}) {
+function DueWorkTable({ allRows, preview }: { allRows: AdminDueWorkRow[]; preview: AdminJobsRunResponse | null }) {
   const [tab, setTab] = useState<AdminDueWorkTab>("all");
   const [offset, setOffset] = useState(0);
   const pageSize = 25;
@@ -109,7 +111,9 @@ function DueWorkTable({
 
   const emptyMsg =
     tab === "cleanup"
-      ? (preview?.shouldRunRetention ? "No cleanup candidates right now." : "Enable cleanup to preview retention candidates.")
+      ? preview?.shouldRunRetention
+        ? "No cleanup candidates right now."
+        : "Enable cleanup to preview retention candidates."
       : tab === "reminders"
         ? "No reminder candidates due right now."
         : tab === "outbox"
@@ -132,20 +136,47 @@ function DueWorkTable({
             onClick={() => handleTabChange(key)}
           >
             {label}{" "}
-            <span class={`badge ${key === tab ? "text-bg-light text-dark" : "text-bg-secondary"}`}>
-              {counts[key]}
-            </span>
+            <span class={`badge ${key === tab ? "text-bg-light text-dark" : "text-bg-secondary"}`}>{counts[key]}</span>
           </button>
         ))}
       </div>
       <div class="border rounded p-3">
         <DataTable
           columns={[
-            { header: "Type", cell: (row) => <span class={`badge text-bg-${BUCKET_COLORS[row.bucket] ?? "secondary"}`}>{row.typeLabel}</span> },
-            { header: "Target", cell: (row) => <><div class="fw-semibold">{row.title}</div>{row.subtitle && <div class="mono small text-muted">{row.subtitle}</div>}</> },
-            { header: "Context", cell: (row) => <><div class="small">{row.context}</div>{row.detail && <div class="small text-muted mt-1">{row.detail}</div>}</> },
+            {
+              header: "Type",
+              cell: (row) => (
+                <span class={`badge text-bg-${BUCKET_COLORS[row.bucket] ?? "secondary"}`}>{row.typeLabel}</span>
+              ),
+            },
+            {
+              header: "Target",
+              cell: (row) => (
+                <>
+                  <div class="fw-semibold">{row.title}</div>
+                  {row.subtitle && <div class="mono small text-muted">{row.subtitle}</div>}
+                </>
+              ),
+            },
+            {
+              header: "Context",
+              cell: (row) => (
+                <>
+                  <div class="small">{row.context}</div>
+                  {row.detail && <div class="small text-muted mt-1">{row.detail}</div>}
+                </>
+              ),
+            },
             { header: "Due", cell: (row) => fmt(row.dueAt), className: "small" },
-            { header: "Status", cell: (row) => row.bucket === "outbox" ? <Badge status={row.statusKey} /> : <span class="badge text-bg-light border text-dark">{row.statusLabel}</span> },
+            {
+              header: "Status",
+              cell: (row) =>
+                row.bucket === "outbox" ? (
+                  <Badge status={row.statusKey} />
+                ) : (
+                  <span class="badge text-bg-light border text-dark">{row.statusLabel}</span>
+                ),
+            },
           ]}
           data={pagedRows}
           empty={emptyMsg}
@@ -168,7 +199,15 @@ function DueWorkTable({
   );
 }
 
-function JobRunSummary({ result, title, empty }: { result: AdminJobsRunResponse | null; title: string; empty: string }) {
+function JobRunSummary({
+  result,
+  title,
+  empty,
+}: {
+  result: AdminJobsRunResponse | null;
+  title: string;
+  empty: string;
+}) {
   if (!result) return <div class="small text-muted">{empty}</div>;
 
   const reminderVerb = result.dryRun ? "Queue" : "Queued";
@@ -188,23 +227,45 @@ function JobRunSummary({ result, title, empty }: { result: AdminJobsRunResponse 
     <div class="border rounded p-3">
       <div class="fw-semibold mb-2">{title}</div>
       <div class="small mb-2">
-        {reminderVerb}: {result.reminders.processed} reminders ({result.reminders.inviteRemindersQueued} attendee, {result.reminders.speakerInviteRemindersQueued} speaker, {result.reminders.presentationRemindersQueued} presentation).
+        {reminderVerb}: {result.reminders.processed} reminders ({result.reminders.inviteRemindersQueued} attendee,{" "}
+        {result.reminders.speakerInviteRemindersQueued} speaker, {result.reminders.presentationRemindersQueued}{" "}
+        presentation).
       </div>
-      <div class="small mb-2">{outboxVerb}: {result.outbox.processed} outbox rows, {result.outbox.failed} failed.</div>
+      <div class="small mb-2">
+        {outboxVerb}: {result.outbox.processed} outbox rows, {result.outbox.failed} failed.
+      </div>
       <div class="small mb-2">{retentionMsg}</div>
       {result.retention.preview.dueEvents.length > 0 && (
         <details class="mt-3">
-          <summary class="small fw-semibold">
-            Cleanup candidates ({result.retention.preview.totalEvents})
-          </summary>
+          <summary class="small fw-semibold">Cleanup candidates ({result.retention.preview.totalEvents})</summary>
           <div class="mt-2">
             <DataTable
               columns={[
-                { header: "Event", cell: (item) => <><div class="fw-semibold">{item.eventName}</div><div class="small text-muted">{item.eventSlug}</div></> },
+                {
+                  header: "Event",
+                  cell: (item) => (
+                    <>
+                      <div class="fw-semibold">{item.eventName}</div>
+                      <div class="small text-muted">{item.eventSlug}</div>
+                    </>
+                  ),
+                },
                 { header: "Ended", cell: (item) => fmt(item.endsAt), className: "small" },
-                { header: { label: "Retention", className: "text-end" }, cell: (item) => `${item.retentionDays} day(s)`, className: "small text-end" },
-                { header: { label: "Regs", className: "text-end" }, cell: (item) => item.eligibleRegistrations, className: "small mono text-end" },
-                { header: { label: "Users", className: "text-end" }, cell: (item) => item.eligibleUsers, className: "small mono text-end" },
+                {
+                  header: { label: "Retention", className: "text-end" },
+                  cell: (item) => `${item.retentionDays} day(s)`,
+                  className: "small text-end",
+                },
+                {
+                  header: { label: "Regs", className: "text-end" },
+                  cell: (item) => item.eligibleRegistrations,
+                  className: "small mono text-end",
+                },
+                {
+                  header: { label: "Users", className: "text-end" },
+                  cell: (item) => item.eligibleUsers,
+                  className: "small mono text-end",
+                },
               ]}
               data={result.retention.preview.dueEvents.slice(0, 5)}
               empty="No cleanup candidates"
@@ -212,25 +273,46 @@ function JobRunSummary({ result, title, empty }: { result: AdminJobsRunResponse 
             />
           </div>
           {result.retention.preview.dueEvents.length > 5 && (
-            <div class="small text-muted mt-2">{result.retention.preview.dueEvents.length - 5} more event(s) eligible for cleanup.</div>
+            <div class="small text-muted mt-2">
+              {result.retention.preview.dueEvents.length - 5} more event(s) eligible for cleanup.
+            </div>
           )}
         </details>
       )}
       {reminderSections.map((section) => (
         <details key={section.title} class="mt-3">
-          <summary class="small fw-semibold">{section.title} ({section.rows.length})</summary>
+          <summary class="small fw-semibold">
+            {section.title} ({section.rows.length})
+          </summary>
           <div class="mt-2">
             <DataTable
               columns={[
-                { header: "Recipient", cell: (row) => <><div class="fw-semibold">{row.recipientName || row.recipientEmail}</div><div class="mono small text-muted">{row.recipientEmail}</div></> },
-                { header: "Event / Template", cell: (row) => [row.templateKey, `${row.eventName} (${row.eventSlug})`, `#${row.reminderNumber}`].filter(Boolean).join(" | "), className: "small" },
+                {
+                  header: "Recipient",
+                  cell: (row) => (
+                    <>
+                      <div class="fw-semibold">{row.recipientName || row.recipientEmail}</div>
+                      <div class="mono small text-muted">{row.recipientEmail}</div>
+                    </>
+                  ),
+                },
+                {
+                  header: "Event / Template",
+                  cell: (row) =>
+                    [row.templateKey, `${row.eventName} (${row.eventSlug})`, `#${row.reminderNumber}`]
+                      .filter(Boolean)
+                      .join(" | "),
+                  className: "small",
+                },
                 { header: "Subject", cell: (row) => row.subject, className: "small" },
               ]}
               data={section.rows.slice(0, 5)}
               empty="No candidates"
             />
           </div>
-          {section.rows.length > 5 && <div class="small text-muted mt-2">{section.rows.length - 5} more candidate(s).</div>}
+          {section.rows.length > 5 && (
+            <div class="small text-muted mt-2">{section.rows.length - 5} more candidate(s).</div>
+          )}
         </details>
       ))}
     </div>
@@ -255,21 +337,24 @@ export function DueWork() {
 
   const [running, setRunning] = useState(false);
 
-  const fetchPreview = useCallback(async (rl: number, ol: number, retention: boolean): Promise<AdminJobsRunResponse> => {
-    return api<AdminJobsRunResponse>("/api/v1/internal/jobs/run", {
-      method: "POST",
-      body: JSON.stringify({
-        reminderLimit: rl,
-        outboxLimit: ol,
-        runReminders: true,
-        runRetention: retention,
-        runOutbox: true,
-        runRetentionMode: "always",
-        retentionHourUtc: 0,
-        dryRun: true,
-      }),
-    });
-  }, []);
+  const fetchPreview = useCallback(
+    async (rl: number, ol: number, retention: boolean): Promise<AdminJobsRunResponse> => {
+      return api<AdminJobsRunResponse>("/api/v1/internal/jobs/run", {
+        method: "POST",
+        body: JSON.stringify({
+          reminderLimit: rl,
+          outboxLimit: ol,
+          runReminders: true,
+          runRetention: retention,
+          runOutbox: true,
+          runRetentionMode: "always",
+          retentionHourUtc: 0,
+          dryRun: true,
+        }),
+      });
+    },
+    [],
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -277,7 +362,9 @@ export function DueWork() {
     try {
       const [, dueOutbox, previewResult] = await Promise.all([
         api<AdminEmailOutboxResponse>("/api/v1/admin/email/outbox?limit=1&offset=0"),
-        api<AdminEmailOutboxResponse>(`/api/v1/admin/email/outbox?dueNow=true&limit=${Math.max(25, Math.min(outboxLimit, 100))}&offset=0`),
+        api<AdminEmailOutboxResponse>(
+          `/api/v1/admin/email/outbox?dueNow=true&limit=${Math.max(25, Math.min(outboxLimit, 100))}&offset=0`,
+        ),
         fetchPreview(reminderLimit, outboxLimit, includeRetention),
       ]);
       setDueOutboxRows(dueOutbox.outbox);
@@ -289,7 +376,9 @@ export function DueWork() {
     }
   }, [reminderLimit, outboxLimit, includeRetention, fetchPreview]);
 
-  useEffect(() => { void load(); }, [load]);
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   async function doRunJobs(dryRun: boolean) {
     setRunning(true);
