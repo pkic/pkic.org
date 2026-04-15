@@ -15,6 +15,7 @@ interface RegistrationRow {
   display_name: string | null;
   referral_code: string | null;
   rsvp_events_json: string | null;
+  has_bounced: number;
 }
 
 interface WaitlistSummaryRow {
@@ -34,6 +35,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   const statusFilter = url.searchParams.get("status") ?? "";
 
   const validStatuses = new Set(["registered", "pending_email_confirmation", "waitlisted", "cancelled"]);
+  const bouncedFilter = url.searchParams.get("bounced") ?? "";
 
   const conditions: string[] = ["r.event_id = ?"];
   const bindings: unknown[] = [event.id];
@@ -41,6 +43,18 @@ export async function onRequestGet(c: any): Promise<Response> {
   if (statusFilter && validStatuses.has(statusFilter)) {
     conditions.push("r.status = ?");
     bindings.push(statusFilter);
+  }
+
+  if (bouncedFilter === "true") {
+    conditions.push(`EXISTS (
+      SELECT 1 FROM email_outbox eo
+      WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
+    )`);
+  } else if (bouncedFilter === "false") {
+    conditions.push(`NOT EXISTS (
+      SELECT 1 FROM email_outbox eo
+      WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
+    )`);
   }
 
   if (search) {
@@ -57,6 +71,10 @@ export async function onRequestGet(c: any): Promise<Response> {
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
             rc.code AS referral_code,
+            EXISTS (
+              SELECT 1 FROM email_outbox eo
+              WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
+            ) AS has_bounced,
             (SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
                 'uid', ics_uid,
                 'status', response_status,
@@ -113,12 +131,13 @@ export async function onRequestGet(c: any): Promise<Response> {
     const summary = waitlistByRegistrationId.get(row.id);
     return {
       ...row,
+      has_bounced: !!row.has_bounced,
       dayWaitlistSummary: summary?.summary ?? null,
       dayWaitlistCount: summary?.count ?? 0,
     };
   });
 
-  const [totalRow, statRows] = await Promise.all([
+  const [totalRow, statRows, bouncedCountRow] = await Promise.all([
     first<{ total: number }>(
       c.env.DB,
       `SELECT COUNT(*) AS total FROM registrations r LEFT JOIN users u ON u.id = r.user_id WHERE ${whereClause}`,
@@ -130,6 +149,14 @@ export async function onRequestGet(c: any): Promise<Response> {
       `SELECT attendance_type, status, COUNT(*) AS count
        FROM registrations WHERE event_id = ?
        GROUP BY attendance_type, status`,
+      [event.id],
+    ),
+    first<{ bounced_count: number }>(
+      c.env.DB,
+      `SELECT COUNT(DISTINCT r.id) AS bounced_count
+       FROM registrations r
+       JOIN email_outbox eo ON eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
+       WHERE r.event_id = ?`,
       [event.id],
     ),
   ]);
@@ -145,7 +172,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   return json({
     event: { id: event.id, slug: event.slug, name: event.name },
     registrations: registrationsWithSummary,
-    stats: { byAttendanceType, byStatus },
+    stats: { byAttendanceType, byStatus, bouncedCount: Number(bouncedCountRow?.bounced_count ?? 0) },
     page: {
       limit,
       offset,

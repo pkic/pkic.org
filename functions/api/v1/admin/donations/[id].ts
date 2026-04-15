@@ -10,7 +10,7 @@ import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 export async function onRequestGet(c: any): Promise<Response> {
   await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
 
-  const id = c.params?.id;
+  const id = c.req.param("id");
   if (!id) return json({ error: { code: "BAD_REQUEST", message: "Missing donation id" } }, 400);
 
   const row = await c.env.DB.prepare(

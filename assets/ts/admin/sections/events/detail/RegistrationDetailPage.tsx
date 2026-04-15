@@ -139,6 +139,77 @@ function AuditLogSection({ slug, regId }: { slug: string; regId: string }) {
   );
 }
 
+// ─── Inline email editor ──────────────────────────────────────────────────────
+
+function EmailEditor({ email, slug, regId, onSaved }: { email: string; slug: string; regId: string; onSaved: () => void }) {
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(email);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  if (!editing) {
+    return (
+      <div class="d-flex align-items-center gap-1">
+        <span>{email}</span>
+        <button
+          class="btn btn-link btn-sm p-0 ms-1"
+          title="Change email"
+          onClick={() => { setValue(email); setEditing(true); setError(""); }}
+        >✏️</button>
+      </div>
+    );
+  }
+
+  async function handleSave() {
+    const trimmed = value.trim().toLowerCase();
+    if (!trimmed || trimmed === email.toLowerCase()) {
+      setEditing(false);
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      await api(`/api/v1/admin/events/${slug}/registrations/${regId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "update", email: trimmed }),
+      });
+      toast("Email updated — confirmation sent to new address", "success");
+      setEditing(false);
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div>
+      <div class="input-group input-group-sm">
+        <input
+          type="email"
+          class="form-control form-control-sm"
+          value={value}
+          onInput={(e) => setValue((e.target as HTMLInputElement).value)}
+          onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); void handleSave(); } if (e.key === "Escape") setEditing(false); }}
+          disabled={saving}
+          autoFocus
+        />
+        <button class="btn btn-sm btn-success" onClick={() => void handleSave()} disabled={saving}>
+          {saving ? "…" : "Save"}
+        </button>
+        <button class="btn btn-sm btn-outline-secondary" onClick={() => setEditing(false)} disabled={saving}>
+          Cancel
+        </button>
+      </div>
+      <div class="form-text text-warning mt-1">
+        Changing the email will require re-confirmation.
+      </div>
+      {error && <div class="small text-danger mt-1">{error}</div>}
+    </div>
+  );
+}
+
 // ─── Main detail page ─────────────────────────────────────────────────────────
 
 interface DetailResponse {
@@ -252,7 +323,7 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
         <div class="col-md-3">
           <div class="card card-body p-3">
             <div class="small text-muted mb-1">Email</div>
-            <div>{reg.user_email ?? "—"}</div>
+            <EmailEditor email={reg.user_email ?? "—"} slug={slug} regId={regId} onSaved={() => void reload()} />
           </div>
         </div>
         <div class="col-md-3">

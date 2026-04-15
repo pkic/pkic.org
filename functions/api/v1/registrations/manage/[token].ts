@@ -1,6 +1,6 @@
 import { parseJsonBody } from "../../../../_lib/validation";
 import { handleError, json } from "../../../../_lib/http";
-import { updateRegistrationByManageToken, updateRegistrationById } from "../../../../_lib/services/registrations";
+import { updateRegistrationByManageToken, updateRegistrationById, changeRegistrationEmail } from "../../../../_lib/services/registrations";
 import { resolveManageToken } from "../../../../_lib/services/manage-token";
 import { first } from "../../../../_lib/db/queries";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
@@ -8,7 +8,7 @@ import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { countRegisteredByEventDay, deriveEventAttendanceType, getRegistrationDayAttendance, listEventDays, resolveAttendanceOptions } from "../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../_lib/services/registrations/day-waitlist";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
-import { registrationManagePageUrl } from "../../../../_lib/services/frontend-links";
+import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../_lib/services/frontend-links";
 import { buildAttendanceEmailData, STATUS_LABELS } from "../../../../_lib/utils/attendance";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
 import { buildEventEmailVariables } from "../../../../_lib/services/events";
@@ -90,58 +90,151 @@ export async function onRequestPatch(c: any): Promise<Response> {
       }
     }
 
-    const user = await first<{
-      email: string;
-      first_name: string | null;
-      last_name: string | null;
-      organization_name: string | null;
-      job_title: string | null;
-    }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [updated.user_id]);
-    if (event && user) {
-      const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-      const manageUrl = registrationManagePageUrl(appBaseUrl, event, token);
-      const templateKey = body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated";
-      const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
-      const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, updated.id);
-      const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
-      const customAnswerRows = body.action !== "report_unauthorized"
-        ? await getCustomAnswerRows(c.env.DB, event.id, updated.custom_answers_json)
-        : [];
-      const acceptedTermsText = body.action !== "report_unauthorized"
-        ? await getAcceptedTermsTextForRegistration(c.env.DB, updated.id)
-        : "";
-      const outboxId = await queueEmail(c.env.DB, {
-        eventId: event.id,
-        templateKey,
-        recipientEmail: user.email,
-        recipientUserId: updated.user_id,
-        messageType: "transactional",
-        subject: body.action === "report_unauthorized"
-          ? `Your registration for ${event.name} has been cancelled and your data removed`
-          : `Registration updated for ${event.name}`,
-        data: {
-          ...buildEventEmailVariables(event, appBaseUrl),
-          firstName: user.first_name ?? "",
-          lastName: user.last_name ?? "",
-          email: user.email,
-          organizationName: user.organization_name ?? "",
-          jobTitle: user.job_title ?? "",
-          attendanceType: updated.attendance_type,
-          attendanceLabel,
-          dayAttendance,
-          dayWaitlist,
-          customAnswerRows,
-          acceptedTermsText: acceptedTermsText || undefined,
-          status: updated.status,
-          statusLabel: STATUS_LABELS[updated.status] ?? updated.status,
-          manageUrl,
-        },
-      });
+    // ── Email change: reassign to new user and require re-confirmation ────
+    let emailChanged = false;
+    if (body.action === "update" && body.email && event) {
+      const currentUser = await first<{ normalized_email: string }>(
+        c.env.DB,
+        "SELECT normalized_email FROM users WHERE id = ?",
+        [updated.user_id],
+      );
+      if (currentUser && body.email.trim().toLowerCase() !== currentUser.normalized_email) {
+        const emailResult = await changeRegistrationEmail(c.env.DB, {
+          registrationId: updated.id,
+          newEmail: body.email,
+          confirmationTtlHours: config.manageTokenTtlHours,
+        });
 
-      c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
+        // Also update PII on the new user when fields were provided
+        if (body.firstName || body.lastName || body.organizationName || body.jobTitle) {
+          const setParts: string[] = [];
+          const setValues: unknown[] = [];
+          if (body.firstName !== undefined) { setParts.push("first_name = ?"); setValues.push(body.firstName); }
+          if (body.lastName !== undefined) { setParts.push("last_name = ?"); setValues.push(body.lastName); }
+          if (body.organizationName !== undefined) { setParts.push("organization_name = ?"); setValues.push(body.organizationName); }
+          if (body.jobTitle !== undefined) { setParts.push("job_title = ?"); setValues.push(body.jobTitle); }
+          if (setParts.length > 0) {
+            setValues.push(emailResult.newUserId);
+            await c.env.DB.prepare(
+              `UPDATE users SET ${setParts.join(", ")} WHERE id = ?`
+            ).bind(...setValues).run();
+          }
+        }
+
+        await writeAuditLog(
+          c.env.DB,
+          isJwt ? "admin" : "user",
+          emailResult.newUserId,
+          "email_changed",
+          "registration",
+          updated.id,
+          { previousEmail: emailResult.previousEmail, newEmail: body.email },
+        );
+
+        // Send confirmation email to the new address
+        const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+        const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, emailResult.confirmationToken);
+        const newUser = await first<{
+          email: string; first_name: string | null; last_name: string | null;
+          organization_name: string | null; job_title: string | null;
+        }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [emailResult.newUserId]);
+        if (newUser) {
+          const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
+          const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, updated.id);
+          const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
+          const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, updated.custom_answers_json);
+          const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, updated.id);
+          const outboxId = await queueEmail(c.env.DB, {
+            eventId: event.id,
+            templateKey: "registration_confirm_email",
+            recipientEmail: newUser.email,
+            recipientUserId: emailResult.newUserId,
+            messageType: "transactional",
+            subject: `Confirm your email address for ${event.name}`,
+            data: {
+              ...buildEventEmailVariables(event, appBaseUrl),
+              firstName: newUser.first_name ?? "",
+              lastName: newUser.last_name ?? "",
+              email: newUser.email,
+              organizationName: newUser.organization_name ?? "",
+              jobTitle: newUser.job_title ?? "",
+              attendanceLabel,
+              dayAttendance,
+              customAnswerRows,
+              dayWaitlist,
+              acceptedTermsText: acceptedTermsText || undefined,
+              status: "pending_email_confirmation",
+              registrationId: updated.id,
+              confirmationUrl,
+              manageUrl: `${appBaseUrl}/events/${event.slug}/manage`,
+              shareUrl: null,
+            },
+          });
+          c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
+        }
+
+        emailChanged = true;
+      }
     }
 
-    return json({ success: true, registration: updated });
+    if (!emailChanged) {
+      const user = await first<{
+        email: string;
+        first_name: string | null;
+        last_name: string | null;
+        organization_name: string | null;
+        job_title: string | null;
+      }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [updated.user_id]);
+      if (event && user) {
+        const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+        const manageUrl = registrationManagePageUrl(appBaseUrl, event, token);
+        const templateKey = body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated";
+        const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
+        const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, updated.id);
+        const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
+        const customAnswerRows = body.action !== "report_unauthorized"
+          ? await getCustomAnswerRows(c.env.DB, event.id, updated.custom_answers_json)
+          : [];
+        const acceptedTermsText = body.action !== "report_unauthorized"
+          ? await getAcceptedTermsTextForRegistration(c.env.DB, updated.id)
+          : "";
+        const outboxId = await queueEmail(c.env.DB, {
+          eventId: event.id,
+          templateKey,
+          recipientEmail: user.email,
+          recipientUserId: updated.user_id,
+          messageType: "transactional",
+          subject: body.action === "report_unauthorized"
+            ? `Your registration for ${event.name} has been cancelled and your data removed`
+            : `Registration updated for ${event.name}`,
+          data: {
+            ...buildEventEmailVariables(event, appBaseUrl),
+            firstName: user.first_name ?? "",
+            lastName: user.last_name ?? "",
+            email: user.email,
+            organizationName: user.organization_name ?? "",
+            jobTitle: user.job_title ?? "",
+            attendanceType: updated.attendance_type,
+            attendanceLabel,
+            dayAttendance,
+            dayWaitlist,
+            customAnswerRows,
+            acceptedTermsText: acceptedTermsText || undefined,
+            status: updated.status,
+            statusLabel: STATUS_LABELS[updated.status] ?? updated.status,
+            manageUrl,
+          },
+        });
+
+        c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
+      }
+    }
+
+    const finalRegistration = emailChanged
+      ? await first(c.env.DB, "SELECT * FROM registrations WHERE id = ?", [updated.id])
+      : updated;
+
+    return json({ success: true, registration: finalRegistration, emailChanged });
   } catch (error) {
     return handleError(error);
   }

@@ -12,13 +12,13 @@
  */
 import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
-import { getEventBySlug } from "../../../../../../../_lib/services/events";
+import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
 import { first } from "../../../../../../../_lib/db/queries";
 import { parseJsonBody } from "../../../../../../../_lib/validation";
 import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
-import { processOutboxByIdBackground } from "../../../../../../../_lib/email/outbox";
+import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
-import { updateRegistrationById } from "../../../../../../../_lib/services/registrations";
+import { updateRegistrationById, changeRegistrationEmail } from "../../../../../../../_lib/services/registrations";
 import { validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
 import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
@@ -27,6 +27,9 @@ import type { DatabaseLike } from "../../../../../../../_lib/types";
 import { registrationManageSchema } from "../../../../../../../../assets/shared/schemas/api";
 import { z } from "zod";
 import { queueRegistrationStatusEmail } from "../../../../../../../_lib/services/registrations/status-notifications";
+import { registrationConfirmPageUrl } from "../../../../../../../_lib/services/frontend-links";
+import { buildAttendanceEmailData } from "../../../../../../../_lib/utils/attendance";
+import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../../../_lib/utils/registration-email";
 
 // ── Shared query ──────────────────────────────────────────────────────────────
 
@@ -182,16 +185,101 @@ export async function onRequestPatch(
   }
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const outbox = await queueRegistrationStatusEmail(c.env.DB, {
-    event,
-    registrationId: updated.id,
-    appBaseUrl,
-    templateKey: body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated",
-    subject: body.action === "report_unauthorized"
-      ? `Registration cancelled and data removed — ${event.name}`
-      : `Registration updated for ${event.name}`,
-  });
-  c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outbox.outboxId));
+
+  // ── Email change: reassign to new user and require re-confirmation ────
+  let emailChanged = false;
+  if (body.action === "update" && body.email) {
+    const currentUser = await first<{ normalized_email: string }>(
+      c.env.DB,
+      "SELECT normalized_email FROM users WHERE id = ?",
+      [updated.user_id],
+    );
+    if (currentUser && body.email.trim().toLowerCase() !== currentUser.normalized_email) {
+      const emailResult = await changeRegistrationEmail(c.env.DB, {
+        registrationId: updated.id,
+        newEmail: body.email,
+        confirmationTtlHours: config.manageTokenTtlHours,
+      });
+
+      // Also update PII on the new user when fields were provided
+      if (body.firstName || body.lastName || body.organizationName || body.jobTitle) {
+        const setParts: string[] = [];
+        const setValues: unknown[] = [];
+        if (body.firstName !== undefined) { setParts.push("first_name = ?"); setValues.push(body.firstName); }
+        if (body.lastName !== undefined) { setParts.push("last_name = ?"); setValues.push(body.lastName); }
+        if (body.organizationName !== undefined) { setParts.push("organization_name = ?"); setValues.push(body.organizationName); }
+        if (body.jobTitle !== undefined) { setParts.push("job_title = ?"); setValues.push(body.jobTitle); }
+        if (setParts.length > 0) {
+          setValues.push(emailResult.newUserId);
+          await c.env.DB.prepare(
+            `UPDATE users SET ${setParts.join(", ")} WHERE id = ?`,
+          ).bind(...setValues).run();
+        }
+      }
+
+      await writeAuditLog(c.env.DB, "admin", admin.id, "admin_email_changed", "registration", updated.id, {
+        eventId: event.id,
+        previousEmail: emailResult.previousEmail,
+        newEmail: body.email,
+      });
+
+      // Send confirmation email to the new address
+      const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, emailResult.confirmationToken);
+      const newUser = await first<{
+        email: string; first_name: string | null; last_name: string | null;
+        organization_name: string | null; job_title: string | null;
+      }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [emailResult.newUserId]);
+      if (newUser) {
+        const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
+        const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, updated.id);
+        const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
+        const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, updated.custom_answers_json);
+        const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, updated.id);
+        const outboxId = await queueEmail(c.env.DB, {
+          eventId: event.id,
+          templateKey: "registration_confirm_email",
+          recipientEmail: newUser.email,
+          recipientUserId: emailResult.newUserId,
+          messageType: "transactional",
+          subject: `Confirm your email address for ${event.name}`,
+          data: {
+            ...buildEventEmailVariables(event, appBaseUrl),
+            firstName: newUser.first_name ?? "",
+            lastName: newUser.last_name ?? "",
+            email: newUser.email,
+            organizationName: newUser.organization_name ?? "",
+            jobTitle: newUser.job_title ?? "",
+            attendanceLabel,
+            dayAttendance,
+            customAnswerRows,
+            dayWaitlist,
+            acceptedTermsText: acceptedTermsText || undefined,
+            status: "pending_email_confirmation",
+            registrationId: updated.id,
+            confirmationUrl,
+            manageUrl: `${appBaseUrl}/events/${event.slug}/manage`,
+            shareUrl: null,
+          },
+        });
+        c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
+      }
+
+      emailChanged = true;
+    }
+  }
+
+  if (!emailChanged) {
+    const outbox = await queueRegistrationStatusEmail(c.env.DB, {
+      event,
+      registrationId: updated.id,
+      appBaseUrl,
+      templateKey: body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated",
+      subject: body.action === "report_unauthorized"
+        ? `Registration cancelled and data removed — ${event.name}`
+        : `Registration updated for ${event.name}`,
+    });
+    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outbox.outboxId));
+  }
 
   await writeAuditLog(c.env.DB, "admin", admin.id, "admin_registration_updated", "registration", updated.id, {
     eventId: event.id,
@@ -199,7 +287,7 @@ export async function onRequestPatch(
   });
 
   const result = await fetchRegistrationWithDetails(c.env.DB, event.id, updated.id);
-  return json({ success: true, registration: result });
+  return json({ success: true, registration: result, emailChanged });
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
