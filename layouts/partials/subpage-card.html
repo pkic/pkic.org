@@ -1,0 +1,7 @@
+<a href="{{ .RelPermalink }}" class="wg-explore-card h-100 d-flex flex-column text-decoration-none">
+    <div class="wg-explore-title">{{ .Title }}</div>
+    {{- with .Summary -}}
+    <div class="wg-explore-desc mt-1">{{ . | plainify | truncate 160 }}</div>
+    {{- end -}}
+    <div class="wg-explore-arrow mt-auto">Read more &rarr;</div>
+</a>

@@ -11,6 +11,10 @@ menu:
         parent: governance
         weight: 22
 
+note: To report an issue or concern under the Code of Conduct, contact `feedback (at) pkic.org`.
+
 ---
 
-To report an issue or concern under the Code of Conduct, contact `feedback (at) pkic.org`.
+The PKI Consortium is committed to maintaining a professional, respectful, and welcoming environment for all participants and contributors. Our Code of Conduct sets out the standards of behavior expected across all official activities — whether in meetings, online discussions, publications, or events.
+
+The Code is organized into two parts:
