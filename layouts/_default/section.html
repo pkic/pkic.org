@@ -19,15 +19,24 @@
 
         {{ .Content }}
 
-        <!-- {{- if not ($.Page.FirstSection.Param "sideMenu") -}}
+        {{- if not ($.Page.FirstSection.Param "sideMenu") -}}
             {{- if not .Params.noPages -}}
-                {{- range .Data.Pages -}}
-                    {{- if not .Params.robots -}}
-                        {{- partial "pagelisting.html" . -}}
+            <section class="mt-3">
+                <div class="row g-3">
+                    {{- range .RegularPages -}}
+                        {{- if not .Params.robots -}}
+                        <div class="col-sm-6 col-lg-4">
+                            {{- partial "subpage-card.html" . -}}
+                        </div>
+                        {{- end -}}
                     {{- end -}}
-                {{- end -}}
+                </div>
+            </section>
+            {{- with .Params.note -}}
+            <p class="mt-4 text-muted"><small>{{ . | markdownify }}</small></p>
             {{- end -}}
-        {{- end -}} -->
+            {{- end -}}
+        {{- end -}}
         </div>
     </div>
 </div>
