@@ -31,17 +31,38 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   const promoters = await all<PromoterRow>(
     db,
-    `WITH currency_rank AS (
-       SELECT source,
-              currency,
-              ROW_NUMBER() OVER (
-                PARTITION BY source
-                ORDER BY COUNT(*) DESC
-              ) AS rn
+    `WITH attributed AS (
+       SELECT
+         source,
+         COUNT(*)                                                      AS attributed_total,
+         COUNT(CASE WHEN status = 'completed' THEN 1 END)             AS attributed_completed,
+         COALESCE(SUM(CASE WHEN status = 'completed'
+                           THEN gross_amount END), 0)                 AS attributed_gross,
+         COALESCE(SUM(
+           CASE
+             WHEN status = 'completed' AND settled_currency = 'usd'  THEN settled_amount
+             WHEN status = 'completed' AND currency = 'usd'          THEN gross_amount
+             ELSE 0
+           END), 0)                                                   AS attributed_gross_usd
          FROM donations
         WHERE source IS NOT NULL
-          AND status = 'completed'
-        GROUP BY source, currency
+        GROUP BY source
+     ),
+     dominant_currency AS (
+       SELECT source, currency
+         FROM (
+           SELECT source,
+                  currency,
+                  ROW_NUMBER() OVER (
+                    PARTITION BY source
+                    ORDER BY COUNT(*) DESC
+                  ) AS rn
+             FROM donations
+            WHERE source IS NOT NULL
+              AND status = 'completed'
+            GROUP BY source, currency
+         )
+        WHERE rn = 1
      )
      SELECT
        p.code,
@@ -49,30 +70,24 @@ export async function onRequestGet(c: any): Promise<Response> {
        p.checkout_session_id,
        p.clicks,
        p.created_at,
-       COALESCE(own.gross_amount, 0)                                                AS own_gross,
+       COALESCE(own.gross_amount, 0)             AS own_gross,
        COALESCE(
          CASE
            WHEN own.settled_currency = 'usd' THEN own.settled_amount
            WHEN own.currency = 'usd'         THEN own.gross_amount
            ELSE NULL
-         END, 0)                                                                    AS own_gross_usd,
-       own.currency                                                                  AS own_currency,
-       COUNT(d.id)                                                                   AS attributed_total,
-       COUNT(CASE WHEN d.status = 'completed' THEN 1 END)                           AS attributed_completed,
-       COALESCE(SUM(CASE WHEN d.status = 'completed' THEN d.gross_amount END), 0)   AS attributed_gross,
-       COALESCE(SUM(
-         CASE
-           WHEN d.status = 'completed' AND d.settled_currency = 'usd' THEN d.settled_amount
-           WHEN d.status = 'completed' AND d.currency = 'usd'         THEN d.gross_amount
-           ELSE 0
-         END), 0)                                                                   AS attributed_gross_usd,
-       cr.currency
+         END, 0)                                 AS own_gross_usd,
+       own.currency                              AS own_currency,
+       COALESCE(a.attributed_total, 0)           AS attributed_total,
+       COALESCE(a.attributed_completed, 0)       AS attributed_completed,
+       COALESCE(a.attributed_gross, 0)           AS attributed_gross,
+       COALESCE(a.attributed_gross_usd, 0)       AS attributed_gross_usd,
+       dc.currency
      FROM donation_promoters p
-     LEFT JOIN donations own ON own.id = p.donation_id AND own.status = 'completed'
-     LEFT JOIN donations d   ON d.source = p.code
-     LEFT JOIN currency_rank cr ON cr.source = p.code AND cr.rn = 1
-     GROUP BY p.code
-     ORDER BY p.clicks DESC, attributed_completed DESC`,
+     LEFT JOIN donations own     ON own.id = p.donation_id AND own.status = 'completed'
+     LEFT JOIN attributed a      ON a.source = p.code
+     LEFT JOIN dominant_currency dc ON dc.source = p.code
+     ORDER BY p.clicks DESC, COALESCE(a.attributed_completed, 0) DESC`,
     [],
   );
 
