@@ -406,6 +406,8 @@ export interface DonationPeriod {
   failed: number;
   expired: number;
   gross: number;
+  gross_usd: number;
+  net_usd: number;
 }
 
 export interface StatsResponse {
@@ -430,6 +432,7 @@ export interface StatsResponse {
       avg_gross: number;
       total_net: number | null;
     }>;
+    totals: { gross_usd: number; net_usd: number };
     daily: Array<{ date: string } & DonationPeriod>;
     weekly: Array<{ week: string } & DonationPeriod>;
     monthly: Array<{ month: string } & DonationPeriod>;
