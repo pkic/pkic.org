@@ -431,6 +431,7 @@ export interface StatsResponse {
       total_gross: number;
       avg_gross: number;
       total_net: number | null;
+      total_gross_usd: number | null;
     }>;
     totals: { gross_usd: number; net_usd: number };
     daily: Array<{ date: string } & DonationPeriod>;
