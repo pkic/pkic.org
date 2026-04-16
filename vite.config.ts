@@ -188,15 +188,15 @@ export default defineConfig(() => {
   // since ESM hoists imports above top-level statements.
   if (!process.env.CLOUDFLARE_ENV) {
     const branch = process.env.WORKERS_CI_BRANCH;
-    process.env.CLOUDFLARE_ENV = branch === "main" ? "production" : branch ? "preview" : "local";
+    process.env.CLOUDFLARE_ENV = branch && branch.toLowerCase() === "main" ? "production" : branch ? "preview" : "local";
   }
 
   // In CI preview builds, patch APP_BASE_URL in wrangler.jsonc to match the
   // branch-specific preview URL so the subsequent `wrangler versions upload`
   // deploy step also picks it up. Uses text replacement to preserve JSONC formatting.
   const ciBranch = process.env.WORKERS_CI_BRANCH;
-  if (ciBranch && ciBranch !== "main") {
-    const sanitized = ciBranch.toLowerCase().replace(/\//g, "-");
+  if (ciBranch && ciBranch.toLowerCase() !== "main") {
+    const sanitized = ciBranch.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const previewUrl = `https://${sanitized}-pkic-org.pkic.workers.dev`;
     const configFile = resolve(projectRoot, "wrangler.jsonc");
     const content = readFileSync(configFile, "utf8");
