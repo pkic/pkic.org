@@ -9,6 +9,7 @@ if (!process.env.CLOUDFLARE_ENV) {
 }
 
 import { spawn } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { clearTimeout, setTimeout } from "node:timers";
 import { relative, resolve, sep } from "node:path";
@@ -207,5 +208,29 @@ export default defineConfig({
     port: 8788,
     strictPort: true,
   },
-  plugins: [hugoPlugin(), cloudflare()],
+  plugins: [
+    hugoPlugin(),
+    cloudflare({
+      configPath: "./wrangler.jsonc",
+      config: (config) => {
+        // Patch wrangler.jsonc on disk so the subsequent `wrangler versions upload`
+        // deploy step also picks up the dynamic preview APP_BASE_URL.
+        const branch = process.env.WORKERS_CI_BRANCH;
+        if (branch && branch !== "main") {
+          const sanitized = branch.toLowerCase().replace(/\//g, "-");
+          const previewUrl = `https://${sanitized}-pkic-org.pkic.workers.dev`;
+          config.vars ??= {};
+          config.vars.APP_BASE_URL = previewUrl;
+
+          const configFile = resolve(projectRoot, "wrangler.jsonc");
+          const raw = JSON.parse(readFileSync(configFile, "utf8"));
+          if (raw.env?.preview?.vars) {
+            raw.env.preview.vars.APP_BASE_URL = previewUrl;
+            writeFileSync(configFile, JSON.stringify(raw, null, 2) + "\n");
+          }
+        }
+        return config;
+      },
+    }),
+  ],
 });

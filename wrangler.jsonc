@@ -142,7 +142,6 @@
         }
       ],
       "vars": {
-        "APP_BASE_URL": "https://pkic-org-preview.pkic.workers.dev/",
         "HUGO_VERSION": "0.160.1",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
         "DEFAULT_REFERRAL_CODE_LENGTH": "7",
