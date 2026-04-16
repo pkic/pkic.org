@@ -102,8 +102,8 @@ export async function onRequestGet(c: any): Promise<Response> {
          SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
                   WHEN status = 'completed' AND currency = 'usd' THEN gross_amount
                   ELSE 0 END) AS gross_usd,
-         SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
-                  WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
+         SUM(CASE WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
+                  WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
                   ELSE 0 END) AS net_usd
        FROM donations`,
     ),
@@ -127,8 +127,8 @@ export async function onRequestGet(c: any): Promise<Response> {
               SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
                        WHEN status = 'completed' AND currency = 'usd' THEN gross_amount
                        ELSE 0 END) AS gross_usd,
-              SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
-                       WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
+              SUM(CASE WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
+                       WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
                        ELSE 0 END) AS net_usd
        FROM donations
        WHERE created_at >= date('now', '-12 months')
@@ -156,8 +156,8 @@ export async function onRequestGet(c: any): Promise<Response> {
               SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
                        WHEN status = 'completed' AND currency = 'usd' THEN gross_amount
                        ELSE 0 END) AS gross_usd,
-              SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
-                       WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
+              SUM(CASE WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
+                       WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
                        ELSE 0 END) AS net_usd
        FROM donations
        WHERE created_at >= date('now', '-30 days')
@@ -185,8 +185,8 @@ export async function onRequestGet(c: any): Promise<Response> {
               SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
                        WHEN status = 'completed' AND currency = 'usd' THEN gross_amount
                        ELSE 0 END) AS gross_usd,
-              SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
-                       WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
+              SUM(CASE WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
+                       WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
                        ELSE 0 END) AS net_usd
        FROM donations
        WHERE created_at >= date('now', '-84 days')
