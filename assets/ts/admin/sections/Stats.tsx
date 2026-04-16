@@ -140,7 +140,6 @@ function RegistrationsTab({ stats }: { stats: StatsResponse }) {
 
 function DonationsTab({ stats }: { stats: StatsResponse }) {
   const don = stats.donations;
-  const primaryCurrency = don.byCurrency.find((r) => r.status === "completed")?.currency ?? "usd";
 
   function amountChart(labels: string[], periods: Array<DonationPeriod>): string {
     const grossValues = periods.map((d) => d.gross_usd);
@@ -186,11 +185,6 @@ function DonationsTab({ stats }: { stats: StatsResponse }) {
     { header: { label: "Pend.", className: "text-end" }, cell: (d) => d.pending, className: "mono text-end" },
     { header: { label: "Failed", className: "text-end" }, cell: (d) => d.failed, className: "mono text-end" },
     { header: { label: "Expd.", className: "text-end" }, cell: (d) => d.expired, className: "mono text-end" },
-    {
-      header: { label: `Gross (${primaryCurrency.toUpperCase()})`, className: "text-end" },
-      cell: (d) => (d.gross > 0 ? fmtMoney(d.gross, primaryCurrency) : "—"),
-      className: "mono text-end",
-    },
     {
       header: { label: "Gross (USD)", className: "text-end" },
       cell: (d) => (d.gross_usd > 0 ? fmtMoney(d.gross_usd, "usd") : "—"),

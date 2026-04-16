@@ -17,7 +17,6 @@ export function Dashboard() {
   if (!stats) return null;
 
   const { registrations: r, email: em, invites: inv, donations: don } = stats;
-  const donTop = don.byCurrency.find((d) => d.status === "completed");
   const donCompleted = don.byStatus.completed ?? 0;
   const donPending = don.byStatus.pending ?? 0;
   const donFailed = don.byStatus.failed ?? 0;
@@ -57,7 +56,7 @@ export function Dashboard() {
         <StatCard
           label="Completed Donations"
           value={donCompleted}
-          note={donTop ? `${fmtMoney(donTop.total_gross, donTop.currency)} total` : "no data"}
+          note={don.totals.gross_usd > 0 ? `${fmtMoney(don.totals.gross_usd, "usd")} gross` : "no data"}
         />
         <StatCard
           label="Pending Donations"

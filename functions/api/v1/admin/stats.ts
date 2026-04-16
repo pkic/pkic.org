@@ -86,16 +86,22 @@ export async function onRequestGet(c: any): Promise<Response> {
               COUNT(*)                   AS count,
               SUM(gross_amount)          AS total_gross,
               ROUND(AVG(gross_amount))   AS avg_gross,
-              SUM(net_amount)            AS total_net
+              SUM(net_amount)            AS total_net,
+              SUM(CASE WHEN settled_currency = 'usd' THEN settled_amount
+                       WHEN currency = 'usd' THEN gross_amount
+                       ELSE NULL END)    AS total_gross_usd
        FROM donations
        GROUP BY status, currency
-       ORDER BY status, total_gross DESC`,
+       ORDER BY status, total_gross_usd DESC NULLS LAST`,
+
       [],
     ),
     first<{ gross_usd: number; net_usd: number }>(
       db,
       `SELECT
-         SUM(CASE WHEN status = 'completed' AND currency = 'usd' THEN gross_amount ELSE 0 END) AS gross_usd,
+         SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
+                  WHEN status = 'completed' AND currency = 'usd' THEN gross_amount
+                  ELSE 0 END) AS gross_usd,
          SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
                   WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
                   ELSE 0 END) AS net_usd
@@ -118,7 +124,9 @@ export async function onRequestGet(c: any): Promise<Response> {
               COUNT(CASE WHEN status = 'failed'    THEN 1 END) AS failed,
               COUNT(CASE WHEN status = 'expired'   THEN 1 END) AS expired,
               SUM(CASE WHEN status = 'completed' THEN gross_amount ELSE 0 END) AS gross,
-              SUM(CASE WHEN status = 'completed' AND currency = 'usd' THEN gross_amount ELSE 0 END) AS gross_usd,
+              SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
+                       WHEN status = 'completed' AND currency = 'usd' THEN gross_amount
+                       ELSE 0 END) AS gross_usd,
               SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
                        WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
                        ELSE 0 END) AS net_usd
@@ -145,7 +153,9 @@ export async function onRequestGet(c: any): Promise<Response> {
               COUNT(CASE WHEN status = 'failed'    THEN 1 END) AS failed,
               COUNT(CASE WHEN status = 'expired'   THEN 1 END) AS expired,
               SUM(CASE WHEN status = 'completed' THEN gross_amount ELSE 0 END) AS gross,
-              SUM(CASE WHEN status = 'completed' AND currency = 'usd' THEN gross_amount ELSE 0 END) AS gross_usd,
+              SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
+                       WHEN status = 'completed' AND currency = 'usd' THEN gross_amount
+                       ELSE 0 END) AS gross_usd,
               SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
                        WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
                        ELSE 0 END) AS net_usd
@@ -172,7 +182,9 @@ export async function onRequestGet(c: any): Promise<Response> {
               COUNT(CASE WHEN status = 'failed'    THEN 1 END) AS failed,
               COUNT(CASE WHEN status = 'expired'   THEN 1 END) AS expired,
               SUM(CASE WHEN status = 'completed' THEN gross_amount ELSE 0 END) AS gross,
-              SUM(CASE WHEN status = 'completed' AND currency = 'usd' THEN gross_amount ELSE 0 END) AS gross_usd,
+              SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
+                       WHEN status = 'completed' AND currency = 'usd' THEN gross_amount
+                       ELSE 0 END) AS gross_usd,
               SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
                        WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
                        ELSE 0 END) AS net_usd

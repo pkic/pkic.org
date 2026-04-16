@@ -15,10 +15,12 @@ interface PromoterRow {
   checkout_session_id: string | null;
   clicks: number;
   own_gross: number;
+  own_gross_usd: number;
   own_currency: string | null;
   attributed_total: number;
   attributed_completed: number;
   attributed_gross: number;
+  attributed_gross_usd: number;
   currency: string | null;
   created_at: string;
 }
@@ -29,24 +31,46 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   const promoters = await all<PromoterRow>(
     db,
-    `SELECT
+    `WITH currency_rank AS (
+       SELECT source,
+              currency,
+              ROW_NUMBER() OVER (
+                PARTITION BY source
+                ORDER BY COUNT(*) DESC
+              ) AS rn
+         FROM donations
+        WHERE source IS NOT NULL
+          AND status = 'completed'
+        GROUP BY source, currency
+     )
+     SELECT
        p.code,
        p.name,
        p.checkout_session_id,
        p.clicks,
        p.created_at,
-       COALESCE(own.gross_amount, 0)                              AS own_gross,
-       own.currency                                               AS own_currency,
-       COUNT(d.id)                                                AS attributed_total,
-       COUNT(CASE WHEN d.status = 'completed' THEN 1 END)        AS attributed_completed,
-       COALESCE(SUM(CASE WHEN d.status = 'completed' THEN d.gross_amount END), 0) AS attributed_gross,
-       -- most common currency from attributed completed donations
-       (SELECT d2.currency FROM donations d2
-        WHERE d2.source = p.code AND d2.status = 'completed'
-        GROUP BY d2.currency ORDER BY COUNT(*) DESC LIMIT 1)     AS currency
+       COALESCE(own.gross_amount, 0)                                                AS own_gross,
+       COALESCE(
+         CASE
+           WHEN own.settled_currency = 'usd' THEN own.settled_amount
+           WHEN own.currency = 'usd'         THEN own.gross_amount
+           ELSE NULL
+         END, 0)                                                                    AS own_gross_usd,
+       own.currency                                                                  AS own_currency,
+       COUNT(d.id)                                                                   AS attributed_total,
+       COUNT(CASE WHEN d.status = 'completed' THEN 1 END)                           AS attributed_completed,
+       COALESCE(SUM(CASE WHEN d.status = 'completed' THEN d.gross_amount END), 0)   AS attributed_gross,
+       COALESCE(SUM(
+         CASE
+           WHEN d.status = 'completed' AND d.settled_currency = 'usd' THEN d.settled_amount
+           WHEN d.status = 'completed' AND d.currency = 'usd'         THEN d.gross_amount
+           ELSE 0
+         END), 0)                                                                   AS attributed_gross_usd,
+       cr.currency
      FROM donation_promoters p
      LEFT JOIN donations own ON own.id = p.donation_id AND own.status = 'completed'
-     LEFT JOIN donations d ON d.source = p.code
+     LEFT JOIN donations d   ON d.source = p.code
+     LEFT JOIN currency_rank cr ON cr.source = p.code AND cr.rn = 1
      GROUP BY p.code
      ORDER BY p.clicks DESC, attributed_completed DESC`,
     [],
