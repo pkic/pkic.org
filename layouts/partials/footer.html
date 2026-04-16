@@ -75,7 +75,7 @@
     {{- /* Module loader — dynamically imports whichever module the page declares via
          [data-module]. The hashed URL is read from the asset manifest produced by
          scripts/build-frontend.mjs, which runs automatically before every Hugo build. */ -}}
-    {{- $manifest := index site.Data "asset-manifest" -}}
+    {{- $manifest := index hugo.Data "asset-manifest" -}}
     {{- with $manifest -}}
       {{- $loader := index . "loader" -}}
       {{- with $loader -}}

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { clearTimeout, setTimeout } from "node:timers";
 import { relative, resolve, sep } from "node:path";
@@ -181,21 +182,50 @@ function hugoPlugin(): Plugin {
   };
 }
 
-export default defineConfig({
-  clearScreen: false,
-  publicDir,
-  server: {
-    host: "0.0.0.0",
-    port: 8788,
-    strictPort: true,
-    watch: {
-      ignored: ["**/dist/**", "**/public/**"],
+export default defineConfig(() => {
+  // Auto-detect Cloudflare environment for CI builds.
+  // Must run here (not at top level) so it executes before cloudflare() reads it,
+  // since ESM hoists imports above top-level statements.
+  if (!process.env.CLOUDFLARE_ENV) {
+    const branch = process.env.WORKERS_CI_BRANCH;
+    process.env.CLOUDFLARE_ENV = branch && branch.toLowerCase() === "main" ? "production" : branch ? "preview" : "local";
+  }
+
+  // In CI preview builds, patch APP_BASE_URL in wrangler.jsonc to match the
+  // branch-specific preview URL so the subsequent `wrangler versions upload`
+  // deploy step also picks it up. Uses text replacement to preserve JSONC formatting.
+  const ciBranch = process.env.WORKERS_CI_BRANCH;
+  if (ciBranch && ciBranch.toLowerCase() !== "main") {
+    const sanitized = ciBranch.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const previewUrl = `https://${sanitized}-pkic-org.pkic.workers.dev`;
+    const configFile = resolve(projectRoot, "wrangler.jsonc");
+    const content = readFileSync(configFile, "utf8");
+    const patched = content.replace(
+      /("APP_BASE_URL"\s*:\s*)"https:\/\/[^"]*\.pkic\.workers\.dev\/?"/,
+      `$1"${previewUrl}"`,
+    );
+    if (patched !== content) {
+      writeFileSync(configFile, patched);
+      console.log(`Preview APP_BASE_URL set to ${previewUrl}`);
+    }
+  }
+
+  return {
+    clearScreen: false,
+    publicDir,
+    server: {
+      host: "0.0.0.0",
+      port: 8788,
+      strictPort: true,
+      watch: {
+        ignored: ["**/dist/**", "**/public/**"],
+      },
     },
-  },
-  preview: {
-    host: "0.0.0.0",
-    port: 8788,
-    strictPort: true,
-  },
-  plugins: [hugoPlugin(), cloudflare()],
+    preview: {
+      host: "0.0.0.0",
+      port: 8788,
+      strictPort: true,
+    },
+    plugins: [hugoPlugin(), cloudflare()],
+  };
 });
