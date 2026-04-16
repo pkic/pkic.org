@@ -51,16 +51,20 @@ describe("admin email template endpoints", () => {
     expect(response.status).toBe(200);
 
     const payload = (await response.json()) as {
-      templates: Array<{ template_key: string; status: string; version: number }>;
+      templates: Array<{
+        template_key: string;
+        active_version: number | null;
+        version_count: number;
+        draft_count: number;
+      }>;
+      page: { limit: number; offset: number; hasMore: boolean; total: number };
     };
+    expect(payload.templates.some((t) => t.template_key === "email_layout" && t.active_version != null)).toBe(true);
     expect(
-      payload.templates.some((template) => template.template_key === "email_layout" && template.status === "active"),
+      payload.templates.some((t) => t.template_key === "registration_confirm_email" && t.active_version != null),
     ).toBe(true);
-    expect(
-      payload.templates.some(
-        (template) => template.template_key === "registration_confirm_email" && template.status === "active",
-      ),
-    ).toBe(true);
+    expect(payload.page).toBeDefined();
+    expect(payload.page.total).toBeGreaterThanOrEqual(2);
   });
 
   it("renders preview HTML and text with seeded partials and layout", async () => {
