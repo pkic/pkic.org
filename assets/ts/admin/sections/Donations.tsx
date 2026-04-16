@@ -429,7 +429,7 @@ export function Donations({ subTab }: { subTab?: string }) {
             empty="No donations found"
             className="align-middle"
             rowKey={(d) => d.id}
-            onRowClick={(d) => navigate(`/donations/${d.id}`)}
+            onRowClick={(d) => navigate(`/donations/detail/${d.id}`)}
           />
         </>
       )}
