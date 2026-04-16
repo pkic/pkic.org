@@ -4,7 +4,7 @@ slogan: Automate certificate lifecycle management with AppViewX for efficiency, 
 website: https://www.appviewx.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: Using AppViewX, the Most Advanced Certificate Lifecycle Management and PKI Platform - Prevent outages, eliminate security weaknesses and reduce risk while accelerating innovation and growth across hybrid multi-cloud environments. 
+description: AppViewX develops products for machine identity management, PKI, and cryptographic automation.
 
 # membership
 memberSince: 2024-06-18
@@ -22,8 +22,8 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: https://www.appviewx.com/resources/resource-center/
-  feed: https://www.appviewx.com/resources/resource-center/feed
+  url: https://www.appviewx.com/resources/blogs/
+  feed: https://www.appviewx.com/resources/blogs/feed
   language: en_US
 
 # Press Releases
@@ -51,33 +51,24 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Muralidharan Palanisamy
-    role: Chief Solutions Officer 
-    social:
-      x: 
-      linkedin: https://www.linkedin.com/in/muralidharanpalanisamy/
-    description: Murali is a veteran enterprise technology influencer, overseeing Innovation, Strategy and Product Direction to enable Customers in achieving value using AppViewX platform.
-  - name: Harshana Moorthy 
-    role: Lead Principle Solutions architect
+  - name: Ganesh Mallaya
+    role: Distinguished Architect and Industry Evangelist
     social:
       x:
-      linkedin: https://www.linkedin.com/in/harshana-moorthy-savvy101/
-    description: A seasoned cybersecurity pre-sales leader with deep expertise in PKI implementation, and secure identity solutions.  Drives strategic growth through understanding customer's compliance requirements and delivering Machine Identity Solutions 
+      linkedin: https://www.linkedin.com/in/ganeshmallaya/
+    description: |
+      Ganesh Mallaya is an accomplished cybersecurity leader at AppViewX, operating at the intersection of product innovation, industry standards, and enterprise adoption. He plays a key role in shaping both the evolution of cryptographic platforms and how organizations implement them in real-world environments, with a focus on Public Key Infrastructure (PKI), certificate lifecycle management, and post-quantum readiness.
+
+      As a field-facing technology leader, Ganesh works closely with CISOs and security leaders across global enterprises, acting as a trusted advisor on cyber risk, crypto-agility, and large-scale PKI transformation. His work goes beyond strategy—he actively influences product direction by bringing frontline customer challenges into the design of scalable, automation-first solutions that address modern cryptographic complexity.
+
+      Ganesh is an active contributor to global standards and industry initiatives, collaborating with the IETF, CA/Browser Forum, and the PKI Consortium. His contributions span areas such as ACME-based automation, device identity and attestation, and the advancement of hybrid and composite cryptographic models to support the transition to quantum-resistant security.
+
+      He is a frequent speaker at leading security and identity conferences, including BSides Seattle and International Cryptographic Module Conference, where he shares practitioner-driven insights on crypto-agility, PKI modernization, and the operational realities of post-quantum adoption. His perspective consistently highlights that the future of cryptography will be defined not just by algorithms, but by the ability to automate, adapt, and operate securely at scale.
   - name: Ganesh Gopalan
-    role: General Manager & Vice President - Identity Security for PKI & CLM 
+    role: VP Product Strategy
     social:
       linkedin: https://www.linkedin.com/in/ganesh-gopalan-749746256/
     description: Possess strong understanding of Cryptography and PKI; Implemented PKI related RFCs like 5280 (Digital Certificate and CRL), 5652 (PKCS#7), 4210 (CMP), 4211 (CRMF), 6960 (OCSP), 3161 (TSA), 5055 (SCVP), 5175 (XML Signatures), ACME (RFC 8555), KMIP, OAUTH 2.0, JSON Web Signatures and Encryption
-  - name: Christina Simko
-    role: Vice President of Product Marketing
-    social:
-      linkedin: https://www.linkedin.com/in/csimko/
-    description: creating and executing high growth marketing strategies and programs for cybersecurity Enterprise. 
-  - name: Cally Fritsch
-    role: Director of Product Marketing
-    hidden: true
-  - name: Ganesh Mallaya
-    role: Director - Solutions Architect
   - name: Chris Bailey
     role: Board Member
     hidden: true
@@ -93,3 +84,25 @@ representatives:
       Chris has held senior leadership roles at Trend Micro, Entrust, and GeoTrust, three prominent companies in the cybersecurity and digital certificate sectors. In these roles, he expanded certificate offerings, guided policy development, and strengthened industry collaboration around trusted identity and encryption technologies.  
 
       Driven by a deep commitment to community engagement, standards development, and technical innovation, Chris continues to champion secure digital identity solutions and foster global cooperation throughout the PKI ecosystem.
+
+
+# Long-form content (markdown)
+title: AppViewX
+content: |
+  ## The machine identity and crypto-agility platform for modern enterprises
+
+  AppViewX is the machine identity and crypto-agility platform for modern enterprises. The company enables security and platform teams to manage cryptography as critical infrastructure by providing unified visibility, automation, and policy-driven control across certificates, keys, and cryptographic assets.
+
+  AppViewX helps organizations simplify Public Key Infrastructure (PKI), automate certificate lifecycle management, and enforce governance at scale across hybrid, multi-cloud, and cloud-native environments. Its platform is designed to eliminate manual processes, reduce risk from outages and misconfigurations, and ensure continuous compliance in dynamic digital ecosystems.
+
+  With a strong focus on crypto-agility and post-quantum readiness, AppViewX enables enterprises to discover their entire cryptographic footprint, generate a Cryptographic Bill of Materials (CBOM), and rapidly transition to new cryptographic standards as threats and regulations evolve. By integrating discovery, automation, and orchestration, the platform allows organizations to move from reactive security practices to resilient, future-ready operations.
+
+  AppViewX develops products across machine identity management, PKI, certificate lifecycle automation, and cryptographic risk management. Its solutions support a wide range of use cases, including securing applications, infrastructure, DevOps pipelines, and connected devices.
+
+  Key capabilities include certificate discovery and inventory, automated issuance and renewal, PKI orchestration, secrets and key management integrations, and policy-driven lifecycle governance. AppViewX integrates seamlessly with leading cloud providers, load balancers, DevOps tools, and enterprise systems to deliver end-to-end automation and control.
+
+  ### Global presence
+
+  AppViewX is a global enterprise having offices in United States, Europe, Canada and India.
+
+  {{< youtube aL72uEYh9vo>}}
