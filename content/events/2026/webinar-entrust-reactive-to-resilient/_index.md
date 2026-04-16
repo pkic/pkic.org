@@ -19,8 +19,8 @@ params:
   eventDuration: 1
 
   heroButton:
-    label: Register for this webinar
-    link: https://events.teams.microsoft.com/event/dc393668-3364-4707-9dbe-febbd5cdc8e6@ca9957e9-0ed0-4d29-9457-9d36f9369594
+    label: Watch the recording
+    link: https://www.linkedin.com/events/fromreactivetoresilient-regaini7445395752853409792/theater/
 
   speakers:
     - member: entrust
