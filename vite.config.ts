@@ -17,6 +17,25 @@ import { cloudflare } from "@cloudflare/vite-plugin";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
 
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
+
+// In CI preview builds, patch APP_BASE_URL in wrangler.jsonc to match the
+// branch-specific preview URL. Uses targeted text replacement to preserve
+// JSONC comments and formatting.
+const ciBranch = process.env.WORKERS_CI_BRANCH;
+if (ciBranch && ciBranch !== "main") {
+  const sanitized = ciBranch.toLowerCase().replace(/\//g, "-");
+  const previewUrl = `https://${sanitized}-pkic-org.pkic.workers.dev`;
+  const configFile = resolve(projectRoot, "wrangler.jsonc");
+  const content = readFileSync(configFile, "utf8");
+  const patched = content.replace(
+    /("APP_BASE_URL"\s*:\s*)"https:\/\/[^"]*\.pkic\.workers\.dev\/?"/,
+    `$1"${previewUrl}"`,
+  );
+  if (patched !== content) {
+    writeFileSync(configFile, patched);
+    console.log(`Preview APP_BASE_URL set to ${previewUrl}`);
+  }
+}
 const publicDir = resolve(projectRoot, "public");
 const hugoBuildState = globalThis as typeof globalThis & {
   __pkicHugoBuildPromise?: Promise<void>;
@@ -208,29 +227,5 @@ export default defineConfig({
     port: 8788,
     strictPort: true,
   },
-  plugins: [
-    hugoPlugin(),
-    cloudflare({
-      configPath: "./wrangler.jsonc",
-      config: (config) => {
-        // Patch wrangler.jsonc on disk so the subsequent `wrangler versions upload`
-        // deploy step also picks up the dynamic preview APP_BASE_URL.
-        const branch = process.env.WORKERS_CI_BRANCH;
-        if (branch && branch !== "main") {
-          const sanitized = branch.toLowerCase().replace(/\//g, "-");
-          const previewUrl = `https://${sanitized}-pkic-org.pkic.workers.dev`;
-          config.vars ??= {};
-          config.vars.APP_BASE_URL = previewUrl;
-
-          const configFile = resolve(projectRoot, "wrangler.jsonc");
-          const raw = JSON.parse(readFileSync(configFile, "utf8"));
-          if (raw.env?.preview?.vars) {
-            raw.env.preview.vars.APP_BASE_URL = previewUrl;
-            writeFileSync(configFile, JSON.stringify(raw, null, 2) + "\n");
-          }
-        }
-        return config;
-      },
-    }),
-  ],
+  plugins: [hugoPlugin(), cloudflare()],
 });
