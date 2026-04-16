@@ -469,23 +469,36 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
   const [contentType, setContentType] = useState<"markdown" | "html" | "text">("markdown");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
-  const [existingKeys, setExistingKeys] = useState<string[]>([]);
+  const [keyCheckStatus, setKeyCheckStatus] = useState<"idle" | "checking" | "exists" | "available">("idle");
 
   useEffect(() => {
-    void api<{ templates: { template_key: string }[] }>("/api/v1/admin/email-templates?limit=200").then((data) => {
-      setExistingKeys((data.templates ?? []).map((t) => t.template_key));
-    });
-  }, []);
+    if (!key || !/^[a-z][a-z0-9_]*$/.test(key)) {
+      setKeyCheckStatus("idle");
+      return;
+    }
+    setKeyCheckStatus("checking");
+    const timer = setTimeout(() => {
+      api<{ exists: boolean }>(`/api/v1/admin/email-templates/${encodeURIComponent(key)}/exists`)
+        .then((data) => setKeyCheckStatus(data.exists ? "exists" : "available"))
+        .catch(() => setKeyCheckStatus("idle"));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [key]);
+
   const keyError =
     key && !/^[a-z][a-z0-9_]*$/.test(key)
       ? "Use lowercase letters, digits, and underscores only (must start with a letter)"
-      : key && existingKeys.includes(key)
+      : keyCheckStatus === "exists"
         ? "A template with this key already exists"
         : null;
 
   async function doCreate() {
     if (!key || keyError) {
       toast("Fix the template key first", "error");
+      return;
+    }
+    if (keyCheckStatus === "checking") {
+      toast("Still checking key availability, please wait", "error");
       return;
     }
     if (!body.trim()) {
@@ -520,13 +533,18 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
           <label class="form-label small fw-semibold mb-1">Template key</label>
           <input
             type="text"
-            class={`form-control form-control-sm font-monospace${keyError ? " is-invalid" : ""}`}
+            class={`form-control form-control-sm font-monospace${keyError ? " is-invalid" : keyCheckStatus === "available" ? " is-valid" : ""}`}
             value={key}
             placeholder="e.g. speaker_confirmation"
             onInput={(e) => setKey((e.target as HTMLInputElement).value)}
           />
           {keyError && <div class="invalid-feedback">{keyError}</div>}
-          <div class="form-text">A unique identifier for this template. Cannot be changed later.</div>
+          {keyCheckStatus === "available" && <div class="valid-feedback">Key is available</div>}
+          <div class="form-text">
+            {keyCheckStatus === "checking"
+              ? "Checking availability…"
+              : "A unique identifier for this template. Cannot be changed later."}
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label small fw-semibold mb-1">Content type</label>
@@ -560,7 +578,11 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
             onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
           />
         </div>
-        <button class="btn btn-success" onClick={() => void doCreate()} disabled={saving || !key || !!keyError}>
+        <button
+          class="btn btn-success"
+          onClick={() => void doCreate()}
+          disabled={saving || !key || !!keyError || keyCheckStatus === "checking"}
+        >
           {saving ? "Creating…" : "Create Template"}
         </button>
       </div>
