@@ -216,12 +216,13 @@ async function bulkBuildProposalInviteEmailContexts(
 ): Promise<Map<string, ProposalInviteEmailContext>> {
   if (proposalIds.length === 0) return new Map();
 
-  const ph = (n: number) => Array.from({ length: n }, () => "?").join(", ");
+  const proposalIdsJson = JSON.stringify(proposalIds);
 
   const proposals = await all<{ id: string; title: string; abstract: string; proposer_user_id: string }>(
     db,
-    `SELECT id, title, abstract, proposer_user_id FROM session_proposals WHERE id IN (${ph(proposalIds.length)})`,
-    proposalIds,
+    `SELECT id, title, abstract, proposer_user_id FROM session_proposals
+     WHERE id IN (SELECT value FROM json_each(?))`,
+    [proposalIdsJson],
   );
 
   const proposerUserIds = [...new Set(proposals.map((p) => p.proposer_user_id).filter(Boolean))];
@@ -244,8 +245,9 @@ async function bulkBuildProposalInviteEmailContexts(
     proposerUserIds.length > 0
       ? all<UserRow>(
           db,
-          `SELECT id, email, first_name, last_name, organization_name FROM users WHERE id IN (${ph(proposerUserIds.length)})`,
-          proposerUserIds,
+          `SELECT id, email, first_name, last_name, organization_name FROM users
+           WHERE id IN (SELECT value FROM json_each(?))`,
+          [JSON.stringify(proposerUserIds)],
         )
       : ([] as UserRow[]),
     all<SpeakerRow>(
@@ -253,9 +255,9 @@ async function bulkBuildProposalInviteEmailContexts(
       `SELECT ps.proposal_id, u.email, u.first_name, u.last_name, u.organization_name
        FROM proposal_speakers ps
        JOIN users u ON u.id = ps.user_id
-       WHERE ps.proposal_id IN (${ph(proposalIds.length)})
+       WHERE ps.proposal_id IN (SELECT value FROM json_each(?))
        ORDER BY ps.created_at ASC`,
-      proposalIds,
+      [proposalIdsJson],
     ),
   ]);
 
@@ -401,7 +403,6 @@ export async function runReminderCycle(
 
     // 3. Fetch all inviters in one query (1 round-trip instead of N)
     const inviteIds = filteredInvites.map((i) => i.id);
-    const inviterPh = inviteIds.map(() => "?").join(", ");
     const inviterRows = await all<InviteInviterInfo & { invite_id: string }>(
       db,
       `SELECT ii.invite_id,
@@ -411,9 +412,9 @@ export async function runReminderCycle(
               u.organization_name AS organizationName
        FROM invite_inviters ii
        JOIN users u ON u.id = ii.inviter_user_id
-       WHERE ii.invite_id IN (${inviterPh})
+       WHERE ii.invite_id IN (SELECT value FROM json_each(?))
        ORDER BY ii.invited_at ASC`,
-      inviteIds,
+      [JSON.stringify(inviteIds)],
     );
     const invitersByInviteId = new Map<string, InviteInviterInfo[]>();
     for (const row of inviterRows) {
