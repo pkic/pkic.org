@@ -5,7 +5,7 @@ import { ErrorAlert } from "../../components/ErrorAlert";
 import { DataTable, type Column } from "../../components/Table";
 import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
-import { fmtMoney, svgBarChart, svgLineChart } from "../charts";
+import { fmtMoney, svgBarChart, svgLineChart, svgStackedBarChart } from "../charts";
 import type { StatsResponse, DonationPeriod } from "../types";
 import { useData } from "../../hooks/useData";
 
@@ -140,11 +140,38 @@ function RegistrationsTab({ stats }: { stats: StatsResponse }) {
 
 function DonationsTab({ stats }: { stats: StatsResponse }) {
   const don = stats.donations;
-  const primaryCurrency = don.byCurrency.find((r) => r.status === "completed")?.currency ?? "usd";
-  const monthlyChart = svgBarChart(
+
+  function amountChart(labels: string[], periods: Array<DonationPeriod>): string {
+    const grossValues = periods.map((d) => d.gross_usd);
+    const feeValues = periods.map((d) => Math.max(0, d.gross_usd - d.net_usd));
+    const hasData = grossValues.some((v) => v > 0);
+    if (!hasData) return "";
+    return svgStackedBarChart(
+      labels,
+      [
+        { label: "Net (USD)", values: periods.map((d) => d.net_usd), color: "#198754" },
+        { label: "Fees", values: feeValues, color: "#dee2e6" },
+      ],
+      { valueFormatter: (v) => fmtMoney(v, "usd") },
+    );
+  }
+
+  const monthlyCountChart = svgBarChart(
     don.monthly.map((d) => d.month.slice(0, 7)),
     don.monthly.map((d) => d.completed),
     { color: "#0d6efd" },
+  );
+  const monthlyAmountChart = amountChart(
+    don.monthly.map((d) => d.month.slice(0, 7)),
+    don.monthly,
+  );
+  const weeklyAmountChart = amountChart(
+    don.weekly.map((d) => d.week),
+    don.weekly,
+  );
+  const dailyAmountChart = amountChart(
+    don.daily.map((d) => d.date.slice(5)),
+    don.daily,
   );
 
   function periodLabel(d: DonationPeriod & { date?: string; week?: string; month?: string }): string {
@@ -159,14 +186,39 @@ function DonationsTab({ stats }: { stats: StatsResponse }) {
     { header: { label: "Failed", className: "text-end" }, cell: (d) => d.failed, className: "mono text-end" },
     { header: { label: "Expd.", className: "text-end" }, cell: (d) => d.expired, className: "mono text-end" },
     {
-      header: { label: `Gross (${primaryCurrency.toUpperCase()})`, className: "text-end" },
-      cell: (d) => (d.gross > 0 ? fmtMoney(d.gross, primaryCurrency) : "—"),
+      header: { label: "Gross (USD)", className: "text-end" },
+      cell: (d) => (d.gross_usd > 0 ? fmtMoney(d.gross_usd, "usd") : "—"),
+      className: "mono text-end",
+    },
+    {
+      header: { label: "Net (USD)", className: "text-end" },
+      cell: (d) => (d.net_usd > 0 ? fmtMoney(d.net_usd, "usd") : "—"),
       className: "mono text-end",
     },
   ];
 
   return (
     <div>
+      <div class="row g-3 mb-3">
+        <div class="col-md-6">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+              <div class="text-uppercase small fw-bold text-muted mb-1">Total Gross (USD)</div>
+              <div class="fs-3 fw-bold">{fmtMoney(don.totals.gross_usd, "usd")}</div>
+              <div class="text-muted small mt-1">Completed USD donations, before fees</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-md-6">
+          <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+              <div class="text-uppercase small fw-bold text-muted mb-1">Total Net (USD)</div>
+              <div class="fs-3 fw-bold">{fmtMoney(don.totals.net_usd, "usd")}</div>
+              <div class="text-muted small mt-1">After payment processing fees</div>
+            </div>
+          </div>
+        </div>
+      </div>
       <div class="card border-0 shadow-sm">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-3">Donations by Status &amp; Currency</h6>
@@ -199,19 +251,22 @@ function DonationsTab({ stats }: { stats: StatsResponse }) {
       <div class="card border-0 shadow-sm mt-3">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-3">Donations — Daily (last 30 days)</h6>
+          {dailyAmountChart && <div dangerouslySetInnerHTML={{ __html: dailyAmountChart }} />}
           <DataTable columns={periodColumns} data={don.daily} empty="No data" />
         </div>
       </div>
       <div class="card border-0 shadow-sm mt-3">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-3">Donations — Weekly (last 12 weeks)</h6>
+          {weeklyAmountChart && <div dangerouslySetInnerHTML={{ __html: weeklyAmountChart }} />}
           <DataTable columns={periodColumns} data={don.weekly} empty="No data" />
         </div>
       </div>
       <div class="card border-0 shadow-sm mt-3">
         <div class="card-body">
           <h6 class="text-uppercase small fw-bold text-muted mb-3">Donations — Monthly (last 12 months)</h6>
-          <div dangerouslySetInnerHTML={{ __html: monthlyChart }} />
+          <div dangerouslySetInnerHTML={{ __html: monthlyCountChart }} />
+          {monthlyAmountChart && <div dangerouslySetInnerHTML={{ __html: monthlyAmountChart }} />}
           <DataTable columns={periodColumns} data={don.monthly} empty="No data" />
         </div>
       </div>

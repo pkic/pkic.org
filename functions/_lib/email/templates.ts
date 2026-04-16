@@ -53,6 +53,15 @@ export async function listTemplateVersions(db: DatabaseLike): Promise<TemplateVe
   );
 }
 
+export async function templateKeyExists(db: DatabaseLike, templateKey: string): Promise<boolean> {
+  const row = await first<{ n: number }>(
+    db,
+    "SELECT 1 AS n FROM email_template_versions WHERE template_key = ? LIMIT 1",
+    [templateKey],
+  );
+  return row !== null;
+}
+
 async function getNextVersion(db: DatabaseLike, templateKey: string): Promise<number> {
   const row = await first<{ max_version: number }>(
     db,

@@ -193,6 +193,7 @@ export async function bulkQueueInviteEmails(
   rows: Array<{
     eventId: string;
     recipientEmail: string;
+    recipientUserId?: string | null;
     templateKey: string;
     subject: string;
     data: Record<string, unknown>;
@@ -211,12 +212,13 @@ export async function bulkQueueInviteEmails(
               id, event_id, template_key, template_version, recipient_user_id, recipient_email,
               subject, payload_json, message_type, provider, provider_message_id, status, attempts,
               send_after, last_error, created_at, updated_at, sent_at
-            ) VALUES (?, ?, ?, NULL, NULL, ?, ?, ?, 'transactional', 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL)`,
+            ) VALUES (?, ?, ?, NULL, ?, ?, ?, ?, 'transactional', 'sendgrid', NULL, 'queued', 0, ?, NULL, ?, ?, NULL)`,
           )
           .bind(
             uuid(),
             row.eventId,
             row.templateKey,
+            row.recipientUserId ?? null,
             row.recipientEmail,
             row.subject,
             stringifyJson(row.data),

@@ -58,10 +58,12 @@ interface PromoterRow {
   checkout_session_id: string | null;
   clicks: number;
   own_gross: number;
+  own_gross_usd: number;
   own_currency: string | null;
   attributed_total: number;
   attributed_completed: number;
   attributed_gross: number;
+  attributed_gross_usd: number;
   currency: string | null;
   created_at: string;
 }
@@ -112,9 +114,8 @@ function rankTier(rank: number): string {
 function DonorPromoterCard({ p, rank }: { p: PromoterRow; rank: number }) {
   const ownAmt = p.own_gross > 0 && p.own_currency ? fmtAmount(p.own_gross, p.own_currency) : null;
   const refAmt = p.attributed_gross > 0 && p.currency ? fmtAmount(p.attributed_gross, p.currency) : null;
-  const totalGross = p.own_gross + p.attributed_gross;
-  const totalCurrency = p.own_currency ?? p.currency;
-  const totalAmt = totalGross > 0 && totalCurrency ? fmtAmount(totalGross, totalCurrency) : "—";
+  const totalUsd = p.own_gross_usd + p.attributed_gross_usd;
+  const totalAmt = totalUsd > 0 ? fmtAmount(totalUsd, "usd") : "—";
   const appBase = window.location.origin;
 
   return (
@@ -187,16 +188,16 @@ function PromotersTab() {
     void load();
   }, []);
 
-  // Sort by total impact (own + attributed)
-  const sorted = [...promoters].sort((a, b) => b.own_gross + b.attributed_gross - (a.own_gross + a.attributed_gross));
+  // Sort by total USD impact (own + attributed)
+  const sorted = [...promoters].sort(
+    (a, b) => b.own_gross_usd + b.attributed_gross_usd - (a.own_gross_usd + a.attributed_gross_usd),
+  );
 
-  // Summary stats
-  const totalOwn = sorted.reduce((s, p) => s + p.own_gross, 0);
-  const totalReferred = sorted.reduce((s, p) => s + p.attributed_gross, 0);
+  // Summary stats (USD-normalised)
+  const totalOwn = sorted.reduce((s, p) => s + p.own_gross_usd, 0);
+  const totalReferred = sorted.reduce((s, p) => s + p.attributed_gross_usd, 0);
   const totalClicks = sorted.reduce((s, p) => s + p.clicks, 0);
   const totalDonated = sorted.reduce((s, p) => s + p.attributed_completed, 0);
-  const mainCurrency =
-    sorted.find((p) => p.own_currency ?? p.currency)?.own_currency ?? sorted.find((p) => p.currency)?.currency ?? "USD";
 
   return (
     <div>
@@ -207,7 +208,7 @@ function PromotersTab() {
             <div class="lbl">Share Links</div>
           </div>
           <div class="stat-card ok">
-            <div class="val">{fmtAmount(totalOwn, mainCurrency)}</div>
+            <div class="val">{fmtAmount(totalOwn, "usd")}</div>
             <div class="lbl">Own Donations</div>
           </div>
           <div class="stat-card">
@@ -219,7 +220,7 @@ function PromotersTab() {
             <div class="lbl">Referred Donors</div>
           </div>
           <div class="stat-card ok">
-            <div class="val">{fmtAmount(totalReferred, mainCurrency)}</div>
+            <div class="val">{fmtAmount(totalReferred, "usd")}</div>
             <div class="lbl">Referred Amount</div>
           </div>
         </div>
@@ -428,7 +429,7 @@ export function Donations({ subTab }: { subTab?: string }) {
             empty="No donations found"
             className="align-middle"
             rowKey={(d) => d.id}
-            onRowClick={(d) => navigate(`/donations/${d.id}`)}
+            onRowClick={(d) => navigate(`/donations/detail/${d.id}`)}
           />
         </>
       )}

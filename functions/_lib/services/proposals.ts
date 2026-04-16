@@ -555,7 +555,7 @@ export interface ProposalSpeakerWithUser {
   headshot_updated_at: string | null;
 }
 
-function formatInvitePerson(
+export function formatInvitePerson(
   firstName: string | null,
   lastName: string | null,
   organizationName: string | null,

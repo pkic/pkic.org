@@ -1,8 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "preact/hooks";
+import { useState, useEffect, useRef } from "preact/hooks";
 import { Badge } from "../../components/Badge";
-import { Spinner } from "../../components/Spinner";
-import { ErrorAlert } from "../../components/ErrorAlert";
-import { DataTable } from "../../components/Table";
+import { ApiDataTable, DataTable, type ApiTableActions } from "../../components/Table";
 import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
 import { esc, toast } from "../ui";
@@ -465,30 +463,42 @@ function TemplateEditor({
 // Create new template
 // ────────────────────────────────────────────────────────
 
-function CreateTemplate({
-  existingKeys,
-  onCreated,
-  onCancel,
-}: {
-  existingKeys: string[];
-  onCreated: (key: string) => void;
-  onCancel: () => void;
-}) {
+function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => void; onCancel: () => void }) {
   const [key, setKey] = useState("");
   const [subject, setSubject] = useState("");
   const [contentType, setContentType] = useState<"markdown" | "html" | "text">("markdown");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
+  const [keyCheckStatus, setKeyCheckStatus] = useState<"idle" | "checking" | "exists" | "available">("idle");
+
+  useEffect(() => {
+    if (!key || !/^[a-z][a-z0-9_]*$/.test(key)) {
+      setKeyCheckStatus("idle");
+      return;
+    }
+    setKeyCheckStatus("checking");
+    const timer = setTimeout(() => {
+      api<{ exists: boolean }>(`/api/v1/admin/email-templates/${encodeURIComponent(key)}/exists`)
+        .then((data) => setKeyCheckStatus(data.exists ? "exists" : "available"))
+        .catch(() => setKeyCheckStatus("idle"));
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [key]);
+
   const keyError =
     key && !/^[a-z][a-z0-9_]*$/.test(key)
       ? "Use lowercase letters, digits, and underscores only (must start with a letter)"
-      : key && existingKeys.includes(key)
+      : keyCheckStatus === "exists"
         ? "A template with this key already exists"
         : null;
 
   async function doCreate() {
     if (!key || keyError) {
       toast("Fix the template key first", "error");
+      return;
+    }
+    if (keyCheckStatus === "checking") {
+      toast("Still checking key availability, please wait", "error");
       return;
     }
     if (!body.trim()) {
@@ -523,13 +533,18 @@ function CreateTemplate({
           <label class="form-label small fw-semibold mb-1">Template key</label>
           <input
             type="text"
-            class={`form-control form-control-sm font-monospace${keyError ? " is-invalid" : ""}`}
+            class={`form-control form-control-sm font-monospace${keyError ? " is-invalid" : keyCheckStatus === "available" ? " is-valid" : ""}`}
             value={key}
             placeholder="e.g. speaker_confirmation"
             onInput={(e) => setKey((e.target as HTMLInputElement).value)}
           />
           {keyError && <div class="invalid-feedback">{keyError}</div>}
-          <div class="form-text">A unique identifier for this template. Cannot be changed later.</div>
+          {keyCheckStatus === "available" && <div class="valid-feedback">Key is available</div>}
+          <div class="form-text">
+            {keyCheckStatus === "checking"
+              ? "Checking availability…"
+              : "A unique identifier for this template. Cannot be changed later."}
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label small fw-semibold mb-1">Content type</label>
@@ -563,7 +578,11 @@ function CreateTemplate({
             onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
           />
         </div>
-        <button class="btn btn-success" onClick={() => void doCreate()} disabled={saving || !key || !!keyError}>
+        <button
+          class="btn btn-success"
+          onClick={() => void doCreate()}
+          disabled={saving || !key || !!keyError || keyCheckStatus === "checking"}
+        >
           {saving ? "Creating…" : "Create Template"}
         </button>
       </div>
@@ -575,47 +594,39 @@ function CreateTemplate({
 // Main section
 // ────────────────────────────────────────────────────────
 
-type TemplatesView = "list" | "create" | { key: string; versions: EmailTemplateVersion[] };
-
-function groupTemplates(templates: EmailTemplateVersion[]): Map<string, EmailTemplateVersion[]> {
-  const grouped = new Map<string, EmailTemplateVersion[]>();
-  for (const template of templates) {
-    const list = grouped.get(template.template_key) ?? [];
-    list.push(template);
-    grouped.set(template.template_key, list);
-  }
-  return grouped;
+interface TemplateSummary {
+  template_key: string;
+  active_version: number | null;
+  version_count: number;
+  draft_count: number;
 }
 
+type TemplatesView = "list" | "create" | { key: string; versions: EmailTemplateVersion[] };
+
 export function Templates() {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [grouped, setGrouped] = useState<Map<string, EmailTemplateVersion[]>>(new Map());
   const [view, setView] = useState<TemplatesView>("list");
+  const tableRef = useRef<ApiTableActions | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+  async function openEditor(key: string) {
     try {
-      const data = await api<{ templates: EmailTemplateVersion[] }>("/api/v1/admin/email-templates");
-      setGrouped(groupTemplates(data.templates ?? []));
+      const data = await api<{ versions: EmailTemplateVersion[] }>(
+        `/api/v1/admin/email-templates/${encodeURIComponent(key)}/versions`,
+      );
+      setView({ key, versions: data.versions ?? [] });
     } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
+      toast((e as Error).message, "error");
     }
-  }, []);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
+  }
 
   async function reloadAndKeepKey(key: string) {
-    const data = await api<{ templates: EmailTemplateVersion[] }>("/api/v1/admin/email-templates");
-    const newGrouped = groupTemplates(data.templates ?? []);
-    setGrouped(newGrouped);
-    const versions = newGrouped.get(key) ?? [];
-    setView({ key, versions });
+    try {
+      const data = await api<{ versions: EmailTemplateVersion[] }>(
+        `/api/v1/admin/email-templates/${encodeURIComponent(key)}/versions`,
+      );
+      setView({ key, versions: data.versions ?? [] });
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
   }
 
   if (view !== "list" && view !== "create") {
@@ -632,84 +643,60 @@ export function Templates() {
   if (view === "create") {
     return (
       <CreateTemplate
-        existingKeys={Array.from(grouped.keys())}
         onCreated={async (key) => {
-          await load();
-          // reload to get fresh data, then open editor
-          const data = await api<{ templates: EmailTemplateVersion[] }>("/api/v1/admin/email-templates");
-          const newGrouped = groupTemplates(data.templates ?? []);
-          setGrouped(newGrouped);
-          const versions = newGrouped.get(key) ?? [];
-          setView(versions.length ? { key, versions } : "list");
+          tableRef.current?.reload();
+          await openEditor(key);
         }}
         onCancel={() => setView("list")}
       />
     );
   }
 
-  if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
-
-  const entries = Array.from(grouped.entries());
-
-  if (!entries.length) {
-    return (
-      <div class="text-center py-4">
-        <p class="text-muted fst-italic small mb-3">
-          No email templates found. Create one or use the seed script to populate initial templates.
-        </p>
-        <button class="btn btn-success btn-sm" onClick={() => setView("create")}>
-          + New Template
-        </button>
-      </div>
-    );
-  }
-
   return (
-    <div>
-      <div class="d-flex justify-content-end mb-2">
-        <button class="btn btn-success btn-sm" onClick={() => setView("create")}>
+    <ApiDataTable<TemplateSummary>
+      endpoint="/api/v1/admin/email-templates"
+      resolve={(d) => (d as { templates: TemplateSummary[] }).templates}
+      resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
+      paginate
+      searchPlaceholder="Search template key…"
+      actionsRef={tableRef}
+      toolbar={() => (
+        <button class="btn btn-success btn-sm ms-auto" onClick={() => setView("create")}>
           + New Template
         </button>
-      </div>
-      <DataTable
-        columns={[
-          { header: "Template Key", cell: (e) => e[0], className: "mono adm-template-key" },
-          {
-            header: "Active",
-            cell: (e) => {
-              const av = e[1].find((v) => v.status === "active");
-              return av ? `v${av.version}` : "—";
-            },
-            className: "mono",
+      )}
+      columns={[
+        { header: "Template Key", cell: (t) => t.template_key, className: "mono adm-template-key" },
+        {
+          header: "Active",
+          cell: (t) => (t.active_version != null ? `v${t.active_version}` : "—"),
+          className: "mono",
+        },
+        {
+          header: "Status",
+          cell: (t) => {
+            const hasActive = t.active_version != null;
+            const hasDraft = t.draft_count > 0;
+            return (
+              <>
+                <Badge status={hasActive ? "active" : "draft"} />
+                {hasDraft && hasActive && <span class="badge text-bg-warning ms-1">draft pending</span>}
+              </>
+            );
           },
-          {
-            header: "Status",
-            cell: (e) => {
-              const av = e[1].find((v) => v.status === "active");
-              const hasDraft = e[1].some((v) => v.status === "draft");
-              return (
-                <>
-                  <Badge status={av ? "active" : "draft"} />
-                  {hasDraft && av && <span class="badge text-bg-warning ms-1">draft pending</span>}
-                </>
-              );
-            },
-          },
-          { header: "Versions", cell: (e) => e[1].length, className: "mono" },
-          {
-            header: "",
-            cell: (e) => (
-              <button class="btn btn-sm btn-outline-success" onClick={() => setView({ key: e[0], versions: e[1] })}>
-                Edit →
-              </button>
-            ),
-          },
-        ]}
-        data={entries}
-        empty="No templates"
-        rowKey={(e) => e[0]}
-      />
-    </div>
+        },
+        { header: "Versions", cell: (t) => t.version_count, className: "mono" },
+        {
+          header: "",
+          cell: (t) => (
+            <button class="btn btn-sm btn-outline-success" onClick={() => void openEditor(t.template_key)}>
+              Edit →
+            </button>
+          ),
+        },
+      ]}
+      empty="No templates"
+      rowKey={(t) => t.template_key}
+    />
   );
 }

@@ -138,7 +138,7 @@ export function AdminShell() {
               )}
             />
             <Route
-              path="/donations/:id"
+              path="/donations/detail/:id"
               component={({ params }: { params: { id: string } }) => (
                 <SectionWrapper title="Donation">
                   <DonationDetailPage donationId={params.id} />

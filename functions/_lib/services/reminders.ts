@@ -1,5 +1,5 @@
-import { all, run } from "../db/queries";
-import { queueEmail } from "../email/outbox";
+import { all } from "../db/queries";
+import { bulkQueueInviteEmails } from "../email/outbox";
 import {
   inviteDeclineUrl,
   proposalPageUrl,
@@ -7,14 +7,13 @@ import {
   speakerManagePageUrl,
   registrationConfirmPageUrl,
 } from "./frontend-links";
-import { formatInviterList, getInviteInviters, markInviteReminderSent, refreshInviteToken } from "./invites";
-import { buildProposalInviteEmailContext, refreshSpeakerManageToken } from "./proposals";
+import { formatInviterList, type InviteInviterInfo } from "./invites";
+import { formatInvitePerson, type ProposalInviteEmailContext } from "./proposals";
 import { buildEventEmailVariables } from "./events";
-import { nowIso } from "../utils/time";
+import { nowIso, addHours } from "../utils/time";
 import { parseJsonSafe } from "../utils/json";
 import { randomToken, sha256Hex } from "../utils/crypto";
-import { addHours } from "../utils/time";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 
 interface EventRouteRow {
   id: string;
@@ -89,6 +88,22 @@ interface DueSpeakerInviteRow {
   event_starts_at: string | null;
   event_settings_json: string;
   reminder_count: number;
+}
+
+interface ConfirmationReminderRow {
+  id: string;
+  event_id: string;
+  user_id: string;
+  first_name: string;
+  last_name: string;
+  email: string;
+  confirmation_token_hash: string;
+  confirmation_token_expires_at: string;
+  event_name: string;
+  event_slug: string;
+  event_base_path: string | null;
+  event_starts_at: string | null;
+  event_settings_json: string;
 }
 
 interface ReminderCandidatePreview {
@@ -182,6 +197,96 @@ function attendeeEffectiveDeadline(invite: DueInviteRow): string | null {
   return minIso;
 }
 
+/** Runs D1 statements in chunks of 500 to respect batch limits. */
+async function batchStatements(db: DatabaseLike, stmts: StatementLike[]): Promise<void> {
+  if (stmts.length === 0) return;
+  const MAX = 500;
+  for (let i = 0; i < stmts.length; i += MAX) {
+    await db.batch(stmts.slice(i, i + MAX));
+  }
+}
+
+/**
+ * Batch version of buildProposalInviteEmailContext. Fetches all required
+ * data for multiple proposals in 3 queries instead of 3×N.
+ */
+async function bulkBuildProposalInviteEmailContexts(
+  db: DatabaseLike,
+  proposalIds: string[],
+): Promise<Map<string, ProposalInviteEmailContext>> {
+  if (proposalIds.length === 0) return new Map();
+
+  const ph = (n: number) => Array.from({ length: n }, () => "?").join(", ");
+
+  const proposals = await all<{ id: string; title: string; abstract: string; proposer_user_id: string }>(
+    db,
+    `SELECT id, title, abstract, proposer_user_id FROM session_proposals WHERE id IN (${ph(proposalIds.length)})`,
+    proposalIds,
+  );
+
+  const proposerUserIds = [...new Set(proposals.map((p) => p.proposer_user_id).filter(Boolean))];
+  type UserRow = {
+    id: string;
+    email: string;
+    first_name: string | null;
+    last_name: string | null;
+    organization_name: string | null;
+  };
+  type SpeakerRow = {
+    proposal_id: string;
+    email: string;
+    first_name: string | null;
+    last_name: string | null;
+    organization_name: string | null;
+  };
+
+  const [proposerUsers, speakerRows] = await Promise.all([
+    proposerUserIds.length > 0
+      ? all<UserRow>(
+          db,
+          `SELECT id, email, first_name, last_name, organization_name FROM users WHERE id IN (${ph(proposerUserIds.length)})`,
+          proposerUserIds,
+        )
+      : ([] as UserRow[]),
+    all<SpeakerRow>(
+      db,
+      `SELECT ps.proposal_id, u.email, u.first_name, u.last_name, u.organization_name
+       FROM proposal_speakers ps
+       JOIN users u ON u.id = ps.user_id
+       WHERE ps.proposal_id IN (${ph(proposalIds.length)})
+       ORDER BY ps.created_at ASC`,
+      proposalIds,
+    ),
+  ]);
+
+  const proposerById = new Map(proposerUsers.map((u) => [u.id, u]));
+  const speakersByProposal = new Map<string, SpeakerRow[]>();
+  for (const s of speakerRows) {
+    const arr = speakersByProposal.get(s.proposal_id) ?? [];
+    arr.push(s);
+    speakersByProposal.set(s.proposal_id, arr);
+  }
+
+  const result = new Map<string, ProposalInviteEmailContext>();
+  for (const proposal of proposals) {
+    const proposer = proposerById.get(proposal.proposer_user_id);
+    const speakers = speakersByProposal.get(proposal.id) ?? [];
+    const speakerLineupText = speakers
+      .map((s) => `- ${formatInvitePerson(s.first_name, s.last_name, s.organization_name, s.email)}`)
+      .join("\n");
+    result.set(proposal.id, {
+      invitedByDisplay: proposer
+        ? formatInvitePerson(proposer.first_name, proposer.last_name, proposer.organization_name, proposer.email)
+        : "The proposer",
+      proposalTitle: proposal.title,
+      proposalAbstract: proposal.abstract,
+      speakerLineupText,
+    });
+  }
+
+  return result;
+}
+
 export async function runReminderCycle(
   db: DatabaseLike,
   payload: {
@@ -208,6 +313,8 @@ export async function runReminderCycle(
 }> {
   const now = nowIso();
   const cutoff = new Date(Date.now() - payload.reminderIntervalDays * 86_400_000).toISOString();
+
+  // ── Section 1: Attendee + Speaker Invites ─────────────────────────────────
 
   const dueInvites = await all<DueInviteRow>(
     db,
@@ -237,15 +344,12 @@ export async function runReminderCycle(
     [payload.maxInviteReminders, now, now, cutoff, payload.limit],
   );
 
-  let inviteRemindersQueued = 0;
+  const filteredInvites = dueInvites.filter((i) => i.invite_type !== "attendee" || isAttendeeInviteReminderAllowed(i));
+
+  // Build preview candidates in memory (no DB writes)
   const attendeeInvites: ReminderCandidatePreview[] = [];
   const speakerInvites: ReminderCandidatePreview[] = [];
-
-  for (const invite of dueInvites) {
-    if (invite.invite_type === "attendee" && !isAttendeeInviteReminderAllowed(invite)) {
-      continue;
-    }
-
+  for (const invite of filteredInvites) {
     const event: EventRouteRow = {
       id: invite.event_id,
       name: invite.event_name,
@@ -254,18 +358,12 @@ export async function runReminderCycle(
       starts_at: invite.event_starts_at,
       settings_json: invite.event_settings_json,
     };
-
-    const token = await refreshInviteToken(db, invite.id);
     const isAttendee = invite.invite_type === "attendee";
-    const actionUrl = isAttendee
-      ? registrationPageUrl(payload.appBaseUrl, event, { invite: token, source: "invite_reminder" })
-      : proposalPageUrl(payload.appBaseUrl, event, { invite: token, source: "speaker_invite_reminder" });
-    const declineUrl = inviteDeclineUrl(payload.appBaseUrl, event, token);
     const deadlineForUrgency = isAttendee ? attendeeEffectiveDeadline(invite) : invite.expires_at;
     const daysToExpiry = daysUntil(deadlineForUrgency);
     const reminderNumber = Number(invite.reminder_count ?? 0) + 1;
     const subject = inviteReminderSubject(event.name, reminderNumber, daysToExpiry);
-    const previewCandidate: ReminderCandidatePreview = {
+    const candidate: ReminderCandidatePreview = {
       category: isAttendee ? "attendee_invite" : "speaker_invite",
       templateKey: isAttendee ? "attendee_invite" : "speaker_invite",
       eventName: event.name,
@@ -277,30 +375,88 @@ export async function runReminderCycle(
       dueAt: deadlineForUrgency,
       subject,
     };
+    if (isAttendee) attendeeInvites.push(candidate);
+    else speakerInvites.push(candidate);
+  }
 
-    if (isAttendee) {
-      attendeeInvites.push(previewCandidate);
-    } else {
-      speakerInvites.push(previewCandidate);
+  const inviteRemindersQueued = filteredInvites.length;
+
+  // Batch DB operations — skipped entirely on dry-run
+  if (!payload.dryRun && filteredInvites.length > 0) {
+    // 1. Generate all tokens in parallel (pure crypto, no DB)
+    const tokenData = await Promise.all(
+      filteredInvites.map(async (invite) => {
+        const token = randomToken(24);
+        const hash = await sha256Hex(token);
+        return { id: invite.id, token, hash };
+      }),
+    );
+    const tokenByInviteId = new Map(tokenData.map((t) => [t.id, t.token]));
+
+    // 2. Batch refresh all invite tokens (1 round-trip instead of N)
+    await batchStatements(
+      db,
+      tokenData.map((t) => db.prepare("UPDATE invites SET token_hash = ? WHERE id = ?").bind(t.hash, t.id)),
+    );
+
+    // 3. Fetch all inviters in one query (1 round-trip instead of N)
+    const inviteIds = filteredInvites.map((i) => i.id);
+    const inviterPh = inviteIds.map(() => "?").join(", ");
+    const inviterRows = await all<InviteInviterInfo & { invite_id: string }>(
+      db,
+      `SELECT ii.invite_id,
+              ii.inviter_user_id  AS userId,
+              u.first_name        AS firstName,
+              u.last_name         AS lastName,
+              u.organization_name AS organizationName
+       FROM invite_inviters ii
+       JOIN users u ON u.id = ii.inviter_user_id
+       WHERE ii.invite_id IN (${inviterPh})
+       ORDER BY ii.invited_at ASC`,
+      inviteIds,
+    );
+    const invitersByInviteId = new Map<string, InviteInviterInfo[]>();
+    for (const row of inviterRows) {
+      const arr = invitersByInviteId.get(row.invite_id) ?? [];
+      arr.push({
+        userId: row.userId,
+        firstName: row.firstName,
+        lastName: row.lastName,
+        organizationName: row.organizationName,
+      });
+      invitersByInviteId.set(row.invite_id, arr);
     }
 
-    if (!payload.dryRun) {
-      // Build social-proof inviter string — at reminder time we may have more
-      // co-inviters than were known when the original email was sent.
-      const inviters = await getInviteInviters(db, invite.id);
-      const inviterName = formatInviterList(inviters);
-
-      await queueEmail(db, {
+    // 4. Build all email rows in memory
+    const emailRows = filteredInvites.map((invite) => {
+      const event: EventRouteRow = {
+        id: invite.event_id,
+        name: invite.event_name,
+        slug: invite.event_slug,
+        base_path: invite.event_base_path,
+        starts_at: invite.event_starts_at,
+        settings_json: invite.event_settings_json,
+      };
+      const isAttendee = invite.invite_type === "attendee";
+      const token = tokenByInviteId.get(invite.id)!;
+      const actionUrl = isAttendee
+        ? registrationPageUrl(payload.appBaseUrl, event, { invite: token, source: "invite_reminder" })
+        : proposalPageUrl(payload.appBaseUrl, event, { invite: token, source: "speaker_invite_reminder" });
+      const declineUrl = inviteDeclineUrl(payload.appBaseUrl, event, token);
+      const deadlineForUrgency = isAttendee ? attendeeEffectiveDeadline(invite) : invite.expires_at;
+      const daysToExpiry = daysUntil(deadlineForUrgency);
+      const reminderNumber = Number(invite.reminder_count ?? 0) + 1;
+      const subject = inviteReminderSubject(event.name, reminderNumber, daysToExpiry);
+      return {
         eventId: event.id,
-        templateKey: isAttendee ? "attendee_invite" : "speaker_invite",
         recipientEmail: invite.invitee_email,
-        messageType: "transactional",
+        templateKey: isAttendee ? "attendee_invite" : "speaker_invite",
         subject,
         data: {
           ...buildEventEmailVariables(event, payload.appBaseUrl),
           firstName: invite.invitee_first_name ?? "",
           lastName: invite.invitee_last_name ?? "",
-          inviterName,
+          inviterName: formatInviterList(invitersByInviteId.get(invite.id) ?? []),
           registrationUrl: isAttendee ? actionUrl : undefined,
           proposalUrl: isAttendee ? undefined : actionUrl,
           declineUrl,
@@ -309,13 +465,26 @@ export async function runReminderCycle(
           daysUntilExpiry: daysToExpiry !== null ? String(daysToExpiry) : "",
           __subjectOverride: subject,
         },
-      });
+      };
+    });
 
-      await markInviteReminderSent(db, invite.id);
-    }
+    // 5. Batch queue all emails (1 round-trip instead of N)
+    await bulkQueueInviteEmails(db, emailRows);
 
-    inviteRemindersQueued += 1;
+    // 6. Batch update all reminder states (1 round-trip instead of N)
+    await batchStatements(
+      db,
+      filteredInvites.map((invite) =>
+        db
+          .prepare(
+            "UPDATE invites SET reminder_count = reminder_count + 1, last_communication_at = ?, reminders_paused_until = NULL WHERE id = ?",
+          )
+          .bind(now, invite.id),
+      ),
+    );
   }
+
+  // ── Section 2: Co-speaker Invites ─────────────────────────────────────────
 
   const remainingAfterInvites = Math.max(0, payload.limit - inviteRemindersQueued);
 
@@ -359,9 +528,11 @@ export async function runReminderCycle(
         )
       : [];
 
-  let speakerInviteRemindersQueued = 0;
-  const coSpeakerInvites: ReminderCandidatePreview[] = [];
+  // Batch-fetch proposal contexts — needed even for dry-run preview
+  const uniqueProposalIds = [...new Set(dueSpeakerInvites.map((r) => r.proposal_id))];
+  const proposalContexts = await bulkBuildProposalInviteEmailContexts(db, uniqueProposalIds);
 
+  const coSpeakerInvites: ReminderCandidatePreview[] = [];
   for (const row of dueSpeakerInvites) {
     const event: EventRouteRow = {
       id: row.event_id,
@@ -371,16 +542,9 @@ export async function runReminderCycle(
       starts_at: row.event_starts_at,
       settings_json: row.event_settings_json,
     };
-
-    const manageToken = await refreshSpeakerManageToken(db, row.proposal_id, row.user_id);
-    const manageUrl = speakerManagePageUrl(payload.appBaseUrl, event, manageToken);
-    const inviteContext = await buildProposalInviteEmailContext(db, {
-      proposalId: row.proposal_id,
-      inviterUserId: null,
-    });
     const reminderNumber = Number(row.reminder_count ?? 0) + 1;
     const subject = `Reminder: please confirm speaker participation — ${event.name}`;
-
+    const ctx = proposalContexts.get(row.proposal_id);
     coSpeakerInvites.push({
       category: "co_speaker_invite",
       templateKey: "co_speaker_invite",
@@ -388,48 +552,95 @@ export async function runReminderCycle(
       eventSlug: event.slug,
       recipientEmail: row.email,
       recipientName: [row.first_name, row.last_name].filter(Boolean).join(" ") || null,
-      proposalTitle: inviteContext.proposalTitle,
+      proposalTitle: ctx?.proposalTitle ?? null,
       reminderNumber,
       dueAt: event.starts_at,
       subject,
     });
+  }
 
-    if (!payload.dryRun) {
-      await queueEmail(db, {
+  const speakerInviteRemindersQueued = dueSpeakerInvites.length;
+
+  if (!payload.dryRun && dueSpeakerInvites.length > 0) {
+    // 1. Generate all manage tokens in parallel
+    const tokenData = await Promise.all(
+      dueSpeakerInvites.map(async (row) => {
+        const token = randomToken(24);
+        const hash = await sha256Hex(token);
+        return { proposalId: row.proposal_id, userId: row.user_id, speakerId: row.speaker_id, token, hash };
+      }),
+    );
+    const speakerTokenKey = (proposalId: string, userId: string) => `${proposalId}:${userId}`;
+    const speakerTokenByKey = new Map(tokenData.map((t) => [speakerTokenKey(t.proposalId, t.userId), t.token]));
+
+    // 2. Batch refresh all manage tokens (1 round-trip instead of N)
+    await batchStatements(
+      db,
+      tokenData.map((t) =>
+        db
+          .prepare("UPDATE proposal_speakers SET manage_token_hash = ? WHERE proposal_id = ? AND user_id = ?")
+          .bind(t.hash, t.proposalId, t.userId),
+      ),
+    );
+
+    // 3. Build email rows in memory
+    const emailRows = dueSpeakerInvites.map((row) => {
+      const event: EventRouteRow = {
+        id: row.event_id,
+        name: row.event_name,
+        slug: row.event_slug,
+        base_path: row.event_base_path,
+        starts_at: row.event_starts_at,
+        settings_json: row.event_settings_json,
+      };
+      const reminderNumber = Number(row.reminder_count ?? 0) + 1;
+      const subject = `Reminder: please confirm speaker participation — ${event.name}`;
+      const manageToken = speakerTokenByKey.get(speakerTokenKey(row.proposal_id, row.user_id))!;
+      const manageUrl = speakerManagePageUrl(payload.appBaseUrl, event, manageToken);
+      const ctx = proposalContexts.get(row.proposal_id);
+      return {
         eventId: row.event_id,
-        templateKey: "co_speaker_invite",
         recipientEmail: row.email,
         recipientUserId: row.user_id,
-        messageType: "transactional",
+        templateKey: "co_speaker_invite",
         subject,
         data: {
           ...buildEventEmailVariables(event, payload.appBaseUrl),
           firstName: row.first_name ?? "",
           lastName: row.last_name ?? "",
           proposerFirstName: row.proposer_first_name ?? "",
-          invitedByDisplay: inviteContext.invitedByDisplay,
-          proposalTitle: inviteContext.proposalTitle,
-          proposalAbstract: inviteContext.proposalAbstract,
-          speakerLineupText: inviteContext.speakerLineupText,
+          invitedByDisplay: ctx?.invitedByDisplay ?? "",
+          proposalTitle: ctx?.proposalTitle ?? "",
+          proposalAbstract: ctx?.proposalAbstract ?? "",
+          speakerLineupText: ctx?.speakerLineupText ?? "",
           manageUrl,
           isReminder: true,
           reminderCount: String(reminderNumber),
         },
-      });
+      };
+    });
 
-      await run(
-        db,
-        `UPDATE proposal_speakers
-         SET speaker_invite_reminder_count = speaker_invite_reminder_count + 1,
-             speaker_invite_last_communication_at = ?,
-             speaker_invite_reminders_paused_until = NULL
-         WHERE id = ?`,
-        [now, row.speaker_id],
-      );
-    }
+    // 4. Batch queue all emails (1 round-trip instead of N)
+    await bulkQueueInviteEmails(db, emailRows);
 
-    speakerInviteRemindersQueued += 1;
+    // 5. Batch update all speaker invite states (1 round-trip instead of N)
+    await batchStatements(
+      db,
+      dueSpeakerInvites.map((row) =>
+        db
+          .prepare(
+            `UPDATE proposal_speakers
+             SET speaker_invite_reminder_count = speaker_invite_reminder_count + 1,
+                 speaker_invite_last_communication_at = ?,
+                 speaker_invite_reminders_paused_until = NULL
+             WHERE id = ?`,
+          )
+          .bind(now, row.speaker_id),
+      ),
+    );
   }
+
+  // ── Section 3: Presentation Reminders ─────────────────────────────────────
 
   const remainingLimit = Math.max(0, payload.limit - inviteRemindersQueued - speakerInviteRemindersQueued);
 
@@ -470,9 +681,7 @@ export async function runReminderCycle(
         )
       : [];
 
-  let presentationRemindersQueued = 0;
   const presentationUploads: ReminderCandidatePreview[] = [];
-
   for (const row of duePresentation) {
     const event: EventRouteRow = {
       id: row.event_id,
@@ -482,14 +691,9 @@ export async function runReminderCycle(
       starts_at: row.event_starts_at,
       settings_json: row.event_settings_json,
     };
-
-    const manageToken = await refreshSpeakerManageToken(db, row.proposal_id, row.user_id);
-
-    const uploadUrl = speakerManagePageUrl(payload.appBaseUrl, event, manageToken);
     const daysToDeadline = daysUntil(row.presentation_deadline);
     const reminderNumber = Number(row.reminder_count ?? 0) + 1;
     const subject = presentationReminderSubject(event.name, reminderNumber, daysToDeadline);
-
     presentationUploads.push({
       category: "presentation_upload_request",
       templateKey: "presentation_upload_request",
@@ -502,14 +706,55 @@ export async function runReminderCycle(
       dueAt: row.presentation_deadline,
       subject,
     });
+  }
 
-    if (!payload.dryRun) {
-      await queueEmail(db, {
+  const presentationRemindersQueued = duePresentation.length;
+
+  if (!payload.dryRun && duePresentation.length > 0) {
+    // 1. Generate all manage tokens in parallel
+    const tokenData = await Promise.all(
+      duePresentation.map(async (row) => {
+        const token = randomToken(24);
+        const hash = await sha256Hex(token);
+        return { proposalId: row.proposal_id, userId: row.user_id, speakerId: row.speaker_id, token, hash };
+      }),
+    );
+    const presTokenKey = (proposalId: string, userId: string) => `${proposalId}:${userId}`;
+    const presTokenByKey = new Map(tokenData.map((t) => [presTokenKey(t.proposalId, t.userId), t.token]));
+
+    // 2. Batch refresh all manage tokens (1 round-trip instead of N)
+    await batchStatements(
+      db,
+      tokenData.map((t) =>
+        db
+          .prepare("UPDATE proposal_speakers SET manage_token_hash = ? WHERE proposal_id = ? AND user_id = ?")
+          .bind(t.hash, t.proposalId, t.userId),
+      ),
+    );
+
+    // 3. Build email rows in memory
+    const emailRows = duePresentation.map((row) => {
+      const event: EventRouteRow = {
+        id: row.event_id,
+        name: row.event_name,
+        slug: row.event_slug,
+        base_path: row.event_base_path,
+        starts_at: row.event_starts_at,
+        settings_json: row.event_settings_json,
+      };
+      const daysToDeadline = daysUntil(row.presentation_deadline);
+      const reminderNumber = Number(row.reminder_count ?? 0) + 1;
+      const subject = presentationReminderSubject(event.name, reminderNumber, daysToDeadline);
+      const uploadUrl = speakerManagePageUrl(
+        payload.appBaseUrl,
+        event,
+        presTokenByKey.get(presTokenKey(row.proposal_id, row.user_id))!,
+      );
+      return {
         eventId: row.event_id,
-        templateKey: "presentation_upload_request",
         recipientEmail: row.email,
         recipientUserId: row.user_id,
-        messageType: "transactional",
+        templateKey: "presentation_upload_request",
         subject,
         data: {
           ...buildEventEmailVariables(event, payload.appBaseUrl),
@@ -522,21 +767,30 @@ export async function runReminderCycle(
           daysUntilDeadline: daysToDeadline !== null ? String(daysToDeadline) : "",
           __subjectOverride: subject,
         },
-      });
+      };
+    });
 
-      await run(
-        db,
-        `UPDATE proposal_speakers
-         SET presentation_reminder_count = presentation_reminder_count + 1,
-             presentation_last_communication_at = ?,
-             presentation_reminders_paused_until = NULL
-         WHERE id = ?`,
-        [now, row.speaker_id],
-      );
-    }
+    // 4. Batch queue all emails (1 round-trip instead of N)
+    await bulkQueueInviteEmails(db, emailRows);
 
-    presentationRemindersQueued += 1;
+    // 5. Batch update all presentation reminder states (1 round-trip instead of N)
+    await batchStatements(
+      db,
+      duePresentation.map((row) =>
+        db
+          .prepare(
+            `UPDATE proposal_speakers
+             SET presentation_reminder_count = presentation_reminder_count + 1,
+                 presentation_last_communication_at = ?,
+                 presentation_reminders_paused_until = NULL
+             WHERE id = ?`,
+          )
+          .bind(now, row.speaker_id),
+      ),
+    );
   }
+
+  // ── Section 4: Registration Confirmation Reminders ─────────────────────────
 
   const remainingLimitForConfirmations =
     payload.limit - inviteRemindersQueued - speakerInviteRemindersQueued - presentationRemindersQueued;
@@ -572,9 +826,7 @@ export async function runReminderCycle(
         )
       : [];
 
-  let confirmationRemindersQueued = 0;
   const registrationConfirmations: ReminderCandidatePreview[] = [];
-
   for (const row of dueConfirmations) {
     const event: EventRouteRow = {
       id: row.event_id,
@@ -584,10 +836,7 @@ export async function runReminderCycle(
       starts_at: row.event_starts_at,
       settings_json: row.event_settings_json,
     };
-
-    const subject = `Reminder: please confirm your registration for ${event.name}`;
-
-    const previewCandidate: ReminderCandidatePreview = {
+    registrationConfirmations.push({
       category: "registration_confirmation",
       templateKey: "registration_confirmation_reminder",
       eventName: event.name,
@@ -597,48 +846,69 @@ export async function runReminderCycle(
       proposalTitle: null,
       reminderNumber: 1,
       dueAt: row.confirmation_token_expires_at,
-      subject,
-    };
+      subject: `Reminder: please confirm your registration for ${event.name}`,
+    });
+  }
 
-    registrationConfirmations.push(previewCandidate);
+  const confirmationRemindersQueued = dueConfirmations.length;
 
-    if (!payload.dryRun) {
-      const newToken = randomToken(24);
-      const newTokenHash = await sha256Hex(newToken);
-      // Give them a fresh 48h from reminder time
-      const newExpiresAt = addHours(now, 48);
-      const confirmationUrl = registrationConfirmPageUrl(payload.appBaseUrl, event, newToken);
-      const manageUrl = `${payload.appBaseUrl}/events/${event.slug}/manage`;
+  if (!payload.dryRun && dueConfirmations.length > 0) {
+    // 1. Generate all new tokens in parallel (pure crypto, no DB)
+    const tokenData = await Promise.all(
+      dueConfirmations.map(async (row) => {
+        const newToken = randomToken(24);
+        const newTokenHash = await sha256Hex(newToken);
+        const newExpiresAt = addHours(now, 48);
+        return { id: row.id, userId: row.user_id, token: newToken, hash: newTokenHash, expiresAt: newExpiresAt, row };
+      }),
+    );
 
-      await queueEmail(db, {
+    // 2. Build email rows in memory
+    const emailRows = tokenData.map(({ token, row }) => {
+      const event: EventRouteRow = {
+        id: row.event_id,
+        name: row.event_name,
+        slug: row.event_slug,
+        base_path: row.event_base_path,
+        starts_at: row.event_starts_at,
+        settings_json: row.event_settings_json,
+      };
+      const subject = `Reminder: please confirm your registration for ${event.name}`;
+      return {
         eventId: event.id,
-        templateKey: "registration_confirmation_reminder",
         recipientEmail: row.email,
         recipientUserId: row.user_id,
-        messageType: "transactional",
+        templateKey: "registration_confirmation_reminder",
         subject,
         data: {
           ...buildEventEmailVariables(event, payload.appBaseUrl),
           firstName: row.first_name ?? "",
-          confirmationUrl,
-          manageUrl,
+          confirmationUrl: registrationConfirmPageUrl(payload.appBaseUrl, event, token),
+          manageUrl: `${payload.appBaseUrl}/events/${event.slug}/manage`,
           timeToExpire: "48 hours",
           __subjectOverride: subject,
         },
-      });
+      };
+    });
 
-      await run(
-        db,
-        `UPDATE registrations
-         SET confirmation_reminder_sent_at = ?,
-             confirmation_token_hash = ?,
-             confirmation_token_expires_at = ?
-         WHERE id = ?`,
-        [now, newTokenHash, newExpiresAt, row.id],
-      );
-    }
+    // 3. Batch queue all emails (1 round-trip instead of N)
+    await bulkQueueInviteEmails(db, emailRows);
 
-    confirmationRemindersQueued += 1;
+    // 4. Batch update all registration states (1 round-trip instead of N)
+    await batchStatements(
+      db,
+      tokenData.map((t) =>
+        db
+          .prepare(
+            `UPDATE registrations
+             SET confirmation_reminder_sent_at = ?,
+                 confirmation_token_hash = ?,
+                 confirmation_token_expires_at = ?
+             WHERE id = ?`,
+          )
+          .bind(now, t.hash, t.expiresAt, t.id),
+      ),
+    );
   }
 
   return {
@@ -656,19 +926,4 @@ export async function runReminderCycle(
       registrationConfirmations,
     },
   };
-}
-interface ConfirmationReminderRow {
-  id: string;
-  event_id: string;
-  user_id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  confirmation_token_hash: string;
-  confirmation_token_expires_at: string;
-  event_name: string;
-  event_slug: string;
-  event_base_path: string | null;
-  event_starts_at: string | null;
-  event_settings_json: string;
 }

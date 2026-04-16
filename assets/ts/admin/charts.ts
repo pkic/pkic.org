@@ -188,7 +188,7 @@ export function isoDateRange(from: string, to: string): string[] {
 export function svgStackedBarChart(
   labels: string[],
   series: Array<{ label: string; values: number[]; color: string }>,
-  opts?: { isoLabels?: string[] },
+  opts?: { isoLabels?: string[]; valueFormatter?: (v: number) => string },
 ): string {
   const n = labels.length;
   if (!n || series.length === 0) return '<p class="text-muted fst-italic small">No data</p>';
@@ -208,11 +208,12 @@ export function svgStackedBarChart(
   const barW = Math.max(2, slotW - 3);
   const step = Math.max(1, Math.ceil(n / 12));
   const gridSteps = 3;
+  const fmtVal = opts?.valueFormatter ?? ((v: number) => String(Math.round(v)));
   let out = "";
   for (let g = 1; g <= gridSteps; g++) {
     const gy = pT + chartH - (g / gridSteps) * chartH;
     out += `<line x1="${pL}" y1="${gy.toFixed(1)}" x2="${(W - pR).toFixed(1)}" y2="${gy.toFixed(1)}" stroke="#e9ecef" stroke-width="1"/>`;
-    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#6c757d" font-family="inherit">${Math.round((g / gridSteps) * maxVal)}</text>`;
+    out += `<text x="${(pL - 3).toFixed(1)}" y="${(gy + 3).toFixed(1)}" text-anchor="end" font-size="9" fill="#6c757d" font-family="inherit">${esc(fmtVal((g / gridSteps) * maxVal))}</text>`;
   }
   if (hasIso) {
     for (let i = 0; i < n; i++) {
@@ -237,7 +238,7 @@ export function svgStackedBarChart(
     }
     const total = totals[i];
     if (total > 0 && pT + chartH - yBase > 14) {
-      out += `<text x="${cx}" y="${(yBase - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="#212529" font-family="inherit">${total}</text>`;
+      out += `<text x="${cx}" y="${(yBase - 3).toFixed(1)}" text-anchor="middle" font-size="8" fill="#212529" font-family="inherit">${esc(fmtVal(total))}</text>`;
     }
     if (i % step === 0 || i === n - 1) {
       out += `<text x="${cx}" y="${(pT + chartH + 12).toFixed(1)}" text-anchor="middle" font-size="9" fill="#6c757d" font-family="inherit">${esc(labels[i])}</text>`;
@@ -259,9 +260,9 @@ export function svgStackedBarChart(
       }
       for (const sr of series) {
         const v = sr.values[i] ?? 0;
-        if (v > 0) tipLines.push(`${sr.label}: ${v}`);
+        if (v > 0) tipLines.push(`${sr.label}: ${fmtVal(v)}`);
       }
-      tipLines.push(`Total: ${total}`);
+      tipLines.push(`Total: ${fmtVal(total)}`);
       out += `<rect x="${(pL + i * slotW).toFixed(1)}" y="${pT}" width="${slotW.toFixed(1)}" height="${chartH}" fill="transparent"><title>${esc(tipLines.join("\n"))}</title></rect>`;
     }
   }

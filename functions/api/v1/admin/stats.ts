@@ -1,6 +1,6 @@
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
-import { all } from "../../../_lib/db/queries";
+import { all, first } from "../../../_lib/db/queries";
 
 /**
  * GET /api/v1/admin/stats
@@ -21,6 +21,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     topEvents,
     recentActivity,
     donationsByCurrency,
+    donationTotals,
     donationMonthly,
     donationDaily,
     donationWeekly,
@@ -85,11 +86,26 @@ export async function onRequestGet(c: any): Promise<Response> {
               COUNT(*)                   AS count,
               SUM(gross_amount)          AS total_gross,
               ROUND(AVG(gross_amount))   AS avg_gross,
-              SUM(net_amount)            AS total_net
+              SUM(net_amount)            AS total_net,
+              SUM(CASE WHEN settled_currency = 'usd' THEN settled_amount
+                       WHEN currency = 'usd' THEN gross_amount
+                       ELSE NULL END)    AS total_gross_usd
        FROM donations
        GROUP BY status, currency
-       ORDER BY status, total_gross DESC`,
+       ORDER BY status, total_gross_usd DESC NULLS LAST`,
+
       [],
+    ),
+    first<{ gross_usd: number; net_usd: number }>(
+      db,
+      `SELECT
+         SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
+                  WHEN status = 'completed' AND currency = 'usd' THEN gross_amount
+                  ELSE 0 END) AS gross_usd,
+         SUM(CASE WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
+                  WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
+                  ELSE 0 END) AS net_usd
+       FROM donations`,
     ),
     all<{
       month: string;
@@ -107,7 +123,13 @@ export async function onRequestGet(c: any): Promise<Response> {
               COUNT(CASE WHEN status = 'pending'   THEN 1 END) AS pending,
               COUNT(CASE WHEN status = 'failed'    THEN 1 END) AS failed,
               COUNT(CASE WHEN status = 'expired'   THEN 1 END) AS expired,
-              SUM(CASE WHEN status = 'completed' THEN gross_amount ELSE 0 END) AS gross
+              SUM(CASE WHEN status = 'completed' THEN gross_amount ELSE 0 END) AS gross,
+              SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
+                       WHEN status = 'completed' AND currency = 'usd' THEN gross_amount
+                       ELSE 0 END) AS gross_usd,
+              SUM(CASE WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
+                       WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
+                       ELSE 0 END) AS net_usd
        FROM donations
        WHERE created_at >= date('now', '-12 months')
        GROUP BY month
@@ -130,7 +152,13 @@ export async function onRequestGet(c: any): Promise<Response> {
               COUNT(CASE WHEN status = 'pending'   THEN 1 END) AS pending,
               COUNT(CASE WHEN status = 'failed'    THEN 1 END) AS failed,
               COUNT(CASE WHEN status = 'expired'   THEN 1 END) AS expired,
-              SUM(CASE WHEN status = 'completed' THEN gross_amount ELSE 0 END) AS gross
+              SUM(CASE WHEN status = 'completed' THEN gross_amount ELSE 0 END) AS gross,
+              SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
+                       WHEN status = 'completed' AND currency = 'usd' THEN gross_amount
+                       ELSE 0 END) AS gross_usd,
+              SUM(CASE WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
+                       WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
+                       ELSE 0 END) AS net_usd
        FROM donations
        WHERE created_at >= date('now', '-30 days')
        GROUP BY date(created_at)
@@ -153,7 +181,13 @@ export async function onRequestGet(c: any): Promise<Response> {
               COUNT(CASE WHEN status = 'pending'   THEN 1 END) AS pending,
               COUNT(CASE WHEN status = 'failed'    THEN 1 END) AS failed,
               COUNT(CASE WHEN status = 'expired'   THEN 1 END) AS expired,
-              SUM(CASE WHEN status = 'completed' THEN gross_amount ELSE 0 END) AS gross
+              SUM(CASE WHEN status = 'completed' THEN gross_amount ELSE 0 END) AS gross,
+              SUM(CASE WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
+                       WHEN status = 'completed' AND currency = 'usd' THEN gross_amount
+                       ELSE 0 END) AS gross_usd,
+              SUM(CASE WHEN status = 'completed' AND currency = 'usd' AND net_amount IS NOT NULL THEN net_amount
+                       WHEN status = 'completed' AND settled_currency = 'usd' THEN settled_amount
+                       ELSE 0 END) AS net_usd
        FROM donations
        WHERE created_at >= date('now', '-84 days')
        GROUP BY strftime('%Y-%W', created_at)
@@ -216,6 +250,10 @@ export async function onRequestGet(c: any): Promise<Response> {
     donations: {
       byStatus: donationsByStatus,
       byCurrency: donationsByCurrency,
+      totals: {
+        gross_usd: donationTotals?.gross_usd ?? 0,
+        net_usd: donationTotals?.net_usd ?? 0,
+      },
       daily: donationDaily,
       weekly: donationWeekly,
       monthly: donationMonthly,
