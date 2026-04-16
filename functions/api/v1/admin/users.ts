@@ -12,7 +12,7 @@
  */
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
-import { all } from "../../../_lib/db/queries";
+import { all, first } from "../../../_lib/db/queries";
 
 interface UserRow {
   id: string;
@@ -30,8 +30,8 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   const url = new URL(c.req.raw.url);
   const role = url.searchParams.get("role") ?? "";
-  const search = (url.searchParams.get("search") ?? "").trim();
-  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "100") || 100, 500);
+  const search = (url.searchParams.get("q") ?? url.searchParams.get("search") ?? "").trim();
+  const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50") || 50, 500);
   const offset = parseInt(url.searchParams.get("offset") ?? "0") || 0;
 
   const conditions: string[] = [];
@@ -57,10 +57,19 @@ export async function onRequestGet(c: any): Promise<Response> {
      ${where}
      ORDER BY u.role ASC, u.email ASC
      LIMIT ? OFFSET ?`,
-    [...params, limit, offset],
+    [...params, limit + 1, offset],
   );
 
-  return json({ users, limit, offset });
+  const hasMore = users.length > limit;
+  const rows = hasMore ? users.slice(0, limit) : users;
+
+  const totalRow = await first<{ total: number }>(c.env.DB, `SELECT COUNT(*) AS total FROM users u ${where}`, params);
+  const total = Number(totalRow?.total ?? 0);
+
+  return json({
+    users: rows,
+    page: { limit, offset, hasMore, total },
+  });
 }
 
 export async function onRequest(c: any): Promise<Response> {

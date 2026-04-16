@@ -283,14 +283,20 @@ function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
     <ApiDataTable<AdminUser>
       endpoint="/api/v1/admin/users"
       resolve={(d) => (d as { users: AdminUser[] }).users}
+      resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
+      paginate
       actionsRef={tableRef}
       searchPlaceholder="email or name"
       params={roleFilter ? { role: roleFilter } : {}}
-      toolbar={() => (
+      deps={[roleFilter]}
+      toolbar={({ resetPage }) => (
         <select
           class="form-select form-select-sm w-auto"
           value={roleFilter}
-          onChange={(e) => setRoleFilter((e.target as HTMLSelectElement).value)}
+          onChange={(e) => {
+            setRoleFilter((e.target as HTMLSelectElement).value);
+            resetPage();
+          }}
         >
           <option value="">All roles</option>
           <option value="admin">Admin</option>

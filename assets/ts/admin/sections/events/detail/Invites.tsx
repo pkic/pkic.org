@@ -347,7 +347,7 @@ function InviteList({ slug, inviteType }: { slug: string; inviteType: InviteType
     <ApiDataTable<InviteRecord>
       endpoint={`/api/v1/admin/events/${slug}/invites`}
       resolve={(d) => (d as { invites: InviteRecord[] }).invites}
-      resolvePage={(d) => (d as { pagination: { total: number; hasMore: boolean } }).pagination}
+      resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
       paginate
       searchPlaceholder="Search email / name…"
       params={{ type: inviteType, ...(statusFilter ? { status: statusFilter } : {}) }}
