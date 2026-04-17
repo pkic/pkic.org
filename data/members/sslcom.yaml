@@ -17,6 +17,8 @@ workingGroups:
 
 # sponsor
 sponsor:
+  level: Titanium
+  since: 2026-04-16
   sponsoring:
     "Post-Quantum Cryptography Conference Kuala Lumpur 2025":
       level: Leader
