@@ -13,8 +13,9 @@ workingGroups:
   - PQC
 
 # sponsor
+# 2026-04-20 gold
 sponsor:
-  level: 
+  level: Gold
 
 # Blog posts
 blog: 
@@ -53,3 +54,11 @@ representatives:
       x: 
       linkedin: https://www.linkedin.com/in/benvolkow/
     description: Ben is the CEO of QIZ Security that focus on PQC migration and Crypto Posture Management, I've been SW Engineer by education and performing CEO roles in the networking and cyber domain for the last 20 years, working with PKI and Cryptography.
+
+# Long-form content (markdown)
+content: |
+  QIZ was founded by serial entrepreneurs to address one of the most urgent challenges security leaders face today: managing the emerging cryptography challenges and preparing for the transition to Post Quantum Cryptography (PQC).
+
+  QIZ helps organizations to align cryptographic management and PQC readiness with real-world risks and compliance demands. With over 6 years PQC field experience and +100 organizations that we’ve worked with on PQC readiness, we offer the market first next generation Crypto Agility platform.
+  
+  Backed by some of the world's most prominent VC’s, we enable organizations to understand their cryptographic posture, prioritize action, and move confidently toward a post-quantum future.
