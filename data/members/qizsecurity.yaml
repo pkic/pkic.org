@@ -13,8 +13,9 @@ workingGroups:
   - PQC
 
 # sponsor
+# 2026-04-20 gold
 sponsor:
-  level: 
+  level: Gold
 
 # Blog posts
 blog: 
