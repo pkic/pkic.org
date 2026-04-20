@@ -10,6 +10,7 @@ description: Decent Cybersecurity provides cutting-edge, quantum-resistant cyber
 memberSince: 2025-03-07
 memberType: F
 workingGroups:
+  - CM
   - PKIMM
   - PQC
   - TCWG

@@ -54,3 +54,12 @@ representatives:
       x: 
       linkedin: https://www.linkedin.com/in/smartman/
     description: Margus is the Board member at eID Easy and represents the organization at the PKI Consortium.
+    till: 2026-04-08
+    hidden: true
+
+  - name: Mats-Joonas Kulla
+    role: Co-Founder / CTO
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/matsjoonas/
+    description: Mats-Joonas is a Co-founder / CTO at eID Easy and represents the organization at the PKI Consortium.
