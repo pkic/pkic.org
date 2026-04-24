@@ -12,8 +12,10 @@ memberSince: 2022-04-11
 memberType: F
 workingGroups:
   - CA
+  - CM
   - PKIMM
   - PQC
+  - TCWG
 
 # sponsor
 # Upgraded from Bronze to Silver on 2025-07-10
