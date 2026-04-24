@@ -60,11 +60,11 @@ representatives:
     description: Tomas Gustavsson has a MSc from KTH in Stockholm and has been researching and implementing PKI systems since 1994. He is the founder of and still a developer of the open source enterprise PKI project EJBCA and a contributor to numerous open source projects. As a co-founder of PrimeKey, Tomas is passionate about helping users worldwide find the best possible PKI and digital signature solutions. He has worked with customers deploying PKI solutions across the world during the last 20 years.
     
   - name: Sven Rajala
-    role: International PKI Man of Mystery
+    role: Deputy PKI Officer
     social:
       x: 
       linkedin: https://www.linkedin.com/in/international-pki-man-of-mystery/
-    description: Sven Rajala is an award winning seasoned cyber-security consultant with extensive subject matter expertise on PKI, automation of PKI/Signing Solutions, and containers. He has over 17 years of experience working in both the private sector and with federal government departments and agencies. Sven is frequently called upon to participate in client discussions, presentations, and seminars on topics including PKI, EJBCA, and PKI Devsecops.
+    description: Sven Rajala is an award winning seasoned cyber-security consultant with extensive subject matter expertise on PKI, automation of PKI/Signing Solutions, and containers. He has over 19 years of experience working in both the private sector and with federal government departments and agencies. Sven is frequently called upon to participate in client discussions, presentations, and seminars on topics including PKI, EJBCA, and PKI Devsecops.
 
   - name: Neal Fuerst
     role: Senior Director, U.S. Federal
@@ -76,9 +76,9 @@ representatives:
 # Long-form content (markdown)
 title: Keyfactor
 content: |
-  ## The machine and IoT identity platform for modern enterprises
+  ## The machine and IoT identity platform for modern enterprises
 
-  Keyfactor is the machine and IoT identity platform for modern enterprises. The company helps security teams manage cryptography as critical infrastructure by simplifying PKI, automating certificate lifecycle management, and enabling crypto-agility at scale. Companies trust Keyfactor to secure every digital key and certificate for multi-cloud enterprises, DevOps, and embedded IoT security.
+  Keyfactor is the machine and IoT identity platform for modern enterprises. The company helps security teams manage cryptography as critical infrastructure by simplifying PKI, automating certificate lifecycle management, and enabling crypto-agility at scale. Companies trust Keyfactor to secure every digital key and certificate for multi-cloud enterprises, DevOps, and embedded IoT security.
 
   Keyfactor develops products in the PKI and digital signature space, as well as cryptographic APIs.
 
