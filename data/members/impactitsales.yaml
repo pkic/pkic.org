@@ -1,10 +1,10 @@
 id: impactitsales
 name: Impact IT Sales
-slogan:
-website: 
+slogan: Boutique business development for IT & Cybersecurity
+website: https://impactitsales.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Impact IT Sales provides business development and consulting services for the IT and cybersecurity sectors.
 
 # membership
 memberSince: 2026-04-14
@@ -36,10 +36,10 @@ careers:
 
 # Social media
 social:
-  x: 
+  x: https://x.com/ImpactITSales
   facebook: 
   instagram: 
-  linkedin: 
+  linkedin: https://www.linkedin.com/company/impact-it-sales/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
@@ -50,7 +50,7 @@ representatives:
   - name: Davin Cooke
     role: Consultant - Director of Business Development
     social:
-      x: 
+      x: https://x.com/DavinCooke
       linkedin: https://www.linkedin.com/in/davin-cooke
     description: Davin is the Consultant - Director of Business Development at Impact IT Sales and represents the organization at the PKI Consortium.
 
