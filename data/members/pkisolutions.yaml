@@ -4,7 +4,7 @@ slogan:
 website: https://www.pkisolutions.com
 
 # Short description, longer content can be placed in `content/members/`
-description: PKI Solutions offers the industry-leading PKI Spotlight, consulting, and training for confidence in your identity and encryption systems.
+description: PKI Solutions offers the industry-leading PKI Spotlight, the first and only solution purpose-built for PKI posture management and operational readiness. 
 
 # membership
 memberSince: 2023-09-05
@@ -19,7 +19,7 @@ sponsor:
 
 # Blog posts
 blog: 
-  url: 
+  url: https://www.pkisolutions.com/blog/
   # Temporarily disabled: RSS feed returns HTML (text/html) instead of XML/RSS
   # Reference: CI report - feed validation failure
   # feed: https://www.pkisolutions.com/feed/
@@ -27,32 +27,64 @@ blog:
 
 # Press Releases
 press: 
-  url: 
+  url: https://www.pkisolutions.com/newsroom/
   feed: 
   language: en_US
 
 # Careers
 careers: 
-  url: 
+  url: https://www.pkisolutions.com/careers/
   feed: 
   language: en_US
 
 # Social media
 social:
-  x: https://x.com/pkisolutions
+  x: 
   facebook: 
   instagram: 
   linkedin: https://www.linkedin.com/company/pki-solutions
-  youtube: 
+  youtube: https://www.youtube.com/@PKISolutions
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
+  - name: Mark B. Cooper
+    role: Founder and CEO
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/thepkiguy/
+    description: Mark B. Cooper, president and founder of PKI Solutions, has been known as “The PKI Guy” since his early days at Microsoft. Mark has deep knowledge and experience in all things Public Key Infrastructure (PKI), including Microsoft Active Directory Certificate Services (ADCS), PKI design and implementation, Internet of Things (IoT), mobile security, and encryption. PKI Solutions provides software consulting, training, professional services, and assessments to help ensure the security of organizations now and in the future. At PKI Solutions, Mark and his team have implemented PKI Spotlight in a number of enterprises, many of them Fortune 500 companies, in industries including energy, IoT, technology, healthcare, and financial services, as well as federal, state, and local government. Mark has also led hundreds of PKI trainings, including private trainings, across the country, and around the world—from Scotland to Buffalo, from Sweden to Washington, D.C.—and everywhere in between. 
+
+  - name: Jake Grandlienard
+    role: Distinguished PKI Architect
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/jake-grandlienard-150623160/
+    description: Jake Grandlienard is PKI Solutions’ Distinguished PKI Architect with over 20 years of experience, specializing in Microsoft-based PKI implementations, ADCS, and enterprise-scale identity solutions with a penchant for Red Bull.
+
+
   - name: Nick Sirikulbut
     role: Director of Business Development
     social:
       x: 
-      linkedin: 
-    description: Nick is the Director of Business Development at PKI Solutions and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/nicksirikulbut/
+    description: Nick is a seasoned executive known for his technical acumen, proactive approach, and creative problem-solving. Nick boasts expertise in various domains, including account management, social media, cloud computing, CRM, and more. His proficiency is acknowledged by industry experts, colleagues, and leaders alike. With over a decade of experience, Nick has consistently demonstrated prowess in project management, architecture, design thinking, and change management. His commitment to excellence and diverse skill set make him an asset in navigating the complexities of cybersecurity. 
+
+# Long-form content (markdown)
+title: PKI Solutions
+content: |
+  ## Purpose-built for PKI posture management and operational readiness. 
+
+  Public Key Infrastructure (PKI) is foundational to modern cybersecurity. It enables authentication, encryption, digital signatures, and machine identity across nearly every enterprise system, including cloud services, mobile devices, applications, and critical infrastructure. Despite this central role, most organizations historically lacked purpose-built tools to monitor and secure the operational health and configuration integrity of their PKI environments.
+
+  PKI Spotlight addresses this challenge as the first commercial platform designed specifically to monitor PKI infrastructure across multiple vendors.  PKI Spotlight is the first purpose-built commercial platform for monitoring multi-vendor PKI environments, providing visibility into the operational health and security posture of cryptographic infrastructure.
+
+  Our solution delivers centralized monitoring across Microsoft ADCS, EJBCA, DigiCert, and HSM platforms, enabling organizations to manage hundreds of certificate authorities and millions of certificates through a single observability layer.
+
+    ### Key Benefits
+
+  With PKI Spotlight, organizations can lower the total cost of PKI management, eliminate unplanned outages, reduce the risk of PKI cyber attack exploits, shorten the mean time to resolution, and gain confidence that PKI is secure, available, and complaint. 
+
+  {{< youtube T_uG5bhlmKE>}}
