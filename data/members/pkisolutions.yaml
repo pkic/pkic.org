@@ -57,7 +57,7 @@ representatives:
       linkedin: https://www.linkedin.com/in/thepkiguy/
     description: Mark B. Cooper, president and founder of PKI Solutions, has been known as “The PKI Guy” since his early days at Microsoft. Mark has deep knowledge and experience in all things Public Key Infrastructure (PKI), including Microsoft Active Directory Certificate Services (ADCS), PKI design and implementation, Internet of Things (IoT), mobile security, and encryption. PKI Solutions provides software consulting, training, professional services, and assessments to help ensure the security of organizations now and in the future. At PKI Solutions, Mark and his team have implemented PKI Spotlight in a number of enterprises, many of them Fortune 500 companies, in industries including energy, IoT, technology, healthcare, and financial services, as well as federal, state, and local government. Mark has also led hundreds of PKI trainings, including private trainings, across the country, and around the world—from Scotland to Buffalo, from Sweden to Washington, D.C.—and everywhere in between. 
 
-- name: Jake Grandlienard
+  - name: Jake Grandlienard
     role: Distinguished PKI Architect
     social:
       x: 
@@ -65,7 +65,7 @@ representatives:
     description: Jake Grandlienard is PKI Solutions’ Distinguished PKI Architect with over 20 years of experience, specializing in Microsoft-based PKI implementations, ADCS, and enterprise-scale identity solutions with a penchant for Red Bull.
 
 
-- name: Nick Sirikulbut
+  - name: Nick Sirikulbut
     role: Director of Business Development
     social:
       x: 
