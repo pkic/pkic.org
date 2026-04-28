@@ -1,0 +1,60 @@
+id: marco-polo-garcia
+name: Marco Polo Garcia
+slogan:
+website: 
+
+# Short description, longer content can be placed in `content/members/`
+description: Marco Polo is an independent consultant that participates at the PKI Consortium.
+
+# membership
+memberSince: 2026-04-28
+memberType: H6
+workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Marco Polo Garcia
+    role: Independent Architect | SIDH™ Sovereignty Framework
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/marcopolocompliancegroup/
+    description: Marco Polo has over 15 years of experience in high-assurance financial environments (Tier-1 Banking), focusing on cryptographic integrity and data hibernation protocols. Expert in designing secure enclaves for PII protection and implementing the Sovereign Isolation Protocol (SIP) to mitigate third-party cloud risks. Currently developing the SIDH™ framework for post-quantum resilience in critical infrastructure.
+
+# Long-form content (markdown)
+content: |
