@@ -4,7 +4,7 @@ slogan:
 website: https://www.nitrkl.ac.in/
 
 # Short description, longer content can be placed in `content/members/`
-description:  I am a Ph.D. research scholar at National Institute of Technology Rourkela under the C2S program, specializing in secure VLSI design.
+description:  PhD researcher in hardware security and VLSI systems, specializing in lightweight cryptographic architectures (ASCON) and secure RISC-V processors. My work focuses on designing energy-efficient, attack-resilient hardware for edge AI and post-quantum environments. I aim to develop scalable secure architectures for next-generation embedded systems.
 
 # membership
 memberSince: 2026-04-28
