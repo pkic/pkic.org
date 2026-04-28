@@ -1,16 +1,16 @@
 id: bmo
-name: BANK OF MONTREAL
+name: Bank of Montreal
 slogan:
 website: https://www.bmo.com
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: BMO is a leading North American bank driven by our purpose to Boldly Grow the Good in business and life.
 
 # membership
 memberSince: 2026-04-28
 memberType: H8
 workingGroups:
-
+  - PQC
 
 # sponsor
 sponsor:
@@ -36,23 +36,23 @@ careers:
 
 # Social media
 social:
-  x: 
-  facebook: 
+  x: https://twitter.com/BMO_US
+  facebook: https://www.facebook.com/bmoUSA
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/company/bmo-us
+  youtube: https://www.youtube.com/@bmoUS
 
 # Here you can list those who represent or have represented the member.
 #
 # Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: IMRAN KHAN
-    role: PRINCIPAL CRYPTOGRAPHY
+  - name: Imran Khan
+    role: Principal Cryptography
     social:
       x: 
       linkedin: https://www.linkedin.com/in/imranmdkhan
-    description: IMRAN is the PRINCIPAL CRYPTOGRAPHY at BANK OF MONTREAL and represents the organization at the PKI Consortium.
+    description: Imran is the Principal Cryptography at Bank of Montreal and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
