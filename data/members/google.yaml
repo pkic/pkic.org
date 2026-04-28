@@ -1,0 +1,61 @@
+id: google
+name: NATIONAL INSTITUTE OF TECHNOLOGY
+slogan:
+website: https://sites.google.com/view/erpkmohanty
+
+# Short description, longer content can be placed in `content/members/`
+description: 
+
+# membership
+memberSince: 2026-04-28
+memberType: H5
+workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Pradeep Kumar Mohanty
+    role: Research Scholar
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/er-pradeep/
+    description: Pradeep Kumar is the Research Scholar at NATIONAL INSTITUTE OF TECHNOLOGY and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
