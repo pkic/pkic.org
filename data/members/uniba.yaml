@@ -1,10 +1,10 @@
 id: uniba
 name: The University of Bamenda
-slogan:
+slogan: The University of the future
 website: https://uniba.cm
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: The University of Bamenda (UBa) is a distinctive anglo-saxon university with future international reputation for higher standards of achievements and innovations in all areas of professionalism, arts, sciences and technology.
 
 # membership
 memberSince: 2026-04-28
@@ -38,10 +38,10 @@ careers:
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
+  x: https://uniba.cm/#
+  facebook: https://www.facebook.com/univbamenda
+  instagram: https://uniba.cm/#
+  linkedin: https://www.linkedin.com/school/university-of-bamenda/
   youtube: 
 
 # Here you can list those who represent or have represented the member.
