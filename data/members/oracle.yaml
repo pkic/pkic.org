@@ -4,7 +4,7 @@ slogan:
 website: https://www.oracle.com/
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: We’re a cloud technology company that provides organizations around the world with computing infrastructure and software to help them innovate, unlock efficiencies and become more effective.
 
 # membership
 memberSince: 2026-04-28
@@ -36,11 +36,11 @@ careers:
 
 # Social media
 social:
-  x: 
-  facebook: 
+  x: https://x.com/oracle
+  facebook: https://www.facebook.com/Oracle/
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/company/oracle/
+  youtube: https://www.youtube.com/oracle/
 
 # Here you can list those who represent or have represented the member.
 #
