@@ -1,0 +1,58 @@
+id: bmo
+name: BANK OF MONTREAL
+slogan:
+website: https://www.bmo.com
+
+# Short description, longer content can be placed in `content/members/`
+description: 
+
+# membership
+memberSince: 2026-04-28
+memberType: H8
+workingGroups:
+
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: IMRAN KHAN
+    role: PRINCIPAL CRYPTOGRAPHY
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/imranmdkhan
+    description: IMRAN is the PRINCIPAL CRYPTOGRAPHY at BANK OF MONTREAL and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
