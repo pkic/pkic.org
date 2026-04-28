@@ -1,10 +1,10 @@
-id: exeterfinance
-name: 
+id: ankit-gupta
+name: Ankit Gupta
 slogan:
-website: https://exeterfinance.com
+website:
 
 # Short description, longer content can be placed in `content/members/`
-description: We make vehicle ownership possible for everyone with auto financing that focuses on your future, not your past, so you can build new opportunities for tomorrow.
+description:  Ankit is the Senior Security Engineer and participates at the PKI Consortium.
 
 # membership
 memberSince: 2026-04-28
@@ -54,7 +54,7 @@ representatives:
     social:
       x: 
       linkedin: https://www.linkedin.com/in/ankytgupta/
-    description: Ankit is the Senior Security Engineer at  and represents the organization at the PKI Consortium.
+    description: Ankit is a Senior Security Engineer with a primary focus on identity, cryptography, and enterprise data protection within large-scale cloud and hybrid environments. My experience with Public Key Infrastructure (PKI) and applied cryptography spans secure identity architectures, certificate lifecycle management, and cryptographic control design across Microsoft-centric ecosystems.
 
 # Long-form content (markdown)
 content: |
