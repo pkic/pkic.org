@@ -1,0 +1,58 @@
+id: qorechain
+name: Qore Chain Association
+slogan:
+website: https://qorechain.io
+
+# Short description, longer content can be placed in `content/members/`
+description: QoreChain is a quantum-safe Layer 1 blockchain with AI-native smart contract tools, triple-VM execution (EVM, CosmWasm, SVM), and cross-chain bridges to 25+ blockchains. Built on Cosmos SDK with NIST FIPS 203/204 post-quantum cryptography.
+
+# membership
+memberSince: 2026-04-28
+memberType: G
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Liviu Ionut Epure
+    role: Vice-president
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/liviuepure/
+    description: Liviu Ionut is the Vice-president at Qore Chain Association and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
