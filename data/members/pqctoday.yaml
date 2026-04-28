@@ -1,5 +1,5 @@
 id: pqctoday
-name: pqctoday
+name: PQC Today
 slogan:
 website: https://pqctoday.com
 
@@ -47,12 +47,12 @@ social:
 # Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: eric amador
-    role: product manager
+  - name: Eric Amador
+    role: Product Manager
     social:
       x: 
       linkedin: https://www.linkedin.com/in/eric-amador-971850a/
-    description: eric is the product manager at pqctoday and represents the organization at the PKI Consortium.
+    description: Eric is the product manager at PQC Today and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
