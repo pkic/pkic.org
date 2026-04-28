@@ -1,0 +1,58 @@
+id: pqctoday
+name: pqctoday
+slogan:
+website: https://pqctoday.com
+
+# Short description, longer content can be placed in `content/members/`
+description: Your guided post-quantum cryptography transformation journey. Explore 49 learning modules, assess quantum risk, track the PQC patent landscape, and migrate your cryptography infrastructure in full compliance with NIST, ANSSI, BSI, and global standards.
+
+# membership
+memberSince: 2026-04-28
+memberType: H6
+workingGroups:
+
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: eric amador
+    role: product manager
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/eric-amador-971850a/
+    description: eric is the product manager at pqctoday and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
