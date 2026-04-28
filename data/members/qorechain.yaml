@@ -1,0 +1,58 @@
+id: qorechain
+name: QoreChain Association
+slogan:
+website: https://qorechain.io
+
+# Short description, longer content can be placed in `content/members/`
+description: QoreChain Association is a Swiss-registered non-profit association (CHE-484.963.998, domiciled in Rolle, Vaud, Switzerland) building a quantum-safe, AI-native Layer 1 blockchain platform.
+
+# membership
+memberSince: 2026-04-28
+memberType: G
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level: 
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: https://x.com/QoreChain
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Liviu Ionut Epure
+    role: Vice-president
+    social:
+      x: 
+      linkedin: https://www.linkedin.com/in/liviuepure/
+    description: Liviu Ionut is the Vice-president at QoreChain Association and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
