@@ -1,10 +1,10 @@
-id: google
-name: NATIONAL INSTITUTE OF TECHNOLOGY
+id: pradeep-kumar-mohanty
+name: Pradeep Kumar Mohanty
 slogan:
-website: https://sites.google.com/view/erpkmohanty
+website: https://www.nitrkl.ac.in/
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description:  I am a Ph.D. research scholar at National Institute of Technology Rourkela under the C2S program, specializing in secure VLSI design.
 
 # membership
 memberSince: 2026-04-28
@@ -54,8 +54,9 @@ representatives:
     role: Research Scholar
     social:
       x: 
+      google: https://sites.google.com/view/erpkmohanty
       linkedin: https://www.linkedin.com/in/er-pradeep/
-    description: Pradeep Kumar is the Research Scholar at NATIONAL INSTITUTE OF TECHNOLOGY and represents the organization at the PKI Consortium.
+    description: Pradeep Kumar is a Ph.D. research scholar at National Institute of Technology Rourkela under the C2S program, specializing in secure VLSI design.
 
 # Long-form content (markdown)
 content: |
