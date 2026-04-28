@@ -1,11 +1,10 @@
 id: qorechain
 name: QoreChain Association
-slogan:
+slogan: Quantum-safe AI-native L1 Interchain Infrastructure
 website: https://qorechain.io
 
 # Short description, longer content can be placed in `content/members/`
-description: QoreChain Association is a Swiss-registered non-profit association (CHE-484.963.998, domiciled in Rolle, Vaud, Switzerland) building a quantum-safe, AI-native Layer 1 blockchain platform.
-
+description: QoreChain Association is a Swiss-registered non-profit (CHE-484.963.998, Rolle, Vaud) building a quantum-safe, AI-native Layer 1 blockchain that delivers post-quantum cryptography, native AI services, and interchain connectivity to 25+ Layer 1 networks.
 # membership
 memberSince: 2026-04-28
 memberType: G
@@ -39,8 +38,8 @@ social:
   x: https://x.com/QoreChain
   facebook: 
   instagram: 
-  linkedin: 
-  youtube: 
+  linkedin: https://www.linkedin.com/company/qorechain
+  youtube: https://www.youtube.com/@QoreChain
 
 # Here you can list those who represent or have represented the member.
 #
@@ -48,11 +47,74 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Liviu Ionut Epure
-    role: Vice-president
+    role: Founder, Vice-President & CTO
     social:
-      x: 
+      x: https://x.com/liviuepure
       linkedin: https://www.linkedin.com/in/liviuepure/
-    description: Liviu Ionut is the Vice-president at QoreChain Association and represents the organization at the PKI Consortium.
-
+    description: Liviu is the Founder, Vice-President, and Chief Technology Officer of QoreChain Association. He leads the organization's post-quantum cryptography integration, AI service architecture, and interchain protocol design, and represents QoreChain at the PKI Consortium and its Post-Quantum Cryptography Working Group. Liviu has been building secure software since 2017, when QoreChain originated as a static application security testing platform before pivoting in 2023 toward quantum-safe distributed infrastructure.
+ 
+  - name: Tilak Patel
+    role: President & CEO
+    social:
+      x:
+      linkedin:
+    description: Tilak serves on the leadership team of QoreChain Association, with responsibility for strategy, partnerships, and organizational governance. With finance education in the United Kingdom and a track record of senior management roles, Tilak helps steer QoreChain's relationships with regulators, ecosystem partners, and the broader trust services community.
+ 
+  - name: Rodolphe Chatagny
+    role: Director & CFO
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/rodolphe-chatagny/
+    description: Rodolphe serves on the leadership team of QoreChain Association, contributing more than twenty-five years of Swiss financial services experience. He holds an MSc in Physics from EPFL and has conducted computer science research at the University of Geneva. Rodolphe focuses on QoreChain's institutional readiness, regulatory posture, and the alignment of its post-quantum security model with the requirements of regulated finance.
+    
 # Long-form content (markdown)
 content: |
+ ## A quantum-safe, AI-native foundation for the next decade of digital trust
+ 
+  QoreChain Association is a Swiss-registered non-profit, domiciled in Rolle, Vaud (CHE-484.963.998). The Association stewards QoreChain, a Layer 1 blockchain designed from the ground up for the post-quantum era. The project began in 2017 as a static application security testing platform and pivoted in 2023 toward quantum-safe distributed infrastructure, as it became clear that the cryptography securing today's blockchains, identity systems, and financial messaging would not survive the arrival of cryptographically relevant quantum computers.
+ 
+  ### Watch: QoreChain in 60 seconds
+ 
+  {{< youtube XdmmMHcnLlM >}}
+ 
+  ### Why QoreChain exists
+ 
+  The threat is not theoretical. Adversaries are already engaged in *Harvest Now, Decrypt Later* attacks: capturing encrypted traffic and ciphertexts today with the intent to decrypt them once quantum capability matures. For long-lived assets such as sovereign records, settlement messages, supply-chain provenance, and digital identity, migrating to post-quantum cryptography is not a roadmap item. It is a deadline.
+ 
+  QoreChain treats post-quantum readiness as a foundational requirement, not a retrofit. There is no classical fallback path that quietly reintroduces the vulnerability we set out to remove.
+ 
+  ### Native post-quantum cryptography
+ 
+  Every transaction, validator signature, and consensus message on QoreChain is signed and verified using NIST-standardized post-quantum algorithms:
+ 
+  - **ML-DSA-87 (CRYSTALS-Dilithium, security level 5)** for digital signatures
+  - **ML-KEM-1024 (CRYSTALS-Kyber)** for key encapsulation
+  - **SHAKE-256** for extendable-output hashing
+ 
+  These primitives are integrated at the protocol level, including the account model, validator set, light-client proofs, and the interchain bridge.
+ 
+  ### PRISM consensus and the QoreChain Consensus Engine
+ 
+  QoreChain runs on **PRISM** (Policy-driven Reinforcement-learning for Intelligent State Machines), a consensus engine that combines proven Byzantine-fault-tolerant guarantees with reinforcement-learning-driven optimization of validator behavior, message propagation, and resource scheduling. The architecture is designed to deliver high throughput and sub-second finality at network scale.
+ 
+  ### QCAI: AI services native to the chain
+ 
+  **QCAI** is QoreChain's native AI service layer, available to applications and operators in three tiers (Fast, Balanced, Advanced) covering fast inference, agent workflows, and complex reasoning. Smart contracts on QoreChain can request AI assistance directly through protocol primitives, with deterministic verification anchored on-chain.
+ 
+  ### Triple virtual machine architecture
+ 
+  QoreChain supports three execution environments running side by side:
+ 
+  - **EVM** for Ethereum-compatible smart contracts and tooling
+  - **CosmWasm** for Rust-based contracts and modular interoperability
+  - **SVM** for Solana-style high-throughput execution
+ 
+  Developers from each ecosystem deploy with familiar tooling, while assets and messages flow between virtual machines through unified interchain logic.
+ 
+  ### Cross-network validator architecture
+ 
+  QoreChain validators do more than produce blocks. They also operate bridge watchers and earn attestation fees across more than 25 directly connected Layer 1 networks, with reach into 120+ chains via interchain messaging. This multi-stream model is central to QoreChain's identity as genuine interchain infrastructure rather than another isolated chain, and is expected to account for the majority of validator revenue at network maturity.
+ 
+  ### Why the PKI Consortium
+ 
+  QoreChain joined the PKI Consortium in April 2026 and contributes to the **Post-Quantum Cryptography Working Group**. The Consortium is the most credible global venue for the work of replacing classical cryptography across Internet-scale trust systems. We want QoreChain's experience deploying ML-DSA, ML-KEM, and SHAKE in a live blockchain environment, including PQC-protected validator signatures, light-node attestation, and cross-chain message authentication, to inform the broader industry transition to quantum-safe trust services.
