@@ -69,7 +69,7 @@ representatives:
     
 # Long-form content (markdown)
 content: |
- ## A quantum-safe, AI-native foundation for the next decade of digital trust
+  ## A quantum-safe, AI-native foundation for the next decade of digital trust
  
   QoreChain Association is a Swiss-registered non-profit, domiciled in Rolle, Vaud (CHE-484.963.998). The Association stewards QoreChain, a Layer 1 blockchain designed from the ground up for the post-quantum era. The project began in 2017 as a static application security testing platform and pivoted in 2023 toward quantum-safe distributed infrastructure, as it became clear that the cryptography securing today's blockchains, identity systems, and financial messaging would not survive the arrival of cryptographically relevant quantum computers.
  
