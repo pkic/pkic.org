@@ -326,12 +326,14 @@ function EmailEditor({
   slug,
   regId,
   isCancelled,
+  attendanceType,
   onSaved,
 }: {
   email: string;
   slug: string;
   regId: string;
   isCancelled: boolean;
+  attendanceType?: string;
   onSaved: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -369,7 +371,7 @@ function EmailEditor({
     try {
       await api(`/api/v1/admin/events/${slug}/registrations/${regId}`, {
         method: "PATCH",
-        body: JSON.stringify({ action: "update", email: trimmed }),
+        body: JSON.stringify({ action: "update", email: trimmed, attendanceType }),
       });
       toast("Email updated — confirmation sent to new address", "success");
       setEditing(false);
@@ -592,6 +594,7 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
               slug={slug}
               regId={regId}
               isCancelled={reg.status === "cancelled" || reg.status === "cancelled_unauthorized"}
+              attendanceType={reg.attendance_type}
               onSaved={() => void reload()}
             />
           </div>

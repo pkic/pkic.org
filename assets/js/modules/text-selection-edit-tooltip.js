@@ -2,9 +2,18 @@
   var editLink = document.querySelector('.edit-on-github');
   if (!editLink) return;
 
+  // If the page body has a data-edit-url (for dynamically-generated pages),
+  // use that as the default edit URL instead of the page's file path.
+  var pageBody = document.querySelector('[data-pagefind-body]');
+  var defaultEditUrl = editLink.href;
+  if (pageBody && pageBody.dataset.editUrl) {
+    defaultEditUrl = pageBody.dataset.editUrl;
+    editLink.href = defaultEditUrl;
+  }
+
   var tooltip = document.createElement('a');
   tooltip.className = 'selection-edit-tooltip';
-  tooltip.href = editLink.href;
+  tooltip.href = defaultEditUrl;
   tooltip.target = '_blank';
   tooltip.rel = 'noopener';
   tooltip.setAttribute('aria-label', 'Edit this page on GitHub');
@@ -34,7 +43,7 @@
       }
       node = node.parentNode;
     }
-    tooltip.href = dataEditUrl || editLink.href;
+    tooltip.href = dataEditUrl || defaultEditUrl;
 
     var tw = tooltip.offsetWidth || 160;
     var th = tooltip.offsetHeight || 32;

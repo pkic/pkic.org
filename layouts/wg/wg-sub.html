@@ -107,6 +107,9 @@
   {{- end -}}
 {{- end -}}
 
+{{/* ── Wrapper for data-driven content ─────────────────────────────── */}}
+<div data-pagefind-body data-edit-url="{{ site.Params.siteSource }}/content/wg/{{ $wg.Params.wgID | lower }}/_index.md">
+
 {{/* ── Section: Focus Areas ────────────────────────────────────────── */}}
 {{ if eq $sec "focus" }}
 {{ with $wg.Params.focus }}
@@ -282,5 +285,7 @@
     </div>
   </div>
 </section>
+
+</div>{{/* End data-pagefind-body wrapper */}}
 
 {{ end }}
