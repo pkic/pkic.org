@@ -22,7 +22,7 @@ describe("engagement events", () => {
           body: JSON.stringify({
             firstName: "Jamie",
             lastName: "Example",
-            email: "jamie@example.test",
+            email: "jamie@pkic.org",
             attendanceType: "virtual",
             sourceType: "direct",
             consents: [

@@ -95,7 +95,7 @@ describe("custom field validation", () => {
             body: JSON.stringify({
               firstName: "Alex",
               lastName: "Tester",
-              email: "alex@example.test",
+              email: "alex@pkic.org",
               attendanceType: "virtual",
               consents: [
                 { termKey: "privacy-policy", version: "v1" },
@@ -137,7 +137,7 @@ describe("custom field validation", () => {
           body: JSON.stringify({
             firstName: "Jamie",
             lastName: "Valid",
-            email: "jamie@example.test",
+            email: "jamie@pkic.org",
             attendanceType: "virtual",
             consents: [
               { termKey: "privacy-policy", version: "v1" },
