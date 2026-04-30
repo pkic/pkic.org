@@ -145,10 +145,17 @@ export async function onRequestPatch(c: any): Promise<Response> {
   }
 
   if (hasPiiUpdates) {
-    const setClauses = Object.keys(piiUpdates)
-      .map((col) => `${col} = ?`)
-      .join(", ");
-    const values = [...Object.values(piiUpdates), nowIso(), user.id];
+    const ALLOWED_PII_COLUMNS = new Set([
+      "first_name",
+      "last_name",
+      "preferred_name",
+      "organization_name",
+      "job_title",
+      "biography",
+    ]);
+    const safeKeys = Object.keys(piiUpdates).filter((col) => ALLOWED_PII_COLUMNS.has(col));
+    const setClauses = safeKeys.map((col) => `${col} = ?`).join(", ");
+    const values = [...safeKeys.map((col) => piiUpdates[col]), nowIso(), user.id];
     await run(c.env.DB, `UPDATE users SET ${setClauses}, updated_at = ? WHERE id = ?`, values);
   }
 
