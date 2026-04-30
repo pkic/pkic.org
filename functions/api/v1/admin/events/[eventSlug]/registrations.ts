@@ -49,11 +49,19 @@ export async function onRequestGet(c: any): Promise<Response> {
     conditions.push(`EXISTS (
       SELECT 1 FROM email_outbox eo
       WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
+      AND eo.updated_at = (
+        SELECT MAX(updated_at) FROM email_outbox
+        WHERE recipient_user_id = r.user_id AND event_id = r.event_id
+      )
     )`);
   } else if (bouncedFilter === "false") {
     conditions.push(`NOT EXISTS (
       SELECT 1 FROM email_outbox eo
       WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
+      AND eo.updated_at = (
+        SELECT MAX(updated_at) FROM email_outbox
+        WHERE recipient_user_id = r.user_id AND event_id = r.event_id
+      )
     )`);
   }
 
@@ -74,6 +82,10 @@ export async function onRequestGet(c: any): Promise<Response> {
             EXISTS (
               SELECT 1 FROM email_outbox eo
               WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
+              AND eo.updated_at = (
+                SELECT MAX(updated_at) FROM email_outbox
+                WHERE recipient_user_id = r.user_id AND event_id = r.event_id
+              )
             ) AS has_bounced,
             (SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
                 'uid', ics_uid,
@@ -154,8 +166,14 @@ export async function onRequestGet(c: any): Promise<Response> {
       c.env.DB,
       `SELECT COUNT(DISTINCT r.id) AS bounced_count
        FROM registrations r
-       JOIN email_outbox eo ON eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
-       WHERE r.event_id = ?`,
+       WHERE r.event_id = ? AND EXISTS (
+         SELECT 1 FROM email_outbox eo
+         WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
+         AND eo.updated_at = (
+           SELECT MAX(updated_at) FROM email_outbox
+           WHERE recipient_user_id = r.user_id AND event_id = r.event_id
+         )
+       )`,
       [event.id],
     ),
   ]);

@@ -4,4 +4,4 @@ export { getRegistrationByManageToken, getRegistrationById, listRegistrationsFor
 export { createRegistration } from "./create";
 export { confirmRegistrationByToken } from "./confirm";
 export { updateRegistrationByManageToken, updateRegistrationById } from "./update";
-export { changeRegistrationEmail } from "./change-email";
+export { changeRegistrationEmail, finalizeEmailChange } from "./change-email";

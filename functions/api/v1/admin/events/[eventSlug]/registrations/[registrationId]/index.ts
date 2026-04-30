@@ -241,7 +241,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
           setValues.push(body.jobTitle);
         }
         if (setParts.length > 0) {
-          setValues.push(emailResult.newUserId);
+          setValues.push(emailResult.userId);
           await c.env.DB.prepare(`UPDATE users SET ${setParts.join(", ")} WHERE id = ?`)
             .bind(...setValues)
             .run();
@@ -251,21 +251,21 @@ export async function onRequestPatch(c: any): Promise<Response> {
       await writeAuditLog(c.env.DB, "admin", admin.id, "admin_email_changed", "registration", updated.id, {
         eventId: event.id,
         previousEmail: emailResult.previousEmail,
-        newEmail: body.email,
+        newEmail: emailResult.pendingEmail,
       });
 
-      // Send confirmation email to the new address
+      // Send confirmation email to the pending email address
       const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, emailResult.confirmationToken);
-      const newUser = await first<{
+      const userRecord = await first<{
         email: string;
         first_name: string | null;
         last_name: string | null;
         organization_name: string | null;
         job_title: string | null;
       }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [
-        emailResult.newUserId,
+        emailResult.userId,
       ]);
-      if (newUser) {
+      if (userRecord) {
         const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
         const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, updated.id);
         const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
@@ -278,17 +278,17 @@ export async function onRequestPatch(c: any): Promise<Response> {
         const outboxId = await queueEmail(c.env.DB, {
           eventId: event.id,
           templateKey: "registration_confirm_email",
-          recipientEmail: newUser.email,
-          recipientUserId: emailResult.newUserId,
+          recipientEmail: emailResult.pendingEmail,
+          recipientUserId: emailResult.userId,
           messageType: "transactional",
           subject: `Confirm your email address for ${event.name}`,
           data: {
             ...buildEventEmailVariables(event, appBaseUrl),
-            firstName: newUser.first_name ?? "",
-            lastName: newUser.last_name ?? "",
-            email: newUser.email,
-            organizationName: newUser.organization_name ?? "",
-            jobTitle: newUser.job_title ?? "",
+            firstName: userRecord.first_name ?? "",
+            lastName: userRecord.last_name ?? "",
+            email: emailResult.pendingEmail,
+            organizationName: userRecord.organization_name ?? "",
+            jobTitle: userRecord.job_title ?? "",
             attendanceLabel,
             dayAttendance,
             customAnswerRows,
