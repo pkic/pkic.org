@@ -26,6 +26,7 @@ import { listDayWaitlistForRegistration } from "../../../../_lib/services/regist
 import { buildAttendanceEmailData } from "../../../../_lib/utils/attendance";
 import { buildAcceptedTermsText, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
 import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../_lib/services/frontend-links";
+import { checkEmailDomainMx } from "../../../../_lib/email/mx-check";
 import { registrationCreateSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(c: any): Promise<Response> {
@@ -33,6 +34,16 @@ export async function onRequestPost(c: any): Promise<Response> {
   const signingSecret = requireInternalSecret(c.env);
   const body = await parseJsonBody(c.req, registrationCreateSchema);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+
+  // Validate the email domain has MX records before proceeding.
+  const mxResult = await checkEmailDomainMx(body.email);
+  if (!mxResult.hasMxRecords) {
+    throw new AppError(
+      422,
+      "EMAIL_DOMAIN_INVALID",
+      "The email domain does not appear to accept mail. Please check the address and try again.",
+    );
+  }
 
   // Record the Hugo page URL sent by the browser so base_path is always the
   // real event page location, not a hardcoded pattern.
