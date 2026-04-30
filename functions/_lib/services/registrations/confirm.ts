@@ -11,6 +11,7 @@ import {
 } from "./day-waitlist";
 import { upsertAttendeeParticipant } from "./participant-registration";
 import { writeAuditLog } from "../audit";
+import { finalizeEmailChange } from "./change-email";
 import type { DatabaseLike } from "../../types";
 import type { RegistrationRecord } from "./types";
 
@@ -32,6 +33,45 @@ export async function confirmRegistrationByToken(
   if (registration.confirmation_token_expires_at && registration.confirmation_token_expires_at < now) {
     throw new AppError(410, "CONFIRM_TOKEN_EXPIRED", "Confirmation link has expired — please request a new one");
   }
+
+  // Finalize any pending email change before confirming registration.
+  // If finalization fails (e.g. EMAIL_TAKEN by a squatting account that
+  // appeared after initiation), clear the pending_email reservation so the
+  // user is not stuck and can retry from the manage URL.
+  let emailMergeNote: { merged: boolean; mergedWithId: string | null } | null = null;
+  const user = await first<{ pending_email: string | null }>(db, "SELECT pending_email FROM users WHERE id = ?", [
+    registration.user_id,
+  ]);
+  if (user?.pending_email) {
+    try {
+      const emailResult = await finalizeEmailChange(db, {
+        userId: registration.user_id,
+        eventId: registration.event_id,
+        registrationId: registration.id,
+      });
+      emailMergeNote = {
+        merged: !!emailResult.mergedWithRegistrationId,
+        mergedWithId: emailResult.mergedWithRegistrationId,
+      };
+    } catch (err) {
+      if (err instanceof AppError && err.code === "EMAIL_TAKEN") {
+        // Clear the dangling pending_email reservation so the user can pick
+        // a different address. Leave the registration in
+        // pending_email_confirmation so the manage URL still works.
+        await run(
+          db,
+          `UPDATE users SET pending_email = NULL, pending_email_expires_at = NULL, updated_at = ?
+            WHERE id = ?`,
+          [now, registration.user_id],
+        );
+        await writeAuditLog(db, "system", null, "registration_email_change_failed", "registration", registration.id, {
+          reason: "email_taken_at_confirmation",
+        });
+      }
+      throw err;
+    }
+  }
+
   const dayEventIds = await listInPersonEventDayIdsForRegistration(db, registration.id);
   const capacityExemptReason = await resolveCapacityExemptReason(db, {
     registrationId: registration.id,
@@ -88,6 +128,7 @@ export async function confirmRegistrationByToken(
       eventId: registration.event_id,
       status: newStatus,
       attendanceType: registration.attendance_type,
+      ...(emailMergeNote && { emailMerge: emailMergeNote }),
     },
   );
   if (newStatus === "waitlisted") {
