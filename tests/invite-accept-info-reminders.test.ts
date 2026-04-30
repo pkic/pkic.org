@@ -12,6 +12,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
+import { run } from "../functions/_lib/db/queries";
 import { createInvite, declineInvite, acceptInvite } from "../functions/_lib/services/invites";
 import { onRequestGet as inviteInfo } from "../functions/api/v1/invites/[token]/info";
 import { onRequestPost as inviteAccept } from "../functions/api/v1/invites/[token]/accept";
@@ -165,6 +166,28 @@ describe("invite info endpoint", () => {
     expect(body.totalInviters).toBeGreaterThanOrEqual(1);
     expect(body.inviters[0].firstName).toBe("Jane");
     expect(body.inviters[0].lastName).toBe("Smith");
+  });
+
+  it("keeps a sent invite valid even when expires_at is in the past", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    const { token, invite } = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "still-valid@example.test",
+      inviteeFirstName: "Still",
+      inviteType: "attendee",
+      ttlHours: 48,
+    });
+
+    await run(env.DB, "UPDATE invites SET expires_at = datetime('now', '-1 day') WHERE id = ?", [invite.id]);
+
+    const response = await inviteInfo(
+      createContext(env, new Request(`https://app.test/api/v1/invites/${token}/info`), { token }),
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { status: string };
+    expect(body.status).toBe("valid");
   });
 });
 

@@ -2,7 +2,7 @@ import { AppError } from "../errors";
 import { all, first, run } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { randomToken, sha256Hex } from "../utils/crypto";
-import { nowIso, addHours, isPast } from "../utils/time";
+import { nowIso, addHours } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { parseJsonSafe } from "../utils/json";
 import { recordEngagement } from "./engagement";
@@ -164,16 +164,15 @@ export async function createInvite(
 
   const now = nowIso();
 
-  // Deduplication: if an active (sent, non-expired) invite already exists for this
+  // Deduplication: if an active sent invite already exists for this
   // invitee+event+type, record the new inviter as a co-inviter for social proof
   // and return without creating a second invite or sending a second email.
   const existingInvite = await first<InviteRecord>(
     db,
     `SELECT * FROM invites
      WHERE event_id = ? AND invitee_email = ? AND invite_type = ? AND status = 'sent'
-       AND (expires_at IS NULL OR expires_at > ?)
      LIMIT 1`,
-    [payload.eventId, inviteeEmail, payload.inviteType, now],
+    [payload.eventId, inviteeEmail, payload.inviteType],
   );
 
   if (existingInvite) {
@@ -208,42 +207,6 @@ export async function createInvite(
 
   const token = randomToken(24);
   const tokenHash = await sha256Hex(token);
-  let expiresAt = addHours(now, payload.ttlHours);
-
-  const event = await first<{
-    starts_at: string | null;
-    registration_mode: string;
-    settings_json: string;
-  }>(db, "SELECT starts_at, registration_mode, settings_json FROM events WHERE id = ?", [payload.eventId]);
-
-  const registrationClosesAt = event
-    ? (() => {
-        const settings = parseJsonSafe<{
-          registrationClosesAt?: string | null;
-          registration?: { closesAt?: string | null };
-        }>(event.settings_json, {});
-        return settings.registration?.closesAt ?? settings.registrationClosesAt ?? null;
-      })()
-    : null;
-
-  // Marketing-style invites for open registration remain valid until registration closes.
-  if (
-    event &&
-    event.registration_mode !== "invite_only" &&
-    registrationClosesAt &&
-    new Date(registrationClosesAt).getTime() > new Date(now).getTime()
-  ) {
-    expiresAt = new Date(registrationClosesAt).toISOString();
-  }
-
-  if (event?.starts_at) {
-    const eventStartMs = new Date(event.starts_at).getTime();
-    const nowMs = new Date(now).getTime();
-    const currentExpiryMs = new Date(expiresAt).getTime();
-    if (Number.isFinite(eventStartMs) && eventStartMs > nowMs && eventStartMs < currentExpiryMs) {
-      expiresAt = new Date(eventStartMs).toISOString();
-    }
-  }
 
   const invite: InviteRecord = {
     id: uuid(),
@@ -265,7 +228,7 @@ export async function createInvite(
     max_uses: 1,
     used_count: 0,
     source_type: payload.sourceType ?? "direct",
-    expires_at: expiresAt,
+    expires_at: null,
     accepted_at: null,
     declined_at: null,
     created_at: now,
@@ -360,11 +323,6 @@ export async function findInviteByToken(db: DatabaseLike, token: string): Promis
 
   if (invite.status !== "sent") {
     throw new AppError(409, "INVITE_NOT_ACTIVE", "Invite is not active anymore");
-  }
-
-  if (invite.expires_at && isPast(invite.expires_at)) {
-    await run(db, "UPDATE invites SET status = 'expired' WHERE id = ?", [invite.id]);
-    throw new AppError(410, "INVITE_EXPIRED", "Invite token has expired");
   }
 
   return invite;

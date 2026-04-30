@@ -16,6 +16,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     speakerInvites: [],
     coSpeakerInvites: [],
     presentationUploads: [],
+    registrationConfirmations: [],
   };
 
   const reminders = body.runReminders
@@ -31,6 +32,7 @@ export async function onRequestPost(c: any): Promise<Response> {
         inviteRemindersQueued: 0,
         speakerInviteRemindersQueued: 0,
         presentationRemindersQueued: 0,
+        confirmationRemindersQueued: 0,
         processed: 0,
         preview: emptyReminderPreview,
       };

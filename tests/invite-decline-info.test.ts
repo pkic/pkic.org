@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { run } from "../functions/_lib/db/queries";
 import { createInvite } from "../functions/_lib/services/invites";
 import { onRequestGet as declineInfoGet } from "../functions/api/v1/invites/[token]/decline-info";
 import { onRequestPost as declinePost } from "../functions/api/v1/invites/[token]/decline";
@@ -74,6 +75,27 @@ describe("invite decline-info", () => {
     expect(response.status).toBe(200);
     const data = (await response.json()) as { status: string };
     expect(data.status).toBe("invalid");
+  });
+
+  it("keeps decline-info valid even when expires_at is in the past", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    const { token, invite } = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "decline-past-expiry@example.test",
+      inviteType: "attendee",
+      ttlHours: 24,
+    });
+
+    await run(env.DB, "UPDATE invites SET expires_at = datetime('now', '-1 day') WHERE id = ?", [invite.id]);
+
+    const response = await declineInfoGet(
+      createContext(env, new Request(`https://app.test/api/v1/invites/${token}/decline-info`), { token }),
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as { status: string };
+    expect(data.status).toBe("valid");
   });
 
   it("stores npsScore when included in POST", async () => {

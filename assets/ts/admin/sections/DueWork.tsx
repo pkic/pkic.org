@@ -40,6 +40,7 @@ function collectDueWorkRows(
       { label: "Speaker Invite", rows: result.reminders.preview.speakerInvites },
       { label: "Co-speaker Invite", rows: result.reminders.preview.coSpeakerInvites },
       { label: "Presentation Upload", rows: result.reminders.preview.presentationUploads },
+      { label: "Registration Confirmation", rows: result.reminders.preview.registrationConfirmations },
     ];
     for (const section of reminderSections) {
       for (const row of section.rows) {
@@ -221,6 +222,7 @@ function JobRunSummary({
     { title: "Speaker Invites", rows: result.reminders.preview.speakerInvites },
     { title: "Co-speaker Invites", rows: result.reminders.preview.coSpeakerInvites },
     { title: "Presentation Uploads", rows: result.reminders.preview.presentationUploads },
+    { title: "Registration Confirmations", rows: result.reminders.preview.registrationConfirmations },
   ].filter((s) => s.rows.length > 0);
 
   return (
@@ -229,7 +231,7 @@ function JobRunSummary({
       <div class="small mb-2">
         {reminderVerb}: {result.reminders.processed} reminders ({result.reminders.inviteRemindersQueued} attendee,{" "}
         {result.reminders.speakerInviteRemindersQueued} speaker, {result.reminders.presentationRemindersQueued}{" "}
-        presentation).
+        presentation, {result.reminders.confirmationRemindersQueued} confirmation).
       </div>
       <div class="small mb-2">
         {outboxVerb}: {result.outbox.processed} outbox rows, {result.outbox.failed} failed.

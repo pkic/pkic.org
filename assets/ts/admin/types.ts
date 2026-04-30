@@ -261,6 +261,7 @@ export interface AdminJobsRunResponse {
     inviteRemindersQueued: number;
     speakerInviteRemindersQueued: number;
     presentationRemindersQueued: number;
+    confirmationRemindersQueued: number;
     preview: {
       attendeeInvites: Array<{
         category: "attendee_invite";
@@ -310,6 +311,18 @@ export interface AdminJobsRunResponse {
         dueAt: string | null;
         subject: string;
       }>;
+      registrationConfirmations: Array<{
+        category: "registration_confirmation";
+        templateKey: string;
+        eventName: string;
+        eventSlug: string;
+        recipientEmail: string;
+        recipientName: string | null;
+        proposalTitle: string | null;
+        reminderNumber: number;
+        dueAt: string | null;
+        subject: string;
+      }>;
     };
   };
   shouldRunRetention: boolean;
@@ -342,7 +355,12 @@ export interface AdminJobsRunResponse {
 }
 
 export type AdminReminderPreviewRow = {
-  category: "attendee_invite" | "speaker_invite" | "co_speaker_invite" | "presentation_upload_request";
+  category:
+    | "attendee_invite"
+    | "speaker_invite"
+    | "co_speaker_invite"
+    | "presentation_upload_request"
+    | "registration_confirmation";
   templateKey: string;
   eventName: string;
   eventSlug: string;

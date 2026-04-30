@@ -11,7 +11,7 @@ import {
   inviteDeclineUrl,
 } from "../../../../../../../_lib/services/frontend-links";
 import { refreshInviteToken } from "../../../../../../../_lib/services/invites";
-import { addHours, nowIso } from "../../../../../../../_lib/utils/time";
+import { nowIso } from "../../../../../../../_lib/utils/time";
 
 type InviteRow = {
   id: string;
@@ -62,8 +62,6 @@ export async function onRequestPost(c: any): Promise<Response> {
   const declineUrl = inviteDeclineUrl(appBaseUrl, event, token);
 
   const now = nowIso();
-  const ttlHours = invite.invite_type === "attendee" ? 24 * 14 : 24 * 21;
-  const freshExpiry = addHours(now, ttlHours);
   await run(
     c.env.DB,
     `UPDATE invites
@@ -72,10 +70,10 @@ export async function onRequestPost(c: any): Promise<Response> {
        decline_reason_code = NULL,
        decline_reason_note = NULL,
        declined_at = NULL,
-       expires_at = ?,
+       expires_at = NULL,
        last_communication_at = ?
      WHERE id = ?`,
-    [freshExpiry, now, invite.id],
+    [now, invite.id],
   );
 
   const actionUrl =

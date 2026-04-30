@@ -2,7 +2,6 @@ import { json } from "../../../../_lib/http";
 import { sha256Hex } from "../../../../_lib/utils/crypto";
 import { first } from "../../../../_lib/db/queries";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
-import { isPast } from "../../../../_lib/utils/time";
 import { proposalPageUrl, registrationPageUrl } from "../../../../_lib/services/frontend-links";
 
 interface InviteRow {
@@ -48,11 +47,6 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   if (invite.status === "expired" || invite.status === "revoked") {
-    return json({ status: "expired" });
-  }
-
-  // status === 'sent' — check expiry
-  if (invite.expires_at && isPast(invite.expires_at)) {
     return json({ status: "expired" });
   }
 
