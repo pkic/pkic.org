@@ -19,6 +19,7 @@ import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { updateRegistrationById, changeRegistrationEmail } from "../../../../../../../_lib/services/registrations";
+import { getRegistrationById } from "../../../../../../../_lib/services/registrations/queries";
 import { validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
 import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
@@ -160,19 +161,33 @@ export async function onRequestPatch(c: any): Promise<Response> {
       })
     : {};
 
-  const updated = await updateRegistrationById(
-    c.env.DB,
-    {
-      registrationId,
-      action: body.action,
-      attendanceType: body.attendanceType,
-      dayAttendance: body.dayAttendance,
-      waitlistClaimWindowHours: config.waitlistClaimWindowHours,
-      customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,
-      sourceRef: body.sourceRef,
-    },
-    `admin:${admin.id}`,
-  );
+  // When a cancelled registration only needs an email address correction, skip
+  // the normal update path (which would refuse to process it) and go straight
+  // to the email-change service.  The email change resets the status to
+  // pending_email_confirmation so the attendee can re-confirm and become active.
+  const currentForCancelCheck = await getRegistrationById(c.env.DB, registrationId);
+  const isCancelled =
+    currentForCancelCheck.status === "cancelled" || currentForCancelCheck.status === "cancelled_unauthorized";
+
+  let updated: Awaited<ReturnType<typeof updateRegistrationById>>;
+  if (isCancelled && body.action === "update" && body.email) {
+    // Use the current record as the base — updateRegistrationById is skipped.
+    updated = currentForCancelCheck;
+  } else {
+    updated = await updateRegistrationById(
+      c.env.DB,
+      {
+        registrationId,
+        action: body.action,
+        attendanceType: body.attendanceType,
+        dayAttendance: body.dayAttendance,
+        waitlistClaimWindowHours: config.waitlistClaimWindowHours,
+        customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,
+        sourceRef: body.sourceRef,
+      },
+      `admin:${admin.id}`,
+    );
+  }
 
   // Update user PII fields when provided.
   if (body.action === "update" && (body.firstName || body.lastName || body.organizationName || body.jobTitle)) {
@@ -217,6 +232,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
         registrationId: updated.id,
         newEmail: body.email,
         confirmationTtlHours: config.manageTokenTtlHours,
+        allowCancelled: true,
       });
 
       // Also update PII on the new user when fields were provided

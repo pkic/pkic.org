@@ -24,32 +24,128 @@ function attendanceTypeLabel(t: string): string {
 
 // ─── Day attendance table ─────────────────────────────────────────────────────
 
-function DayAttendanceTable({
+type DayOption = "none" | "in_person" | "virtual" | "on_demand";
+
+const DAY_OPTIONS: { value: DayOption; label: string }[] = [
+  { value: "none", label: "Not attending" },
+  { value: "in_person", label: "In-person" },
+  { value: "virtual", label: "Virtual" },
+  { value: "on_demand", label: "On-demand" },
+];
+
+function DayAttendancePanel({
   dayAttendance,
+  eventDays,
+  registrationStatus,
+  slug,
+  regId,
+  onReload,
 }: {
   dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+  eventDays: AdminEventDay[];
+  registrationStatus: string;
+  slug: string;
+  regId: string;
+  onReload: () => void;
 }) {
-  if (!dayAttendance.length) return <p class="small text-muted fst-italic mb-0">No day attendance records.</p>;
+  const [pending, setPending] = useState<Record<string, DayOption>>({});
+  const [saving, setSaving] = useState<Record<string, boolean>>({});
+
+  if (!eventDays.length) return <p class="small text-muted fst-italic mb-0">No event days configured.</p>;
+
+  const attendanceByDate = new Map(dayAttendance.map((d) => [d.dayDate, d.attendanceType as DayOption]));
+  const rows = eventDays.map((d) => ({
+    dayDate: d.date,
+    label: d.label,
+    current: attendanceByDate.get(d.date) ?? ("none" as DayOption),
+  }));
+
+  async function applyChange(dayDate: string, action: DayOption) {
+    setSaving((s) => ({ ...s, [dayDate]: true }));
+    try {
+      if (action === "in_person") {
+        await api(`/api/v1/admin/events/${slug}/registrations/${regId}/admit`, {
+          method: "POST",
+          body: JSON.stringify({
+            mode: "capacity_exempt",
+            reason: "Admin approved in-person admission",
+            dayDates: [dayDate],
+          }),
+        });
+      } else {
+        await api(`/api/v1/admin/events/${slug}/registrations/${regId}/day-attendance`, {
+          method: "PATCH",
+          body: JSON.stringify({ action: action === "none" ? "remove" : action, dayDates: [dayDate] }),
+        });
+      }
+      toast(`Day ${dayDate} updated`, "success");
+      setPending((p) => {
+        const n = { ...p };
+        delete n[dayDate];
+        return n;
+      });
+      onReload();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setSaving((s) => ({ ...s, [dayDate]: false }));
+    }
+  }
+
   return (
-    <DataTable
-      columns={[
-        { header: "Date", cell: (d) => d.dayDate, className: "mono small" },
-        { header: "Day", cell: (d) => d.label ?? "—", className: "small" },
-        {
-          header: "Attendance",
-          cell: (d) => (
-            <span
-              class={`badge text-bg-${d.attendanceType === "in_person" ? "success" : d.attendanceType === "virtual" ? "info" : "secondary"}`}
-            >
-              {attendanceTypeLabel(d.attendanceType)}
-            </span>
-          ),
-        },
-      ]}
-      data={dayAttendance}
-      className="align-middle"
-      rowKey={(d) => d.dayDate}
-    />
+    <>
+      {registrationStatus === "waitlisted" && (
+        <div class="alert alert-info small py-2 mb-3">
+          This registration is <strong>waitlisted</strong>. Setting a day to in-person will promote them to registered
+          (capacity-exempt) and send a confirmation email.
+        </div>
+      )}
+      <DataTable
+        columns={[
+          { header: "Date", cell: (d) => d.dayDate, className: "mono small" },
+          { header: "Day", cell: (d) => d.label ?? "—", className: "small" },
+          {
+            header: "Attendance",
+            cell: (d) => {
+              const selected = pending[d.dayDate] ?? d.current;
+              const isSaving = saving[d.dayDate] ?? false;
+              const changed = selected !== d.current;
+              return (
+                <div class="d-flex gap-1 align-items-center">
+                  <select
+                    class="form-select form-select-sm adm-filter-select"
+                    value={selected}
+                    disabled={isSaving}
+                    onChange={(e) => {
+                      const v = (e.target as HTMLSelectElement).value as DayOption;
+                      setPending((p) => ({ ...p, [d.dayDate]: v }));
+                    }}
+                  >
+                    {DAY_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                  {changed && (
+                    <button
+                      class="btn btn-sm btn-primary text-nowrap"
+                      disabled={isSaving}
+                      onClick={() => void applyChange(d.dayDate, selected)}
+                    >
+                      {isSaving ? "…" : "Apply"}
+                    </button>
+                  )}
+                </div>
+              );
+            },
+          },
+        ]}
+        data={rows}
+        className="align-middle"
+        rowKey={(d) => d.dayDate}
+      />
+    </>
   );
 }
 
@@ -229,11 +325,13 @@ function EmailEditor({
   email,
   slug,
   regId,
+  isCancelled,
   onSaved,
 }: {
   email: string;
   slug: string;
   regId: string;
+  isCancelled: boolean;
   onSaved: () => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -308,7 +406,83 @@ function EmailEditor({
           Cancel
         </button>
       </div>
-      <div class="form-text text-warning mt-1">Changing the email will require re-confirmation.</div>
+      <div class="form-text text-warning mt-1">
+        {isCancelled
+          ? "Changing the email will restore this cancelled registration and send a confirmation email to the new address."
+          : "Changing the email will require re-confirmation."}
+      </div>
+      {error && <div class="small text-danger mt-1">{error}</div>}
+    </div>
+  );
+}
+
+// ─── Force status panel ───────────────────────────────────────────────────────
+
+const FORCE_STATUS_OPTIONS = [
+  { value: "pending_email_confirmation", label: "Pending confirmation" },
+  { value: "registered", label: "Registered" },
+  { value: "waitlisted", label: "Waitlisted" },
+  { value: "cancelled", label: "Cancelled" },
+] as const;
+
+function ForceStatusPanel({
+  currentStatus,
+  slug,
+  regId,
+  onSaved,
+}: {
+  currentStatus: string;
+  slug: string;
+  regId: string;
+  onSaved: () => void;
+}) {
+  const [selected, setSelected] = useState(currentStatus);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  async function handleSave() {
+    if (selected === currentStatus) return;
+    setSaving(true);
+    setError("");
+    try {
+      await api(`/api/v1/admin/events/${slug}/registrations/${regId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "force_status", status: selected }),
+      });
+      toast(`Status changed to ${selected}`, "success");
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div>
+      <p class="small text-muted mb-2">
+        Directly override the registration status. Use with care — this bypasses capacity and waitlist logic.
+      </p>
+      <div class="d-flex align-items-center gap-2 flex-wrap">
+        <select
+          class="form-select form-select-sm adm-filter-select"
+          value={selected}
+          onChange={(e) => setSelected((e.target as HTMLSelectElement).value)}
+        >
+          {FORCE_STATUS_OPTIONS.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </select>
+        <button
+          class="btn btn-sm btn-warning"
+          onClick={() => void handleSave()}
+          disabled={saving || selected === currentStatus}
+        >
+          {saving ? "Saving…" : "Apply"}
+        </button>
+      </div>
       {error && <div class="small text-danger mt-1">{error}</div>}
     </div>
   );
@@ -327,7 +501,6 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   const [resendStatus, setResendStatus] = useState("");
   const [openingManage, setOpeningManage] = useState(false);
   const [regenerating, setRegenerating] = useState(false);
-  const [admitting, setAdmitting] = useState(false);
 
   const { data, loading, error, reload } = useData<DetailResponse>(
     () => api<DetailResponse>(`/api/v1/admin/events/${slug}/registrations/${regId}`),
@@ -343,12 +516,6 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   const dayAttendance = data?.dayAttendance ?? [];
   const dayWaitlist = data?.dayWaitlist ?? [];
   const eventDays = daysData?.days ?? [];
-
-  const [admitDays, setAdmitDays] = useState<string[]>([]);
-  // initialise admit-days when event days load
-  if (admitDays.length === 0 && eventDays.length > 0 && !admitting) {
-    setAdmitDays(eventDays.map((d) => d.date));
-  }
 
   async function handleResend() {
     setResendStatus("Sending…");
@@ -393,30 +560,6 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
     }
   }
 
-  async function handleAdmit() {
-    if (!admitDays.length) {
-      toast("Select at least one day", "error");
-      return;
-    }
-    setAdmitting(true);
-    try {
-      await api(`/api/v1/admin/events/${slug}/registrations/${regId}/admit`, {
-        method: "POST",
-        body: JSON.stringify({
-          mode: "capacity_exempt",
-          reason: "Admin approved in-person admission",
-          dayDates: admitDays,
-        }),
-      });
-      toast("Registration admitted", "success");
-      void reload();
-    } catch (e) {
-      toast((e as Error).message, "error");
-    } finally {
-      setAdmitting(false);
-    }
-  }
-
   if (loading) return <Spinner />;
   if (error) return <ErrorAlert error={error} />;
   if (!reg) return null;
@@ -444,7 +587,13 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
         <div class="col-md-3">
           <div class="card card-body p-3">
             <div class="small text-muted mb-1">Email</div>
-            <EmailEditor email={reg.user_email ?? "—"} slug={slug} regId={regId} onSaved={() => void reload()} />
+            <EmailEditor
+              email={reg.user_email ?? "—"}
+              slug={slug}
+              regId={regId}
+              isCancelled={reg.status === "cancelled" || reg.status === "cancelled_unauthorized"}
+              onSaved={() => void reload()}
+            />
           </div>
         </div>
         <div class="col-md-3">
@@ -473,7 +622,14 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
           <h6 class="mb-0">Day Attendance</h6>
         </div>
         <div class="card-body">
-          <DayAttendanceTable dayAttendance={dayAttendance} />
+          <DayAttendancePanel
+            dayAttendance={dayAttendance}
+            eventDays={eventDays}
+            registrationStatus={reg.status}
+            slug={slug}
+            regId={regId}
+            onReload={() => void reload()}
+          />
         </div>
       </div>
 
@@ -574,43 +730,6 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
         </div>
       </div>
 
-      {/* Admit days */}
-      {eventDays.length > 0 && (
-        <div class="card mb-3">
-          <div class="card-header">
-            <h6 class="mb-0">Admit Selected Days</h6>
-          </div>
-          <div class="card-body">
-            <p class="small text-body-secondary mb-2">Tick the days to convert to in-person attendance.</p>
-            <div class="d-flex flex-column gap-2 mb-2">
-              {eventDays.map((d) => (
-                <label key={d.date} class="form-check border rounded px-3 py-2 mb-0 bg-white">
-                  <input
-                    class="form-check-input me-2"
-                    type="checkbox"
-                    value={d.date}
-                    checked={admitDays.includes(d.date)}
-                    onChange={(e) => {
-                      const v = (e.target as HTMLInputElement).value;
-                      setAdmitDays((prev) =>
-                        (e.target as HTMLInputElement).checked ? [...prev, v] : prev.filter((x) => x !== v),
-                      );
-                    }}
-                  />
-                  <span class="form-check-label">
-                    {d.date}
-                    {d.label ? ` — ${d.label}` : ""}
-                  </span>
-                </label>
-              ))}
-            </div>
-            <button class="btn btn-sm btn-success" onClick={() => void handleAdmit()} disabled={admitting}>
-              {admitting ? "Admitting…" : "Admit Selected Days"}
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Badge role */}
       <div class="card mb-3">
         <div class="card-header">
@@ -629,6 +748,16 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
         </div>
         <div class="card-body">
           <AuditLogSection slug={slug} regId={regId} />
+        </div>
+      </div>
+
+      {/* Force status */}
+      <div class="card mb-3">
+        <div class="card-header">
+          <h6 class="mb-0">Override Status</h6>
+        </div>
+        <div class="card-body">
+          <ForceStatusPanel currentStatus={reg.status} slug={slug} regId={regId} onSaved={() => void reload()} />
         </div>
       </div>
     </div>
