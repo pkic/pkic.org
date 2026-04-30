@@ -212,7 +212,7 @@ describe("admin event management endpoints", () => {
   });
 
   it("allows admin to reinstate a cancelled registration and rejects double-cancel", async () => {
-    const { baseEventId } = await setupAdmin();
+    await setupAdmin();
 
     await env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, created_at, updated_at)
