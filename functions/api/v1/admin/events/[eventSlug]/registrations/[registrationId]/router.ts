@@ -4,6 +4,7 @@ import { onRequestPost as AdminEventsEventSlugRegistrationsRegistrationIdAdmitPo
 import { onRequestGet as AdminEventsEventSlugRegistrationsRegistrationIdAuditLogGet_l } from "./audit-log";
 import { onRequestGet as AdminEventsEventSlugRegistrationsRegistrationIdBadgeRoleGet_l } from "./badge-role";
 import { onRequestPatch as AdminEventsEventSlugRegistrationsRegistrationIdBadgeRolePatch_l } from "./badge-role";
+import { onRequestPatch as AdminEventsEventSlugRegistrationsRegistrationIdDayAttendancePatch_l } from "./day-attendance";
 import { onRequestGet as AdminEventsEventSlugRegistrationsRegistrationIdGet_l } from "./index";
 import { onRequestPatch as AdminEventsEventSlugRegistrationsRegistrationIdPatch_l } from "./index";
 import { onRequestPost as AdminEventsEventSlugRegistrationsRegistrationIdOpenManagePost_l } from "./open-manage";
@@ -17,6 +18,7 @@ app.post("/admit", AdminEventsEventSlugRegistrationsRegistrationIdAdmitPost_l);
 app.get("/audit-log", AdminEventsEventSlugRegistrationsRegistrationIdAuditLogGet_l);
 app.get("/badge-role", AdminEventsEventSlugRegistrationsRegistrationIdBadgeRoleGet_l);
 app.patch("/badge-role", AdminEventsEventSlugRegistrationsRegistrationIdBadgeRolePatch_l);
+app.patch("/day-attendance", AdminEventsEventSlugRegistrationsRegistrationIdDayAttendancePatch_l);
 app.get("/", AdminEventsEventSlugRegistrationsRegistrationIdGet_l);
 app.patch("/", AdminEventsEventSlugRegistrationsRegistrationIdPatch_l);
 app.post("/open-manage", AdminEventsEventSlugRegistrationsRegistrationIdOpenManagePost_l);

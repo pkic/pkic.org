@@ -35,7 +35,7 @@ describe("registration workflows", () => {
             body: JSON.stringify({
               firstName: "Alice",
               lastName: "Doe",
-              email: "alice@company.test",
+              email: "alice@pkic.org",
               attendanceType: "virtual",
               sourceType: "direct",
               consents: [{ termKey: "privacy-policy", version: "v1" }],
@@ -55,7 +55,7 @@ describe("registration workflows", () => {
           body: JSON.stringify({
             firstName: "Alice",
             lastName: "Doe",
-            email: "alice@company.test",
+            email: "alice@pkic.org",
             attendanceType: "virtual",
             sourceType: "direct",
             consents: [

@@ -5,7 +5,12 @@ import { Tabs } from "../../components/Tabs";
 import { api } from "../api";
 import { esc, toast } from "../ui";
 import type { EmailTemplateVersion } from "../types";
-import { TEMPLATE_HELPERS, type TemplateHelperCategory } from "../email-template-helpers";
+import {
+  TEMPLATE_HELPERS,
+  TEMPLATE_PARTIALS,
+  PREVIEW_DEFAULTS,
+  type TemplateHelperCategory,
+} from "../email-template-helpers";
 
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
@@ -80,13 +85,14 @@ function TemplateEditor({
   );
   const [subject, setSubject] = useState(current?.subject_template ?? "");
   const [body, setBody] = useState(current?.body ?? "");
-  const [previewData, setPreviewData] = useState("");
+  const [previewData, setPreviewData] = useState(JSON.stringify(PREVIEW_DEFAULTS, null, 2));
   const [previewTab, setPreviewTab] = useState<"html" | "text">("html");
   const [previewSubject, setPreviewSubject] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
   const [previewText, setPreviewText] = useState("");
   const [previewStatus, setPreviewStatus] = useState("Preview not rendered yet.");
   const [saving, setSaving] = useState(false);
+  const [hasPreviewedRef] = [useRef(false)];
 
   const subjectPreRef = useRef<HTMLPreElement>(null);
   const bodyPreRef = useRef<HTMLPreElement>(null);
@@ -133,10 +139,10 @@ function TemplateEditor({
       setBody((b) => {
         const el = bodyTextareaRef.current;
         if (!el) return b + snippet;
-        const start = el.selectionStart ?? b.length;
-        const end = el.selectionEnd ?? b.length;
-        const next = `${b.slice(0, start)}${snippet}${b.slice(end)}`;
-        // restore cursor after re-render
+        const start = el.selectionStart ?? el.value.length;
+        const end = el.selectionEnd ?? el.value.length;
+        const next = `${el.value.slice(0, start)}${snippet}${el.value.slice(end)}`;
+        el.value = next; // imperative — textarea is uncontrolled
         requestAnimationFrame(() => {
           el.focus();
           el.setSelectionRange(start + snippet.length, start + snippet.length);
@@ -148,9 +154,13 @@ function TemplateEditor({
   }
 
   function loadVersion(version: EmailTemplateVersion) {
+    const newBody = version.body ?? "";
     setSubject(version.subject_template ?? "");
-    setBody(version.body ?? "");
+    setBody(newBody);
     setContentType((version.content_type as "markdown" | "html" | "text") ?? "markdown");
+    if (bodyTextareaRef.current) {
+      bodyTextareaRef.current.value = newBody;
+    }
     toast(`Loaded v${version.version} into editor`, "info");
   }
 
@@ -193,6 +203,7 @@ function TemplateEditor({
       setPreviewHtml(result.html);
       setPreviewText(result.text);
       setPreviewStatus("Preview rendered.");
+      hasPreviewedRef.current = true;
     } catch (e) {
       const msg = (e as Error).message;
       toast(msg, "error");
@@ -205,10 +216,14 @@ function TemplateEditor({
       toast("Body cannot be empty", "error");
       return;
     }
+    if (!hasPreviewedRef.current) {
+      toast("Please render a preview before saving", "error");
+      return;
+    }
     setSaving(true);
     try {
       const effectiveContentType = isLayout ? "html" : contentType;
-      const result = await api<{ success: boolean; version: number }>(
+      const result = await api<{ success: boolean; version: { version: number } }>(
         `/api/v1/admin/email-templates/${encodeURIComponent(templateKey)}/versions`,
         {
           method: "POST",
@@ -219,7 +234,7 @@ function TemplateEditor({
           }),
         },
       );
-      toast(`Saved as draft v${result.version}`, "success");
+      toast(`Saved as draft v${result.version.version}`, "success");
       await onReload();
     } catch (e) {
       toast((e as Error).message, "error");
@@ -288,14 +303,17 @@ function TemplateEditor({
                   <pre
                     ref={subjectPreRef}
                     aria-hidden="true"
-                    class="adm-template-backdrop adm-template-backdrop-subject"
+                    class="adm-template-backdrop adm-template-backdrop-subject font-monospace"
                   ></pre>
                   <input
                     type="text"
-                    class={`form-control form-control-sm font-monospace adm-template-input-overlay${subject ? " adm-template-input-hidden-text" : ""}`}
+                    class="form-control form-control-sm font-monospace adm-template-input-overlay"
                     value={subject}
                     placeholder="e.g. Your invitation to {{eventName}}"
-                    onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
+                    onInput={(e) => {
+                      setSubject((e.target as HTMLInputElement).value);
+                      hasPreviewedRef.current = false;
+                    }}
                     onFocus={() => {
                       editorFocusRef.current = "subject";
                     }}
@@ -315,19 +333,46 @@ function TemplateEditor({
                   <pre
                     ref={bodyPreRef}
                     aria-hidden="true"
-                    class="adm-template-backdrop adm-template-backdrop-body"
+                    class="adm-template-backdrop adm-template-backdrop-body font-monospace"
                   ></pre>
                   <textarea
                     ref={bodyTextareaRef}
                     class="form-control font-monospace adm-template-input-overlay adm-template-body-input"
                     rows={16}
-                    value={body}
-                    onInput={(e) => setBody((e.target as HTMLTextAreaElement).value)}
+                    defaultValue={body}
+                    onInput={(e) => {
+                      setBody((e.target as HTMLTextAreaElement).value);
+                      hasPreviewedRef.current = false;
+                    }}
                     onFocus={() => {
                       editorFocusRef.current = "body";
                     }}
                     onScroll={handleBodyScroll}
                   />
+                </div>
+              </div>
+
+              {/* Partials */}
+              <div class="mb-3">
+                <label class="form-label small fw-semibold mb-1">Insert partial</label>
+                <div class="input-group input-group-sm">
+                  <select
+                    id="partialSelect"
+                    class="form-select form-select-sm"
+                    onChange={(e) => {
+                      const sel = e.target as HTMLSelectElement;
+                      if (!sel.value) return;
+                      insertSnippet(`{{> ${sel.value}}}`, "body");
+                      sel.value = "";
+                    }}
+                  >
+                    <option value="">— select partial to insert —</option>
+                    {TEMPLATE_PARTIALS.map((p) => (
+                      <option key={p.name} value={p.name}>
+                        {p.name} — {p.description}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -358,12 +403,20 @@ function TemplateEditor({
 
               {/* Preview data */}
               <div class="mb-3">
-                <label class="form-label small fw-semibold mb-1">Preview data (JSON)</label>
+                <label class="form-label small fw-semibold mb-1 d-flex justify-content-between align-items-center">
+                  Preview data (JSON)
+                  <button
+                    type="button"
+                    class="btn btn-link btn-sm p-0 text-muted"
+                    onClick={() => setPreviewData(JSON.stringify(PREVIEW_DEFAULTS, null, 2))}
+                  >
+                    Reset to defaults
+                  </button>
+                </label>
                 <textarea
-                  class="form-control font-monospace"
+                  class="form-control font-monospace adm-template-preview-data"
                   rows={6}
                   value={previewData}
-                  placeholder="Optional: provide sample variables as JSON"
                   onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
                 />
               </div>
@@ -372,11 +425,15 @@ function TemplateEditor({
                 <button class="btn btn-outline-primary" onClick={() => void doPreview()}>
                   Render Preview
                 </button>
-                <button class="btn btn-success" onClick={() => void doSave()} disabled={saving}>
+                <button
+                  class="btn btn-success"
+                  onClick={() => void doSave()}
+                  disabled={saving || !hasPreviewedRef.current}
+                >
                   {saving ? "Saving…" : "Save as Draft"}
                 </button>
                 <span class="text-muted small">
-                  Saving creates a new draft version. Activate it below to put it in use.
+                  Preview required before saving. Saving creates a new draft version — activate it below.
                 </span>
               </div>
             </div>

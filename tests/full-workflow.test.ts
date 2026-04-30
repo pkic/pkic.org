@@ -284,7 +284,7 @@ describe("full workflow", () => {
             body: JSON.stringify({
               firstName: "Attendee",
               lastName: "One",
-              email: "attendee1@example.test",
+              email: "attendee1@pkic.org",
               attendanceType: "in_person",
               sourceType: "direct",
               consents: [
@@ -302,7 +302,7 @@ describe("full workflow", () => {
       const firstConfirmationPayload = (
         await queryAll<{ payload_json: string }>(
           env.DB,
-          "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = 'attendee1@example.test' ORDER BY created_at DESC LIMIT 1",
+          "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = 'attendee1@pkic.org' ORDER BY created_at DESC LIMIT 1",
         )
       )[0];
       const firstConfirmationToken = extractTokenFromOutboxUrl(
@@ -354,7 +354,7 @@ describe("full workflow", () => {
             body: JSON.stringify({
               firstName: "Attendee",
               lastName: "Two",
-              email: "attendee2@example.test",
+              email: "attendee2@pkic.org",
               attendanceType: "in_person",
               sourceType: "direct",
               consents: [
@@ -371,7 +371,7 @@ describe("full workflow", () => {
       const secondConfirmationPayload = (
         await queryAll<{ payload_json: string }>(
           env.DB,
-          "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = 'attendee2@example.test' ORDER BY created_at DESC LIMIT 1",
+          "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' AND recipient_email = 'attendee2@pkic.org' ORDER BY created_at DESC LIMIT 1",
         )
       )[0];
       const secondConfirmationToken = extractTokenFromOutboxUrl(

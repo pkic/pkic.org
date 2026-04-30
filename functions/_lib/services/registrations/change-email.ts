@@ -12,6 +12,7 @@ import { normalizeEmail } from "../../validation";
 import { randomToken, sha256Hex } from "../../utils/crypto";
 import { nowIso, addHours } from "../../utils/time";
 import { uuid } from "../../utils/ids";
+import { checkEmailDomainMx } from "../../email/mx-check";
 import type { DatabaseLike } from "../../types";
 import type { RegistrationRecord } from "./types";
 
@@ -34,6 +35,12 @@ export async function changeRegistrationEmail(
     registrationId: string;
     newEmail: string;
     confirmationTtlHours: number;
+    /**
+     * When true, allows changing the email on a cancelled registration and
+     * resets its status to pending_email_confirmation. Intended for admin use
+     * only so operators can recover bounce-cancelled registrations.
+     */
+    allowCancelled?: boolean;
   },
 ): Promise<ChangeEmailResult> {
   const registration = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [
@@ -43,7 +50,10 @@ export async function changeRegistrationEmail(
     throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
   }
 
-  if (registration.status === "cancelled" || registration.status === "cancelled_unauthorized") {
+  if (
+    !params.allowCancelled &&
+    (registration.status === "cancelled" || registration.status === "cancelled_unauthorized")
+  ) {
     throw new AppError(409, "ALREADY_CANCELLED", "Cannot change email on a cancelled registration");
   }
 
@@ -68,6 +78,16 @@ export async function changeRegistrationEmail(
   const newNormalized = normalizeEmail(params.newEmail);
   if (newNormalized === currentUser.normalized_email) {
     throw new AppError(400, "EMAIL_UNCHANGED", "The new email address is the same as the current one");
+  }
+
+  // Verify the new email domain has MX records.
+  const mxResult = await checkEmailDomainMx(newNormalized);
+  if (!mxResult.hasMxRecords) {
+    throw new AppError(
+      422,
+      "EMAIL_DOMAIN_INVALID",
+      "The email domain does not appear to accept mail. Please check the address and try again.",
+    );
   }
 
   // Check if a user with the new email already exists

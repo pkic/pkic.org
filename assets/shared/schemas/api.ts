@@ -593,14 +593,21 @@ export const adminUserRoleSchema = z.object({
   role: z.enum(["admin", "user", "guest"]),
 });
 
-/** PATCH body for updating a user's role and/or active status. */
+/** PATCH body for updating a user's role, active status, email, and/or PII fields. */
 export const adminUserUpdateSchema = z
   .object({
     role: z.enum(["admin", "user", "guest"]).optional(),
     active: z.boolean().optional(),
+    email: z.string().trim().toLowerCase().email().optional(),
+    firstName: z.string().trim().max(80).nullable().optional(),
+    lastName: z.string().trim().max(120).nullable().optional(),
+    preferredName: z.string().trim().max(80).nullable().optional(),
+    organizationName: z.string().trim().max(200).nullable().optional(),
+    jobTitle: z.string().trim().max(200).nullable().optional(),
+    biography: z.string().trim().max(5000).nullable().optional(),
   })
-  .refine((v) => v.role !== undefined || v.active !== undefined, {
-    message: "At least one of 'role' or 'active' must be provided",
+  .refine((v) => Object.values(v).some((x) => x !== undefined), {
+    message: "At least one field must be provided",
   });
 
 /** POST /anonymize — no body required; confirmation is implicit in calling the endpoint. */
@@ -658,6 +665,11 @@ export const adminRegistrationAdmitSchema = z.object({
   mode: z.enum(["vip", "capacity_exempt"]).default("vip"),
   reason: trimmedString(3, 1000),
   dayDates: z.array(dayDateSchema).min(1).max(31).optional(),
+});
+
+export const adminManageDayAttendanceSchema = z.object({
+  action: z.enum(["in_person", "virtual", "on_demand", "remove"]),
+  dayDates: z.array(dayDateSchema).min(1).max(31),
 });
 
 // ── Admin: campaign emails ────────────────────────────────────────────────────

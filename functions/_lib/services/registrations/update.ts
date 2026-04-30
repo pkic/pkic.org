@@ -112,10 +112,6 @@ async function applyRegistrationUpdate(
     return updated;
   }
 
-  if (isCancelled) {
-    throw new AppError(409, "ALREADY_CANCELLED", "Cannot update a cancelled registration");
-  }
-
   const derivedAttendanceType = deriveEventAttendanceType(payload.dayAttendance);
   const effectiveAttendanceType = payload.attendanceType ?? derivedAttendanceType;
   if (!effectiveAttendanceType) {
@@ -128,9 +124,11 @@ async function applyRegistrationUpdate(
   });
   const hasPerDayAttendanceInput = Boolean(payload.dayAttendance && payload.dayAttendance.length > 0);
   const hasPerDayAttendanceContext = hasPerDayAttendanceInput || previousInPersonDayIds.length > 0;
-  let newStatus = registration.status;
+  // When reinstating a cancelled registration the status starts as "registered";
+  // capacity/waitlist logic below may still downgrade it to "waitlisted" as needed.
+  let newStatus = isCancelled ? "registered" : registration.status;
   if (hasPerDayAttendanceContext || capacityExemptReason) {
-    newStatus = isCancelled ? registration.status : "registered";
+    newStatus = "registered";
   } else if (effectiveAttendanceType !== registration.attendance_type) {
     if (effectiveAttendanceType === "in_person") {
       if (registration.status === "waitlisted") {
@@ -141,7 +139,7 @@ async function applyRegistrationUpdate(
       }
     }
     if (registration.attendance_type === "in_person" && effectiveAttendanceType !== "in_person") {
-      newStatus = isCancelled ? registration.status : "registered";
+      newStatus = "registered";
     }
   }
   await run(
@@ -149,7 +147,7 @@ async function applyRegistrationUpdate(
     `UPDATE registrations
      SET attendance_type = ?, status = ?, custom_answers_json = COALESCE(?, custom_answers_json),
          source_ref = COALESCE(?, source_ref), capacity_exempt_in_person = ?,
-         capacity_exempt_reason = ?, updated_at = ?
+         capacity_exempt_reason = ?, cancelled_at = ?, updated_at = ?
      WHERE id = ?`,
     [
       effectiveAttendanceType,
@@ -158,6 +156,7 @@ async function applyRegistrationUpdate(
       payload.sourceRef ?? null,
       capacityExemptReason ? 1 : 0,
       capacityExemptReason,
+      isCancelled ? null : registration.cancelled_at,
       nowIso(),
       registration.id,
     ],

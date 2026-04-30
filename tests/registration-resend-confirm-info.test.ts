@@ -28,7 +28,7 @@ async function registerAttendee(): Promise<{ confirmationToken: string; email: s
         body: JSON.stringify({
           firstName: "Test",
           lastName: "User",
-          email: "resendtest@example.test",
+          email: "resendtest@pkic.org",
           attendanceType: "virtual",
           sourceType: "direct",
           consents: [
@@ -53,7 +53,7 @@ async function registerAttendee(): Promise<{ confirmationToken: string; email: s
   const confirmUrl = new URL(emailPayload.confirmationUrl);
   const confirmationToken = confirmUrl.searchParams.get("token") as string;
 
-  return { confirmationToken, email: "resendtest@example.test", manageToken: payload.manageToken };
+  return { confirmationToken, email: "resendtest@pkic.org", manageToken: payload.manageToken };
 }
 
 describe("confirm-info endpoint", () => {
@@ -96,7 +96,7 @@ describe("confirm-info endpoint", () => {
     };
     expect(body.firstName).toBe("Test");
     expect(body.lastName).toBe("User");
-    expect(body.email).toBe("resendtest@example.test");
+    expect(body.email).toBe("resendtest@pkic.org");
     expect(body.eventName).toBe("PQC Conference 2026");
     expect(body.expired).toBe(false);
   });

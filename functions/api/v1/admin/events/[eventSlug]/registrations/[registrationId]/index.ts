@@ -217,6 +217,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
         registrationId: updated.id,
         newEmail: body.email,
         confirmationTtlHours: config.manageTokenTtlHours,
+        allowCancelled: true,
       });
 
       // Also update PII on the new user when fields were provided

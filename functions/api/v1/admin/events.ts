@@ -51,13 +51,10 @@ export async function onRequestGet(c: any): Promise<Response> {
        e.settings_json,
        e.created_at,
        e.updated_at,
-       COUNT(DISTINCT r.id)                                              AS total_registrations,
-       COUNT(DISTINCT CASE WHEN r.status = 'registered' THEN r.id END)  AS confirmed_registrations,
-       COUNT(DISTINCT CASE WHEN i.status = 'sent' AND i.invite_type = 'attendee' THEN i.id END)  AS pending_invites
+       (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id)                                                                 AS total_registrations,
+       (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = 'registered')                                     AS confirmed_registrations,
+       (SELECT COUNT(*) FROM invites i WHERE i.event_id = e.id AND i.status = 'sent' AND i.invite_type = 'attendee')                  AS pending_invites
      FROM events e
-     LEFT JOIN registrations r ON r.event_id = e.id
-     LEFT JOIN invites       i ON i.event_id = e.id
-     GROUP BY e.id
      ORDER BY COALESCE(e.starts_at, '9999') DESC`,
     [],
   );

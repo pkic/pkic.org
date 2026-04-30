@@ -270,7 +270,7 @@ describe("speaker nomination by attendees", () => {
           body: JSON.stringify({
             firstName: "Attendee",
             lastName: "Nominator",
-            email: "nominator@example.test",
+            email: "nominator@pkic.org",
             attendanceType: "in_person",
             sourceType: "direct",
             consents: [

@@ -4,6 +4,12 @@ import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { getEventBySlug } from "../functions/_lib/services/events";
+import {
+  createRegistration,
+  confirmRegistrationByToken,
+  updateRegistrationById,
+} from "../functions/_lib/services/registrations";
 
 const ADMIN_TOKEN = "event-admin-token";
 
@@ -203,5 +209,67 @@ describe("admin event management endpoints", () => {
         expect.objectContaining({ user_email: "organizer@example.test", permission: "organizer" }),
       ]),
     );
+  });
+
+  it("allows admin to reinstate a cancelled registration and rejects double-cancel", async () => {
+    await setupAdmin();
+
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, created_at, updated_at)
+       VALUES ('user-reinstate', 'reinstate@example.test', 'reinstate@example.test', datetime('now'), datetime('now'))`,
+    ).run();
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistration(env.DB, {
+      event,
+      userId: "user-reinstate",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: created.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+    });
+
+    // Cancel via the service (simulates attendee or earlier admin action)
+    const cancelled = await updateRegistrationById(
+      env.DB,
+      { registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
+      "admin:test",
+    );
+    expect(cancelled.status).toBe("cancelled");
+    expect(cancelled.cancelled_at).not.toBeNull();
+
+    // Double-cancel must still be rejected
+    await expect(
+      updateRegistrationById(
+        env.DB,
+        { registrationId: created.registration.id, action: "cancel", waitlistClaimWindowHours: 24 },
+        "admin:test",
+      ),
+    ).rejects.toMatchObject({ code: "ALREADY_CANCELLED" });
+
+    // Admin reinstates via the HTTP endpoint
+    const reinstateResponse = await callAdmin(
+      `/api/v1/admin/events/pqc-2026/registrations/${created.registration.id}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ action: "update", attendanceType: "virtual" }),
+      },
+    );
+    expect(reinstateResponse.status).toBe(200);
+    const reinstatePayload = (await reinstateResponse.json()) as { success: boolean; registration: { status: string } };
+    expect(reinstatePayload.success).toBe(true);
+    expect(reinstatePayload.registration.status).toBe("registered");
+
+    const row = (
+      await queryAll<{ cancelled_at: string | null }>(
+        env.DB,
+        "SELECT cancelled_at FROM registrations WHERE id = ?",
+        created.registration.id,
+      )
+    )[0];
+    expect(row.cancelled_at).toBeNull();
   });
 });
