@@ -8,6 +8,10 @@
  * Fails open: if the DNS lookup itself fails (network error, timeout, etc.)
  * the function returns `true` so that a temporary DNS failure does not block
  * legitimate registrations.
+ *
+ * RFC 2606 / RFC 6761 reserved special-use TLDs (.test, .example, .invalid,
+ * .localhost) are always treated as valid since they will never have real DNS
+ * records and are only used in controlled test or development environments.
  */
 
 /** Result returned by checkEmailDomainMx. */
@@ -17,6 +21,13 @@ export interface MxCheckResult {
   /** false only when we received a definitive "no MX records" response. */
   hasMxRecords: boolean;
 }
+
+/**
+ * IANA / RFC 2606+6761 special-use TLDs that are reserved for testing and
+ * documentation. They will never have real MX records, so we skip the DNS
+ * lookup for them and treat them as valid.
+ */
+const RESERVED_TEST_TLDS = new Set(["test", "example", "invalid", "localhost", "local"]);
 
 /**
  * Extracts the domain from an email address string.
@@ -40,6 +51,13 @@ export async function checkEmailDomainMx(email: string): Promise<MxCheckResult> 
   const domain = domainFromEmail(email);
   if (!domain) {
     return { valid: false, hasMxRecords: false };
+  }
+
+  // Skip DNS lookup for IANA-reserved special-use TLDs — they have no real
+  // MX records by design and are only used in test/dev environments.
+  const tld = domain.split(".").pop()?.toLowerCase() ?? "";
+  if (RESERVED_TEST_TLDS.has(tld)) {
+    return { valid: true, hasMxRecords: true };
   }
 
   try {
