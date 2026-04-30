@@ -120,8 +120,10 @@
     <div class="bento-grid">
       {{ range . }}
       <div class="bento-card bento-{{ $color }}-pale">
-        {{ with .icon }}<span class="bento-icon">{{ . }}</span>{{ end }}
-        <div class="bento-title">{{ .title }}</div>
+        <div class="d-flex align-items-flex-start gap-2 mb-2">
+          {{ with .icon }}<span class="bento-icon flex-shrink-0">{{ . }}</span>{{ end }}
+          <div class="bento-title">{{ .title }}</div>
+        </div>
         <div class="bento-text">{{ .description }}</div>
       </div>
       {{ end }}

@@ -125,6 +125,11 @@
     color: #1e293b;
   }
 
+  .d-flex .bento-icon {
+    font-size: 1.75rem;
+    margin-bottom: 0;
+  }
+
   .bento-title {
     font-size: 1.25rem;
     font-weight: 700;
@@ -132,6 +137,11 @@
     line-height: 1.35;
     letter-spacing: -0.01em;
     color: inherit;
+  }
+
+  .d-flex .bento-title {
+    margin-bottom: 0;
+    font-size: 1.1rem;
   }
 
   .bento-text {
@@ -221,9 +231,7 @@
   }
 
   .bento-icon {
-    background: linear-gradient(135deg, lighten($bg, 5%), $bg);
-    color: #fff;
-    box-shadow: 0 4px 12px rgba($bg, 0.3), inset 0 1px 2px rgba(255,255,255,0.3);
+    color: darken($bg, 10%);
   }
 
   &:hover {
