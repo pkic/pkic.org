@@ -4,7 +4,7 @@
  *
  * Only a global admin may call these endpoints.
  */
-import { parseJsonBody } from "../../../../../_lib/validation";
+import { parseJsonBody, normalizeEmail } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { first, run } from "../../../../../_lib/db/queries";
@@ -105,19 +105,76 @@ export async function onRequestPatch(c: any): Promise<Response> {
   const newRole = body.role ?? user.role;
   const newActive = body.active ?? Boolean(user.active);
 
-  await run(c.env.DB, "UPDATE users SET role = ?, active = ?, updated_at = ? WHERE id = ?", [
-    newRole,
-    newActive ? 1 : 0,
-    nowIso(),
-    user.id,
-  ]);
+  // Email change — check uniqueness before any mutations
+  let newEmail = user.email;
+  if (body.email !== undefined) {
+    const normalized = normalizeEmail(body.email);
+    if (normalized !== normalizeEmail(user.email)) {
+      const existing = await first<{ id: string }>(
+        c.env.DB,
+        "SELECT id FROM users WHERE normalized_email = ? AND id != ?",
+        [normalized, user.id],
+      );
+      if (existing) {
+        throw new AppError(409, "EMAIL_ALREADY_IN_USE", "Another account already uses that email address");
+      }
+      newEmail = normalized;
+    }
+  }
+
+  const piiUpdates: Record<string, string | null> = {};
+  if (body.firstName !== undefined) piiUpdates.first_name = body.firstName || null;
+  if (body.lastName !== undefined) piiUpdates.last_name = body.lastName || null;
+  if (body.preferredName !== undefined) piiUpdates.preferred_name = body.preferredName || null;
+  if (body.organizationName !== undefined) piiUpdates.organization_name = body.organizationName || null;
+  if (body.jobTitle !== undefined) piiUpdates.job_title = body.jobTitle || null;
+  if (body.biography !== undefined) piiUpdates.biography = body.biography || null;
+
+  const hasPiiUpdates = Object.keys(piiUpdates).length > 0;
+
+  // Fetch current PII values before mutating so we can produce accurate audit log diffs.
+  let currentDetail: UserDetailRow | null = null;
+  if (hasPiiUpdates) {
+    currentDetail = await first<UserDetailRow>(
+      c.env.DB,
+      `SELECT id, email, first_name, last_name, preferred_name, organization_name, job_title, biography,
+              role, active, headshot_r2_key, headshot_updated_at, created_at, updated_at, pii_redacted_at
+       FROM users WHERE id = ?`,
+      [user.id],
+    );
+  }
+
+  if (hasPiiUpdates) {
+    const setClauses = Object.keys(piiUpdates)
+      .map((col) => `${col} = ?`)
+      .join(", ");
+    const values = [...Object.values(piiUpdates), nowIso(), user.id];
+    await run(c.env.DB, `UPDATE users SET ${setClauses}, updated_at = ? WHERE id = ?`, values);
+  }
+
+  await run(
+    c.env.DB,
+    "UPDATE users SET email = ?, normalized_email = ?, role = ?, active = ?, updated_at = ? WHERE id = ?",
+    [newEmail, normalizeEmail(newEmail), newRole, newActive ? 1 : 0, nowIso(), user.id],
+  );
 
   const changes: Record<string, unknown> = {};
+  if (newEmail !== user.email) {
+    changes.email = { from: user.email, to: newEmail };
+  }
   if (body.role !== undefined && body.role !== user.role) {
     changes.role = { from: user.role, to: newRole };
   }
   if (body.active !== undefined && body.active !== Boolean(user.active)) {
     changes.active = { from: Boolean(user.active), to: newActive };
+  }
+  if (hasPiiUpdates && currentDetail) {
+    for (const [col, after] of Object.entries(piiUpdates)) {
+      const before = currentDetail[col as keyof UserDetailRow];
+      if (before !== after) {
+        changes[col] = { from: before, to: after };
+      }
+    }
   }
 
   if (Object.keys(changes).length > 0) {
@@ -126,7 +183,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
 
   return json({
     success: true,
-    user: { id: user.id, email: user.email, role: newRole, active: newActive },
+    user: { id: user.id, email: newEmail, role: newRole, active: newActive },
   });
 }
 
