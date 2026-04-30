@@ -113,7 +113,8 @@ async function applyRegistrationUpdate(
   }
 
   const derivedAttendanceType = deriveEventAttendanceType(payload.dayAttendance);
-  const effectiveAttendanceType = payload.attendanceType ?? derivedAttendanceType;
+  // When only changing email on a cancelled registration, preserve the original attendance type
+  const effectiveAttendanceType = payload.attendanceType ?? derivedAttendanceType ?? registration.attendance_type;
   if (!effectiveAttendanceType) {
     throw new AppError(400, "ATTENDANCE_TYPE_REQUIRED", "attendanceType is required for update action");
   }

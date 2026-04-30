@@ -64,6 +64,7 @@ export interface RegistrationManageResponse {
     status: string;
     attendance_type: string;
     custom_answers: Record<string, unknown> | null;
+    isEmailVerified: boolean;
   };
   event: {
     id: string;

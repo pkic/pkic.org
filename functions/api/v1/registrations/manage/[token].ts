@@ -137,6 +137,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
           registrationId: updated.id,
           newEmail: body.email,
           confirmationTtlHours: config.manageTokenTtlHours,
+          allowCancelled: true,
         });
 
         // Also update PII on the new user when fields were provided
@@ -355,6 +356,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       registration: {
         ...registration,
         custom_answers: registration.custom_answers_json ? JSON.parse(registration.custom_answers_json) : null,
+        isEmailVerified: registration.confirmed_at !== null,
       },
       event,
       user,

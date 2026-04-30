@@ -267,7 +267,7 @@ async function main(): Promise<void> {
     }
   }
 
-  // ── Lock the form if already cancelled ───────────────────────────────────
+  // ── Lock the form if cancelled ──
   if (isCancelled && actionButtons) {
     const allButtons = actionButtons.querySelectorAll<HTMLButtonElement>("button");
     for (const btn of Array.from(allButtons)) {
@@ -279,7 +279,56 @@ async function main(): Promise<void> {
     for (const field of Array.from(fields)) {
       field.disabled = true;
     }
-    setStatus(statusEl, "This registration has been cancelled and can no longer be edited.", true);
+
+    // Show different message and options based on email verification status
+    const isEmailVerified = manageData.registration.isEmailVerified;
+    if (isEmailVerified) {
+      // Email verified but registration cancelled for other reason → offer simple restore
+      const restoreBtn = document.createElement("button");
+      restoreBtn.type = "button";
+      restoreBtn.className = "btn btn-primary mt-2";
+      restoreBtn.textContent = "Restore Registration";
+      let restoring = false;
+      restoreBtn.onclick = async (e) => {
+        e.preventDefault();
+        if (restoring) return;
+        restoring = true;
+        restoreBtn.disabled = true;
+        try {
+          await patchJson(`/api/v1/registrations/manage/${encodeURIComponent(token)}`, { action: "update" });
+          if (manageFormEl) {
+            showPostAction(root, manageFormEl, {
+              title: "Registration Restored",
+              message: "Your registration has been successfully restored. You will be redirected momentarily.",
+            });
+          }
+          setTimeout(() => window.location.reload(), 1500);
+        } catch (error) {
+          if (manageFormEl) {
+            showPostAction(root, manageFormEl, {
+              title: "Restore Failed",
+              message: (error as Error).message,
+              isError: true,
+            });
+          }
+          restoring = false;
+          restoreBtn.disabled = false;
+        }
+      };
+      statusEl?.parentElement?.insertBefore(restoreBtn, statusEl?.nextSibling);
+      setStatus(statusEl, "This registration has been cancelled. Your email address is verified.", true);
+    } else {
+      // Email not verified → allow user to correct it
+      const emailInput = form.querySelector<HTMLInputElement>("input[name='email']");
+      if (emailInput) {
+        emailInput.disabled = false;
+      }
+      setStatus(
+        statusEl,
+        "This registration has been cancelled because your email address could not be verified. Please check or correct your email address and try again to restore your registration.",
+        true,
+      );
+    }
   }
 
   // ── Show the form ─────────────────────────────────────────────────────────
