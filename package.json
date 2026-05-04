@@ -31,6 +31,9 @@
     "migrate:local": "npx wrangler d1 migrations apply DB --env local --local",
     "migrate:preview": "npx wrangler d1 migrations apply DB --env preview --remote",
     "migrate:production": "npx wrangler d1 migrations apply DB --env production --remote",
+    "backup:local": "mkdir -p backups/d1 && npx wrangler d1 export DB --env local --local --output backups/d1/local-$(date +%Y%m%d-%H%M%S).sql",
+    "backup:preview": "mkdir -p backups/d1 && npx wrangler d1 export DB --env preview --remote --output backups/d1/preview-$(date +%Y%m%d-%H%M%S).sql",
+    "backup:production": "mkdir -p backups/d1 && npx wrangler d1 export DB --env production --remote --output backups/d1/production-$(date +%Y%m%d-%H%M%S).sql",
     "seed:local": "node scripts/seed.mjs --local",
     "seed:preview": "node scripts/seed.mjs --preview",
     "seed:production": "node scripts/seed.mjs --production"
