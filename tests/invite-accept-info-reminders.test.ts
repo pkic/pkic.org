@@ -189,6 +189,22 @@ describe("invite info endpoint", () => {
     const body = (await response.json()) as { status: string };
     expect(body.status).toBe("valid");
   });
+
+  it("creates invites without a default expiry when ttlHours is omitted", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    const { invite } = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "no-default-expiry@example.test",
+      inviteType: "attendee",
+    });
+
+    const rows = await queryAll<{ expires_at: string | null }>(env.DB, "SELECT expires_at FROM invites WHERE id = ?", [
+      invite.id,
+    ]);
+
+    expect(rows[0].expires_at).toBeNull();
+  });
 });
 
 describe("invite accept endpoint", () => {

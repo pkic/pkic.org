@@ -7,6 +7,7 @@ import { onRequestPost as createInvites } from "../functions/api/v1/events/[even
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
+import { createInvite } from "../functions/_lib/services/invites";
 import {
   createRegistration as createRegistrationService,
   confirmRegistrationByToken,
@@ -93,6 +94,143 @@ describe("registration workflows", () => {
     expect(confirmResponse.status).toBe(200);
     const confirmedPayload = (await confirmResponse.json()) as { status: string };
     expect(confirmedPayload.status).toBe("registered");
+  });
+
+  it("accepts a pending invite when the matching registration is confirmed", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    const { invite } = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "matching-invite@pkic.org",
+      inviteeFirstName: "Match",
+      inviteType: "attendee",
+    });
+
+    const createResponse = await createRegistration(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Match",
+            lastName: "Invite",
+            email: "matching-invite@pkic.org",
+            attendanceType: "virtual",
+            sourceType: "direct",
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
+          }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+
+    expect(createResponse.status).toBe(200);
+
+    const outbox = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirm_email' ORDER BY created_at DESC LIMIT 1",
+    );
+    const token = extractConfirmationToken(outbox[0].payload_json);
+
+    const confirmResponse = await confirmEmail(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+
+    expect(confirmResponse.status).toBe(200);
+
+    const rows = await queryAll<{
+      registration_status: string;
+      invite_id: string | null;
+      invite_status: string | null;
+    }>(
+      env.DB,
+      `SELECT r.status AS registration_status, r.invite_id, i.status AS invite_status
+       FROM registrations r
+       JOIN users u ON u.id = r.user_id
+       LEFT JOIN invites i ON i.id = r.invite_id
+       WHERE r.event_id = ? AND u.normalized_email = ?
+       LIMIT 1`,
+      [eventId, "matching-invite@pkic.org"],
+    );
+
+    expect(rows[0].registration_status).toBe("registered");
+    expect(rows[0].invite_id).toBe(invite.id);
+    expect(rows[0].invite_status).toBe("accepted");
+  });
+
+  it("keeps the invite token as the source of truth when confirmation email matches a different invite", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    const tokenInvite = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "token-user@example.test",
+      inviteType: "attendee",
+    });
+    const emailInvite = await createInvite(env.DB, {
+      eventId,
+      inviteeEmail: "email-user@example.test",
+      inviteType: "attendee",
+    });
+
+    const createResponse = await createRegistration(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Token",
+            lastName: "User",
+            email: "email-user@example.test",
+            inviteToken: tokenInvite.token,
+            attendanceType: "virtual",
+            sourceType: "direct",
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
+          }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+
+    expect(createResponse.status).toBe(200);
+    const createdPayload = (await createResponse.json()) as { status: string; registrationId: string };
+    expect(createdPayload.status).toBe("registered");
+
+    const rows = await queryAll<{
+      registration_invite_id: string | null;
+      token_invite_status: string;
+      email_invite_status: string;
+    }>(
+      env.DB,
+      `SELECT r.invite_id AS registration_invite_id,
+              t.status AS token_invite_status,
+              e.status AS email_invite_status
+       FROM registrations r
+       LEFT JOIN invites t ON t.id = ?
+       LEFT JOIN invites e ON e.id = ?
+       WHERE r.id = ?
+       LIMIT 1`,
+      [tokenInvite.invite.id, emailInvite.invite.id, createdPayload.registrationId],
+    );
+
+    expect(rows[0].registration_invite_id).toBe(tokenInvite.invite.id);
+    expect(rows[0].token_invite_status).toBe("accepted");
+    expect(rows[0].email_invite_status).toBe("revoked");
   });
 
   it("enforces attendee invite abuse limits per attendee", async () => {

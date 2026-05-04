@@ -57,7 +57,6 @@ export async function onRequestPost(c: any): Promise<Response> {
             inviteeLastName: contact.lastName ?? null,
             inviteType: invite.invite_type,
             sourceType: "declined-forward",
-            ttlHours: invite.invite_type === "speaker" ? 24 * 21 : 24 * 14,
           });
 
           // Do not send a new email if the contact already has an active invite.

@@ -89,7 +89,6 @@ export async function onRequestPost(c: any): Promise<Response> {
         inviteeLastName: item.lastName,
         inviteType: "speaker",
         sourceType: "peer-nomination",
-        ttlHours: 24 * 21,
       });
 
       if (isNew) {

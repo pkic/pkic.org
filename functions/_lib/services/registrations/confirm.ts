@@ -12,6 +12,7 @@ import {
 import { upsertAttendeeParticipant } from "./participant-registration";
 import { writeAuditLog } from "../audit";
 import { finalizeEmailChange } from "./change-email";
+import { revokeDuplicateInvitesForEmail } from "../invites";
 import type { DatabaseLike } from "../../types";
 import type { RegistrationRecord } from "./types";
 
@@ -39,9 +40,12 @@ export async function confirmRegistrationByToken(
   // appeared after initiation), clear the pending_email reservation so the
   // user is not stuck and can retry from the manage URL.
   let emailMergeNote: { merged: boolean; mergedWithId: string | null } | null = null;
-  const user = await first<{ pending_email: string | null }>(db, "SELECT pending_email FROM users WHERE id = ?", [
-    registration.user_id,
-  ]);
+  const user = await first<{ pending_email: string | null; normalized_email: string }>(
+    db,
+    "SELECT pending_email, normalized_email FROM users WHERE id = ?",
+    [registration.user_id],
+  );
+  let inviteEmail = user?.normalized_email ?? null;
   if (user?.pending_email) {
     try {
       const emailResult = await finalizeEmailChange(db, {
@@ -53,6 +57,7 @@ export async function confirmRegistrationByToken(
         merged: !!emailResult.mergedWithRegistrationId,
         mergedWithId: emailResult.mergedWithRegistrationId,
       };
+      inviteEmail = emailResult.finalEmail;
     } catch (err) {
       if (err instanceof AppError && err.code === "EMAIL_TAKEN") {
         // Clear the dangling pending_email reservation so the user can pick
@@ -71,6 +76,19 @@ export async function confirmRegistrationByToken(
       throw err;
     }
   }
+
+  const matchingInvite =
+    !registration.invite_id && inviteEmail
+      ? await first<{ id: string; inviter_user_id: string | null; invite_type: "attendee" | "speaker" }>(
+          db,
+          `SELECT id, inviter_user_id, invite_type
+           FROM invites
+           WHERE event_id = ? AND invitee_email = ? AND invite_type = 'attendee' AND status = 'sent'
+           ORDER BY created_at ASC
+           LIMIT 1`,
+          [registration.event_id, inviteEmail],
+        )
+      : null;
 
   const dayEventIds = await listInPersonEventDayIdsForRegistration(db, registration.id);
   const capacityExemptReason = await resolveCapacityExemptReason(db, {
@@ -104,15 +122,43 @@ export async function confirmRegistrationByToken(
     }
   }
 
-  await run(
-    db,
-    `UPDATE registrations
-     SET status = ?, confirmed_at = ?, confirmation_token_hash = NULL,
-         confirmation_token_expires_at = NULL, capacity_exempt_in_person = ?,
-         capacity_exempt_reason = ?, updated_at = ?
-     WHERE id = ?`,
-    [newStatus, now, capacityExemptReason ? 1 : 0, capacityExemptReason, now, registration.id],
-  );
+  const updateStatements = [
+    db
+      .prepare(
+        `UPDATE registrations
+         SET status = ?, confirmed_at = ?, confirmation_token_hash = NULL,
+             confirmation_token_expires_at = NULL, invite_id = COALESCE(invite_id, ?),
+             capacity_exempt_in_person = ?, capacity_exempt_reason = ?, updated_at = ?
+         WHERE id = ?`,
+      )
+      .bind(
+        newStatus,
+        now,
+        matchingInvite?.id ?? null,
+        capacityExemptReason ? 1 : 0,
+        capacityExemptReason,
+        now,
+        registration.id,
+      ),
+  ];
+  if (matchingInvite) {
+    updateStatements.push(
+      db
+        .prepare(
+          `UPDATE invites
+           SET status = 'accepted', accepted_at = ?, used_count = used_count + 1
+           WHERE id = ? AND status = 'sent'`,
+        )
+        .bind(now, matchingInvite.id),
+    );
+  }
+
+  await db.batch(updateStatements);
+  await revokeDuplicateInvitesForEmail(db, {
+    eventId: registration.event_id,
+    inviteeEmail: inviteEmail ?? user?.normalized_email ?? "",
+    keepInviteId: registration.invite_id ?? matchingInvite?.id ?? null,
+  });
   await upsertAttendeeParticipant(db, {
     ...registration,
     status: newStatus,
@@ -128,6 +174,10 @@ export async function confirmRegistrationByToken(
       eventId: registration.event_id,
       status: newStatus,
       attendanceType: registration.attendance_type,
+      ...(matchingInvite && {
+        inviteId: matchingInvite.id,
+        inviteAcceptedVia: "registration_confirmation",
+      }),
       ...(emailMergeNote && { emailMerge: emailMergeNote }),
     },
   );
@@ -137,6 +187,19 @@ export async function confirmRegistrationByToken(
   const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
   if (!updated) {
     throw new AppError(500, "REGISTRATION_CONFIRM_FAILED", "Registration update failed");
+  }
+  if (matchingInvite?.inviter_user_id) {
+    await recordEngagement(db, {
+      userId: matchingInvite.inviter_user_id,
+      eventId: registration.event_id,
+      subjectType: "invite",
+      subjectRef: matchingInvite.id,
+      actionType: "invite_accepted",
+      points: 3,
+      sourceType: "invite",
+      sourceRef: matchingInvite.id,
+      data: { inviteType: matchingInvite.invite_type, acceptedVia: "registration_confirmation" },
+    });
   }
   if (newStatus === "registered") {
     await recordEngagement(db, {

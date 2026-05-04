@@ -4,7 +4,6 @@ import { normalizeEmail } from "../validation";
 import { randomToken, sha256Hex } from "../utils/crypto";
 import { nowIso, addHours } from "../utils/time";
 import { uuid } from "../utils/ids";
-import { parseJsonSafe } from "../utils/json";
 import { recordEngagement } from "./engagement";
 import type { DatabaseLike } from "../types";
 
@@ -117,13 +116,15 @@ export async function createInvite(
     inviteeLastName?: string | null;
     inviteType: "attendee" | "speaker";
     sourceType?: string;
-    ttlHours: number;
+    ttlHours?: number | null;
   },
   // isNew: true  → fresh invite row created, caller must send the invite email.
   // isNew: false → invitee already has an active invite; this inviter was recorded
   //                as a co-inviter (social proof) but NO new email should be sent.
 ): Promise<{ invite: InviteRecord; token: string; isNew: boolean }> {
   const inviteeEmail = normalizeEmail(payload.inviteeEmail);
+  const now = nowIso();
+  const expiresAt = payload.ttlHours == null ? null : addHours(now, payload.ttlHours);
 
   if (await isUnsubscribed(db, inviteeEmail, payload.eventId)) {
     throw new AppError(409, "INVITEE_UNSUBSCRIBED", "Invitee has unsubscribed from future invitations");
@@ -161,8 +162,6 @@ export async function createInvite(
       throw new AppError(409, "INVITEE_ALREADY_PROPOSED", "Invitee already has an active proposal for this event");
     }
   }
-
-  const now = nowIso();
 
   // Deduplication: if an active sent invite already exists for this
   // invitee+event+type, record the new inviter as a co-inviter for social proof
@@ -228,7 +227,7 @@ export async function createInvite(
     max_uses: 1,
     used_count: 0,
     source_type: payload.sourceType ?? "direct",
-    expires_at: null,
+    expires_at: expiresAt,
     accepted_at: null,
     declined_at: null,
     created_at: now,
@@ -353,6 +352,45 @@ export async function acceptInvite(db: DatabaseLike, inviteId: string): Promise<
   }
 }
 
+export async function revokeDuplicateInvitesForEmail(
+  db: DatabaseLike,
+  payload: {
+    eventId: string;
+    inviteeEmail: string;
+    keepInviteId?: string | null;
+  },
+): Promise<string[]> {
+  const inviteeEmail = normalizeEmail(payload.inviteeEmail);
+  const rows = await all<{ id: string }>(
+    db,
+    `SELECT id
+     FROM invites
+     WHERE event_id = ?
+       AND invitee_email = ?
+       AND status = 'sent'
+       AND (? IS NULL OR id != ?)
+     ORDER BY created_at ASC`,
+    [payload.eventId, inviteeEmail, payload.keepInviteId ?? null, payload.keepInviteId ?? null],
+  );
+
+  if (rows.length === 0) {
+    return [];
+  }
+
+  await run(
+    db,
+    `UPDATE invites
+     SET status = 'revoked'
+     WHERE event_id = ?
+       AND invitee_email = ?
+       AND status = 'sent'
+       AND (? IS NULL OR id != ?)`,
+    [payload.eventId, inviteeEmail, payload.keepInviteId ?? null, payload.keepInviteId ?? null],
+  );
+
+  return rows.map((row) => row.id);
+}
+
 export async function declineInvite(
   db: DatabaseLike,
   payload: {
@@ -472,7 +510,7 @@ export async function bulkCreateAttendeesAdmin(
       inviteeLastName?: string | null;
       sourceType?: string;
     }>;
-    ttlHours: number;
+    ttlHours?: number | null;
   },
 ): Promise<BulkAttendeeOutcome[]> {
   if (payload.invites.length === 0) return [];
@@ -514,41 +552,19 @@ export async function bulkCreateAttendeesAdmin(
       .prepare(
         `SELECT invitee_email FROM invites
        WHERE event_id = ?1 AND invite_type = 'attendee' AND status = 'sent'
-         AND (expires_at IS NULL OR expires_at > ?2)
-         AND invitee_email IN (SELECT value FROM json_each(?3))`,
+         AND invitee_email IN (SELECT value FROM json_each(?2))`,
       )
-      .bind(eventId, now, emailsJson),
+      .bind(eventId, emailsJson),
   ])) as Array<{ results: Array<Record<string, string>> }>;
 
   const unsubscribed = new Set((batchResults[0].results ?? []).map((row) => row.email));
   const registered = new Set((batchResults[1].results ?? []).map((row) => row.normalized_email));
   const alreadyInvited = new Set((batchResults[2].results ?? []).map((row) => row.invitee_email));
 
-  // --- Compute expiry once (same logic as createInvite, using pre-loaded event) ---
-  const settings = parseJsonSafe<{
-    registrationClosesAt?: string | null;
-    registration?: { closesAt?: string | null };
-  }>(payload.event.settings_json, {});
-  const registrationClosesAt = settings.registration?.closesAt ?? settings.registrationClosesAt ?? null;
-
-  function computeExpiry(): string {
-    let expiresAt = addHours(now, payload.ttlHours);
-    if (
-      payload.event.registration_mode !== "invite_only" &&
-      registrationClosesAt &&
-      new Date(registrationClosesAt).getTime() > new Date(now).getTime()
-    ) {
-      expiresAt = new Date(registrationClosesAt).toISOString();
-    }
-    if (payload.event.starts_at) {
-      const eventStartMs = new Date(payload.event.starts_at).getTime();
-      const nowMs = new Date(now).getTime();
-      const currentExpiryMs = new Date(expiresAt).getTime();
-      if (Number.isFinite(eventStartMs) && eventStartMs > nowMs && eventStartMs < currentExpiryMs) {
-        expiresAt = new Date(eventStartMs).toISOString();
-      }
-    }
-    return expiresAt;
+  // --- Compute expiry only when the caller explicitly requests one ---
+  function computeExpiry(): string | null {
+    if (payload.ttlHours == null) return null;
+    return addHours(now, payload.ttlHours);
   }
 
   // --- Classify each input row ---
@@ -651,7 +667,7 @@ export async function bulkCreateSpeakersAdmin(
       inviteeLastName?: string | null;
       sourceType?: string;
     }>;
-    ttlHours: number;
+    ttlHours?: number | null;
   },
 ): Promise<BulkSpeakerOutcome[]> {
   if (payload.invites.length === 0) return [];
@@ -701,10 +717,9 @@ export async function bulkCreateSpeakersAdmin(
       .prepare(
         `SELECT invitee_email FROM invites
        WHERE event_id = ?1 AND invite_type = 'speaker' AND status = 'sent'
-         AND (expires_at IS NULL OR expires_at > ?2)
-         AND invitee_email IN (SELECT value FROM json_each(?3))`,
+         AND invitee_email IN (SELECT value FROM json_each(?2))`,
       )
-      .bind(eventId, now, emailsJson),
+      .bind(eventId, emailsJson),
   ])) as Array<{ results: Array<Record<string, string>> }>;
 
   const unsubscribed = new Set((batchResults[0].results ?? []).map((row) => row.email));
@@ -712,31 +727,10 @@ export async function bulkCreateSpeakersAdmin(
   const alreadyProposed = new Set((batchResults[2].results ?? []).map((row) => row.normalized_email));
   const alreadyInvited = new Set((batchResults[3].results ?? []).map((row) => row.invitee_email));
 
-  // --- Compute expiry ---
-  const settings = parseJsonSafe<{
-    registrationClosesAt?: string | null;
-    registration?: { closesAt?: string | null };
-  }>(payload.event.settings_json, {});
-  const registrationClosesAt = settings.registration?.closesAt ?? settings.registrationClosesAt ?? null;
-
-  function computeExpiry(): string {
-    let expiresAt = addHours(now, payload.ttlHours);
-    if (
-      payload.event.registration_mode !== "invite_only" &&
-      registrationClosesAt &&
-      new Date(registrationClosesAt).getTime() > new Date(now).getTime()
-    ) {
-      expiresAt = new Date(registrationClosesAt).toISOString();
-    }
-    if (payload.event.starts_at) {
-      const eventStartMs = new Date(payload.event.starts_at).getTime();
-      const nowMs = new Date(now).getTime();
-      const currentExpiryMs = new Date(expiresAt).getTime();
-      if (Number.isFinite(eventStartMs) && eventStartMs > nowMs && eventStartMs < currentExpiryMs) {
-        expiresAt = new Date(eventStartMs).toISOString();
-      }
-    }
-    return expiresAt;
+  // --- Compute expiry only when the caller explicitly requests one ---
+  function computeExpiry(): string | null {
+    if (payload.ttlHours == null) return null;
+    return addHours(now, payload.ttlHours);
   }
 
   // --- Classify each input row ---

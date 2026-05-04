@@ -10,7 +10,7 @@ import {
 } from "../../../../_lib/services/events";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
 import { findOrCreateUser } from "../../../../_lib/services/users";
-import { acceptInvite, findInviteByToken } from "../../../../_lib/services/invites";
+import { acceptInvite, findInviteByToken, revokeDuplicateInvitesForEmail } from "../../../../_lib/services/invites";
 import { createRegistration } from "../../../../_lib/services/registrations";
 import { createReferralCode } from "../../../../_lib/services/referrals";
 import { trySeedGravatarThenPrerender } from "../../../../_lib/services/og-badge-prerender";
@@ -122,6 +122,11 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   if (inviteId) {
     await acceptInvite(c.env.DB, inviteId);
+    await revokeDuplicateInvitesForEmail(c.env.DB, {
+      eventId: event.id,
+      inviteeEmail: body.email,
+      keepInviteId: inviteId,
+    });
   }
 
   const referralCode = await createReferralCode(c.env.DB, {

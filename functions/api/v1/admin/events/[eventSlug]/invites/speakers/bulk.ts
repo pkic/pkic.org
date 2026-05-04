@@ -22,7 +22,6 @@ export async function onRequestPost(c: any): Promise<Response> {
       inviteeLastName: item.lastName,
       sourceType: item.sourceType,
     })),
-    ttlHours: 24 * 21,
   });
 
   const created: Array<{ email: string; inviteToken: string }> = [];

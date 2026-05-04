@@ -64,7 +64,6 @@ export async function onRequestPost(c: any): Promise<Response> {
       inviteeLastName: i.lastName ?? null,
       sourceType: i.sourceType,
     })),
-    ttlHours: 24 * 14,
   });
 
   // Pre-compute shared email variables once.

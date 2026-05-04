@@ -110,7 +110,6 @@ export async function onRequestPost(c: any): Promise<Response> {
         inviteeLastName: item.lastName,
         inviteType: "attendee",
         sourceType: "peer-invite",
-        ttlHours: 24 * 14,
       });
 
       if (isNew) {
