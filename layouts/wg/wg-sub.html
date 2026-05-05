@@ -19,8 +19,23 @@
       <a href="/wg/">Working Groups</a>
       <span aria-hidden="true">›</span>
       <a href="{{ $base }}">{{ $wg.Params.wgID | upper }}</a>
+      {{- $crumbs := slice -}}
+      {{- $found  := false -}}
+      {{- range .Ancestors -}}
+        {{- if not $found -}}
+          {{- if eq . $wg -}}{{- $found = true -}}
+          {{- else -}}{{- $crumbs = $crumbs | append . -}}{{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $n := len $crumbs -}}
+      {{- if gt $n 0 -}}
+        {{- range seq 1 $n -}}
+          {{- $item := index $crumbs (sub $n .) -}}
+          <span aria-hidden="true">›</span><a href="{{ $item.RelPermalink }}">{{ $item.LinkTitle }}</a>
+        {{- end -}}
+      {{- end }}
     </p>
-    <h1 class="wg-sub-title">{{ .Title }}</h1>
+    <h1 class="wg-sub-title">{{ .LinkTitle }}</h1>
     {{ with .Description }}<p class="wg-sub-desc">{{ . }}</p>{{ end }}
   </div>
 </div>
@@ -108,7 +123,7 @@
 {{- end -}}
 
 {{/* ── Wrapper for data-driven content ─────────────────────────────── */}}
-<div data-pagefind-body data-edit-url="{{ site.Params.siteSource }}/content/wg/{{ $wg.Params.wgID | lower }}/_index.md">
+<div class="wg-data-body" data-pagefind-body data-edit-url="{{ site.Params.siteSource }}/content/wg/{{ $wg.Params.wgID | lower }}/_index.md">
 
 {{/* ── Section: Focus Areas ────────────────────────────────────────── */}}
 {{ if eq $sec "focus" }}
@@ -215,55 +230,47 @@
 
 {{/* ── Section: Conferences ────────────────────────────────────────── */}}
 {{ if eq $sec "conferences" }}
-{{/* Upcoming */}}
-{{ with .Params.upcoming }}
+{{/* Get all PQC conference events */}}
+{{- $pqcConfs := sort (where site.Pages "Params.eventType" "conference") "Params.eventDate" "desc" -}}
+{{- $upcomingConfs := slice -}}
+{{- $pastConfs := slice -}}
+{{- $today := now.Format "2006-01-02" -}}
+
+{{/* Separate into upcoming and past */}}
+{{ range $pqcConfs }}
+  {{- $eventDate := .Param "eventDate" -}}
+  {{- if ge ($eventDate | time.Format "2006-01-02") $today -}}
+    {{- $upcomingConfs = $upcomingConfs | append . -}}
+  {{- else -}}
+    {{- $pastConfs = $pastConfs | append . -}}
+  {{- end -}}
+{{ end }}
+
+{{/* Upcoming conferences */}}
+{{ if $upcomingConfs }}
 <section class="py-5" id="wg-conferences-upcoming">
   <div class="container">
-    <p class="pkic-section-eyebrow mb-2">Upcoming</p>
-    <h2 class="fw-bold mb-4">Next PQC Conference</h2>
-    {{ range . }}
-    <div class="pqc-conf-featured-card">
-      <div class="pqc-conf-featured-header">
-        <div class="pqc-conf-flag">{{ .flag }}</div>
-        <div>
-          <div class="pqc-conf-featured-label">UPCOMING CONFERENCE</div>
-          <h3 class="pqc-conf-featured-title">{{ .title }}</h3>
-          <div class="pqc-conf-featured-meta">
-            <span class="pqc-conf-meta-item"><strong>📅</strong> {{ .dates }}</span>
-            <span class="pqc-conf-meta-item"><strong>📍</strong> {{ .location }}</span>
-          </div>
-        </div>
+    <h2 class="fw-bold mb-4">Upcoming Conferences</h2>
+    <div class="row g-4">
+      {{ range $upcomingConfs }}
+      <div class="col-md-6">
+        {{ partial "events/card.html" . }}
       </div>
-      <p class="pqc-conf-featured-desc">{{ .description | markdownify }}</p>
-      <div class="d-flex gap-3 flex-wrap">
-        {{ with .registerURL }}
-        <a href="{{ . }}" class="btn btn-page-accent btn-lg rounded-pill px-4">Register Interest</a>
-        {{ end }}
-        {{ with .url }}
-        <a href="{{ . }}" class="btn btn-outline-secondary btn-lg rounded-pill px-4">More information</a>
-        {{ end }}
-      </div>
+      {{ end }}
     </div>
-    {{ end }}
   </div>
 </section>
 {{ end }}
 
 {{/* Past conferences */}}
-{{ with .Params.past }}
-<section class="py-5 wg-alt-section" id="wg-conferences-past">
+{{ if $pastConfs }}
+<section class="py-5" id="wg-conferences-past">
   <div class="container">
-    <p class="pkic-section-eyebrow mb-2">Archive</p>
     <h2 class="fw-bold mb-4">Past Conferences</h2>
-    <div class="row g-3">
-      {{ range . }}
-      <div class="col-md-6 col-xl-4">
-        <a href="{{ .url }}" class="pqc-conf-past-card text-decoration-none d-block">
-          <div class="pqc-conf-past-flag">{{ .flag }}</div>
-          <div class="pqc-conf-past-title">{{ .title }}</div>
-          <div class="pqc-conf-past-meta">{{ .dates }} · {{ .location }}</div>
-          <div class="pqc-conf-past-arrow">View recordings &amp; slides →</div>
-        </a>
+    <div class="row g-4">
+      {{ range $pastConfs }}
+      <div class="col-md-6">
+        {{ partial "events/card.html" . }}
       </div>
       {{ end }}
     </div>
