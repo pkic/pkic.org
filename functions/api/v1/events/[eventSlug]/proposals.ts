@@ -41,9 +41,9 @@ export async function onRequestPost(c: any): Promise<Response> {
     if (invite.event_id !== event.id || invite.invite_type !== "speaker") {
       return json({ error: { code: "INVITE_INVALID", message: "Invalid speaker invite" } }, 400);
     }
-    if (invite.invitee_email !== body.proposer.email) {
-      return json({ error: { code: "EMAIL_MISMATCH", message: "Invite email must match proposer email" } }, 400);
-    }
+    // Accept the invite regardless of whether the proposer email matches the
+    // invitee email. A colleague may submit on someone else's behalf (delegation),
+    // and we want the invite to be consumed so reminders stop going to the invitee.
     inviteId = invite.id;
   }
 
