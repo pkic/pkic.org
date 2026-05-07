@@ -127,7 +127,8 @@ export async function confirmRegistrationByToken(
       .prepare(
         `UPDATE registrations
          SET status = ?, confirmed_at = ?, confirmation_token_hash = NULL,
-             confirmation_token_expires_at = NULL, invite_id = COALESCE(invite_id, ?),
+           confirmation_token_expires_at = NULL, pending_confirmation_deadline_at = NULL,
+             confirmation_reminder_sent_at = NULL, invite_id = COALESCE(invite_id, ?),
              capacity_exempt_in_person = ?, capacity_exempt_reason = ?, updated_at = ?
          WHERE id = ?`,
       )

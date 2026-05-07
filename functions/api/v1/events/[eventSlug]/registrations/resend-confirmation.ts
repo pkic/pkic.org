@@ -74,9 +74,10 @@ export async function onRequestPost(c: any): Promise<Response> {
     `UPDATE registrations
      SET    confirmation_token_hash = ?,
             confirmation_token_expires_at = ?,
+            confirmation_reminder_sent_at = ?,
             updated_at = ?
      WHERE  id = ?`,
-    [newTokenHash, newExpiresAt, now, registration.id],
+    [newTokenHash, newExpiresAt, now, now, registration.id],
   );
 
   // Retrieve the attendee so we can personalise the email.

@@ -16,6 +16,8 @@ import { upsertAttendeeParticipant } from "./participant-registration";
 import type { DatabaseLike } from "../../types";
 import type { RegistrationRecord } from "./types";
 
+const PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
+
 async function initialRegistrationStatus(
   db: DatabaseLike,
   eventId: string,
@@ -100,10 +102,12 @@ export async function createRegistration(
   let confirmationToken: string | null = null;
   let confirmationHash: string | null = null;
   let confirmationExpiresAt: string | null = null;
+  let pendingConfirmationDeadlineAt: string | null = null;
   if (status === "pending_email_confirmation") {
     confirmationToken = randomToken(24);
     confirmationHash = await sha256Hex(confirmationToken);
     confirmationExpiresAt = addHours(now, payload.confirmationTtlHours);
+    pendingConfirmationDeadlineAt = addHours(now, PENDING_CONFIRMATION_DEADLINE_HOURS);
   }
   const registration: RegistrationRecord = {
     id: uuid(),
@@ -118,6 +122,7 @@ export async function createRegistration(
     referred_by_code: payload.referredByCode ?? null,
     confirmation_token_hash: confirmationHash,
     confirmation_token_expires_at: confirmationExpiresAt,
+    pending_confirmation_deadline_at: pendingConfirmationDeadlineAt,
     manage_token_hash: manageHash,
     capacity_exempt_in_person: capacityExempt ? 1 : 0,
     capacity_exempt_reason: capacityExemptReason,
@@ -131,9 +136,10 @@ export async function createRegistration(
     `INSERT INTO registrations (
       id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
       custom_answers_json, referred_by_code, confirmation_token_hash, confirmation_token_expires_at,
+      pending_confirmation_deadline_at,
       manage_token_hash, capacity_exempt_in_person, capacity_exempt_reason,
       confirmed_at, cancelled_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       registration.id,
       registration.event_id,
@@ -147,6 +153,7 @@ export async function createRegistration(
       registration.referred_by_code,
       registration.confirmation_token_hash,
       registration.confirmation_token_expires_at,
+      registration.pending_confirmation_deadline_at,
       registration.manage_token_hash,
       registration.capacity_exempt_in_person,
       registration.capacity_exempt_reason,

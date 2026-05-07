@@ -119,21 +119,34 @@ async function insertPendingRegistration(opts: {
   regId: string;
   eventId: string;
   userId: string;
-  /** ISO string — must be within the next 24 h to trigger the reminder */
-  confirmationExpiresAt: string;
+  confirmationExpiresAt?: string;
+  deadlineAt?: string;
+  reminderSentAt?: string | null;
 }): Promise<void> {
   const hash = `conf-hash-${opts.regId}`;
   const manageHash = `manage-hash-${opts.regId}`;
+  const confirmationExpiresAt = opts.confirmationExpiresAt ?? new Date(Date.now() + 12 * 3_600_000).toISOString();
+  const deadlineAt = opts.deadlineAt ?? new Date(Date.now() + 12 * 24 * 3_600_000).toISOString();
   await db
     .prepare(
       `INSERT INTO registrations
          (id, event_id, user_id, status, attendance_type, source_type,
-          confirmation_token_hash, confirmation_token_expires_at, manage_token_hash,
+          confirmation_token_hash, confirmation_token_expires_at, pending_confirmation_deadline_at,
+          confirmation_reminder_sent_at, manage_token_hash,
           created_at, updated_at)
        VALUES (?, ?, ?, 'pending_email_confirmation', 'virtual', 'open',
-               ?, ?, ?, datetime('now'), datetime('now'))`,
+               ?, ?, ?, ?, ?, datetime('now', '-2 days'), datetime('now'))`,
     )
-    .bind(opts.regId, opts.eventId, opts.userId, hash, opts.confirmationExpiresAt, manageHash)
+    .bind(
+      opts.regId,
+      opts.eventId,
+      opts.userId,
+      hash,
+      confirmationExpiresAt,
+      deadlineAt,
+      opts.reminderSentAt ?? null,
+      manageHash,
+    )
     .run();
 }
 
@@ -378,13 +391,17 @@ describe("runReminderCycle", () => {
 
   // ── Section 4: Registration confirmation reminders ────────────────────────────
 
-  it("queues an email, refreshes the token, and marks reminder sent for a pending confirmation", async () => {
+  it("queues a daily email, refreshes the token, and marks reminder sent for a pending confirmation", async () => {
     const userId = crypto.randomUUID();
     const regId = crypto.randomUUID();
     await insertUser(userId, "confirm@example.test", "Chris", "Reg");
-    // Token expires in 12 hours — within the <24 h window
-    const expiresAt = new Date(Date.now() + 12 * 3_600_000).toISOString();
-    await insertPendingRegistration({ regId, eventId, userId, confirmationExpiresAt: expiresAt });
+    await insertPendingRegistration({
+      regId,
+      eventId,
+      userId,
+      deadlineAt: new Date(Date.now() + 12 * 24 * 3_600_000).toISOString(),
+      reminderSentAt: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    });
 
     const result = await runReminderCycle(db, BASE_PAYLOAD);
 
@@ -414,33 +431,81 @@ describe("runReminderCycle", () => {
     expect(outbox[0].template_key).toBe("registration_confirmation_reminder");
   });
 
-  it("skips confirmation reminder when expiry is more than 24 h away", async () => {
+  it("skips confirmation reminder when the last reminder was sent less than 24 h ago", async () => {
     const userId = crypto.randomUUID();
     const regId = crypto.randomUUID();
     await insertUser(userId, "early@example.test");
-    // Expires in 48 h — outside the reminder window
-    const expiresAt = new Date(Date.now() + 48 * 3_600_000).toISOString();
-    await insertPendingRegistration({ regId, eventId, userId, confirmationExpiresAt: expiresAt });
+    await insertPendingRegistration({
+      regId,
+      eventId,
+      userId,
+      deadlineAt: new Date(Date.now() + 11 * 24 * 3_600_000).toISOString(),
+      reminderSentAt: new Date(Date.now() - 6 * 3_600_000).toISOString(),
+    });
 
     const result = await runReminderCycle(db, BASE_PAYLOAD);
 
     expect(result.confirmationRemindersQueued).toBe(0);
   });
 
-  it("skips confirmation reminder when it has already been sent", async () => {
+  it("uses the final daily reminder as a cancellation warning in the last 24 hours", async () => {
     const userId = crypto.randomUUID();
     const regId = crypto.randomUUID();
-    await insertUser(userId, "already@example.test");
-    const expiresAt = new Date(Date.now() + 12 * 3_600_000).toISOString();
-    await insertPendingRegistration({ regId, eventId, userId, confirmationExpiresAt: expiresAt });
-    await db
-      .prepare("UPDATE registrations SET confirmation_reminder_sent_at = datetime('now') WHERE id = ?")
-      .bind(regId)
-      .run();
+    await insertUser(userId, "warning@example.test");
+    await insertPendingRegistration({
+      regId,
+      eventId,
+      userId,
+      deadlineAt: new Date(Date.now() + 22 * 3_600_000).toISOString(),
+      reminderSentAt: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    });
+
+    const result = await runReminderCycle(db, BASE_PAYLOAD);
+
+    expect(result.confirmationRemindersQueued).toBe(1);
+    expect(result.preview.registrationConfirmations[0].subject).toContain("will be cancelled");
+
+    const payloadRow = (
+      await queryAll<{ payload_json: string }>(
+        db,
+        "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirmation_reminder' ORDER BY created_at DESC LIMIT 1",
+      )
+    )[0];
+    expect(payloadRow.payload_json).toContain("hours");
+  });
+
+  it("cancels pending confirmations after 14 days and notifies the attendee", async () => {
+    const userId = crypto.randomUUID();
+    const regId = crypto.randomUUID();
+    await insertUser(userId, "expired@example.test");
+    await insertPendingRegistration({
+      regId,
+      eventId,
+      userId,
+      deadlineAt: new Date(Date.now() - 24 * 3_600_000).toISOString(),
+      reminderSentAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    });
 
     const result = await runReminderCycle(db, BASE_PAYLOAD);
 
     expect(result.confirmationRemindersQueued).toBe(0);
+    expect(result.confirmationCancellationsProcessed).toBe(1);
+
+    const reg = (
+      await queryAll<{ status: string; cancelled_at: string | null }>(
+        db,
+        "SELECT status, cancelled_at FROM registrations WHERE id = ?",
+        regId,
+      )
+    )[0];
+    expect(reg.status).toBe("cancelled");
+    expect(reg.cancelled_at).not.toBeNull();
+
+    const outbox = await queryAll<{ template_key: string }>(
+      db,
+      "SELECT template_key FROM email_outbox ORDER BY created_at DESC LIMIT 1",
+    );
+    expect(outbox[0].template_key).toBe("registration_updated");
   });
 
   // ── Dry-run ───────────────────────────────────────────────────────────────────

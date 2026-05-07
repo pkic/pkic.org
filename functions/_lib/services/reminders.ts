@@ -11,151 +11,32 @@ import { formatInviterList, type InviteInviterInfo } from "./invites";
 import { formatInvitePerson, type ProposalInviteEmailContext } from "./proposals";
 import { buildEventEmailVariables } from "./events";
 import { nowIso, addHours } from "../utils/time";
-import { parseJsonSafe } from "../utils/json";
 import { randomToken, sha256Hex } from "../utils/crypto";
+import { prepareAuditLog } from "./audit";
+import { queueRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "./registrations/status-notifications";
+import {
+  attendeeRegistrationClosesAt,
+  confirmationReminderSubject,
+  daysUntil,
+  earlierIso,
+  formatPendingConfirmationTimeLeft,
+  inviteReminderSubject,
+  pendingConfirmationDeadline,
+  presentationReminderSubject,
+} from "./reminders-support";
+import type {
+  ConfirmationReminderRow,
+  DueInviteRow,
+  DuePresentationRow,
+  DueSpeakerInviteRow,
+  EventRouteRow,
+  ReminderCandidatePreview,
+} from "./reminders-support";
 import type { DatabaseLike, StatementLike } from "../types";
 
-interface EventRouteRow {
-  id: string;
-  name: string;
-  slug: string;
-  base_path: string | null;
-  starts_at: string | null;
-  settings_json: string;
-}
-
-interface DueInviteRow {
-  id: string;
-  event_id: string;
-  invitee_email: string;
-  invitee_first_name: string | null;
-  invitee_last_name: string | null;
-  invite_type: "attendee" | "speaker";
-  reminder_count: number;
-  expires_at: string | null;
-  event_name: string;
-  event_slug: string;
-  event_base_path: string | null;
-  event_starts_at: string | null;
-  event_settings_json: string;
-}
-
-interface EventReminderSettings {
-  registrationClosesAt?: string | null;
-  registration?: {
-    closesAt?: string | null;
-  };
-}
-
-function attendeeRegistrationClosesAt(invite: DueInviteRow): string | null {
-  const settings = parseJsonSafe<EventReminderSettings>(invite.event_settings_json, {});
-  return settings.registration?.closesAt ?? settings.registrationClosesAt ?? null;
-}
-
-interface DuePresentationRow {
-  speaker_id: string;
-  proposal_id: string;
-  user_id: string;
-  email: string;
-  first_name: string | null;
-  last_name: string | null;
-  proposal_title: string;
-  event_id: string;
-  event_name: string;
-  event_slug: string;
-  event_base_path: string | null;
-  event_starts_at: string | null;
-  event_settings_json: string;
-  presentation_deadline: string | null;
-  reminder_count: number;
-}
-
-interface DueSpeakerInviteRow {
-  speaker_id: string;
-  proposal_id: string;
-  user_id: string;
-  role: string;
-  speaker_status: string;
-  email: string;
-  first_name: string | null;
-  last_name: string | null;
-  proposal_title: string;
-  proposer_first_name: string | null;
-  event_id: string;
-  event_name: string;
-  event_slug: string;
-  event_base_path: string | null;
-  event_starts_at: string | null;
-  event_settings_json: string;
-  reminder_count: number;
-}
-
-interface ConfirmationReminderRow {
-  id: string;
-  event_id: string;
-  user_id: string;
-  first_name: string;
-  last_name: string;
-  email: string;
-  confirmation_token_hash: string;
-  confirmation_token_expires_at: string;
-  event_name: string;
-  event_slug: string;
-  event_base_path: string | null;
-  event_starts_at: string | null;
-  event_settings_json: string;
-}
-
-interface ReminderCandidatePreview {
-  category:
-    | "attendee_invite"
-    | "speaker_invite"
-    | "co_speaker_invite"
-    | "presentation_upload_request"
-    | "registration_confirmation";
-  templateKey: string;
-  eventName: string;
-  eventSlug: string;
-  recipientEmail: string;
-  recipientName: string | null;
-  proposalTitle: string | null;
-  reminderNumber: number;
-  dueAt: string | null;
-  subject: string;
-}
-
-function daysUntil(iso: string | null, now = Date.now()): number | null {
-  if (!iso) return null;
-  const diff = new Date(iso).getTime() - now;
-  return Math.ceil(diff / 86_400_000);
-}
-
-function inviteReminderSubject(eventName: string, reminderNumber: number, daysToExpiry: number | null): string {
-  if (daysToExpiry !== null && daysToExpiry <= 2) {
-    return `Final reminder: your invitation expires soon — ${eventName}`;
-  }
-  const variants = [
-    `Reminder: your invitation to ${eventName}`,
-    `Still interested in ${eventName}?`,
-    `Quick follow-up: ${eventName} invitation`,
-  ];
-  return variants[(Math.max(1, reminderNumber) - 1) % variants.length];
-}
-
-function presentationReminderSubject(eventName: string, reminderNumber: number, daysToDeadline: number | null): string {
-  if (daysToDeadline !== null && daysToDeadline <= 1) {
-    return `Final call: upload your presentation today — ${eventName}`;
-  }
-  if (daysToDeadline !== null && daysToDeadline <= 3) {
-    return `Urgent: presentation upload deadline is near — ${eventName}`;
-  }
-  const variants = [
-    `Reminder: please upload your presentation — ${eventName}`,
-    `We still need your slides for ${eventName}`,
-    `Quick follow-up: presentation upload for ${eventName}`,
-  ];
-  return variants[(Math.max(1, reminderNumber) - 1) % variants.length];
-}
+const PENDING_CONFIRMATION_REMINDER_INTERVAL_HOURS = 24;
+const PENDING_CONFIRMATION_CANCEL_AFTER_DAYS = 14;
+const PENDING_CONFIRMATION_TOKEN_TTL_HOURS = 48;
 
 function isAttendeeInviteReminderAllowed(invite: DueInviteRow): boolean {
   const nowMs = Date.now();
@@ -304,6 +185,7 @@ export async function runReminderCycle(
   speakerInviteRemindersQueued: number;
   presentationRemindersQueued: number;
   confirmationRemindersQueued: number;
+  confirmationCancellationsProcessed: number;
   processed: number;
   preview: {
     attendeeInvites: ReminderCandidatePreview[];
@@ -795,7 +677,7 @@ export async function runReminderCycle(
 
   const remainingLimitForConfirmations =
     payload.limit - inviteRemindersQueued - speakerInviteRemindersQueued - presentationRemindersQueued;
-  const dueConfirmations =
+  const expiredConfirmations =
     remainingLimitForConfirmations > 0
       ? await all<ConfirmationReminderRow>(
           db,
@@ -808,6 +690,97 @@ export async function runReminderCycle(
            u.email,
            r.confirmation_token_hash,
            r.confirmation_token_expires_at,
+           r.confirmation_reminder_sent_at,
+           r.pending_confirmation_deadline_at,
+           r.created_at,
+           e.name       AS event_name,
+           e.slug       AS event_slug,
+           e.base_path  AS event_base_path,
+           e.timezone   AS event_timezone,
+           e.starts_at  AS event_starts_at,
+           e.ends_at    AS event_ends_at,
+           e.settings_json AS event_settings_json
+         FROM registrations r
+         JOIN events e ON e.id = r.event_id
+         JOIN users u ON u.id = r.user_id
+         WHERE r.status = 'pending_email_confirmation'
+           AND datetime(COALESCE(r.pending_confirmation_deadline_at, datetime(r.created_at, ?))) <= datetime(?)
+         ORDER BY datetime(COALESCE(r.pending_confirmation_deadline_at, datetime(r.created_at, ?))) ASC
+         LIMIT ?`,
+          [
+            `+${PENDING_CONFIRMATION_CANCEL_AFTER_DAYS} days`,
+            now,
+            `+${PENDING_CONFIRMATION_CANCEL_AFTER_DAYS} days`,
+            remainingLimitForConfirmations,
+          ],
+        )
+      : [];
+
+  const confirmationCancellationsProcessed = expiredConfirmations.length;
+
+  if (!payload.dryRun && expiredConfirmations.length > 0) {
+    const nowValue = nowIso();
+    await batchStatements(
+      db,
+      expiredConfirmations.flatMap((row) => [
+        db
+          .prepare(
+            `UPDATE registrations
+             SET status = 'cancelled',
+                 cancelled_at = ?,
+                 confirmation_token_hash = NULL,
+                 confirmation_token_expires_at = NULL,
+               pending_confirmation_deadline_at = NULL,
+                 confirmation_reminder_sent_at = NULL,
+                 updated_at = ?
+             WHERE id = ?`,
+          )
+          .bind(nowValue, nowValue, row.id),
+        prepareAuditLog(db, "system", null, "cancelled_pending_confirmation_timeout", "registration", row.id, {
+          deadlineAt: pendingConfirmationDeadline(row),
+          reason: "pending_email_confirmation_timeout",
+        }),
+      ]),
+    );
+
+    for (const row of expiredConfirmations) {
+      const event: RegistrationStatusEmailEvent = {
+        id: row.event_id,
+        name: row.event_name,
+        slug: row.event_slug,
+        base_path: row.event_base_path,
+        timezone: row.event_timezone,
+        starts_at: row.event_starts_at,
+        ends_at: row.event_ends_at,
+        settings_json: row.event_settings_json,
+      };
+      await queueRegistrationStatusEmail(db, {
+        event,
+        registrationId: row.id,
+        appBaseUrl: payload.appBaseUrl,
+        templateKey: "registration_updated",
+        subject: `Registration cancelled due to missing email confirmation — ${event.name}`,
+      });
+    }
+  }
+
+  const remainingReminderBudget = Math.max(0, remainingLimitForConfirmations - confirmationCancellationsProcessed);
+  const dueConfirmations =
+    remainingReminderBudget > 0
+      ? await all<ConfirmationReminderRow>(
+          db,
+          `SELECT
+           r.id,
+           r.event_id,
+           u.id AS user_id,
+           u.first_name,
+           u.last_name,
+           u.email,
+           r.confirmation_token_hash,
+           r.confirmation_token_expires_at,
+           r.confirmation_reminder_sent_at,
+           r.pending_confirmation_deadline_at,
+           r.created_at,
            e.name       AS event_name,
            e.slug       AS event_slug,
            e.base_path  AS event_base_path,
@@ -817,13 +790,17 @@ export async function runReminderCycle(
          JOIN events e ON e.id = r.event_id
          JOIN users u ON u.id = r.user_id
          WHERE r.status = 'pending_email_confirmation'
-           AND r.confirmation_reminder_sent_at IS NULL
-           AND r.confirmation_token_expires_at IS NOT NULL
-           AND r.confirmation_token_expires_at > ?
-           AND datetime(r.confirmation_token_expires_at, '-1 day') <= ?
-         ORDER BY r.created_at ASC
+           AND datetime(COALESCE(r.pending_confirmation_deadline_at, datetime(r.created_at, ?))) > datetime(?)
+           AND datetime(COALESCE(r.confirmation_reminder_sent_at, r.created_at)) <= datetime(?, ?)
+         ORDER BY datetime(COALESCE(r.confirmation_reminder_sent_at, r.created_at)) ASC
          LIMIT ?`,
-          [now, now, remainingLimitForConfirmations],
+          [
+            `+${PENDING_CONFIRMATION_CANCEL_AFTER_DAYS} days`,
+            now,
+            now,
+            `-${PENDING_CONFIRMATION_REMINDER_INTERVAL_HOURS} hours`,
+            remainingReminderBudget,
+          ],
         )
       : [];
 
@@ -837,6 +814,7 @@ export async function runReminderCycle(
       starts_at: row.event_starts_at,
       settings_json: row.event_settings_json,
     };
+    const deadlineAt = pendingConfirmationDeadline(row);
     registrationConfirmations.push({
       category: "registration_confirmation",
       templateKey: "registration_confirmation_reminder",
@@ -846,8 +824,8 @@ export async function runReminderCycle(
       recipientName: [row.first_name, row.last_name].filter(Boolean).join(" ") || null,
       proposalTitle: null,
       reminderNumber: 1,
-      dueAt: row.confirmation_token_expires_at,
-      subject: `Reminder: please confirm your registration for ${event.name}`,
+      dueAt: deadlineAt,
+      subject: confirmationReminderSubject(event.name, deadlineAt),
     });
   }
 
@@ -859,7 +837,10 @@ export async function runReminderCycle(
       dueConfirmations.map(async (row) => {
         const newToken = randomToken(24);
         const newTokenHash = await sha256Hex(newToken);
-        const newExpiresAt = addHours(now, 48);
+        const newExpiresAt = earlierIso(
+          addHours(now, PENDING_CONFIRMATION_TOKEN_TTL_HOURS),
+          pendingConfirmationDeadline(row),
+        );
         return { id: row.id, userId: row.user_id, token: newToken, hash: newTokenHash, expiresAt: newExpiresAt, row };
       }),
     );
@@ -874,7 +855,8 @@ export async function runReminderCycle(
         starts_at: row.event_starts_at,
         settings_json: row.event_settings_json,
       };
-      const subject = `Reminder: please confirm your registration for ${event.name}`;
+      const deadlineAt = pendingConfirmationDeadline(row);
+      const subject = confirmationReminderSubject(event.name, deadlineAt);
       return {
         eventId: event.id,
         recipientEmail: row.email,
@@ -886,7 +868,7 @@ export async function runReminderCycle(
           firstName: row.first_name ?? "",
           confirmationUrl: registrationConfirmPageUrl(payload.appBaseUrl, event, token),
           manageUrl: `${payload.appBaseUrl}/events/${event.slug}/manage`,
-          timeToExpire: "48 hours",
+          timeToExpire: formatPendingConfirmationTimeLeft(deadlineAt),
           __subjectOverride: subject,
         },
       };
@@ -917,8 +899,13 @@ export async function runReminderCycle(
     speakerInviteRemindersQueued,
     presentationRemindersQueued,
     confirmationRemindersQueued,
+    confirmationCancellationsProcessed,
     processed:
-      inviteRemindersQueued + speakerInviteRemindersQueued + presentationRemindersQueued + confirmationRemindersQueued,
+      inviteRemindersQueued +
+      speakerInviteRemindersQueued +
+      presentationRemindersQueued +
+      confirmationRemindersQueued +
+      confirmationCancellationsProcessed,
     preview: {
       attendeeInvites,
       speakerInvites,

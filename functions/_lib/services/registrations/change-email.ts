@@ -21,6 +21,8 @@ import { checkEmailDomainMx } from "../../email/mx-check";
 import type { DatabaseLike, StatementLike } from "../../types";
 import type { RegistrationRecord } from "./types";
 
+const PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
+
 interface ChangeEmailResult {
   registration: RegistrationRecord;
   userId: string;
@@ -128,6 +130,7 @@ export async function changeRegistrationEmail(
   const confirmationToken = randomToken(24);
   const confirmationTokenHash = await sha256Hex(confirmationToken);
   const confirmationExpiresAt = addHours(now, params.confirmationTtlHours);
+  const confirmationDeadlineAt = addHours(now, PENDING_CONFIRMATION_DEADLINE_HOURS);
   const pendingEmailExpiresAt = addHours(now, params.confirmationTtlHours);
 
   // Store the normalized form so confirmation logic and the unique index see
@@ -152,10 +155,12 @@ export async function changeRegistrationEmail(
      SET status = 'pending_email_confirmation',
          confirmation_token_hash = ?,
          confirmation_token_expires_at = ?,
+         pending_confirmation_deadline_at = ?,
+         confirmation_reminder_sent_at = NULL,
          confirmed_at = NULL,
          updated_at = ?
      WHERE id = ?`,
-    [confirmationTokenHash, confirmationExpiresAt, now, registration.id],
+    [confirmationTokenHash, confirmationExpiresAt, confirmationDeadlineAt, now, registration.id],
   );
 
   const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
