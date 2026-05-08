@@ -155,21 +155,8 @@
     color: inherit;
   }
 
-  // Links: faint tinted hint at rest — full accent on hover
-  a:not(.btn):not([class]) {
-    color: color-mix(in srgb, var(--page-accent, var(--wg-color, #{$green})) 42%, #1a2332);
-    text-decoration: underline;
-    text-underline-offset: 2px;
-    text-decoration-color: color-mix(in srgb, var(--page-accent, var(--wg-color, #{$green})) 18%, transparent);
-    transition:
-      color 0.15s,
-      text-decoration-color 0.15s;
-
-    &:hover {
-      color: var(--page-accent, var(--wg-color, #{$green}));
-      text-decoration-color: var(--page-accent, var(--wg-color, #{$green}));
-    }
-  }
+  // Links: handled by _base-layout-and-modules.scss brush-stroke rules
+  // (scoped to .wg-main-content, .wg-prose, .wg-data-body)
 
   // Inline code
   code:not(pre code) {

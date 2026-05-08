@@ -298,13 +298,13 @@
 // ─────────────────────────────────────────────────────────────────────────
 
 figure,
-#content > p > img {
+:is(#content, .wg-main-content, .wg-prose, .wg-data-body) > p > img {
   margin: 1.5rem auto;
   text-align: center;
 }
 
 figure > img,
-#content > p > img {
+:is(#content, .wg-main-content, .wg-prose, .wg-data-body) > p > img {
   max-width: 80%;
 }
 
@@ -348,18 +348,6 @@ blockquote {
   }
   p:last-child {
     margin-bottom: 0;
-  }
-
-  a {
-    color: rgba(255, 255, 255, 0.85) !important;
-    text-decoration: underline !important;
-    text-decoration-style: dotted !important;
-    text-underline-offset: 3px !important;
-
-    &:hover {
-      color: #ffffff !important;
-      text-decoration-style: solid !important;
-    }
   }
 
   h4 {
@@ -491,18 +479,6 @@ blockquote::after {
   p:last-child {
     margin-bottom: 0;
   }
-  a {
-    color: rgba(255, 255, 255, 0.85) !important;
-    text-decoration: underline !important;
-    text-decoration-style: dotted !important;
-    text-underline-offset: 3px !important;
-
-    &:hover {
-      color: #ffffff !important;
-      text-decoration-style: solid !important;
-    }
-  }
-
   // Large filled yellow info circle — absolute positioned like the " mark
   &::before {
     content: "" !important;
@@ -614,10 +590,10 @@ main :is(h2, h3, h4):hover .header-link {
 }
 
 // Body-copy links: brush-stroke underline with shimmer on hover.
-// Scoped to #content so it never affects navbars, sidebars, related-topic panels, etc.
+// Scoped to known content containers so it never affects navbars, sidebars, related-topic panels, etc.
 // At rest: a very faint 1px hint — just enough to read as a link, not enough to crowd a list.
 // On hover: the stroke sweeps to full width and brightens, then a light glint races across it.
-#content a:not(.btn):not([class]):not(:has(img)) {
+:is(#content, .wg-main-content, .wg-prose, .wg-data-body) a:not(.btn):not([class]):not(:has(img)) {
   position: relative;
   color: color-mix(in srgb, var(--page-accent) 55%, #1a2332);
   text-decoration: none;
@@ -660,6 +636,61 @@ main :is(h2, h3, h4):hover .header-link {
       103deg,
       color-mix(in srgb, var(--page-accent) 55%, transparent) 0%,
       color-mix(in srgb, var(--page-accent) 20%, transparent) 65%,
+      transparent 100%
+    );
+    background-size: 108% 2px;
+
+    &::after {
+      animation: link-shimmer 0.55s 0.35s ease-in-out forwards;
+    }
+  }
+}
+
+// Links inside dark pull-quote contexts — same brush-stroke technique as body-copy
+// links but adapted to white-on-dark. Covers all known content containers.
+:is(#content, .wg-main-content, .wg-prose, .wg-data-body) :is(blockquote, .callout-info) a:not(.btn):not([class]):not(:has(img)) {
+  position: relative;
+  color: rgba(255, 255, 255, 0.85);
+  text-decoration: none;
+  padding-bottom: 4px;
+  background-image: linear-gradient(
+    103deg,
+    rgba(255, 255, 255, 0.25) 0%,
+    rgba(255, 255, 255, 0.08) 60%,
+    transparent 100%
+  );
+  background-repeat: no-repeat;
+  background-size: 60% 1px;
+  background-position: 0 100%;
+  transition:
+    background-size 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+    background-image 0.2s ease,
+    color 0.2s ease;
+
+  &::after {
+    content: "";
+    position: absolute;
+    bottom: 0;
+    left: -20%;
+    width: 25%;
+    height: 2px;
+    background: linear-gradient(
+      90deg,
+      transparent,
+      rgba(255, 255, 255, 0.8) 40%,
+      white 60%,
+      transparent
+    );
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  &:hover {
+    color: #ffffff;
+    background-image: linear-gradient(
+      103deg,
+      rgba(255, 255, 255, 0.6) 0%,
+      rgba(255, 255, 255, 0.25) 65%,
       transparent 100%
     );
     background-size: 108% 2px;
