@@ -177,7 +177,7 @@ flowchart TD
 
     RFP["Tender / Supplier Response"]:::doc
     
-    Report -.->|"Report <br> (Option: A)"| RFP
+    Report -.->|"Report <br> (Option A)"| RFP
     Cert -.->|"Issued Certificate <br> (Option B)"| RFP
 
     subgraph OrgDomain ["Organization (Evaluation)"]
