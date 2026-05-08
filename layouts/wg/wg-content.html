@@ -29,9 +29,24 @@
     <p class="wg-sub-eyebrow">
       <a href="/wg/">Working Groups</a>
       <span aria-hidden="true">›</span>
-      {{ with $wg }}<a href="{{ .RelPermalink }}">{{ .Params.wgID | upper }}</a>{{ end }}
+      {{ with $wg }}<a href="{{ .RelPermalink }}">{{ .Params.wgID | upper }}</a>{{ end -}}
+      {{- $crumbs := slice -}}
+      {{- $found  := false -}}
+      {{- range .Ancestors -}}
+        {{- if not $found -}}
+          {{- if eq . $wg -}}{{- $found = true -}}
+          {{- else -}}{{- $crumbs = $crumbs | append . -}}{{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $n := len $crumbs -}}
+      {{- if gt $n 0 -}}
+        {{- range seq 1 $n -}}
+          {{- $item := index $crumbs (sub $n .) -}}
+          <span aria-hidden="true">›</span><a href="{{ $item.RelPermalink }}">{{ $item.LinkTitle }}</a>
+        {{- end -}}
+      {{- end }}
     </p>
-    <h1 class="wg-sub-title">{{ .Title }}</h1>
+    <h1 class="wg-sub-title">{{ .LinkTitle }}</h1>
     {{ with .Description }}<p class="wg-sub-desc">{{ . }}</p>{{ end }}
   </div>
 </div>
@@ -51,7 +66,7 @@
     <a class="wg-nav-link" href="{{ $base }}">About</a>
 
     {{ if $charterPage }}
-    <a class="wg-nav-link" href="{{ $charterPage.RelPermalink }}">Charter</a>
+    <a class="wg-nav-link{{ if eq $.Page.RelPermalink $charterPage.RelPermalink }} is-active{{ end }}" href="{{ $charterPage.RelPermalink }}">Charter</a>
     {{ end }}
 
     {{ if $wg.Params.focus }}
@@ -152,7 +167,7 @@
 {{ end }}
 
 {{/* ── Content ──────────────────────────────────────────────────────── */}}
-<div class="container py-5">
+<div class="container pt-4 pb-5">
   {{- if $.Page.Params.sideMenu }}
   <div class="wg-layout">
     <aside class="wg-sidebar-wrap wg-{{ $wg.Params.wgID | lower }}" id="wg-sidebar-wrap">
@@ -163,7 +178,7 @@
     </div>
   </div>
   {{- else }}
-  <div data-pagefind-body>
+  <div class="wg-prose" data-pagefind-body>
     {{ .Content }}
   </div>
   {{- end }}

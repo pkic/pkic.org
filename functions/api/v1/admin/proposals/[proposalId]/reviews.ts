@@ -2,7 +2,11 @@ import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
-import { listProposalReviews, upsertProposalReview } from "../../../../../_lib/services/proposals";
+import {
+  buildProposalReviewAuditDetails,
+  listProposalReviews,
+  upsertProposalReview,
+} from "../../../../../_lib/services/proposals";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { first } from "../../../../../_lib/db/queries";
 import { reviewUpsertSchema } from "../../../../../../assets/shared/schemas/api";
@@ -42,6 +46,19 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   const body = await parseJsonBody(c.req, reviewUpsertSchema);
+  const existing = await first<{
+    id: string;
+    recommendation: string;
+    score: number | null;
+    reviewer_comment: string | null;
+    applicant_note: string | null;
+  }>(
+    c.env.DB,
+    `SELECT id, recommendation, score, reviewer_comment, applicant_note
+     FROM proposal_reviews
+     WHERE proposal_id = ? AND reviewer_user_id = ?`,
+    [proposalId, admin.id],
+  );
 
   const review = await upsertProposalReview(c.env.DB, {
     proposalId,
@@ -52,9 +69,23 @@ export async function onRequestPost(c: any): Promise<Response> {
     applicantNote: body.applicantNote,
   });
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "proposal_review_upserted", "proposal_review", review.id, {
-    proposalId,
-  });
+  const before = {
+    recommendation: existing?.recommendation ?? null,
+    score: existing?.score ?? null,
+    reviewerComment: existing?.reviewer_comment ?? null,
+    applicantNote: existing?.applicant_note ?? null,
+  };
+  const after = {
+    recommendation: review.recommendation,
+    score: review.score,
+    reviewerComment: review.reviewer_comment ?? null,
+    applicantNote: review.applicant_note ?? null,
+  };
+
+  const changes = buildProposalReviewAuditDetails(before, after);
+  if (Object.keys(changes).length > 0) {
+    await writeAuditLog(c.env.DB, "admin", admin.id, "proposal_review_upserted", "proposal_review", review.id, changes);
+  }
 
   return json({ success: true, review });
 }

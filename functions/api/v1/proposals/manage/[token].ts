@@ -4,6 +4,7 @@ import { all } from "../../../../_lib/db/queries";
 import { getProposalByManageToken, updateProposalByManageToken } from "../../../../_lib/services/proposals";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
 import { proposalManageSchema } from "../../../../../assets/shared/schemas/api";
+import { resolveAppBaseUrl } from "../../../../_lib/config";
 
 export async function onRequestPatch(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, proposalManageSchema);
@@ -30,6 +31,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
 
 export async function onRequestGet(c: any): Promise<Response> {
   const proposal = await getProposalByManageToken(c.env.DB, c.req.param("token"));
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const speakers = await all<{
     user_id: string;
     role: string;
@@ -43,10 +45,13 @@ export async function onRequestGet(c: any): Promise<Response> {
     job_title: string | null;
     biography: string | null;
     links_json: string | null;
+    headshot_r2_key: string | null;
+    headshot_updated_at: string | null;
   }>(
     c.env.DB,
     `SELECT ps.user_id, ps.role, ps.status, ps.confirmed_at, ps.declined_at,
-          u.email, u.first_name, u.last_name, u.organization_name, u.job_title, u.biography, u.links_json
+          u.email, u.first_name, u.last_name, u.organization_name, u.job_title, u.biography, u.links_json,
+          u.headshot_r2_key, u.headshot_updated_at
      FROM proposal_speakers ps
      JOIN users u ON u.id = ps.user_id
      WHERE ps.proposal_id = ?
@@ -73,6 +78,11 @@ export async function onRequestGet(c: any): Promise<Response> {
       jobTitle: entry.job_title,
       bio: entry.biography,
       links: entry.links_json ? JSON.parse(entry.links_json) : [],
+      headshotUploaded: Boolean(entry.headshot_r2_key),
+      headshotUpdatedAt: entry.headshot_updated_at,
+      headshotUrl: entry.headshot_r2_key
+        ? `${appBaseUrl}/api/v1/proposals/manage/${encodeURIComponent(c.req.param("token"))}/speakers/${encodeURIComponent(entry.user_id)}/headshot?v=${encodeURIComponent(entry.headshot_updated_at ?? "")}`
+        : null,
     })),
   });
 }

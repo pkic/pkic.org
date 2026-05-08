@@ -51,6 +51,13 @@ export async function seedWorkflowEmailTemplates(db: DatabaseLike, adminId: stri
   await seedTemplate(
     db,
     adminId,
+    "speaker_profile_request",
+    "Please review or update your speaker profile for **{{proposalTitle}}** here: {{{profileUrl}}}.",
+    "Speaker profile request",
+  );
+  await seedTemplate(
+    db,
+    adminId,
     "proposal_submitted",
     "Proposal **{{proposalTitle}}** submitted. Manage: {{{manageUrl}}}.",
     "Proposal submitted",

@@ -12,7 +12,8 @@
  * Speakers can re-upload to replace their submission until the deadline.
  */
 import { json } from "../../../../../_lib/http";
-import { getSpeakerByManageToken, recordPresentationUpload } from "../../../../../_lib/services/proposals";
+import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
+import { recordPresentationUpload } from "../../../../../_lib/services/proposals-speaker-profile";
 import { AppError } from "../../../../../_lib/errors";
 import { first } from "../../../../../_lib/db/queries";
 

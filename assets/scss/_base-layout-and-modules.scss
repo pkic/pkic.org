@@ -350,6 +350,18 @@ blockquote {
     margin-bottom: 0;
   }
 
+  a {
+    color: rgba(255, 255, 255, 0.85) !important;
+    text-decoration: underline !important;
+    text-decoration-style: dotted !important;
+    text-underline-offset: 3px !important;
+
+    &:hover {
+      color: #ffffff !important;
+      text-decoration-style: solid !important;
+    }
+  }
+
   h4 {
     color: $green;
     font-style: normal;
@@ -480,12 +492,15 @@ blockquote::after {
     margin-bottom: 0;
   }
   a {
-    color: #ffffff !important;
-    text-decoration: underline;
-    text-underline-offset: 2px;
-  }
-  a:hover {
     color: rgba(255, 255, 255, 0.85) !important;
+    text-decoration: underline !important;
+    text-decoration-style: dotted !important;
+    text-underline-offset: 3px !important;
+
+    &:hover {
+      color: #ffffff !important;
+      text-decoration-style: solid !important;
+    }
   }
 
   // Large filled yellow info circle — absolute positioned like the " mark

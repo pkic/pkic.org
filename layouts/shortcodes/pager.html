@@ -1,0 +1,58 @@
+{{/*
+  pager.html — generic prev / up / next page navigation bar.
+
+  Parameters (all optional — omit any slot to hide it):
+    prev     — title of the previous page
+    prev_url — URL  of the previous page
+    up       — title of the overview / parent page
+    up_url   — URL  of the overview / parent page
+    next     — title of the next page
+    next_url — URL  of the next page
+    label    — accessible aria-label for the <nav> (default: "Page navigation")
+*/}}
+{{- $prev    := .Get "prev"     -}}
+{{- $prevUrl := .Get "prev_url" -}}
+{{- $up      := .Get "up"       -}}
+{{- $upUrl   := .Get "up_url"   -}}
+{{- $next    := .Get "next"     -}}
+{{- $nextUrl := .Get "next_url" -}}
+{{- $label   := or (.Get "label") "Page navigation" -}}
+
+<nav class="pager" aria-label="{{ $label }}">
+  <div class="pager-inner">
+
+    {{- if $prev }}
+    <a class="pager-item pager-prev" href="{{ $prevUrl }}">
+      <span class="pager-label">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/></svg>
+        Previous
+      </span>
+      <span class="pager-title">{{ $prev }}</span>
+    </a>
+    {{- else }}<div class="pager-spacer"></div>
+    {{- end }}
+
+    {{- if $up }}
+    <a class="pager-item pager-up" href="{{ $upUrl }}">
+      <span class="pager-label">
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M8 15a.5.5 0 0 0 .5-.5V2.707l3.146 3.147a.5.5 0 0 0 .708-.708l-4-4a.5.5 0 0 0-.708 0l-4 4a.5.5 0 0 0 .708.708L7.5 2.707V14.5a.5.5 0 0 0 .5.5z"/></svg>
+        Overview
+      </span>
+      <span class="pager-title">{{ $up }}</span>
+    </a>
+    {{- else }}<div class="pager-spacer"></div>
+    {{- end }}
+
+    {{- if $next }}
+    <a class="pager-item pager-next" href="{{ $nextUrl }}">
+      <span class="pager-label">
+        Next
+        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/></svg>
+      </span>
+      <span class="pager-title">{{ $next }}</span>
+    </a>
+    {{- else }}<div class="pager-spacer"></div>
+    {{- end }}
+
+  </div>
+</nav>

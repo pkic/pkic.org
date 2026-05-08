@@ -1,0 +1,33 @@
+{{/*
+  glossary.html — sorted definition list with alphabetical dividers.
+*/}}
+{{- $data := .Inner | transform.Unmarshal -}}
+{{- $terms := sort $data.terms "term" "asc" -}}
+
+<div class="glossary-list">
+  {{- $lastLetter := "" -}}
+  {{- range $item := $terms -}}
+    {{- $currentLetter := lower (substr $item.term 0 1) -}}
+    
+    {{- if ne $currentLetter $lastLetter -}}
+      {{- if ne $lastLetter "" -}}
+        </dl>
+        </div>
+      {{- end -}}
+      <div class="glossary-group w-100">
+        <h2 class="glossary-letter" id="{{ lower $currentLetter }}">{{ upper $currentLetter }}{{ partial "anchor.html" (lower $currentLetter) }}</h2>
+        <dl>
+    {{- end -}}
+    
+    <div class="glossary-item w-100">
+      <dt class="glossary-term align-items-center" id="{{ $item.term | anchorize }}">{{ $item.term }}{{ partial "anchor.html" ($item.term | anchorize) }}</dt>
+      <dd class="glossary-definition">{{ $item.definition | $.Page.RenderString }}</dd>
+    </div>
+    
+    {{- $lastLetter = $currentLetter -}}
+  {{- end -}}
+  {{- if ne $lastLetter "" -}}
+    </dl>
+    </div>
+  {{- end -}}
+</div>

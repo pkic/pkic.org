@@ -3,6 +3,7 @@ import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
 import { onRequestPost as upsertReview } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
+import { onRequestPatch as patchReview } from "../functions/api/v1/admin/proposals/[proposalId]/reviews/[reviewId]";
 import { onRequestPost as finalizeProposal } from "../functions/api/v1/admin/proposals/[proposalId]/finalize";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
@@ -48,6 +49,99 @@ describe("proposal review and finalize", () => {
   beforeEach(async () => {
     await resetDb();
   });
+
+  it("writes consistent audit deltas for review create and patch, and skips no-op saves", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, admin1Id } = await seedProposal(env.DB, eventId);
+
+    await createAdminSession(env.DB, admin1Id, "token-admin-1");
+
+    const createResponse = await upsertReview(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: "Bearer token-admin-1",
+          },
+          body: JSON.stringify({ recommendation: "accept", score: 9, reviewerComment: "Good" }),
+        }),
+        { proposalId },
+      ),
+    );
+
+    expect(createResponse.status).toBe(200);
+
+    const createdAuditRows = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'proposal_review_upserted' ORDER BY created_at ASC",
+    );
+    expect(createdAuditRows).toHaveLength(1);
+    expect(JSON.parse(createdAuditRows[0].details_json)).toMatchObject({
+      recommendation: { from: null, to: "accept" },
+      score: { from: null, to: 9 },
+      reviewerComment: { from: null, to: "Good" },
+    });
+
+    const noOpResponse = await upsertReview(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: "Bearer token-admin-1",
+          },
+          body: JSON.stringify({ recommendation: "accept", score: 9, reviewerComment: "Good" }),
+        }),
+        { proposalId },
+      ),
+    );
+
+    expect(noOpResponse.status).toBe(200);
+
+    const noOpAuditCount = await queryAll<{ total: number }>(
+      env.DB,
+      "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'proposal_review_upserted'",
+    );
+    expect(Number(noOpAuditCount[0].total)).toBe(1);
+
+    const reviews = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM proposal_reviews WHERE proposal_id = ? AND reviewer_user_id = ?",
+      [proposalId, admin1Id],
+    );
+
+    const patchResponse = await patchReview(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews/${reviews[0].id}`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            authorization: "Bearer token-admin-1",
+          },
+          body: JSON.stringify({ score: 10, reviewerComment: "Excellent", applicantNote: "Ready for acceptance" }),
+        }),
+        { proposalId, reviewId: reviews[0].id },
+      ),
+    );
+
+    expect(patchResponse.status).toBe(200);
+
+    const patchedAuditRows = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'proposal_review_upserted' ORDER BY created_at ASC",
+    );
+    expect(patchedAuditRows).toHaveLength(2);
+    expect(JSON.parse(patchedAuditRows[1].details_json)).toMatchObject({
+      score: { from: 9, to: 10 },
+      reviewerComment: { from: "Good", to: "Excellent" },
+      applicantNote: { from: null, to: "Ready for acceptance" },
+    });
+  });
+
   it("enforces minimum reviews before final decision", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id, admin2Id } = await seedProposal(env.DB, eventId);
@@ -58,7 +152,7 @@ describe("proposal review and finalize", () => {
     await upsertReview(
       createContext(
         env,
-        new Request("https://app.test/api/v1/admin/proposals/p/reviews", {
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -74,7 +168,7 @@ describe("proposal review and finalize", () => {
       finalizeProposal(
         createContext(
           env,
-          new Request("https://app.test/api/v1/admin/proposals/p/finalize", {
+          new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
             method: "POST",
             headers: {
               "content-type": "application/json",
@@ -90,7 +184,7 @@ describe("proposal review and finalize", () => {
     await upsertReview(
       createContext(
         env,
-        new Request("https://app.test/api/v1/admin/proposals/p/reviews", {
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
           method: "POST",
           headers: {
             "content-type": "application/json",
@@ -105,7 +199,7 @@ describe("proposal review and finalize", () => {
     const finalizeResponse = await finalizeProposal(
       createContext(
         env,
-        new Request("https://app.test/api/v1/admin/proposals/p/finalize", {
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
           method: "POST",
           headers: {
             "content-type": "application/json",

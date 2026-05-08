@@ -493,7 +493,8 @@ If you have any questions or would like to discuss your proposal first, please [
 
   // ─────────────────────────────────────────────────────────────────────────
   // 6. Proposal submitted
-  // Variables: eventName, proposalTitle, manageUrl, shareUrl
+  // Variables: eventName, firstName, lastName, proposalTitle, proposalAbstract,
+  //            proposalType, speakerLineupText, manageUrl, shareUrl
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "proposal_submitted",
@@ -507,7 +508,22 @@ Thank you for submitting your proposal to **{{eventName}}**. We have successfull
 ## Your submission
 
 > **Title:** {{proposalTitle}}  
+> **Type:** {{proposalType}}  
 > **Event:** {{eventName}}
+
+{{#if proposalAbstract}}
+### Abstract
+
+{{proposalAbstract}}
+{{/if}}
+
+{{#if speakerLineupText}}
+### Speaker(s)
+
+{{speakerLineupText}}
+{{/if}}
+
+---
 
 ## What happens next?
 
@@ -515,7 +531,9 @@ Thank you for submitting your proposal to **{{eventName}}**. We have successfull
 2. **Decision** — You will receive an email with the outcome once a decision has been made.
 3. **Preparation** *(if accepted)* — We will be in touch with scheduling and logistical details.
 
-You can view or edit your proposal at any time: [Manage my proposal &rarr;]({{manageUrl}})
+Please review the details above carefully. If anything looks incorrect, use your management link to make changes before the review process begins.
+
+[Manage my proposal &rarr;]({{manageUrl}})
 
 Encourage colleagues to attend by sharing your referral link: [{{shareUrl}}]({{shareUrl}})
 

@@ -44,12 +44,12 @@
   <hr class="my-4">
 
   <div data-cospeaker-section>
-    <h5 class="mb-1">Co-speakers</h5>
-    <p class="text-muted small mb-3">Invite additional speakers to contribute to this proposal. They will receive an email with a link to confirm their participation.</p>
+    <h5 class="mb-1">Speakers</h5>
+    <p class="text-muted small mb-3">Invite additional speakers to contribute to this proposal. You can provide their profile details and headshot here, or send them a profile link so they can update their own information.</p>
 
     <div data-cospeaker-list class="mb-3"></div>
     <p class="text-muted small mb-3" data-cospeaker-status-help>
-      Track who has accepted and send a reminder to invited speakers who have not responded yet.
+      Track who has accepted, keep speaker details current, and send a reminder to invited speakers who have not responded yet.
     </p>
 
     <div data-cospeaker-form>
@@ -81,3 +81,4 @@
     </div>
   </div>
 </div>
+{{ partial "headshot-modals.html" . }}

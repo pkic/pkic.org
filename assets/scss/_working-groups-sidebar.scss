@@ -295,8 +295,21 @@ $toggle-width: 1.4rem;
   min-width: 0;
   padding-left: 1.5rem;
 
+  // First element in the content area aligns with the top of the sidebar,
+  // regardless of whether it's a heading or paragraph.
+  > *:first-child {
+    margin-top: 0;
+  }
+
   @media (max-width: 991px) {
     padding-left: 0;
+  }
+}
+
+// Non-sidebar full-width content prose wrapper
+.wg-prose {
+  > *:first-child {
+    margin-top: 0;
   }
 }
 

@@ -125,6 +125,9 @@ export interface ProposalManageResponse {
     organizationName: string | null;
     jobTitle: string | null;
     bio: string | null;
-    links: string[];
+    links: Array<string | { label?: string | null; url: string }>;
+    headshotUploaded: boolean;
+    headshotUpdatedAt: string | null;
+    headshotUrl: string | null;
   }>;
 }

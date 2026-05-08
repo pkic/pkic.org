@@ -2,17 +2,14 @@ import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
-import {
-  finalizeProposalDecision,
-  listProposalSpeakersWithStatus,
-  refreshSpeakerManageToken,
-} from "../../../../../_lib/services/proposals";
+import { finalizeProposalDecision, refreshSpeakerManageToken } from "../../../../../_lib/services/proposals";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
-import { processPendingOutboxBackground, queueEmail } from "../../../../../_lib/email/outbox";
+import { queueEmail } from "../../../../../_lib/email/outbox";
 import { first, run } from "../../../../../_lib/db/queries";
 import { speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
-import { buildEventEmailVariables } from "../../../../../_lib/services/events";
+import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
+import { buildProposalDecisionEmailPlan } from "./decision-emails";
 
 export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
@@ -54,111 +51,52 @@ export async function onRequestPost(c: any): Promise<Response> {
     );
   }
 
-  const proposal = await first<{
-    title: string;
-    event_id: string;
-    proposer_user_id: string;
-    presentation_deadline: string | null;
-  }>(c.env.DB, "SELECT title, event_id, proposer_user_id, presentation_deadline FROM session_proposals WHERE id = ?", [
-    proposalId,
-  ]);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+  const plan = await buildProposalDecisionEmailPlan(
+    c.env.DB,
+    {
+      proposalId,
+      finalStatus: body.finalStatus,
+      decisionNote: body.decisionNote,
+      presentationDeadline: body.presentationDeadline,
+    },
+    {
+      appBaseUrl,
+      resolveSpeakerManageUrl: async (speaker, event) => {
+        const freshToken = await refreshSpeakerManageToken(c.env.DB, proposalId, speaker.user_id);
+        return speakerManagePageUrl(appBaseUrl, event, freshToken);
+      },
+    },
+  );
 
-  if (proposal) {
-    const [event, speakers] = await Promise.all([
-      first<{
-        id: string;
-        name: string;
-        slug: string;
-        base_path: string | null;
-        starts_at: string | null;
-        settings_json: string;
-      }>(c.env.DB, "SELECT id, name, slug, base_path, starts_at, settings_json FROM events WHERE id = ?", [
-        proposal.event_id,
-      ]),
-      listProposalSpeakersWithStatus(c.env.DB, proposalId),
-    ]);
-
-    const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-
-    for (const speaker of speakers) {
-      // Decision email to the proposer only.
-      if (speaker.user_id === proposal.proposer_user_id) {
-        await queueEmail(c.env.DB, {
-          eventId: proposal.event_id,
-          templateKey: "proposal_decision",
-          recipientEmail: speaker.email,
-          recipientUserId: speaker.user_id,
-          subject: `Proposal update: ${proposal.title}`,
-          messageType: "transactional",
-          data: {
-            ...(event ? buildEventEmailVariables(event, appBaseUrl) : {}),
-            eventName: event?.name ?? "",
-            firstName: speaker.first_name ?? "",
-            lastName: speaker.last_name ?? "",
-            proposalTitle: proposal.title,
-            finalStatus: body.finalStatus,
-            decisionNote: body.decisionNote ?? "",
-          },
-        });
-      }
-
-      // On acceptance, ask all confirmed/invited speakers to complete their profile
-      // and upload a headshot, and to upload their presentation slides.
-      if (body.finalStatus === "accepted" && event) {
-        const isActive = speaker.status !== "declined";
-
-        if (isActive) {
-          // Refresh the speaker's manage token so the acceptance emails contain valid links.
-          const freshToken = await refreshSpeakerManageToken(c.env.DB, proposalId, speaker.user_id);
-          const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, freshToken);
-
-          await queueEmail(c.env.DB, {
-            eventId: proposal.event_id,
-            templateKey: "speaker_profile_request",
-            recipientEmail: speaker.email,
-            recipientUserId: speaker.user_id,
-            subject: `Action required: complete your speaker profile — ${event.name}`,
-            messageType: "transactional",
-            data: {
-              ...buildEventEmailVariables(event, appBaseUrl),
-              firstName: speaker.first_name ?? "",
-              proposalTitle: proposal.title,
-              profileUrl: speakerManageUrl,
-              hasHeadshot: speaker.headshot_r2_key ? "true" : "",
-              hasBio: speaker.biography ? "true" : "",
-            },
-          });
-
-          await queueEmail(c.env.DB, {
-            eventId: proposal.event_id,
-            templateKey: "presentation_upload_request",
-            recipientEmail: speaker.email,
-            recipientUserId: speaker.user_id,
-            subject: `Please upload your presentation — ${event.name}`,
-            messageType: "transactional",
-            data: {
-              ...buildEventEmailVariables(event, appBaseUrl),
-              firstName: speaker.first_name ?? "",
-              proposalTitle: proposal.title,
-              uploadUrl: speakerManageUrl,
-              deadline: proposal.presentation_deadline ?? body.presentationDeadline ?? "",
-            },
-          });
-
-          await run(
-            c.env.DB,
-            `UPDATE proposal_speakers
-             SET presentation_last_communication_at = ?,
-                 presentation_reminders_paused_until = NULL
-             WHERE proposal_id = ? AND user_id = ?`,
-            [new Date().toISOString(), proposalId, speaker.user_id],
-          );
-        }
-      }
-    }
-
-    c.executionCtx.waitUntil(processPendingOutboxBackground(c.env.DB, c.env, 5));
+  for (const message of plan.messages) {
+    await queueEmail(c.env.DB, {
+      eventId: plan.proposal.event_id,
+      templateKey: message.templateKey,
+      recipientEmail: message.recipientEmail,
+      recipientUserId: message.recipientUserId,
+      subject: message.fallbackSubject,
+      messageType: "transactional",
+      data: message.data,
+    });
   }
+
+  for (const userId of plan.presentationReminderUserIds) {
+    await run(
+      c.env.DB,
+      `UPDATE proposal_speakers
+       SET presentation_last_communication_at = ?,
+           presentation_reminders_paused_until = NULL
+       WHERE proposal_id = ? AND user_id = ?`,
+      [new Date().toISOString(), proposalId, userId],
+    );
+  }
+
+  await writeAuditLog(c.env.DB, "admin", admin.id, "proposal_decision_recorded", "proposal", proposalId, {
+    adminEmail: admin.email,
+    finalStatus: body.finalStatus,
+    decisionNote: body.decisionNote ?? null,
+  });
 
   return json({ success: true, ...finalized, minReviewsRequired });
 }

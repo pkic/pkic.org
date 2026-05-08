@@ -465,6 +465,14 @@ $adm-danger:    #dc3545;
   .adm-cell-name       { font-size: 0.85rem; }
   .adm-flex-1          { flex: 1; }
   .adm-snippet-disabled { opacity: 0.4; }
+  .adm-speaker-headshot { width: 48px; height: 48px; object-fit: cover; }
+  .adm-initials-avatar {
+    width: 48px; height: 48px; border-radius: 50%;
+    background-color: #6c757d; color: #fff;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: 1rem; flex-shrink: 0;
+  }
+  .adm-table-label-col { width: 30%; min-width: 100px; }
 
   // ── Pagination ──────────────────────────────────────────────────────────────
 

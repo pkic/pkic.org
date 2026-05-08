@@ -26,9 +26,24 @@
     <p class="wg-sub-eyebrow">
       <a href="/wg/">Working Groups</a>
       <span aria-hidden="true">›</span>
-      {{ with $wg }}<a href="{{ .RelPermalink }}">{{ .Params.wgID | upper }}</a>{{ end }}
+      {{ with $wg }}<a href="{{ .RelPermalink }}">{{ .Params.wgID | upper }}</a>{{ end -}}
+      {{- $crumbs := slice -}}
+      {{- $found  := false -}}
+      {{- range .Ancestors -}}
+        {{- if not $found -}}
+          {{- if eq . $wg -}}{{- $found = true -}}
+          {{- else -}}{{- $crumbs = $crumbs | append . -}}{{- end -}}
+        {{- end -}}
+      {{- end -}}
+      {{- $n := len $crumbs -}}
+      {{- if gt $n 0 -}}
+        {{- range seq 1 $n -}}
+          {{- $item := index $crumbs (sub $n .) -}}
+          <span aria-hidden="true">›</span><a href="{{ $item.RelPermalink }}">{{ $item.LinkTitle }}</a>
+        {{- end -}}
+      {{- end }}
     </p>
-    <h1 class="wg-sub-title">{{ .Title }}</h1>
+    <h1 class="wg-sub-title">{{ .LinkTitle }}</h1>
     {{ with .Description }}<p class="wg-sub-desc">{{ . }}</p>{{ end }}
   </div>
 </div>
@@ -53,14 +68,15 @@
 {{- end -}}
 <nav class="wg-section-nav wg-{{ $wg.Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
   <div class="container d-flex gap-1">
-    <a class="wg-nav-link" href="{{ $base }}">About</a>
+    <a class="wg-nav-link{{ if eq $.Page.RelPermalink $base }} is-active{{ end }}" href="{{ $base }}">About</a>
 
     {{ if $charterPage }}
-    <a class="wg-nav-link" href="{{ $charterPage.RelPermalink }}">Charter</a>
+    <a class="wg-nav-link{{ if eq $.Page.RelPermalink $charterPage.RelPermalink }} is-active{{ end }}" href="{{ $charterPage.RelPermalink }}">Charter</a>
     {{ end }}
 
     {{ if $wg.Params.focus }}
-    <a class="wg-nav-link" href="{{ $base }}focus/">Focus Areas</a>
+    {{- $focusURL := printf "%sfocus/" $base -}}
+    <a class="wg-nav-link{{ if strings.HasPrefix $.Page.RelPermalink $focusURL }} is-active{{ end }}" href="{{ $focusURL }}">Focus Areas</a>
     {{ end }}
 
     {{/* Deliverables that live within this WG get individual nav links */}}
@@ -99,7 +115,7 @@
     {{- $subSlug := partial "wg/path-slug.html" (dict "path" $subRoot.RelPermalink) -}}
     {{- if $subRootHasChildren -}}
     <div class="wg-nav-link-wrap" data-panel="wg-nav-tree-{{ $subSlug }}">
-      <a class="wg-nav-link{{ if $rootActive }} is-active{{ end }}" href="{{ $subRoot.RelPermalink }}">{{ $subRoot.Params.menuTitle | default ($subRoot.Title | truncate 22 "…") }}</a>
+      <a class="wg-nav-link{{ if $rootActive }} is-active{{ end }}" href="{{ $subRoot.RelPermalink }}">{{ $subRoot.Params.menuTitle | default ($subRoot.LinkTitle | truncate 22 "…") }}</a>
       <button class="wg-nav-more-btn" type="button"
               data-wg-tree-btn aria-expanded="false" aria-label="Show contents">
         <svg xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
@@ -110,20 +126,22 @@
       </button>
     </div>
     {{- else -}}
-    <a class="wg-nav-link{{ if $rootActive }} is-active{{ end }}" href="{{ $subRoot.RelPermalink }}">{{ $subRoot.Params.menuTitle | default ($subRoot.Title | truncate 22 "…") }}</a>
+    <a class="wg-nav-link{{ if $rootActive }} is-active{{ end }}" href="{{ $subRoot.RelPermalink }}">{{ $subRoot.Params.menuTitle | default ($subRoot.LinkTitle | truncate 22 "…") }}</a>
     {{- end -}}
     {{- end -}}
 
     {{ if $wg.Params.wgID }}
-    <a class="wg-nav-link" href="{{ $base }}members/">Members</a>
+    {{- $membersURL := printf "%smembers/" $base -}}
+    <a class="wg-nav-link{{ if strings.HasPrefix $.Page.RelPermalink $membersURL }} is-active{{ end }}" href="{{ $membersURL }}">Members</a>
     {{ end }}
 
     {{ if $wg.Params.resources }}
-    <a class="wg-nav-link" href="{{ $base }}resources/">Resources</a>
+    {{- $resourcesURL := printf "%sresources/" $base -}}
+    <a class="wg-nav-link{{ if strings.HasPrefix $.Page.RelPermalink $resourcesURL }} is-active{{ end }}" href="{{ $resourcesURL }}">Resources</a>
     {{ end }}
 
     {{ if $confPage }}
-    <a class="wg-nav-link" href="{{ $confPage.RelPermalink }}">Conferences</a>
+    <a class="wg-nav-link{{ if strings.HasPrefix $.Page.RelPermalink $confPage.RelPermalink }} is-active{{ end }}" href="{{ $confPage.RelPermalink }}">Conferences</a>
     {{ end }}
 
     <a class="wg-nav-link" href="/blog/?wg={{ $wg.Params.wgID | lower }}">Blog</a>
@@ -155,7 +173,7 @@
 {{- end -}}
 
 {{/* ── Content ──────────────────────────────────────────────────────── */}}
-<div class="container py-5">
+<div class="container pt-4 pb-5">
   {{- if $effectiveSideMenu }}
   <div class="wg-layout">
     <aside class="wg-sidebar-wrap wg-{{ $wg.Params.wgID | lower }}" id="wg-sidebar-wrap">
@@ -166,7 +184,7 @@
     </div>
   </div>
   {{- else }}
-  <div data-pagefind-body>
+  <div class="wg-prose" data-pagefind-body>
     {{ .Content }}
   </div>
   {{- end }}

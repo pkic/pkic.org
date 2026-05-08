@@ -1,0 +1,45 @@
+{{/*
+  maturity-staircase — ascending staircase visualisation for maturity model levels.
+
+  Use {{< >}} syntax (raw inner content processed as YAML).
+
+  Inner YAML:
+    levels:
+      - number: 0
+        label:  "None"
+        color:  none          # none | gray | green | blue | violet | purple
+        summary: "Brief phrase shown below the bar"
+        url:    "/wg/pqc/pqcmm/level-0/"   # optional — wraps the bar in a link
+      - number: 1
+        label:  "Initial"
+        color:  gray
+        summary: "..."
+        url:    "/wg/pqc/pqcmm/level-1/"
+*/}}
+{{- $yaml := .Inner | transform.Unmarshal -}}
+{{- $total := len $yaml.levels -}}
+
+<div class="maturity-staircase" role="list" aria-label="Maturity model levels">
+  {{- range $i, $level := $yaml.levels }}
+  {{- $color := $level.color | default "gray" -}}
+  {{- $isFirst := eq $i 0 -}}
+  <div class="maturity-step maturity-step--{{ $color }}" role="listitem">
+    {{- $inner := printf `<span class="maturity-step-number" aria-hidden="true">%d</span><span class="maturity-step-name">%s</span>` $level.number $level.label -}}
+    {{- if $level.url -}}
+    <a href="{{ $level.url }}" class="maturity-step-bar" aria-label="Level {{ $level.number }}: {{ $level.label }}">
+      {{ $inner | safeHTML }}
+    </a>
+    {{- else -}}
+    <div class="maturity-step-bar" aria-label="Level {{ $level.number }}: {{ $level.label }}">
+      {{ $inner | safeHTML }}
+    </div>
+    {{- end -}}
+    <p class="maturity-step-summary">{{ $level.summary }}</p>
+    {{- if and (not $isFirst) $level.url -}}
+    <a href="{{ $level.url }}" class="maturity-step-cta" aria-label="Details for level {{ $level.number }}">Details →</a>
+    {{- else if $level.url -}}
+    <a href="{{ $level.url }}" class="maturity-step-cta" aria-label="Details for level {{ $level.number }}">Details →</a>
+    {{- end -}}
+  </div>
+  {{- end }}
+</div>

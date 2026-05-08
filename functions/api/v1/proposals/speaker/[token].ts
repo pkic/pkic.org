@@ -16,18 +16,28 @@
  *   PUT /api/v1/proposals/speaker/[token]/presentation
  */
 import { handleError, json } from "../../../../_lib/http";
+import { getSpeakerByManageToken } from "../../../../_lib/services/proposals";
 import {
-  getSpeakerByManageToken,
   confirmSpeakerParticipation,
   declineSpeakerParticipation,
   updateSpeakerProfile,
-} from "../../../../_lib/services/proposals";
+} from "../../../../_lib/services/proposals-speaker-profile";
 import { getRequiredTerms } from "../../../../_lib/services/events";
 import { persistConsents, validateRequiredConsents } from "../../../../_lib/services/consent";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { requireInternalSecret } from "../../../../_lib/request";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { z } from "zod";
+import {
+  firstNameSchema,
+  lastNameSchema,
+  organizationNameSchema,
+  jobTitleSchema,
+} from "../../../../../assets/shared/schemas/api";
+
+function optionalNullableOrEmpty<T extends z.ZodTypeAny>(schema: T) {
+  return z.union([schema, z.literal(""), z.null()]).optional();
+}
 
 const speakerActionSchema = z.discriminatedUnion("action", [
   z.object({
@@ -49,7 +59,11 @@ const speakerActionSchema = z.discriminatedUnion("action", [
 ]);
 
 const speakerProfileSchema = z.object({
-  biography: z.string().trim().min(1).max(10_000).optional(),
+  firstName: optionalNullableOrEmpty(firstNameSchema),
+  lastName: optionalNullableOrEmpty(lastNameSchema),
+  organizationName: optionalNullableOrEmpty(organizationNameSchema),
+  jobTitle: optionalNullableOrEmpty(jobTitleSchema),
+  biography: optionalNullableOrEmpty(z.string().trim().min(1).max(10_000)),
   links: z
     .array(
       z.object({
@@ -152,7 +166,11 @@ export async function onRequestPatch(c: any): Promise<Response> {
     }
 
     await updateSpeakerProfile(c.env.DB, user.id, {
-      biography: body.biography ?? null,
+      firstName: body.firstName === undefined ? undefined : body.firstName || null,
+      lastName: body.lastName === undefined ? undefined : body.lastName || null,
+      organizationName: body.organizationName === undefined ? undefined : body.organizationName || null,
+      jobTitle: body.jobTitle === undefined ? undefined : body.jobTitle || null,
+      biography: body.biography === undefined ? undefined : body.biography || null,
       linksJson: body.links ? JSON.stringify(body.links) : null,
     });
 

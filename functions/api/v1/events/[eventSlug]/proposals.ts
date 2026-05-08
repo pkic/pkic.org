@@ -156,6 +156,11 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const manageUrl = proposalManagePageUrl(appBaseUrl, event, created.manageToken);
 
+  const inviteContext = await buildProposalInviteEmailContext(c.env.DB, {
+    proposalId: created.proposal.id,
+    inviterUserId: proposer.id,
+  });
+
   const outboxId = await queueEmail(c.env.DB, {
     eventId: event.id,
     templateKey: "proposal_submitted",
@@ -168,6 +173,9 @@ export async function onRequestPost(c: any): Promise<Response> {
       firstName: proposer.first_name ?? "",
       lastName: proposer.last_name ?? "",
       proposalTitle: created.proposal.title,
+      proposalAbstract: created.proposal.abstract,
+      proposalType: created.proposal.proposal_type,
+      speakerLineupText: inviteContext.speakerLineupText,
       manageToken: created.manageToken,
       manageUrl,
       shareUrl: `${appBaseUrl}/r/${referralCode}`,
