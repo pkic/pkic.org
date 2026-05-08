@@ -38,7 +38,7 @@ A third-party assessment is only credible if the assessor is genuinely independe
 - The assessor has no undisclosed conflict of interest with the vendor ([see Glossary](/wg/pqc/pqcmm/glossary/)).
 - The assessor's declaration of independence is signed by the assessor (not the vendor) and included in the report.
 
-Any conflict of interest \u2014 including current or recent consulting engagements with the vendor relating to the assessed product, board or advisory positions, or revenue dependency \u2014 must be disclosed in the assessment report. Undisclosed conflicts identified after the fact are grounds for the PKI Consortium to refuse, suspend, or revoke certification.
+Any conflict of interest — including current or recent consulting engagements with the vendor relating to the assessed product, board or advisory positions, or revenue dependency — must be disclosed in the assessment report. Undisclosed conflicts identified after the fact are grounds for the PKI Consortium to refuse, suspend, or revoke certification.
 
 ### Prior Engagement Disclosure
 
