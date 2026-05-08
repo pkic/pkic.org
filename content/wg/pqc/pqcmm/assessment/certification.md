@@ -88,7 +88,7 @@ By submitting a certification application, the vendor and assessor accept the fo
 
 ## Material Change and Vendor Notification
 
-A *material change* (see Glossary) to a certified product may invalidate the basis of the certificate. Vendors must notify the PKI Consortium within 30 days of a material change. Material changes include:
+A *material change* ([see Glossary](/wg/pqc/pqcmm/glossary/)) to a certified product may invalidate the basis of the certificate. Vendors must notify the PKI Consortium within 30 days of a material change. Material changes include:
 
 - A change to a cryptographic algorithm, parameter set, or default in the product.
 - A cryptographic library version change that adds, removes, or alters PQC support.
