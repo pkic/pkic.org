@@ -77,7 +77,8 @@
       {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
         {{- $hasDelivLink = true -}}
         {{- $label := .menuTitle | default (.title | truncate 22 "…") -}}
-        {{- $delSection := $.Site.GetPage $delURL -}}
+        {{- $delPath := strings.TrimSuffix "/" (strings.TrimPrefix "/" $delURL) -}}
+        {{- $delSection := $.Site.GetPage $delPath -}}
         {{- $delHasChildren := and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
         {{- $slug := partial "wg/path-slug.html" (dict "path" $delURL) -}}
         {{- if $delHasChildren -}}
@@ -132,7 +133,8 @@
 {{- range .Params.deliverables -}}
   {{- $delURL := .url | default "" -}}
   {{- if and $delURL (strings.HasPrefix $delURL $wgBase) -}}
-    {{- $delSection := $.Site.GetPage $delURL -}}
+    {{- $delPath := strings.TrimSuffix "/" (strings.TrimPrefix "/" $delURL) -}}
+    {{- $delSection := $.Site.GetPage $delPath -}}
     {{- if and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
       {{- $slug := partial "wg/path-slug.html" (dict "path" $delURL) -}}
 <div class="wg-nav-tree-panel wg-{{ $.Page.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
@@ -393,7 +395,7 @@
 
 {{/* Sub-pages (charter, etc.) — excluding section sub-pages */}}
 {{ $otherSubPages := slice }}
-{{ range .Data.Pages }}
+{{ range .Pages }}
   {{ if not .Params.wgSection }}
     {{ $otherSubPages = $otherSubPages | append . }}
   {{ end }}
