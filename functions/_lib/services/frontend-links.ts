@@ -15,10 +15,11 @@ function buildUrl(appBaseUrl: string, path: string, query: Record<string, string
 
 function routesForEvent(event: EventRouteSource): ReturnType<typeof resolveEventFrontendRoutes> {
   const routes = resolveEventFrontendRoutes(event);
-  if (routes.usedFallback) {
+  const noisyFallbackKeys = routes.fallbackKeys.filter((key) => key !== "speakerManage" && key !== "inviteDecline");
+  if (noisyFallbackKeys.length > 0) {
     logInfo("EVENT_FRONTEND_ROUTES_FALLBACK", {
       eventSlug: event.slug,
-      fallbackKeys: routes.fallbackKeys,
+      fallbackKeys: noisyFallbackKeys,
     });
   }
   return routes;

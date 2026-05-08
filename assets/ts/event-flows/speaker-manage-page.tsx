@@ -4,9 +4,9 @@ import { normalizeValidation } from "../shared/form/validation-map";
 import { renderProfileLinks, type ProfileLinksWidget } from "../shared/widgets/profile-links";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
 import { showManageLinkRecoveryForm } from "../shared/widgets/link-recovery";
-import { wireHeadshotController } from "../shared/headshot/controller";
 import { withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
+import { wireTokenHeadshotSection } from "./registration-manage-headshot";
 import type { RequiredTerm } from "../shared/types";
 import { formatStatusLabel, statusBadgeClass, findSubmitButton } from "../shared/form/helpers";
 
@@ -137,10 +137,6 @@ async function main(): Promise<void> {
   const headshotSection = boot.root.querySelector<HTMLElement>("[data-headshot-section]");
   const profileSection = boot.root.querySelector<HTMLElement>("[data-profile-section]");
   const presentationSection = boot.root.querySelector<HTMLElement>("[data-presentation-section]");
-  const headshotPreview = boot.root.querySelector<HTMLElement>("[data-headshot-preview]");
-  const headshotStatus = boot.root.querySelector<HTMLElement>("[data-headshot-status]");
-  const headshotFile = boot.root.querySelector<HTMLInputElement>("[data-headshot-file]");
-  const headshotDelete = boot.root.querySelector<HTMLButtonElement>("[data-headshot-delete]");
 
   function toggleEditableSections(isEnabled: boolean): void {
     headshotSection?.classList.toggle("d-none", !isEnabled);
@@ -239,6 +235,10 @@ async function main(): Promise<void> {
   const profileFormWrap = boot.root.querySelector<HTMLElement>("[data-profile-form-wrap]");
   const profileSavedState = boot.root.querySelector<HTMLElement>("[data-profile-saved-state]");
   const profileEditButton = boot.root.querySelector<HTMLButtonElement>("[data-profile-edit]");
+  const firstNameField = profileForm?.querySelector<HTMLInputElement>("#speaker-first-name");
+  const lastNameField = profileForm?.querySelector<HTMLInputElement>("#speaker-last-name");
+  const organizationField = profileForm?.querySelector<HTMLInputElement>("#speaker-organization");
+  const jobTitleField = profileForm?.querySelector<HTMLInputElement>("#speaker-job-title");
   const bioField = profileForm?.querySelector<HTMLTextAreaElement>("#speaker-bio");
   const linksContainer = boot.root.querySelector<HTMLElement>("[data-profile-links-container]");
   let linksWidget: ProfileLinksWidget | null = null;
@@ -246,7 +246,7 @@ async function main(): Promise<void> {
   function showProfileEditForm(): void {
     profileSavedState?.classList.add("d-none");
     profileFormWrap?.classList.remove("d-none");
-    bioField?.focus();
+    firstNameField?.focus();
   }
 
   function showProfileSavedState(): void {
@@ -256,6 +256,10 @@ async function main(): Promise<void> {
 
   profileEditButton?.addEventListener("click", showProfileEditForm);
 
+  if (firstNameField) firstNameField.value = data.profile.firstName ?? "";
+  if (lastNameField) lastNameField.value = data.profile.lastName ?? "";
+  if (organizationField) organizationField.value = data.profile.organizationName ?? "";
+  if (jobTitleField) jobTitleField.value = data.profile.jobTitle ?? "";
   if (bioField) bioField.value = data.profile.biography ?? "";
   if (linksContainer) {
     linksWidget = renderProfileLinks(linksContainer, "links", { max: 10 });
@@ -267,6 +271,10 @@ async function main(): Promise<void> {
     await withLoadingButton(findSubmitButton(profileForm), async () => {
       try {
         await patchJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`, {
+          firstName: firstNameField?.value.trim() || null,
+          lastName: lastNameField?.value.trim() || null,
+          organizationName: organizationField?.value.trim() || null,
+          jobTitle: jobTitleField?.value.trim() || null,
           biography: bioField?.value.trim() || "",
           links: (linksWidget?.getLinks() ?? []).map((url) => ({ label: url, url })),
         });
@@ -282,32 +290,20 @@ async function main(): Promise<void> {
 
   if (data.speaker.status === "declined") {
     headshotSection?.classList.add("d-none");
+    profileSection?.classList.add("d-none");
   } else {
-    wireHeadshotController({
-      preview: headshotPreview,
-      status: headshotStatus,
-      fileInput: headshotFile,
-      deleteButton: headshotDelete,
-      initialUrl: data.profile.headshotUrl,
-      previewOptions: { alt: "Your headshot", emptyLabel: "No headshot uploaded yet." },
-      uploadStatus: "Uploading...",
+    headshotSection?.classList.remove("d-none");
+    profileSection?.classList.remove("d-none");
+    wireTokenHeadshotSection({
+      root: boot.root,
+      initialHeadshotUrl: data.profile.headshotUrl,
+      statusEl: boot.statusEl,
+      uploadUrl: `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/headshot`,
+      deleteUrl: `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/headshot`,
+      emptyLabel: "No headshot uploaded yet.",
       uploadSuccessStatus: "Headshot uploaded successfully.",
-      uploadHeadshot: async (cropped) => {
-        const form = new FormData();
-        form.append("file", cropped, "headshot.jpg");
-        form.append("consent", "true");
-        const response = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/headshot`, {
-          method: "PUT",
-          body: form,
-        });
-        const json = (await response.json()) as {
-          success?: boolean;
-          headshotUrl?: string;
-          error?: { message?: string };
-        };
-        if (!response.ok) throw new Error(json.error?.message ?? `HTTP ${response.status}`);
-        return { headshotUrl: json.headshotUrl ?? null };
-      },
+      deleteSuccessStatus: "Headshot removed successfully.",
+      confirmDeleteMessage: "Remove your headshot?",
     });
   }
 
@@ -316,7 +312,7 @@ async function main(): Promise<void> {
   const presentationInput = boot.root.querySelector<HTMLInputElement>("[data-presentation-file]");
   const presentationUploadStatus = boot.root.querySelector<HTMLElement>("[data-presentation-upload-status]");
 
-  if (data.proposal.status === "accepted") {
+  if (data.proposal.status === "accepted" && data.speaker.status !== "declined") {
     presentationSection?.classList.remove("d-none");
     if (presentationMsg) {
       presentationMsg.textContent = data.proposal.presentationUploaded

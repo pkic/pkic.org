@@ -1,14 +1,31 @@
 import { wireHeadshotController } from "../shared/headshot/controller";
 import { setStatus } from "./boot";
 
-export function wireHeadshotSection(
-  root: HTMLElement,
-  token: string,
-  apiBase: string,
-  initialHeadshotUrl: string | null | undefined,
-  statusEl: HTMLElement,
-  onChanged?: () => void,
-): void {
+interface TokenHeadshotSectionOptions {
+  root: HTMLElement;
+  initialHeadshotUrl: string | null | undefined;
+  statusEl: HTMLElement;
+  uploadUrl: string;
+  deleteUrl?: string;
+  emptyLabel?: string;
+  uploadSuccessStatus?: string;
+  deleteSuccessStatus?: string;
+  confirmDeleteMessage?: string;
+  onChanged?: () => void;
+}
+
+export function wireTokenHeadshotSection({
+  root,
+  initialHeadshotUrl,
+  statusEl,
+  uploadUrl,
+  deleteUrl,
+  emptyLabel = "No photo",
+  uploadSuccessStatus = "Photo updated. Your social badge has been updated.",
+  deleteSuccessStatus = "Photo removed. Your social badge has been updated.",
+  confirmDeleteMessage = "Remove your profile photo?",
+  onChanged,
+}: TokenHeadshotSectionOptions): void {
   const section = root.querySelector<HTMLElement>("[data-headshot-section]");
   if (!section) return;
 
@@ -23,16 +40,16 @@ export function wireHeadshotSection(
     fileInput,
     deleteButton: deleteBtn,
     initialUrl: initialHeadshotUrl ?? null,
-    previewOptions: { alt: "Your headshot", emptyLabel: "No photo" },
+    previewOptions: { alt: "Your headshot", emptyLabel },
     uploadStatus: "Uploading...",
-    uploadSuccessStatus: "Photo updated. Your social badge has been updated.",
-    deleteSuccessStatus: "Photo removed. Your social badge has been updated.",
-    confirmDeleteMessage: "Remove your profile photo?",
+    uploadSuccessStatus,
+    deleteSuccessStatus,
+    confirmDeleteMessage,
     uploadHeadshot: async (cropped) => {
       const form = new FormData();
       form.append("file", cropped, "headshot.jpg");
       form.append("consent", "true");
-      const res = await fetch(`${apiBase}/registrations/manage/${encodeURIComponent(token)}/headshot`, {
+      const res = await fetch(uploadUrl, {
         method: "PUT",
         body: form,
       });
@@ -40,15 +57,17 @@ export function wireHeadshotSection(
       if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`);
       return { headshotUrl: data.headshotUrl ?? null };
     },
-    deleteHeadshot: async () => {
-      const res = await fetch(`${apiBase}/registrations/manage/${encodeURIComponent(token)}/headshot`, {
-        method: "DELETE",
-      });
-      if (!res.ok) {
-        const data = (await res.json()) as { error?: { message?: string } };
-        throw new Error(data.error?.message ?? `HTTP ${res.status}`);
-      }
-    },
+    deleteHeadshot: deleteUrl
+      ? async () => {
+          const res = await fetch(deleteUrl, {
+            method: "DELETE",
+          });
+          if (!res.ok) {
+            const data = (await res.json()) as { error?: { message?: string } };
+            throw new Error(data.error?.message ?? `HTTP ${res.status}`);
+          }
+        }
+      : undefined,
     onUploaded: () => {
       onChanged?.();
     },
@@ -59,5 +78,23 @@ export function wireHeadshotSection(
       const verb = action === "upload" ? "upload" : "remove";
       setStatus(statusEl, `Failed to ${verb} headshot: ${message}`, true);
     },
+  });
+}
+
+export function wireHeadshotSection(
+  root: HTMLElement,
+  token: string,
+  apiBase: string,
+  initialHeadshotUrl: string | null | undefined,
+  statusEl: HTMLElement,
+  onChanged?: () => void,
+): void {
+  wireTokenHeadshotSection({
+    root,
+    initialHeadshotUrl,
+    statusEl,
+    uploadUrl: `${apiBase}/registrations/manage/${encodeURIComponent(token)}/headshot`,
+    deleteUrl: `${apiBase}/registrations/manage/${encodeURIComponent(token)}/headshot`,
+    onChanged,
   });
 }

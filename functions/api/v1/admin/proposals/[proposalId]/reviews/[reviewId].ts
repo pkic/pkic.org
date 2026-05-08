@@ -3,7 +3,8 @@ import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../../_lib/auth/proposal-access";
 import { first } from "../../../../../../_lib/db/queries";
-import { updateReviewById } from "../../../../../../_lib/services/proposals";
+import { writeAuditLog } from "../../../../../../_lib/services/audit";
+import { buildProposalReviewAuditDetails, updateReviewById } from "../../../../../../_lib/services/proposals";
 import { reviewPatchSchema } from "../../../../../../../assets/shared/schemas/api";
 
 export async function onRequestPatch(c: any): Promise<Response> {
@@ -34,7 +35,50 @@ export async function onRequestPatch(c: any): Promise<Response> {
 
   const body = await parseJsonBody(c.req, reviewPatchSchema);
 
+  const existing = await first<{
+    recommendation: string;
+    score: number | null;
+    reviewer_comment: string | null;
+    applicant_note: string | null;
+  }>(
+    c.env.DB,
+    `SELECT recommendation, score, reviewer_comment, applicant_note
+     FROM proposal_reviews
+     WHERE id = ?`,
+    [reviewId],
+  );
+
   const review = await updateReviewById(c.env.DB, reviewId, body);
+
+  if (existing) {
+    const changes = buildProposalReviewAuditDetails(
+      {
+        recommendation: existing.recommendation,
+        score: existing.score,
+        reviewerComment: existing.reviewer_comment ?? null,
+        applicantNote: existing.applicant_note ?? null,
+      },
+      {
+        recommendation: review.recommendation,
+        score: review.score,
+        reviewerComment: review.reviewer_comment ?? null,
+        applicantNote: review.applicant_note ?? null,
+      },
+    );
+
+    if (Object.keys(changes).length > 0) {
+      await writeAuditLog(
+        c.env.DB,
+        "admin",
+        admin.id,
+        "proposal_review_upserted",
+        "proposal_review",
+        review.id,
+        changes,
+      );
+    }
+  }
+
   return json({ success: true, review });
 }
 

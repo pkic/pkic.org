@@ -3,6 +3,9 @@ import { ConsentList } from "../../components/ConsentCard";
 import type { RequiredTerm } from "../types";
 
 export function renderConsentInputs(container: HTMLElement, terms: RequiredTerm[]): void {
+  // Clear any server-rendered placeholder (e.g. "Loading…") before Preact
+  // takes over, as Preact's first diff may not remove pre-existing children.
+  container.textContent = "";
   render(<ConsentList terms={terms} />, container);
 }
 

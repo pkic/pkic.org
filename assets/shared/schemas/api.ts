@@ -308,7 +308,7 @@ export const proposalManageSchema = boundedJsonObject(
 
 export const reviewUpsertSchema = z.object({
   recommendation: z.enum(["accept", "reject", "needs-work"]),
-  score: z.number().int().min(1).max(10).optional(),
+  score: z.number().int().min(1).max(10),
   reviewerComment: z.preprocess(
     (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
     trimmedString(3, 10_000).optional(),
@@ -337,6 +337,18 @@ export const finalizeProposalSchema = z.object({
   decisionNote: trimmedString(3, 10_000).optional(),
   /** ISO-8601 date by which speakers must upload their presentation slides. */
   presentationDeadline: z.string().datetime().optional(),
+});
+
+export const adminProposalPatchSchema = z.object({
+  title: proposalTitleSchema.optional(),
+  abstract: proposalAbstractSchema.optional(),
+});
+
+export const adminSpeakerBioPatchSchema = z.object({
+  biography: z.preprocess(
+    (value) => (typeof value === "string" && value.trim() === "" ? null : value),
+    z.string().trim().max(5000).nullable().optional(),
+  ),
 });
 
 export const adminEmailTemplateVersionSchema = z.object({

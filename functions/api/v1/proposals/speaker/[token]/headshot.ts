@@ -14,13 +14,17 @@
 import { json } from "../../../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
-import { getSpeakerByManageToken, updateSpeakerProfile } from "../../../../../_lib/services/proposals";
+import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
+import { updateSpeakerProfile } from "../../../../../_lib/services/proposals-speaker-profile";
+import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
+import { nowIso } from "../../../../../_lib/utils/time";
+import { run } from "../../../../../_lib/db/queries";
 
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_HEADSHOT_BYTES = 20 * 1024 * 1024; // 20 MB
 
-async function onRequestGet(c: any): Promise<Response> {
+export async function onRequestGet(c: any): Promise<Response> {
   const { user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
 
   if (!user.headshot_r2_key) {
@@ -110,9 +114,38 @@ export async function onRequestPut(c: any): Promise<Response> {
   });
 }
 
+export async function onRequestDelete(c: any): Promise<Response> {
+  const { user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
+
+  const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
+  if (bucket && user.headshot_r2_key) {
+    try {
+      await (bucket as unknown as { delete(key: string): Promise<void> }).delete(user.headshot_r2_key);
+    } catch {
+      // Non-fatal
+    }
+  }
+
+  await run(
+    c.env.DB,
+    "UPDATE users SET headshot_r2_key = NULL, headshot_updated_at = NULL, updated_at = ? WHERE id = ?",
+    [nowIso(), user.id],
+  );
+
+  await writeAuditLog(c.env.DB, "user", user.id, "headshot_deleted_by_speaker", "user", user.id, {
+    speakerUserId: user.id,
+  });
+
+  const origin = resolveAppBaseUrl(c.env, c.req.raw);
+  await invalidateAndRerender(user.id, c.env, origin);
+
+  return json({ success: true });
+}
+
 export async function onRequest(c: any): Promise<Response> {
   c.set("sensitive", true);
   if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "PUT") return onRequestPut(c);
+  if (c.req.raw.method === "DELETE") return onRequestDelete(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

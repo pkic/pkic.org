@@ -13,6 +13,7 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
 import { listProposalSpeakersWithStatus } from "../../../../../_lib/services/proposals";
+import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { first } from "../../../../../_lib/db/queries";
 
 export async function onRequestGet(c: any): Promise<Response> {
@@ -45,6 +46,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   const speakers = await listProposalSpeakersWithStatus(c.env.DB, proposalId);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   // Summarise participation completeness for the admin overview.
   const summary = {
@@ -83,6 +85,14 @@ export async function onRequestGet(c: any): Promise<Response> {
       profileComplete: Boolean(s.biography) && Boolean(s.headshot_r2_key),
       hasHeadshot: Boolean(s.headshot_r2_key),
       hasBio: Boolean(s.biography),
+      biography: s.biography,
+      headshotUrl: s.headshot_r2_key
+        ? (() => {
+            const urlPath = s.headshot_r2_key.split("/").slice(1).join("/");
+            const v = s.headshot_updated_at ? `?v=${encodeURIComponent(s.headshot_updated_at)}` : "";
+            return `${appBaseUrl}/api/v1/headshots/${urlPath}${v}`;
+          })()
+        : null,
       headshotUpdatedAt: s.headshot_updated_at,
     })),
   });

@@ -1,0 +1,28 @@
+{{/*
+  criteria.html — visually prominent requirements block for maturity level pages.
+
+  Wraps the formal criteria (intro sentence + bullet list) in a styled card so
+  readers immediately recognise them as THE normative requirements of a level.
+
+  Usage:
+    {{< criteria >}}
+    A product meets Level 2 when all Level 1 criteria are met, plus:
+
+    - Criterion one with **bold key term**.
+    - Criterion two.
+    {{< /criteria >}}
+
+  The ## Criteria heading in the surrounding Markdown is intentionally kept
+  separate so it remains part of the page TOC / section navigation.
+*/}}
+<div class="criteria-box" role="region" aria-label="Level criteria">
+  <div class="criteria-box-label" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
+    </svg>
+    Requirements
+  </div>
+  <div class="criteria-box-body">
+    {{ .Inner | markdownify }}
+  </div>
+</div>

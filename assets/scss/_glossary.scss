@@ -1,0 +1,53 @@
+.glossary-list {
+  margin: 1.5rem 0;
+}
+
+.glossary-group {
+  margin-top: 2rem;
+  border-top: 2px solid $gray-200;
+  padding-top: 1rem;
+
+  &:first-child {
+    margin-top: 0;
+    border-top: none;
+    padding-top: 0;
+  }
+}
+
+.glossary-letter {
+  font-size: 1.75rem;
+  color: $primary;
+  margin-bottom: 1rem;
+  display: flex;
+  align-items: center;
+  position: relative;
+  
+  &:hover .header-link {
+    opacity: 1;
+  }
+}
+
+.glossary-item {
+  margin-bottom: 1.5rem;
+}
+
+.glossary-term {
+  font-size: 1.125rem;
+  font-weight: 700;
+  color: $gray-900;
+  margin-bottom: 0.25rem;
+  display: flex;
+  align-items: center;
+  position: relative;
+
+  &:hover .header-link {
+    opacity: 1;
+  }
+}
+
+.glossary-definition {
+  font-size: 1rem;
+  color: $gray-700;
+  line-height: 1.6;
+  margin-left: 0;
+}

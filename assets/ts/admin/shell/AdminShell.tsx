@@ -15,6 +15,7 @@ import { Users } from "../sections/Users";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { RegistrationDetailPage } from "../sections/events/detail/RegistrationDetailPage";
+import { ProposalDetailPage } from "../sections/events/detail/ProposalDetailPage";
 
 function SectionWrapper({ title, children }: { title: string; children: preact.ComponentChildren }) {
   return (
@@ -77,6 +78,14 @@ export function AdminShell() {
               component={({ params }: { params: { slug: string; regId: string } }) => (
                 <SectionWrapper title="Registration">
                   <RegistrationDetailPage slug={params.slug} regId={params.regId} />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/events/:slug/proposal/:proposalId"
+              component={({ params }: { params: { slug: string; proposalId: string } }) => (
+                <SectionWrapper title="Proposal">
+                  <ProposalDetailPage slug={params.slug} proposalId={params.proposalId} />
                 </SectionWrapper>
               )}
             />

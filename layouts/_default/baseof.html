@@ -5,8 +5,9 @@
     {{ partial "header.html" . }}
 
     {{ $sass := resources.Get "scss/main.scss" }}
-    {{ $style := $sass | css.Sass | resources.Fingerprint }}
-    <link rel="stylesheet" href="{{ $style.RelPermalink }}" {{ if hugo.IsProduction }}integrity="{{ $style.Data.Integrity }}"{{ end }}>
+    {{ $style := $sass | css.Sass }}
+    {{ if eq hugo.Environment "production" }}{{ $style = $style | resources.Fingerprint }}{{ end }}
+    <link rel="stylesheet" href="{{ $style.RelPermalink }}" {{ if eq hugo.Environment "production" }}integrity="{{ $style.Data.Integrity }}"{{ end }}>
     {{ block "head_extra" . }}{{ end }}
   </head>
   <body {{ printf "style=%q" $themeVars | safeHTMLAttr }}>

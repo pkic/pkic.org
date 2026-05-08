@@ -24,6 +24,51 @@ import { onRequestPost as createRegistration } from "../functions/api/v1/events/
 import { onRequestGet as confirmRegistrationEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
 import { onRequestPost as speakerInvites } from "../functions/api/v1/events/[eventSlug]/speaker-invites";
 import { findOrCreateUser } from "../functions/_lib/services/users";
+import app from "../functions/router";
+
+interface StoredObject {
+  body: ArrayBuffer;
+  contentType: string;
+}
+
+class FakeUploadsBucket {
+  private readonly objects = new Map<string, StoredObject>();
+
+  async put(
+    key: string,
+    value: string | ArrayBuffer | ReadableStream,
+    options?: Record<string, unknown>,
+  ): Promise<void> {
+    let body: ArrayBuffer;
+
+    if (typeof value === "string") {
+      body = new TextEncoder().encode(value).buffer;
+    } else if (value instanceof ArrayBuffer) {
+      body = value;
+    } else {
+      body = await new Response(value).arrayBuffer();
+    }
+
+    const contentType =
+      (options?.httpMetadata as { contentType?: string } | undefined)?.contentType ?? "application/octet-stream";
+
+    this.objects.set(key, { body, contentType });
+  }
+
+  async get(key: string): Promise<{ arrayBuffer(): Promise<ArrayBuffer> } | null> {
+    const stored = this.objects.get(key);
+    if (!stored) return null;
+    return {
+      async arrayBuffer() {
+        return stored.body;
+      },
+    };
+  }
+
+  async delete(key: string): Promise<void> {
+    this.objects.delete(key);
+  }
+}
 
 let fetchMock: ReturnType<typeof vi.fn>;
 let adminSessionToken: string;
@@ -37,7 +82,12 @@ async function setupWorkflow() {
   return { eventId, adminUserId: adminUser.id };
 }
 
-async function inviteSpeakerAndSubmitProposal(): Promise<{ speakerManageToken: string; proposalId: string }> {
+async function inviteSpeakerAndSubmitProposal(): Promise<{
+  speakerManageToken: string;
+  proposalId: string;
+  coSpeakerUserId: string;
+  proposalManageToken: string;
+}> {
   // Invite a speaker via admin
   const inviteResponse = await inviteSpeakersBulk(
     createContext(
@@ -89,7 +139,7 @@ async function inviteSpeakerAndSubmitProposal(): Promise<{ speakerManageToken: s
     ),
   );
   expect(proposalResponse.status).toBe(200);
-  const { proposalId } = (await proposalResponse.json()) as { proposalId: string };
+  const { proposalId, manageToken } = (await proposalResponse.json()) as { proposalId: string; manageToken: string };
 
   // Get the proposer's user ID
   const users = await queryAll<{ id: string }>(
@@ -115,7 +165,7 @@ async function inviteSpeakerAndSubmitProposal(): Promise<{ speakerManageToken: s
     role: "co_speaker",
   });
 
-  return { speakerManageToken, proposalId };
+  return { speakerManageToken, proposalId, coSpeakerUserId: coSpeakerUser.id, proposalManageToken: manageToken };
 }
 
 describe("speaker self-management endpoints", () => {
@@ -215,7 +265,7 @@ describe("speaker self-management endpoints", () => {
     expect(body.status).toBe("declined");
   });
 
-  it("PATCH updates speaker profile (bio + links)", async () => {
+  it("PATCH updates speaker profile fields", async () => {
     await setupWorkflow();
     const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
 
@@ -226,6 +276,10 @@ describe("speaker self-management endpoints", () => {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
+            firstName: "Updated",
+            lastName: "Speaker",
+            organizationName: "Quantum Labs",
+            jobTitle: "Principal Researcher",
             biography: "Updated bio with post-quantum expertise.",
             links: [{ label: "LinkedIn", url: "https://linkedin.com/in/speaker" }],
           }),
@@ -242,8 +296,201 @@ describe("speaker self-management endpoints", () => {
         token: speakerManageToken,
       }),
     );
-    const profile = (await getResponse.json()) as { profile: { biography: string } };
+    const profile = (await getResponse.json()) as {
+      profile: {
+        firstName: string;
+        lastName: string;
+        organizationName: string;
+        jobTitle: string;
+        biography: string;
+      };
+    };
+    expect(profile.profile.firstName).toBe("Updated");
+    expect(profile.profile.lastName).toBe("Speaker");
+    expect(profile.profile.organizationName).toBe("Quantum Labs");
+    expect(profile.profile.jobTitle).toBe("Principal Researcher");
     expect(profile.profile.biography).toBe("Updated bio with post-quantum expertise.");
+  });
+
+  it("proposal manage token updates speaker profile fields", async () => {
+    await setupWorkflow();
+    const { proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          firstName: "Casey",
+          lastName: "Cryptographer",
+          organizationName: "PKIC Labs",
+          jobTitle: "Senior Engineer",
+          biography: "Provided by the proposer.",
+          links: [{ label: "GitHub", url: "https://github.com/casey" }],
+        }),
+      }),
+      env,
+      {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any,
+    );
+
+    expect(response.status).toBe(200);
+
+    const manageGet = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}`),
+      env,
+      {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any,
+    );
+
+    const payload = (await manageGet.json()) as {
+      speakers: Array<{
+        userId: string;
+        firstName: string | null;
+        lastName: string | null;
+        organizationName: string | null;
+        jobTitle: string | null;
+        bio: string | null;
+      }>;
+    };
+    const speaker = payload.speakers.find((entry) => entry.userId === coSpeakerUserId);
+    expect(speaker).toMatchObject({
+      firstName: "Casey",
+      lastName: "Cryptographer",
+      organizationName: "PKIC Labs",
+      jobTitle: "Senior Engineer",
+      bio: "Provided by the proposer.",
+    });
+  });
+
+  it("proposal manage token uploads and serves a speaker headshot", async () => {
+    await setupWorkflow();
+    const { proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    const bucket = new FakeUploadsBucket();
+
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" });
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const uploadResponse = await app.fetch(
+      new Request(
+        `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+        {
+          method: "PUT",
+          body: formData,
+        },
+      ),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any,
+    );
+
+    expect(uploadResponse.status).toBe(200);
+    const uploadPayload = (await uploadResponse.json()) as { success: boolean; headshotUrl: string; r2Key: string };
+    expect(uploadPayload.success).toBe(true);
+    expect(uploadPayload.headshotUrl).toContain(
+      `/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+    );
+    expect(uploadPayload.r2Key.startsWith(`headshots/${coSpeakerUserId}/`)).toBe(true);
+
+    const serveResponse = await app.fetch(
+      new Request(
+        `https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/${coSpeakerUserId}/headshot`,
+      ),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any,
+    );
+
+    expect(serveResponse.status).toBe(200);
+    expect(serveResponse.headers.get("content-type")).toBe("image/jpeg");
+  });
+
+  it("speaker manage token uploads and serves a speaker headshot", async () => {
+    await setupWorkflow();
+    const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+    const bucket = new FakeUploadsBucket();
+
+    const file = new File([new Uint8Array([0xff, 0xd8, 0xff, 0xd9])], "headshot.jpg", { type: "image/jpeg" });
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const uploadResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}/headshot`, {
+        method: "PUT",
+        body: formData,
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any,
+    );
+
+    expect(uploadResponse.status).toBe(200);
+
+    const serveResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}/headshot`),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any,
+    );
+
+    expect(serveResponse.status).toBe(200);
+    expect(serveResponse.headers.get("content-type")).toBe("image/jpeg");
+  });
+
+  it("proposal manage reminder requests profile review for confirmed speakers", async () => {
+    await setupWorkflow();
+    const { proposalManageToken, coSpeakerUserId, speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+
+    const confirmResponse = await speakerPost(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/speaker/${speakerManageToken}`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "confirm",
+            consents: [{ termKey: "speaker-terms", version: "v1" }],
+          }),
+        }),
+        { token: speakerManageToken },
+      ),
+    );
+    expect(confirmResponse.status).toBe(200);
+
+    const remindResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/manage/${proposalManageToken}/speakers/remind`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ userId: coSpeakerUserId }),
+      }),
+      env,
+      {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any,
+    );
+
+    expect(remindResponse.status).toBe(200);
+    const outboxRows = await queryAll<{ template_key: string; subject: string; payload_json: string }>(
+      env.DB,
+      "SELECT template_key, subject, payload_json FROM email_outbox ORDER BY created_at DESC LIMIT 1",
+    );
+    expect(outboxRows[0].template_key).toBe("speaker_profile_request");
+    expect(outboxRows[0].subject).toContain("review or update your speaker profile");
+    expect(outboxRows[0].payload_json).toContain("profileUrl");
   });
 });
 

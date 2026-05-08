@@ -6,7 +6,8 @@ import { api } from "../api";
 import { authToken } from "../state";
 import { fmt, toast } from "../ui";
 import type { AdminUser } from "../types";
-import { wireHeadshotController, confirmHeadshotUsage } from "../../shared/headshot/controller";
+import { confirmHeadshotUsage } from "../../shared/headshot/controller";
+import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../shared/headshot/AdminHeadshotManager";
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -33,14 +34,6 @@ interface UserDetail {
 
 const ROLE_COLOR: Record<string, string> = { admin: "danger", user: "secondary", guest: "light" };
 
-const HEADSHOT_DISCLAIMER = [
-  "This is a photograph of the named individual.",
-  "PKI Consortium holds the copyright, or has an unrestricted, royalty-free licence to use and publish this image.",
-  "The image does not infringe any third-party intellectual property rights, privacy rights, or applicable laws.",
-  "PKI Consortium may display this image alongside the individual's name and professional details on the website and related materials.",
-  "I accept full responsibility for any claims arising from this upload.",
-];
-
 // ────────────────────────────────────────────────────────
 // User detail component
 // ────────────────────────────────────────────────────────
@@ -64,11 +57,6 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
     role: string;
     active: boolean;
   } | null>(null);
-
-  const headshotPreviewRef = useRef<HTMLDivElement>(null);
-  const headshotFileRef = useRef<HTMLInputElement>(null);
-  const headshotDeleteRef = useRef<HTMLButtonElement>(null);
-
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -91,53 +79,7 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
     setHeadshotStatus(
       user.headshot_updated_at ? `Updated: ${new Date(user.headshot_updated_at).toLocaleString("en-GB")}` : "",
     );
-
-    wireHeadshotController({
-      preview: headshotPreviewRef.current,
-      status: null,
-      fileInput: headshotFileRef.current,
-      deleteButton: headshotDeleteRef.current,
-      initialUrl: user.headshotUrl,
-      previewOptions: {
-        alt: "Headshot",
-        emptyLabel: "User",
-        containerClass: "adm-headshot-preview",
-        imageClass: ["rounded-circle", "border", "shadow-sm", "adm-headshot-preview-img"],
-        placeholderClass: [
-          "rounded-circle",
-          "border",
-          "bg-light",
-          "d-flex",
-          "align-items-center",
-          "justify-content-center",
-          "mx-auto",
-          "adm-headshot-placeholder",
-        ],
-      },
-      disclaimerOptions: {
-        title: "Before uploading a photo",
-        texts: HEADSHOT_DISCLAIMER,
-        confirmText: "Proceed",
-      },
-      uploadSuccessStatus: "Headshot uploaded",
-      deleteSuccessStatus: "Headshot removed",
-      confirmDeleteMessage: "Remove this user's headshot?",
-      resetListeners: true,
-      uploadHeadshot: (file) => uploadHeadshotFile(user.id, file),
-      deleteHeadshot: () => deleteHeadshotFile(user.id),
-      onUploaded: async () => {
-        toast("Headshot uploaded", "success");
-        await load();
-      },
-      onDeleted: async () => {
-        toast("Headshot removed", "success");
-        await load();
-      },
-      onError: (message) => {
-        toast(message, "error");
-      },
-    });
-  }, [user, load]);
+  }, [user]);
 
   async function uploadHeadshotFile(uid: string, file: Blob) {
     const headers: Record<string, string> = { "Content-Type": file.type || "application/octet-stream" };
@@ -202,7 +144,7 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
     if (!user) return;
     const accepted = await confirmHeadshotUsage({
       title: "Before uploading a photo",
-      texts: HEADSHOT_DISCLAIMER,
+      texts: ADMIN_HEADSHOT_DISCLAIMER,
       confirmText: "Proceed",
     });
     if (!accepted) return;
@@ -233,25 +175,27 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
       </div>
       <div class="row g-4">
         <div class="col-md-4 text-center">
-          <div class="mb-3">
-            <div ref={headshotPreviewRef} class="mb-2"></div>
-            <div class="d-flex flex-column gap-2 align-items-center">
-              <label class="btn btn-sm btn-outline-primary w-100 adm-headshot-btn">
-                📷 Upload headshot
-                <input ref={headshotFileRef} type="file" accept="image/jpeg,image/png,image/webp" class="d-none" />
-              </label>
-              <button
-                class="btn btn-sm btn-outline-secondary w-100 adm-headshot-btn"
-                onClick={() => void fetchGravatar()}
-              >
-                🌐 Fetch from Gravatar
-              </button>
-              <button ref={headshotDeleteRef} class="btn btn-sm btn-outline-danger w-100 adm-headshot-btn d-none">
-                🗑 Remove headshot
-              </button>
-            </div>
-            {headshotStatus && <div class="mt-2 small text-muted">{headshotStatus}</div>}
-          </div>
+          <AdminHeadshotManager
+            initialUrl={user.headshotUrl}
+            alt="Headshot"
+            emptyLabel="User"
+            statusText={headshotStatus}
+            uploadHeadshot={(file) => uploadHeadshotFile(user.id, file)}
+            deleteHeadshot={() => deleteHeadshotFile(user.id)}
+            onFetchGravatar={fetchGravatar}
+            onUploaded={async () => {
+              toast("Headshot uploaded", "success");
+              await load();
+            }}
+            onDeleted={async () => {
+              toast("Headshot removed", "success");
+              await load();
+            }}
+            onError={(message) => {
+              toast(message, "error");
+            }}
+            confirmDeleteMessage="Remove this user's headshot?"
+          />
         </div>
         <div class="col-md-8">
           <div class="card border-0 shadow-sm">

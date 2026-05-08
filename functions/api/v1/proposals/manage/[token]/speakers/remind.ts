@@ -58,8 +58,8 @@ export async function onRequestPost(c: any): Promise<Response> {
     throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
   }
 
-  if (speakerRow.status === "confirmed" || speakerRow.status === "declined") {
-    return json({ error: { code: "ALREADY_RESPONDED", message: `Speaker has already ${speakerRow.status}` } }, 400);
+  if (speakerRow.status === "declined") {
+    return json({ error: { code: "ALREADY_RESPONDED", message: `Speaker has declined` } }, 400);
   }
 
   // Rotate the manage token — we cannot reconstruct the original from its hash.
@@ -77,25 +77,40 @@ export async function onRequestPost(c: any): Promise<Response> {
     inviterUserId: proposal.proposer_user_id,
   });
 
+  const isProfileReviewRequest = speakerRow.status === "confirmed";
+  const templateKey = isProfileReviewRequest ? "speaker_profile_request" : "co_speaker_invite";
+  const subject = isProfileReviewRequest
+    ? `Action requested: review or update your speaker profile — ${event.name}`
+    : `Reminder: confirm your participation — ${event.name}`;
+
   const outboxId = await queueEmail(c.env.DB, {
     eventId: event.id,
-    templateKey: "co_speaker_invite",
+    templateKey,
     recipientEmail: speakerRow.email,
     recipientUserId: speakerRow.user_id,
     messageType: "transactional",
-    subject: `Reminder: confirm your participation — ${event.name}`,
-    data: {
-      ...buildEventEmailVariables(event, appBaseUrl),
-      firstName: speakerRow.first_name ?? "",
-      lastName: speakerRow.last_name ?? "",
-      proposerFirstName: proposer?.first_name ?? "",
-      invitedByDisplay: inviteContext.invitedByDisplay,
-      proposalTitle: inviteContext.proposalTitle,
-      proposalAbstract: inviteContext.proposalAbstract,
-      speakerLineupText: inviteContext.speakerLineupText,
-      manageUrl: speakerManageUrl,
-      isReminder: true,
-    },
+    subject,
+    data: isProfileReviewRequest
+      ? {
+          ...buildEventEmailVariables(event, appBaseUrl),
+          firstName: speakerRow.first_name ?? "",
+          proposalTitle: inviteContext.proposalTitle,
+          profileUrl: speakerManageUrl,
+          hasHeadshot: "",
+          hasBio: "",
+        }
+      : {
+          ...buildEventEmailVariables(event, appBaseUrl),
+          firstName: speakerRow.first_name ?? "",
+          lastName: speakerRow.last_name ?? "",
+          proposerFirstName: proposer?.first_name ?? "",
+          invitedByDisplay: inviteContext.invitedByDisplay,
+          proposalTitle: inviteContext.proposalTitle,
+          proposalAbstract: inviteContext.proposalAbstract,
+          speakerLineupText: inviteContext.speakerLineupText,
+          manageUrl: speakerManageUrl,
+          isReminder: true,
+        },
   });
 
   c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));

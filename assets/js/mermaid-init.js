@@ -3,7 +3,7 @@ mermaid.initialize({
   theme: 'base',
   themeVariables: {
     background:           'transparent',
-    mainBkg:              'transparent',
+    mainBkg:              '#1e3f7a',
     primaryColor:         '#1e3f7a',
     primaryTextColor:     '#ffffff',
     primaryBorderColor:   '#4a7fd4',
@@ -17,11 +17,11 @@ mermaid.initialize({
     nodeBorder:           '#4a7fd4',
     clusterBkg:           'rgba(255,255,255,0.05)',
     clusterBorder:        '#4b5563',
-    edgeLabelBackground:  'rgba(30,40,60,0.8)',
+    edgeLabelBackground:  'rgba(248, 250, 252, 0.95)',
     titleColor:           '#f0f6fc',
-    labelBoxBkgColor:     'rgba(30,40,60,0.8)',
+    labelBoxBkgColor:     'rgba(248, 250, 252, 0.95)',
     labelBoxBorderColor:  '#4b5563',
-    labelTextColor:       '#ffffff',
+    labelTextColor:       '#1a1a2e',
     loopTextColor:        '#ffffff',
     noteBkgColor:         'rgba(30,40,60,0.8)',
     noteTextColor:        '#f0f6fc',
@@ -85,4 +85,24 @@ mermaid.initialize({
   flowchart: { curve: 'basis', useMaxWidth: true, htmlLabels: true },
   sequence:  { useMaxWidth: true, mirrorActors: false },
   mindmap:   { useMaxWidth: true },
+});
+
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.mermaid-wrap').forEach(wrap => {
+    // Add title attribute to hint that it's clickable
+    wrap.setAttribute('title', 'Click to view fullscreen');
+    
+    wrap.addEventListener('click', function(e) {
+      if (e.target.closest('a')) return; // Allow links to work
+      
+      this.classList.toggle('fullscreen');
+      if (this.classList.contains('fullscreen')) {
+        document.body.classList.add('mermaid-fullscreen-active');
+        this.removeAttribute('title');
+      } else {
+        document.body.classList.remove('mermaid-fullscreen-active');
+        this.setAttribute('title', 'Click to view fullscreen');
+      }
+    });
+  });
 });

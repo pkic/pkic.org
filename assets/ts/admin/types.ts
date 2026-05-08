@@ -178,6 +178,12 @@ export interface ProposalSpeaker {
   firstName: string | null;
   lastName: string | null;
   organizationName: string | null;
+  jobTitle: string | null;
+  biography: string | null;
+  headshotUrl: string | null;
+  confirmedAt: string | null;
+  declinedAt: string | null;
+  declineReason: string | null;
   hasHeadshot: boolean;
   hasBio: boolean;
 }

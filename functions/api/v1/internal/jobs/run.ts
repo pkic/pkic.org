@@ -33,6 +33,7 @@ export async function onRequestPost(c: any): Promise<Response> {
         speakerInviteRemindersQueued: 0,
         presentationRemindersQueued: 0,
         confirmationRemindersQueued: 0,
+        confirmationCancellationsProcessed: 0,
         processed: 0,
         preview: emptyReminderPreview,
       };

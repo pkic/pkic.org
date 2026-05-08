@@ -89,9 +89,9 @@ export async function onRequestPost(c: any): Promise<Response> {
     await run(
       c.env.DB,
       `UPDATE registrations
-       SET confirmation_token_hash = ?, confirmation_token_expires_at = ?, updated_at = ?
+       SET confirmation_token_hash = ?, confirmation_token_expires_at = ?, confirmation_reminder_sent_at = ?, updated_at = ?
        WHERE id = ?`,
-      [newTokenHash, newExpiresAt, now, registration.id],
+      [newTokenHash, newExpiresAt, now, now, registration.id],
     );
 
     const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, newToken);

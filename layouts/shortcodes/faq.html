@@ -1,0 +1,37 @@
+{{/*
+  faq.html — accessible collapsible FAQ list.
+
+  Use {{< >}} syntax with inner YAML:
+    groups:
+      - title: Group title
+        questions:
+          - question: Question text?
+            answer: |
+              Markdown answer text.
+            open: true
+*/}}
+{{- $data := .Inner | transform.Unmarshal -}}
+{{- $class := .Get "class" | default "" -}}
+
+<div class="faq-list{{ with $class }} {{ . }}{{ end }}">
+  {{- range $group := $data.groups }}
+  <section class="faq-group">
+    {{- with $group.title }}
+    <h2 class="faq-group-title">{{ . }}</h2>
+    {{- end }}
+    <div class="faq-items">
+      {{- range $item := $group.questions }}
+      <details class="faq-item"{{ if $item.open }} open{{ end }}>
+        <summary class="faq-question">
+          <span>{{ $item.question }}</span>
+          <span class="faq-toggle" aria-hidden="true"></span>
+        </summary>
+        <div class="faq-answer">
+          {{- $item.answer | $.Page.RenderString -}}
+        </div>
+      </details>
+      {{- end }}
+    </div>
+  </section>
+  {{- end }}
+</div>

@@ -11,6 +11,7 @@ export interface RegistrationRecord {
   referred_by_code: string | null;
   confirmation_token_hash: string | null;
   confirmation_token_expires_at: string | null;
+  pending_confirmation_deadline_at: string | null;
   manage_token_hash: string;
   capacity_exempt_in_person: number;
   capacity_exempt_reason: string | null;

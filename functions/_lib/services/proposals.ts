@@ -5,7 +5,6 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { recordReferralConversion } from "./referrals";
 import { recordEngagement } from "./engagement";
-import { writeAuditLog } from "./audit";
 import type { DatabaseLike } from "../types";
 
 export interface ProposalRecord {
@@ -405,119 +404,6 @@ export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: str
   };
 }
 
-export async function confirmSpeakerParticipation(
-  db: DatabaseLike,
-  manageToken: string,
-  payload: { termsAccepted: boolean },
-): Promise<void> {
-  const { speaker } = await getSpeakerByManageToken(db, manageToken);
-
-  if (speaker.status === "confirmed") {
-    return; // idempotent
-  }
-  if (speaker.status === "declined") {
-    throw new AppError(
-      409,
-      "SPEAKER_ALREADY_DECLINED",
-      "You have already declined participation. Please contact the organiser if you changed your mind.",
-    );
-  }
-  if (!payload.termsAccepted) {
-    throw new AppError(400, "TERMS_NOT_ACCEPTED", "You must accept the participation terms to confirm.");
-  }
-
-  const now = nowIso();
-  await run(
-    db,
-    `UPDATE proposal_speakers
-     SET status = 'confirmed', confirmed_at = ?, terms_accepted_at = ?
-     WHERE id = ?`,
-    [now, now, speaker.id],
-  );
-  await writeAuditLog(db, "user", speaker.user_id, "speaker_confirmed", "proposal_speaker", speaker.id, {
-    proposalId: speaker.proposal_id,
-  });
-}
-
-export async function declineSpeakerParticipation(
-  db: DatabaseLike,
-  manageToken: string,
-  payload: { reason?: string | null },
-): Promise<void> {
-  const { speaker, proposal } = await getSpeakerByManageToken(db, manageToken);
-
-  if (speaker.status === "declined") {
-    return; // idempotent
-  }
-
-  const now = nowIso();
-  await run(
-    db,
-    `UPDATE proposal_speakers
-     SET status = 'declined', declined_at = ?, decline_reason = ?
-     WHERE id = ?`,
-    [now, payload.reason ?? null, speaker.id],
-  );
-
-  // Mark the participant as inactive in the event roster.
-  await run(
-    db,
-    `UPDATE event_participants
-     SET status = 'inactive', updated_at = ?
-     WHERE event_id = ? AND user_id = ? AND source_type = 'proposal' AND source_ref = ?`,
-    [now, proposal.event_id, speaker.user_id, proposal.id],
-  );
-  await writeAuditLog(db, "user", speaker.user_id, "speaker_declined", "proposal_speaker", speaker.id, {
-    proposalId: speaker.proposal_id,
-    reason: payload.reason ?? null,
-  });
-}
-
-export async function updateSpeakerProfile(
-  db: DatabaseLike,
-  userId: string,
-  payload: {
-    biography?: string | null;
-    linksJson?: string | null;
-    headshotR2Key?: string | null;
-  },
-): Promise<void> {
-  const now = nowIso();
-  const headshotUpdatedAt = payload.headshotR2Key !== undefined ? now : null;
-
-  await run(
-    db,
-    `UPDATE users
-     SET
-       biography         = COALESCE(?, biography),
-       links_json        = COALESCE(?, links_json),
-       headshot_r2_key   = COALESCE(?, headshot_r2_key),
-       headshot_updated_at = CASE WHEN ? IS NOT NULL THEN ? ELSE headshot_updated_at END,
-       updated_at        = ?
-     WHERE id = ?`,
-    [
-      payload.biography ?? null,
-      payload.linksJson ?? null,
-      payload.headshotR2Key ?? null,
-      payload.headshotR2Key ?? null,
-      headshotUpdatedAt,
-      now,
-      userId,
-    ],
-  );
-}
-
-export async function recordPresentationUpload(db: DatabaseLike, proposalId: string, r2Key: string): Promise<void> {
-  const now = nowIso();
-  await run(
-    db,
-    `UPDATE session_proposals
-     SET presentation_r2_key = ?, presentation_uploaded_at = ?, updated_at = ?
-     WHERE id = ?`,
-    [r2Key, now, now, proposalId],
-  );
-}
-
 /**
  * Generates a fresh manage token for a specific speaker on a proposal.
  * Useful when sending follow-up emails (e.g., profile request, presentation
@@ -814,6 +700,31 @@ export async function upsertProposalReview(
   return updated;
 }
 
+export function buildProposalReviewAuditDetails(
+  before: {
+    recommendation: string | null;
+    score: number | null;
+    reviewerComment: string | null;
+    applicantNote: string | null;
+  },
+  after: {
+    recommendation: string | null;
+    score: number | null;
+    reviewerComment: string | null;
+    applicantNote: string | null;
+  },
+): Record<string, { from: unknown; to: unknown }> {
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+
+  for (const key of Object.keys(after) as Array<keyof typeof after>) {
+    if (before[key] !== after[key]) {
+      changes[key] = { from: before[key], to: after[key] };
+    }
+  }
+
+  return changes;
+}
+
 export async function listProposalReviews(db: DatabaseLike, proposalId: string): Promise<ProposalReviewRecord[]> {
   return all<ProposalReviewRecord>(
     db,
@@ -933,7 +844,7 @@ export async function finalizeProposalDecision(
     ],
   );
 
-  const mappedStatus = payload.finalStatus === "needs_work" ? "needs_work" : payload.finalStatus;
+  const mappedStatus = payload.finalStatus;
   await run(db, "UPDATE session_proposals SET status = ?, updated_at = ? WHERE id = ?", [
     mappedStatus,
     now,

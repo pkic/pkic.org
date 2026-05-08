@@ -130,18 +130,22 @@ export async function createInvite(
     throw new AppError(409, "INVITEE_UNSUBSCRIBED", "Invitee has unsubscribed from future invitations");
   }
 
-  // Guard: do not invite someone who is already registered for the event.
-  const alreadyRegistered = await first<{ id: string }>(
-    db,
-    `SELECT r.id
-     FROM registrations r
-     JOIN users u ON u.id = r.user_id
-     WHERE u.normalized_email = ? AND r.event_id = ? AND r.status NOT IN ('cancelled')
-     LIMIT 1`,
-    [inviteeEmail, payload.eventId],
-  );
-  if (alreadyRegistered) {
-    throw new AppError(409, "INVITEE_ALREADY_REGISTERED", "Invitee is already registered for this event");
+  // Guard: do not send an attendee invite to someone already registered for the event.
+  // Speaker invites are allowed regardless of registration status — a registered
+  // attendee can also be invited to speak.
+  if (payload.inviteType === "attendee") {
+    const alreadyRegistered = await first<{ id: string }>(
+      db,
+      `SELECT r.id
+       FROM registrations r
+       JOIN users u ON u.id = r.user_id
+       WHERE u.normalized_email = ? AND r.event_id = ? AND r.status NOT IN ('cancelled')
+       LIMIT 1`,
+      [inviteeEmail, payload.eventId],
+    );
+    if (alreadyRegistered) {
+      throw new AppError(409, "INVITEE_ALREADY_REGISTERED", "Invitee is already registered for this event");
+    }
   }
 
   // Guard: do not invite a speaker who already has an active proposal for this event.
@@ -690,16 +694,6 @@ export async function bulkCreateSpeakersAdmin(
          )`,
       )
       .bind(emailsJson, eventId),
-    db
-      .prepare(
-        `SELECT u.normalized_email
-       FROM registrations r
-       JOIN users u ON u.id = r.user_id
-       WHERE u.normalized_email IN (SELECT value FROM json_each(?1))
-         AND r.event_id = ?2
-         AND r.status NOT IN ('cancelled')`,
-      )
-      .bind(emailsJson, eventId),
     // Speaker-specific: already has an active proposal
     db
       .prepare(
@@ -723,9 +717,8 @@ export async function bulkCreateSpeakersAdmin(
   ])) as Array<{ results: Array<Record<string, string>> }>;
 
   const unsubscribed = new Set((batchResults[0].results ?? []).map((row) => row.email));
-  const registered = new Set((batchResults[1].results ?? []).map((row) => row.normalized_email));
-  const alreadyProposed = new Set((batchResults[2].results ?? []).map((row) => row.normalized_email));
-  const alreadyInvited = new Set((batchResults[3].results ?? []).map((row) => row.invitee_email));
+  const alreadyProposed = new Set((batchResults[1].results ?? []).map((row) => row.normalized_email));
+  const alreadyInvited = new Set((batchResults[2].results ?? []).map((row) => row.invitee_email));
 
   // --- Compute expiry only when the caller explicitly requests one ---
   function computeExpiry(): string | null {
@@ -740,7 +733,7 @@ export async function bulkCreateSpeakersAdmin(
   for (let i = 0; i < payload.invites.length; i++) {
     const email = normalizedEmails[i];
     const item = payload.invites[i];
-    if (unsubscribed.has(email) || registered.has(email) || alreadyProposed.has(email)) {
+    if (unsubscribed.has(email) || alreadyProposed.has(email)) {
       outcomes.push({ email, status: "skipped" });
     } else if (alreadyInvited.has(email)) {
       outcomes.push({ email, status: "endorsed" });

@@ -622,10 +622,10 @@ test.describe("browser workflows", () => {
     const proposalManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(proposalManageUrl).searchParams.get("token") ?? "")}`;
     await page.goto(proposalManageRoute);
     await expect(page.getByText(/Open this page from your proposal management link/i)).toBeVisible();
-    await page.getByLabel("Session type").selectOption("panel");
-    await page.getByLabel("Title").fill("Operational Trust in a Post-Quantum Transition, Revised");
+    await page.locator("#manage-proposal-type").selectOption("panel");
+    await page.locator("#manage-proposal-title").fill("Operational Trust in a Post-Quantum Transition, Revised");
     await page
-      .getByLabel("Abstract")
+      .locator("#manage-proposal-abstract")
       .fill(
         "A revised abstract describing the operational migration choices, governance controls, and delivery trade-offs teams face while moving critical infrastructure into a post-quantum future.",
       );
@@ -633,11 +633,12 @@ test.describe("browser workflows", () => {
     await expect(page.getByText(/Proposal updated/i)).toBeVisible();
     await screenshot("02-proposal-updated");
 
-    await page.getByLabel("Email *").fill("speaker@example.test");
-    await page.getByLabel("First name").fill("Sam");
-    await page.getByLabel("Last name").fill("Speaker");
-    await page.getByLabel("Role").selectOption("co_speaker");
-    await page.getByRole("button", { name: /Send invite/i }).click();
+    const inviteForm = page.locator("[data-cospeaker-form]");
+    await inviteForm.locator("#cs-email").fill("speaker@example.test");
+    await inviteForm.locator("#cs-first-name").fill("Sam");
+    await inviteForm.locator("#cs-last-name").fill("Speaker");
+    await inviteForm.locator("#cs-role").selectOption("co_speaker");
+    await inviteForm.getByRole("button", { name: /Send invite/i }).click();
     await expect(page.getByText(/Invite sent to speaker@example.test/i)).toBeVisible();
     await screenshot("03-speaker-invited");
 
@@ -845,11 +846,12 @@ test.describe("browser workflows", () => {
     await page.goto(
       `/events/2026/pqc-conference-amsterdam-nl/propose/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(propToken)}`,
     );
-    await page.getByLabel("Email *").fill("speaker-sec@example.test");
-    await page.getByLabel("First name").fill("Sec");
-    await page.getByLabel("Last name").fill("Speaker");
-    await page.getByLabel("Role").selectOption("co_speaker");
-    await page.getByRole("button", { name: /Send invite/i }).click();
+    const securityInviteForm = page.locator("[data-cospeaker-form]");
+    await securityInviteForm.locator("#cs-email").fill("speaker-sec@example.test");
+    await securityInviteForm.locator("#cs-first-name").fill("Sec");
+    await securityInviteForm.locator("#cs-last-name").fill("Speaker");
+    await securityInviteForm.locator("#cs-role").selectOption("co_speaker");
+    await securityInviteForm.getByRole("button", { name: /Send invite/i }).click();
     await expect(page.getByText(/Invite sent to speaker-sec@example.test/i)).toBeVisible();
 
     const spkInviteEmail = await waitForEmail("speaker-sec@example.test", "speaker");
@@ -1079,12 +1081,62 @@ test.describe("browser workflows", () => {
     const proposalManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(samProposalManageToken)}`;
     await page.goto(proposalManageRoute);
     await expect(page.getByText(/Open this page from your proposal management link/i)).toBeVisible();
-    await page.getByLabel("Email *").fill("co-sam-speaker@example.test");
-    await page.getByLabel("First name").fill("Co");
-    await page.getByLabel("Last name").fill("Sam");
-    await page.getByLabel("Role").selectOption("co_speaker");
-    await page.getByRole("button", { name: /Send invite/i }).click();
+    const nominationInviteForm = page.locator("[data-cospeaker-form]");
+    await nominationInviteForm.locator("#cs-email").fill("co-sam-speaker@example.test");
+    await nominationInviteForm.locator("#cs-first-name").fill("Co");
+    await nominationInviteForm.locator("#cs-last-name").fill("Sam");
+    await nominationInviteForm.locator("#cs-role").selectOption("co_speaker");
+    await nominationInviteForm.getByRole("button", { name: /Send invite/i }).click();
     await expect(page.getByText(/Invite sent to co-sam-speaker@example.test/i)).toBeVisible();
+
+    const coSpeakerCard = page.locator("[data-speaker-card]").filter({ hasText: "co-sam-speaker@example.test" });
+    await expect(coSpeakerCard).toBeVisible();
+    await coSpeakerCard.getByLabel("First name").fill("Co");
+    await coSpeakerCard.getByLabel("Last name").fill("Sam Speaker");
+    await coSpeakerCard.getByLabel("Organization").fill("PKIC Partner Org");
+    await coSpeakerCard.getByLabel("Job title").fill("Applied Cryptography Lead");
+    await coSpeakerCard
+      .getByLabel("Biography")
+      .fill("Profile drafted by the proposer so the invited speaker can refine it later.");
+    await coSpeakerCard.getByLabel("Profile URL").fill("https://github.com/co-sam-speaker");
+    await coSpeakerCard.getByRole("button", { name: /Add profile link/i }).click();
+    await coSpeakerCard.getByRole("button", { name: /Save speaker details/i }).click();
+    await expect(page.getByText(/Saved speaker details for co-sam-speaker@example.test/i)).toBeVisible({
+      timeout: 15_000,
+    });
+
+    const speakerUserId = await coSpeakerCard.locator('textarea[id^="speaker-bio-"]').evaluate((element) => {
+      return (element as HTMLTextAreaElement).id.replace("speaker-bio-", "");
+    });
+    const proposerHeadshotResult = await page.evaluate(
+      async ({ token, userId }) => {
+        const formData = new FormData();
+        const bytes = Uint8Array.from(
+          atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnR0L8AAAAASUVORK5CYII="),
+          (char) => char.charCodeAt(0),
+        );
+        formData.append("file", new File([bytes], "co-speaker-headshot.png", { type: "image/png" }));
+
+        const res = await fetch(
+          `/api/v1/proposals/manage/${encodeURIComponent(token)}/speakers/${encodeURIComponent(userId)}/headshot`,
+          {
+            method: "PUT",
+            body: formData,
+          },
+        );
+        return (await res.json()) as { success?: boolean; headshotUrl?: string | null; error?: { message?: string } };
+      },
+      { token: samProposalManageToken, userId: speakerUserId },
+    );
+    expect(proposerHeadshotResult.success).toBe(true);
+    expect(proposerHeadshotResult.headshotUrl).toBeTruthy();
+
+    await page.reload();
+    const refreshedCoSpeakerCard = page
+      .locator("[data-speaker-card]")
+      .filter({ hasText: "co-sam-speaker@example.test" });
+    await expect(refreshedCoSpeakerCard).toBeVisible();
+    await expect(refreshedCoSpeakerCard.locator("img.adm-headshot-preview-img")).toBeVisible({ timeout: 15_000 });
     await screenshot("05-co-speaker-invited");
 
     // ── Resend the co-speaker manage link via the browser ────────────────────
@@ -1109,6 +1161,16 @@ test.describe("browser workflows", () => {
     const refreshedRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(refreshedToken)}`;
     await page.goto(refreshedRoute);
     await expect(page.getByText(/Please confirm whether you would like to participate/i)).toBeVisible();
+    await expect(page.locator("[data-profile-section]")).toBeVisible();
+    await expect(page.locator("[data-headshot-preview] img")).toBeVisible();
+    await expect(page.locator("#speaker-organization")).toHaveValue("PKIC Partner Org");
+    await expect(page.locator("#speaker-job-title")).toHaveValue("Applied Cryptography Lead");
+    await page.locator("#speaker-job-title").fill("Cryptography Programme Manager");
+    await page
+      .locator("#speaker-bio")
+      .fill("Updated by the invited speaker after reviewing the proposer-provided draft.");
+    await page.getByRole("button", { name: /Save profile/i }).click();
+    await expect(page.getByText(/Profile updated./i)).toBeVisible({ timeout: 10_000 });
     // Accept all speaker consent terms
     const refreshedConsentCards = page.locator("div.event-flow-consent-card");
     await refreshedConsentCards.first().waitFor({ state: "visible", timeout: 10_000 });
