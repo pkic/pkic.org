@@ -24,8 +24,8 @@ importers:
         specifier: ^4.7.9
         version: 4.7.9
       hono:
-        specifier: ^4.12.16
-        version: 4.12.16
+        specifier: ^4.12.18
+        version: 4.12.18
       ical.js:
         specifier: ^2.2.1
         version: 2.2.1
@@ -1487,8 +1487,8 @@ packages:
     engines: {node: '>=0.4.7'}
     hasBin: true
 
-  hono@4.12.16:
-    resolution: {integrity: sha512-jN0ZewiNAWSe5khM3EyCmBb250+b40wWbwNILNfEvq84VREWwOIkuUsFONk/3i3nqkz7Oe1PcpM2mwQEK2L9Kg==}
+  hono@4.12.18:
+    resolution: {integrity: sha512-RWzP96k/yv0PQfyXnWjs6zot20TqfpfsNXhOnev8d1InAxubW93L11/oNUc3tQqn2G0bSdAOBpX+2uDFHV7kdQ==}
     engines: {node: '>=16.9.0'}
 
   html-encoding-sniffer@6.0.0:
@@ -3420,7 +3420,7 @@ snapshots:
     optionalDependencies:
       uglify-js: 3.19.3
 
-  hono@4.12.16: {}
+  hono@4.12.18: {}
 
   html-encoding-sniffer@6.0.0:
     dependencies:
