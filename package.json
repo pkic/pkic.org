@@ -44,7 +44,7 @@
     "@resvg/resvg-wasm": "^2.6.2",
     "chanfana": "^3.3.0",
     "handlebars": "^4.7.9",
-    "hono": "^4.12.16",
+    "hono": "^4.12.18",
     "ical.js": "^2.2.1",
     "marked": "^17.0.6",
     "postal-mime": "^2.7.4",
