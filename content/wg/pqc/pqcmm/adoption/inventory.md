@@ -17,7 +17,7 @@ You don't have long to build this baseline. Apply the PQCMM to your entire suppl
 
 Once vendor responses are collected, record them in a Post-Quantum Cryptography Maturity Model (PQCMM) supplier inventory. The inventory turns individual assessments into supply-chain visibility.
 
-[Download a supplier inventory template](pqcmm-supplier-inventory-template.csv) and adapt it to your procurement, vendor-risk, or governance tooling.
+[Download a supplier inventory template](../downloads/pqcmm-supplier-inventory-template.csv) and adapt it to your procurement, vendor-risk, or governance tooling.
 
 | Field | Example |
 |---|-----|

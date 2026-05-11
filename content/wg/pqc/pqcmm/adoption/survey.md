@@ -5,6 +5,11 @@ title: "Vendor Assessment Survey - Post-Quantum Cryptography Maturity Model (PQC
 description: How to require vendors to submit a Post-Quantum Cryptography Maturity Model assessment or certification report, including mandatory intake questions, existing supply chain evaluations, evidence expectations, and red flags.
 summary: Use this standardized question set in your procurement tenders and supply chain surveys to require vendors to state and support their PQCMM level for both new contracts and existing inventory.
 weight: 10
+
+resources:
+- name: PQCMM Scorecard Template
+  title: A CSV template for importing the mandatory intake questions directly into your procurement and GRC
+  src: downloads/pqcmm-scorecard-template.csv
 ---
 
 ## Assessing Your Entire Supply Chain
@@ -42,7 +47,7 @@ Use these questions in supplier questionnaires, requests for proposal, tenders, 
 | 10 | What events require reassessment? | Major version changes, cryptographic library changes, algorithm changes, deployment mode changes, or security incidents |
 | 11 | If independent assurance is required by the buyer, will the vendor support third-party assessment or PKI Consortium certification? | Yes/No, with proposed timeline |
 
-[Download the PQCMM Scorecard Template](pqcmm-scorecard-template.csv) to import these gating questions directly into your procurement and GRC tools.
+[Download the PQCMM Scorecard Template](../downloads/pqcmm-scorecard-template.csv) to import these gating questions directly into your procurement and GRC tools.
 
 These questions are not optional if the PQCMM is being used as a procurement control. If the organization has made PKI Consortium certification a precondition, question 3 must be answered "PKI Consortium certified" and question 4 must include the certificate or certificate reference.
 
