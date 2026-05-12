@@ -52,7 +52,7 @@ Recent speakers include Bill Newhouse and Andrew Regenscheid from NIST, the U.S.
 
 The community has cleared up the confusion about _where to start_ and _what the path forward looks like_ — and the people who built that clarity did it by getting on a stage and telling other practitioners what they learned. If you have done the work, you belong on that stage too.
 
-Submissions are open through the end of June. That said, we will start rolling out acceptances in the next few weeks — and when two proposals are substantially similar, we will prioritize the one submitted first. The earlier you submit, the better your odds.
+Submissions are open through June 30, 2026. That said, we will start rolling out acceptances in the next few weeks — and when two proposals are substantially similar, we will prioritize the one submitted first. The earlier you submit, the better your odds.
 
 - **Submit a speaking proposal:** [pkic.org/call](/call)
 - **Register to attend:** [pkic.org/register](/register)
