@@ -14,36 +14,36 @@ workingGroups:
   - PKIMM
   - PQC
   - TCWG
-  
+
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
   feed: https://marginsgroup.com/feed/
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://marginsgroup.com/news/
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +53,25 @@ representatives:
   - name: Selorm Darko
     role: PKI lead
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/selorm-darko-058a1618b/
-    description: Selorm is the PKI lead at Margins ID systems and Applications and represents the organization at the PKI Consortium.
+    description: |
+      Selorm Courage Darko is an IT Project Management professional, PKI Consultant, and Business Analytics graduate student with extensive experience supporting large-scale national identity and digital transformation initiatives.
+
+      His professional background spans public key infrastructure (PKI), secure identity systems, fraud prevention, information security, project delivery, and business analytics. Over the years, he has contributed to the implementation and support of major government and enterprise identity programs, including work connected to Ghana’s National Identification Authority (NIA), national border management systems, and large-scale digital registration initiatives.
+
+      Selorm has experience managing and supporting PKI environments involving certificate lifecycle management, hardware security modules (HSMs), authentication systems, trust validation, and secure digital identity operations. His work also extends into analytics-driven fraud detection and identity assurance, particularly in areas where identity verification intersects with financial systems, education systems, and public services.
+
+      Currently pursuing a Master’s degree in Information Systems and Business Analytics at Park University in the United States, he combines technical infrastructure expertise with modern analytics, cloud technologies, and data-driven decision-making approaches.
+
+      His areas of interest include:
+
+      - Digital Identity Infrastructure
+      - PKI & Information Security
+      - Fraud Prevention & Identity Assurance
+      - Business Analytics & Data Systems
+      - Project & Technology Management
+      - Digital Transformation
+      - Secure Government Systems
+
+      Selorm is passionate about building trusted digital ecosystems that improve security, reduce fraud, and strengthen confidence in both public and private sector systems.
