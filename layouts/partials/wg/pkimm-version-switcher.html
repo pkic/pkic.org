@@ -63,22 +63,16 @@
     window.addEventListener('scroll', positionMenu, { passive: true });
     window.addEventListener('resize', positionMenu);
 
-    // Path-preserving navigation with 404 fallback.
+    // Path-preserving navigation: rewrite each version link's href to the
+    // equivalent sub-path under that version, so the user stays on the same
+    // page when switching. If a target page doesn't exist in the target
+    // version (structural divergence between versions), the click falls
+    // through to Hugo's 404 page — accepted trade-off to keep clicks
+    // instant and the script simple.
     if (path.indexOf(currentBase) === 0) {
       var subPath = path.slice(currentBase.length);
       sw.querySelectorAll('a[data-version-path]').forEach(function (a) {
         a.href = a.dataset.versionPath + subPath;
-        a.addEventListener('click', function (ev) {
-          var href = a.href;
-          ev.preventDefault();
-          fetch(href, { method: 'HEAD' })
-            .then(function (res) {
-              window.location.href = res.ok ? href : a.dataset.versionPath;
-            })
-            .catch(function () {
-              window.location.href = a.dataset.versionPath;
-            });
-        });
       });
     }
 
