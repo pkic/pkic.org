@@ -50,6 +50,140 @@
       border-bottom-color: var(--wg-color, #{$green}); // matches WG color
     }
   }
+
+  // ─── Version switcher (PKIMM) ────────────────────────────────────────
+  // A small dropdown anchored to the right of the section nav. Reuses the
+  // same dark palette and font scale as .wg-nav-link so it reads as part
+  // of the same control bar.
+  .wg-version-switcher {
+    margin-left: auto;
+    position: relative;
+    align-self: stretch;
+    display: flex;
+    align-items: center;
+
+    // Hide the default <details>/<summary> marker
+    summary {
+      list-style: none;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.45rem;
+      padding: 0.4rem 0.7rem;
+      font-size: 0.78rem;
+      font-weight: 600;
+      letter-spacing: 0.04em;
+      color: rgba(255, 255, 255, 0.55);
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 0.4rem;
+      white-space: nowrap;
+      transition:
+        color 0.15s,
+        border-color 0.15s,
+        background 0.15s;
+
+      &::-webkit-details-marker {
+        display: none;
+      }
+      &:hover {
+        color: #fff;
+        border-color: rgba(255, 255, 255, 0.28);
+        background: rgba(255, 255, 255, 0.04);
+      }
+    }
+
+    &[open] summary {
+      color: #fff;
+      border-color: var(--wg-color, #{$green});
+      background: rgba(255, 255, 255, 0.06);
+    }
+  }
+
+  .wg-version-eyebrow {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+  }
+
+  .wg-version-chevron {
+    transition: transform 0.15s ease;
+    opacity: 0.75;
+  }
+  .wg-version-switcher[open] .wg-version-chevron {
+    transform: rotate(180deg);
+  }
+
+  // ─── Badge — the version label itself ───────────────────────────────
+  // Used in the trigger (showing the current version) and in each menu
+  // entry (showing that entry's version).
+  .wg-version-badge {
+    display: inline-block;
+    padding: 0.15rem 0.45rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    line-height: 1.3;
+    border-radius: 0.3rem;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+  }
+
+  // ─── Menu (the dropdown that appears below the trigger) ─────────────
+  // Positioned `fixed` so it escapes the .container's `overflow-x: auto`
+  // clip. The partial's JS sets `top`/`right` from the trigger's bounding
+  // rect on open and on scroll/resize.
+  .wg-version-menu {
+    position: fixed;
+    top: 0;
+    right: 0;
+    z-index: 1050;
+    min-width: 14rem;
+    padding: 0.35rem;
+    background: #111;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 0.5rem;
+    box-shadow:
+      0 12px 28px rgba(0, 0, 0, 0.5),
+      0 0 0 1px rgba(0, 0, 0, 0.4);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .wg-version-item {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    padding: 0.5rem 0.6rem;
+    color: rgba(255, 255, 255, 0.78);
+    text-decoration: none;
+    border-radius: 0.35rem;
+    transition:
+      color 0.12s,
+      background 0.12s;
+
+    &:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.06);
+    }
+
+    &.is-active {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+      box-shadow: inset 2px 0 0 var(--wg-color, #{$green});
+    }
+  }
+
+  // Secondary inline hint next to the badge, e.g. "Latest release".
+  .wg-version-hint {
+    font-size: 0.65rem;
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: color-mix(in srgb, #{$green} 80%, #fff);
+  }
 }
 
 // Data-driven WG section pages (Focus Areas, Deliverables, Members, etc.).
