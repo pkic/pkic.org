@@ -54,8 +54,8 @@ The community has cleared up the confusion about _where to start_ and _what the 
 
 Submissions are open through the end of June. That said, we will start rolling out acceptances in the next few weeks — and when two proposals are substantially similar, we will prioritize the one submitted first. The earlier you submit, the better your odds.
 
-- **Submit a speaking proposal:** [pkic.org/call](https://pkic.org/call)
-- **Register to attend:** [pkic.org/register](https://pkic.org/register)
+- **Submit a speaking proposal:** [pkic.org/call](/call)
+- **Register to attend:** [pkic.org/register](/register)
 
 If you are on the fence about whether your work belongs on this stage, submit anyway. We would rather see a rough abstract from someone with real migration experience than a polished one from someone with a commercial interest.
 
