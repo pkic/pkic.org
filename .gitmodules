@@ -13,4 +13,3 @@
 [submodule "content/pkimm-1.0.0"]
 	path = content/wg/pkimm/1.0.0
 	url = ../pkimm
-	branch = 1.0.0

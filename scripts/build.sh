@@ -75,6 +75,20 @@ else
 fi
 
 # ── Build ─────────────────────────────────────────────────────────────────────
-git submodule update --init --remote
+# Clone any missing submodules at the SHAs recorded in the parent commit.
+git submodule update --init --recursive
+
+# Refresh submodules that track a moving branch (have `branch = ...` in
+# .gitmodules) to the latest tip of that branch. Submodules pinned to a
+# specific commit — typically frozen version snapshots like
+# content/wg/pkimm/1.0.0 — have no `branch` field and stay at the recorded
+# SHA so they don't drift.
+while IFS= read -r entry; do
+  name="${entry#submodule.}"
+  name="${name%.branch}"
+  path="$(git config -f .gitmodules --get "submodule.${name}.path")"
+  [ -n "$path" ] && git submodule update --remote -- "$path"
+done < <(git config -f .gitmodules --name-only --get-regexp '^submodule\..*\.branch$')
+
 "${HUGO_BIN}" -e development --minify --cacheDir "$(pwd)/.cache"
 npx -y pagefind --site "public"
