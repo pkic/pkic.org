@@ -15,7 +15,7 @@ params:
     heroDescription: The Call for Proposals is now open.
 ---
 
-The Post-Quantum Cryptography Conference is returning to Europe (Amsterdam, December 1-3, 2026), and our Call for Proposals is now open at [pkic.org/call](https://pkic.org/call).
+The Post-Quantum Cryptography Conference is returning to Europe (Amsterdam, December 1-3, 2026), and our Call for Proposals is now open at [pkic.org/call](/call).
 
 If you watched the [aftermovie from Kuala Lumpur last October](https://youtu.be/Z8ZbbPcugz8), one line from the room captured the mood: 
 
