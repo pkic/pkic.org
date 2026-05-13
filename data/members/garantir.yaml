@@ -2,7 +2,9 @@ id: garantir
 name: Garantir
 slogan: Garantir is a leading cybersecurity vendor based in San Diego, California
 website: https://garantir.io
-
+# Business domains for email
+businessDomains:
+  - garantir.io
 # Short description, longer content can be placed in `content/members/`
 description: Garantir is dedicated to providing the most advanced and most versatile security platform on the market. We deliver cybersecurity solutions that protect enterprise data and infrastructure across a wide range of use cases without impeding performance or obstructing workplace integrations.
 
@@ -13,10 +15,10 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://garantir.io/blog/
   # Temporarily disabled: RSS feed returns HTML (text/html) instead of XML/RSS
   # Reference: CI report - feed validation failure
@@ -24,22 +26,22 @@ blog:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/garantir_io
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/garantir-cybersecurity/
   youtube: https://www.youtube.com/channel/UC9-aJMBL-dpv2viFAhBKpQg
   reddit: https://www.reddit.com/user/garantir
@@ -52,14 +54,14 @@ representatives:
   - name: Kieran Miller
     role: Chief Architect
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/kieran-miller-0776136/
     description: Kieran Miller is Chief Architect at Garantir. Kieren is specialized in enterprise digital signature and asymmetric cryptography applications
 
   - name: Chris Van Genderen
     role: Senior Security Architect
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/chris-van-genderen-4677678/
     description: Chris Van Genderen is Senior Security Architect at Garantir and represents the organization at the PKI Consortium
 

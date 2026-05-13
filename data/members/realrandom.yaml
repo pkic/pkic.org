@@ -2,7 +2,9 @@ id: realrandom
 name: Real Random
 slogan: Make a safer Internet by providing true randomness for real security
 website: https://realrandom.co/
-
+# Business domains for email
+businessDomains:
+  - realrandom.co
 # Short description, longer content can be placed in `content/members/`
 description: Our mission is to help make a safer Internet by providing true randomness for real security. In modern cryptographic systems, security is largely based on algorithms that can be reverse engineered, making them increasingly vulnerable to threats as technology advances. To inhibit these attacks, our solution supports network security by providing a consistently reliable source of unpredictable numbers - in other words, true randomness.
 
@@ -13,24 +15,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media

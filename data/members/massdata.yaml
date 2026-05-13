@@ -2,7 +2,9 @@ id: massdata
 name: Mass Data Defense Corporation
 slogan:
 website: https://massdata.com
-
+# Business domains for email
+businessDomains:
+  - massdata.com
 # Short description, longer content can be placed in `content/members/`
 description: We protect sensitive data at rest, in transit, & while it’s being processed. We keep your data confidential using the #1 encryption & key management solutions.
 
@@ -16,35 +18,35 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   # Temporarily disabled: RSS feed returns HTML (text/html; charset=iso-8859-1) instead of XML/RSS
   # Reference: CI report - feed validation failure
   # feed: https://massdata.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -54,6 +56,6 @@ representatives:
   - name: Saul Garcia
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/saul-garcia
     description: Saul is the CEO at Mass Data Defense Corporation and represents the organization at the PKI Consortium.

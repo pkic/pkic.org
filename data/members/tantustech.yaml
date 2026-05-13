@@ -2,7 +2,9 @@ id: tantustech
 name: Tantus Technologies Inc.
 slogan:
 website: https://tantustech.com/
-
+# Business domains for email
+businessDomains:
+  - tantustech.com
 # Short description, longer content can be placed in `content/members/`
 description: Delivering insights and innovative solutions, Tantus partners with government leaders to improve the lives of the citizens they serve.
 
@@ -14,24 +16,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
-  url: 
+  url:
   feed: https://tantustech.com/feed/
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
   url: https://tantustech.com/careers/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -40,7 +42,7 @@ social:
   facebook: https://www.facebook.com/TantusTech?ref=hl
   instagram: https://www.instagram.com/tantustech/?igshid=YmMyMTA2M2Y%3D
   linkedin: https://www.linkedin.com/company/tantus-technologies-inc-/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,7 +52,7 @@ representatives:
   - name: Karlene Stecchi
     role: President
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/karlenestecchi/
     description: Karlene is the President at Tantus Technologies Inc. and represents the organization at the PKI Consortium.
 

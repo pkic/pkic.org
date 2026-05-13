@@ -2,7 +2,9 @@ id: noreg
 name: Noreg
 slogan: More than 20 years in PKI
 website: https://noreg-inc.eu/
-
+# Business domains for email
+businessDomains:
+  - noreg.hu
 # Short description, longer content can be placed in `content/members/`
 description: Noreg is a Hungarian private company dedicated to provide IT security solutions to its customers.
 
@@ -16,28 +18,28 @@ sponsor:
   level: Silver
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/noreg
   youtube: https://www.youtube.com/user/NoregHU
 

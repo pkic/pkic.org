@@ -2,7 +2,9 @@ id: uber
 name: Uber
 slogan: On our way
 website: https://www.uber.com
-
+# Business domains for email
+businessDomains:
+  - uber.com
 # Short description, longer content can be placed in `content/members/`
 description: We’re on our way so you can be on yours
 
@@ -16,24 +18,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://eng.uber.com
   feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.uber.com/newsroom
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://careers.uber.com
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -52,19 +54,19 @@ representatives:
   - name: Pavel Kruhlei
     role: Engineering Manager
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/pavel-kruhlei/
     description: Pavel is an Engineering Manager at Uber, PKI Officer on the Platform Security team, and represents the organization at the PKI Consortium.
   - name: Artem Myagkov
     role: Senior Software Engineer
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/artem-myagkov-b9290930/
     description: Artem is a Senior Software Engineer at Uber, PKI Officer on the Platform Security team, and represents the organization at the PKI Consortium.
   - name: Lucas Carneiro
     role: Software Engineer
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/lucasrodcarneiro/
     description: Lucas is a Software Engineer at Uber, PKI Officer on the Platform Security team, and represents the organization at the PKI Consortium.
 

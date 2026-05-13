@@ -2,7 +2,9 @@ id: think-secure
 name: Think Secure
 slogan:
 website: https://think-secure.nl/
-
+# Business domains for email
+businessDomains:
+  - think-secure.nl
 # Short description, longer content can be placed in `content/members/`
 description: We provide from expert experience services to your company to secure against a wide range of security threats and Risks.
 
@@ -15,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/think-secure/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,6 +53,6 @@ representatives:
   - name: Thomas Hall
     role: Sr. Security Advisor
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/thinksecure
     description: Thomas is the Sr. Security Advisor at Think Secure and represents the organization at the PKI Consortium.

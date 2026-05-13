@@ -2,7 +2,9 @@ id: buypass
 name: Buypass
 slogan: We bring you a safer digital world
 website: https://www.buypass.com/
-
+# Business domains for email
+businessDomains:
+  - buypass.no
 # Short description, longer content can be placed in `content/members/`
 description: With a long history of supplying digital ID and payment solutions, Buypass provides a safer and simpler working day for both individuals and companies.
 
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url: https://www.buypass.com/news
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://www.buypass.com/the-company/work-with-us
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/buypass
   facebook: https://www.facebook.com/buypassCA
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/buypass-as
-  youtube: 
+  youtube:
 
 # Here you can list those who represent the member
 representatives:
@@ -49,8 +51,7 @@ representatives:
     social:
       x:
       linkedin: https://www.linkedin.com/in/mads-henriksveen-48948941/
-    description:
-      Mads Henriksveen has a Master in Computer Science and has more than 35 years of working experience with focus on systems development and IT security. Mads has been working with cryptography, eID, eSignature, PKI etc for the last 20 years. Mads represents Buypass in the PKI Consortium and is currently acting as Vice Chair for the S/MIME Certificate Working Group in the CA/Browser Forum.
+    description: Mads Henriksveen has a Master in Computer Science and has more than 35 years of working experience with focus on systems development and IT security. Mads has been working with cryptography, eID, eSignature, PKI etc for the last 20 years. Mads represents Buypass in the PKI Consortium and is currently acting as Vice Chair for the S/MIME Certificate Working Group in the CA/Browser Forum.
 
 # Long-form content (markdown)
 content: |

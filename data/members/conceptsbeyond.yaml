@@ -2,7 +2,9 @@ id: conceptsbeyond
 name: Concepts Beyond
 slogan:
 website: https://conceptsbeyond.com/
-
+# Business domains for email
+businessDomains:
+  - conceptsbeyond.com
 # Short description, longer content can be placed in `content/members/`
 description: Provide PKI architecture, design, implementation, WebTrust audit support to a government agency
 
@@ -14,35 +16,35 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   # Temporarily disabled: RSS feed returns HTML (text/html; charset=iso-8859-1) instead of XML/RSS
   # Reference: CI report - feed validation failure
   # feed: https://conceptsbeyond.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: Sandra Schoen
     role: Senior II Computer Scientist/Systems Analyst
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/sandy-schoen-105868/
     description: Sandra is the Senior II Computer Scientist/Systems Analyst at Concepts Beyond and represents the organization at the PKI Consortium.

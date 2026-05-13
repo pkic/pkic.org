@@ -2,7 +2,9 @@ id: planckred
 name: Plank Red Private Limited
 slogan:
 website: https://planckred.com/
-
+# Business domains for email
+businessDomains:
+  - planckred.com
 # Short description, longer content can be placed in `content/members/`
 description: Creating sustainable digital infrastructure to drive human proress
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: https://planckred.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: SHISHIR MIGLANI
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/shishirmiglani
     description: SHISHIR is the CEO at PLANCK RED PRIVATE LIMITED and represents the organization at the PKI Consortium.

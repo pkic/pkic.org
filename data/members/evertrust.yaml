@@ -2,7 +2,9 @@ id: evertrust
 name: EVERTRUST
 slogan:
 website: https://www.evertrust.io/
-
+# Business domains for email
+businessDomains:
+  - evertrust.fr
 # Short description, longer content can be placed in `content/members/`
 description: "EVERTRUST is a French software vendor specialized in a key sector of cybersecurity: trust management software."
 

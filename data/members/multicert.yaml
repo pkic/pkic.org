@@ -2,7 +2,9 @@ id: multicert
 name: Multicert
 slogan:
 website: https://www.multicert.com
-
+# Business domains for email
+businessDomains:
+  - multicert.com
 # Short description, longer content can be placed in `content/members/`
 description: Multicert's purpose is to guarantee the Identity, Security and Digital Trust of Organizations, Systems and People. Anytime and anywhere.
 
@@ -13,31 +15,31 @@ workingGroups:
   - TCWG
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
+  x:
   facebook: https://www.facebook.com/multicert.pt/
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/multicert
   youtube: https://www.youtube.com/c/MULTICERTSA-security
 
@@ -49,6 +51,6 @@ representatives:
   - name: Nuno Ponte
     role: Head of Advanced Solutions
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/nponte/
     description: Nuno is the Head of Advanced Solutions at Multicert and represents the organization at the PKI Consortium.

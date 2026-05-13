@@ -2,7 +2,9 @@ id: tecsec
 name: Tecsec
 slogan:
 website: https://tecsec.com
-
+# Business domains for email
+businessDomains:
+  - tecsec.com
 # Short description, longer content can be placed in `content/members/`
 description: TecSec’s focus is on Information Security and Information Access Management, enforced through its 7th generation, VEIL® technology cryptography.
 
@@ -15,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: https://tecsec.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,6 +53,6 @@ representatives:
   - name: Jay Wack
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/jay-wack-298211/
     description: Jay is the CEO at Tecsec and represents the organization at the PKI Consortium.

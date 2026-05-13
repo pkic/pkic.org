@@ -2,7 +2,9 @@ id: vantive
 name: Vantive
 slogan:
 website: https://www.vantive.com
-
+# Business domains for email
+businessDomains:
+  - vantive.com
 # Short description, longer content can be placed in `content/members/`
 description: Focused on vital kidney care and acute organ support therapies, digital solutions and advanced services to extend lives and expand possibilities for patients every day.
 
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.vantive.com/news
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://jobs.vantive.com/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +52,6 @@ representatives:
   - name: Sivaram Rajagopalan
     role: Sr.Cybersecurity Architect
     social:
-      x: 
+      x:
       linkedin: https://linkedin.com/in/sivaramrajagopalan
     description: Sivaram is the Sr.Cybersecurity Architect at Vantive and represents the organization at the PKI Consortium.

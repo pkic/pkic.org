@@ -2,7 +2,9 @@ id: turkcell
 name: Turkcell
 slogan: Connect to Life with Turkcell
 website: https://www.turkcell.com.tr/
-
+# Business domains for email
+businessDomains:
+  - turkcell.com.tr
 # Short description, longer content can be placed in `content/members/`
 description: Turkcell is a converged telecommunication and technology services provider.
 
@@ -10,22 +12,22 @@ description: Turkcell is a converged telecommunication and technology services p
 memberSince: 2024-02-19
 memberType: H3
 workingGroups:
- - PQC
+  - PQC
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Press Releases
-press: 
+press:
   url: https://www.turkcell.com.tr/en/aboutus/investor-relations/announcements
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://kariyerim.turkcell.com.tr/
-  feed: 
+  feed:
   language: tr
 
 # Social media
@@ -40,13 +42,13 @@ social:
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
-representatives:     
+representatives:
   - name: Buse Bilgin
     role: 5G/6G Research Engineer
     social:
       linkedin: https://www.linkedin.com/in/buseebrem/
     description: |
-      Buse Bilgin is an accomplished Next Generation R&D Engineer based in Istanbul, Turkey, specializing in Electrical & Electronics Engineering with a focus on 5G and 6G technologies. With a Master's degree from Koç University and a Bachelor's 
-      degree from Istanbul Bilgi University, Buse has excelled academically and professionally. At Turkcell Technology, she plays a pivotal role in managing EU projects related to next-generation wireless technologies. As a co-founder and ML-Engineer 
-      at Vrables Lab, she contributed to the development of advanced photonic-based diagnostic platforms and received a prestigious TUBITAK BiGG grant. Recognized for her work with awards like the KUImpact Patent Competition 2022, Buse is also a passionate 
+      Buse Bilgin is an accomplished Next Generation R&D Engineer based in Istanbul, Turkey, specializing in Electrical & Electronics Engineering with a focus on 5G and 6G technologies. With a Master's degree from Koç University and a Bachelor's
+      degree from Istanbul Bilgi University, Buse has excelled academically and professionally. At Turkcell Technology, she plays a pivotal role in managing EU projects related to next-generation wireless technologies. As a co-founder and ML-Engineer
+      at Vrables Lab, she contributed to the development of advanced photonic-based diagnostic platforms and received a prestigious TUBITAK BiGG grant. Recognized for her work with awards like the KUImpact Patent Competition 2022, Buse is also a passionate
       advocate for engineering excellence and innovation. She is responsible from the R&D activities focusing on quantum technology in Turkcell.

@@ -1,8 +1,10 @@
 id: antarcticgroup
 name: Antarctic Group
 slogan:
-website: 
-
+website:
+# Business domains for email
+businessDomains:
+  - antarcticgroup.com
 # Short description, longer content can be placed in `content/members/`
 description: Consulting on public key infrastructure solutions to organisations in the UK for nearly 20 years to a range of government, public and private sector organisations.
 
@@ -15,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: null
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/antarctic-group/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,6 +53,6 @@ representatives:
   - name: Andrew Willett
     role: Managing Consultant
     social:
-      x: 
-      linkedin: https://linkedin.com/in/andrewwillett/ 
+      x:
+      linkedin: https://linkedin.com/in/andrewwillett/
     description: Andrew is the Managing Consultant at Antarctic Group and represents the organization at the PKI Consortium.

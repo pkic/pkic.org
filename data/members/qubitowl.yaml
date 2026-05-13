@@ -2,7 +2,9 @@ id: qubitowl
 name: QubitOwl
 slogan:
 website: https://www.qubitowl.com/
-
+# Business domains for email
+businessDomains:
+  - qubitowl.com
 # Short description, longer content can be placed in `content/members/`
 description: QubitOwl offers enterprise cryptographic visibility, PQC assessment, and migration planning to ensure post-quantum readiness and reduce quantum threat risks.
 
@@ -15,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: http://linkedin.com/company/qubitowl
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,12 +53,12 @@ representatives:
   - name: Bret Laughlin
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/bret-laughlin-5a12168
     description: Bret is the CEO at QubitOwl and represents the organization at the PKI Consortium.
   - name: Brett VanWagoner
     role: SVP, Product
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/brettvanwagoner
     description: Brett VanWagoner represents QubitOwl at the PKI Consortium and leads product management for the CONTINUUM CADI platform.

@@ -2,7 +2,9 @@ id: kquantaresearch
 name: Kquanta Research LlP
 slogan: Shaping Tomorrow ,Today
 website: https://www.kquantaresearch.com
-
+# Business domains for email
+businessDomains:
+  - kquantaresearch.com
 # Short description, longer content can be placed in `content/members/`
 description: Explore our comprehensive market research services tailored for businesses looking to gain valuable insights to drive growth and success.
 
@@ -16,31 +18,31 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://kquantaresearch.com/insights
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/KquantaResearch
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/105374266/admin/dashboard/
   youtube: https://www.youtube.com/@kquantaresearchllp
 
@@ -52,6 +54,6 @@ representatives:
   - name: Anita Nandi-Ray
     role: Policy Director
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/anitanandi/
     description: Anita is the Policy Director at Kquanta Research LlP and represents the organization at the PKI Consortium.

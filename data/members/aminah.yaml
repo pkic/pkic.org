@@ -2,9 +2,11 @@ id: aminah
 name: Aminah Technologies, Inc
 slogan:
 website: https://www.aminah.tech/
-
+# Business domains for email
+businessDomains:
+  - aminah.tech
 # Short description, longer content can be placed in `content/members/`
-description: 
+description:
 
 # membership
 memberSince: 2026-03-25
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,7 +54,7 @@ representatives:
   - name: Loui LaTouche
     role: Principal Consultant
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/louilatouche/
     description: Loui is the Principal Consultant at Aminah Technologies, Inc and represents the organization at the PKI Consortium.
 

@@ -1,8 +1,10 @@
 id: nimbus
 name: Nimbus
-slogan: 
+slogan:
 website: https://www.nimbus-berlin.com/
-
+# Business domains for email
+businessDomains:
+  - nimbus.berlin
 # Short description, longer content can be placed in `content/members/`
 description: Nimbus Technologieberatung GmbH has been the model for forward thinking, engaged and effective leadership and consultancy since 1999.
 
@@ -13,30 +15,30 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
+  x:
   facebook:
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/nimbus-technologieberatung-gmbh/
-  youtube: 
+  youtube:

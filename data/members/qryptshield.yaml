@@ -2,7 +2,9 @@ id: qryptshield
 name: Qrypshield Technologies private limited
 slogan:
 website: https://www.qryptshield.com/
-
+# Business domains for email
+businessDomains:
+  - qryptshield.com
 # Short description, longer content can be placed in `content/members/`
 description: Provides post-quantum cryptographic solutions, compliant with NIST standards, to protect digital infrastructure from quantum computing threats.
 
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://www.qryptshield.com/
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/qryptshield-technologies-pvt-ltd/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,7 +52,7 @@ representatives:
   - name: Mayank Verma
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/mayank-verma-b15a7121/
     description: Mayank is the CEO at Qrypshield Technologies private limited and represents the organization at the PKI Consortium.
 

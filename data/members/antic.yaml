@@ -2,7 +2,9 @@ id: antic
 name: ANTIC
 slogan:
 website: https://camgovca.cm/
-
+# Business domains for email
+businessDomains:
+  - antic.cm
 # Short description, longer content can be placed in `content/members/`
 description: |
   ANTIC is the Root Certification Authorithy and Governement Certification Authorithy of Cameroon. ANTIC issues electronic certificates that ensure four security services notably: the authentication of users, integrity of data, confidentiality of exchanges and the non-repudiation of messages exchanged during online transactions.
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/antic/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +52,6 @@ representatives:
   - name: Ndanga Brice
     role: Security Engineer Information Systemes
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/gbithicki-ndanga-brice-ars%C3%A8ne-1292a5191/
     description: Ndanga is the Security Engineer Information Systemes at ANTIC and represents the organization at the PKI Consortium.

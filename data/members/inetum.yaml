@@ -2,7 +2,9 @@ id: inetum
 name: Inetum
 slogan:
 website: https://inetum.com
-
+# Business domains for email
+businessDomains:
+  - inetum.com
 # Short description, longer content can be placed in `content/members/`
 description: For nearly two decades, Inetum has been delivering Public Key Infrastructure (PKI) projects and services across Spain and the Americas. Additionally, we serve as the regulatory support team to the Spanish Ministry responsible for overseeing Trust Service Providers in the country.
 
@@ -17,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +55,6 @@ representatives:
   - name: Alberto Martín de los Santos
     role: Cybersecurity Director Iberia LATAM
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/albertomartinsantos/
     description: Alberto is the Cybersecurity Director Iberia LATAM at Inetum and represents the organization at the PKI Consortium.

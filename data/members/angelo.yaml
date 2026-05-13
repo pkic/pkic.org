@@ -2,7 +2,9 @@ id: angelo
 name: Angelo State University, TX
 slogan:
 website: https://www.angelo.edu
-
+# Business domains for email
+businessDomains:
+  - angelo.edu
 # Short description, longer content can be placed in `content/members/`
 description: We provide a complete educational experience and a values-based culture on our modern campus in the heart of West Texas. We are the Ram Family. Join us today.
 
@@ -17,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +55,6 @@ representatives:
   - name: Sundar Krishnan
     role: Assistant Professor Cybersecurity
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/sunkris/
     description: Sundar is the Assistant Professor Cybersecurity at Angelo State University, TX and represents the organization at the PKI Consortium.

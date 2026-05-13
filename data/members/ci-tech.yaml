@@ -2,7 +2,9 @@ id: ci-tech
 name: CI TECH SOLUTIONS SDN. BHD.
 slogan:
 website: https://citechsolutions.com.my
-
+# Business domains for email
+businessDomains:
+  - ci-tech.io
 # Short description, longer content can be placed in `content/members/`
 description: Delivering end-to-end cybersecurity solutions and strategic advisory to strengthen cyber resilience, supported by mature SecOps and a dedicated Security Operations Centre (SOC). We also provide Post-Quantum Cryptography (PQC) solutions to protect critical systems and enable a secure transition to quantum-resilient standards.
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,7 +55,7 @@ representatives:
     id: ahmad-zakwan
     role: Principal Security Consultant & Co-Founder
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/zakwanmy
     description: A. Zakwan is the Principal Security Consultant and Co-Founder at CI Tech Solutions, representing the organization at the PKI Consortium. He brings over 15 years of experience in cybersecurity, with a focus on enterprise security solutions, SecOps, cybersecurity assessments, and encryption.
 

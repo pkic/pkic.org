@@ -2,7 +2,9 @@ id: eviden
 name: Eviden
 slogan: Expanding the possibilities of data and technology
 website: https://www.cryptovision.com/en/welcome/
-
+# Business domains for email
+businessDomains:
+  - eviden.com
 # Short description, longer content can be placed in `content/members/`
 description: Eviden provides highly certified software and hardware cybersecurity products to support customers in protecting their data, managing access and securing identities, bringing the needed layer of trust in today’s heterogenous digital environments.
 
@@ -15,24 +17,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://eviden.com/insights/blogs/
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.cryptovision.com/en/news-2/
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://www.cryptovision.com/en/hr-career/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -66,7 +68,7 @@ content: |
 
   ### Eviden Cybersecurity Products
 
-  Eviden provides highly certified software and hardware cybersecurity products to support customers in protecting their data, managing access and securing identities, bringing the needed layer of trust in today’s heterogenous digital environments. Our cybersecurity products include: 
+  Eviden provides highly certified software and hardware cybersecurity products to support customers in protecting their data, managing access and securing identities, bringing the needed layer of trust in today’s heterogenous digital environments. Our cybersecurity products include:
   - **Data Encryption**: protect and encrypt your most sensitive data, at rest and in motion. For cloud, virtual and on-premises infrastructures, and any level of encryption...
   - **Identity and Access Management**: only give the right people access to the right information at the right time. See who has access, why they have it and how they use it,
   - **Digital Identity**: protect electronic identities with cryptographic solutions and applications for secure elements, digital identities and user-friendly encryption.

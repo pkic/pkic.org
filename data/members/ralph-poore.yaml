@@ -2,7 +2,8 @@ id: ralph-poore
 name: Ralph Poore
 slogan:
 website:
-
+# Business domains for email
+businessDomains:
 # Short description, longer content can be placed in `content/members/`
 description: Adjunct Professor, Standards Developer (PCI, ANS X9, ISO TC68), and consultant in applied cryptography.
 
@@ -13,34 +14,34 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/in/ralphspencerpoore/
   youtube:
-  github: 
+  github:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +51,6 @@ representatives:
   - name: Ralph Poore
     role: Applied Cryptographer
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/ralphspencerpoore/
     description: Ralph is a Applied Cryptographer and represents the organization at the PKI Consortium.

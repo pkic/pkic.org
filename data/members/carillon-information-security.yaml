@@ -2,7 +2,9 @@ id: carillon-information-security
 name: Carillon Information Security
 slogan: We build trust
 website: https://www.carillon.ca/
-
+# Business domains for email
+businessDomains:
+  - carillon.ca
 # Short description, longer content can be placed in `content/members/`
 description: Carillon Information Security provides a complete spectrum of identity management solutions that are designed to prevent identity theft, promote the migration from paper to electronic authentication, and avoid loss of intellectual property.
 
@@ -10,36 +12,36 @@ description: Carillon Information Security provides a complete spectrum of ident
 memberSince: 2023-02-17
 memberType: A
 workingGroups:
- - CA
- - PQC
+  - CA
+  - PQC
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url: https://www.carillon.ca/en/news-and-events.php
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  pinterest: 
+  x:
+  facebook:
+  instagram:
+  pinterest:
   linkedin: https://www.linkedin.com/company/carillon-information-security
-  youtube: 
+  youtube:

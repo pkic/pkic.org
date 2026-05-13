@@ -2,7 +2,9 @@ id: trustgatedigital
 name: Trustgate Digital
 slogan: Trust, Be Trusted in the Digital World
 website: https://www.trustgatedigital.com
-
+# Business domains for email
+businessDomains:
+  - trustgatedigital.com
 # Short description, longer content can be placed in `content/members/`
 description: Our solution is to provide a holistic public key infrastructure and digital trust certificate services for people and organizations through the creation, deployment, and management of trusted digital certificates for people, businesses, and IT assets.
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
+  x:
   facebook: http://www.facebook.com/trustgatedigital
-  instagram: 
-  linkedin: 
-  youtube: 
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Ope Odusan
     role: Managing Director
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Ope is the Managing Director at Trustgate Digital Ltd and represents the organization at the PKI Consortium.

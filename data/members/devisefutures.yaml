@@ -2,7 +2,9 @@ id: devisefutures
 name: Devise Futures - IT Solutions, Lda
 slogan:
 website: https://www.devisefutures.com
-
+# Business domains for email
+businessDomains:
+  - devisefutures.com
 # Short description, longer content can be placed in `content/members/`
 description: Devise Futures is an innovative organization dedicated to advancing secure digital solutions through expertise in cryptography, identity management, and public key infrastructure (PKI).
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: https://www.devisefutures.com/index.xml
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: José Miranda
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/josepinamiranda/
     description: José is the CEO at Devise Futures - IT Solutions, Lda and represents the organization at the PKI Consortium.

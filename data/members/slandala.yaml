@@ -2,7 +2,9 @@ id: slandala
 name: Slandala Company
 slogan: Security Solutions
 website: https://www.slandala.com/
-
+# Business domains for email
+businessDomains:
+  - slandala.com
 # Short description, longer content can be placed in `content/members/`
 description: The Slandala Company is an Information Assurance and Information Technology consultancy. Our focus is on the design, implementation and operation of information assurance systems and the technologies that enable and support the implementation of information security services.
 
@@ -13,31 +15,31 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   pinterest:
   linkedin: https://www.linkedin.com/company/the-slandala-company/
-  youtube: 
+  youtube:

@@ -1,14 +1,17 @@
 id: encryptionconsulting
 name: Encryption Consulting
-slogan: 
+slogan:
 website: https://www.encryptionconsulting.com/
-
+# Business domains for email
+businessDomains:
+  - encryptionconsulting.com
 # Short description, longer content can be placed in `content/members/`
 description: Encryption Consulting is a customer-focused cyber-consulting firm providing an array of services in all aspects of Encryption.
 
 # membership
 memberSince: 2021-07-20
-memberType: H2
+memberType:
+  H2
   #Consultant
 workingGroups:
 
@@ -17,21 +20,21 @@ sponsor:
   level: Gold
 
 # Blog posts
-blog: 
+blog:
   url: https://www.encryptionconsulting.com/blogs/
   feed: https://www.encryptionconsulting.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://www.encryptionconsulting.com/work-with-us/
-  feed: 
+  feed:
   language: en_US
 
 # Social media

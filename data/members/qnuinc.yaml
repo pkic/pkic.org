@@ -2,7 +2,9 @@ id: qnuinc
 name: QNu Inc
 slogan:
 website: https://www.qnuinc.com
-
+# Business domains for email
+businessDomains:
+  - qnuinc.com
 # Short description, longer content can be placed in `content/members/`
 description: Get QNu's ✓QShield Quantum Security Platform and ready-to-deploy services for seamless network infrastructure and application upgrades with quantum security.
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Rajesh Patil
     role: CTO
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Rajesh is the CTO at QNu Inc and represents the organization at the PKI Consortium.

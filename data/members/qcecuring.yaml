@@ -2,7 +2,9 @@ id: qcecuring
 name: QCecuring Technologies
 slogan:
 website: https://qcecuring.com
-
+# Business domains for email
+businessDomains:
+  - qcecuring.com
 # Short description, longer content can be placed in `content/members/`
 description: Securely automate certificate lifecycle management, code signing, SSH keys, PKI, and machine identities with QCecuring’s modern cryptographic operations platform.
 
@@ -17,31 +19,31 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/qcecuring/
   youtube: https://www.qcecuring.com/assets/icons/svg/youtube.svg
   github: https://github.com/qcecuring
@@ -54,7 +56,7 @@ representatives:
   - name: Shivam Sharma
     role: Director
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/shivam111sharma/
     description: Shivam is the Director at QCecuring Technologies and represents the organization at the PKI Consortium.
 

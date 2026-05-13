@@ -2,7 +2,9 @@ id: vistakencana
 name: Vista Kencana Sdn Bhd
 slogan:
 website: https://vistakencana.com.my
-
+# Business domains for email
+businessDomains:
+  - vistakencana.com.my
 # Short description, longer content can be placed in `content/members/`
 description: Vista Kencana | Empowered of Innovation
 
@@ -18,33 +20,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://vistakencana.com.my/blog
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://vistakencana.com.my/career
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/vista-kencana-sdn-bhd/mycompany/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -54,6 +56,6 @@ representatives:
   - name: Ami Azrul Abdullah
     role: General Manager
     social:
-      x: 
+      x:
       linkedin: https://my.linkedin.com/in/ami-azrul-b5647646
     description: Ami Azrul is the General Manager at Vista Kencana Sdn Bhd and represents the organization at the PKI Consortium.

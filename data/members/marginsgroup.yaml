@@ -2,7 +2,10 @@ id: marginsgroup
 name: Margins ID systems and Applications
 slogan:
 website: https://marginsgroup.com/portfolio-item/margins-id-systems-application-ltd/
-
+# Business domains for email
+businessDomains:
+  - imsgh.org
+  - marginsgroup.com
 # Short description, longer content can be placed in `content/members/`
 description: Margins ID systems and Applications (MIDSA) is a company that provides IT solutions related to identity matters.
 
@@ -14,36 +17,36 @@ workingGroups:
   - PKIMM
   - PQC
   - TCWG
-  
+
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
   feed: https://marginsgroup.com/feed/
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://marginsgroup.com/news/
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +56,6 @@ representatives:
   - name: Selorm Darko
     role: PKI lead
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/selorm-darko-058a1618b/
     description: Selorm is the PKI lead at Margins ID systems and Applications and represents the organization at the PKI Consortium.

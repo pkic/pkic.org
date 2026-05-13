@@ -2,7 +2,9 @@ id: gary-moore
 name: Gary Moore
 slogan:
 website:
-
+# Business domains for email
+businessDomains:
+  - tridentityideas.com
 # Short description, longer content can be placed in `content/members/`
 description: Independent consultant that operates a consulting LLC to provide PKI related services related to policy, implementation, CA Software design, relying party software design and implementation and other Identity and Access Management solutions sets.
 
@@ -14,34 +16,34 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/in/garyamoore/
   youtube:
-  github: 
+  github:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,6 +53,6 @@ representatives:
   - name: Gary Moore
     role: Security Architect/Founder
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/garyamoore/
     description: Gary is a Security Architect/Founder and represents the organization at the PKI Consortium.

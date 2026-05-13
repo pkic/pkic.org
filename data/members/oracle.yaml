@@ -2,7 +2,9 @@ id: oracle
 name: Oracle Corporation
 slogan:
 website: https://www.oracle.com/
-
+# Business domains for email
+businessDomains:
+  - oracle.com
 # Short description, longer content can be placed in `content/members/`
 description: We’re a cloud technology company that provides organizations around the world with computing infrastructure and software to help them innovate, unlock efficiencies and become more effective.
 
@@ -11,34 +13,33 @@ memberSince: 2026-04-28
 memberType: G
 workingGroups:
 
-
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/oracle
   facebook: https://www.facebook.com/Oracle/
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/oracle/
   youtube: https://www.youtube.com/oracle/
 
@@ -50,7 +51,7 @@ representatives:
   - name: Bikash Poudel
     role: Principal Security Engineer
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/bpoudel7/
     description: Bikash is the Principal Security Engineer at Oracle Corporation and represents the organization at the PKI Consortium.
 

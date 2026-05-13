@@ -2,7 +2,9 @@ id: beesight
 name: BEESIGHT B.V.
 slogan:
 website: https://www.beesight.nl
-
+# Business domains for email
+businessDomains:
+  - beesight.nl
 # Short description, longer content can be placed in `content/members/`
 description: BEESIGHT B.V. provides services for the Dutch Ministry of Defense related to PKI and SmartCards.
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: null
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Sietze de Jonge
     role: Security Architect
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/sietze-de-jonge/
     description: Sietze is the Security Architect at BEESIGHT B.V. and represents the organization at the PKI Consortium.

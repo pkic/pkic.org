@@ -2,7 +2,9 @@ id: datasci
 name: Data & Scientific Inc.
 slogan:
 website: https://www.datasci.net/
-
+# Business domains for email
+businessDomains:
+  - blackcanadianmedia.ca
 # Short description, longer content can be placed in `content/members/`
 description: We are a Canadian company but also active in the export market. Data & Scientific deployed the secure database for the national ID implementation in one of our export market countries. we have been involved with PKI projects since 2005.  We are also actively investigating Quantum computing.
 
@@ -10,38 +12,38 @@ description: We are a Canadian company but also active in the export market. Dat
 memberSince: 2025-03-07
 memberType: F
 workingGroups:
- - PKIMM
- - PQC
+  - PKIMM
+  - PQC
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: null
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,6 +53,6 @@ representatives:
   - name: Tope Akinbiyi
     role: Executive Vice President
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/data-and-scientific/
     description: Tope is the Executive Vice President at Data & Scientific Inc. and represents the organization at the PKI Consortium.

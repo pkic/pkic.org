@@ -2,7 +2,9 @@ id: qtrinolabs
 name: QTrino Labs
 slogan: Securing Tomorrow, Today
 website: https://www.qtrinolabs.com/
-
+# Business domains for email
+businessDomains:
+  - qtrinolabs.com
 # Short description, longer content can be placed in `content/members/`
 description: Built for regulated environment and long-lived confidentiality requirements.
 
@@ -15,10 +17,10 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   # url: https://www.qtrinolabs.com/blog/
   # Temporarily disabled: RSS feed returns HTML (text/html; charset=utf-8) instead of XML/RSS
   # Reference: CI report - feed validation failure
@@ -26,24 +28,24 @@ blog:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   # url: https://www.qtrinolabs.com/careers
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/qtrinolabs/posts/?feedView=all
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -56,9 +58,9 @@ representatives:
       linkedin: https://www.linkedin.com/in/atul-sharma-00b8331/
     description: Atul brings 20+ years of leadership across cybersecurity, risk management, and digital trust. With deep roots in cryptography and PKI from his early work at VeriSign, he has built and scaled security platforms as CEO of Custodela (acquired by Checkmarx). At QTrino, he bridges cryptography, cloud security, and business outcomes for regulated enterprises.
   - name: Prof Jawar Singh
-    role: Director 
+    role: Director
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/jawar-singh-25495a17/
     description: Prof. Jawar Singh is a professor at IIT Patna with decades of experience in research, teaching, and industry collaboration. He has served as Associate Dean (R&D) and Project Director of the Technology Innovation Hub. His expertise spans VLSI, post-quantum cryptography, and neuromorphic computing, with multiple patents across India and the US.
   - name: Abhishek Sriwastav
@@ -71,16 +73,17 @@ representatives:
     role: Chief Product Officer
     social:
       linkedin: https://www.linkedin.com/in/abhraneel-saha-724512230/
-    description: Abhraneel Saha is a product leader focused on building quantum-resilient technologies that address real-world security challenges. As Chief Product Officer at QTrino Labs, he bridges deep technical innovation in post-quantum cryptography with market needs, delivering scalable, future-ready security products that drive enterprise trust and long-term growth. 
-      
-      He is involved in quantum-safe cryptographic solutions and actively researching the integration of AI and hardware to develop innovative solutions in this domain. Beyond my academic pursuits, I enjoy reading and sharing insights on science, philosophy, and music. 
+    description:
+      Abhraneel Saha is a product leader focused on building quantum-resilient technologies that address real-world security challenges. As Chief Product Officer at QTrino Labs, he bridges deep technical innovation in post-quantum cryptography with market needs, delivering scalable, future-ready security products that drive enterprise trust and long-term growth.
+
+      He is involved in quantum-safe cryptographic solutions and actively researching the integration of AI and hardware to develop innovative solutions in this domain. Beyond my academic pursuits, I enjoy reading and sharing insights on science, philosophy, and music.
   - name: Partha Sarathi Dutta
     role: Chief Technology Officer - Hardware Products
     social:
       linkedin: https://www.linkedin.com/in/ps-dutta1092/
-    description: Partha is passionate and driven VLSI Design Engineer with experience in Analog and Digital domains. 
-     
-     Adept at translating complex algorithms into optimized hardware architectures. Strong foundation in digital design principles and hands-on experience in FPGA and ASIC development.
+    description: Partha is passionate and driven VLSI Design Engineer with experience in Analog and Digital domains.
+
+      Adept at translating complex algorithms into optimized hardware architectures. Strong foundation in digital design principles and hands-on experience in FPGA and ASIC development.
 
 # Long-form content (markdown)
 content: |

@@ -2,7 +2,9 @@ id: bankofamerica
 name: Bank of America
 slogan:
 website: https://www.bankofamerica.com/information/corporate/
-
+# Business domains for email
+businessDomains:
+  - bofa.com
 # Short description, longer content can be placed in `content/members/`
 description: Bank of America is a global financial institution providing banking, investing, asset management, and other financial services to individuals, small and middle-market businesses, large corporations, and governments.
 
@@ -15,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,6 +53,6 @@ representatives:
   - name: Chris Davis
     role: VP PKI Governance
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/christopher-davis-2a413551/
     description: Chris is the VP PKI Governance at Bank of America and represents the organization at the PKI Consortium.

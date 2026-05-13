@@ -2,7 +2,9 @@ id: cleverbase
 name: Cleverbase
 slogan: Securely e-sign your documents
 website: https://www.cleverbase.com/
-
+# Business domains for email
+businessDomains:
+  - cleverbase.com
 # Short description, longer content can be placed in `content/members/`
 description: Cleverbase offers a mobile app which, after a one-time registration, you can use to place qualified electronic signatures on documents, and exchange these securely.
 
@@ -15,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
-  language: 
+  url:
+  feed:
+  language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: http://www.linkedin.com/company/cleverbase
-  youtube: 
+  youtube:
 
 # Here you can list those who represent the member
 representatives:

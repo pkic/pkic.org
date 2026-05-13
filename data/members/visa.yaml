@@ -2,7 +2,9 @@ id: visa
 name: Visa
 slogan:
 website: https://www.visa.com
-
+# Business domains for email
+businessDomains:
+  - visa.com
 # Short description, longer content can be placed in `content/members/`
 description: Visa is a trusted world leader in digital payment technology that connects and enables individuals, businesses, and economies to thrive.
 
@@ -13,24 +15,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://usa.visa.com/visa-everywhere/blog.html
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://corporate.visa.com/en/careers.html
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -39,7 +41,7 @@ social:
   facebook: https://www.facebook.com/VisaUnitedStates
   instagram: https://instagram.com/visa_us/
   linkedin: https://www.linkedin.com/company/visa
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Adam Clark
     role: Vice President Applied Cryptography
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Adam is the Vice President Applied Cryptography at Visa and represents the organization at the PKI Consortium.

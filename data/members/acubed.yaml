@@ -2,7 +2,9 @@ id: acubed
 name: Acubed.it
 slogan: Designing Secure Applications
 website: https://www.acubed.it
-
+# Business domains for email
+businessDomains:
+  - acubed.it
 # Short description, longer content can be placed in `content/members/`
 description: acubed.it collaborates with government departments in the UK to design and build secure applications leveraging cross-domain & cyber security expertise.
 
@@ -15,24 +17,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.acubed.it/the-cdha-chronicles
   feed: https://www.acubed.it/blog-feed.xml
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -53,7 +55,8 @@ representatives:
     social:
       x: https://x.com/
       linkedin: https://www.linkedin.com/in/amit-gupta-1131b96/
-    description: As the Founder and CEO of acubed.it, Amit leads a dynamic team of software developers and architects who are passionate about crafting innovative and secure cross-security domain solutions for the UK government and our valued clients.
+    description:
+      As the Founder and CEO of acubed.it, Amit leads a dynamic team of software developers and architects who are passionate about crafting innovative and secure cross-security domain solutions for the UK government and our valued clients.
 
       With over two decades of experience in software development, Amit brings a broad range of expertise in various technologies and methodologies. His career has been marked by significant contributions to large-scale digital transformation initiatives in both public and private sectors.
 
@@ -64,7 +67,7 @@ representatives:
 # Long-form content (markdown)
 content: |
   acubed.it offers specialised services tailored for government and public sector organisations, including:
-  
+
   **Cross Domain Solutions:** Secure, NCSC-compliant frameworks for inter-domain connectivity.
 
   **Enterprise Case Management:** Bespoke Dynamics 365 solutions for case handling and stakeholder management.
@@ -76,5 +79,5 @@ content: |
   **Custom Application Development:** Design and delivery of secure applications on platforms such as Rosa, SharePoint, and Power BI.
 
   **Cyber Security Advisory:** Expertise in designing and implementing secure, integrated IT systems.
-  
+
   Partner with us for innovative and secure IT solutions.

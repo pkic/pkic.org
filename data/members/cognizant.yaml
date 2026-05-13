@@ -2,7 +2,9 @@ id: cognizant
 name: Cognizant Technology solutions
 slogan: Engineering modern business
 website: https://www.cognizant.com
-
+# Business domains for email
+businessDomains:
+  - cognizant.com
 # Short description, longer content can be placed in `content/members/`
 description: Engineering modern business to improve everyday lives. Over the past 30 years, we’ve built relationships with market-leading companies around the world. That’s the power of intuition—and we can engineer it. Learn more.
 
@@ -16,24 +18,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -41,7 +43,7 @@ social:
   x: https://x.com/cognizant
   facebook: https://www.facebook.com/Cognizant
   instagram: https://www.instagram.com/cognizant/#
-  linkedin: https://www.linkedin.com/company/cognizant/ 
+  linkedin: https://www.linkedin.com/company/cognizant/
   youtube: https://www.youtube.com/cognizant
 
 # Here you can list those who represent or have represented the member.
@@ -52,6 +54,6 @@ representatives:
   - name: Rasool Kareem Irfan M
     role: Security architect
     social:
-      x: 
+      x:
       linkedin: https://linkedin.com/in/rasoolirfan
     description: Rasool Kareem Irfan is the Security architect at Cognizant Technology solutions and represents the organization at the PKI Consortium.

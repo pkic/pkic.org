@@ -2,7 +2,9 @@ id: ritu-dhaulakhandi
 name: Ritu Dhaulakhandi
 slogan:
 website:
-
+# Business domains for email
+businessDomains:
+  - uni-siegen.de
 # Short description, longer content can be placed in `content/members/`
 description: I’m a PhD student at the University of Siegen actively working in the field of quantum cryptography.
 
@@ -14,34 +16,34 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://de.linkedin.com/in/ritu-dhaulakhandi-165aa022b
   youtube:
-  github: 
+  github:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,6 +53,6 @@ representatives:
   - name: Ritu Dhaulakhandi
     role: PhD Student
     social:
-      x: 
+      x:
       linkedin: https://de.linkedin.com/in/ritu-dhaulakhandi-165aa022b
     description: Ritu is a PhD student and represents the organization at the PKI Consortium.

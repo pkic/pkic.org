@@ -2,7 +2,9 @@ id: viasat
 name: Viasat
 slogan: We enable a world of possibilities
 website: https://www.viasat.com/
-
+# Business domains for email
+businessDomains:
+  - viasat.com
 # Short description, longer content can be placed in `content/members/`
 description: Viasat brings connectivity where it's needed most to unlock opportunity for the world
 

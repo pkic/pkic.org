@@ -2,7 +2,9 @@ id: globalsign
 name: GlobalSign
 slogan:
 website: https://www.globalsign.com/en
-
+# Business domains for email
+businessDomains:
+  - globalsign.com
 # Short description, longer content can be placed in `content/members/`
 description: As technology evolves, the need for trusted, verified, and easily deployed digital identities to secure our connections will continue to grow. GlobalSign is the global identity authority providing security, convenience and trust through digital identities for everyone and everything.
 
@@ -13,27 +15,27 @@ workingGroups:
   - PQC
   - PKIMM
   - TCWG
-  
+
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.globalsign.com/en/blog
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.globalsign.com/en/company/news-events/news
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://www.globalsign.com/en/company/careers/nala
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -52,7 +54,7 @@ representatives:
   - name: Mohit Kumar
     role: VP, Product Management
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/mohit-kumar-76070727
     description: Mohit is the VP, Product Management at GlobalSign and represents the organization at the PKI Consortium.
 

@@ -2,7 +2,9 @@ id: fixmycert
 name: FixMyCert
 slogan:
 website: https://fixmycert.com
-
+# Business domains for email
+businessDomains:
+  - fixmycert.com
 # Short description, longer content can be placed in `content/members/`
 description: Interactive PKI education and compliance resources for practitioners. Learn PKI, SSL/TLS, and certificate management through free interactive demos, guides, and troubleshooting tools — no paywalls, no signup required.
 # membership
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://trustthechain.com
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,7 +52,7 @@ representatives:
   - name: Patrick Jenkins
     role: Owner
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/patrick-m-jenkins/
     description: Patrick is the Owner at FixMyCert and represents the organization at the PKI Consortium.
 

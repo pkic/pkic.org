@@ -2,7 +2,9 @@ id: izenpe
 name: Izenpe
 slogan: Qualified Trusted Service Provider in the Basque Country
 website: https://www.izenpe.eus/
-
+# Business domains for email
+businessDomains:
+  - izenpe.eus
 # Short description, longer content can be placed in `content/members/`
 description: "Izenpe is a project promoted by the Basque Government and the Basque Provincial Councils for the promotion of e-government and e-government in the Basque Country."
 
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
-  language: 
+  url:
+  feed:
+  language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: http://www.linkedin.com/company/izenpe
-  youtube: 
+  youtube:
 
 # Here you can list those who represent the member
 representatives:
@@ -49,16 +51,14 @@ representatives:
     social:
       x:
       linkedin: https://www.linkedin.com/in/toni-saez-gonzalez-25355121/
-    description:
-      Toni Saez is the Izenpe Technical Manager and represents Izenpe at the PKI Consortium.
-      
+    description: Toni Saez is the Izenpe Technical Manager and represents Izenpe at the PKI Consortium.
+
   - name: Oscar García
     role: Chief Security Officer (CISO)
     social:
       x:
       linkedin: https://www.linkedin.com/in/oscar-garc%C3%ADa-42204416/
-    description:
-      Oscar Garcia is responsible for the Information Security of Izenpe, as for the compliance of industry and standard requirements. He represents Izenpe at the PKI Consortium and at the CABForum.
+    description: Oscar Garcia is responsible for the Information Security of Izenpe, as for the compliance of industry and standard requirements. He represents Izenpe at the PKI Consortium and at the CABForum.
     from: 2021-02-12
     till: 2021-07-16
 

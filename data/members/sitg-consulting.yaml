@@ -2,7 +2,9 @@ id: sitg-consulting
 name: SITG-Consulting
 slogan:
 website: https://sitg-consulting.com
-
+# Business domains for email
+businessDomains:
+  - sitg-consulting.com
 # Short description, longer content can be placed in `content/members/`
 description: SITG Consulting delivers board‑ready insights on quantum risk, resilience, and survival mandates. Read The Quantum Time Bomb and more. Transformation, Integrity, Growth, Training, Strategy, Investigations, Cybersecurity.
 
@@ -17,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x:
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/briancouzens/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +55,6 @@ representatives:
   - name: Brian Couzens
     role: Founder/CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/bcouzens/
     description: Brian is the Founder/CEO at SITG-Consulting and represents the organization at the PKI Consortium.

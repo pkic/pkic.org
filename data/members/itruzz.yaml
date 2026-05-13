@@ -2,7 +2,9 @@ id: itruzz
 name: ITRUZZ
 slogan:
 website: https://www.itruzz.com/
-
+# Business domains for email
+businessDomains:
+  - itruzz.co.id
 # Short description, longer content can be placed in `content/members/`
 description: Itruzz is a technology company that specializes in verification service technology. Itruzz is present along with the rapid development of the fintech industry and digital financial products that offer various financial service solutions to retail consumers.
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/itruzz/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Budi Abdurahman
     role: Public Key Infrastructure Manager
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Budi is the Public Key Infrastructure Manager at ITRUZZ and represents the organization at the PKI Consortium.

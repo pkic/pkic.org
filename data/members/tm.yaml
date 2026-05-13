@@ -2,7 +2,9 @@ id: tm
 name: TM Technology Services Sdn Bhd
 slogan:
 website: https://www.tm.com.my
-
+# Business domains for email
+businessDomains:
+  - tm.com.my
 # Short description, longer content can be placed in `content/members/`
 description: Connect to your future with Telekom Malaysia, Malaysia's communications solution provider
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Nazman Fariz Mohd Noh
     role: Head CA
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Nazman Fariz is the Head CA at TM Technology Services Sdn Bhd and represents the organization at the PKI Consortium.

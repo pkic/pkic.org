@@ -2,7 +2,9 @@ id: oldrepublictitle
 name: Old Republic Title Company
 slogan:
 website: https://www.oldrepublictitle.com
-
+# Business domains for email
+businessDomains:
+  - oldrepublictitle.com
 # Short description, longer content can be placed in `content/members/`
 description: Old Republic Title provides title insurance and settlement services for Title Agents, Real Estate Professionals, Lenders, Homeowners and Commercial Transactions. Check out our sustainability report.
 
@@ -16,29 +18,29 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.oldrepublictitle.com/blog
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://www.oldrepublictitle.com/careers
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
+  x:
   facebook: https://www.facebook.com/oldrepublictitle/
   instagram: https://www.instagram.com/oldrepublictitle
   linkedin: https://www.linkedin.com/company/oldrepublictitle
@@ -52,6 +54,6 @@ representatives:
   - name: Kelley Perez
     role: Security Engineer
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/kelley-p-5718aa161/
     description: Kelley is the Security Engineer at Old Republic Title Company and represents the organization at the PKI Consortium.

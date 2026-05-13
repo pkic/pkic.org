@@ -2,7 +2,9 @@ id: upm
 name: Universiti Putra Malaysia
 slogan:
 website: https://www.fsktm.upm.edu.my
-
+# Business domains for email
+businessDomains:
+  - upm.edu.my
 # Short description, longer content can be placed in `content/members/`
 description: UPM is recognised by the independent government assessments as one of Malaysia's leading research universities. Founded in 1931 as the School of Agriculture, the University today combines impressive modern facilities and a dynamic approach to teaching and research with its proud heritage of quality services and achievements.
 
@@ -14,24 +16,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -50,6 +52,6 @@ representatives:
   - name: Sharifah Md Yasin
     role: Senior Lecturer
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/sharifah-md-yasin-b9a41367/
     description: Sharifah is the Senior Lecturer at Universiti Putra Malaysia and represents the organization at the PKI Consortium.

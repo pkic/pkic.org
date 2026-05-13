@@ -2,45 +2,46 @@ id: db-fernverkehr
 name: DB Fernverkehr AG
 slogan:
 website: https://www.deutschebahn.com/de/konzern
-
+# Business domains for email
+businessDomains:
+  - deutschebahn.com
 # Short description, longer content can be placed in `content/members/`
-description: 
+description:
 
 # membership
 memberSince: 2026-01-06
 memberType: H3
 workingGroups:
-  
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.deutschebahn.com/en/presse/press_releases
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +51,6 @@ representatives:
   - name: Peer Eichler
     role: IT Architect
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/peer-eichler-770a1031b
     description: Peer is the IT Architect at DB Fernverkehr AG and represents the organization at the PKI Consortium.

@@ -1,8 +1,10 @@
 id: lex-persona
 name: Lex Persona
-slogan: 
+slogan:
 website: https://www.lex-persona.com
-
+# Business domains for email
+businessDomains:
+  - lex-persona.com
 # Short description, longer content can be placed in `content/members/`
 description: Lex Persona is a specialized software publisher and trust services operator based in Troyes, France. Our focus is on the dematerialization field with probative value. We offer customized software and APIs that seamlessly integrate with your business processes. As an independent French company, we prioritize the protection of our users' data and host all our servers in France.
 
@@ -14,30 +16,30 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
   x: https://x.com/lexpersona
-  facebook: 
+  facebook:
   instagram:
   pinterest:
   linkedin: https://www.linkedin.com/company/lex-persona/

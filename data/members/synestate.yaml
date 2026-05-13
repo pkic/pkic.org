@@ -2,7 +2,9 @@ id: synestate
 name: Synestate
 slogan: Security & Securities
 website: https://synestate.com
-
+# Business domains for email
+businessDomains:
+  - synestate.com
 # Short description, longer content can be placed in `content/members/`
 description: Synestate pursues R&D, cryptography, and high-tech finance ventures.
 
@@ -14,35 +16,35 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url:  https://synestate.com/
+blog:
+  url: https://synestate.com/
   # Temporarily disabled: RSS feed returns HTML (text/html; charset=utf-8) instead of XML/RSS
   # Reference: CI report - feed validation failure
   # feed: https://synestate.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/synestate
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,7 +55,7 @@ representatives:
     role: Founder
     social:
       x:
-      github: https://github.com/naolduga/awesome-blockchain 
+      github: https://github.com/naolduga/awesome-blockchain
       linkedin: https://www.linkedin.com/in/naolduga
     description: Naol Duga is the Founder of Synestate and represents the organization at the PKI Consortium.
 

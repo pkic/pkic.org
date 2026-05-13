@@ -2,7 +2,9 @@ id: altronsecurity
 name: Altron Security
 slogan: Information Security Solutions
 website: https://www.altronsecurity.com
-
+# Business domains for email
+businessDomains:
+  - altron.com
 # Short description, longer content can be placed in `content/members/`
 description: Altron Security is Africa’s leading high-trust Digital Trust Services provider, being the first accredited authentication service provider in South Africa Altron Security is accredited under the requirements of the Electronic Communications Act of 2002 to provide Advanced Electronic Signature (AeSign) solutions and the Adobe Approved Trust List. Altron Security has become a foundational element of South African society, through the Digital Trust Services provided to government and industry.
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
+  x:
   facebook: https://www.facebook.com/AltronS/
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/altron-security/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Cornel Kleynhans
     role: "Senior Manager: Technology Operations"
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Cornel is the Senior Manager Technology Operations at Lawtrust and represents the organization at the PKI Consortium.

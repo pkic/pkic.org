@@ -2,7 +2,9 @@ id: cryptomathic
 name: Cryptomathic
 slogan: Empowering Secure Cryptographic Solutions
 website: https://www.cryptomathic.com
-
+# Business domains for email
+businessDomains:
+  - cryptomathic.com
 # Short description, longer content can be placed in `content/members/`
 description: Cryptomathic's robust cryptographic solutions protect sensitive information from unauthorized access. Trusted by global organizations across all industries.
 
@@ -16,30 +18,30 @@ sponsor:
   level: Titanium
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Emil Hansen
     role: CTO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/davin-cooke/
     description: Emil is the CTO at Cryptomathic Inc and represents the organization at the PKI Consortium.

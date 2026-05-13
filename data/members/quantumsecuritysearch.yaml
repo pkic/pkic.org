@@ -2,7 +2,9 @@ id: quantumsecuritysearch
 name: Quantum Security Search
 slogan:
 website: https://quantumsecuritysearch.io/
-
+# Business domains for email
+businessDomains:
+  - quantumsecuritysearch.io
 # Short description, longer content can be placed in `content/members/`
 description: Provider of quantum security recruitment services connecting organizations with PQC migration, crypto-agility, and quantum readiness talent, covering ML-KEM, ML-DSA, CNSA 2.0, QKD, and HNDL threat roles.
 
@@ -17,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,7 +55,7 @@ representatives:
   - name: Luke Pulsford
     role: Founder
     social:
-      x: 
+      x:
       linkedin: https://uk.linkedin.com/in/lukepulsford-securitysearch
     description: Luke is the Founder at Quantum Security Search and represents the organization at the PKI Consortium.
 

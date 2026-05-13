@@ -2,7 +2,9 @@ id: ge
 name: GE Research
 slogan: Building a world that works
 website: https://www.ge.com/
-
+# Business domains for email
+businessDomains:
+  - ge.com
 # Short description, longer content can be placed in `content/members/`
 description: The General Electric Company (GE) is an American multinational company. For more than 125 years, GE has invented the future of industry. Today, GE is best known for its work in the Power, Renewable Energy, Aviation and Healthcare industries.
 

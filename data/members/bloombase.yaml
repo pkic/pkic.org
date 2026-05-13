@@ -2,7 +2,9 @@ id: bloombase
 name: Bloombase
 slogan: Intelligent Storage Firewall
 website: https://www.bloombase.com/
-
+# Business domains for email
+businessDomains:
+  - bloombase.com
 # Short description, longer content can be placed in `content/members/`
 description: Blombase is an intelligent storage firewall company
 
@@ -14,24 +16,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://blog.bloombase.com
   feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.bloombase.com/go/press-releases
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://careers.bloombase.com
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -62,8 +64,8 @@ representatives:
   - name: Justy Wong
     role: Chief Technology Officer
     hidden: true
- 
- # Long-form content (markdown)
+
+  # Long-form content (markdown)
 content: |
   ## Intelligent Storage Firewall
 

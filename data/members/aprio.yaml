@@ -2,7 +2,9 @@ id: aprio
 name: Aprio
 slogan: Passionate for what’s next
 website: https://www.aprio.com
-
+# Business domains for email
+businessDomains:
+  - aprio.com
 # Short description, longer content can be placed in `content/members/`
 description: As a full-service business advisory and accounting firm. Aprio’s associates work as integrated teams across advisory, audit, tax, managed, and private client services, bringing the best thinking and personal commitment to each client.
 
@@ -16,10 +18,10 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.aprio.com/articles/
   # Temporarily disabled: RSS feed returns HTML (text/html) instead of XML/RSS
   # Reference: CI report - feed validation failure
@@ -27,15 +29,15 @@ blog:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.aprio.com/newsroom
   feed: https://www.aprio.com/newsroom/feed
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://careers.aprio.com
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -44,7 +46,7 @@ social:
   facebook: https://www.facebook.com/aprioadvisors
   instagram: https://www.instagram.com/aprioadvisors
   linkedin: https://www.linkedin.com/company/aprio
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -54,35 +56,35 @@ representatives:
   - name: Jeff Ward
     role: Partner, Risk Advisory and Assurance Services
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/jeffreyfward/
     description: Jeff Ward is a Partner in Aprio’s Information Assurance Services group, working with companies across various industries to share his extensive knowledge of SOC, WebTrust for Certification Authorities, FedRAMP, CMMC, and other Risk Advisory services. He created the WebTrust for Certification Authorities service and regularly collaborates with companies to implement this service. Jeff specializes in securing transactions for his clients and implementing scalable solutions that help drive operational excellence, mitigate regulatory and operational risks, and identify growth opportunities.
 
   - name: Brett Williams
     role: Partner, Risk Advisory and Assurance Services
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/brettwilliamsaprio
     description: Brett Williams is the leader of Aprio’s Risk Advisory and Attestation Services team. He leverages his twenty plus years of focused business process and information technology control experience to help small to midsized companies protect their operations from cyber threats. He has performed over 3,000 audit* and compliance related engagements for companies across multiple industries including, FinTech, healthcare, healthcare IT, technology, insurance, licensed gaming, telecommunications, and consumer and industrial products. Brett has a deep understanding of business processes, IT controls, data security and privacy and the impact these processes have on IT applications, systems and networks as it relates to compliance requirements such as GDPR, FISMA, FedRAMP, HITRUST and HIPPA.
 
 # Long-form content (markdown)
 content: |
-  ## Passionate for what’s next 
+  ## Passionate for what’s next
 
-  As a full-service business advisory and accounting firm, Aprio’s associates work as integrated teams across advisory, audit, tax, managed, and private client services, bringing the best thinking and personal commitment to each client. Aprio helps owners, founders, executives, and companies simplify operations, manage risks, and drive profitable growth with a broad range of audit, advisory, and tax services for technology companies. 
+  As a full-service business advisory and accounting firm, Aprio’s associates work as integrated teams across advisory, audit, tax, managed, and private client services, bringing the best thinking and personal commitment to each client. Aprio helps owners, founders, executives, and companies simplify operations, manage risks, and drive profitable growth with a broad range of audit, advisory, and tax services for technology companies.
 
-  ## Providing High Quality Comprehensive Information Assurance Services 
+  ## Providing High Quality Comprehensive Information Assurance Services
 
-  Aprio is one of a handful of firms capable of handling all your compliance requirements. Our Information Assurance team provides tailored solutions leveraging a “test once, use many” approach that unifies your compliance efforts across certification requirements to simplify compliance, reduce risks, and improve efficiency.  We use our innovative approach and toolset to streamline our collective efforts to enhance quality and reduce turnaround time to drive a successful and highly efficient process.  It is common for the members of the PKI Consortium to demonstrate compliance with various frameworks, and we take great pride in helping meet your objectives.  
+  Aprio is one of a handful of firms capable of handling all your compliance requirements. Our Information Assurance team provides tailored solutions leveraging a “test once, use many” approach that unifies your compliance efforts across certification requirements to simplify compliance, reduce risks, and improve efficiency.  We use our innovative approach and toolset to streamline our collective efforts to enhance quality and reduce turnaround time to drive a successful and highly efficient process.  It is common for the members of the PKI Consortium to demonstrate compliance with various frameworks, and we take great pride in helping meet your objectives.
 
 
 
-  ### Overview: Detailed information about our services. 
+  ### Overview: Detailed information about our services.
 
-  Aprio offers a full suite of information assurance services including SOC, WebTrust, FedRAMP, CMMC, FISMA, PCI, ISO and HITRUST.  We are one of a handful of firms capable of handling all of your compliance requirements. Our Information Assurance team provides tailored solutions leveraging a “test once, use many” approach that unifies your compliance efforts across certification requirements to simplify compliance, reduce risks, and improve efficiency.   
+  Aprio offers a full suite of information assurance services including SOC, WebTrust, FedRAMP, CMMC, FISMA, PCI, ISO and HITRUST.  We are one of a handful of firms capable of handling all of your compliance requirements. Our Information Assurance team provides tailored solutions leveraging a “test once, use many” approach that unifies your compliance efforts across certification requirements to simplify compliance, reduce risks, and improve efficiency.
 
-  Our services typically fall into one of three categories – compliance, consulting/advisory, and software-as-a-service. So, whether you need help at the onset of your journey, need the third-party independent certification, or need to maximize your Governance Risk & Compliance (GRC) solution, there is likely a role for Aprio to assist you. 
+  Our services typically fall into one of three categories – compliance, consulting/advisory, and software-as-a-service. So, whether you need help at the onset of your journey, need the third-party independent certification, or need to maximize your Governance Risk & Compliance (GRC) solution, there is likely a role for Aprio to assist you.
 
-  ### History: Information about founding and contributions to the PKI Consortium. 
+  ### History: Information about founding and contributions to the PKI Consortium.
 
   Our passion is entrenched in the desire to educate our clients and prospects on best practices, emerging trends and sharing our thought leadership.  We have been deeply involved in standard setting since SAS70 was created in 1992.  Providing thought leadership for new services to address emerging needs of our industry is something we take great pride in; we don’t merely join organizations, we get involved and contribute.  As SAS70 was morphing into SOC1, and the creation of SOC2 was taking place, we were involved in their development.  We were also involved with the creation of WebTrust for Certification Authorities since its inception.  We are familiar with many of the PKI Consortium members already through our active participation in these other venues.

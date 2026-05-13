@@ -2,7 +2,9 @@ id: ltf-ngo
 name: Libyan Technology Foundation
 slogan: Technical Awareness for All
 website: https://www.ltf.ngo/
-
+# Business domains for email
+businessDomains:
+  - technology.ly
 # Short description, longer content can be placed in `content/members/`
 description: LTF is a non-profit foundation 2020, to promote technical awareness, support Libya's ICT sector, and drive digital transformation.
 
@@ -19,7 +21,7 @@ sponsor:
   level: none
 
 # Blog posts
-blog: 
+blog:
   url: https://www.ltf.ngo/blog/
   # Temporarily disabled: RSS feed returns HTML (text/html) instead of XML/RSS
   # Reference: CI report - feed validation failure
@@ -27,15 +29,15 @@ blog:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://technology.ly/en/news/
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://technology.ly/en/contact/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -44,7 +46,7 @@ social:
   facebook: https://www.facebook.com/Libyan.Technology.NGO/
   instagram: https://www.instagram.com/libyan_technology_ngo/
   linkedin: https://www.linkedin.com/company/libyantechnology/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -61,17 +63,17 @@ representatives:
 
       In his role at LTF, Salih oversees the organization's strategic direction, focusing on initiatives that enhance technological awareness and support the growth of the information and communications technology (ICT) sector in Libya. Under his leadership, LTF has launched programs aimed at fostering innovation and entrepreneurship among Libyan youth.
 
-      Beyond his work with LTF, Salih is an active participant in Libya's broader technology community. He has delivered talks on digital transformation, including a presentation at TEDxZintan, where he discussed the evolution of technology and its necessity for the country's progress. 
+      Beyond his work with LTF, Salih is an active participant in Libya's broader technology community. He has delivered talks on digital transformation, including a presentation at TEDxZintan, where he discussed the evolution of technology and its necessity for the country's progress.
 
-      Salih's contributions extend to organizing significant events such as the Libyan Information Technology Day, held in Tripoli on June 1, 2022. This event featured various activities, workshops, and conferences across multiple cities, highlighting his commitment to advancing Libya's technological landscape. 
+      Salih's contributions extend to organizing significant events such as the Libyan Information Technology Day, held in Tripoli on June 1, 2022. This event featured various activities, workshops, and conferences across multiple cities, highlighting his commitment to advancing Libya's technological landscape.
     from: 2020-08-25
 
 # Long-form content (markdown)
 content: |
-  LTF is a non-profit Foundation, registered by the Civil Society Commission, and was established on the twenty-fifth of August 2020.  
+  LTF is a non-profit Foundation, registered by the Civil Society Commission, and was established on the twenty-fifth of August 2020. 
 
   The foundation was established for noble purposes, which were to spread technical awareness, support the development of the communications and information technology sector in Libya, and advance institutional and societal digital transformation. To this end, it exploits all local resources, capabilities, and Libyan competencies, to build a better society, and enable the Libyan citizen to benefit from services. Modern and renewable digital, keeping pace with the rapid development in the world of technology.
 
-  The foundation is doing its best to bring viewpoints closer together and bridge the gap between citizens, Libyan telecommunications companies and legislative bodies in the country, by reviewing legal texts and materials, technical decisions and policies, and presenting proposals and drafts that suit the Libyan situation.  
+  The foundation is doing its best to bring viewpoints closer together and bridge the gap between citizens, Libyan telecommunications companies and legislative bodies in the country, by reviewing legal texts and materials, technical decisions and policies, and presenting proposals and drafts that suit the Libyan situation. 
 
   The foundation’s motto is (Technical Awareness for All), so it intensifies our efforts aimed at contributing to the technical, scientific, awareness, educational, research, and information technology fields and communications, to be proactive and creative in everything that would improve and facilitate the lives of Libyans through technology.

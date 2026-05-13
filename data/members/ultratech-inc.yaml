@@ -2,7 +2,9 @@ id: ultratech-inc
 name: Ultratech inc
 slogan:
 website: https://www.ultratech-inc.com/
-
+# Business domains for email
+businessDomains:
+  - ultratech-inc.com
 # Short description, longer content can be placed in `content/members/`
 description: We are the company who apply the electronic signature of Panamá into the national Apostille platform.
 
@@ -13,35 +15,35 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   # Temporarily disabled: Request timeout during content-type check
   # Reference: CI report - feed validation failure
   # feed: https://www.ultratech-inc.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,6 +53,6 @@ representatives:
   - name: Eduardo Campione
     role: Director de desarrollo de software
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/eduardocampione/
     description: Eduardo is the Director de desarrollo de software at Ultratech inc and represents the organization at the PKI Consortium.

@@ -1,14 +1,17 @@
 id: amseymour-consulting
 name: Amseymour Consulting
-slogan: 
+slogan:
 website:
-
+# Business domains for email
+businessDomains:
+  - amseymourconsulting.co.uk
 # Short description, longer content can be placed in `content/members/`
 description: Amseymour Consulting is a private company that provides services in the field of Risk Assurance, Identity Management, PKI Policies and Procedures, PKI Assessment, Smart Cards, Biometrics, Information Security Management (ISM), Secure Authentication.
 
 # membership
 memberSince: 2022-05-23
-memberType: H2
+memberType:
+  H2
   #Consultant
 workingGroups:
   - PKIMM
@@ -16,38 +19,38 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
-  language:  
+  feed:
+  language:
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/amseymour-consulting/
-  youtube: 
+  youtube:
 
 representatives:
   - name: Tony Seymour
     role: Director
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/tonyms
     description: Tony Seymour is director at amseymour consulting and represents the organization at the PKI Consortium.

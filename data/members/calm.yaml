@@ -2,7 +2,9 @@ id: calm
 name: CALM
 slogan: "Providing high quality and secure solutions for organizations around the world"
 website: https://www.calm.fi/
-
+# Business domains for email
+businessDomains:
+  - calm.fi
 # Short description, longer content can be placed in `content/members/`
 description: CALM is provider of consulting services and producer of CLM Certificate Lifecycle Management SaaS -service offering.
 
@@ -13,34 +15,34 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
   # these are disabled due to invalid certificate slowing pkic.org build times
   # url: https://clm.fi/blogs/news/
   # feed: https://clm.fi/blogs/news.atom
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/calmoy
   facebook: https://www.facebook.com/calmfioy/
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/calm-oy
   youtube:
 
@@ -49,13 +51,13 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-   - id: tommi-gronlund
-     name: Tommi Grönlund
-     role: CEO
-     social:
-       x: 
-       linkedin: https://x.com/tomgron
-     description: Tommi is the managing director of CALM Oy, he has been implementing multiple security related applications in enterprises around the world and one of the innovators of clm.fi.
+  - id: tommi-gronlund
+    name: Tommi Grönlund
+    role: CEO
+    social:
+      x:
+      linkedin: https://x.com/tomgron
+    description: Tommi is the managing director of CALM Oy, he has been implementing multiple security related applications in enterprises around the world and one of the innovators of clm.fi.
 
 # Long-form content (markdown)
 content: |

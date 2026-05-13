@@ -2,7 +2,9 @@ id: chase
 name: JP Morgan
 slogan:
 website: https://chase.com
-
+# Business domains for email
+businessDomains:
+  - jpmchase.com
 # Short description, longer content can be placed in `content/members/`
 description: Chase online; credit cards, mortgages, commercial banking, auto loans, investing & retirement planning, checking and business banking.
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: Sreenivas Podalakur
     role: PKI Lead
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/podalakur/
     description: Sreenivas is the PKI Lead at JP Morgan and represents the organization at the PKI Consortium.

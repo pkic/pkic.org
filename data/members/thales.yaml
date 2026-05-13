@@ -2,7 +2,10 @@ id: thales
 name: Thales
 slogan: Building a future we can all trust
 website: https://www.thalesgroup.com/
-
+# Business domains for email
+businessDomains:
+  - thalestct.com
+  - thalesgroup.com
 # Short description, longer content can be placed in `content/members/`
 description: Thales is a global technology leader with more than 77,000 employees on five continents. The Group is investing in digital and “deep tech” innovations - Big Data, artificial intelligence, connectivity, cybersecurity and quantum technology - to build a future we can all trust.
 
@@ -14,28 +17,28 @@ workingGroups:
 
 # sponsor
 sponsor:
-# Started sponsoring the PKIC in August 2025
+  # Started sponsoring the PKIC in August 2025
   level: Gold
   sponsoring:
     "Post-Quantum Cryptography Conference Amsterdam 2023":
       level: Innovator
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media

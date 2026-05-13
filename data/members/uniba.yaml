@@ -2,7 +2,9 @@ id: uniba
 name: The University of Bamenda
 slogan: The University of the future
 website: https://uniba.cm
-
+# Business domains for email
+businessDomains:
+  - uniba.cm
 # Short description, longer content can be placed in `content/members/`
 description: The University of Bamenda (UBa) is a distinctive anglo-saxon university with future international reputation for higher standards of achievements and innovations in all areas of professionalism, arts, sciences and technology.
 
@@ -16,24 +18,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
   url: https://uniba.cm/blog
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
 press:
   url: https://uniba.cm/press-release
-  feed: 
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -42,7 +44,7 @@ social:
   facebook: https://www.facebook.com/univbamenda
   instagram: https://uniba.cm/#
   linkedin: https://www.linkedin.com/school/university-of-bamenda/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,7 +54,7 @@ representatives:
   - name: Smith Neba Chi
     role: Research Assistant
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/neba-chi/
     description: Smith is the Research Assistant at The University of Bamenda and represents the organization at the PKI Consortium.
 

@@ -2,7 +2,9 @@ id: yokai
 name: Yokai
 slogan: Foundational Infrastructure for the Multi-Agent Economy
 website: https://yokai.network
-
+# Business domains for email
+businessDomains:
+  - yokai.network
 # Short description, longer content can be placed in `content/members/`
 description: Yokai Network develops the critical infrastructure layer for secure multi agent communication, implementing quantum-resistant cryptographic protocols that enable autonomous systems to establish verifiable trust relationships across organizational boundaries.
 

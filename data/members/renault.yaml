@@ -2,7 +2,9 @@ id: renault
 name: Renault Group
 slogan:
 website: https://www.renault.com
-
+# Business domains for email
+businessDomains:
+  - renault.com
 # Short description, longer content can be placed in `content/members/`
 description: Bienvenue sur le site officiel de Renault Group, le groupe automobile de future génération.
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: JOYEZ Philippe
     role: Project Leader Cryptography
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/philippe-joyez-9a6b3323/
     description: JOYEZ is the Project Leader Cryptography at Renault Group and represents the organization at the PKI Consortium.

@@ -2,7 +2,9 @@ id: soluti
 name: Soluti Negócios Inteligentes Ltda
 slogan:
 website: https://www.soluti.com.br
-
+# Business domains for email
+businessDomains:
+  - soluti.com.br
 # Short description, longer content can be placed in `content/members/`
 description: O Certificado Digital Ideal Para você ou sua empresa! Segurança e Comodidade. Compre ou Renove seu Certificado com a Soluti.
 
@@ -13,30 +15,30 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: https://www.soluti.com.br/feed/
   language: pt_BR
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: pt_BR
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: pt_BR
 
 # Social media
 social:
-  x: 
-  facebook: 
+  x:
+  facebook:
   instagram: https://www.instagram.com/solutidigital/
   linkedin: https://www.linkedin.com/company/solutidigital/
   youtube: https://www.youtube.com/c/SolutiDigital
@@ -49,7 +51,7 @@ representatives:
   - name: Alexandre Torres
     role: CIO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/alexandrehtorres/
     description: Alexandre is the CIO at Soluti Negócios Inteligentes Ltda and represents the organization at the PKI Consortium.
     hidden: true

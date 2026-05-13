@@ -2,7 +2,9 @@ id: transsped
 name: Trans Sped
 slogan: The first trusted service provider in Romania
 website: https://www.transsped.com/
-
+# Business domains for email
+businessDomains:
+  - transsped.ro
 # Short description, longer content can be placed in `content/members/`
 description: Trans Sped is the most experienced trusted solutions provider based on qualified digital certificates, active on the domestic market since 2004. Qualified certificates issued by Trans Sped are internationally recognized and guarantee interoperability with various types of systems and applications.
 
@@ -14,24 +16,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.transsped.com/media
-  feed: 
+  feed:
   language: ro
 
 # Press Releases
-press: 
+press:
   url: https://www.transsped.com/media
-  feed: 
+  feed:
   language: ro
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -41,8 +43,8 @@ social:
   instagram: https://www.instagram.com/tsp_trans_sped/
   linkedin: https://ro.linkedin.com/company/transsped
   youtube: https://www.youtube.com/channel/UC6C8jsytGNSka5LSyp5NBfQ
-  reddit: 
-  
+  reddit:
+
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
@@ -51,6 +53,6 @@ representatives:
   - name: Camelia-Elena Ivan
     role: Chief Executive Officer
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/camelia-elena-ivan-1437a147/
-    description: 
+    description:

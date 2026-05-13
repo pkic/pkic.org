@@ -2,7 +2,9 @@ id: khics
 name: KHICS Consulting
 slogan:
 website: https://khics.com
-
+# Business domains for email
+businessDomains:
+  - khics.com
 # Short description, longer content can be placed in `content/members/`
 description: KHICS Consulting undertakes cybersecurity capability maturity assessments for clients. It relies on the outcomes to enable appropriate security capabilities for them, including PKI Certificate Management capabilities.
 
@@ -17,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://khics.com/blog/
   feed: https://khics.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +55,6 @@ representatives:
   - name: Ernest Ketcha
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/prof-dr-ernest-ketcha-ngassam-534048b3
     description: Ernest is the CEO at KHICS Consulting and represents the organization at the PKI Consortium.

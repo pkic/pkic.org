@@ -2,7 +2,9 @@ id: soebit
 name: SOEBIT Cybersecurity
 slogan:
 website: https://soebit.com
-
+# Business domains for email
+businessDomains:
+  - soebit.com
 # Short description, longer content can be placed in `content/members/`
 description: SOEBIT is a solution-oriented Cybersecurity, Training, Service & Consultancy Company established in 2003 In the Netherlands.
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: https://soebit.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: Soenil Soebedar
     role: Founder, Cryptography & PKI/HSM Specialist
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/soenil-soebedar-51b1364
     description: Soenil is the Founder, Cryptography & PKI/HSM Specialist at SOEBIT Cybersecurity and represents the organization at the PKI Consortium.

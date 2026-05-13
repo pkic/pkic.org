@@ -2,7 +2,9 @@ id: cereneveracruz
 name: Centro de Rehabilitacion Neuropsicologica
 slogan: Centro de Rehabilitacion Neuropsicologica
 website: https://cereneveracruz.com.mx
-
+# Business domains for email
+businessDomains:
+  - cereneveracruz.com.mx
 # Short description, longer content can be placed in `content/members/`
 description: We are a small clinic working on the human side of cybersecurity integration of algorithms and neurotechnology. Currently working on rubber-hose crypto analysis.
 
@@ -13,27 +15,27 @@ workingGroups:
   - PKIMM
   - PQC
   - TCWG
-  
+
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://cereneveracruz.com.mx/newsletter/
-  feed: 
+  feed:
   language: es-ES
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: es-ES
 
 # Careers
-careers: 
+careers:
   url: https://cereneveracruz.com.mx/mod/page/view.php?id=362
-  feed: 
+  feed:
   language: es-ES
 
 # Social media
@@ -65,4 +67,4 @@ representatives:
 content: |
   ## Centro de Rehabilitacion Neuropsicologica
 
-  We are a small private clinic working in the intersection of Neurotehabilitation and Neurotechnologies. As part of our work with private financial entities we are experts in the design of deniable encryption and cryptoanalysis. 
+  We are a small private clinic working in the intersection of Neurotehabilitation and Neurotechnologies. As part of our work with private financial entities we are experts in the design of deniable encryption and cryptoanalysis.

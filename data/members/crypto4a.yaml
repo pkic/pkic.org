@@ -2,7 +2,9 @@ id: crypto4a
 name: Crypto4A
 slogan: Easy to use, easy to deploy, easy to sustain cybersecurity foundations - today and tomorrow.
 website: https://www.crypto4a.com/
-
+# Business domains for email
+businessDomains:
+  - crypto4a.com
 # Short description, longer content can be placed in `content/members/`
 description: Crypto4A Technologies Inc. develops and delivers quantum-safe hardware security modules designed to meet the highest standards of cryptographic security. Its flagship QxHSM™ product empowers organizations to deploy secure, agile, and scalable cryptographic solutions, enabling a seamless transition to the quantum future.
 
@@ -22,28 +24,28 @@ sponsor:
       level: Innovator
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   pinterest:
   linkedin: https://ca.linkedin.com/company/crypto4a
-  youtube: 
+  youtube:

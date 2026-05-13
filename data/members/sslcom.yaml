@@ -2,7 +2,9 @@ id: sslcom
 name: SSL.com
 slogan: Trust is what we do
 website: https://www.ssl.com/
-
+# Business domains for email
+businessDomains:
+  - ssl.com
 # Short description, longer content can be placed in `content/members/`
 description: SSL.com is a publicly-trusted commercial certificate authority expanding the boundaries of encryption and authentication relied upon by users worldwide.
 
@@ -24,30 +26,30 @@ sponsor:
       level: Leader
     "Post-Quantum Cryptography Conference Austin 2025":
       level: Leader
-      
+
 # Blog posts
-blog: 
+blog:
   url: https://www.ssl.com/blog/
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url: https://www.ssl.com/careers/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/sslcorp
   facebook: https://www.facebook.com/sslcorp
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/ssl-com/
   youtube: https://www.youtube.com/channel/UC2S1NiPt3QTMGyiH4auvlMQ
 
@@ -57,7 +59,7 @@ representatives:
   - name: Leo Grove
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/leogrove/
     description: Leo is the CEO of SSL.com and represents the organization at the PKI Consortium.
 
@@ -69,6 +71,6 @@ content: |
 
   {{< vimeo 135666049 >}}
 
-  At SSL, trust is the foundation of everything we do. We continuously develop technologies that address tomorrow's security challenges, from post-quantum cryptography and content provenance to enterprise-scale managed PKI. 
+  At SSL, trust is the foundation of everything we do. We continuously develop technologies that address tomorrow's security challenges, from post-quantum cryptography and content provenance to enterprise-scale managed PKI.
 
   We back it all with a commitment to customer success that has made us a trusted partner for thousands of organizations worldwide, delivering the expert guidance and responsive support that teams of every size and technical background need to protect their brand, voice, and operations.

@@ -1,8 +1,10 @@
-id: indenova 
+id: indenova
 name: inDenova
-slogan: 
+slogan:
 website: https://www.indenova.com/
-
+# Business domains for email
+businessDomains:
+  - indenova.com
 # Short description, longer content can be placed in `content/members/`
 description: inDenova is a European and LATAM TSP. As a TSP we provide automation solutions (BPM Platforms, eForms,...) and Electronic Signature and onboarding solutions (eKYC, cloud signature services, biometric solutions, ....). Indenova is a Lleida.net company. Lleida.net is a TSP for certified electronic delivery services.
 
@@ -13,24 +15,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.indenova.com/blog/
   feed: https://www.indenova.com/blog/feed/
   language: es_ES
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media

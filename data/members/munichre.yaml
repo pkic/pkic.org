@@ -2,10 +2,11 @@ id: munichre
 name: Munich Reinsurance Group
 slogan:
 website: https://www.munichre.com
-
+# Business domains for email
+businessDomains:
+  - munichre.com
 # Short description, longer content can be placed in `content/members/`
 description: Munich Re is a leading global provider of reinsurance, primary insurance and insurance-related risk solutions.
-
 
 # membership
 memberSince: 2025-03-07
@@ -17,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +54,6 @@ representatives:
   - name: Cosmin Stefan Marin
     role: Senior IT Risk Technical Specialist
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/marincosmin
     description: Cosmin Stefan is the Senior IT Risk Technical Specialist at Munich Reinsurance Group and represents the organization at the PKI Consortium.

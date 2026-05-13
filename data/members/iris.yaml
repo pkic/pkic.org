@@ -2,7 +2,9 @@ id: iris
 name: IRIS Corporation Berhad
 slogan:
 website: https://www.iris.com.my/
-
+# Business domains for email
+businessDomains:
+  - iris.com.my
 # Short description, longer content can be placed in `content/members/`
 description: IRIS innovates, evolves, and digitalises Trusted Identification and Identity Solutions in a dynamic landscape.
 
@@ -15,24 +17,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.iris.com.my/category/blog/
   feed: https://www.iris.com.my/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -51,6 +53,6 @@ representatives:
   - name: Jia Giin Tan
     role: General Manager, Software Solutions
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/jia-giin-tan-282ab1131/
     description: Jia Giin is the General Manager, Software Solutions at IRIS Corporation Berhad and represents the organization at the PKI Consortium.

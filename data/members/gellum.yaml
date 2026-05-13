@@ -2,7 +2,9 @@ id: gellum
 name: Gellum
 slogan: Your Trusted Technology Partner
 website: https://gellum.com/
-
+# Business domains for email
+businessDomains:
+  - backdoorglobal.com
 # Short description, longer content can be placed in `content/members/`
 description: Gellum is the technology division of Backdoor Global, Inc., providing comprehensive IT solutions to businesses of all sizes.
 
@@ -16,29 +18,29 @@ sponsor:
   level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.gellum.com/blog
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.gellum.com/blog
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://gellum.com/contacto
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/gellum_com
   facebook: https://fb.com/gellumcom
-  instagram: 
-  linkedin: 
+  instagram:
+  linkedin:
   youtube: https://www.youtube.com/@gellumcom
 
 # Here you can list those who represent or have represented the member.
@@ -59,10 +61,10 @@ representatives:
       x: https://x.com/neugocho
       linkedin: https://www.linkedin.com/in/euder-villamizar-94374231/
     description: |
-         Euder Isaac Villamizar Peñaloza is a businessman and systems engineer. He is the co-founder of Backdoor Global, Inc.
-         
-         He graduated in Systems Engineering from UNEFA in 2011. Currently, he is an outsourcing consultant for SAP ABAP/Workflow and the chief of software development and CEO at Backdoor Global, Inc., a company whose mission is to eliminate barriers to entry and introduce computer solutions into daily life in Latin America.
-  
+      Euder Isaac Villamizar Peñaloza is a businessman and systems engineer. He is the co-founder of Backdoor Global, Inc.
+
+      He graduated in Systems Engineering from UNEFA in 2011. Currently, he is an outsourcing consultant for SAP ABAP/Workflow and the chief of software development and CEO at Backdoor Global, Inc., a company whose mission is to eliminate barriers to entry and introduce computer solutions into daily life in Latin America.
+
 # Long-form content (markdown)
 content: |
   ## Excellence and Security in Technological Solutions

@@ -3,7 +3,9 @@ name: B.EST Solutions
 slogan: Mobile-ID based on eSIM, SIM and PKI technologies
 website: https://bestsolutions.ee/
 description: Digital mobile identity based on eSIM, SIM and PKI technologies
-
+# Business domains for email
+businessDomains:
+  - bestsolutions.ee
 # membership
 memberSince: 2024-11-06
 memberType: F
@@ -12,24 +14,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: https://bestsolutions.ee/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -45,6 +47,6 @@ representatives:
   - name: Jana Krimpe
     role: CEO, Founder
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Jana is the CEO, Founder at B.EST Solutions Estonia and represents the organization at the PKI Consortium.

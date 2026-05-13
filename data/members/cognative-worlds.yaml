@@ -2,7 +2,9 @@ id: cognitive-worlds
 name: Cognitive Worlds
 slogan:
 website: https://cognitiveworlds9.godaddysites.com/
-
+# Business domains for email
+businessDomains:
+  - cognitiveworlds.com
 # Short description, longer content can be placed in `content/members/`
 description: Cognitive Worlds operates at the intersection of advanced software development and strategic cybersecurity consultancy. We specialize in building the next generation of intelligent orchestration platforms and providing the expert guidance necessary to navigate the complex transition to a quantum-secure future.  We understand that the coming quantum computing era represents both an existential threat and a transformative opportunity. Our mission is to provide clients with both the software tools and the strategic insights to turn this challenge into a competitive advantage. We don't just advise on the future; we build it.
 
@@ -17,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: https://cognitiveworlds9.godaddysites.com/f.rss
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +55,6 @@ representatives:
   - name: Supriya Mhatre/Pangam
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/supriya-m-592402384/
     description: Supriya is the CEO at Cognitive Worlds and represents the organization at the PKI Consortium.

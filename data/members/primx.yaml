@@ -2,7 +2,9 @@ id: primx
 name: PRIM'X
 slogan:
 website: https://www.primx.eu/
-
+# Business domains for email
+businessDomains:
+  - primx.fr
 # Short description, longer content can be placed in `content/members/`
 description: Make encryption happen
 
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +52,6 @@ representatives:
   - name: Pierre-Jean LECA
     role: CTO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/pleca/
     description: Pierre-Jean is the CTO at PRIM'X and represents the organization at the PKI Consortium.

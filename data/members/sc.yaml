@@ -2,7 +2,9 @@ id: sc
 name: Standard Chartered Bank GBS SDN BHD
 slogan:
 website: https://www.sc.com/my/
-
+# Business domains for email
+businessDomains:
+  - sc.com
 # Short description, longer content can be placed in `content/members/`
 description: Standard Chartered Bank offers personalized banking solutions for your needs. From savings deposits, credit cards, loans, investments & more.
 
@@ -17,24 +19,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -53,6 +55,6 @@ representatives:
   - name: Saravanakarthik Marimuthu
     role: Chapter Lead, Data Security
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/saravanakarthik-marimuthu-095b1a21
     description: Saravanakarthik Marimuthu is the Chapter Lead, Data Security at Standard Chartered Bank GBS SDN BHD and represents the organization at the PKI Consortium.

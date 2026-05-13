@@ -2,7 +2,9 @@ id: easy-pki
 name: Easy-PKI
 slogan: A Concierge Consulting Company
 website: https://www.easy-PKI.com
-
+# Business domains for email
+businessDomains:
+  - easy-pki.com
 # Short description, longer content can be placed in `content/members/`
 description: Easy-PKI is committed to simplifying the use of PKI, Digital Certificates, PQC, and Encryption Technologies
 
@@ -11,36 +13,36 @@ memberSince: 2025-05-28
 memberType: H2
 workingGroups:
   - PQC
-  
+
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.easy-PKI.com/Easy-PKI-Blog
   feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,9 +52,10 @@ representatives:
   - name: Tim Thompson
     role: Founder & CEO
     social:
-      x: 
-      linkedin: 
-    description: Tim Thompson has a career spanning 37+ years in IT & CyberSecurity and has an unswerving passion for Data Protection.
+      x:
+      linkedin:
+    description:
+      Tim Thompson has a career spanning 37+ years in IT & CyberSecurity and has an unswerving passion for Data Protection.
 
       Mr. Thompson managed all Encryption & Data Protection world wide for AT&T Services for 22 years.  He has worked on projects ranging from PKI deployments, Public & Private Digital Certificate projects, utilizing PKI to generate Revenue, and most recently one of the guiding members of the PQC efforts at AT&T.
 
@@ -65,17 +68,18 @@ representatives:
   - name: Brian Novack
     role: Chief Technical Officer
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/brian-novack-10478b1/
-    description: Brian recently retired from AT&T with over 30 years of experience in IT including more than 20 years with the AT&T Chief Security Office and AT&T Chief Compliance Office.
- 
-       Mr. Novack was the leader for Biometrics and PKI where he successfully delivered one of the largest enterprise Voice Biometric solutions. His expertise in IdAM grew as his work expanded from the enterprise to include the customer. In the area of PKI, he pioneered certificate discovery and management including automated integration with operational change management.
+    description:
+      Brian recently retired from AT&T with over 30 years of experience in IT including more than 20 years with the AT&T Chief Security Office and AT&T Chief Compliance Office.
 
-       Mr. Novack’s achievements in the areas of IdAM, PKI, and the Metaverse established a new vision for Identity and Access Management at AT&T, generated more than 50 United States Patents for AT&T, recognized by the Association for Computing Machinery as a Distinguished Engineer, and presenter in the areas of IdAM and compliance management.
- 
-       Mr. Novack led critical risk assessments, evaluated emerging data protection and cybersecurity risks, enhanced the AT&T Identity Theft Prevention Program, and collaborated with business units to monitor and reduce data and cybersecurity risks.  Throughout his tenure, he helped ensure AT&T had an effective Data Protection Risk Program.
- 
-       Mr. Novack received a Bachelor’s Degree in Computer Studies from Webster University in St. Louis.
+      Mr. Novack was the leader for Biometrics and PKI where he successfully delivered one of the largest enterprise Voice Biometric solutions. His expertise in IdAM grew as his work expanded from the enterprise to include the customer. In the area of PKI, he pioneered certificate discovery and management including automated integration with operational change management.
+
+      Mr. Novack’s achievements in the areas of IdAM, PKI, and the Metaverse established a new vision for Identity and Access Management at AT&T, generated more than 50 United States Patents for AT&T, recognized by the Association for Computing Machinery as a Distinguished Engineer, and presenter in the areas of IdAM and compliance management.
+
+      Mr. Novack led critical risk assessments, evaluated emerging data protection and cybersecurity risks, enhanced the AT&T Identity Theft Prevention Program, and collaborated with business units to monitor and reduce data and cybersecurity risks.  Throughout his tenure, he helped ensure AT&T had an effective Data Protection Risk Program.
+
+      Mr. Novack received a Bachelor’s Degree in Computer Studies from Webster University in St. Louis.
 
 # Long-form content (markdown)
 content: |

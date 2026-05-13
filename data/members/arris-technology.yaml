@@ -2,7 +2,10 @@ id: arris-technology
 name: ARRIS Technology, Inc.
 slogan:
 website: https://www.pki-center.com/
-
+# Business domains for email
+businessDomains:
+  - auroranetworks.com
+  - vistancenetworks.com
 # Short description, longer content can be placed in `content/members/`
 description: A provider of PKI and other security-related services staffed by a team of dedicated professionals with 30+ years operational experience and security expertise.
 
@@ -15,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/vistance-networks/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,7 +54,7 @@ representatives:
   - name: Xin Qiu
     role: Head of Security Solutions and PKI Center At Aurora Networks
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/xin-qiu-ph-d-94908512/
     description: Xin is the Head of Security Solutions and PKI Center At Aurora Networks at ARRIS Technology, Inc. and represents the organization at the PKI Consortium.
 

@@ -2,9 +2,11 @@ id: sealweb
 name: SEALWeb
 slogan: Securing transactions
 website: https://www.sealweb.eu/
-
+# Business domains for email
+businessDomains:
+  - sealweb.eu
 # Short description, longer content can be placed in `content/members/`
-description: SEALWeb is a consulting company dedicated to trust services projects. 
+description: SEALWeb is a consulting company dedicated to trust services projects.
 
 # membership
 memberSince: 2023-05-01
@@ -15,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
-  language: 
+blog:
+  url:
+  feed:
+  language:
 
 # Press Releases
-press: 
-  url: 
-  feed: 
-  language: 
+press:
+  url:
+  feed:
+  language:
 
 # Careers
-careers: 
+careers:
   url: https://www.sealweb.eu/la-societe/recrutement/?lang=en
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/sealwebeu
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #

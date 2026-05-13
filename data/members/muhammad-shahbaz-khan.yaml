@@ -2,7 +2,8 @@ id: muhammad-shahbaz-khan
 name: Muhammad Shahbaz Khan
 slogan:
 website:
-
+# Business domains for email
+businessDomains:
 # Short description, longer content can be placed in `content/members/`
 description: I'm an experienced researcher and academic with over 10 years of expertise in research and teaching at leading academic institutions. I hold a Master’s degree in Electrical Engineering and currently pursuing a PhD in Computing (Cybersecurity and AI) at Edinburgh Napier University, Scotland, UK.
 
@@ -15,34 +16,34 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/in/muhammadshahbazkhan/
   youtube:
-  github: 
+  github:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +53,6 @@ representatives:
   - name: Muhammad Shahbaz Khan
     role: PhD student
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/muhammadshahbazkhan/
     description: Muhammad Shahbaz is a PhD student and represents the organization at the PKI Consortium.

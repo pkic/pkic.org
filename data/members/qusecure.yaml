@@ -2,7 +2,9 @@ id: qusecure
 name: QuSecure
 slogan:
 website: https://www.qusecure.com
-
+# Business domains for email
+businessDomains:
+  - qusecure.com
 # Short description, longer content can be placed in `content/members/`
 description: QuSecure provides a post-quantum cryptography software solution with cryptographic agility, controls, and insights.
 
@@ -14,35 +16,35 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   # Temporarily disabled: RSS feed returns HTML (text/html) instead of XML/RSS
   # Reference: CI report - feed validation failure
   # feed: https://www.qusecure.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: Rebecca Krauthamer
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://linkedin.com/in/rkrauthamer
     description: Rebecca is the CEO at QuSecure and represents the organization at the PKI Consortium.

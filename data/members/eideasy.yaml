@@ -2,7 +2,9 @@ id: eideasy
 name: eID Easy
 slogan:
 website: https://eideasy.com
-
+# Business domains for email
+businessDomains:
+  - eideasy.com
 # Short description, longer content can be placed in `content/members/`
 description: Easily add the strongest digital signature signing methods to your website or app through our simple API. ID methods from Europe and beyond.
 
@@ -13,35 +15,35 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   # Temporarily disabled: RSS feed returns HTML (text/html) instead of XML/RSS
   # Reference: CI report - feed validation failure
   # feed: https://eideasy.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/eid-easy/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,7 +53,7 @@ representatives:
   - name: Margus Pala
     role: Board member
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/smartman/
     description: Margus is the Board member at eID Easy and represents the organization at the PKI Consortium.
     till: 2026-04-08
@@ -60,6 +62,6 @@ representatives:
   - name: Mats-Joonas Kulla
     role: Co-Founder / CTO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/matsjoonas/
     description: Mats-Joonas is a Co-founder / CTO at eID Easy and represents the organization at the PKI Consortium.

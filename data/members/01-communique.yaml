@@ -2,7 +2,9 @@ id: 01-communique
 name: 01 Communique
 slogan: Tomorrow's Cyber Security, Today
 website: https://www.01com.com/
-
+# Business domains for email
+businessDomains:
+  - 01com.com
 # Short description, longer content can be placed in `content/members/`
 description: Established in 1992, 01 Communique is always at the forefront of technology. Our latest innovation is on cyber security with our latest development focused on Quantum-Safe Cryptography. Our patent-protected Quantum-Safe Cryptography is designed to operate on conventional computer systems as we know them today while at the same time is secure enough to safeguard against future attacks from the world of Quantum Computers. Examples of vertical applications are email/file encryption, digital signatures, blockchain security, remote access/VPN, password management, credit card security, cloud storage, artificial intelligence, IoT (5G), and website security.
 
@@ -19,27 +21,27 @@ sponsor:
       level: Ambassador
 
 # Blog posts
-blog: 
+blog:
   url: https://blog.01com.com/wp/
   feed: https://blog.01com.com/wp/?feed=rss2
   language: en_US
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
-  facebook: 
+  x:
+  facebook:
   instagram:
   pinterest:
   linkedin: https://www.linkedin.com/company/01-communique
