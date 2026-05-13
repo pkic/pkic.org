@@ -68,6 +68,8 @@ params:
   submoduleSources:
     - prefix: wg/pkimm/model/
       source: https://github.com/pkic/pkimm/edit/main
+    - prefix: wg/pkimm/1.0.0/
+      source: https://github.com/pkic/pkimm/blob/1.0.0
     - prefix: wg/cm/remote-key-attestation/
       source: https://github.com/pkic/remote-key-attestation/edit/main
     - prefix: wg/pqc/pqccm/

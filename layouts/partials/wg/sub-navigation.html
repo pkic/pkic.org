@@ -145,6 +145,10 @@
     {{ end }}
 
     <a class="wg-nav-link" href="/blog/?wg={{ $wg.Params.wgID | lower }}">Blog</a>
+
+    {{ if eq ($wg.Params.wgID | upper) "PKIMM" }}
+    {{ partial "wg/pkimm-version-switcher.html" . }}
+    {{ end }}
   </div>
 </nav>
 {{/* Tree panels — one per deliverable section with child pages */}}
