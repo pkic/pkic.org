@@ -5,7 +5,6 @@ website: https://www.utimaco.com/
 # Business domains for email
 businessDomains:
   - utimaco.com
-  - exceet.de
 # Short description, longer content can be placed in `content/members/`
 description: Utimaco is a global platform solution provider of trusted Cybersecurity and Compliance solutions and services.
 
