@@ -2,9 +2,11 @@ id: dilithium3
 name: Dilithium3
 slogan:
 website: https://dilithium3.com
-
+# Business domains for email
+businessDomains:
+  - dilithium3.com
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Dilithium3 is a technology company focused on post-quantum cryptography.
 
 # membership
 memberSince: 2026-05-04
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,7 +52,7 @@ representatives:
   - name: Juan Todoli
     role: Founder & CEO
     social:
-      x: 
+      x:
       linkedin: https://linkedin.com/in/juantodoli
     description: Juan is the Founder & CEO at Dilithium3 and represents the organization at the PKI Consortium.
 
