@@ -5,6 +5,7 @@ website: https://savis.vn/
 # Business domains for email
 businessDomains:
   - savis.vn
+  - savis-digital.com
 # Short description, longer content can be placed in `content/members/`
 description: SAVIS GROUP is in the TOP 10 leading Information Technology enterprises in Vietnam providing Platforms - Services - Solutions for Digital Transformation and Security - Information Security, with in-depth capabilities in the field of Digital Government, Digital businesses, Digital television, Digital banking, IoT and smart cities.
 

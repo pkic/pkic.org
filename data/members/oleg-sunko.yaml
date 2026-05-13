@@ -4,6 +4,7 @@ slogan:
 website:
 # Business domains for email
 businessDomains:
+  - borderlandersinc.com
 # Short description, longer content can be placed in `content/members/`
 description: Oleg Implements security solutions for telecommunications and logistics.
 
