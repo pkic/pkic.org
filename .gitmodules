@@ -10,3 +10,6 @@
 	path = content/wg/cm/remote-key-attestation
 	url = ../remote-key-attestation.git
 	branch = main
+[submodule "content/pkimm-1.0.0"]
+	path = content/wg/pkimm/1.0.0
+	url = ../pkimm

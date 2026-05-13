@@ -1,0 +1,26 @@
+# Registry of PKIMM model versions rendered on the site.
+#
+# Each entry corresponds to a content subtree mounted via a git submodule
+# under `content/wg/pkimm/`. The version switcher partial reads this file
+# to render its dropdown and route between versions.
+#
+# Fields:
+#   id               URL segment under /wg/pkimm/ — used to detect the
+#                    current version from the page path
+#   label            short text rendered as a pill badge in the switcher
+#   path             absolute site path of this version's root
+#   isLatestRelease  true for the most recent stable release — shows a
+#                    "Latest release" hint under the entry in the menu
+#
+# Entries are listed in the order they appear in the dropdown. Put the
+# recommended landing version first.
+
+versions:
+  - id: "1.0.0"
+    label: "1.0.0"
+    path: /wg/pkimm/1.0.0/
+    isLatestRelease: true
+
+  - id: model
+    label: "main"
+    path: /wg/pkimm/model/

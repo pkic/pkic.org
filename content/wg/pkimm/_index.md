@@ -32,13 +32,13 @@ chair:
 keyDeliverables:
   - title: PKI Maturity Model
     description: A complete five-level framework for evaluating and benchmarking PKI implementations across all critical domains — from governance and risk management to cryptographic controls and certificate lifecycle.
-    url: /wg/pkimm/model/
+    url: /wg/pkimm/1.0.0/
     icon: pkimm-model
     cta: Explore the Model
     badge: Active
   - title: Online Quick Assessment
     description: Assess your organization's PKI maturity in minutes. The interactive self-assessment scores your PKI across all domains and provides an instant gap analysis with actionable recommendations — no login required.
-    url: /wg/pkimm/model/tools/self-assessment/
+    url: /wg/pkimm/1.0.0/tools/self-assessment/
     icon: pkimm-assessment
     cta: Start Free Assessment
     badge: Free · No login required
@@ -50,10 +50,10 @@ card:
   description: "A globally recognized standard for evaluating, planning and comparing PKI implementations across every sector."
   links:
     - text: "Maturity Model"
-      url: "/wg/pkimm/model/"
+      url: "/wg/pkimm/1.0.0/"
       chip: primary
     - text: "Assessment Tools"
-      url: "/wg/pkimm/model/tools/"
+      url: "/wg/pkimm/1.0.0/tools/"
       chip: secondary
     - text: "Blog Posts"
       url: "/tags/pkimm/"
@@ -94,7 +94,7 @@ deliverables:
   - title: PKI Maturity Model
     menuTitle: Model
     description: The foundational maturity model framework with defined levels, domains, and criteria.
-    url: /wg/pkimm/model/
+    url: /wg/pkimm/1.0.0/
     status: active
   - title: PKIMM Certification Program
     description: A formal assessment and certification program for organizations seeking recognized PKIMM validation.
@@ -102,7 +102,7 @@ deliverables:
 
 resources:
   - title: PKIMM Self-Assessment Tool
-    url: /wg/pkimm/model/tools/
+    url: /wg/pkimm/1.0.0/tools/
     description: Use the interactive tool to assess your organization's PKI maturity level.
   - title: NIST Cybersecurity Framework
     url: https://www.nist.gov/cyberframework
