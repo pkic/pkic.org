@@ -4,7 +4,6 @@ slogan:
 website:
 # Business domains for email
 businessDomains:
-  - btinternet.com
 # Short description, longer content can be placed in `content/members/`
 description: PKI security consultancy business
 
