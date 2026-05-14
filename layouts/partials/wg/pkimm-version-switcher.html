@@ -1,86 +1,57 @@
 {{/*
   PKIMM version switcher.
-  Rendered inside the sticky .wg-section-nav for PKIMM pages. Reads
-  data/pkimm-versions.yaml, detects the current version from the page
-  URL, and emits a <details> dropdown with one <a> per version. A small
-  inline script rewrites those hrefs on click so switching preserves
-  the in-version sub-path (falls back to the version root on 404).
+
+  Renders inline at the bottom of the Model tree panel (see
+  layouts/partials/wg/sub-navigation.html and its sibling layouts). Reads
+  data/pkimm-versions.yaml, detects the current version from the page URL,
+  and emits one link per version.
+
+  Path preservation is resolved at build time: for each non-current version
+  we ask Hugo whether the equivalent sub-path exists in that version's
+  content tree. If yes, link to the sub-path; if not, fall back to the
+  version root. This eliminates runtime 404s when versions diverge
+  structurally and removes the need for any client-side href rewriting.
 */}}
 {{- $versions := index $.Site.Data "pkimm-versions" -}}
 {{- if and $versions $versions.versions -}}
   {{- $current := "" -}}
-  {{- $currentLabel := "" -}}
+  {{- $currentPath := "" -}}
   {{- range $versions.versions -}}
     {{- if and (not $current) (strings.HasPrefix $.RelPermalink .path) -}}
       {{- $current = .id -}}
-      {{- $currentLabel = .label -}}
+      {{- $currentPath = .path -}}
     {{- end -}}
   {{- end -}}
-  {{- if $current -}}
-<details class="wg-version-switcher" data-current="{{ $current }}">
-  <summary aria-label="Switch model version">
-    <span class="wg-version-eyebrow">Version</span>
-    <span class="wg-version-badge">{{ $currentLabel }}</span>
-    <svg class="wg-version-chevron" xmlns="http://www.w3.org/2000/svg" width="11" height="11" viewBox="0 0 24 24"
-         fill="none" stroke="currentColor" stroke-width="2.5"
-         stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
-      <polyline points="6 9 12 15 18 9"/>
-    </svg>
-  </summary>
-  <div class="wg-version-menu" role="menu">
-    {{ range $versions.versions }}
-    <a class="wg-version-item{{ if eq $current .id }} is-active{{ end }}"
-       href="{{ .path }}"
-       data-version-path="{{ .path }}"
-       role="menuitem">
+  {{- $subPath := "" -}}
+  {{- if $currentPath -}}
+    {{- $subPath = strings.TrimPrefix $currentPath $.RelPermalink -}}
+  {{- end -}}
+<div class="wg-version-switcher" data-current="{{ $current }}">
+  <p class="wg-version-eyebrow">Switch version</p>
+  <div class="wg-version-list" role="group" aria-label="Switch PKIMM model version">
+    {{- range $versions.versions -}}
+      {{- $href := .path -}}
+      {{- $exists := true -}}
+      {{- if eq .id $current -}}
+        {{- $href = $.RelPermalink -}}
+      {{- else if $subPath -}}
+        {{- $candidate := printf "%s%s" .path $subPath -}}
+        {{- if $.Site.GetPage $candidate -}}
+          {{- $href = $candidate -}}
+        {{- else -}}
+          {{- $exists = false -}}
+        {{- end -}}
+      {{- end -}}
+    <a class="wg-version-item{{ if eq $current .id }} is-active{{ end }}" href="{{ $href }}">
       <span class="wg-version-badge">{{ .label }}</span>
       {{- if .isLatestRelease }}
       <span class="wg-version-hint">Latest release</span>
       {{- end }}
+      {{- if not $exists }}
+      <span class="wg-version-hint wg-version-hint--fallback" title="This page is not available in {{ .label }} — go to the version overview instead">Overview</span>
+      {{- end }}
     </a>
-    {{ end }}
+    {{- end }}
   </div>
-</details>
-<script>
-  (function () {
-    var sw = document.currentScript.previousElementSibling;
-    if (!sw || !sw.classList.contains('wg-version-switcher')) return;
-    var summary = sw.querySelector('summary');
-    var menu = sw.querySelector('.wg-version-menu');
-    var currentBase = '/wg/pkimm/' + sw.dataset.current + '/';
-    var path = window.location.pathname;
-
-    // Position the menu under the trigger. The menu is position:fixed so it
-    // escapes the .container overflow clip; we set top/right here from the
-    // trigger's bounding rect.
-    function positionMenu() {
-      if (!sw.open) return;
-      var rect = summary.getBoundingClientRect();
-      menu.style.top = (rect.bottom + 4) + 'px';
-      menu.style.right = (window.innerWidth - rect.right) + 'px';
-    }
-    sw.addEventListener('toggle', positionMenu);
-    window.addEventListener('scroll', positionMenu, { passive: true });
-    window.addEventListener('resize', positionMenu);
-
-    // Path-preserving navigation: rewrite each version link's href to the
-    // equivalent sub-path under that version, so the user stays on the same
-    // page when switching. If a target page doesn't exist in the target
-    // version (structural divergence between versions), the click falls
-    // through to Hugo's 404 page — accepted trade-off to keep clicks
-    // instant and the script simple.
-    if (path.indexOf(currentBase) === 0) {
-      var subPath = path.slice(currentBase.length);
-      sw.querySelectorAll('a[data-version-path]').forEach(function (a) {
-        a.href = a.dataset.versionPath + subPath;
-      });
-    }
-
-    // Close on outside click.
-    document.addEventListener('click', function (ev) {
-      if (sw.open && !sw.contains(ev.target)) sw.open = false;
-    });
-  })();
-</script>
-  {{- end -}}
+</div>
 {{- end -}}

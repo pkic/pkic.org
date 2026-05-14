@@ -66,6 +66,26 @@
     {{- end -}}
   {{- end -}}
 {{- end -}}
+{{/* PKIMM version awareness: deliverable URLs in _index.md are pinned to one
+     version (e.g. /wg/pkimm/1.0.0/), but on a sibling version page (e.g.
+     /wg/pkimm/model/...) those URLs should follow the current version so the
+     tree panel shows the user's own version's pages and the tab highlights
+     correctly. We detect the current version base and the pinned version base
+     from data/pkimm-versions.yaml, then rewrite each deliverable URL below. */}}
+{{- $isPkimm := eq ($wg.Params.wgID | upper) "PKIMM" -}}
+{{- $pkimmVersions := slice -}}
+{{- $pkimmCurrentBase := "" -}}
+{{- if $isPkimm -}}
+  {{- $data := index $.Site.Data "pkimm-versions" -}}
+  {{- if and $data $data.versions -}}
+    {{- $pkimmVersions = $data.versions -}}
+    {{- range $pkimmVersions -}}
+      {{- if and (not $pkimmCurrentBase) (strings.HasPrefix $.Page.RelPermalink .path) -}}
+        {{- $pkimmCurrentBase = .path -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 <nav class="wg-section-nav wg-{{ $wg.Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
   <div class="container d-flex gap-1">
     <a class="wg-nav-link{{ if eq $.Page.RelPermalink $base }} is-active{{ end }}" href="{{ $base }}">About</a>
@@ -83,6 +103,13 @@
     {{- $hasDelivLink := false -}}
     {{- range $wg.Params.deliverables -}}
       {{- $delURL := .url | default "" -}}
+      {{- if and $isPkimm $pkimmCurrentBase $delURL -}}
+        {{- range $pkimmVersions -}}
+          {{- if and (strings.HasPrefix $delURL .path) (ne .path $pkimmCurrentBase) -}}
+            {{- $delURL = printf "%s%s" $pkimmCurrentBase (strings.TrimPrefix .path $delURL) -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
       {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
         {{- $hasDelivLink = true -}}
         {{- $label := .menuTitle | default (.title | truncate 22 "…") -}}
@@ -145,15 +172,18 @@
     {{ end }}
 
     <a class="wg-nav-link" href="/blog/?wg={{ $wg.Params.wgID | lower }}">Blog</a>
-
-    {{ if eq ($wg.Params.wgID | upper) "PKIMM" }}
-    {{ partial "wg/pkimm-version-switcher.html" . }}
-    {{ end }}
   </div>
 </nav>
 {{/* Tree panels — one per deliverable section with child pages */}}
 {{- range $wg.Params.deliverables -}}
   {{- $delURL := .url | default "" -}}
+  {{- if and $isPkimm $pkimmCurrentBase $delURL -}}
+    {{- range $pkimmVersions -}}
+      {{- if and (strings.HasPrefix $delURL .path) (ne .path $pkimmCurrentBase) -}}
+        {{- $delURL = printf "%s%s" $pkimmCurrentBase (strings.TrimPrefix .path $delURL) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
   {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
     {{- $delSection := $.Site.GetPage $delURL -}}
     {{- if and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
@@ -162,6 +192,9 @@
       {{- $treePage := cond $isActive $.Page $delSection -}}
 <div class="wg-nav-tree-panel wg-{{ $wg.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
   {{ partial "wg/sidebar-tree.html" $treePage }}
+  {{ if eq ($wg.Params.wgID | upper) "PKIMM" }}
+  {{ partial "wg/pkimm-version-switcher.html" $.Page }}
+  {{ end }}
 </div>
     {{- end -}}
   {{- end -}}
