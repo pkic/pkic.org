@@ -2,7 +2,9 @@ id: olympussolutionsinc
 name: Olympus Solutions, Inc
 slogan:
 website: https://www.olympussolutionsinc.com
-
+# Business domains for email
+businessDomains:
+  - olympussolutionsinc.com
 # Short description, longer content can be placed in `content/members/`
 description: Olympus Solutions Inc., an SDVOSB, specializes in cybersecurity systems, identity management, and O&M services. We enhance the ROI of IAM tools.
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
-  url: 
+  url:
   feed: https://www.olympussolutionsinc.com/feed/
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
   url: https://www.olympussolutionsinc.com/careers/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,8 +54,8 @@ representatives:
   - name: Jim Walker
     role: General Manager, Service Delivery
     social:
-      x: 
-      linkedin: www.linkedin.com/in/jim-walker-43067738/
+      x:
+      linkedin: https://www.linkedin.com/in/jim-walker-43067738/
     description: Jim is the General Manager, Service Delivery at Olympus Solutions, Inc and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
