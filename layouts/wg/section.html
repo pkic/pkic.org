@@ -50,6 +50,23 @@
 {{- $resourcesPage   := .GetPage "resources" -}}
 {{- $confPage        := .GetPage "conferences" -}}
 {{- $charterPage     := .GetPage "charter" -}}
+{{/* PKIMM version awareness: on the WG landing page there is no "current
+     version", so $pkimmCurrentBase stays empty; the switcher still renders
+     in the Model tree panel with no active state. */}}
+{{- $isPkimm := eq $wgID "PKIMM" -}}
+{{- $pkimmVersions := slice -}}
+{{- $pkimmCurrentBase := "" -}}
+{{- if $isPkimm -}}
+  {{- $data := index $.Site.Data "pkimm-versions" -}}
+  {{- if and $data $data.versions -}}
+    {{- $pkimmVersions = $data.versions -}}
+    {{- range $pkimmVersions -}}
+      {{- if and (not $pkimmCurrentBase) (strings.HasPrefix $.Page.RelPermalink .path) -}}
+        {{- $pkimmCurrentBase = .path -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 {{- if .Params.sectionNav -}}
 <nav class="wg-section-nav wg-{{ .Params.wgID | lower }}" id="wgSectionNav" aria-label="Page sections">
   <div class="container d-flex gap-1">
@@ -74,6 +91,13 @@
     {{- $hasDelivLink := false -}}
     {{- range .Params.deliverables -}}
       {{- $delURL := .url | default "" -}}
+      {{- if and $isPkimm $pkimmCurrentBase $delURL -}}
+        {{- range $pkimmVersions -}}
+          {{- if and (strings.HasPrefix $delURL .path) (ne .path $pkimmCurrentBase) -}}
+            {{- $delURL = printf "%s%s" $pkimmCurrentBase (strings.TrimPrefix .path $delURL) -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
       {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
         {{- $hasDelivLink = true -}}
         {{- $label := .menuTitle | default (.title | truncate 22 "…") -}}
@@ -132,6 +156,13 @@
 {{- $wgBase := .RelPermalink -}}
 {{- range .Params.deliverables -}}
   {{- $delURL := .url | default "" -}}
+  {{- if and $isPkimm $pkimmCurrentBase $delURL -}}
+    {{- range $pkimmVersions -}}
+      {{- if and (strings.HasPrefix $delURL .path) (ne .path $pkimmCurrentBase) -}}
+        {{- $delURL = printf "%s%s" $pkimmCurrentBase (strings.TrimPrefix .path $delURL) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
   {{- if and $delURL (strings.HasPrefix $delURL $wgBase) -}}
     {{- $delPath := strings.TrimSuffix "/" (strings.TrimPrefix "/" $delURL) -}}
     {{- $delSection := $.Site.GetPage $delPath -}}
@@ -139,6 +170,9 @@
       {{- $slug := partial "wg/path-slug.html" (dict "path" $delURL) -}}
 <div class="wg-nav-tree-panel wg-{{ $.Page.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
   {{ partial "wg/sidebar-tree.html" $delSection }}
+  {{ if $isPkimm }}
+  {{ partial "wg/pkimm-version-switcher.html" $.Page }}
+  {{ end }}
 </div>
     {{- end -}}
   {{- end -}}
