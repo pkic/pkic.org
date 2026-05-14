@@ -146,4 +146,3 @@ document.querySelectorAll('time[datetime]').forEach(function ($e) {
     });
   });
 })();
-
