@@ -192,7 +192,7 @@
       {{- $treePage := cond $isActive $.Page $delSection -}}
 <div class="wg-nav-tree-panel wg-{{ $wg.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
   {{ partial "wg/sidebar-tree.html" $treePage }}
-  {{ if eq ($wg.Params.wgID | upper) "PKIMM" }}
+  {{ if $isPkimm }}
   {{ partial "wg/pkimm-version-switcher.html" $.Page }}
   {{ end }}
 </div>

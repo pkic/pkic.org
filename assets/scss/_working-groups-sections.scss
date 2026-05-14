@@ -58,8 +58,8 @@
 // layouts/partials/wg/pkimm-version-switcher.html). Lives inside the
 // `.wg-nav-tree-panel`, which already handles its own positioning, so the
 // switcher itself is in normal flow — no `position: fixed`, no JS-driven
-// repositioning. Path-preserving link rewriting is handled in
-// assets/js/modules/global-ui.js.
+// repositioning. Path-preserving link rewriting is resolved at build time
+// in layouts/partials/wg/pkimm-version-switcher.html.
 
 .wg-version-switcher {
   margin-top: 0.75rem;
