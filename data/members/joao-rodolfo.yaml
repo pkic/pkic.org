@@ -4,6 +4,7 @@ slogan:
 website:
 # Business domains for email
 businessDomains:
+  - joaorodolfo.eti.br
 # Short description, longer content can be placed in `content/members/`
 description: Joao Rodolfo is the Cyber Security Specialist in Brazil working for the largest Financial Bank group into South America and Tech Lead for Manager the Certificate X509 Subject for the Brazilian Open Finance system.
 

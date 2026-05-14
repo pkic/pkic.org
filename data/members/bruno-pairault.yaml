@@ -1,16 +1,21 @@
-id: pqctoday
-name: PQC Today
+id: bruno-pairault
+name: Bruno Pairault
 slogan:
-website: https://pqctoday.com
+website:
 # Business domains for email
 businessDomains:
+  - cyber-defence-technologies.com.au
 # Short description, longer content can be placed in `content/members/`
-description: Your guided post-quantum cryptography transformation journey. Explore 49 learning modules, assess quantum risk, track the PQC patent landscape, and migrate your cryptography infrastructure in full compliance with NIST, ANSSI, BSI, and global standards.
+description: Bruno has worked in PKI at OpenTrust, Entrust, and for many organizations and governments.
 
 # membership
-memberSince: 2026-04-28
+memberSince: 2025-11-05
 memberType: H6
 workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
@@ -47,12 +52,12 @@ social:
 # Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Eric Amador
-    role: Product Manager
+  - name: Bruno Pairault
+    role: CEO Cyber Defence Technologies PTY LTD
     social:
       x:
-      linkedin: https://www.linkedin.com/in/eric-amador-971850a/
-    description: Eric is the product manager at PQC Today and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/bruno-pairault-0658224/
+    description: Bruno is the CEO of Cyber Defence Technologies PTY LTD and participates at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |

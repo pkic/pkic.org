@@ -5,6 +5,7 @@ website: https://qubridge.io/
 # Business domains for email
 businessDomains:
   - qubridge.io
+  - quantumbridgetech.com
 # Short description, longer content can be placed in `content/members/`
 description: Quantum Bridge delivers scalable, quantum-safe key distribution to future-proof network security.
 

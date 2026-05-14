@@ -4,6 +4,7 @@ slogan:
 website:
 # Business domains for email
 businessDomains:
+  - ralph-s-poore.com
 # Short description, longer content can be placed in `content/members/`
 description: Adjunct Professor, Standards Developer (PCI, ANS X9, ISO TC68), and consultant in applied cryptography.
 

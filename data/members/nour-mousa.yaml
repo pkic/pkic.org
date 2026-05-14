@@ -4,6 +4,7 @@ slogan:
 website:
 # Business domains for email
 businessDomains:
+  - torontomu.ca
 # Short description, longer content can be placed in `content/members/`
 description: I am a PhD student researching PQC migration.
 

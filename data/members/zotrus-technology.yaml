@@ -5,6 +5,7 @@ website: https://www.zotrus.com/
 # Business domains for email
 businessDomains:
   - ztbro.com
+  - zotrus.com
 # Short description, longer content can be placed in `content/members/`
 description: A Zero Trust Security Provider Based on Cryptographic Technology
 

@@ -1,18 +1,16 @@
 id: ecac
 name: ECAC
 slogan: Electronic Certification Accreditation Council
-website: https://www.ecac.org.pk
+website: https://www.ecac.gov.pk
 # Business domains for email
 businessDomains:
-  - ecac.org.pk
+  - ecac.gov.pk
 # Short description, longer content can be placed in `content/members/`
 description: ECAC, Government of Pakistan is a regulatory body for Certificate Service Providers
 
 # membership
 memberSince: 2021-07-20
-memberType:
-  C
-  #Regulator
+memberType: H1
 workingGroups:
   - CM
   - PKIMM
@@ -31,13 +29,13 @@ blog:
 
 # Press Releases
 press:
-  url: https://www.ecac.org.pk/press
+  url:
   feed:
   language: en_US
 
 # Careers
 careers:
-  url: https://www.ecac.org.pk/careers
+  url:
   feed:
   language: en_US
 

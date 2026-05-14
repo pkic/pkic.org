@@ -1,22 +1,17 @@
-id: sia
-name: SIA
+id: lukas-geyer
+name: Lukáš Geyer
 slogan:
-website: https://www.sia.es/sia--home.html
+website:
 # Business domains for email
 businessDomains:
-  - sia.es
-  - minsait.com
+  - dal.ca
 # Short description, longer content can be placed in `content/members/`
-description: SIA is an Indra company located in Spain that is a Trust Service Provider eIDAS compliant and we have our own cryptographic products such as PKI, KMS & digital signature platforms.
+description: Lukáš has been working as a security architect & security consultant in the area of cryptographic & trust services for over 10 years.
 
 # membership
-memberSince: 2024-12-24
-memberType: A
+memberSince: 2022-03-17
+memberType: H6
 workingGroups:
-  - CA
-  - PKIMM
-  - PQC
-  - TCWG
 
 # sponsor
 sponsor:
@@ -25,7 +20,7 @@ sponsor:
 # Blog posts
 blog:
   url:
-  feed: null
+  feed:
   language: en_US
 
 # Press Releases
@@ -45,7 +40,7 @@ social:
   x:
   facebook:
   instagram:
-  linkedin:
+  linkedin: https://www.linkedin.com/in/pkiluke/
   youtube:
 
 # Here you can list those who represent or have represented the member.
@@ -53,9 +48,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Alfonso Ríos Montero
-    role: Business Development Director
+  - name: Lukáš Geyer
+    role: Security Architect
     social:
       x:
-      linkedin:
-    description: Alfonso is the Business Development Director at SIA and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/pkiluke/
+    description: Lukáš has been working as a security architect & security consultant in the area of cryptographic & trust services for over 10 years.

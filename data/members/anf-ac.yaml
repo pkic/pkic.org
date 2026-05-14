@@ -5,6 +5,7 @@ website: https://anf.es/en/
 # Business domains for email
 businessDomains:
   - anf.es
+  - anfac.org
 # Short description, longer content can be placed in `content/members/`
 description: Focused on actively contributing to the progress of society and improving the competitiveness of our customers, all of our products and solutions have been developed by our own engineering team, based in PKI technology.
 
