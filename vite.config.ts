@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { clearTimeout, setTimeout } from "node:timers";
@@ -60,7 +60,33 @@ async function buildHugoSite(isDev: boolean, rebuildFrontend = true): Promise<vo
   const cloudflareEnv = process.env.CLOUDFLARE_ENV ?? "local";
 
   if (!isDev && cloudflareEnv !== "local") {
-    await run("git", ["submodule", "update", "--init", "--remote"]);
+    // Clone any missing submodules at the SHAs recorded in the parent
+    // commit. Critically, no --remote here: tag-pinned snapshots like
+    // content/wg/pkimm/1.0.0 (no `branch=` in .gitmodules) must stay at
+    // their pinned SHA — passing --remote here would silently bump them
+    // to the remote HEAD branch (typically main) and override the pin.
+    await run("git", ["submodule", "update", "--init", "--recursive"]);
+    // Then refresh only the submodules that explicitly track a moving
+    // branch (have a `branch =` field in .gitmodules) to the latest tip.
+    // Mirrors the logic in scripts/build.sh.
+    const branchEntries = execFileSync(
+      "git",
+      ["config", "-f", ".gitmodules", "--name-only", "--get-regexp", "^submodule\\..*\\.branch$"],
+      { cwd: projectRoot, encoding: "utf8" },
+    )
+      .split("\n")
+      .filter(Boolean);
+    for (const entry of branchEntries) {
+      const name = entry.replace(/^submodule\./, "").replace(/\.branch$/, "");
+      const path = execFileSync(
+        "git",
+        ["config", "-f", ".gitmodules", "--get", `submodule.${name}.path`],
+        { cwd: projectRoot, encoding: "utf8" },
+      ).trim();
+      if (path) {
+        await run("git", ["submodule", "update", "--remote", "--", path]);
+      }
+    }
   }
 
   const hugoArgs = ["--destination", "public"];
