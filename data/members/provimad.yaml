@@ -2,9 +2,11 @@ id: provimad
 name: Provimad de Verificaciones Registrales S.L.
 slogan:
 website: https://www.provimad.com
-
+# Business domains for email
+businessDomains:
+  - provimad.com
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Provimad is a Spanish company specialized in digital transformation services, certified digitization, electronic invoicing, electronic signature solutions, and trusted preservation of electronic documents with evidentiary value.
 
 # membership
 memberSince: 2026-05-04
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram: https://www.instagram.com/provimad/
+  linkedin: https://www.linkedin.com/company/provimad
+  youtube: https://www.youtube.com/@provimad
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,9 +54,14 @@ representatives:
   - name: Rafael Fernández
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/rafael-fernández-lopez-provimad/
     description: Rafael is the CEO at Provimad de Verificaciones Registrales S.L. and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
+  Provimad is a Spanish company specialized in digital transformation services, certified digitization, electronic invoicing, electronic signature solutions, and trusted preservation of electronic documents with evidentiary value.
+
+  Through its technological platforms and specialized back-office services, Provimad supports financial institutions, legal professionals, real estate networks, and corporations in secure digital processes aligned with European regulatory frameworks, including eIDAS and eIDAS 2.0.
+
+  The company is particularly focused on trusted digital communications, evidentiary management, and secure electronic transaction workflows.
