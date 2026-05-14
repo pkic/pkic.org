@@ -28,6 +28,7 @@ cascade:
 
 chair:
   name: Roman Cinkais
+  viceChair: Kennedy Nwup
 
 keyDeliverables:
   - title: PKI Maturity Model
