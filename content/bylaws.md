@@ -96,19 +96,23 @@ PKIC may establish a bank account or may deposit funds with a third-party compan
 
 ## 5. Board of Directors
 
-PKIC shall maintain a Board of Directors with an odd number of at least three (3) Directors but not more than seven (7). Directors will be elected for a two (2) year term commencing on July 1 and may be reelected. The Board of Directors may elect its own officers and approve amendments to the Articles of Incorporation and take such other actions as the Articles of Incorporation provide.
+PKIC shall maintain a Board of Directors of at least three (3) Directors but not more than seven (7). Directors will be elected for up to a two (2) year term commencing on July 1 of an even-numbered year and may be reelected. A Director appointed mid-cycle serves the remainder of the open term. The Board of Directors may elect its own officers and approve amendments to the Articles of Incorporation and take such other actions as the Articles of Incorporation provide. In the event of a tied vote of the Board of Directors, the Chair of the Board shall have the deciding vote.
 
-When the term of a Director expires, the Board of Directors may nominate a new Director (or re-nominate the existing Director for a new term), and the nomination will be subject to approval by the voting Members.
+When the term of a Director expires, or a vacancy is available, the Board of Directors may nominate a new Director (or re-nominate the existing Director for a new term), and the nomination will be subject to approval by the voting Members.
 
 The Board of Directors shall meet at least annually to discuss PKIC activities and future plans.
 
 ## 6. Officers
 
-The officers of PKIC shall be a Chair and a Vice Chair (who will act as Chair when the Chair is absent). Each officer will be elected for a two (2) year term commencing on July 1 and may be elected to successive terms. Prior to election, the voting Member representatives will be asked who is interested in being elected to the positions. If there is only one candidate for an officer position, the election will occur by consensus. Otherwise, the election will be held by vote (one vote per Member). If there are only two candidates, then the candidate with the most votes wins. If there are more than two candidates, then there will be successive ballots (with the candidate with the fewest votes eliminated each time) until an officer is elected by at least 50% of the votes plus one vote.
+The officers of PKIC shall be a Chair and a Vice Chair (who will act as Chair when the Chair is absent). Each officer will be elected for up to a two (2) year term commencing on July 1 of an even-numbered year and may be elected to successive terms. An officer appointed mid-cycle serves the remainder of the open term. Prior to election, the voting Member representatives will be asked who is interested in being elected to the positions. If there is only one candidate for an officer position, the election will occur by consensus. Otherwise, the election will be held by vote (one vote per Member). If there are only two candidates, then the candidate with the most votes wins. If there are more than two candidates, then there will be successive ballots (with the candidate with the fewest votes eliminated each time) until an officer is elected by at least 50% of the votes plus one vote.
 
 ## 7. Executive Council
 
-The Board of Directors shall nominate an Executive Council with an odd number of up to fifteen (15) Member representatives from those voting Members who have been most active on PKIC projects, giving priority to those Member representatives who are active on PKIC activities and meetings. Executive Council members will be elected for a two (2) year term starting on July 1 and may be reelected. Directors may serve on the Executive Council. Executive Council nominations are subject to approval by the Members. The Executive Council may elect a chair to conduct its meetings. Member representatives may not serve on the Executive Council after they are no longer associated with the Member.
+The Board of Directors shall nominate an Executive Council of up to fifteen (15) members. Executive Council members will be elected for up to a two (2) year term commencing on July 1 of an even-numbered year and may be reelected. A member appointed mid-cycle serves the remainder of the open term. Directors may serve on the Executive Council. Executive Council nominations are subject to approval by the Members. The Executive Council may elect its own officers. In the event of a tied vote of the Executive Council, the Chair of the Executive Council shall have the deciding vote. 
+
+When the term of an Executive Council member expires, or a vacancy is available, the Board of Directors may nominate a new member (or re-nominate the existing member for a new term), and the nomination will be subject to approval by the voting Members.
+
+An Executive Council member’s continued service shall be at the discretion of the Board of Directors if the member ceases to be associated with the Member organization they represent.
 
 ## 8. Indemnification
 
