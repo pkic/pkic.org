@@ -69,13 +69,23 @@ async function buildHugoSite(isDev: boolean, rebuildFrontend = true): Promise<vo
     // Then refresh only the submodules that explicitly track a moving
     // branch (have a `branch =` field in .gitmodules) to the latest tip.
     // Mirrors the logic in scripts/build.sh.
-    const branchEntries = execFileSync(
-      "git",
-      ["config", "-f", ".gitmodules", "--name-only", "--get-regexp", "^submodule\\..*\\.branch$"],
-      { cwd: projectRoot, encoding: "utf8" },
-    )
-      .split("\n")
-      .filter(Boolean);
+    //
+    // `git config --get-regexp` exits 1 if there are no matches (or if
+    // .gitmodules is missing entirely), which would make execFileSync
+    // throw. Catch that so a repo with no branch-tracking submodules
+    // doesn't break the build.
+    let branchEntries: string[] = [];
+    try {
+      branchEntries = execFileSync(
+        "git",
+        ["config", "-f", ".gitmodules", "--name-only", "--get-regexp", "^submodule\\..*\\.branch$"],
+        { cwd: projectRoot, encoding: "utf8" },
+      )
+        .split("\n")
+        .filter(Boolean);
+    } catch {
+      // No branch-tracking submodules — nothing to refresh.
+    }
     for (const entry of branchEntries) {
       const name = entry.replace(/^submodule\./, "").replace(/\.branch$/, "");
       const path = execFileSync(
