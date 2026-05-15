@@ -10,6 +10,21 @@
 {{- $base   := $wg.RelPermalink -}}
 {{- $sec    := .Params.wgSection -}}
 {{- $confPage := $wg.GetPage "conferences" -}}
+{{/* PKIMM version awareness: see notes in layouts/partials/wg/sub-navigation.html */}}
+{{- $isPkimm := eq $wgID "PKIMM" -}}
+{{- $pkimmVersions := slice -}}
+{{- $pkimmCurrentBase := "" -}}
+{{- if $isPkimm -}}
+  {{- $data := index $.Site.Data "pkimm-versions" -}}
+  {{- if and $data $data.versions -}}
+    {{- $pkimmVersions = $data.versions -}}
+    {{- range $pkimmVersions -}}
+      {{- if and (not $pkimmCurrentBase) (strings.HasPrefix $.Page.RelPermalink .path) -}}
+        {{- $pkimmCurrentBase = .path -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
+{{- end -}}
 
 {{/* ── Compact sub-page header ──────────────────────────────────── */}}
 <div class="wg-sub-header wg-{{ $wg.Params.wgID | lower }}">
@@ -60,6 +75,13 @@
     {{- $hasDelivLink := false -}}
     {{- range $wg.Params.deliverables -}}
       {{- $delURL := .url | default "" -}}
+      {{- if and $isPkimm $pkimmCurrentBase $delURL -}}
+        {{- range $pkimmVersions -}}
+          {{- if and (strings.HasPrefix $delURL .path) (ne .path $pkimmCurrentBase) -}}
+            {{- $delURL = printf "%s%s" $pkimmCurrentBase (strings.TrimPrefix .path $delURL) -}}
+          {{- end -}}
+        {{- end -}}
+      {{- end -}}
       {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
         {{- $hasDelivLink = true -}}
         {{- $label := .menuTitle | default (.title | truncate 22 "…") -}}
@@ -109,6 +131,13 @@
 {{/* Tree panels — one per deliverable section with child pages */}}
 {{- range $wg.Params.deliverables -}}
   {{- $delURL := .url | default "" -}}
+  {{- if and $isPkimm $pkimmCurrentBase $delURL -}}
+    {{- range $pkimmVersions -}}
+      {{- if and (strings.HasPrefix $delURL .path) (ne .path $pkimmCurrentBase) -}}
+        {{- $delURL = printf "%s%s" $pkimmCurrentBase (strings.TrimPrefix .path $delURL) -}}
+      {{- end -}}
+    {{- end -}}
+  {{- end -}}
   {{- if and $delURL (strings.HasPrefix $delURL $base) -}}
     {{- $delSection := $.Site.GetPage $delURL -}}
     {{- if and $delSection (or $delSection.Sections $delSection.RegularPages) -}}
@@ -117,6 +146,9 @@
       {{- $treePage := cond $isActive $.Page $delSection -}}
 <div class="wg-nav-tree-panel wg-{{ $wg.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
   {{ partial "wg/sidebar-tree.html" $treePage }}
+  {{ if $isPkimm }}
+  {{ partial "wg/pkimm-version-switcher.html" $.Page }}
+  {{ end }}
 </div>
     {{- end -}}
   {{- end -}}
