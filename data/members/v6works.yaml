@@ -1,19 +1,17 @@
-id: yapikredi
-name: Yapi Kredi Bank
+id: v6works
+name: V6Works
 slogan:
-website: https://www.yapikredi.com.tr
+website:
 # Business domains for email
 businessDomains:
-  - yapikredi.com.tr
-  - ykteknoloji.com.tr
+  - v6works.com
 # Short description, longer content can be placed in `content/members/`
-description: Yapı Kredi ayrıcalığı ile kredi, sigorta, ödeme ve daha fazla işlemlerinizi hemen gerçekleştirin! Yapı Kredi avantajları hakkında detaylı bilgi için tıklayın.
+description: V6Works provides training and consulting in IPv6, PKI and cryptography.
 
 # membership
-memberSince: 2025-03-07
-memberType: G
+memberSince: 2025-03-05
+memberType: H2
 workingGroups:
-  - PKIMM
   - PQC
   - TCWG
 
@@ -52,9 +50,9 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Serkan KIRKKULAÇ
-    role: Data and Endpoint Security Manager
+  - name: Lawrence Huges
+    role: Independent Consultant
     social:
       x:
-      linkedin: https://www.linkedin.com/in/serkankirkkulac
-    description: Serkan is the Data and Endpoint Security Manager at Yapi Kredi Bank and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/lawrence-hughes-128164/
+    description: Lawrence is independent consultant at V6Works and represents the organization at the PKI Consortium.

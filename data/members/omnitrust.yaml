@@ -5,7 +5,6 @@ website: https://omnitrust.com/
 # Business domains for email
 businessDomains:
   - omnitrust.com
-  - 3key.company
 # Short description
 description: OmniTrust secures the connected world from silicon to AI through unified Trust Lifecycle Management across devices, identities, and cryptography.
 

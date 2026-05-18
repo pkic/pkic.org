@@ -6,6 +6,7 @@ website: https://www2.deloitte.com/in
 businessDomains:
   - deloitte.it
   - deloitte.com
+  - deloitte.ca
 # Short description, longer content can be placed in `content/members/`
 description: Deloitte drives progress, helping clients become leaders. Deloitte invests in outstanding people of diverse talents and backgrounds, empowering them to achieve more. Our work combines advice with action and integrity. We believe that when our clients and society are stronger, so are we.
 

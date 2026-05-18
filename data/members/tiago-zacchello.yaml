@@ -1,21 +1,17 @@
-id: yapikredi
-name: Yapi Kredi Bank
+id: tiago-zacchello
+name: Tiago Zacchello
 slogan:
-website: https://www.yapikredi.com.tr
+website:
 # Business domains for email
 businessDomains:
-  - yapikredi.com.tr
-  - ykteknoloji.com.tr
+  - certutil.net
 # Short description, longer content can be placed in `content/members/`
-description: Yapı Kredi ayrıcalığı ile kredi, sigorta, ödeme ve daha fazla işlemlerinizi hemen gerçekleştirin! Yapı Kredi avantajları hakkında detaylı bilgi için tıklayın.
+description: I am a cybersecurity consultant with focus on Public Key Infrastructure & Identity services.
 
 # membership
-memberSince: 2025-03-07
-memberType: G
+memberSince: 2024-04-16
+memberType: H6
 workingGroups:
-  - PKIMM
-  - PQC
-  - TCWG
 
 # sponsor
 sponsor:
@@ -44,17 +40,18 @@ social:
   x:
   facebook:
   instagram:
-  linkedin:
+  linkedin: https://www.linkedin.com/in/t-roveri-z/
   youtube:
+  github:
 
 # Here you can list those who represent or have represented the member.
 #
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: Serkan KIRKKULAÇ
-    role: Data and Endpoint Security Manager
+  - name: Tiago Zacchello
+    role: Cybersecurity Consultant
     social:
       x:
-      linkedin: https://www.linkedin.com/in/serkankirkkulac
-    description: Serkan is the Data and Endpoint Security Manager at Yapi Kredi Bank and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/t-roveri-z/
+    description: Tiago is a cybersecurity consultant and participates at the PKI Consortium.
