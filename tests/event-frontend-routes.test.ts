@@ -38,7 +38,7 @@ describe("event frontend routes and hydration contracts", () => {
       settings_json: "{}",
     });
     expect(defaults.registrationPath).toBe("/events/pqc-2026/register/");
-    expect(defaults.proposalManagePath).toBe("/events/pqc-2026/propose-manage/");
+    expect(defaults.proposalManagePath).toBe("/events/pqc-2026/propose/manage/");
     expect(defaults.usedFallback).toBe(true);
   });
 
@@ -54,7 +54,7 @@ describe("event frontend routes and hydration contracts", () => {
     expect(withBasePath.registrationConfirmPath).toBe("/events/2026/pqc-conference-amsterdam-nl/register/confirm/");
     expect(withBasePath.proposalPath).toBe("/events/2026/pqc-conference-amsterdam-nl/propose/");
     expect(withBasePath.registrationManagePath).toBe("/events/2026/pqc-conference-amsterdam-nl/register/manage/");
-    expect(withBasePath.proposalManagePath).toBe("/events/2026/pqc-conference-amsterdam-nl/propose-manage/");
+    expect(withBasePath.proposalManagePath).toBe("/events/2026/pqc-conference-amsterdam-nl/propose/manage/");
   });
 
   it("falls back to starts_at year when base_path is null", () => {
@@ -69,7 +69,7 @@ describe("event frontend routes and hydration contracts", () => {
     expect(withYear.registrationConfirmPath).toBe("/events/2026/pqc-conference-amsterdam-nl/register/confirm/");
     expect(withYear.proposalPath).toBe("/events/2026/pqc-conference-amsterdam-nl/propose/");
     expect(withYear.registrationManagePath).toBe("/events/2026/pqc-conference-amsterdam-nl/register/manage/");
-    expect(withYear.proposalManagePath).toBe("/events/2026/pqc-conference-amsterdam-nl/propose-manage/");
+    expect(withYear.proposalManagePath).toBe("/events/2026/pqc-conference-amsterdam-nl/propose/manage/");
   });
 
   it("resolves relative frontend routes against the event base path", () => {
@@ -84,7 +84,7 @@ describe("event frontend routes and hydration contracts", () => {
             registrationConfirm: "register/confirm/",
             proposal: "propose/",
             registrationManage: "register/manage/",
-            proposalManage: "propose-manage/",
+            proposalManage: "propose/manage/",
             speakerManage: "speaker-manage/",
             inviteDecline: "invite/decline/",
           },
@@ -97,7 +97,7 @@ describe("event frontend routes and hydration contracts", () => {
     expect(relative.registrationConfirmPath).toBe("/events/2026/pqc-conference-amsterdam-nl/register/confirm/");
     expect(relative.proposalPath).toBe("/events/2026/pqc-conference-amsterdam-nl/propose/");
     expect(relative.registrationManagePath).toBe("/events/2026/pqc-conference-amsterdam-nl/register/manage/");
-    expect(relative.proposalManagePath).toBe("/events/2026/pqc-conference-amsterdam-nl/propose-manage/");
+    expect(relative.proposalManagePath).toBe("/events/2026/pqc-conference-amsterdam-nl/propose/manage/");
     // All keys configured, so no fallback needed
     expect(relative.usedFallback).toBe(false);
   });
