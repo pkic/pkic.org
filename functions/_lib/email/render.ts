@@ -356,6 +356,22 @@ function wrapHtml(
   return layout.replace("{{{body_html}}}", bodyHtml);
 }
 
+function stripHtmlToText(input: string): string {
+  return input
+    .replace(/<br\s*\/?>/gi, "\n")
+    .replace(/<\/(p|div|li|h[1-6]|blockquote|section|article|table|tr)>/gi, "\n")
+    .replace(/<li[^>]*>/gi, "- ")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/gi, " ")
+    .replace(/&amp;/gi, "&")
+    .replace(/&lt;/gi, "<")
+    .replace(/&gt;/gi, ">")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .replace(/[ \t]{2,}/g, " ")
+    .trim();
+}
+
 export async function renderEmail(
   template: string,
   data: Record<string, unknown>,
@@ -370,10 +386,7 @@ export async function renderEmail(
   if (contentType === "html") {
     // Template is already HTML — wrap in layout but skip markdown processing.
     const html = wrapHtml(rendered, layoutHtml, dataWithBase, baseUrl);
-    const text = rendered
-      .replace(/<[^>]+>/g, " ")
-      .replace(/\s{2,}/g, " ")
-      .trim();
+    const text = stripHtmlToText(rendered);
     return { html, text };
   }
 
@@ -381,7 +394,7 @@ export async function renderEmail(
     // Plain-text template — wrap a <pre>-based fallback, no markdown processor.
     const htmlBody = `<pre style="white-space:pre-wrap;font-family:inherit">${rendered.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</pre>`;
     const html = wrapHtml(htmlBody, layoutHtml, dataWithBase, baseUrl);
-    return { html, text: rendered.trim() };
+    return { html, text: stripHtmlToText(rendered) };
   }
 
   // Default: markdown
@@ -391,11 +404,7 @@ export async function renderEmail(
   });
   const html = wrapHtml(htmlBody, layoutHtml, dataWithBase, baseUrl);
 
-  const text = rendered
-    .replace(/\[(.*?)\]\((.*?)\)/g, "$1 <$2>")
-    .replace(/[#*_`>]/g, "")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
+  const text = stripHtmlToText(rendered.replace(/\[(.*?)\]\((.*?)\)/g, "$1 <$2>").replace(/[#*_`>]/g, ""));
 
   return { html, text };
 }

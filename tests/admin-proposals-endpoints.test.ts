@@ -264,7 +264,7 @@ describe("admin proposal endpoints", () => {
     const url = new URL(payload.manageUrl);
     const token = url.searchParams.get("token");
 
-    expect(url.pathname).toContain("propose-manage");
+    expect(url.pathname).toContain("/propose/manage/");
     expect(token).toBeTruthy();
 
     const proposal = await getProposalByManageToken(env.DB, token!);

@@ -47,7 +47,7 @@ export interface ProposalListRecord extends ProposalRecord {
   proposer_first_name: string | null;
   proposer_last_name: string | null;
   review_count: number;
-  decision_status: "accepted" | "rejected" | "needs_work" | null;
+  decision_status: "accepted" | "rejected" | "needs-work" | null;
   decision_note: string | null;
   decision_decided_at: string | null;
 }
@@ -267,7 +267,8 @@ export interface SpeakerWithContext {
 }
 
 export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: string): Promise<SpeakerWithContext> {
-  const hash = await sha256Hex(manageToken);
+  const hashedToken = await sha256Hex(manageToken);
+  const directToken = /^[a-f0-9]{64}$/i.test(manageToken) ? manageToken.toLowerCase() : null;
   const row = await first<{
     // proposal_speakers
     ps_id: string;
@@ -352,8 +353,8 @@ export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: str
      FROM proposal_speakers ps
      JOIN session_proposals sp ON sp.id = ps.proposal_id
      JOIN users u              ON u.id  = ps.user_id
-     WHERE ps.manage_token_hash = ?`,
-    [hash],
+     WHERE ps.manage_token_hash = ? OR ps.manage_token_hash = ?`,
+    [hashedToken, directToken ?? hashedToken],
   );
 
   if (!row) {
@@ -421,11 +422,27 @@ export async function refreshSpeakerManageToken(db: DatabaseLike, proposalId: st
   return token;
 }
 
+/**
+ * Generates a fresh manage token for a proposal submitter workflow.
+ * The old token is invalidated when the hash is replaced.
+ */
+export async function refreshProposalManageToken(db: DatabaseLike, proposalId: string): Promise<string> {
+  const token = randomToken(24);
+  const hash = await sha256Hex(token);
+  await run(db, `UPDATE session_proposals SET manage_token_hash = ?, updated_at = ? WHERE id = ?`, [
+    hash,
+    nowIso(),
+    proposalId,
+  ]);
+  return token;
+}
+
 export interface ProposalSpeakerWithUser {
   speaker_id: string;
   user_id: string;
   role: string;
   status: string;
+  manage_token_hash: string | null;
   confirmed_at: string | null;
   declined_at: string | null;
   terms_accepted_at: string | null;
@@ -530,6 +547,7 @@ export async function listProposalSpeakersWithStatus(
        ps.user_id,
        ps.role,
        ps.status,
+      ps.manage_token_hash,
        ps.confirmed_at,
        ps.declined_at,
        ps.terms_accepted_at,
@@ -552,10 +570,13 @@ export async function listProposalSpeakersWithStatus(
 }
 
 export async function getProposalByManageToken(db: DatabaseLike, manageToken: string): Promise<ProposalRecord> {
-  const hash = await sha256Hex(manageToken);
-  const proposal = await first<ProposalRecord>(db, "SELECT * FROM session_proposals WHERE manage_token_hash = ?", [
-    hash,
-  ]);
+  const hashedToken = await sha256Hex(manageToken);
+  const directToken = /^[a-f0-9]{64}$/i.test(manageToken) ? manageToken.toLowerCase() : null;
+  const proposal = await first<ProposalRecord>(
+    db,
+    "SELECT * FROM session_proposals WHERE manage_token_hash = ? OR manage_token_hash = ?",
+    [hashedToken, directToken ?? hashedToken],
+  );
 
   if (!proposal) {
     throw new AppError(404, "PROPOSAL_NOT_FOUND", "Invalid proposal manage token");
@@ -788,7 +809,7 @@ export async function finalizeProposalDecision(
   payload: {
     proposalId: string;
     decidedByUserId: string;
-    finalStatus: "accepted" | "rejected" | "needs_work";
+    finalStatus: "accepted" | "rejected" | "needs-work";
     decisionNote?: string | null;
     minReviewsRequired: number;
   },

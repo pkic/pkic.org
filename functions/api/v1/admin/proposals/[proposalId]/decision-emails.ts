@@ -18,6 +18,7 @@ interface ProposalEmailSource {
   title: string;
   event_id: string;
   proposer_user_id: string;
+  manage_token_hash: string;
   presentation_deadline: string | null;
 }
 
@@ -47,18 +48,19 @@ export async function buildProposalDecisionEmailPlan(
   db: DatabaseLike,
   payload: {
     proposalId: string;
-    finalStatus: "accepted" | "rejected" | "needs_work";
+    finalStatus: "accepted" | "rejected" | "needs-work";
     decisionNote?: string;
     presentationDeadline?: string;
   },
   options: {
     appBaseUrl: string;
     resolveSpeakerManageUrl: (speaker: ProposalSpeakerWithUser, event: EventEmailSource) => Promise<string>;
+    resolveProposalManageUrl: (event: EventEmailSource, proposalManageToken: string) => Promise<string>;
   },
 ): Promise<ProposalDecisionEmailPlan> {
   const proposal = await first<ProposalEmailSource>(
     db,
-    `SELECT id, title, event_id, proposer_user_id, presentation_deadline
+    `SELECT id, title, event_id, proposer_user_id, manage_token_hash, presentation_deadline
      FROM session_proposals
      WHERE id = ?`,
     [payload.proposalId],
@@ -77,6 +79,7 @@ export async function buildProposalDecisionEmailPlan(
 
   const messages: ProposalDecisionEmailMessage[] = [];
   const presentationReminderUserIds = new Set<string>();
+  const proposalManageUrl = event ? await options.resolveProposalManageUrl(event, proposal.manage_token_hash) : "";
 
   for (const speaker of speakers) {
     if (speaker.user_id === proposal.proposer_user_id) {
@@ -93,6 +96,7 @@ export async function buildProposalDecisionEmailPlan(
           firstName: speaker.first_name ?? "",
           lastName: speaker.last_name ?? "",
           proposalTitle: proposal.title,
+          manageUrl: proposalManageUrl,
           finalStatus: payload.finalStatus,
           decisionNote: payload.decisionNote ?? "",
         },

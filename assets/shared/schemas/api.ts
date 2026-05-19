@@ -333,7 +333,7 @@ export const reviewPatchSchema = z.object({
 });
 
 export const finalizeProposalSchema = z.object({
-  finalStatus: z.enum(["accepted", "rejected", "needs_work"]),
+  finalStatus: z.enum(["accepted", "rejected", "needs-work"]),
   decisionNote: trimmedString(3, 10_000).optional(),
   /** ISO-8601 date by which speakers must upload their presentation slides. */
   presentationDeadline: z.string().datetime().optional(),

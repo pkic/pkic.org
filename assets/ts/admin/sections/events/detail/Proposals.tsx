@@ -55,7 +55,7 @@ function ProposalsList({ slug }: { slug: string }) {
           <option value="under_review">Under Review</option>
           <option value="accepted">Accepted</option>
           <option value="rejected">Rejected</option>
-          <option value="needs_work">Needs Work</option>
+          <option value="needs-work">Needs Work</option>
           <option value="withdrawn">Withdrawn</option>
         </select>
         <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void reload()}>

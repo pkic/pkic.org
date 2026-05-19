@@ -122,7 +122,7 @@ function defaultFrontendPaths(
     registrationConfirmPath: `${base}register/confirm/`,
     proposalPath: `${base}propose/`,
     registrationManagePath: `${base}register/manage/`,
-    proposalManagePath: `${base}propose-manage/`,
+    proposalManagePath: `${base}propose/manage/`,
     speakerManagePath: `${base}propose/speaker/`,
     inviteDeclinePath: `${base}invite/decline/`,
   };

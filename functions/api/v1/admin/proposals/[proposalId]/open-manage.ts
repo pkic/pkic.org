@@ -7,24 +7,11 @@
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
-import { run, first } from "../../../../../_lib/db/queries";
+import { first } from "../../../../../_lib/db/queries";
 import { json } from "../../../../../_lib/http";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { proposalManagePageUrl } from "../../../../../_lib/services/frontend-links";
-import { nowIso } from "../../../../../_lib/utils/time";
-import { randomToken, sha256Hex } from "../../../../../_lib/utils/crypto";
-import type { DatabaseLike } from "../../../../../_lib/types";
-
-async function refreshProposalManageToken(db: DatabaseLike, proposalId: string): Promise<string> {
-  const token = randomToken(24);
-  const hash = await sha256Hex(token);
-  await run(db, `UPDATE session_proposals SET manage_token_hash = ?, updated_at = ? WHERE id = ?`, [
-    hash,
-    nowIso(),
-    proposalId,
-  ]);
-  return token;
-}
+import { refreshProposalManageToken } from "../../../../../_lib/services/proposals";
 
 export async function onRequestPost(c: any): Promise<Response> {
   const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
