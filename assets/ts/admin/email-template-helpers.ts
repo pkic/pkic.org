@@ -40,6 +40,12 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   attendanceType: "in_person",
   attendanceLabel: "In-person",
   manageUrl: "https://pkic.org/events/2026/conference/manage/?token=sample",
+  registrationUrl: "https://pkic.org/events/2026/conference/register/?invite=sample",
+  proposalUrl: "https://pkic.org/events/2026/conference/propose/?invite=sample",
+  profileUrl: "https://pkic.org/events/2026/conference/speaker/manage/?token=sample",
+  uploadUrl: "https://pkic.org/events/2026/conference/speaker/manage/?token=sample",
+  finalStatus: "needs_work",
+  decisionNote: "Please add concrete deployment constraints and success metrics.",
   acceptedTermsText: "I agree to the Code of Conduct.",
   waitlistOfferNotice: false,
   // Day attendance
@@ -76,11 +82,17 @@ export const TEMPLATE_HELPERS: TemplateHelperItem[] = [
   { category: "Variables", label: "attendanceType", snippet: "{{attendanceType}}" },
   { category: "Variables", label: "attendanceLabel", snippet: "{{attendanceLabel}}" },
   { category: "Variables", label: "manageUrl", snippet: "{{manageUrl}}" },
+  { category: "Variables", label: "registrationUrl", snippet: "{{registrationUrl}}" },
+  { category: "Variables", label: "proposalUrl", snippet: "{{proposalUrl}}" },
+  { category: "Variables", label: "profileUrl", snippet: "{{profileUrl}}" },
+  { category: "Variables", label: "uploadUrl", snippet: "{{uploadUrl}}" },
   { category: "Variables", label: "acceptedTermsText", snippet: "{{acceptedTermsText}}" },
   // Speaker / proposal
   { category: "Variables", label: "proposalTitle", snippet: "{{proposalTitle}}" },
   { category: "Variables", label: "proposalAbstract", snippet: "{{proposalAbstract}}" },
   { category: "Variables", label: "speakerStatus", snippet: "{{speakerStatus}}" },
+  { category: "Variables", label: "finalStatus", snippet: "{{finalStatus}}" },
+  { category: "Variables", label: "decisionNote", snippet: "{{decisionNote}}" },
 
   // ── Conditions ────────────────────────────────────────────────────────────
   {

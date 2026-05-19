@@ -240,7 +240,9 @@ describe("admin user anonymization", () => {
       )
     )[0];
     expect(entry.action).toBe("user_anonymized");
-    const details = JSON.parse(entry.details_json) as { previousEmail: string };
-    expect(details.previousEmail).toBe("audit-anon@example.test");
+    const details = JSON.parse(entry.details_json) as {
+      previousEmail: { from: string | null; to: string };
+    };
+    expect(details.previousEmail).toEqual({ from: null, to: "audit-anon@example.test" });
   });
 });

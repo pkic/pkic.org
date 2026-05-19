@@ -2,11 +2,11 @@ import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
-import { finalizeProposalDecision, refreshSpeakerManageToken } from "../../../../../_lib/services/proposals";
+import { finalizeProposalDecision } from "../../../../../_lib/services/proposals";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
 import { queueEmail } from "../../../../../_lib/email/outbox";
 import { first, run } from "../../../../../_lib/db/queries";
-import { speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
+import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
 import { buildProposalDecisionEmailPlan } from "./decision-emails";
@@ -31,6 +31,15 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const body = await parseJsonBody(c.req, finalizeProposalSchema);
   const config = getConfig(c.env, c.req.raw);
+  const previousDecision = await first<{ final_status: string | null; decision_note: string | null }>(
+    c.env.DB,
+    `SELECT final_status, decision_note
+     FROM proposal_decisions
+     WHERE proposal_id = ?
+     ORDER BY decided_at DESC
+     LIMIT 1`,
+    [proposalId],
+  );
 
   const minReviewsRequired = config.minProposalReviews;
 
@@ -62,10 +71,10 @@ export async function onRequestPost(c: any): Promise<Response> {
     },
     {
       appBaseUrl,
-      resolveSpeakerManageUrl: async (speaker, event) => {
-        const freshToken = await refreshSpeakerManageToken(c.env.DB, proposalId, speaker.user_id);
-        return speakerManagePageUrl(appBaseUrl, event, freshToken);
-      },
+      resolveSpeakerManageUrl: async (speaker, event) =>
+        speakerManagePageUrl(appBaseUrl, event, speaker.manage_token_hash ?? ""),
+      resolveProposalManageUrl: async (event, proposalManageToken) =>
+        proposalManagePageUrl(appBaseUrl, event, proposalManageToken),
     },
   );
 
@@ -78,6 +87,12 @@ export async function onRequestPost(c: any): Promise<Response> {
       subject: message.fallbackSubject,
       messageType: "transactional",
       data: message.data,
+    });
+
+    await writeAuditLog(c.env.DB, "admin", admin.id, "proposal_decision_email_queued", "proposal", proposalId, {
+      templateKey: { from: null, to: message.templateKey },
+      recipientEmail: { from: null, to: message.recipientEmail },
+      recipientUserId: { from: null, to: message.recipientUserId },
     });
   }
 
@@ -93,9 +108,11 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   await writeAuditLog(c.env.DB, "admin", admin.id, "proposal_decision_recorded", "proposal", proposalId, {
-    adminEmail: admin.email,
-    finalStatus: body.finalStatus,
-    decisionNote: body.decisionNote ?? null,
+    adminEmail: { from: null, to: admin.email },
+    finalStatus: { from: previousDecision?.final_status ?? null, to: body.finalStatus },
+    decisionNote: { from: previousDecision?.decision_note ?? null, to: body.decisionNote ?? null },
+    queuedEmailCount: { from: 0, to: plan.messages.length },
+    manageLinkPolicy: { from: "rotated", to: "reused_existing" },
   });
 
   return json({ success: true, ...finalized, minReviewsRequired });

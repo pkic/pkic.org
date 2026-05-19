@@ -7,7 +7,7 @@ import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { resolveTemplate } from "../../../../../_lib/email/templates";
 import { renderEmail, renderSubject } from "../../../../../_lib/email/render";
 import { loadEmailLayout, loadEmailPartials } from "../../../../../_lib/email/partials";
-import { speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
+import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
 import { buildProposalDecisionEmailPlan } from "./decision-emails";
 
@@ -41,7 +41,10 @@ export async function onRequestPost(c: any): Promise<Response> {
     },
     {
       appBaseUrl,
-      resolveSpeakerManageUrl: async (_speaker, event) => speakerManagePageUrl(appBaseUrl, event, "preview-token"),
+      resolveSpeakerManageUrl: async (speaker, event) =>
+        speakerManagePageUrl(appBaseUrl, event, speaker.manage_token_hash ?? ""),
+      resolveProposalManageUrl: async (event, proposalManageToken) =>
+        proposalManagePageUrl(appBaseUrl, event, proposalManageToken),
     },
   );
 

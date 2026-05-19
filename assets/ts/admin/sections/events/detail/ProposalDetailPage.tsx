@@ -74,6 +74,10 @@ interface AuditDelta {
   to: unknown;
 }
 
+function isNeedsWorkDecision(value: string): boolean {
+  return value === "needs_work" || value === "needs-work";
+}
+
 function isAuditDelta(value: unknown): value is AuditDelta {
   return (
     Boolean(value) && typeof value === "object" && "from" in (value as AuditDelta) && "to" in (value as AuditDelta)
@@ -137,8 +141,16 @@ function formatProposalAuditAction(entry: ProposalAuditLogEntry): string {
       return fields ? `Proposal updated: ${fields}` : "Proposal updated";
     }
     case "proposal_decision_recorded": {
-      const status = typeof entry.details?.finalStatus === "string" ? entry.details.finalStatus : null;
-      return status ? `Decision recorded: ${status.replace(/_/g, " ")}` : "Decision recorded";
+      const finalStatusDelta = entry.details?.finalStatus;
+      const status = isAuditDelta(finalStatusDelta) ? finalStatusDelta.to : finalStatusDelta;
+      return typeof status === "string" ? `Decision recorded: ${status.replace(/_/g, " ")}` : "Decision recorded";
+    }
+    case "proposal_decision_email_queued": {
+      const templateDelta = entry.details?.templateKey;
+      const template = isAuditDelta(templateDelta) ? templateDelta.to : templateDelta;
+      return typeof template === "string"
+        ? `Decision email queued: ${template.replace(/_/g, " ")}`
+        : "Decision email queued";
     }
     case "speaker_bio_updated":
       return "Speaker bio updated";
@@ -483,7 +495,9 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   // Sync decision/abstract form state when proposal data (re)loads
   useEffect(() => {
     if (data?.proposal) {
-      setDecisionStatus(data.proposal.decision_status ?? "");
+      setDecisionStatus(
+        isNeedsWorkDecision(data.proposal.decision_status ?? "") ? "needs-work" : (data.proposal.decision_status ?? ""),
+      );
       setDecisionNote(data.proposal.decision_note ?? "");
       setAbstractDraft(data.proposal.abstract);
     }
@@ -498,7 +512,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ") || proposal.proposer_email;
   const answerRows = buildProposalAnswerRows(proposal.details, form?.fields);
   const quorumMet = reviews.length >= minReviewsRequired;
-  const needsWorkRequiresNote = decisionStatus === "needs_work" && !decisionNote.trim();
+  const needsWorkRequiresNote = isNeedsWorkDecision(decisionStatus) && !decisionNote.trim();
   const selectedDecisionPreview =
     decisionPreview?.messages.find((message) => message.id === selectedDecisionPreviewId) ??
     decisionPreview?.messages[0] ??
@@ -968,14 +982,14 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                           >
                             <option value="">— select —</option>
                             <option value="accepted">Accepted</option>
-                            <option value="needs_work">Needs Work</option>
+                            <option value="needs-work">Needs Work</option>
                             <option value="rejected">Rejected</option>
                           </select>
                         </div>
                         <div class="col-12">
                           <label class="form-label fw-semibold">
                             Note to applicant
-                            {decisionStatus === "needs_work" && <span class="text-danger ms-1">* required</span>}
+                            {isNeedsWorkDecision(decisionStatus) && <span class="text-danger ms-1">* required</span>}
                             <span class="text-muted fw-normal ms-2 small">
                               Sent in decision email · Markdown supported
                             </span>
@@ -986,7 +1000,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                             value={decisionNote}
                             onInput={(e) => setDecisionNote((e.target as HTMLTextAreaElement).value)}
                             placeholder={
-                              decisionStatus === "needs_work"
+                              isNeedsWorkDecision(decisionStatus)
                                 ? "Describe what changes or clarifications are needed…"
                                 : "Optional feedback for the proposer…"
                             }
