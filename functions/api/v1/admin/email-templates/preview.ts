@@ -13,7 +13,7 @@ function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
     firstName: "Alex",
     lastName: "Morgan",
     proposalTitle: "Operational Trust in a Post-Quantum Transition",
-    finalStatus: "needs_work",
+    finalStatus: "needs-work",
     decisionNote: "Please update the proposal with measurable outcomes and migration constraints.",
     // Preview-only placeholders. Real links are generated from event route settings/frontmatter.
     manageUrl: `${baseUrl}/example/manage/?token=example`,

@@ -75,7 +75,7 @@ interface AuditDelta {
 }
 
 function isNeedsWorkDecision(value: string): boolean {
-  return value === "needs_work" || value === "needs-work";
+  return value === "needs-work";
 }
 
 function isAuditDelta(value: unknown): value is AuditDelta {
@@ -143,7 +143,7 @@ function formatProposalAuditAction(entry: ProposalAuditLogEntry): string {
     case "proposal_decision_recorded": {
       const finalStatusDelta = entry.details?.finalStatus;
       const status = isAuditDelta(finalStatusDelta) ? finalStatusDelta.to : finalStatusDelta;
-      return typeof status === "string" ? `Decision recorded: ${status.replace(/_/g, " ")}` : "Decision recorded";
+      return typeof status === "string" ? `Decision recorded: ${status.replace(/[_-]/g, " ")}` : "Decision recorded";
     }
     case "proposal_decision_email_queued": {
       const templateDelta = entry.details?.templateKey;
@@ -703,7 +703,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
           <div class="card card-body p-3 h-100">
             <div class="small text-muted mb-1">Decision</div>
             <div class="text-capitalize">
-              {proposal.decision_status ? proposal.decision_status.replace(/_/g, " ") : "Pending"}
+              {proposal.decision_status ? proposal.decision_status.replace(/[_-]/g, " ") : "Pending"}
             </div>
             <div class="small text-muted">
               {proposal.decision_decided_at ? `Recorded ${fmt(proposal.decision_decided_at)}` : "No final decision yet"}

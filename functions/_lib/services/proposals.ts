@@ -47,7 +47,7 @@ export interface ProposalListRecord extends ProposalRecord {
   proposer_first_name: string | null;
   proposer_last_name: string | null;
   review_count: number;
-  decision_status: "accepted" | "rejected" | "needs_work" | null;
+  decision_status: "accepted" | "rejected" | "needs-work" | null;
   decision_note: string | null;
   decision_decided_at: string | null;
 }
@@ -809,7 +809,7 @@ export async function finalizeProposalDecision(
   payload: {
     proposalId: string;
     decidedByUserId: string;
-    finalStatus: "accepted" | "rejected" | "needs_work";
+    finalStatus: "accepted" | "rejected" | "needs-work";
     decisionNote?: string | null;
     minReviewsRequired: number;
   },

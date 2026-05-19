@@ -48,7 +48,7 @@ export async function buildProposalDecisionEmailPlan(
   db: DatabaseLike,
   payload: {
     proposalId: string;
-    finalStatus: "accepted" | "rejected" | "needs_work";
+    finalStatus: "accepted" | "rejected" | "needs-work";
     decisionNote?: string;
     presentationDeadline?: string;
   },

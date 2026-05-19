@@ -44,7 +44,7 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   proposalUrl: "https://pkic.org/events/2026/conference/propose/?invite=sample",
   profileUrl: "https://pkic.org/events/2026/conference/speaker/manage/?token=sample",
   uploadUrl: "https://pkic.org/events/2026/conference/speaker/manage/?token=sample",
-  finalStatus: "needs_work",
+  finalStatus: "needs-work",
   decisionNote: "Please add concrete deployment constraints and success metrics.",
   acceptedTermsText: "I agree to the Code of Conduct.",
   waitlistOfferNotice: false,
