@@ -1,5 +1,8 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
+import { cacheAdminForRequest, requireAdminFromRequest } from "../../../_lib/auth/admin";
+import { readReplicaDb } from "../../../_lib/db/session";
+import type { Env } from "../../../_lib/types";
 import { onRequestGet as AdminAuditLogGet_l } from "./audit-log";
 import { onRequestGet as AdminDonationsGet_l } from "./donations";
 import { onRequestGet as AdminEmailTemplatesGet_l } from "./email-templates";
@@ -18,6 +21,29 @@ import users_Router from "./users/router";
 
 const app = new Hono();
 export const openapi = fromHono(app);
+
+async function useReadReplicaForAdminReads(c: any, next: () => Promise<void>): Promise<void> {
+  const method = c.req.raw.method.toUpperCase();
+  if (method !== "GET" && method !== "HEAD") {
+    await next();
+    return;
+  }
+
+  const env = c.env as Env;
+  const request = c.req.raw as Request;
+  const primaryDb = env.DB;
+  const admin = await requireAdminFromRequest(primaryDb, request, env);
+  cacheAdminForRequest(request, admin);
+
+  env.DB = readReplicaDb(primaryDb);
+  try {
+    await next();
+  } finally {
+    env.DB = primaryDb;
+  }
+}
+
+app.use("*", useReadReplicaForAdminReads);
 
 app.get("/donations", AdminDonationsGet_l);
 app.get("/audit-log", AdminAuditLogGet_l);

@@ -21,11 +21,22 @@ interface AdminSessionRow {
   role: string;
 }
 
+const adminByRequest = new WeakMap<Request, AuthAdmin>();
+
+export function cacheAdminForRequest(request: Request, admin: AuthAdmin): void {
+  adminByRequest.set(request, admin);
+}
+
 export async function requireAdminFromRequest(
   db: DatabaseLike,
   request: Request,
   env?: Pick<Env, "ADMIN_API_KEY">,
 ): Promise<AuthAdmin> {
+  const cached = adminByRequest.get(request);
+  if (cached) {
+    return cached;
+  }
+
   const auth = request.headers.get("authorization") ?? "";
   const match = auth.match(/^Bearer\s+(.+)$/i);
   if (!match) {
@@ -36,10 +47,14 @@ export async function requireAdminFromRequest(
 
   // API key auth — no DB lookup needed, returns a synthetic admin identity
   if (env?.ADMIN_API_KEY && token === env.ADMIN_API_KEY) {
-    return { id: "api-key", email: "api-key", role: "admin" };
+    const admin = { id: "api-key", email: "api-key", role: "admin" };
+    cacheAdminForRequest(request, admin);
+    return admin;
   }
 
-  return getAdminBySessionToken(db, token);
+  const admin = await getAdminBySessionToken(db, token);
+  cacheAdminForRequest(request, admin);
+  return admin;
 }
 
 export async function getAdminBySessionToken(db: DatabaseLike, token: string): Promise<AuthAdmin> {
