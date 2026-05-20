@@ -45,7 +45,7 @@ jobs:
           submodules: recursive
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           run_install: false
 
@@ -56,7 +56,7 @@ jobs:
           cache: "pnpm"
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
 
@@ -64,7 +64,7 @@ jobs:
         uses: peaceiris/actions-hugo@v3
         with:
           extended: true
-          hugo-version: "0.160.0"
+          hugo-version: "0.161.1"
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
