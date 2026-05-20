@@ -3,7 +3,7 @@ name: Trustgate Digital
 slogan: Trust, Be Trusted in the Digital World
 website: https://www.trustgatedigital.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - trustgatedigital.com
 # Short description, longer content can be placed in `content/members/`
 description: Our solution is to provide a holistic public key infrastructure and digital trust certificate services for people and organizations through the creation, deployment, and management of trusted digital certificates for people, businesses, and IT assets.

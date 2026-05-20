@@ -3,7 +3,7 @@ name: Kathmandu University
 slogan:
 website: https://ku.edu.np/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ku.edu.np
 # Short description, longer content can be placed in `content/members/`
 description: Kathmandu University (KU) is an autonomous, not-for-profit, self-funding public institution established by an Act of Parliament in December 1991. It is an institution of higher learning dedicated to maintaining the standard of academic excellence in various classical and professional disciplines. The mission statement of the University is “to provide quality education for leadership”. The vision is “to become a world-class university devoted to bringing knowledge and technology to the service of mankind”.

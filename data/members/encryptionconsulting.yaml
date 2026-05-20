@@ -3,7 +3,7 @@ name: Encryption Consulting
 slogan:
 website: https://www.encryptionconsulting.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - encryptionconsulting.com
 # Short description, longer content can be placed in `content/members/`
 description: Encryption Consulting is a customer-focused cyber-consulting firm providing an array of services in all aspects of Encryption.

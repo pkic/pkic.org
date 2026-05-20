@@ -3,7 +3,7 @@ name: Dohatec Certifying Authority
 slogan: excellence,always
 website: http://www.dohatec-ca.com.bd/DohatecCA/index.jsp
 # Business domains for email
-businessDomains:
+organizationDomains:
   - dohatec.net
 # Short description, longer content can be placed in `content/members/`
 description: An international software vendor fuelled by professional competence and pride in a Digital World, enhancing earnings from the global marketplace and enriching the workforce intellectually,professionally and economically.

@@ -3,7 +3,7 @@ name: Gellum
 slogan: Your Trusted Technology Partner
 website: https://gellum.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - backdoorglobal.com
 # Short description, longer content can be placed in `content/members/`
 description: Gellum is the technology division of Backdoor Global, Inc., providing comprehensive IT solutions to businesses of all sizes.

@@ -3,7 +3,7 @@ name: Logius
 slogan: Public Key Infrastructure for the Dutch government
 website: https://www.logius.nl/english
 # Business domains for email
-businessDomains:
+organizationDomains:
   - logius.nl
 # Short description, longer content can be placed in `content/members/`
 description: Logius manages PKIoverheid, which is the name for the PKI designed for trustworthy electronic communication within and with the Dutch government. To reach this goal a national PKI certificate hierarchy has been realized.

@@ -3,7 +3,7 @@ name: Universiti Putra Malaysia
 slogan:
 website: https://www.fsktm.upm.edu.my
 # Business domains for email
-businessDomains:
+organizationDomains:
   - upm.edu.my
 # Short description, longer content can be placed in `content/members/`
 description: UPM is recognised by the independent government assessments as one of Malaysia's leading research universities. Founded in 1931 as the School of Agriculture, the University today combines impressive modern facilities and a dynamic approach to teaching and research with its proud heritage of quality services and achievements.

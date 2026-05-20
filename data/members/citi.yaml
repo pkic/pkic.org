@@ -3,7 +3,7 @@ name: Citi
 slogan:
 website: https://www.citi.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - citi.com
 # Short description, longer content can be placed in `content/members/`
 description: Citi's mission is to serve as a trusted partner to our clients by responsibly providing financial services that enable growth and economic progress. We have set expectations for how we must act to bring our mission to life. These expectations are at the heart of our Leadership Principles – we take ownership, we deliver with pride and we succeed together.

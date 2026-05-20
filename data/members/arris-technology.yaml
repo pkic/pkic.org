@@ -3,7 +3,7 @@ name: ARRIS Technology, Inc.
 slogan:
 website: https://www.pki-center.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - auroranetworks.com
   - vistancenetworks.com
 # Short description, longer content can be placed in `content/members/`

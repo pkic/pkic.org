@@ -4,7 +4,7 @@ name: Samet Tonyali
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - gumushane.edu.tr
 # Short description, longer content can be placed in `content/members/`
 description: Samet is an assistant professor in the Department of Software Engineering at Gümüşhane University in Turkey. His research area focuses on application of cryptographic algorithms on communication protocols.

@@ -3,7 +3,7 @@ name: CORAN LABS
 slogan:
 website: https://www.coranlabs.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - coranlabs.com
 # Short description, longer content can be placed in `content/members/`
 description: CoRAN Labs is actively working on post-quantum cryptography (PQC) and its application in securing different domains such as telecom(post quantum telecom network), cloud native(k8s), etc.

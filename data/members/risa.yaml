@@ -3,7 +3,7 @@ name: Rwanda Information Society Authority (RISA)
 slogan:
 website: https://www.risa.gov.rw/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - risa.gov.rw
 # Short description, longer content can be placed in `content/members/`
 description: In our country (Rwanda), we have adopted the enhancement of digital security and trust using the PKI features.

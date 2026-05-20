@@ -3,7 +3,7 @@ name: DTCC
 slogan:
 website: https://www.dtcc.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - dtcc.com
 # Short description, longer content can be placed in `content/members/`
 description: The Depository Trust and Clearing Corporation (DTCC) advances solutions that help markets grow and protect the security of the global financial system.

@@ -3,7 +3,7 @@ name: Think Secure
 slogan:
 website: https://think-secure.nl/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - think-secure.nl
 # Short description, longer content can be placed in `content/members/`
 description: We provide from expert experience services to your company to secure against a wide range of security threats and Risks.

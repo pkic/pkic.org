@@ -3,7 +3,7 @@ name: Digitorus
 slogan: Specialist in Public Key Infrastructure (PKI), Digital Signatures, and Trustworthy Systems (TWS)
 website: https://www.digitorus.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - digitorus.com
 # Short description, longer content can be placed in `content/members/`
 description: Digitorus is a software development and consultancy company specialized in Public Key Infrastructure (PKI), Digital Signatures, and Trustworthy Systems (TWS) that require a high level of confidentiality, integrity, and availability.

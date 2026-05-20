@@ -3,7 +3,7 @@ name: Togu Turnip
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - dtu.dk
 # Short description, longer content can be placed in `content/members/`
 description: I am currently pursuing his PhD degree in the Department of Technology Engineering at Denmark Technical University, Denmark. My research interests are in the areas of information security and cryptography, as well as network security.

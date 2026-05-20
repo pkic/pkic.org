@@ -3,7 +3,7 @@ name: CyberSecurity NonProfit (CSNP)
 slogan:
 website: https://csnp.org
 # Business domains for email
-businessDomains:
+organizationDomains:
   - csnp.org
 # Short description, longer content can be placed in `content/members/`
 description: CSNP is a 501(c)(3) nonprofit organization dedicated to transforming global cybersecurity. We strive to create a secure and equitable digital world by providing accessible education, driving innovation, and empowering diverse communities

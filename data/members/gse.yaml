@@ -3,7 +3,7 @@ name: GESTION DE SEGURIDAD ELECTRONICA S.A. - GSE
 slogan: Lead change with digital confidence and advanced technology
 website: https://gse.com.co
 # Business domains for email
-businessDomains:
+organizationDomains:
   - gse.com.co
 # Short description, longer content can be placed in `content/members/`
 description: We are GSE, transforming companies into the digital era with secure, reliable certification services.

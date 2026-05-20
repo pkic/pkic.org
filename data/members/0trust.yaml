@@ -3,7 +3,7 @@ name: Foard Consulting LLC
 slogan:
 website: https://www.0trust.pro
 # Business domains for email
-businessDomains:
+organizationDomains:
   - 0trust.pro
 # Short description, longer content can be placed in `content/members/`
 description: Foard Consulting LLC provides consulting services to organizations that support the US federal government. Principle leadership has been involved in federal ICAM as both a government leader and a consulting contractor for over 20 years and has participated in post quantum cryptography strategy and plans within the federal government.

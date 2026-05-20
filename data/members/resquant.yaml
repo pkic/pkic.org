@@ -3,7 +3,7 @@ name: Resquant
 slogan: Stay secure in the era of quantum computers
 website: https://www.resquant.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - resquant.com
 # Short description, longer content can be placed in `content/members/`
 description: ResQuant is a deep-tech, cybersecurity company operating on the border of science and business. We exist to protect sensitive data worldwide from current and future threats.

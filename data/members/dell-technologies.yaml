@@ -3,7 +3,7 @@ name: Dell Technologies
 slogan: With Dell Technologies, your business is always ready to move forward
 website: https://www.dell.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - dell.com
 # Short description, longer content can be placed in `content/members/`
 description: Technology drives human progress. This tenet is the core of our business and vision. Our customers and team members are integral to our continuing success as we provide the essential infrastructure for organizations to transform their digital futures.

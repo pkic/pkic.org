@@ -3,7 +3,7 @@ name: HARICA
 slogan: Hellenic Academic and Research Institutions Certification Authority
 website: https://www.harica.gr/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - harica.gr
 # Short description, longer content can be placed in `content/members/`
 description: HARICA is the Hellenic Academic & Research Institutions Certification Authority. It participates in all major Global 'ROOT CA' Trust Programs, and operates as a 'Trust Anchor' in widely used Application Software and Operating Systems.

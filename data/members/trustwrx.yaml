@@ -3,7 +3,7 @@ name: TrustWrx
 slogan: Threat-Immune Security for IoT
 website: https://www.trustwrx.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - trustwrx.com
 # Short description, longer content can be placed in `content/members/`
 description: TrustWrx is the first low-cost, hands-free enterprise-class security service to protect the networks, computers and smart devices in connected homes, small businesses and smart cities.

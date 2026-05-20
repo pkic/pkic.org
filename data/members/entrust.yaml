@@ -3,7 +3,7 @@ name: Entrust
 slogan: Securing a world in motion
 website: https://www.entrust.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - entrust.com
 # Short description, longer content can be placed in `content/members/`
 description: Entrust is dedicated to securing identities, data, and transactions around the globe

@@ -3,7 +3,7 @@ name: GRC PATH
 slogan:
 website: https://www.grcpath.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - grcpath.com
 # Short description, longer content can be placed in `content/members/`
 description: "GRC PATH is the first Iraqi company that provides consultation services on : IT Audit, SWIFT CSP Assessment, PCI Compliance"

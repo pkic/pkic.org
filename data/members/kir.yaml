@@ -3,7 +3,7 @@ name: KIR
 slogan: Your trustworthy partner in building a secure digital world
 website: https://www.kir.pl
 # Business domains for email
-businessDomains:
+organizationDomains:
   - kir.pl
 # Short description, longer content can be placed in `content/members/`
 description: KIR is a key entity of the Polish payment system infrastructure. Based on state-of-the-art technologies, we build solutions for digital processes in business and administration. We specialize in remote identity authentication, secure data exchange, settlements and open banking.

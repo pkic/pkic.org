@@ -3,7 +3,7 @@ name: ExeQuantum
 slogan:
 website: https://www.exequantum.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - exequantum.com
 # Short description, longer content can be placed in `content/members/`
 description: ExeQuantum delivers end-to-end PQC migration, including cryptographic discovery & inventory, remediation, and maintenance

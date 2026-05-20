@@ -3,7 +3,7 @@ name: SIA
 slogan:
 website: https://www.sia.es/sia--home.html
 # Business domains for email
-businessDomains:
+organizationDomains:
   - sia.es
   - minsait.com
 # Short description, longer content can be placed in `content/members/`

@@ -3,7 +3,7 @@ name: Zeva
 slogan: Empowering Security, Protection Privacry, Enabling Transparency
 website: https://www.zevainc.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - zeva.us
 # Short description, longer content can be placed in `content/members/`
 description: Zeva is a global IT security leader specializing in cryptography, identity and access management, and digital security systems with primary focus in PKI Enablement (PKE)

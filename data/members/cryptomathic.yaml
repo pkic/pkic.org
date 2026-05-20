@@ -3,7 +3,7 @@ name: Cryptomathic
 slogan: Empowering Secure Cryptographic Solutions
 website: https://www.cryptomathic.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cryptomathic.com
 # Short description, longer content can be placed in `content/members/`
 description: Cryptomathic's robust cryptographic solutions protect sensitive information from unauthorized access. Trusted by global organizations across all industries.

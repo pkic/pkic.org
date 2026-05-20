@@ -3,7 +3,7 @@ name: Margins ID systems and Applications
 slogan:
 website: https://marginsgroup.com/portfolio-item/margins-id-systems-application-ltd/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - imsgh.org
   - marginsgroup.com
 # Short description, longer content can be placed in `content/members/`

@@ -3,7 +3,7 @@ name: Panos Vlachos
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qub.ac.uk
 # Short description, longer content can be placed in `content/members/`
 description: I am currently pursuing his PhD degree in Post-Quantum Cryptography at Queen's University, Belfast, UK. My research focuses on alternatives to traditional PKI, including innovative approaches to asymmetric cryptography that address emerging quantum threats.

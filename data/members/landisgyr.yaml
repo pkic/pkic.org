@@ -3,7 +3,7 @@ name: Landis+Gyr, Inc.
 slogan:
 website: https://www.landisgyr.eu/?locale=en_US
 # Business domains for email
-businessDomains:
+organizationDomains:
   - landisgyr.com
 # Short description, longer content can be placed in `content/members/`
 description: At Landis+Gyr, we create a greener tomorrow through leading smart metering, grid edge intelligence and smart infrastructure technology.

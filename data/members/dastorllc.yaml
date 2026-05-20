@@ -3,7 +3,7 @@ name: DāSTOR
 slogan:
 website: https://dastorllc.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - dastorllc.com
 # Short description, longer content can be placed in `content/members/`
 description: DāSTOR provides enterprise data center solutions that leverage foundational infrastructure and interconnectivity to drive scalable and reliable digital services. With DāSTOR, customers seamlessly connect to partners and clients to drive better digital outcomes.

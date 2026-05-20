@@ -3,7 +3,7 @@ name: Ultratech inc
 slogan:
 website: https://www.ultratech-inc.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ultratech-inc.com
 # Short description, longer content can be placed in `content/members/`
 description: We are the company who apply the electronic signature of Panamá into the national Apostille platform.

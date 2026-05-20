@@ -3,7 +3,7 @@ name: DIGISIGN.ID
 slogan: We delivered Digital Signature, Digital Certification, Dekstop Signing, and Mobile Application for companies.
 website: https://digisign.id/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - digi-id.id
 # Short description, longer content can be placed in `content/members/`
 description: Digisign is a brand of PT. Solusi Net Internusa are specialized in Electronic Signatures (Digital Signature) & Electronic Certificate Providers (CA-Certificate Authority).

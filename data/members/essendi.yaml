@@ -3,7 +3,7 @@ name: essendi it Group
 slogan: We secure connected worlds
 website: https://www.essendi.de/en
 # Business domains for email
-businessDomains:
+organizationDomains:
   - essendi.de
 # Short description, longer content can be placed in `content/members/`
 description: Building a Secure Basis for Trust. essendi it Group is a European and Swiss expert in digital security, helping organizations manage cryptographic assets and prepare for a quantum-safe future.

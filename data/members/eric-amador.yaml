@@ -3,7 +3,7 @@ name: Eric Amador
 slogan:
 website: https://pqctoday.com
 # Business domains for email
-businessDomains:
+organizationDomains:
 # Short description, longer content can be placed in `content/members/`
 description: Your guided post-quantum cryptography transformation journey. Explore 49 learning modules, assess quantum risk, track the PQC patent landscape, and migrate your cryptography infrastructure in full compliance with NIST, ANSSI, BSI, and global standards.
 

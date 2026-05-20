@@ -3,7 +3,7 @@ name: BxC Security
 slogan:
 website: https://www.bxc-security.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - bxc-security.com
 # Short description, longer content can be placed in `content/members/`
 description: Stop cyber threats before they reach production. BxC Security provides expert OT security consulting and solutions for manufacturing environments.

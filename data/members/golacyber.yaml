@@ -3,7 +3,7 @@ name: Gola Cyber
 slogan: Secure. Build. Grow.
 website: https://www.golacyber.ai
 # Business domains for email
-businessDomains:
+organizationDomains:
   - golacyber.ai
 # Short description, longer content can be placed in `content/members/`
 description: GolaCyber is a startup vendor providing PKI and PQC technology and services in the Australian market.

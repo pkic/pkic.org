@@ -3,7 +3,7 @@ name: 01 Communique
 slogan: Tomorrow's Cyber Security, Today
 website: https://www.01com.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - 01com.com
   - ironcap.ca
 # Short description, longer content can be placed in `content/members/`

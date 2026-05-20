@@ -3,7 +3,7 @@ name: hubraum - technology incubator of Deutsche Telekom Group
 slogan:
 website: https://www.hubraum.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - t-mobile.pl
 # Short description, longer content can be placed in `content/members/`
 description: Our tech incubator helps to take your product to the next level As startup incubator we offer coworking spaces, investments access to Deutsche Telekom

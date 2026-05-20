@@ -3,7 +3,7 @@ name: Keytalk
 slogan: CA Independent Certificate implementation, distribution and management
 website: https://keytalk.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - keytalk.com
 # Short description, longer content can be placed in `content/members/`
 description: It is the Keytalk mission to make PKI Management not only as best as possible, but also as simple as possible. Due to what some organizations are doing to themselves…

@@ -3,7 +3,7 @@ name: JP Morgan
 slogan:
 website: https://chase.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - jpmchase.com
 # Short description, longer content can be placed in `content/members/`
 description: Chase online; credit cards, mortgages, commercial banking, auto loans, investing & retirement planning, checking and business banking.

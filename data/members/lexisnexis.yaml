@@ -3,7 +3,7 @@ name: Lexis Nexis Risk Solutions
 slogan:
 website: https://risk.lexisnexis.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - lexisnexisrisk.com
 # Short description, longer content can be placed in `content/members/`
 description: LexisNexis Risk Solutions uses Big Data, proprietary linking and targeted solutions to provide insights that help make organizations more secure and efficient.

@@ -3,7 +3,7 @@ name: SecureMachines
 slogan:
 website: https://www.securemachines.in
 # Business domains for email
-businessDomains:
+organizationDomains:
   - securemachines.in
 # Short description, longer content can be placed in `content/members/`
 description: SecureMachines is a deep-tech security company building India's first Quantum-Safe Hardware Security Module (HSM) platform.

@@ -3,7 +3,7 @@ name: Deloitte-India
 slogan:
 website: https://www2.deloitte.com/in
 # Business domains for email
-businessDomains:
+organizationDomains:
   - deloitte.it
   - deloitte.com
   - deloitte.ca

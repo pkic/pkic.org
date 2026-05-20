@@ -3,7 +3,7 @@ name: DirectTrust
 slogan: Instilling Trust in Exchange
 website: https://directtrust.org/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - Directtrust.org
 # Short description, longer content can be placed in `content/members/`
 description: A pioneer in offering technical trust and confidence in the secure exchange of health information, DirectTrust is committed to collaboration for advancing secure communication. As a non-profit trade alliance, DirectTrust operates not only as a membership organization, but also as an ANSI-accredited standards body, a trust framework supported by policy, and an accreditor for reliable and trusted exchange across the DirectTrust network.

@@ -3,7 +3,7 @@ name: DAVID GROUP
 slogan: Improvise Global Cyber Stability
 website: https://davidgroup.co.id
 # Business domains for email
-businessDomains:
+organizationDomains:
   - davidgroup.co.id
 # Short description, longer content can be placed in `content/members/`
 description: Indonesian Cyber-based Technologies and Internet Security Company

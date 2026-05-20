@@ -3,7 +3,7 @@ name: QubitOwl
 slogan:
 website: https://www.qubitowl.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qubitowl.com
 # Short description, longer content can be placed in `content/members/`
 description: QubitOwl offers enterprise cryptographic visibility, PQC assessment, and migration planning to ensure post-quantum readiness and reduce quantum threat risks.

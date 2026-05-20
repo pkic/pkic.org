@@ -3,7 +3,7 @@ name: SAP
 slogan:
 website: https://www.sap.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - sap.com
 # Short description, longer content can be placed in `content/members/`
 description: SAP develops Enterprise software and b2b applications.

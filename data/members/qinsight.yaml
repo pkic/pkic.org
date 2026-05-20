@@ -3,7 +3,7 @@ name: Qinsight
 slogan:
 website: https://www.qinsight.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qinsight.com
 # Short description, longer content can be placed in `content/members/`
 description: Discovery, inventory and risk assessment platform. Qinsight provides visibility into cryptographic assets and risk, enabling migration to post-quantum cryptography.

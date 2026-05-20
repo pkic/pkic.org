@@ -3,7 +3,7 @@ name: Provimad de Verificaciones Registrales S.L.
 slogan:
 website: https://www.provimad.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - provimad.com
 # Short description, longer content can be placed in `content/members/`
 description: Provimad is a Spanish company specialized in digital transformation services, certified digitization, electronic invoicing, electronic signature solutions, and trusted preservation of electronic documents with evidentiary value.

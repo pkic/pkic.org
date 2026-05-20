@@ -3,7 +3,7 @@ name: Digidentity
 slogan: Digidentity - digital identity made easy
 website: https://www.digidentity.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - digidentity.com
 # Short description, longer content can be placed in `content/members/`
 description: Digidentity develops products focused on a secure digital identity, where the user and their privacy are key. Our technology supplies digital identities, electronic signatures and identity proofing products to more than 20 million people of different nationalities. Digidentity provides more than 300 million secure online transactions per year between people, organisations, and governments.

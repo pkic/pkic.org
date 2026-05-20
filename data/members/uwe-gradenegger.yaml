@@ -3,7 +3,7 @@ name: Uwe Gradenegger
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - gradenegger.eu
 # Short description, longer content can be placed in `content/members/`
 description: I work in the PKI team of Deutsche Bahn, the largest railroad organization in europe. I also own a part-time consulting business on PKI and run a blog on this topic. I worked six years for Microsoft on PKI and AD CS. I also develop Add-Ons for MS AD CS.

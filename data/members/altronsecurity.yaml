@@ -3,7 +3,7 @@ name: Altron Security
 slogan: Information Security Solutions
 website: https://www.altronsecurity.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - altron.com
 # Short description, longer content can be placed in `content/members/`
 description: Altron Security is Africa’s leading high-trust Digital Trust Services provider, being the first accredited authentication service provider in South Africa Altron Security is accredited under the requirements of the Electronic Communications Act of 2002 to provide Advanced Electronic Signature (AeSign) solutions and the Adobe Approved Trust List. Altron Security has become a foundational element of South African society, through the Digital Trust Services provided to government and industry.

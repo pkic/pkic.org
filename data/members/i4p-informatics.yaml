@@ -3,7 +3,7 @@ name: i4p informatics
 slogan: Developer of applied cryptography solutions with 100+ years of man experience
 website: https://www.i4p.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - i4p.com
 # Short description, longer content can be placed in `content/members/`
 description: i4p is a Hungarian company, who is first to offer secure multi-party cryptography (MPC) in the certified HSM. Their products are Common Criteria EAL4+ certified while their QSCD is eIDAS listed.

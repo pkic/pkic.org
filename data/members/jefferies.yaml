@@ -3,7 +3,7 @@ name: Jefferies
 slogan:
 website: https://jefferies.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - jefferies.com
 # Short description, longer content can be placed in `content/members/`
 description: Jefferies is the leading pure-play investment banking and capital markets firm, purpose-built and driven to deliver for our clients.

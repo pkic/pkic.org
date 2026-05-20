@@ -3,7 +3,7 @@ name: PRIM'X
 slogan:
 website: https://www.primx.eu/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - primx.fr
 # Short description, longer content can be placed in `content/members/`
 description: Make encryption happen

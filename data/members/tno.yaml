@@ -3,7 +3,7 @@ name: The Netherlands Organisation for applied scientific research
 slogan: Innovation for life
 website: https://www.tno.nl
 # Business domains for email
-businessDomains:
+organizationDomains:
   - tno.nl
 # Short description, longer content can be placed in `content/members/`
 description: TNO connects people and knowledge to create innovations that boost the competitive strength of industry and the well-being of society in a sustainable way.

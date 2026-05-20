@@ -3,7 +3,7 @@ name: Garantir
 slogan: Garantir is a leading cybersecurity vendor based in San Diego, California
 website: https://garantir.io
 # Business domains for email
-businessDomains:
+organizationDomains:
   - garantir.io
 # Short description, longer content can be placed in `content/members/`
 description: Garantir is dedicated to providing the most advanced and most versatile security platform on the market. We deliver cybersecurity solutions that protect enterprise data and infrastructure across a wide range of use cases without impeding performance or obstructing workplace integrations.

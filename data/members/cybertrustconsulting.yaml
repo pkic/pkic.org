@@ -3,7 +3,7 @@ name: CyberTrust Consulting
 slogan:
 website: https://www.cybertrustconsulting.co.nz
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cybertrustconsulting.co.nz
 # Short description, longer content can be placed in `content/members/`
 description: CyberTrust consulting is a boutique cybersecurity company that specialises in PKI, PQC consulting and Identity Security.

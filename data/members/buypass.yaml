@@ -3,7 +3,7 @@ name: Buypass
 slogan: We bring you a safer digital world
 website: https://www.buypass.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - buypass.no
 # Short description, longer content can be placed in `content/members/`
 description: With a long history of supplying digital ID and payment solutions, Buypass provides a safer and simpler working day for both individuals and companies.

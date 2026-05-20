@@ -3,7 +3,7 @@ name: Finanz Informatik Technologie Service
 slogan: The Bridge to Digitalization in Financial Industries
 website: https://www.f-i-ts.de/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - f-i-ts.de
 # Short description, longer content can be placed in `content/members/`
 description: We are the right partner and are reliably at your side. We have been building tailor-made solutions for our customers for over 30 years. We see opportunities in future challenges.

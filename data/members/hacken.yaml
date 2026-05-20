@@ -3,7 +3,7 @@ name: Hacken
 slogan:
 website: https://hacken.io
 # Business domains for email
-businessDomains:
+organizationDomains:
   - hacken.io
 # Short description, longer content can be placed in `content/members/`
 description: Hacken is an end-to-end blockchain security & compliance partner for digital assets. Hacken was born on blockchain, combining deep Web3 expertise with enterprise-grade quality, AI-powered offensive security, and globally recognized certifications.

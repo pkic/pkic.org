@@ -3,7 +3,7 @@ name: CREAPLUS
 slogan:
 website: https://www.creaplus.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - creaplus.com
 # Short description, longer content can be placed in `content/members/`
 description: CREAPLUS is dedicated to achieving a high level of cybersecurity for its customers and partners. Established in 2002 it helps organisations prepare for the cyber challenges of today and tomorrow. It offers a wide range of solutions and services that enable and ensure secure electronic business processes.

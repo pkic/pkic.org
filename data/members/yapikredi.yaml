@@ -3,7 +3,7 @@ name: Yapi Kredi Bank
 slogan:
 website: https://www.yapikredi.com.tr
 # Business domains for email
-businessDomains:
+organizationDomains:
   - yapikredi.com.tr
   - ykteknoloji.com.tr
 # Short description, longer content can be placed in `content/members/`

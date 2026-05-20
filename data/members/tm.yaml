@@ -3,7 +3,7 @@ name: TM Technology Services Sdn Bhd
 slogan:
 website: https://www.tm.com.my
 # Business domains for email
-businessDomains:
+organizationDomains:
   - tm.com.my
 # Short description, longer content can be placed in `content/members/`
 description: Connect to your future with Telekom Malaysia, Malaysia's communications solution provider

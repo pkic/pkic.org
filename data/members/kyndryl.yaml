@@ -3,7 +3,7 @@ name: Kyndryl
 slogan:
 website: https://www.kyndryl.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - kyndryl.com
 # Short description, longer content can be placed in `content/members/`
 description: At Kyndryl, we design, build, manage and modernize the mission-critical technology systems that the world depends on every day.

@@ -3,7 +3,7 @@ name: Tecsec
 slogan:
 website: https://tecsec.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - tecsec.com
 # Short description, longer content can be placed in `content/members/`
 description: TecSec’s focus is on Information Security and Information Access Management, enforced through its 7th generation, VEIL® technology cryptography.

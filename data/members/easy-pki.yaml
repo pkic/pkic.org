@@ -3,7 +3,7 @@ name: Easy-PKI
 slogan: A Concierge Consulting Company
 website: https://www.easy-PKI.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - easy-pki.com
 # Short description, longer content can be placed in `content/members/`
 description: Easy-PKI is committed to simplifying the use of PKI, Digital Certificates, PQC, and Encryption Technologies

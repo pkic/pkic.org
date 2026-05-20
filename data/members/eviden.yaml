@@ -3,7 +3,7 @@ name: Eviden
 slogan: Expanding the possibilities of data and technology
 website: https://www.cryptovision.com/en/welcome/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - eviden.com
 # Short description, longer content can be placed in `content/members/`
 description: Eviden provides highly certified software and hardware cybersecurity products to support customers in protecting their data, managing access and securing identities, bringing the needed layer of trust in today’s heterogenous digital environments.

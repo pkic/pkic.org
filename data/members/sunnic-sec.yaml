@@ -3,7 +3,7 @@ name: Sunnic
 slogan: A secure cyberspace built on the foundation of trust
 website: https://www.sunnic-sec.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - sunnic-sec.com
 # Short description, longer content can be placed in `content/members/`
 description: Sunnic is the leading provider of comprehensive digital data security technology, specializing in data protection, cryptography key management, PKI, and access control solutions, designed to safeguard our customers' most critical assets.

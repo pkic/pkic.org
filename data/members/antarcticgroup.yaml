@@ -3,7 +3,7 @@ name: Antarctic Group
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - antarcticgroup.com
 # Short description, longer content can be placed in `content/members/`
 description: Consulting on public key infrastructure solutions to organisations in the UK for nearly 20 years to a range of government, public and private sector organisations.

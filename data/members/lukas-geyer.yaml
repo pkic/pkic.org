@@ -3,7 +3,7 @@ name: Lukáš Geyer
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - dal.ca
 # Short description, longer content can be placed in `content/members/`
 description: Lukáš has been working as a security architect & security consultant in the area of cryptographic & trust services for over 10 years.

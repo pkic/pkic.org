@@ -3,7 +3,7 @@ name: CPA Canada
 slogan:
 website: https://cpacanada.ca
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cpacanada.ca
 # Short description, longer content can be placed in `content/members/`
 description: Our dedicated efforts help shape public policy, influence regulatory frameworks and establish high professional standards that reflect the evolving needs of the accounting industry.

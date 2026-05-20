@@ -3,7 +3,7 @@ name: 8 Unlimited GmbH
 slogan:
 website: https://8unlimited.at
 # Business domains for email
-businessDomains:
+organizationDomains:
   - kaiblinger.net
 # Short description, longer content can be placed in `content/members/`
 description: We provide resources and project management for PKI implementations.

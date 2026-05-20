@@ -3,7 +3,7 @@ name: Loblaw Companies Limited
 slogan:
 website: https://loblaw.ca
 # Business domains for email
-businessDomains:
+organizationDomains:
   - loblaw.ca
 # Short description, longer content can be placed in `content/members/`
 description: Loblaw Companies Limited is a Canadian retailer with corporate and franchised supermarkets under various banners, as well as pharmacies, banking, and apparel services.

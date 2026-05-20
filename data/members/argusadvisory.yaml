@@ -3,7 +3,7 @@ name: Argus Advisory LLC
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - argusadvisoryllc.com
 # Short description, longer content can be placed in `content/members/`
 description: Argus Advisory LLC offers Post-Quantum Cryptography and Quantum Computing Technology Roadmapping advisory services.

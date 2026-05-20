@@ -3,7 +3,7 @@ name: OmniTrust
 slogan: Securing What Matters From Silicon to AI
 website: https://omnitrust.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - omnitrust.com
 # Short description
 description: OmniTrust secures the connected world from silicon to AI through unified Trust Lifecycle Management across devices, identities, and cryptography.

@@ -3,7 +3,7 @@ name: CDAC
 slogan: India Centre for Development of Advanced Computing
 website: https://www.cdac.in
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cdac.in
 # Short description, longer content can be placed in `content/members/`
 description: The Centre for Development of Advanced Computing (C-DAC) in India is the premier Research and Development organization of the Ministry of Electronics and Information Technology (MeitY) for carrying out Research and Development in IT, Electronics and associated areas.

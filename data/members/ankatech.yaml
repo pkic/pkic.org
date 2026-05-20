@@ -3,7 +3,7 @@ name: AnkaTech
 slogan:
 website: https://www.ankatech.co
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ankasecure.co
 # Short description, longer content can be placed in `content/members/`
 description: Next-gen cybersecurity solutions with NIST-certified post-quantum encryption for ultimate data protection.

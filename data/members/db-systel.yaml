@@ -3,7 +3,7 @@ name: DB Systel
 slogan: The digital partner of Deutsche Bahn
 website: https://www.dbsystel.de/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - deutschebahn.com
 # Short description, longer content can be placed in `content/members/`
 description: DB Systel GmbH, headquartered in Frankfurt am Main, is a wholly owned subsidiary of DB AG and a digital partner for all Group companies.

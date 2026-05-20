@@ -3,7 +3,7 @@ name: ITRUZZ
 slogan:
 website: https://www.itruzz.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - itruzz.co.id
 # Short description, longer content can be placed in `content/members/`
 description: Itruzz is a technology company that specializes in verification service technology. Itruzz is present along with the rapid development of the fintech industry and digital financial products that offer various financial service solutions to retail consumers.

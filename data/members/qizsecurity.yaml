@@ -3,7 +3,7 @@ name: QIZ Security
 slogan:
 website: https://www.qizsecurity.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qizsecurity.com
 # Short description, longer content can be placed in `content/members/`
 description: QIZ helps organizations gain cryptographic visibility, manage risks, and prepare for the post-quantum era with crypto-agility at scale.

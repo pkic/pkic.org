@@ -3,7 +3,7 @@ name: Navy Federal Credit Union
 slogan: Our members are the mission
 website: https://www.navyfederal.org/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - navyfederal.org
 # Short description, longer content can be placed in `content/members/`
 description: Navy Federal Credit Union is an armed forces bank serving the Navy, Army, Marine Corps, Air Force, Space Force, Coast Guard, veterans, DoD & their families.

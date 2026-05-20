@@ -3,7 +3,7 @@ name: Tiago Zacchello
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - certutil.net
 # Short description, longer content can be placed in `content/members/`
 description: I am a cybersecurity consultant with focus on Public Key Infrastructure & Identity services.

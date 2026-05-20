@@ -3,7 +3,7 @@ name: Bosch
 slogan: Invented for life
 website: https://www.bosch.de/en/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - de.bosch.com
 # Short description, longer content can be placed in `content/members/`
 description: For over 130 years the name “Bosch” has been associated with forward-looking technology and trailblazing inventions that have made history. Bosch does business all over the world and is active in the most wide-ranging sectors.

@@ -3,7 +3,7 @@ name: Quantinuum
 slogan: Accelerate quantum computing and use its power to positively transform the world
 website: https://www.quantinuum.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - quantinuum.com
 # Short description, longer content can be placed in `content/members/`
 description: Quantinuum unites best-in-class software with high-fidelity hardware to accelerate quantum computing. With integrated full-stack technology, our world-class scientists are rapidly scaling quantum computing.

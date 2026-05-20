@@ -4,7 +4,7 @@ slogan: Preparing for Post Quantum Cryptography
 #website: https://pkiconsultants.safecipher.com/index.html
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - safecipher.com
 # Short description, longer content can be placed in `content/members/`
 description: SafeCipher focuses on Public Key Infrastructure (PKI), Hardware Security Modules (HSM), and Quantum-Resistant Cryptography.

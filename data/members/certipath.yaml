@@ -3,7 +3,7 @@ name: CertiPath
 slogan: Helping organizations achieve ubiquitous trust online
 website: https://certipath.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - certipath.com
 # Short description, longer content can be placed in `content/members/`
 description: CertiPath focuses on the use of digital identity in the modern connected world

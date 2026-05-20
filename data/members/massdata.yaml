@@ -3,7 +3,7 @@ name: Mass Data Defense Corporation
 slogan:
 website: https://massdata.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - massdata.com
 # Short description, longer content can be placed in `content/members/`
 description: We protect sensitive data at rest, in transit, & while it’s being processed. We keep your data confidential using the #1 encryption & key management solutions.

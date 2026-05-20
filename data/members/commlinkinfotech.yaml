@@ -3,7 +3,7 @@ name: Commlink Info Tech Ltd.
 slogan:
 website: https://www.commlinkinfotech.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - commlinkinfotech.com
 # Short description, longer content can be placed in `content/members/`
 description: Commlink Info Tech Ltd, the Best software company in Bangladesh, provides innovative and customized software solutions for businesses of all sizes.

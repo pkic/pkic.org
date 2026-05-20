@@ -3,7 +3,7 @@ name: Datil
 slogan:
 website: https://datil.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - datil.com
 # Short description, longer content can be placed in `content/members/`
 description: Dátil is an accredited Certificate Authority in Ecuador

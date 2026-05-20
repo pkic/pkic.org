@@ -3,7 +3,7 @@ name: Concepts Beyond
 slogan:
 website: https://conceptsbeyond.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - conceptsbeyond.com
 # Short description, longer content can be placed in `content/members/`
 description: Provide PKI architecture, design, implementation, WebTrust audit support to a government agency

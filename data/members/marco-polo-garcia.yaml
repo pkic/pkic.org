@@ -3,7 +3,7 @@ name: Marco Polo Garcia
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
 # Short description, longer content can be placed in `content/members/`
 description: Marco Polo is an independent consultant that participates at the PKI Consortium.
 

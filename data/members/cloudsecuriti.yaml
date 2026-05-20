@@ -3,7 +3,7 @@ name: Cloud Security Solutions
 slogan:
 website: https://cloudsecuriti.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cloudsecuriti.com
 # Short description, longer content can be placed in `content/members/`
 description: Cloud Cyber Security Consultancy company

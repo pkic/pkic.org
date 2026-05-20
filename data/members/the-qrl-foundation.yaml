@@ -3,7 +3,7 @@ name: The QRL Foundation
 slogan: Supporting open-source post-quantum blockchain development
 website: https://www.theqrl.org/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - theqrl.org
 # Short description, longer content can be placed in `content/members/`
 description: Die QRL Stiftung is a grant-awarding non-profit organisation that supports the development of post-quantum secure blockchain solutions

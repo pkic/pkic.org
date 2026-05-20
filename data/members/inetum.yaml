@@ -3,7 +3,7 @@ name: Inetum
 slogan:
 website: https://inetum.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - inetum.com
 # Short description, longer content can be placed in `content/members/`
 description: For nearly two decades, Inetum has been delivering Public Key Infrastructure (PKI) projects and services across Spain and the Americas. Additionally, we serve as the regulatory support team to the Spanish Ministry responsible for overseeing Trust Service Providers in the country.

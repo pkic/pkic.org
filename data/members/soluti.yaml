@@ -3,7 +3,7 @@ name: Soluti Negócios Inteligentes Ltda
 slogan:
 website: https://www.soluti.com.br
 # Business domains for email
-businessDomains:
+organizationDomains:
   - soluti.com.br
 # Short description, longer content can be placed in `content/members/`
 description: O Certificado Digital Ideal Para você ou sua empresa! Segurança e Comodidade. Compre ou Renove seu Certificado com a Soluti.

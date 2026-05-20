@@ -3,7 +3,7 @@ name: Data-Warehouse
 slogan:
 website: https://datawh.info
 # Business domains for email
-businessDomains:
+organizationDomains:
   - dwh.gmbh
 # Short description, longer content can be placed in `content/members/`
 description: Data-Warehouse provides a german native cryptographic inventorisation and management plattform with outstanding discovery capabilities PCert(TM) since more than 10 years.

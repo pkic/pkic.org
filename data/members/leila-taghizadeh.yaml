@@ -3,7 +3,7 @@ name: Leila Taghizadeh
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - student.kuleuven.be
 # Short description, longer content can be placed in `content/members/`
 description: Leila Taghizadeh is a PhD student at KU Leuven studying Post-Quantum Cryptography (PQC) and leads PQC at Allianz.

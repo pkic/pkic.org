@@ -3,7 +3,7 @@ name: VTT, Research Center of Finland
 slogan:
 website: https://www.vttresearch.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - vtt.fi
 # Short description, longer content can be placed in `content/members/`
 description: We help you to science up your solutions and achieve tomorrow’s breakthroughs.

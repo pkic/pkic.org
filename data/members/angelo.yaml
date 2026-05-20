@@ -3,7 +3,7 @@ name: Angelo State University, TX
 slogan:
 website: https://www.angelo.edu
 # Business domains for email
-businessDomains:
+organizationDomains:
   - angelo.edu
 # Short description, longer content can be placed in `content/members/`
 description: We provide a complete educational experience and a values-based culture on our modern campus in the heart of West Texas. We are the Ram Family. Join us today.

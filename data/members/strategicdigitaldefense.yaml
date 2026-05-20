@@ -3,7 +3,7 @@ name: Strategic Digital Defense, LLC
 slogan:
 website: https://strategicdigitaldefense.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - strategicdigitaldefense.com
 # Short description, longer content can be placed in `content/members/`
 description: Design, implement and maintain cybersecurity and cryptographic technologies to protect your brand, your firm's irreplaceable competitive advantage, your customers' confidential information, your communications and your way of doing business.

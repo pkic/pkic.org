@@ -3,7 +3,7 @@ name: Technology source
 slogan:
 website: https://techsource.iq
 # Business domains for email
-businessDomains:
+organizationDomains:
   - techsource.iq
 # Short description, longer content can be placed in `content/members/`
 description: At Technology Source, we are the first Trust Service Provider (TSP) in Iraq. Our mission is to empower government institutions, businesses and individuals to securely sign and manage their documents with ease and efficiency.

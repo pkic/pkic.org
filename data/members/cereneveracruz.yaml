@@ -3,7 +3,7 @@ name: Centro de Rehabilitacion Neuropsicologica
 slogan: Centro de Rehabilitacion Neuropsicologica
 website: https://cereneveracruz.com.mx
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cereneveracruz.com.mx
 # Short description, longer content can be placed in `content/members/`
 description: We are a small clinic working on the human side of cybersecurity integration of algorithms and neurotechnology. Currently working on rubber-hose crypto analysis.

@@ -3,7 +3,7 @@ name: QAGs.com
 slogan:
 website: https://www.qaigs.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qaigs.com
 # Short description, longer content can be placed in `content/members/`
 description: Quantum and Generative AI solutions simplified

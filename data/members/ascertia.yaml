@@ -3,7 +3,7 @@ name: Ascertia
 slogan: Identity Proven, Trust Delivered
 website: https://www.ascertia.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ascertia.com
 # Short description, longer content can be placed in `content/members/`
 description: Since 2001, Ascertia has been a global leader in delivering high-trust e-security solutions focusing on Digital Signatures, Timestamps, Evidence Archiving and OCSP Validation.

@@ -3,7 +3,7 @@ name: Adaptive Systems Inc.
 slogan:
 website: https://www.adaptivesystemsinc.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - adaptivesystemsinc.com
 # Short description, longer content can be placed in `content/members/`
 description: Data Security and Compliance Company Princeton NJ Adaptive Systems Data Security, Data Privacy and Compliance company Adaptive Systems specializing in database security, DLP, information security, data-at-rest encryption and encryption key management

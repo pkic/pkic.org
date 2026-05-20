@@ -3,7 +3,7 @@ name: QCecuring Technologies
 slogan:
 website: https://qcecuring.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qcecuring.com
 # Short description, longer content can be placed in `content/members/`
 description: Securely automate certificate lifecycle management, code signing, SSH keys, PKI, and machine identities with QCecuring’s modern cryptographic operations platform.

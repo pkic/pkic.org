@@ -3,7 +3,7 @@ name: FixMyCert
 slogan:
 website: https://fixmycert.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - fixmycert.com
 # Short description, longer content can be placed in `content/members/`
 description: Interactive PKI education and compliance resources for practitioners. Learn PKI, SSL/TLS, and certificate management through free interactive demos, guides, and troubleshooting tools — no paywalls, no signup required.

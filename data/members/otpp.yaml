@@ -3,7 +3,7 @@ name: OTPP
 slogan:
 website: https://otpp.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - otpp.com
 # Short description, longer content can be placed in `content/members/`
 description: The Ontario Teachers' Pension Plan is one of the world's largest, administering pensions for teachers in Ontario, Canada, and investing globally in a diverse range of assets.

@@ -4,7 +4,7 @@ slogan: Mobile-ID based on eSIM, SIM and PKI technologies
 website: https://bestsolutions.ee/
 description: Digital mobile identity based on eSIM, SIM and PKI technologies
 # Business domains for email
-businessDomains:
+organizationDomains:
   - bestsolutions.ee
 # membership
 memberSince: 2024-11-06

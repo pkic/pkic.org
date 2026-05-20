@@ -3,7 +3,7 @@ name: Savyint Group
 slogan:
 website: https://www.savyint.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - savyint.com
 # Short description, longer content can be placed in `content/members/`
 description: Our expertise spans Open Banking solutions, information security, and FinTech, particularly in the Finance/Banking & FSI, Government, Manufacturing, Telecommunications, Healthcare, Education, and Media sectors.

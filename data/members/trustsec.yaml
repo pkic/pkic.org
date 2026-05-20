@@ -3,7 +3,7 @@ name: TrustSEC
 slogan: A Polish company established by the hands of Security experts
 website: https://trustsec.net/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - trustsec.net
 # Short description, longer content can be placed in `content/members/`
 description: TrustSec is founded by internationally recognized information security and cryptography experts. Launched in 2016, the company aims to fill the gap in the cybersecurity market, Securing data assets, and digital identity against unauthorized access, cyber-attacks, hacking, through its state-of-the-art and innovative products and solutions.

@@ -3,7 +3,7 @@ name: Idenprotect
 slogan:
 website: https://idenprotect.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - idenprotect.com
 # Short description, longer content can be placed in `content/members/`
 description: Eliminate password risks, streamline operations, and foster a secure, productive digital environment. Try Idenprotect now!

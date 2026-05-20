@@ -3,7 +3,7 @@ name: Impact IT Sales
 slogan: Boutique business development for IT & Cybersecurity
 website: https://impactitsales.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - impactitsales.com
 # Short description, longer content can be placed in `content/members/`
 description: Impact IT Sales provides business development and consulting services for the IT and cybersecurity sectors.

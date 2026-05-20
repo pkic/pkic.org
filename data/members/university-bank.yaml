@@ -3,7 +3,7 @@ name: University Bancorp
 slogan:
 website: https://www.university-bank.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - university-bank.com
 # Short description, longer content can be placed in `content/members/`
 description: Your Local Community Bank - Offering personal and business banking solutions, and mortgage lending, in Ann Arbor and Ypsilanti, Michigan.

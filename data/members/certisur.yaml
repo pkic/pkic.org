@@ -3,7 +3,7 @@ name: CertiSur
 slogan: Specialists in User Authentication, SSL Certificates, Digital and Biometric Signature
 website: https://www.certisur.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - certisur.com
 # Short description, longer content can be placed in `content/members/`
 description: CertiSur offers a wide range of Products and Services that enable and ensure electronic business processes. From digital certificates for secure websites to Consulting Services on Workflow of secure electronic documents and Digital Signature.

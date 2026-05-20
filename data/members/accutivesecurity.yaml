@@ -3,7 +3,7 @@ name: Accutive
 slogan: The Auth + Crypto Products and Services Company
 website: https://accutivesecurity.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - accutive.com
 # Short description, longer content can be placed in `content/members/`
 description: Accutive Security offers effective customizable and secure data protection products and services that safeguard vital information and accelerate innovation.

@@ -3,7 +3,7 @@ name: NENA
 slogan: The 9-1-1 Association
 website: https://www.nena.org/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - nena.org
 # Short description, longer content can be placed in `content/members/`
 description: "NENA: The 9-1-1 Association empowers its members and the greater 9-1-1 community to provide the best possible emergency response through standards development, training, thought leadership, outreach, and advocacy. Our vision is a public made safer by 9-1-1 services delivered by highly-trained emergency-communications professionals and powered by the latest technologies"

@@ -3,7 +3,7 @@ name: i2km, inc
 slogan: Intelligence in Key Management
 website: https://i2km.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - i2km.com
   - keymirror.io
 # Short description, longer content can be placed in `content/members/`

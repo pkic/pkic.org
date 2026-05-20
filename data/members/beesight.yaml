@@ -3,7 +3,7 @@ name: BEESIGHT B.V.
 slogan:
 website: https://www.beesight.nl
 # Business domains for email
-businessDomains:
+organizationDomains:
   - beesight.nl
 # Short description, longer content can be placed in `content/members/`
 description: BEESIGHT B.V. provides services for the Dutch Ministry of Defense related to PKI and SmartCards.

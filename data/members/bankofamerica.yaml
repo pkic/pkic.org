@@ -3,7 +3,7 @@ name: Bank of America
 slogan:
 website: https://www.bankofamerica.com/information/corporate/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - bofa.com
 # Short description, longer content can be placed in `content/members/`
 description: Bank of America is a global financial institution providing banking, investing, asset management, and other financial services to individuals, small and middle-market businesses, large corporations, and governments.

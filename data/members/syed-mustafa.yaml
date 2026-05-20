@@ -3,7 +3,7 @@ name: Syed Mustafa
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - fortquant.dev
 # Short description, longer content can be placed in `content/members/`
 description: I am a seasoned business consultant and have been following developments in quantum computing and cryptography over the years.

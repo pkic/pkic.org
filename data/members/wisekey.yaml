@@ -3,7 +3,7 @@ name: WISeKey SA
 slogan:
 website: https://wisekey.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - wisekey.com
 # Short description, longer content can be placed in `content/members/`
 description: WISeKey is a leading global cybersecurity company deploying large scale digital identity ecosystems for people and objects using Blockchain, AI and IoT

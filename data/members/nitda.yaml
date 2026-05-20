@@ -3,7 +3,7 @@ name: NITDA
 slogan: The Nigerian Public Key Infrastructure Organization
 website: https://www.nitda.gov.ng
 # Business domains for email
-businessDomains:
+organizationDomains:
   - nitda.gov.ng
 # Short description, longer content can be placed in `content/members/`
 description: The Nigerian Public Key Infrastructure Organization (NITDA) is a government agency mandated to develop, regulate and advise on information technology in the country through regulatory standards, guidelines and policies.

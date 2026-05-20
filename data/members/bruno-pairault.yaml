@@ -3,7 +3,7 @@ name: Bruno Pairault
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cyber-defence-technologies.com.au
 # Short description, longer content can be placed in `content/members/`
 description: Bruno has worked in PKI at OpenTrust, Entrust, and for many organizations and governments.

@@ -3,7 +3,7 @@ name: CVS Health
 slogan:
 website: https://www.cvshealth.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cvshealth.com
 # Short description, longer content can be placed in `content/members/`
 description: Helping people on their path to better health.

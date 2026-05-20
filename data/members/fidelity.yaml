@@ -3,7 +3,7 @@ name: Fidelity International
 slogan:
 website: https://www.fidelityinternational.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - fil.com
 # Short description, longer content can be placed in `content/members/`
 description: Fidelity International offers investment solutions and retirement expertise to institutions, individuals and their advisers around the world. We bring together savings and pensions expertise with world-class investment choices - both our own and those of others - to help our clients build better futures for themselves and generations to come.

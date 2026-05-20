@@ -3,7 +3,7 @@ name: KUVB
 slogan:
 website: https://www.kuvb.de
 # Business domains for email
-businessDomains:
+organizationDomains:
   - kuvb.de
 # Short description, longer content can be placed in `content/members/`
 description: Ein Träger der gesetzlichen Unfallversicherung. Diese ist wie die Kranken-, Renten-, Pflege- und Arbeitslosenversicherung ein Zweig des Sozialversicherungssystems der Bundesrepublik Deutschland.

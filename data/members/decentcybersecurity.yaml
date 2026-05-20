@@ -3,7 +3,7 @@ name: Decent Cybersecurity
 slogan: Pioneering cyber defense for tomorrow
 website: https://decentcybersecurity.eu/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - decentcybersecurity.eu
 # Short description, longer content can be placed in `content/members/`
 description: Decent Cybersecurity provides cutting-edge, quantum-resistant cybersecurity solutions.

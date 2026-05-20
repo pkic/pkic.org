@@ -3,7 +3,7 @@ name: Sixscape Communications
 slogan: Cryptographic Authentication & Identity
 website: https://www.sixscape.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - sixscape.com
 # Short description, longer content can be placed in `content/members/`
 description: Sixscape is dedicated to making Cryptographic Authentication and Secure Messaging Simple, to enable secure digital transformation, IoT deployment and allow 5G to be fully and securely exploited.

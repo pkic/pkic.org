@@ -3,7 +3,7 @@ name: GlobalSign
 slogan:
 website: https://www.globalsign.com/en
 # Business domains for email
-businessDomains:
+organizationDomains:
   - globalsign.com
 # Short description, longer content can be placed in `content/members/`
 description: As technology evolves, the need for trusted, verified, and easily deployed digital identities to secure our connections will continue to grow. GlobalSign is the global identity authority providing security, convenience and trust through digital identities for everyone and everything.

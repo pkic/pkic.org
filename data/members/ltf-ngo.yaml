@@ -3,7 +3,7 @@ name: Libyan Technology Foundation
 slogan: Technical Awareness for All
 website: https://www.ltf.ngo/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - technology.ly
 # Short description, longer content can be placed in `content/members/`
 description: LTF is a non-profit foundation 2020, to promote technical awareness, support Libya's ICT sector, and drive digital transformation.

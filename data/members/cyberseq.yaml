@@ -3,7 +3,7 @@ name: CyberSeQ
 slogan:
 website: https://cyberseq.io/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cyberseq.net
 # Short description, longer content can be placed in `content/members/`
 description: CyberSeQ™ - AI-powered post-quantum cryptography migration platform. Only solution combining CADI discovery with automated refactoring for enterprise PQC compliance. 90% faster than traditional crypto audits.

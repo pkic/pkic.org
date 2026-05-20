@@ -2,7 +2,7 @@ id: sts
 name: Special Telecommunications Service
 website: https://www.sts.ro/en/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - stsnet.ro
 # Short description, longer content can be placed in `content/members/`
 description: Ensuring communications and information technology secured services for the Romanian authorities

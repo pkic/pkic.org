@@ -3,7 +3,7 @@ name: PQSecure
 slogan:
 website: https://www.pqsecurity.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - pqsecurity.com
 # Short description, longer content can be placed in `content/members/`
 description: PQSecure is a pioneering company dedicated to developing cryptographic solutions for IoT devices, embedded systems, and secure silicon chips.

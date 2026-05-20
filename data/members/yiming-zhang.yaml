@@ -4,7 +4,7 @@ name: Yiming Zhang
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - tsinghua.edu.cn
 # Short description, longer content can be placed in `content/members/`
 description: Yiming is the Postdoctoral Researcher at Tsinghua Univeristy.

@@ -3,7 +3,7 @@ name: TrustHub
 slogan: Your Trust Service Provider
 website: https://www.trusthub.cloud
 # Business domains for email
-businessDomains:
+organizationDomains:
   - trusthub.cloud
 # Short description, longer content can be placed in `content/members/`
 description: Solutions for the electronic and digital signing of electronic documents

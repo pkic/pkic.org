@@ -3,7 +3,7 @@ name: Cleverbase
 slogan: Securely e-sign your documents
 website: https://www.cleverbase.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cleverbase.com
 # Short description, longer content can be placed in `content/members/`
 description: Cleverbase offers a mobile app which, after a one-time registration, you can use to place qualified electronic signatures on documents, and exchange these securely.

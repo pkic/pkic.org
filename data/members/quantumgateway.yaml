@@ -3,7 +3,7 @@ name: Quantum Gateway Solutions
 slogan:
 website: https://quantumgateway.foundation
 # Business domains for email
-businessDomains:
+organizationDomains:
   - quantumgateway.foundation
 # Short description, longer content can be placed in `content/members/`
 description: Discover| Design | Protect

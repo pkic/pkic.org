@@ -3,7 +3,7 @@ name: Forkbomb B.V.
 slogan: Cryptography, SSI, PQC
 website: https://forkbomb.solutions/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - forkbomb.eu
 # Short description, longer content can be placed in `content/members/`
 description: Forkbomb builds components and solutions for applied Cryptography, Decentralized Identities and DPP

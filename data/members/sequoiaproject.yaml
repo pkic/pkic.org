@@ -3,7 +3,7 @@ name: Healtheway Inc Dba the Sequoia Proj
 slogan:
 website: https://sequoiaproject.org/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - sequoiaproject.org
 # Short description, longer content can be placed in `content/members/`
 description: The independent, trusted advocate for nationwide health information exchange.

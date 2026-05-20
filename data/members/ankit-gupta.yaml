@@ -3,7 +3,7 @@ name: Ankit Gupta
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
 # Short description, longer content can be placed in `content/members/`
 description: Ankit is the Senior Security Engineer and participates at the PKI Consortium.
 

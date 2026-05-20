@@ -3,7 +3,7 @@ name: ComSign
 slogan: Israel’s oldest and largest CA with over 20 years of experience in PKI solutions
 website: https://www.comsigntrust.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - comda.co.il
 # Short description, longer content can be placed in `content/members/`
 description: ComSign has vast experience in providing digital signature and PKI solutions to any sized organizations

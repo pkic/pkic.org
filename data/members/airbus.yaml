@@ -3,7 +3,7 @@ name: Airbus
 slogan: We make it fly
 website: https://www.airbus.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - airbus.com
 # Short description, longer content can be placed in `content/members/`
 description: Airbus is a global pioneer in the aerospace industry, operating in the commercial aircraft, helicopters, defence and space sectors.

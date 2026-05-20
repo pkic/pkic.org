@@ -3,7 +3,7 @@ name: Afield AB
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - afieldconsulting.com
 # Short description, longer content can be placed in `content/members/`
 description: Afield AB is an independent consultancy providing enterprise architecture and digital transformation advisory services, with an emerging specialization in post-quantum cryptography readiness.

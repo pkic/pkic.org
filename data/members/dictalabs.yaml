@@ -3,7 +3,7 @@ name: DictaLabs LLC
 slogan:
 website: https://dictalabs.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - dictalabs.com
 # Short description, longer content can be placed in `content/members/`
 description: DictaLabs is a pioneering provider of Public Key Infrastructure (PKI), digital signatures, and cryptographic solutions, dedicated to enhancing trust and security in digital transactions. With its flagship products, vScrawl (a remote digital signature platform) and Crypto Engine (a secure API gateway for cryptographic operations and HSM integration), DictaLabs is committed to delivering affordable, scalable, and standards-compliant security solutions.

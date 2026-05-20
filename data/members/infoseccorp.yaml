@@ -3,7 +3,7 @@ name: Information Security Corporation (ISC)
 slogan: Develops and markets cutting-edge PKI-based security solutions
 website: https://www.infoseccorp.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - infoseccorp.com
 # Short description, longer content can be placed in `content/members/`
 description: ISC has provided PKI solutions to the world's most security-conscious enterprises for over thirty years.

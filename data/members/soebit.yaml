@@ -3,7 +3,7 @@ name: SOEBIT Cybersecurity
 slogan:
 website: https://soebit.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - soebit.com
 # Short description, longer content can be placed in `content/members/`
 description: SOEBIT is a solution-oriented Cybersecurity, Training, Service & Consultancy Company established in 2003 In the Netherlands.

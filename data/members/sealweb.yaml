@@ -3,7 +3,7 @@ name: SEALWeb
 slogan: Securing transactions
 website: https://www.sealweb.eu/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - sealweb.eu
 # Short description, longer content can be placed in `content/members/`
 description: SEALWeb is a consulting company dedicated to trust services projects.

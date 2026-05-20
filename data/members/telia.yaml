@@ -3,7 +3,7 @@ name: Telia Company AB
 slogan:
 website: https://cps.trust.telia.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - teliacompany.com
 # Short description, longer content can be placed in `content/members/`
 description: Telia Company AB is a leading Nordic and Baltic digital communications provider headquartered in Sweden.

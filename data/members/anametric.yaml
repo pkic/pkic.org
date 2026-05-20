@@ -3,7 +3,7 @@ name: Anametric, Inc.
 slogan:
 website: https://anametric.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - anametric.com
 # Short description, longer content can be placed in `content/members/`
 description: Anametric is developing new technologies and devices for chip scale quantum photonics, with a focus on cybersecurity.

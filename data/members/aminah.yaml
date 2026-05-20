@@ -3,7 +3,7 @@ name: Aminah Technologies, Inc
 slogan:
 website: https://www.aminah.tech/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - aminah.tech
   - aminah.ai
 # Short description, longer content can be placed in `content/members/`

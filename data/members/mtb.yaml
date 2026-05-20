@@ -3,7 +3,7 @@ name: M&T Bank
 slogan:
 website: https://Www.mtb.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - mtb.com
 # Short description, longer content can be placed in `content/members/`
 description: With a community bank approach, M&T Bank helps people reach their personal and business goals with banking, mortgage, loan and investment services.

@@ -3,7 +3,7 @@ name: VIAVI Solutions
 slogan:
 website: https://www.viavisolutions.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - viavisolutions.com
 # Short description, longer content can be placed in `content/members/`
 description: VIAVI Solutions offers security performance test solutions prior to deployment. SASE, PQC.

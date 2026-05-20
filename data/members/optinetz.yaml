@@ -3,7 +3,7 @@ name: Optinetz LImited
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - optinetz.co.uk
 # Short description, longer content can be placed in `content/members/`
 description: we provide consultancy around Encryption, PKI and Cryptography.

@@ -3,7 +3,7 @@ name: Medtronic
 slogan:
 website: https://www.medtronic.com/en-us/index.html
 # Business domains for email
-businessDomains:
+organizationDomains:
   - medtronic.com
 # Short description, longer content can be placed in `content/members/`
 description: People-centered, data-driven, personalized. Solving our world’s biggest health challenges with advanced technology.

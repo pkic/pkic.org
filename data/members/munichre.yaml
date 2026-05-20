@@ -3,7 +3,7 @@ name: Munich Reinsurance Group
 slogan:
 website: https://www.munichre.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - munichre.com
 # Short description, longer content can be placed in `content/members/`
 description: Munich Re is a leading global provider of reinsurance, primary insurance and insurance-related risk solutions.

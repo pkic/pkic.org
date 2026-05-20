@@ -3,7 +3,7 @@ name: Plank Red Private Limited
 slogan:
 website: https://planckred.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - planckred.com
 # Short description, longer content can be placed in `content/members/`
 description: Creating sustainable digital infrastructure to drive human proress

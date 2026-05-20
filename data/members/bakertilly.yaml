@@ -3,7 +3,7 @@ name: Baker Tilly
 slogan: Now, for tomorrow
 website: https://www.bakertilly.my/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - bakertillyconsulting.com.my
 # Short description, longer content can be placed in `content/members/`
 description: Baker Tilly ranks among the largest accounting and business advisory firms in Malaysia, with 50 Partners and Directors, 6 offices across Malaysia and an office in Phnom Penh, Cambodia, and a staff force of over 800 professionals.

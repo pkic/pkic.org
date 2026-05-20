@@ -3,7 +3,7 @@ name: TRUSTZONE
 slogan: Encrypt, Authenticate, Automate™
 website: https://trustzone.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - trustzone.com
 # Short description, longer content can be placed in `content/members/`
 description: TRUSTZONE is Scandinavia’s largest SSL/TLS certificate supplier and a leading provider of scalable PKI and IoT solutions for encryption, authentication, and automated certificate lifecycle management.

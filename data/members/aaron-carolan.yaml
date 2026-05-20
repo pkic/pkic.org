@@ -3,7 +3,7 @@ name: Aaron Carolan
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
 # Short description, longer content can be placed in `content/members/`
 description: Aaron is an Independent consultant with 27 years experience, national and enterprise PKI, cyber and privacy GRC.
 

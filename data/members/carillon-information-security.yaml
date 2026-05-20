@@ -3,7 +3,7 @@ name: Carillon Information Security
 slogan: We build trust
 website: https://www.carillon.ca/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - carillon.ca
 # Short description, longer content can be placed in `content/members/`
 description: Carillon Information Security provides a complete spectrum of identity management solutions that are designed to prevent identity theft, promote the migration from paper to electronic authentication, and avoid loss of intellectual property.

@@ -3,7 +3,7 @@ name: Futurex
 slogan:
 website: https://www.futurex.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - futurex.com
 # Short description, longer content can be placed in `content/members/`
 description: For over 40 years, Futurex has been the industry leader in enterprise data protection solutions. All Futurex products are securely built and signed in the USA.

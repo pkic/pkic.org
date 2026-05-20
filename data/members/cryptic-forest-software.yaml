@@ -3,7 +3,7 @@ name: Cryptic Forest Software
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ounsworth.ca
 # Short description, longer content can be placed in `content/members/`
 description: Cryptic Forest Software is a small business that offers services in and around PKI, crypto libraries, and PQC Migration.

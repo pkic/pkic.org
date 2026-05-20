@@ -3,7 +3,7 @@ name: Muhammad Shahbaz Khan
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - napier.ac.uk
 # Short description, longer content can be placed in `content/members/`
 description: I'm an experienced researcher and academic with over 10 years of expertise in research and teaching at leading academic institutions. I hold a Master’s degree in Electrical Engineering and currently pursuing a PhD in Computing (Cybersecurity and AI) at Edinburgh Napier University, Scotland, UK.

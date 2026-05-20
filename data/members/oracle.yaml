@@ -3,7 +3,7 @@ name: Oracle Corporation
 slogan:
 website: https://www.oracle.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - oracle.com
 # Short description, longer content can be placed in `content/members/`
 description: We’re a cloud technology company that provides organizations around the world with computing infrastructure and software to help them innovate, unlock efficiencies and become more effective.

@@ -3,7 +3,7 @@ name: V6Works
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - v6works.com
 # Short description, longer content can be placed in `content/members/`
 description: V6Works provides training and consulting in IPv6, PKI and cryptography.

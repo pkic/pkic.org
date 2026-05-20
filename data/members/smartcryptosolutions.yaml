@@ -3,7 +3,7 @@ name: SmartCrypto
 slogan: Affordable crypto solutions to Africa and the one Billion
 website: https://smartcryptosolutions.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - smartcryptosolutions.com
 # Short description, longer content can be placed in `content/members/`
 description: SmartCrypto is a niche provider of cryptographic solutions to financial and government organisations in Africa

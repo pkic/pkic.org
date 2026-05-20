@@ -3,7 +3,7 @@ name: Zetes
 slogan:
 website: https://www.zetes.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ee.zetes.com
 # Short description, longer content can be placed in `content/members/`
 description: We are your trusted advisor for a high performing collaborative and connected supply chain. We help you maximise agility, traceability and visibility through a unique solution portfolio, taking advantage of the very latest technology.

@@ -3,7 +3,7 @@ name: Aprio
 slogan: Passionate for what’s next
 website: https://www.aprio.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - aprio.com
 # Short description, longer content can be placed in `content/members/`
 description: As a full-service business advisory and accounting firm. Aprio’s associates work as integrated teams across advisory, audit, tax, managed, and private client services, bringing the best thinking and personal commitment to each client.

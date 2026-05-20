@@ -3,7 +3,7 @@ name: NG Sign
 slogan:
 website: https://www.ng-sign.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ng-sign.com
 # Short description, longer content can be placed in `content/members/`
 description: NG Sign is a software development company with its headquarters in Tunisia.

@@ -3,7 +3,7 @@ name: SwissSign AG
 slogan:
 website: https://www.swisssign.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - swisssign.com
 # Short description, longer content can be placed in `content/members/`
 description: CA issuing TLS and S/MIME certificates according to CABF standards; Trust Service Provider according to Swiss digital signature law and according to eIDAS.

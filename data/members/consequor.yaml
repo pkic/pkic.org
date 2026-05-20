@@ -3,7 +3,7 @@ name: Consequor Tecnologia
 slogan:
 website: https://www.consequor.com.br
 # Business domains for email
-businessDomains:
+organizationDomains:
   - consequor.com.br
 # Short description, longer content can be placed in `content/members/`
 description: A única empresa que suporta um Ecossistema de Cyber-Segurança que inclui Código Fonte/Executável, Certificados Digitais, Criptografia e Defesa de cada canto do Cyberespaço.

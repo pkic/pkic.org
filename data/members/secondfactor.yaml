@@ -3,7 +3,7 @@ name: Second Factor
 slogan: A Higher Level of Trust
 website: https://www.secondfactor.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - secondfactor.com
 # Short description, longer content can be placed in `content/members/`
 description: Second Factor is an IT services consulting company focused on securing complex systems where our customer base includes the U.S. Government and private entities.

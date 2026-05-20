@@ -3,7 +3,7 @@ name: Tec D Distribution (Malaysia) Sdn. Bhd.
 slogan:
 website: https://mytecd.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - mytecd.com
 # Short description, longer content can be placed in `content/members/`
 description: Leading IT distributor & solutions aggregator across Asia Pacific. Serving 22,000+ partners with enterprise technology distribution & enablement.

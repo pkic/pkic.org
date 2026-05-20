@@ -3,7 +3,7 @@ name: IRIS Corporation Berhad
 slogan:
 website: https://www.iris.com.my/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - iris.com.my
 # Short description, longer content can be placed in `content/members/`
 description: IRIS innovates, evolves, and digitalises Trusted Identification and Identity Solutions in a dynamic landscape.

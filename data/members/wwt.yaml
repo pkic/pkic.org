@@ -3,7 +3,7 @@ name: World Wide Technology
 slogan:
 website: https://www.wwt.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - wwt.com
 # Short description, longer content can be placed in `content/members/`
 description: Explore on-demand technology labs, thought leadership and a portfolio of services designed to help IT and the business undergo digital transformation.

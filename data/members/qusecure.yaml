@@ -3,7 +3,7 @@ name: QuSecure
 slogan:
 website: https://www.qusecure.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qusecure.com
 # Short description, longer content can be placed in `content/members/`
 description: QuSecure provides a post-quantum cryptography software solution with cryptographic agility, controls, and insights.

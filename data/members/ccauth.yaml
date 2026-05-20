@@ -3,7 +3,7 @@ name: Common Crypto Authority
 slogan:
 website: https://www.ccauth.org/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ccauth.org
 # Short description, longer content can be placed in `content/members/`
 description: We help companies build out technical infrastructure to support ecommerce, real time payments, or in a consultive or proof of concept capacity to build new, or improve the security of existing encryption infrastructure.

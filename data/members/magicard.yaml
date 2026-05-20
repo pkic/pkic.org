@@ -3,7 +3,7 @@ name: Magicard
 slogan:
 website: https://Magicard.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - magicard.com
 # Short description, longer content can be placed in `content/members/`
 description: Magicard was founded in 1992 and is a pioneer of ID card printing technologies with a full range of desktop devices to meet any ID requirement.

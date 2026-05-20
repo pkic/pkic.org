@@ -3,7 +3,7 @@ name: MTG AG
 slogan: Enterprise Resource Security - Mastering Cryptographic Key Lifecycles
 website: https://www.mtg.de/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - mtg.de
 # Short description, longer content can be placed in `content/members/`
 description: MTG enables the industry-specific implementation and easy integration of a complete Key Management Lifecycle for selected processes in companies and public institutions.

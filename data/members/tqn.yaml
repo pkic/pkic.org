@@ -3,7 +3,7 @@ name: Tasmanian Quantum Network Quantum Safe Transition Working Group
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
 # Short description, longer content can be placed in `content/members/`
 description: The Tasmanian Quantum Network (Australia) in 2023 to foster a quantum ecosystem in our state and started the TQN Quantum Safe Transition Working Group from July 2024.
 

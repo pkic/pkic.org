@@ -3,7 +3,7 @@ name: i4ops
 slogan:
 website: https://i4ops.ai
 # Business domains for email
-businessDomains:
+organizationDomains:
   - i4ops.com
 # Short description, longer content can be placed in `content/members/`
 description: AI and data science requires data but breaches are daily news. i4 Zero Exfil prevents data breach, including credentialed users.

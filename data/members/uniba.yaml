@@ -3,7 +3,7 @@ name: The University of Bamenda
 slogan: The University of the future
 website: https://uniba.cm
 # Business domains for email
-businessDomains:
+organizationDomains:
   - uniba.cm
 # Short description, longer content can be placed in `content/members/`
 description: The University of Bamenda (UBa) is a distinctive anglo-saxon university with future international reputation for higher standards of achievements and innovations in all areas of professionalism, arts, sciences and technology.

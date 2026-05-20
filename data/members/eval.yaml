@@ -3,7 +3,7 @@ name: Eval
 slogan: Eval, security is value.
 website: https://eval.digital/en/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - eval.digital
 # Short description, longer content can be placed in `content/members/`
 description: Eval has led the way in Brazilian information security, offering comprehensive data protection solutions across various industry

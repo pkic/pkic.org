@@ -3,7 +3,7 @@ name: AHEAD
 slogan:
 website: https://www.ahead.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ahead.com
 # Short description, longer content can be placed in `content/members/`
 description: AHEAD accelerates the impact of technology on clients by engineering customized data, developer, and infrastructure platforms that improve IT operations.

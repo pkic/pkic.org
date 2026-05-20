@@ -3,7 +3,7 @@ name: VinCSS JSC
 slogan:
 website: https://vincss.net/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - vincss.net
 # Short description, longer content can be placed in `content/members/`
 description: VinCSS Internet Security Services JSC, established in 2018, is a leading company in the cybersecurity industry, driven by its mission to Pioneer For A Better Digital World.

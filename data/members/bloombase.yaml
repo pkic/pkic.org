@@ -3,7 +3,7 @@ name: Bloombase
 slogan: Intelligent Storage Firewall
 website: https://www.bloombase.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - bloombase.com
 # Short description, longer content can be placed in `content/members/`
 description: Blombase is an intelligent storage firewall company

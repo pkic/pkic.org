@@ -3,7 +3,7 @@ name: Synestate
 slogan: Security & Securities
 website: https://synestate.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - synestate.com
 # Short description, longer content can be placed in `content/members/`
 description: Synestate pursues R&D, cryptography, and high-tech finance ventures.

@@ -3,7 +3,7 @@ name: Ponnam Mahendran Reddipalayam
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
 # Short description, longer content can be placed in `content/members/`
 description: Ponnam is a Senior Security consultant at a Middle East firm providing encryption and PKI expertiese.
 

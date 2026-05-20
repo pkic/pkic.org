@@ -3,7 +3,7 @@ name: Ritu Dhaulakhandi
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - uni-siegen.de
 # Short description, longer content can be placed in `content/members/`
 description: I’m a PhD student at the University of Siegen actively working in the field of quantum cryptography.

@@ -3,7 +3,7 @@ name: Keyfactor
 slogan: The machine and IoT identity platform for modern enterprises
 website: https://www.keyfactor.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - keyfactor.com
 # Short description, longer content can be placed in `content/members/`
 description: Keyfactor develops products for PKI, digital signatures and cryptography

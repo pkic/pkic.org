@@ -3,7 +3,7 @@ name: Rupesh Paterical
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
 # Short description, longer content can be placed in `content/members/`
 description: I work as an independent consultant on PKI and Cyber security. At present based in UAE, I was involved in few PKI implementations in Telecom, Banking and others.
 

@@ -3,7 +3,7 @@ name: Relief Validation LTD
 slogan: Empowering businesses with seamless e-signature solutions
 website: https://reliefvalidation.com.bd
 # Business domains for email
-businessDomains:
+organizationDomains:
   - reliefvalidation.com.bd
 # Short description, longer content can be placed in `content/members/`
 description: We provide a secure and efficient e-signature platform to streamline document signing processes. Save time, reduce costs, and increase productivity with our user-friendly interface. Join us today and embrace the power of digital signatures for your business.

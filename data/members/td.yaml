@@ -3,7 +3,7 @@ name: TD
 slogan: Be the better bank
 website: https://www.td.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - td.com
 # Short description, longer content can be placed in `content/members/`
 description: As a top 10 North American bank, TD aims to stand out from its peers by having a differentiated brand - anchored in our proven business model, and rooted in a desire to give our customers, communities and colleagues the confidence to thrive in a changing world.

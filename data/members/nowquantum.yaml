@@ -3,7 +3,7 @@ name: NowQuantum
 slogan: The future is now
 website: https://www.nowquantum.net
 # Business domains for email
-businessDomains:
+organizationDomains:
   - nowquantum.co
 # Short description, longer content can be placed in `content/members/`
 description: NowQuantum is pioneering B2B applications for critical infrastructure industries, including finance and telecommunications, by combining advanced AI with a post-quantum safe architecture, ensuring institutions stay ahead of both today’s and tomorrow’s security threats.

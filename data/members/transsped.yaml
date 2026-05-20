@@ -3,7 +3,7 @@ name: Trans Sped
 slogan: The first trusted service provider in Romania
 website: https://www.transsped.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - transsped.ro
 # Short description, longer content can be placed in `content/members/`
 description: Trans Sped is the most experienced trusted solutions provider based on qualified digital certificates, active on the domestic market since 2004. Qualified certificates issued by Trans Sped are internationally recognized and guarantee interoperability with various types of systems and applications.

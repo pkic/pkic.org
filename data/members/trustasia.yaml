@@ -3,7 +3,7 @@ name: TrustAsia
 slogan: Build Trust Everywhere in the Digital World
 website: https://www.trustasia.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - trustasia.com
 # Short description, longer content can be placed in `content/members/`
 description: Focused on building trust and security in the digital world, TrustAsia is dedicated to delivering sophisticated cybersecurity solutions for customers globally.

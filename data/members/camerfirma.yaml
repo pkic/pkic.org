@@ -3,7 +3,7 @@ name: Camerfirma
 slogan: "Qualified Trust Service Provider: Digital Identity / Digital Signature / PSD2 Compliance"
 website: https://www.camerfirma.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - camerfirma.com
 # Short description, longer content can be placed in `content/members/`
 description: Camerfirma is the digital certification and electronic signature authority of the Chambers of Commerce. The operations carried out with the Camerfirma digital certificate guarantee the identity, integrity and confidentiality of the information and the non-repudiation of the transactions.

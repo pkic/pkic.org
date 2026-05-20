@@ -3,7 +3,7 @@ name: eMudhra
 slogan:
 website: https://www.emudhra.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - emudhra.com
 # Short description, longer content can be placed in `content/members/`
 description: eMudhra, a Digital Trust Service Provider (TSP), specializes in delivering comprehensive digital security solutions and services. This role is pivotal in ensuring secure online transactions and communication through digital certificates, authentication services, and cryptographic solutions.

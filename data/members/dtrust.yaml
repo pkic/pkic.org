@@ -3,8 +3,9 @@ name: D-Trust
 slogan: Paving the way for social and economic progress
 website: https://www.d-trust.net/en/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - d-trust.net
+  - bdr.de
 # Short description, longer content can be placed in `content/members/`
 description: Berlin-based D-TRUST is a member of the Bundesdruckerei Group. D-TRUST is a pioneer in secure digital identities, delivering technologically mature solutions.
 

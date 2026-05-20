@@ -3,7 +3,7 @@ name: Digicert
 slogan: Building Trust Into What Matters to you
 website: https://www.digicert.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - digicert.com
 # Short description, longer content can be placed in `content/members/`
 description: |

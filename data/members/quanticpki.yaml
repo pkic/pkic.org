@@ -3,7 +3,7 @@ name: Quantic PKI
 slogan:
 website: https://www.quanticpki.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - quanticpki.com
 # Short description, longer content can be placed in `content/members/`
 description: We specialize in Post Quantum PKI Migration.

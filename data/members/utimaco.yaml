@@ -3,7 +3,7 @@ name: Utimaco
 slogan: Creating Trust in the Digital Society
 website: https://www.utimaco.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - utimaco.com
 # Short description, longer content can be placed in `content/members/`
 description: Utimaco is a global platform solution provider of trusted Cybersecurity and Compliance solutions and services.

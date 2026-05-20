@@ -3,7 +3,7 @@ name: QNu Inc
 slogan:
 website: https://www.qnuinc.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qnuinc.com
 # Short description, longer content can be placed in `content/members/`
 description: Get QNu's ✓QShield Quantum Security Platform and ready-to-deploy services for seamless network infrastructure and application upgrades with quantum security.

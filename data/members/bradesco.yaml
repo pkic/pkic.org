@@ -3,7 +3,7 @@ name: Banco Bradesco
 slogan:
 website: https://banco.bradesco
 # Business domains for email
-businessDomains:
+organizationDomains:
   - bradesco.com.br
 # Short description, longer content can be placed in `content/members/`
 description: O Bradesco é um dos líderes do setor financeiro privado e um dos maiores empregadores na categoria. Além disso, apresenta o melhor índice de eficiência entre os bancos de varejo.

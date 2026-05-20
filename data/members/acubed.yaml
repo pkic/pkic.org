@@ -3,7 +3,7 @@ name: Acubed.it
 slogan: Designing Secure Applications
 website: https://www.acubed.it
 # Business domains for email
-businessDomains:
+organizationDomains:
   - acubed.it
 # Short description, longer content can be placed in `content/members/`
 description: acubed.it collaborates with government departments in the UK to design and build secure applications leveraging cross-domain & cyber security expertise.

@@ -3,7 +3,7 @@ name: ANF Autoridad de Certificación
 slogan: R + D + i, the only way to excellence
 website: https://anf.es/en/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - anf.es
   - anfac.org
 # Short description, longer content can be placed in `content/members/`

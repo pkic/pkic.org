@@ -3,7 +3,7 @@ name: Ernst Van Nigtevecht
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - arict.eu
 # Short description, longer content can be placed in `content/members/`
 description:

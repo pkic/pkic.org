@@ -3,7 +3,7 @@ name: Chunghwa Telecom Laboratories
 slogan:
 website: https://www.chttl.com.tw/en/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cht.com.tw
 # Short description, longer content can be placed in `content/members/`
 description: Chunghwa Telecom Laboratories specializes in developing PKI systems and serving as a PKI provider in Taiwan.

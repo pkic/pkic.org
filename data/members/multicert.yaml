@@ -3,7 +3,7 @@ name: Multicert
 slogan:
 website: https://www.multicert.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - multicert.com
 # Short description, longer content can be placed in `content/members/`
 description: Multicert's purpose is to guarantee the Identity, Security and Digital Trust of Organizations, Systems and People. Anytime and anywhere.

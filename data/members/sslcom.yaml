@@ -3,7 +3,7 @@ name: SSL.com
 slogan: Trust is what we do
 website: https://www.ssl.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ssl.com
 # Short description, longer content can be placed in `content/members/`
 description: SSL.com is a publicly-trusted commercial certificate authority expanding the boundaries of encryption and authentication relied upon by users worldwide.

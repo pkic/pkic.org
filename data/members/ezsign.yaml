@@ -3,7 +3,7 @@ name: PT Solusi Identitas Global Net
 slogan:
 website: https://ezsign.id
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ezsign.id
 # Short description, longer content can be placed in `content/members/`
 description: PT Solusi Identitas Global Net is an Indonesian-based provider of secure and legally compliant electronic signature solutions, functioning as a registered Certification Authority (CA) under KOMINFO, which facilitates digital document signing through web and mobile applications, complete with features like e-Meterai, time stamping, and document management, catering to both individual and corporate needs while prioritizing data security and the validity of electronic transactions.

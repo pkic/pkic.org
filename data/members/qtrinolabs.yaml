@@ -3,7 +3,7 @@ name: QTrino Labs
 slogan: Securing Tomorrow, Today
 website: https://www.qtrinolabs.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qtrinolabs.com
 # Short description, longer content can be placed in `content/members/`
 description: Built for regulated environment and long-lived confidentiality requirements.

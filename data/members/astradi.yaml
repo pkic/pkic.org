@@ -3,7 +3,7 @@ name: Astradi GmbH
 slogan: PQC. Done Right.
 website: https://astradi.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - astradi.com
 # Short description, longer content can be placed in `content/members/`
 description: Astradi is a provider of post-quantum cryptography (PQC) solutions, dedicated to securing digital communication and data against the threat of quantum computers.

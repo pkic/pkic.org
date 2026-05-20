@@ -3,7 +3,7 @@ name: Cloud Wave Technology Co., Ltd.
 slogan:
 website: https://www.cloudwave.com.tw
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cloudwave.com.tw
 # Short description, longer content can be placed in `content/members/`
 description: CloudWave 提供豐富多元上雲解決方案，輕鬆部署、規劃雲端資訊架構，為企業帶來最大效益。除了持續深耕亞洲，更加著重全球市場佈局，運營地區現已拓展至歐洲、南美、非洲等地。

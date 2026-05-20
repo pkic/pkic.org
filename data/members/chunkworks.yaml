@@ -3,7 +3,7 @@ name: Chunk Works
 slogan: Intelligent, quantum-secure data platform
 website: https://www.chunkworks.net
 # Business domains for email
-businessDomains:
+organizationDomains:
   - chunkworks.net
 # Short description, longer content can be placed in `content/members/`
 description: Chunk Works provides software that transforms any public or private cloud or on-premises infrastructure into a post-quantum-ready decentralized zero knowledge network. Our software creates an easy transition to post-quantum cryptography (PQC) faster, easier, and more cost-effective by seamlessly integrating with existing systems or hardware.

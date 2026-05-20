@@ -3,7 +3,7 @@ name: Unsung Limited
 slogan:
 website: https://www.unsungltd.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - unsungltd.com
 # Short description, longer content can be placed in `content/members/`
 description: Established in 2009, Unsung is a trusted cyber security advisor who has provided best in class PKI solutions to both public sector and private clients.

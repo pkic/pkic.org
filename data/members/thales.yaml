@@ -3,7 +3,7 @@ name: Thales
 slogan: Building a future we can all trust
 website: https://www.thalesgroup.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - thalestct.com
   - thalesgroup.com
 # Short description, longer content can be placed in `content/members/`

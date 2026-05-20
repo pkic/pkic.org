@@ -3,7 +3,7 @@ name: Unisys
 slogan: Inspired by possibility. Driven by performance.
 website: https://www.unisys.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - unisys.com
 # Short description, longer content can be placed in `content/members/`
 description: Unisys is a global technology solutions company dedicated to helping people and organizations reach the next breakthrough. And the one after that.

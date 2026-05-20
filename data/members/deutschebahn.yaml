@@ -3,7 +3,7 @@ name: DB Fernverkehr AG
 slogan:
 website: https://www.deutschebahn.com/de/konzern
 # Business domains for email
-businessDomains:
+organizationDomains:
   - deutschebahn.com
 # Short description, longer content can be placed in `content/members/`
 description:

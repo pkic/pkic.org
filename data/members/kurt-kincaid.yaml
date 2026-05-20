@@ -3,7 +3,7 @@ name: Kurt Kincaid
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
 # Short description, longer content can be placed in `content/members/`
 description: Encryption and PKI specialist. Hacker and independent researcher.
 

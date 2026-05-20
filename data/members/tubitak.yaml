@@ -3,7 +3,7 @@ name: TÜBİTAK BİLGEM
 slogan: We are at the heart of technology
 website: https://bilgem.tubitak.gov.tr/en
 # Business domains for email
-businessDomains:
+organizationDomains:
   - tubitak.gov.tr
 # Short description, longer content can be placed in `content/members/`
 description: TÜBİTAK BİLGEM continues to be an R&D center that shapes the future and directs the science and technology of the future by making our country a reference point.

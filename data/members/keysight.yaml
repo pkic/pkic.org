@@ -3,7 +3,7 @@ name: Keysight Technologies
 slogan: Design, Emulation, and Test Solutions to Connect and Secure the World
 website: https://www.keysight.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - keysight.com
 # Short description, longer content can be placed in `content/members/`
 description: At Keysight, we empower innovators to explore, design, and bring world-changing technologies to life. Our software-centric solutions serve across the design and development environment, enabling you to deliver tomorrow’s breakthroughs at speed and with reduced risk.

@@ -3,7 +3,7 @@ name: Tantus Technologies Inc.
 slogan:
 website: https://tantustech.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - tantustech.com
 # Short description, longer content can be placed in `content/members/`
 description: Delivering insights and innovative solutions, Tantus partners with government leaders to improve the lives of the citizens they serve.

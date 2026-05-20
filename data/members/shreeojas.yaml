@@ -3,7 +3,7 @@ name: Shree Ojas system and techinfra Pvt Ltd.
 slogan:
 website: https://shreeojas.com/index.html
 # Business domains for email
-businessDomains:
+organizationDomains:
   - shreeojas.com
 # Short description, longer content can be placed in `content/members/`
 description: Shree Ojas system and techinfra Pvt Ltd is major PKI consultant and hardware, software integration company in India.

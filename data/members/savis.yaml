@@ -3,7 +3,7 @@ name: SAVIS TECHNOLOGY GROUP
 slogan: Shaping Digital Future Together
 website: https://savis.vn/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - savis.vn
   - savis-digital.com
 # Short description, longer content can be placed in `content/members/`

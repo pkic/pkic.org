@@ -3,7 +3,7 @@ name: Versasec
 slogan: Managing Digital Identities
 website: https://www.versasec.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - versasec.com
 # Short description, longer content can be placed in `content/members/`
 description: Award-winning credential management system, enabling certificate-based and FIDO authentication methods.

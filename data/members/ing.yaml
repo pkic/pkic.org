@@ -3,7 +3,7 @@ name: ING
 slogan:
 website: https://ing.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ing.com
 # Short description, longer content can be placed in `content/members/`
 description: ING Group N.V. is a Dutch multinational banking and financial services corporation headquartered in Amsterdam.

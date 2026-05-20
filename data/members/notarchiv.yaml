@@ -3,7 +3,7 @@ name: NOTARchiv
 slogan: Qualified Trust Service Provider in Hungary
 website: https://notarchiv.hu/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - notarchiv.hu
 # Short description, longer content can be placed in `content/members/`
 description:

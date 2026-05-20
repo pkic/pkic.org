@@ -3,7 +3,7 @@ name: ATB Financial
 slogan:
 website: https://www.atb.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - atb.com
 # Short description, longer content can be placed in `content/members/`
 description: Big life events can trigger big banking changes. Whether you’re starting university or planning your retirement, we’ve made it easy to find the accounts and resources you need.

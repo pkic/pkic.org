@@ -3,7 +3,7 @@ name: MI Support IT A/S
 slogan:
 website: https://www.misupportit.dk/en/pki-management/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - misupport.dk
 # Short description, longer content can be placed in `content/members/`
 description: Security and peace of mind around your PKI environment — design, implementation, operations and automation with ADCS and Cyberark (formerly Venafi).

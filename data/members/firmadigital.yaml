@@ -3,7 +3,7 @@ name: Firma.Digital # Trust Service Provider SPA (TSP SpA)
 slogan: Digital experience with 100% human quality
 website: https://www.firma.digital/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - firma.digital
 # Short description, longer content can be placed in `content/members/`
 description: Firma.Digital is a trust service provider authorized by Minister of Finance of the Government of Chile to authenticate, authorize, and issue digital certificates to contributors to pay taxes and issue tributary documents.

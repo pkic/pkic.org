@@ -3,7 +3,7 @@ name: SITG-Consulting
 slogan:
 website: https://sitg-consulting.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - sitg-consulting.com
 # Short description, longer content can be placed in `content/members/`
 description: SITG Consulting delivers board‑ready insights on quantum risk, resilience, and survival mandates. Read The Quantum Time Bomb and more. Transformation, Integrity, Growth, Training, Strategy, Investigations, Cybersecurity.

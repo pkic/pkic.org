@@ -3,7 +3,7 @@ name: Kquanta Research LlP
 slogan: Shaping Tomorrow ,Today
 website: https://www.kquantaresearch.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - kquantaresearch.com
 # Short description, longer content can be placed in `content/members/`
 description: Explore our comprehensive market research services tailored for businesses looking to gain valuable insights to drive growth and success.

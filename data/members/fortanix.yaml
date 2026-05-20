@@ -3,7 +3,7 @@ name: Fortanix
 slogan: Look. Know. Further.
 website: https://fortanix.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - fortanix.com
 # Short description, longer content can be placed in `content/members/`
 description: Modernize data security for multi-cloud. Secure data at rest, in motion, or during use. On-premises, In the cloud. Or anywhere in-between.

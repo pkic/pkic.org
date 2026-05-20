@@ -3,7 +3,7 @@ name: Pradeep Kumar Mohanty
 slogan:
 website: https://www.nitrkl.ac.in/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - nitrkl.ac.in
 # Short description, longer content can be placed in `content/members/`
 description: PhD researcher in hardware security and VLSI systems, specializing in lightweight cryptographic architectures (ASCON) and secure RISC-V processors. My work focuses on designing energy-efficient, attack-resilient hardware for edge AI and post-quantum environments. I aim to develop scalable secure architectures for next-generation embedded systems.

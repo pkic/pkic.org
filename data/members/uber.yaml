@@ -3,7 +3,7 @@ name: Uber
 slogan: On our way
 website: https://www.uber.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - uber.com
 # Short description, longer content can be placed in `content/members/`
 description: We’re on our way so you can be on yours

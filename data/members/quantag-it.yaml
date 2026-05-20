@@ -3,7 +3,7 @@ name: Quantag IT Solutions
 slogan:
 website: https://quantag-it.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - quantag-it.com
 # Short description, longer content can be placed in `content/members/`
 description: We develop PQC software

@@ -3,7 +3,7 @@ name: Vantive
 slogan:
 website: https://www.vantive.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - vantive.com
 # Short description, longer content can be placed in `content/members/`
 description: Focused on vital kidney care and acute organ support therapies, digital solutions and advanced services to extend lives and expand possibilities for patients every day.

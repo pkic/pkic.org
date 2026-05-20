@@ -3,7 +3,7 @@ name: Cisco Systems
 slogan:
 website: https://www.cisco.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cisco.com
 # Short description, longer content can be placed in `content/members/`
 description: Cisco is a worldwide technology leader. Our purpose is to power an inclusive future for all through software, networking, security, computing, and more solutions.

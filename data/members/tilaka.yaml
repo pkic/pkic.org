@@ -3,7 +3,7 @@ name: Tilaka Nusa Teknologi
 slogan: Your Digital ID and Certificate Trusted Partner
 website: https://www.tilaka.id
 # Business domains for email
-businessDomains:
+organizationDomains:
   - tilaka.id
 # Short description, longer content can be placed in `content/members/`
 description: PT Tilaka Nusa Teknologi was established in 2019 to be the answer to business needs in various industries related to legality and data security in the digital world.

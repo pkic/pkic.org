@@ -3,7 +3,7 @@ name: Peter Takacs
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - elmittemex.hu
 # Short description, longer content can be placed in `content/members/`
 description: Peter is a PKI consultant with over 25 years experience in PKI Crypto space implementing private and public PKI services in Hungray.

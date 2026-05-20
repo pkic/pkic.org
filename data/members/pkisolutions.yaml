@@ -3,7 +3,7 @@ name: PKI Solutions
 slogan:
 website: https://www.pkisolutions.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - pkisolutions.com
 # Short description, longer content can be placed in `content/members/`
 description: PKI Solutions offers the industry-leading PKI Spotlight, the first and only solution purpose-built for PKI posture management and operational readiness.

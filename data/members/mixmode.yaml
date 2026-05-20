@@ -3,7 +3,7 @@ name: MixMode
 slogan:
 website: https://mixmode.ai/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - mixmode.ai
 # Short description, longer content can be placed in `content/members/`
 description: Real-time threat detection and response powered by Third-Wave AI for cloud, on-premise, and hybrid environments.

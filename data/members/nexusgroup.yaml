@@ -3,7 +3,7 @@ name: Nexus Group (IN Groupe)
 slogan: Nexus Group secures society by enabling trusted identities for people and things
 website: https://www.nexusgroup.com/smart-id/nexus-smart-id-pki/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ingroupe.com
 # Short description, longer content can be placed in `content/members/`
 description: Our future-proof PKI helps organizations enable trust with certificate-based identities for citizens, employees, applications, things, and IoT.

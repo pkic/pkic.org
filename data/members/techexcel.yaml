@@ -3,7 +3,7 @@ name: TechExcel Inc.
 slogan:
 website: https://www.techexcel.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - techexcel.com
 # Short description, longer content can be placed in `content/members/`
 description: TechExcel bridges the gap between product development and service/support with a unified platform for ALM, ITSM and customer support.

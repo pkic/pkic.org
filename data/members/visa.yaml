@@ -3,7 +3,7 @@ name: Visa
 slogan:
 website: https://www.visa.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - visa.com
 # Short description, longer content can be placed in `content/members/`
 description: Visa is a trusted world leader in digital payment technology that connects and enables individuals, businesses, and economies to thrive.

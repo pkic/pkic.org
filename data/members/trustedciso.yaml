@@ -3,7 +3,7 @@ name: TrustedCISO
 slogan:
 website: https://trustedciso.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - trustedciso.com
 # Short description, longer content can be placed in `content/members/`
 description: Expert vCISO services, risk assessments, and compliance support for SOC 2, ISO 27001, HIPAA, FedRAMP & more. Build cyber resilience with TrustedCISO.

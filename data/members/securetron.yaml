@@ -3,7 +3,7 @@ name: Securetron
 slogan: Next Generation of PKI - No Going Back!
 website: https://securetron.net
 # Business domains for email
-businessDomains:
+organizationDomains:
   - securetron.net
 # Short description, longer content can be placed in `content/members/`
 description: Securetron is a leading provider of Keys, Certificates, and Digital Signatures Management solution aimed at Simplifying Digital Identity and Data Protection.

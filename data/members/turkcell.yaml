@@ -3,7 +3,7 @@ name: Turkcell
 slogan: Connect to Life with Turkcell
 website: https://www.turkcell.com.tr/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - turkcell.com.tr
 # Short description, longer content can be placed in `content/members/`
 description: Turkcell is a converged telecommunication and technology services provider.

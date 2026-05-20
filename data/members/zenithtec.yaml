@@ -3,7 +3,7 @@ name: ZenithTec Solutions
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - zenithtec.co.uk
 # Short description, longer content can be placed in `content/members/`
 description: ZenithTec Solutions is a cybersecurity consultancy founded by Bharat Parvathaneni, an experienced cybersecurity consultant and architect.

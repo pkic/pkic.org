@@ -3,7 +3,7 @@ name: CALM
 slogan: "Providing high quality and secure solutions for organizations around the world"
 website: https://www.calm.fi/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - calm.fi
 # Short description, longer content can be placed in `content/members/`
 description: CALM is provider of consulting services and producer of CLM Certificate Lifecycle Management SaaS -service offering.

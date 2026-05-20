@@ -3,7 +3,7 @@ name: Maria Sommerhalder
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
 # Short description, longer content can be placed in `content/members/`
 description: I used to work as an auditor and my consultancy would like to push for remote key attestations, specifically in the field of blockchain key generations.
 

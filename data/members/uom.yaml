@@ -3,7 +3,7 @@ name: University of Malakand
 slogan:
 website: https://www.uom.edu.pk
 # Business domains for email
-businessDomains:
+organizationDomains:
   - uom.edu.pk
 # Short description, longer content can be placed in `content/members/`
 description: A distinctive place of learning and academic discourse for innovations and discoveries, where students are prepared to solve the challenging problems of the changing world and Pakistan.

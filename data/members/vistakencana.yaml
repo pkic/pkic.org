@@ -3,7 +3,7 @@ name: Vista Kencana Sdn Bhd
 slogan:
 website: https://vistakencana.com.my
 # Business domains for email
-businessDomains:
+organizationDomains:
   - vistakencana.com.my
 # Short description, longer content can be placed in `content/members/`
 description: Vista Kencana | Empowered of Innovation

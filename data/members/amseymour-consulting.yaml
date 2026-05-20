@@ -3,7 +3,7 @@ name: Amseymour Consulting
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - amseymourconsulting.co.uk
 # Short description, longer content can be placed in `content/members/`
 description: Amseymour Consulting is a private company that provides services in the field of Risk Assurance, Identity Management, PKI Policies and Procedures, PKI Assessment, Smart Cards, Biometrics, Information Security Management (ISM), Secure Authentication.

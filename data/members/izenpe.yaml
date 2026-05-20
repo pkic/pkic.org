@@ -3,7 +3,7 @@ name: Izenpe
 slogan: Qualified Trusted Service Provider in the Basque Country
 website: https://www.izenpe.eus/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - izenpe.eus
 # Short description, longer content can be placed in `content/members/`
 description: "Izenpe is a project promoted by the Basque Government and the Basque Provincial Councils for the promotion of e-government and e-government in the Basque Country."

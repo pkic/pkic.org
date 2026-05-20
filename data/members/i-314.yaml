@@ -3,7 +3,7 @@ name: I-314
 slogan: Solving complex problems through mathemathical thinking
 website: https://i-314.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - i-314.com
 # Short description, longer content can be placed in `content/members/`
 description: State of the Art Machine Learning & Quantum Computing techonolgy for problem solving

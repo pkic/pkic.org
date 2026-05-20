@@ -3,7 +3,7 @@ name: TATA CONSULTANCY SERVICES LIMITED
 slogan:
 website: https://www.tcs.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - tcs.com
 # Short description, longer content can be placed in `content/members/`
 description: TCS, a global leader in IT services, consulting, and business solutions, leverages technology for business transformation and helps catalyze change.

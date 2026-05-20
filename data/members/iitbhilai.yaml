@@ -3,7 +3,7 @@ name: IIT Bhilai
 slogan:
 website: https://iitbhilai.ac.in/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - iitbhilai.ac.in
 # Short description, longer content can be placed in `content/members/`
 description: Indian Institute of Technology Bhilai is a public technical and research university located in Bhilai, Chhattisgarh, India.

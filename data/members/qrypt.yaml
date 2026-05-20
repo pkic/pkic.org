@@ -3,7 +3,7 @@ name: Qrypt
 slogan:
 website: https://www.qrypt.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qrypt.com
 # Short description, longer content can be placed in `content/members/`
 description: Quantum-Secure, Qrypt makes everlasting encryption accessible to all by reimagining how data is encrypted, transmitted, and stored.

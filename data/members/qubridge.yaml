@@ -3,7 +3,7 @@ name: Quantum Bridge
 slogan: Securing Tomorrow, Today.
 website: https://qubridge.io/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qubridge.io
   - quantumbridgetech.com
 # Short description, longer content can be placed in `content/members/`

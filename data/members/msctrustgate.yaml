@@ -3,7 +3,7 @@ name: MSC Trustgate
 slogan: Sign with Trust. Trust in Trustgate.
 website: https://www.msctrustgate.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - msctrustgate.com
 # Short description, longer content can be placed in `content/members/`
 description: MSC Trustgate, a licensed Certification Authority under Malaysia's Digital Signature Act 1997 since 2000, offers a comprehensive range of digital trust services, including digital certificates, digital signature solutions, and date/time stamping services. Our mission is to build digital trust through secure and reliable PKI solutions.

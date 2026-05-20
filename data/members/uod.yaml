@@ -3,7 +3,7 @@ name: University of Delhi
 slogan:
 website: https://www.du.ac.in/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ramanaujan.du.ac.in
 # Short description, longer content can be placed in `content/members/`
 description: The University of Delhi is a premier university in India with a venerable legacy and international acclaim for its high academic standards and diverse educational programs. It is recognized as an Institution of Eminence by the Government of India, fostering a rich environment for research and innovation across various disciplines.

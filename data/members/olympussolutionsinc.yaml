@@ -3,7 +3,7 @@ name: Olympus Solutions, Inc
 slogan:
 website: https://www.olympussolutionsinc.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - olympussolutionsinc.com
 # Short description, longer content can be placed in `content/members/`
 description: Olympus Solutions Inc., an SDVOSB, specializes in cybersecurity systems, identity management, and O&M services. We enhance the ROI of IAM tools.

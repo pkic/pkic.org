@@ -3,7 +3,7 @@ name: AppViewX
 slogan: Automate certificate lifecycle management with AppViewX for efficiency, security, and compliance!
 website: https://www.appviewx.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - appviewx.com
 # Short description, longer content can be placed in `content/members/`
 description: AppViewX develops products for machine identity management, PKI, and cryptographic automation.

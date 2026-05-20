@@ -3,7 +3,7 @@ name: Gary Moore
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - tridentityideas.com
 # Short description, longer content can be placed in `content/members/`
 description: Independent consultant that operates a consulting LLC to provide PKI related services related to policy, implementation, CA Software design, relying party software design and implementation and other Identity and Access Management solutions sets.

@@ -3,7 +3,7 @@ name: ZoTrus Technology
 slogan: Make Zero Trust Zero Threshold
 website: https://www.zotrus.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - ztbro.com
   - zotrus.com
 # Short description, longer content can be placed in `content/members/`

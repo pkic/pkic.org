@@ -3,7 +3,7 @@ name: Old Republic Title Company
 slogan:
 website: https://www.oldrepublictitle.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - oldrepublictitle.com
 # Short description, longer content can be placed in `content/members/`
 description: Old Republic Title provides title insurance and settlement services for Title Agents, Real Estate Professionals, Lenders, Homeowners and Commercial Transactions. Check out our sustainability report.

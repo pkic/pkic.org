@@ -3,7 +3,7 @@ name: QoreChain Association
 slogan: Quantum-safe AI-native L1 Interchain Infrastructure
 website: https://qorechain.io
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qorechain.io
 # Short description, longer content can be placed in `content/members/`
 description: QoreChain Association is a Swiss-registered non-profit (CHE-484.963.998, Rolle, Vaud) building a quantum-safe, AI-native Layer 1 blockchain that delivers post-quantum cryptography, native AI services, and interchain connectivity to 25+ Layer 1 networks.

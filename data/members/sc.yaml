@@ -3,7 +3,7 @@ name: Standard Chartered Bank GBS SDN BHD
 slogan:
 website: https://www.sc.com/my/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - sc.com
 # Short description, longer content can be placed in `content/members/`
 description: Standard Chartered Bank offers personalized banking solutions for your needs. From savings deposits, credit cards, loans, investments & more.

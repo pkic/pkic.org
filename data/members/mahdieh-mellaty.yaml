@@ -3,7 +3,7 @@ name: Mahdieh Mellaty
 slogan:
 website:
 # Business domains for email
-businessDomains:
+organizationDomains:
   - dal.ca
 # Short description, longer content can be placed in `content/members/`
 description: Mahdieh is the Researcher at Dalhousie University.

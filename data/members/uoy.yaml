@@ -3,7 +3,7 @@ name: University of York
 slogan: In limine sapientiae
 website: https://www.york.ac.uk/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - york.ac.uk
 # Short description, longer content can be placed in `content/members/`
 description: The University of York is a collegiate research university in York, England

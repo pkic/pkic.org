@@ -3,7 +3,7 @@ name: PKIpartners
 slogan:
 website: https://pkipartners.nl
 # Business domains for email
-businessDomains:
+organizationDomains:
   - pkipartners.nl
 # Short description, longer content can be placed in `content/members/`
 description: PKIpartners biedt professionele hulp bij het aanvragen en beheren van een PKI certificaat. Snelle en hulpvaardige support.

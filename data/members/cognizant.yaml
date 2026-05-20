@@ -3,7 +3,7 @@ name: Cognizant Technology solutions
 slogan: Engineering modern business
 website: https://www.cognizant.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - cognizant.com
 # Short description, longer content can be placed in `content/members/`
 description: Engineering modern business to improve everyday lives. Over the past 30 years, we’ve built relationships with market-leading companies around the world. That’s the power of intuition—and we can engineer it. Learn more.

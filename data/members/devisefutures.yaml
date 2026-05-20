@@ -3,7 +3,7 @@ name: Devise Futures - IT Solutions, Lda
 slogan:
 website: https://www.devisefutures.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - devisefutures.com
 # Short description, longer content can be placed in `content/members/`
 description: Devise Futures is an innovative organization dedicated to advancing secure digital solutions through expertise in cryptography, identity management, and public key infrastructure (PKI).

@@ -3,7 +3,7 @@ name: Sonic AI
 slogan:
 website: https://www.sonicai.ai
 # Business domains for email
-businessDomains:
+organizationDomains:
   - sonicai.ai
 # Short description, longer content can be placed in `content/members/`
 description: Sonic AI is a proprietary signal injection protocol working with numerous governing bodies and rights owners to achieve content authenticity and verification.

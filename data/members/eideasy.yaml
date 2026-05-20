@@ -3,7 +3,7 @@ name: eID Easy
 slogan:
 website: https://eideasy.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - eideasy.com
 # Short description, longer content can be placed in `content/members/`
 description: Easily add the strongest digital signature signing methods to your website or app through our simple API. ID methods from Europe and beyond.

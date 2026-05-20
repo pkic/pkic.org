@@ -3,7 +3,7 @@ name: Data & Scientific Inc.
 slogan:
 website: https://www.datasci.net/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - blackcanadianmedia.ca
 # Short description, longer content can be placed in `content/members/`
 description: We are a Canadian company but also active in the export market. Data & Scientific deployed the secure database for the national ID implementation in one of our export market countries. we have been involved with PKI projects since 2005.  We are also actively investigating Quantum computing.

@@ -3,7 +3,7 @@ name: Nimbus
 slogan:
 website: https://www.nimbus-berlin.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - nimbus-berlin.com
 # Short description, longer content can be placed in `content/members/`
 description: Nimbus Technologieberatung GmbH has been the model for forward thinking, engaged and effective leadership and consultancy since 1999.

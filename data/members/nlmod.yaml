@@ -3,7 +3,7 @@ name: Dutch Ministry of Defence
 slogan: Protecting what we value
 website: https://english.defensie.nl/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - mindef.nl
 # Short description, longer content can be placed in `content/members/`
 description: The Dutch Ministry of Defence (NL-MoD) has created an internal publicly trusted CA certified according eIDAS. The only subscriber is the NL-MoD. All subjects are bound to NL-MoD by contracts or treaties. The main purpose is to establish scalable public trust for all possible business applications to be able to reach out to governments, contractors and society that must rely on public trust.

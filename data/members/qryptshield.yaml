@@ -3,7 +3,7 @@ name: Qrypshield Technologies private limited
 slogan:
 website: https://www.qryptshield.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - qryptshield.com
 # Short description, longer content can be placed in `content/members/`
 description: Provides post-quantum cryptographic solutions, compliant with NIST standards, to protect digital infrastructure from quantum computing threats.

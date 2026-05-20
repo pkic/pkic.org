@@ -3,7 +3,7 @@ name: TÜV TRUST IT
 slogan: Your Partner for effective Information Security
 website: https://it-tuv.com/
 # Business domains for email
-businessDomains:
+organizationDomains:
   - tuv-austria.com
 # Short description, longer content can be placed in `content/members/`
 description: For many years the TÜV TRUST IT has been a successful IT-TÜV enterprise as part of the TÜV AUSTRIA Group. Operating from our locations in Cologne and Vienna, we are the impartial, objective and independent partner in commerce.

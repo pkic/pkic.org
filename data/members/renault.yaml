@@ -3,7 +3,7 @@ name: Renault Group
 slogan:
 website: https://www.renault.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - renault.com
 # Short description, longer content can be placed in `content/members/`
 description: Bienvenue sur le site officiel de Renault Group, le groupe automobile de future génération.
