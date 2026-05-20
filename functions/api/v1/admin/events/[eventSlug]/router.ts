@@ -19,8 +19,9 @@ import invites_Router from "./invites/router";
 import permissions_Router from "./permissions/router";
 import registrations_Router from "./registrations/router";
 import waitlist_Router from "./waitlist/router";
+import type { RequestDbContext } from "../../../../../_lib/db/context";
 
-const app = new Hono();
+const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.get("/days", AdminEventsEventSlugDaysGet_l);

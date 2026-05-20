@@ -13,6 +13,7 @@
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { all, first } from "../../../_lib/db/queries";
+import { requestDb, type AdminContext } from "../../../_lib/db/context";
 
 interface UserRow {
   id: string;
@@ -25,8 +26,8 @@ interface UserRow {
   created_at: string;
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
   const url = new URL(c.req.raw.url);
   const role = url.searchParams.get("role") ?? "";
@@ -51,7 +52,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
 
   const users = await all<UserRow>(
-    c.env.DB,
+    requestDb(c),
     `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at
      FROM users u
      ${where}
@@ -63,7 +64,11 @@ export async function onRequestGet(c: any): Promise<Response> {
   const hasMore = users.length > limit;
   const rows = hasMore ? users.slice(0, limit) : users;
 
-  const totalRow = await first<{ total: number }>(c.env.DB, `SELECT COUNT(*) AS total FROM users u ${where}`, params);
+  const totalRow = await first<{ total: number }>(
+    requestDb(c),
+    `SELECT COUNT(*) AS total FROM users u ${where}`,
+    params,
+  );
   const total = Number(totalRow?.total ?? 0);
 
   return json({
@@ -72,7 +77,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

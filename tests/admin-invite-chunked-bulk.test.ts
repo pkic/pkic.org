@@ -29,7 +29,7 @@ import type { Env as AppEnv } from "../functions/_lib/types";
 const appEnv = env as unknown as AppEnv;
 
 const EVENT_SLUG = "pqc-2026";
-const RAW_TOKEN = "chunked-bulk-test-token";
+let RAW_TOKEN = "chunked-bulk-test-token";
 
 async function seedRequiredTemplates(adminId: string): Promise<void> {
   for (const [key, content, subject] of [
@@ -65,7 +65,7 @@ describe("attendee invite — chunked bulk send", () => {
     await seedEventAndAdmin(appEnv.DB);
     const row = (await queryAll<{ id: string }>(appEnv.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
     adminId = row.id;
-    await createAdminSession(appEnv.DB, adminId, RAW_TOKEN);
+    RAW_TOKEN = await createAdminSession(appEnv.DB, adminId, RAW_TOKEN);
     await seedRequiredTemplates(adminId);
   });
 

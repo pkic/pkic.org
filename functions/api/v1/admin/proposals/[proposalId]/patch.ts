@@ -13,13 +13,14 @@ import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-acc
 import { first, run } from "../../../../../_lib/db/queries";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { adminProposalPatchSchema } from "../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestPatch(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+export async function onRequestPatch(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
   const proposal = await first<{ id: string; event_id: string; title: string; abstract: string }>(
-    c.env.DB,
+    requestDb(c),
     "SELECT id, event_id, title, abstract FROM session_proposals WHERE id = ?",
     [proposalId],
   );
@@ -27,7 +28,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(c.env.DB, proposal.event_id, admin);
+  const access = await getProposalAccessForEvent(requestDb(c), proposal.event_id, admin);
   if (!access.canFinalize) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to edit proposals" } }, 403);
   }
@@ -35,7 +36,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, adminProposalPatchSchema);
 
   await run(
-    c.env.DB,
+    requestDb(c),
     `UPDATE session_proposals
      SET title    = COALESCE(?, title),
          abstract = COALESCE(?, abstract),
@@ -45,7 +46,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   );
 
   const updated = await first<{ id: string; title: string; abstract: string; updated_at: string }>(
-    c.env.DB,
+    requestDb(c),
     "SELECT id, title, abstract, updated_at FROM session_proposals WHERE id = ?",
     [proposalId],
   );
@@ -62,7 +63,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   }
 
   if (Object.keys(changes).length > 0) {
-    await writeAuditLog(c.env.DB, "admin", admin.id, "proposal_edited", "proposal", proposalId, changes);
+    await writeAuditLog(requestDb(c), "admin", admin.id, "proposal_edited", "proposal", proposalId, changes);
   }
 
   return json({ proposal: updated });

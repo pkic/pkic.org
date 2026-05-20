@@ -12,6 +12,7 @@ import {
 } from "../../../../../../../_lib/services/frontend-links";
 import { refreshInviteToken } from "../../../../../../../_lib/services/invites";
 import { nowIso } from "../../../../../../../_lib/utils/time";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 type InviteRow = {
   id: string;
@@ -24,12 +25,12 @@ type InviteRow = {
   created_at: string;
 };
 
-export async function onRequestPost(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const invite = await first<InviteRow>(
-    c.env.DB,
+    requestDb(c),
     `SELECT
        id,
        event_id,
@@ -58,12 +59,12 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const token = await refreshInviteToken(c.env.DB, invite.id);
+  const token = await refreshInviteToken(requestDb(c), invite.id);
   const declineUrl = inviteDeclineUrl(appBaseUrl, event, token);
 
   const now = nowIso();
   await run(
-    c.env.DB,
+    requestDb(c),
     `UPDATE invites
      SET
        status = 'sent',
@@ -84,7 +85,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const templateKey = invite.invite_type === "attendee" ? "attendee_invite" : "speaker_invite";
   const subject = invite.invite_type === "attendee" ? `Invitation: ${event.name}` : `Speaker invitation: ${event.name}`;
 
-  const outboxId = await queueEmail(c.env.DB, {
+  const outboxId = await queueEmail(requestDb(c), {
     eventId: event.id,
     templateKey,
     recipientEmail: invite.invitee_email,
@@ -102,12 +103,12 @@ export async function onRequestPost(c: any): Promise<Response> {
     },
   });
 
-  c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
+  c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outboxId));
 
   return json({ success: true, inviteId: invite.id, resentAt: now, inviteType: invite.invite_type });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

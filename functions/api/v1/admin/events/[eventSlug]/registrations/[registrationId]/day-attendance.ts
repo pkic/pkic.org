@@ -19,20 +19,21 @@ import { AppError } from "../../../../../../../_lib/errors";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { queueRegistrationStatusEmail } from "../../../../../../../_lib/services/registrations/status-notifications";
 import { processOutboxByIdBackground } from "../../../../../../../_lib/email/outbox";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 interface RegistrationRow {
   id: string;
   event_id: string;
 }
 
-export async function onRequestPatch(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+export async function onRequestPatch(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminManageDayAttendanceSchema);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const registrationId = c.req.param("registrationId");
 
   const registration = await first<RegistrationRow>(
-    c.env.DB,
+    requestDb(c),
     "SELECT id, event_id FROM registrations WHERE id = ? AND event_id = ?",
     [registrationId, event.id],
   );
@@ -41,7 +42,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
     throw new AppError(404, "NOT_FOUND", "Registration not found for this event");
   }
 
-  const eventDays = await listEventDays(c.env.DB, event.id);
+  const eventDays = await listEventDays(requestDb(c), event.id);
   const dayByDate = new Map(eventDays.map((day) => [day.day_date, day]));
 
   for (const dayDate of body.dayDates) {
@@ -51,13 +52,14 @@ export async function onRequestPatch(c: any): Promise<Response> {
     }
 
     if (body.action === "remove") {
-      await run(c.env.DB, `DELETE FROM registration_day_attendance WHERE registration_id = ? AND event_day_id = ?`, [
-        registration.id,
-        day.id,
-      ]);
+      await run(
+        requestDb(c),
+        `DELETE FROM registration_day_attendance WHERE registration_id = ? AND event_day_id = ?`,
+        [registration.id, day.id],
+      );
     } else {
       await run(
-        c.env.DB,
+        requestDb(c),
         `INSERT INTO registration_day_attendance (
            id, registration_id, event_day_id, attendance_type, created_at, updated_at
          ) VALUES (?, ?, ?, ?, ?, ?)
@@ -69,7 +71,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   }
 
   await writeAuditLog(
-    c.env.DB,
+    requestDb(c),
     "admin",
     admin.id,
     "registration_day_attendance_updated",
@@ -80,20 +82,20 @@ export async function onRequestPatch(c: any): Promise<Response> {
 
   if (body.action !== "remove") {
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-    const outbox = await queueRegistrationStatusEmail(c.env.DB, {
+    const outbox = await queueRegistrationStatusEmail(requestDb(c), {
       event,
       registrationId: registration.id,
       appBaseUrl,
       templateKey: "registration_updated",
       subject: `Registration updated for ${event.name}`,
     });
-    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outbox.outboxId));
+    c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outbox.outboxId));
   }
 
   return json({ success: true });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method === "PATCH") return onRequestPatch(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

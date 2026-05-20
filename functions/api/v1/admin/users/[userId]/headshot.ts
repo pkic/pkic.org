@@ -17,6 +17,7 @@ import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
 import { AppError } from "../../../../../_lib/errors";
 import { readUploadedImage, resizeHeadshot } from "../../../../../_lib/utils/headshot-upload";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_HEADSHOT_BYTES = 5 * 1024 * 1024; // 5 MB (raw input before admin crop UI; result will be a small JPEG)
 
@@ -27,10 +28,10 @@ interface HeadshotRow {
 
 // ── GET — serve the headshot image ──────────────────────────────────────────
 
-async function onGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+async function onGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const user = await first<HeadshotRow>(c.env.DB, "SELECT id, headshot_r2_key FROM users WHERE id = ?", [
+  const user = await first<HeadshotRow>(requestDb(c), "SELECT id, headshot_r2_key FROM users WHERE id = ?", [
     c.req.param("userId"),
   ]);
 
@@ -60,10 +61,10 @@ async function onGet(c: any): Promise<Response> {
 
 // ── PUT — upload / replace headshot ─────────────────────────────────────────
 
-async function onPut(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+async function onPut(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const user = await first<HeadshotRow>(c.env.DB, "SELECT id, headshot_r2_key FROM users WHERE id = ?", [
+  const user = await first<HeadshotRow>(requestDb(c), "SELECT id, headshot_r2_key FROM users WHERE id = ?", [
     c.req.param("userId"),
   ]);
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
@@ -109,14 +110,13 @@ async function onPut(c: any): Promise<Response> {
   }
 
   const now = nowIso();
-  await run(c.env.DB, "UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ? WHERE id = ?", [
-    r2Key,
-    now,
-    now,
-    user.id,
-  ]);
+  await run(
+    requestDb(c),
+    "UPDATE users SET headshot_r2_key = ?, headshot_updated_at = ?, updated_at = ? WHERE id = ?",
+    [r2Key, now, now, user.id],
+  );
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "headshot_uploaded", "user", user.id, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "headshot_uploaded", "user", user.id, {
     r2Key,
     uploadedBy: "admin",
   });
@@ -129,10 +129,10 @@ async function onPut(c: any): Promise<Response> {
 
 // ── DELETE — remove headshot ────────────────────────────────────────────────
 
-async function onDelete(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+async function onDelete(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const user = await first<HeadshotRow>(c.env.DB, "SELECT id, headshot_r2_key FROM users WHERE id = ?", [
+  const user = await first<HeadshotRow>(requestDb(c), "SELECT id, headshot_r2_key FROM users WHERE id = ?", [
     c.req.param("userId"),
   ]);
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
@@ -144,12 +144,12 @@ async function onDelete(c: any): Promise<Response> {
 
   const now = nowIso();
   await run(
-    c.env.DB,
+    requestDb(c),
     "UPDATE users SET headshot_r2_key = NULL, headshot_updated_at = NULL, updated_at = ? WHERE id = ?",
     [now, user.id],
   );
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "headshot_removed", "user", user.id, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "headshot_removed", "user", user.id, {
     previousKey: user.headshot_r2_key,
   });
 
@@ -158,7 +158,7 @@ async function onDelete(c: any): Promise<Response> {
 
 // ── Router ──────────────────────────────────────────────────────────────────
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   switch (c.req.raw.method) {
     case "GET":
       return onGet(c);
@@ -174,7 +174,7 @@ export async function onRequest(c: any): Promise<Response> {
 export class AdminUsersUserIdHeadshotGet extends OpenAPIRoute {
   schema = {};
 
-  async handle(c: any) {
+  async handle(c: AdminContext) {
     return onGet(c);
   }
 }
@@ -182,7 +182,7 @@ export class AdminUsersUserIdHeadshotGet extends OpenAPIRoute {
 export class AdminUsersUserIdHeadshotPut extends OpenAPIRoute {
   schema = {};
 
-  async handle(c: any) {
+  async handle(c: AdminContext) {
     return onPut(c);
   }
 }
@@ -190,7 +190,7 @@ export class AdminUsersUserIdHeadshotPut extends OpenAPIRoute {
 export class AdminUsersUserIdHeadshotDelete extends OpenAPIRoute {
   schema = {};
 
-  async handle(c: any) {
+  async handle(c: AdminContext) {
     return onDelete(c);
   }
 }

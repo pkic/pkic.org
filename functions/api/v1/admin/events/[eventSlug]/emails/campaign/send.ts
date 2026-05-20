@@ -16,15 +16,16 @@ import {
   verifyCampaignPreviewToken,
 } from "../../../../../../../_lib/services/admin-email-campaign";
 import { adminEventCampaignSendSchema } from "../../../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEventCampaignSendSchema);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const secret = requireInternalSecret(c.env);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
-  const recipients = await listCampaignRecipients(c.env.DB, event.id, {
+  const recipients = await listCampaignRecipients(requestDb(c), event.id, {
     audience: body.filter.audience,
     attendeeStatus: body.filter.attendeeStatus,
     attendanceType: body.filter.attendanceType,
@@ -89,7 +90,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   // Validate template exists only when not using a direct body override
   const templateKey = body.bodyContent ? body.templateKey || "__direct__" : (body.templateKey as string);
-  const template = !body.bodyContent ? await resolveTemplate(c.env.DB, templateKey) : null;
+  const template = !body.bodyContent ? await resolveTemplate(requestDb(c), templateKey) : null;
 
   if (body.sendMode === "bcc_batch") {
     const unsafeRefs = findBroadcastOnlyTemplateRefs(uniqueRecipients, [
@@ -117,7 +118,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   if (body.sendMode === "personal") {
     for (const recipient of uniqueRecipients) {
-      const outboxId = await queueEmail(c.env.DB, {
+      const outboxId = await queueEmail(requestDb(c), {
         eventId: event.id,
         templateKey,
         recipientEmail: recipient.email,
@@ -135,7 +136,7 @@ export async function onRequestPost(c: any): Promise<Response> {
         },
       });
       queued += 1;
-      c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
+      c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outboxId));
     }
     batches = uniqueRecipients.length;
   } else {
@@ -144,7 +145,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       const to = chunk[0];
       if (!to) continue;
       const bcc = chunk.slice(1).map((recipient) => recipient.email);
-      const outboxId = await queueEmail(c.env.DB, {
+      const outboxId = await queueEmail(requestDb(c), {
         eventId: event.id,
         templateKey,
         recipientEmail: to.email,
@@ -163,7 +164,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       });
       queued += chunk.length;
       batches += 1;
-      c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
+      c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outboxId));
     }
   }
 
@@ -175,7 +176,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

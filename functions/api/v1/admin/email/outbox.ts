@@ -21,6 +21,7 @@ import { renderSubject } from "../../../../_lib/email/render";
 import { resolveTemplate } from "../../../../_lib/email/templates";
 import { json } from "../../../../_lib/http";
 import { parseJsonSafe } from "../../../../_lib/utils/json";
+import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 interface OutboxListRow {
   id: string;
   event_id: string | null;
@@ -114,7 +115,7 @@ function buildWhereClause(
 }
 
 async function resolveSubjectTemplate(
-  c: any,
+  c: AdminContext,
   row: OutboxListRow,
   cache: Map<string, string | null>,
 ): Promise<string | null> {
@@ -125,7 +126,7 @@ async function resolveSubjectTemplate(
     }
 
     const versionRow = await first<TemplateSubjectRow>(
-      c.env.DB,
+      requestDb(c),
       "SELECT subject_template FROM email_template_versions WHERE template_key = ? AND version = ?",
       [row.template_key, row.template_version],
     );
@@ -140,7 +141,7 @@ async function resolveSubjectTemplate(
   }
 
   try {
-    const active = await resolveTemplate(c.env.DB, row.template_key);
+    const active = await resolveTemplate(requestDb(c), row.template_key);
     cache.set(cacheKey, active.subjectTemplate ?? null);
     return active.subjectTemplate ?? null;
   } catch {
@@ -150,7 +151,7 @@ async function resolveSubjectTemplate(
 }
 
 async function buildPreviewSubject(
-  c: any,
+  c: AdminContext,
   row: OutboxListRow,
   payload: Record<string, unknown>,
   cache: Map<string, string | null>,
@@ -167,8 +168,8 @@ async function buildPreviewSubject(
   return renderSubject(subjectTemplate, fallbackSubject, payload);
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
   const url = new URL(c.req.raw.url);
   const status = (url.searchParams.get("status") ?? "").trim().toLowerCase();
@@ -182,7 +183,7 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   const [rows, totalRow, statusCounts, messageTypeCounts, templateCounts, dueCounts, dueNextRow] = await Promise.all([
     all<OutboxListRow>(
-      c.env.DB,
+      requestDb(c),
       `SELECT
          o.id,
          o.event_id,
@@ -219,7 +220,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       [...params, limit, offset],
     ),
     first<{ total: number }>(
-      c.env.DB,
+      requestDb(c),
       `SELECT COUNT(*) AS total
        FROM email_outbox o
        LEFT JOIN events e ON e.id = o.event_id
@@ -227,7 +228,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       params,
     ),
     all<CountRow>(
-      c.env.DB,
+      requestDb(c),
       `SELECT o.status, COUNT(*) AS count
        FROM email_outbox o
        LEFT JOIN events e ON e.id = o.event_id
@@ -236,7 +237,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       params,
     ),
     all<MessageTypeCountRow>(
-      c.env.DB,
+      requestDb(c),
       `SELECT o.message_type, COUNT(*) AS count
        FROM email_outbox o
        LEFT JOIN events e ON e.id = o.event_id
@@ -245,7 +246,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       params,
     ),
     all<TemplateCountRow>(
-      c.env.DB,
+      requestDb(c),
       `SELECT o.template_key, COUNT(*) AS count
        FROM email_outbox o
        LEFT JOIN events e ON e.id = o.event_id
@@ -256,7 +257,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       params,
     ),
     all<DueCountRow>(
-      c.env.DB,
+      requestDb(c),
       `SELECT status, COUNT(*) AS count
        FROM email_outbox
        WHERE status IN ('queued', 'retrying')
@@ -265,7 +266,7 @@ export async function onRequestGet(c: any): Promise<Response> {
       [new Date().toISOString()],
     ),
     first<{ send_after: string | null }>(
-      c.env.DB,
+      requestDb(c),
       `SELECT MIN(send_after) AS send_after
        FROM email_outbox
        WHERE status IN ('queued', 'retrying')`,
@@ -342,7 +343,7 @@ export async function onRequestGet(c: any): Promise<Response> {
 export class AdminEmailOutboxGet extends OpenAPIRoute {
   schema = {};
 
-  async handle(c: any) {
+  async handle(c: AdminContext) {
     return onRequestGet(c);
   }
 }

@@ -21,6 +21,7 @@ import { first, run } from "../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 interface UserRow {
   id: string;
@@ -30,8 +31,8 @@ interface UserRow {
   pii_redacted_at: string | null;
 }
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const userId = c.req.param("userId");
 
   if (userId === admin.id) {
@@ -39,7 +40,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   const user = await first<UserRow>(
-    c.env.DB,
+    requestDb(c),
     "SELECT id, email, role, active, pii_redacted_at FROM users WHERE id = ?",
     [userId],
   );
@@ -59,7 +60,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const redactedNormalized = redactedEmail;
 
   await run(
-    c.env.DB,
+    requestDb(c),
     `UPDATE users
      SET email             = ?,
          normalized_email  = ?,
@@ -82,12 +83,12 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   // Revoke all non-expired sessions so the user is signed out immediately.
   await run(
-    c.env.DB,
+    requestDb(c),
     "UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL AND expires_at > ?",
     [now, user.id, now],
   );
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "user_anonymized", "user", user.id, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "user_anonymized", "user", user.id, {
     previousEmail: user.email,
     previousRole: user.role,
   });
@@ -95,7 +96,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   return json({ success: true, userId: user.id });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

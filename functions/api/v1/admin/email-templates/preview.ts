@@ -5,6 +5,7 @@ import { renderEmail, renderSubject } from "../../../../_lib/email/render";
 import { loadEmailLayout, loadEmailPartials } from "../../../../_lib/email/partials";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { adminEmailTemplatePreviewSchema } from "../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 
 function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
   return {
@@ -30,8 +31,8 @@ function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
   };
 }
 
-export async function onRequestPost(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEmailTemplatePreviewSchema);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
@@ -39,8 +40,8 @@ export async function onRequestPost(c: any): Promise<Response> {
     ...buildDefaultPreviewData(appBaseUrl),
     ...(body.data ?? {}),
   };
-  const partials = await loadEmailPartials(c.env.DB);
-  const layoutHtml = body.layoutHtml ?? (await loadEmailLayout(c.env.DB));
+  const partials = await loadEmailPartials(requestDb(c));
+  const layoutHtml = body.layoutHtml ?? (await loadEmailLayout(requestDb(c)));
   const dataWithPartials = { ...data, _partials: partials };
 
   const subject = renderSubject(body.subjectTemplate ?? null, "PKI Consortium Preview Subject", dataWithPartials);
@@ -56,7 +57,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

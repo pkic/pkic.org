@@ -3,6 +3,7 @@ import { first, run } from "../db/queries";
 import { normalizeEmail } from "../validation";
 import { nowIso, addMinutes, addHours } from "../utils/time";
 import { randomToken, sha256Hex } from "../utils/crypto";
+import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
 import { uuid } from "../utils/ids";
 import type { AuthAdmin, DatabaseLike, Env } from "../types";
 
@@ -14,6 +15,7 @@ interface AdminUserRow {
 }
 
 interface AdminSessionRow {
+  id: string;
   user_id: string;
   expires_at: string;
   revoked_at: string | null;
@@ -21,11 +23,112 @@ interface AdminSessionRow {
   role: string;
 }
 
+export interface AdminSessionTokenClaims {
+  typ: "admin-session";
+  sub: string;
+  sid: string;
+  email: string;
+  role: string;
+  scopes: string[];
+  state?: string;
+  exp: number;
+}
+
+const ADMIN_SESSION_TOKEN_TYPE = "admin-session";
+
+const adminByRequest = new WeakMap<Request, AuthAdmin>();
+
+function constantTimeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) {
+    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return diff === 0;
+}
+
+export function cacheAdminForRequest(request: Request, admin: AuthAdmin): void {
+  adminByRequest.set(request, admin);
+}
+
+export function getCachedAdminForRequest(request: Request): AuthAdmin | undefined {
+  return adminByRequest.get(request);
+}
+
+function sessionExpiresAtToExp(expiresAt: string): number {
+  const ms = new Date(expiresAt).getTime();
+  if (!Number.isFinite(ms)) {
+    throw new Error(`Invalid expiresAt timestamp: ${expiresAt}`);
+  }
+  return Math.floor(ms / 1000);
+}
+
+function isAdminSessionTokenClaims(claims: object): claims is AdminSessionTokenClaims {
+  const candidate = claims as Partial<AdminSessionTokenClaims>;
+  return (
+    candidate.typ === ADMIN_SESSION_TOKEN_TYPE &&
+    typeof candidate.sub === "string" &&
+    typeof candidate.sid === "string" &&
+    typeof candidate.email === "string" &&
+    typeof candidate.role === "string" &&
+    Array.isArray(candidate.scopes) &&
+    candidate.scopes.every((scope) => typeof scope === "string") &&
+    (candidate.state === undefined || typeof candidate.state === "string") &&
+    typeof candidate.exp === "number"
+  );
+}
+
+export async function signAdminSessionToken(
+  secret: string,
+  payload: {
+    admin: AuthAdmin;
+    sessionId: string;
+    expiresAt: string;
+    state?: string | null;
+    scopes?: string[];
+  },
+): Promise<string> {
+  const claims: AdminSessionTokenClaims = {
+    typ: ADMIN_SESSION_TOKEN_TYPE,
+    sub: payload.admin.id,
+    sid: payload.sessionId,
+    email: payload.admin.email,
+    role: payload.admin.role,
+    scopes: payload.scopes ?? payload.admin.scopes ?? [],
+    exp: sessionExpiresAtToExp(payload.expiresAt),
+  };
+
+  if (payload.state) {
+    claims.state = payload.state;
+  }
+
+  return signJwt(secret, claims as unknown as Record<string, unknown>);
+}
+
+export async function verifyAdminSessionToken(
+  secret: string,
+  token: string,
+): Promise<JwtVerifyResult<AdminSessionTokenClaims>> {
+  const result = await verifyJwt<object>(secret, token);
+  if (!result.ok) {
+    return result;
+  }
+  if (!isAdminSessionTokenClaims(result.claims)) {
+    return { ok: false, reason: "invalid" };
+  }
+  return { ok: true, claims: result.claims };
+}
+
 export async function requireAdminFromRequest(
   db: DatabaseLike,
   request: Request,
-  env?: Pick<Env, "ADMIN_API_KEY">,
+  env?: Pick<Env, "ADMIN_API_KEY" | "INTERNAL_SIGNING_SECRET">,
 ): Promise<AuthAdmin> {
+  const cached = adminByRequest.get(request);
+  if (cached) {
+    return cached;
+  }
+
   const auth = request.headers.get("authorization") ?? "";
   const match = auth.match(/^Bearer\s+(.+)$/i);
   if (!match) {
@@ -34,23 +137,40 @@ export async function requireAdminFromRequest(
 
   const token = match[1];
 
-  // API key auth — no DB lookup needed, returns a synthetic admin identity
-  if (env?.ADMIN_API_KEY && token === env.ADMIN_API_KEY) {
-    return { id: "api-key", email: "api-key", role: "admin" };
+  // API key auth — no DB lookup needed, returns a synthetic admin identity.
+  // Use constant-time comparison to avoid leaking the configured key via timing.
+  if (env?.ADMIN_API_KEY && constantTimeEqual(token, env.ADMIN_API_KEY)) {
+    const admin = { id: "api-key", email: "api-key", role: "admin" };
+    cacheAdminForRequest(request, admin);
+    return admin;
   }
 
-  return getAdminBySessionToken(db, token);
+  if (!env?.INTERNAL_SIGNING_SECRET) {
+    throw new AppError(500, "INTERNAL_SECRET_MISSING", "INTERNAL_SIGNING_SECRET is not configured");
+  }
+
+  const verified = await verifyAdminSessionToken(env.INTERNAL_SIGNING_SECRET, token);
+  if (!verified.ok) {
+    throw new AppError(
+      401,
+      verified.reason === "expired" ? "AUTH_EXPIRED" : "AUTH_INVALID",
+      verified.reason === "expired" ? "Admin session expired" : "Invalid admin session token",
+    );
+  }
+
+  const admin = await getAdminBySessionClaims(db, verified.claims);
+  cacheAdminForRequest(request, admin);
+  return admin;
 }
 
-export async function getAdminBySessionToken(db: DatabaseLike, token: string): Promise<AuthAdmin> {
-  const tokenHash = await sha256Hex(token);
+export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSessionTokenClaims): Promise<AuthAdmin> {
   const row = await first<AdminSessionRow>(
     db,
-    `SELECT s.user_id, s.expires_at, s.revoked_at, u.email, u.role
+    `SELECT s.id, s.user_id, s.expires_at, s.revoked_at, u.email, u.role
      FROM sessions s
      JOIN users u ON u.id = s.user_id
-     WHERE s.token_hash = ? AND u.active = 1 AND u.role = 'admin'`,
-    [tokenHash],
+     WHERE s.id = ? AND s.user_id = ? AND u.active = 1 AND u.role = 'admin'`,
+    [claims.sid, claims.sub],
   );
 
   if (!row) {
@@ -69,6 +189,10 @@ export async function getAdminBySessionToken(db: DatabaseLike, token: string): P
     id: row.user_id,
     email: row.email,
     role: row.role,
+    scopes: claims.scopes,
+    sessionId: row.id,
+    expiresAt: row.expires_at,
+    state: claims.state ?? null,
   };
 }
 
@@ -125,7 +249,7 @@ export async function requestAdminMagicLink(
 export async function verifyAdminMagicLink(
   db: DatabaseLike,
   payload: { token: string; sessionTtlHours: number; ipHash?: string | null; userAgentHash?: string | null },
-): Promise<{ admin: AuthAdmin; sessionToken: string; expiresAt: string }> {
+): Promise<{ admin: AuthAdmin; sessionId: string; expiresAt: string }> {
   const tokenHash = await sha256Hex(payload.token);
   const row = await first<{
     id: string;
@@ -165,17 +289,25 @@ export async function verifyAdminMagicLink(
     throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", "Magic link is not valid from this browser");
   }
 
-  await run(db, "UPDATE auth_magic_links SET used_at = ? WHERE id = ?", [nowIso(), row.id]);
+  // Atomic consume to prevent TOCTOU race: only the request that flips used_at
+  // from NULL wins. Other concurrent verifications get MAGIC_LINK_USED.
+  const consume = await run(db, "UPDATE auth_magic_links SET used_at = ? WHERE id = ? AND used_at IS NULL", [
+    nowIso(),
+    row.id,
+  ]);
+  if (consume.changes === 0) {
+    throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
+  }
 
-  const sessionToken = randomToken(24);
-  const sessionHash = await sha256Hex(sessionToken);
+  const sessionId = uuid();
+  const sessionHash = await sha256Hex(randomToken(24));
   const expiresAt = addHours(nowIso(), payload.sessionTtlHours);
 
   await run(
     db,
     `INSERT INTO sessions (id, user_id, token_hash, expires_at, revoked_at, created_at)
      VALUES (?, ?, ?, ?, NULL, ?)`,
-    [uuid(), row.user_id, sessionHash, expiresAt, nowIso()],
+    [sessionId, row.user_id, sessionHash, expiresAt, nowIso()],
   );
 
   return {
@@ -184,7 +316,7 @@ export async function verifyAdminMagicLink(
       email: row.email,
       role: row.role,
     },
-    sessionToken,
+    sessionId,
     expiresAt,
   };
 }

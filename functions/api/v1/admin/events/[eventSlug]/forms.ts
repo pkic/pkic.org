@@ -16,6 +16,7 @@ import { uuid } from "../../../../../_lib/utils/ids";
 import { stringifyJson } from "../../../../../_lib/utils/json";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { adminFormCreateSchema } from "../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 interface FormRow {
   id: string;
@@ -32,12 +33,12 @@ interface FormRow {
   submission_count: number;
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
   const forms = await all<FormRow>(
-    c.env.DB,
+    requestDb(c),
     `SELECT
        f.*,
        COUNT(DISTINCT ff.id) AS field_count,
@@ -55,16 +56,16 @@ export async function onRequestGet(c: any): Promise<Response> {
   return json({ forms });
 }
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminFormCreateSchema);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
   const now = nowIso();
   const formId = uuid();
 
   await run(
-    c.env.DB,
+    requestDb(c),
     `INSERT INTO forms (id, key, scope_type, scope_ref, purpose, status, title, description, created_at, updated_at)
      VALUES (?, ?, 'event', ?, ?, ?, ?, ?, ?, ?)`,
     [formId, body.key, event.id, body.purpose, body.status, body.title, body.description ?? null, now, now],
@@ -72,7 +73,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   for (const field of body.fields) {
     await run(
-      c.env.DB,
+      requestDb(c),
       `INSERT INTO form_fields (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
@@ -90,7 +91,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     );
   }
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "event_form_created", "form", formId, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "event_form_created", "form", formId, {
     eventSlug: event.slug,
     key: body.key,
     purpose: body.purpose,
@@ -99,7 +100,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   return json({ success: true, formId, key: body.key }, 201);
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "POST") return onRequestPost(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

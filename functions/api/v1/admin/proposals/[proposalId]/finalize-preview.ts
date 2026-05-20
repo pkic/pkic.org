@@ -10,13 +10,14 @@ import { loadEmailLayout, loadEmailPartials } from "../../../../../_lib/email/pa
 import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
 import { buildProposalDecisionEmailPlan } from "./decision-emails";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
   const accessCheckProposal = await first<{ event_id: string }>(
-    c.env.DB,
+    requestDb(c),
     "SELECT event_id FROM session_proposals WHERE id = ?",
     [proposalId],
   );
@@ -24,7 +25,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(c.env.DB, accessCheckProposal.event_id, admin);
+  const access = await getProposalAccessForEvent(requestDb(c), accessCheckProposal.event_id, admin);
   if (!access.canFinalize) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to finalize proposals" } }, 403);
   }
@@ -32,7 +33,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, finalizeProposalSchema);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const plan = await buildProposalDecisionEmailPlan(
-    c.env.DB,
+    requestDb(c),
     {
       proposalId,
       finalStatus: body.finalStatus,
@@ -48,11 +49,11 @@ export async function onRequestPost(c: any): Promise<Response> {
     },
   );
 
-  const [layoutHtml, partials] = await Promise.all([loadEmailLayout(c.env.DB), loadEmailPartials(c.env.DB)]);
+  const [layoutHtml, partials] = await Promise.all([loadEmailLayout(requestDb(c)), loadEmailPartials(requestDb(c))]);
 
   const messages = await Promise.all(
     plan.messages.map(async (message) => {
-      const template = await resolveTemplate(c.env.DB, message.templateKey);
+      const template = await resolveTemplate(requestDb(c), message.templateKey);
       const dataWithPartials = { ...message.data, _partials: partials };
       const subject = renderSubject(template.subjectTemplate, message.fallbackSubject, dataWithPartials);
       const rendered = await renderEmail(
@@ -83,7 +84,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

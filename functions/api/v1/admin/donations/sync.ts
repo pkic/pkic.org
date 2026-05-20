@@ -29,6 +29,8 @@ import { queueEmail, processOutboxByIdBackground } from "../../../../_lib/email/
 import { prerenderDonationBadge } from "../../../../_lib/services/og-badge-prerender";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
 import { getOrCreatePromoterCode } from "../../donations/promoter";
+import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import type { DatabaseLike, Env } from "../../../../_lib/types";
 
 interface PendingDonation {
   id: string;
@@ -200,10 +202,10 @@ async function fetchPaymentDetails(stripeKey: string, paymentIntentId: string): 
 }
 
 async function sendPaymentFailedEmail(
-  db: D1Database,
-  env: any,
+  db: DatabaseLike,
+  env: Env,
   sessionId: string,
-  executionCtx: ExecutionContext,
+  executionCtx: Pick<ExecutionContext, "waitUntil">,
 ): Promise<void> {
   try {
     const donor = (await db
@@ -231,8 +233,8 @@ async function sendPaymentFailedEmail(
   }
 }
 
-export async function onRequestPost(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
   const { env } = c;
 

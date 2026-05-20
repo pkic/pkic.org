@@ -77,8 +77,7 @@ async function setupWorkflow() {
   const { eventId } = await seedEventAndAdmin(env.DB);
   const adminUser = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
   await seedWorkflowEmailTemplates(env.DB, adminUser.id);
-  await createAdminSession(env.DB, adminUser.id, "test-admin-token");
-  adminSessionToken = "test-admin-token";
+  adminSessionToken = await createAdminSession(env.DB, adminUser.id, "test-admin-token");
   return { eventId, adminUserId: adminUser.id };
 }
 

@@ -10,8 +10,9 @@ import { onRequestPatch as AdminEventsEventSlugRegistrationsRegistrationIdPatch_
 import { onRequestPost as AdminEventsEventSlugRegistrationsRegistrationIdOpenManagePost_l } from "./open-manage";
 import { onRequestPost as AdminEventsEventSlugRegistrationsRegistrationIdRegenerateBadgePost_l } from "./regenerate-badge";
 import { onRequestPost as AdminEventsEventSlugRegistrationsRegistrationIdResendConfirmationPost_l } from "./resend-confirmation";
+import type { RequestDbContext } from "../../../../../../../_lib/db/context";
 
-const app = new Hono();
+const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.post("/admit", AdminEventsEventSlugRegistrationsRegistrationIdAdmitPost_l);

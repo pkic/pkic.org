@@ -3,8 +3,9 @@ import { fromHono } from "chanfana";
 import { onRequestGet as AdminDonationsIdGet_l } from "./[id]";
 import { onRequestGet as AdminDonationsPromotersGet_l } from "./promoters";
 import { onRequestPost as AdminDonationsSyncPost_l } from "./sync";
+import type { RequestDbContext } from "../../../../_lib/db/context";
 
-const app = new Hono();
+const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.get("/promoters", AdminDonationsPromotersGet_l);

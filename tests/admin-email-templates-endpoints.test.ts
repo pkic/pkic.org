@@ -6,7 +6,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 
-const ADMIN_TOKEN = "email-templates-admin-token";
+let ADMIN_TOKEN = "email-templates-admin-token";
 
 function adminRequest(path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -34,7 +34,7 @@ async function setupAdminTemplates(): Promise<{ adminId: string }> {
   const adminRow = (
     await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
   )[0];
-  await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
+  ADMIN_TOKEN = await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
   await seedWorkflowEmailTemplates(env.DB, adminRow.id);
   return { adminId: adminRow.id };
 }

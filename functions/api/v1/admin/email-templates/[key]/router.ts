@@ -6,8 +6,9 @@ import {
   onRequestPost as AdminEmailTemplatesKeyVersionsPost_l,
 } from "./versions";
 import { onRequestGet as AdminEmailTemplatesKeyExistsGet_l } from "./exists";
+import type { RequestDbContext } from "../../../../../_lib/db/context";
 
-const app = new Hono();
+const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 openapi.post("/activate", AdminEmailTemplatesKeyActivatePost);

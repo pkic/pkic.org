@@ -11,6 +11,7 @@ export interface DatabaseLike {
   prepare(query: string): StatementLike;
   batch(statements: StatementLike[]): Promise<unknown[]>;
   exec?(query: string): Promise<unknown>;
+  withSession?(constraintOrBookmark?: string): DatabaseLike & { getBookmark?(): string | null };
 }
 
 export interface R2ObjectLike {
@@ -147,4 +148,8 @@ export interface AuthAdmin {
   id: string;
   email: string;
   role: string;
+  scopes?: string[];
+  sessionId?: string;
+  expiresAt?: string;
+  state?: string | null;
 }

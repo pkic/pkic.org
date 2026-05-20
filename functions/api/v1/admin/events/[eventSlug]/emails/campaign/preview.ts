@@ -18,17 +18,18 @@ import {
   signCampaignPreviewToken,
 } from "../../../../../../../_lib/services/admin-email-campaign";
 import { adminEventCampaignPreviewSchema } from "../../../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 const PREVIEW_TTL_SECONDS = 10 * 60;
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEventCampaignPreviewSchema);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const secret = requireInternalSecret(c.env);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
-  const recipients = await listCampaignRecipients(c.env.DB, event.id, {
+  const recipients = await listCampaignRecipients(requestDb(c), event.id, {
     audience: body.filter.audience,
     attendeeStatus: body.filter.attendeeStatus,
     attendanceType: body.filter.attendanceType,
@@ -84,7 +85,8 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   if (body.sendMode === "bcc_batch") {
-    const template = !body.bodyContent && body.templateKey ? await resolveTemplate(c.env.DB, body.templateKey) : null;
+    const template =
+      !body.bodyContent && body.templateKey ? await resolveTemplate(requestDb(c), body.templateKey) : null;
     const unsafeRefs = findBroadcastOnlyTemplateRefs(uniqueRecipients, [
       body.subjectOverride,
       body.bodyContent,
@@ -103,8 +105,8 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   let subject: string;
   let rendered: { html: string; text: string };
-  const partials = await loadEmailPartials(c.env.DB);
-  const layoutHtml = await loadEmailLayout(c.env.DB);
+  const partials = await loadEmailPartials(requestDb(c));
+  const layoutHtml = await loadEmailLayout(requestDb(c));
   const sample = uniqueRecipients[0];
   const routeVars =
     body.filter.audience === "attendees"
@@ -127,7 +129,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     subject = renderSubject(body.subjectOverride ?? null, `Update: ${event.name}`, dataWithPartials);
     rendered = await renderEmail(body.bodyContent, dataWithPartials, layoutHtml, "markdown", appBaseUrl);
   } else {
-    const template = await resolveTemplate(c.env.DB, body.templateKey as string);
+    const template = await resolveTemplate(requestDb(c), body.templateKey as string);
     const data = {
       ...sampleData,
       customText: body.customText ?? "",
@@ -159,7 +161,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

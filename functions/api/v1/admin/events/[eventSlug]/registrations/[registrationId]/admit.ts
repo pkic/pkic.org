@@ -15,6 +15,7 @@ import { adminRegistrationAdmitSchema } from "../../../../../../../../assets/sha
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground } from "../../../../../../../_lib/email/outbox";
 import { queueRegistrationStatusEmail } from "../../../../../../../_lib/services/registrations/status-notifications";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 interface RegistrationRow {
   id: string;
@@ -24,14 +25,14 @@ interface RegistrationRow {
   attendance_type: "in_person" | "virtual" | "on_demand";
 }
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminRegistrationAdmitSchema);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const registrationId = c.req.param("registrationId");
 
   const registration = await first<RegistrationRow>(
-    c.env.DB,
+    requestDb(c),
     "SELECT id, event_id, user_id, status, attendance_type FROM registrations WHERE id = ? AND event_id = ?",
     [registrationId, event.id],
   );
@@ -48,19 +49,19 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   const reason = `${body.mode}:${body.reason}`;
-  await setRegistrationCapacityExempt(c.env.DB, {
+  await setRegistrationCapacityExempt(requestDb(c), {
     registrationId: registration.id,
     exempt: true,
     reason,
   });
 
   if (registration.status === "waitlisted") {
-    await run(c.env.DB, "UPDATE registrations SET status = 'registered', updated_at = ? WHERE id = ?", [
+    await run(requestDb(c), "UPDATE registrations SET status = 'registered', updated_at = ? WHERE id = ?", [
       nowIso(),
       registration.id,
     ]);
     await run(
-      c.env.DB,
+      requestDb(c),
       `UPDATE waitlist_entries
        SET status = 'removed', updated_at = ?
        WHERE event_id = ? AND registration_id = ? AND status IN ('waiting', 'offered')`,
@@ -68,7 +69,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     );
   }
 
-  const eventDays = await listEventDays(c.env.DB, event.id);
+  const eventDays = await listEventDays(requestDb(c), event.id);
   let admittedDayDates: string[] = [];
 
   if (eventDays.length > 0) {
@@ -85,7 +86,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       }
 
       await run(
-        c.env.DB,
+        requestDb(c),
         `INSERT INTO registration_day_attendance (
           id, registration_id, event_day_id, attendance_type, created_at, updated_at
         ) VALUES (?, ?, ?, 'in_person', ?, ?)
@@ -96,12 +97,12 @@ export async function onRequestPost(c: any): Promise<Response> {
     }
   }
 
-  const selections = (await getRegistrationDayAttendance(c.env.DB, registration.id)).map((entry) => ({
+  const selections = (await getRegistrationDayAttendance(requestDb(c), registration.id)).map((entry) => ({
     dayDate: entry.dayDate,
     attendanceType: entry.attendanceType,
   }));
 
-  await syncRegistrationDayWaitlist(c.env.DB, {
+  await syncRegistrationDayWaitlist(requestDb(c), {
     registrationId: registration.id,
     eventId: event.id,
     userId: registration.user_id,
@@ -109,7 +110,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     capacityExemptReason: reason,
   });
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "registration_admitted", "registration", registration.id, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "registration_admitted", "registration", registration.id, {
     mode: body.mode,
     reason: body.reason,
     admittedDayDates,
@@ -117,16 +118,16 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const outbox = await queueRegistrationStatusEmail(c.env.DB, {
+  const outbox = await queueRegistrationStatusEmail(requestDb(c), {
     event,
     registrationId: registration.id,
     appBaseUrl,
     templateKey: "registration_updated",
     subject: `Registration updated for ${event.name}`,
   });
-  c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outbox.outboxId));
+  c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outbox.outboxId));
 
-  const updated = await first<Record<string, unknown>>(c.env.DB, "SELECT * FROM registrations WHERE id = ?", [
+  const updated = await first<Record<string, unknown>>(requestDb(c), "SELECT * FROM registrations WHERE id = ?", [
     registration.id,
   ]);
 
@@ -137,7 +138,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

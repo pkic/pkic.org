@@ -14,13 +14,14 @@ import {
   signAttendeeInvitePreviewToken,
 } from "../../../../../../../_lib/services/admin-invite-preview";
 import { adminBulkAttendeeInvitesPreviewSchema } from "../../../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 const PREVIEW_TTL_SECONDS = 10 * 60;
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminBulkAttendeeInvitesPreviewSchema);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const secret = requireInternalSecret(c.env);
 
@@ -35,8 +36,8 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
   const declineUrl = inviteDeclineUrl(appBaseUrl, event, "preview-token");
 
-  const template = await resolveTemplate(c.env.DB, "attendee_invite");
-  const layoutHtml = await loadEmailLayout(c.env.DB);
+  const template = await resolveTemplate(requestDb(c), "attendee_invite");
+  const layoutHtml = await loadEmailLayout(requestDb(c));
   const digest = await computeAttendeeInviteDigest(body.invites);
   const preview = await signAttendeeInvitePreviewToken({
     secret,
@@ -76,7 +77,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

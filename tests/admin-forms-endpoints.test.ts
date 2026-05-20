@@ -6,7 +6,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { nowIso } from "../functions/_lib/utils/time";
 
-const ADMIN_TOKEN = "forms-admin-token";
+let ADMIN_TOKEN = "forms-admin-token";
 
 type FormFieldSeed = {
   key: string;
@@ -44,7 +44,7 @@ async function setupAdmin(): Promise<{ eventId: string }> {
   const adminRow = (
     await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
   )[0];
-  await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
+  ADMIN_TOKEN = await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
   return { eventId };
 }
 

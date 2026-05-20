@@ -2,6 +2,7 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { first, all } from "../../../../../_lib/db/queries";
 import type { DatabaseLike } from "../../../../../_lib/types";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 interface AuditLogRow {
   id: string;
@@ -41,16 +42,18 @@ async function fetchAuditLog(db: DatabaseLike, proposalId: string): Promise<Audi
   );
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
-  const proposal = await first<{ id: string }>(c.env.DB, "SELECT id FROM session_proposals WHERE id = ?", [proposalId]);
+  const proposal = await first<{ id: string }>(requestDb(c), "SELECT id FROM session_proposals WHERE id = ?", [
+    proposalId,
+  ]);
   if (!proposal) {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const entries = await fetchAuditLog(c.env.DB, proposalId);
+  const entries = await fetchAuditLog(requestDb(c), proposalId);
 
   const parsed = entries.map((e) => ({
     ...e,

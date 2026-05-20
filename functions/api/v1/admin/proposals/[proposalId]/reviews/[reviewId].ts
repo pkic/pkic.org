@@ -6,26 +6,29 @@ import { first } from "../../../../../../_lib/db/queries";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { buildProposalReviewAuditDetails, updateReviewById } from "../../../../../../_lib/services/proposals";
 import { reviewPatchSchema } from "../../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 
-export async function onRequestPatch(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+export async function onRequestPatch(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
   const reviewId = c.req.param("reviewId");
 
-  const proposal = await first<{ event_id: string }>(c.env.DB, "SELECT event_id FROM session_proposals WHERE id = ?", [
-    proposalId,
-  ]);
+  const proposal = await first<{ event_id: string }>(
+    requestDb(c),
+    "SELECT event_id FROM session_proposals WHERE id = ?",
+    [proposalId],
+  );
   if (!proposal) {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(c.env.DB, proposal.event_id, admin);
+  const access = await getProposalAccessForEvent(requestDb(c), proposal.event_id, admin);
   if (!access.canReview) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to review proposals" } }, 403);
   }
 
   const reviewBelongsToProposal = await first<{ id: string }>(
-    c.env.DB,
+    requestDb(c),
     "SELECT id FROM proposal_reviews WHERE id = ? AND proposal_id = ?",
     [reviewId, proposalId],
   );
@@ -41,14 +44,14 @@ export async function onRequestPatch(c: any): Promise<Response> {
     reviewer_comment: string | null;
     applicant_note: string | null;
   }>(
-    c.env.DB,
+    requestDb(c),
     `SELECT recommendation, score, reviewer_comment, applicant_note
      FROM proposal_reviews
      WHERE id = ?`,
     [reviewId],
   );
 
-  const review = await updateReviewById(c.env.DB, reviewId, body);
+  const review = await updateReviewById(requestDb(c), reviewId, body);
 
   if (existing) {
     const changes = buildProposalReviewAuditDetails(
@@ -68,7 +71,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
 
     if (Object.keys(changes).length > 0) {
       await writeAuditLog(
-        c.env.DB,
+        requestDb(c),
         "admin",
         admin.id,
         "proposal_review_upserted",
@@ -82,7 +85,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   return json({ success: true, review });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "PATCH") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

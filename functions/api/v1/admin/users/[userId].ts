@@ -15,6 +15,7 @@ import { first, run } from "../../../../_lib/db/queries";
 import { nowIso } from "../../../../_lib/utils/time";
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import { adminUserUpdateSchema } from "../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 
 interface UserRow {
   id: string;
@@ -24,8 +25,8 @@ interface UserRow {
   pii_redacted_at: string | null;
 }
 
-export async function onRequestPatch(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPatch(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminUserUpdateSchema);
   const userId = c.req.param("userId");
 
@@ -40,7 +41,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   }
 
   const user = await first<UserRow>(
-    c.env.DB,
+    requestDb(c),
     "SELECT id, email, role, active, pii_redacted_at FROM users WHERE id = ?",
     [userId],
   );
@@ -52,7 +53,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   const newRole = body.role ?? user.role;
   const newActive = body.active ?? Boolean(user.active);
 
-  await run(c.env.DB, "UPDATE users SET role = ?, active = ?, updated_at = ? WHERE id = ?", [
+  await run(requestDb(c), "UPDATE users SET role = ?, active = ?, updated_at = ? WHERE id = ?", [
     newRole,
     newActive ? 1 : 0,
     nowIso(),
@@ -68,7 +69,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   }
 
   if (Object.keys(changes).length > 0) {
-    await writeAuditLog(c.env.DB, "admin", admin.id, "user_updated", "user", user.id, changes);
+    await writeAuditLog(requestDb(c), "admin", admin.id, "user_updated", "user", user.id, changes);
   }
 
   return json({
@@ -77,7 +78,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "PATCH") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

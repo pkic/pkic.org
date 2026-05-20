@@ -8,6 +8,7 @@
 import { json } from "../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../_lib/auth/admin";
 import { all } from "../../../../_lib/db/queries";
+import { requestDb, type AdminContext } from "../../../../_lib/db/context";
 
 interface PromoterRow {
   code: string;
@@ -49,9 +50,9 @@ interface DominantCurrency {
   currency: string;
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const db = c.env.DB;
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const db = requestDb(c);
 
   // Three simple queries instead of one complex CTE with window functions,
   // which causes CPU-budget issues in the D1 Workers binding.
@@ -128,7 +129,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   return json({ promoters });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

@@ -12,6 +12,7 @@ import { nowIso } from "../../../../../_lib/utils/time";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
 import { adminUserUpdateSchema } from "../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 interface UserRow {
   id: string;
@@ -41,12 +42,12 @@ interface UserDetailRow {
 
 // ── GET ─────────────────────────────────────────────────────────────────────
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const userId = c.req.param("userId");
 
   const user = await first<UserDetailRow>(
-    c.env.DB,
+    requestDb(c),
     `SELECT id, email, first_name, last_name, preferred_name,
             organization_name, job_title, biography, role, active,
             headshot_r2_key, headshot_updated_at,
@@ -77,8 +78,8 @@ export async function onRequestGet(c: any): Promise<Response> {
 
 // ── PATCH ───────────────────────────────────────────────────────────────────
 
-export async function onRequestPatch(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPatch(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminUserUpdateSchema);
   const userId = c.req.param("userId");
 
@@ -93,7 +94,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   }
 
   const user = await first<UserRow>(
-    c.env.DB,
+    requestDb(c),
     "SELECT id, email, role, active, pii_redacted_at FROM users WHERE id = ?",
     [userId],
   );
@@ -111,7 +112,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
     const normalized = normalizeEmail(body.email);
     if (normalized !== normalizeEmail(user.email)) {
       const existing = await first<{ id: string }>(
-        c.env.DB,
+        requestDb(c),
         "SELECT id FROM users WHERE normalized_email = ? AND id != ?",
         [normalized, user.id],
       );
@@ -146,7 +147,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   let currentDetail: UserDetailRow | null = null;
   if (hasPiiUpdates) {
     currentDetail = await first<UserDetailRow>(
-      c.env.DB,
+      requestDb(c),
       `SELECT id, email, first_name, last_name, preferred_name, organization_name, job_title, biography,
               role, active, headshot_r2_key, headshot_updated_at, created_at, updated_at, pii_redacted_at
        FROM users WHERE id = ?`,
@@ -157,11 +158,11 @@ export async function onRequestPatch(c: any): Promise<Response> {
   if (hasPiiUpdates) {
     const setClauses = safeKeys.map((col) => `${col} = ?`).join(", ");
     const values = [...safeKeys.map((col) => piiUpdates[col]), nowIso(), user.id];
-    await run(c.env.DB, `UPDATE users SET ${setClauses}, updated_at = ? WHERE id = ?`, values);
+    await run(requestDb(c), `UPDATE users SET ${setClauses}, updated_at = ? WHERE id = ?`, values);
   }
 
   await run(
-    c.env.DB,
+    requestDb(c),
     "UPDATE users SET email = ?, normalized_email = ?, role = ?, active = ?, updated_at = ? WHERE id = ?",
     [newEmail, normalizeEmail(newEmail), newRole, newActive ? 1 : 0, nowIso(), user.id],
   );
@@ -187,7 +188,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   }
 
   if (Object.keys(changes).length > 0) {
-    await writeAuditLog(c.env.DB, "admin", admin.id, "user_updated", "user", user.id, changes);
+    await writeAuditLog(requestDb(c), "admin", admin.id, "user_updated", "user", user.id, changes);
   }
 
   return json({
@@ -196,7 +197,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "PATCH") return onRequestPatch(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

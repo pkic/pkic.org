@@ -2,6 +2,7 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { all } from "../../../../../_lib/db/queries";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 /**
  * GET /api/v1/admin/events/:eventSlug/promoters
@@ -12,10 +13,10 @@ import { all } from "../../../../../_lib/db/queries";
  *
  * Sorted by overall effectiveness: conversions desc, then acceptances desc, then invites sent desc.
  */
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
   // ── 1. Per-inviter invite stats ──────────────────────────────────────────
   const inviterStats = await all<{
@@ -32,7 +33,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     invites_expired: number;
     last_invite_at: string | null;
   }>(
-    c.env.DB,
+    requestDb(c),
     `SELECT
        i.inviter_user_id,
        u.email             AS inviter_email,
@@ -75,7 +76,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     total_clicks: number;
     total_conversions: number;
   }>(
-    c.env.DB,
+    requestDb(c),
     `SELECT
        COALESCE(rc.created_by_user_id, reg.user_id) AS effective_user_id,
        COALESCE(u1.email,      u2.email)      AS referrer_email,
@@ -118,7 +119,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     conversions: number;
     created_at: string;
   }>(
-    c.env.DB,
+    requestDb(c),
     `SELECT
        rc.code,
        rc.owner_type,
@@ -143,7 +144,7 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   // ── 4. Recent referral click timeline (last 30 days, by day) ─────────────
   const clickTimeline = await all<{ date: string; clicks: number }>(
-    c.env.DB,
+    requestDb(c),
     `SELECT
        date(created_at) AS date,
        COUNT(*)         AS clicks
@@ -256,7 +257,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

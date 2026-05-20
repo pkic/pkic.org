@@ -7,8 +7,9 @@ import { AdminUsersUserIdHeadshotGet } from "./headshot";
 import { AdminUsersUserIdHeadshotDelete } from "./headshot";
 import { onRequestGet as AdminUsersUserIdGet_l } from "./index";
 import { onRequestPatch as AdminUsersUserIdPatch_l } from "./index";
+import type { RequestDbContext } from "../../../../../_lib/db/context";
 
-const app = new Hono();
+const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.post("/anonymize", AdminUsersUserIdAnonymizePost_l);

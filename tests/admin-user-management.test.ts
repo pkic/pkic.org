@@ -7,14 +7,14 @@ import { resetDb } from "./helpers/reset-db";
 import { onRequestPatch as patchUser } from "../functions/api/v1/admin/users/[userId]/index";
 import { onRequestPost as anonymizeUser } from "../functions/api/v1/admin/users/[userId]/anonymize";
 
-const ADMIN_TOKEN = "admin-session-token";
+let adminToken: string;
 
 async function setup() {
   await seedEventAndAdmin(env.DB);
   const adminId = (
     await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
   )[0].id;
-  await createAdminSession(env.DB, adminId, ADMIN_TOKEN);
+  adminToken = await createAdminSession(env.DB, adminId, "admin-session-token");
   return { adminId, env };
 }
 
@@ -23,7 +23,7 @@ function adminRequest(path: string, method: string, body?: unknown): Request {
     method,
     headers: {
       "content-type": "application/json",
-      authorization: `Bearer ${ADMIN_TOKEN}`,
+      authorization: `Bearer ${adminToken}`,
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
@@ -34,9 +34,11 @@ async function seedUser(_db: DatabaseLike, email: string): Promise<string> {
   await env.DB.prepare(
     `
     INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
-    VALUES ('${userId}', '${email}', '${email}', 'Test', 'User', 'user', 1, datetime('now'), datetime('now'));
+    VALUES (?, ?, ?, 'Test', 'User', 'user', 1, datetime('now'), datetime('now'));
   `,
-  ).run();
+  )
+    .bind(userId, email, email)
+    .run();
   return userId;
 }
 

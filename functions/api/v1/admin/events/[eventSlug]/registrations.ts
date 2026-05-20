@@ -2,6 +2,7 @@ import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { all, first } from "../../../../../_lib/db/queries";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 interface RegistrationRow {
   id: string;
@@ -24,9 +25,9 @@ interface WaitlistSummaryRow {
   count: number;
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
   const url = new URL(c.req.raw.url);
   const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10) || 50));
@@ -74,7 +75,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   const whereClause = conditions.join(" AND ");
 
   const registrationRows = await all<RegistrationRow>(
-    c.env.DB,
+    requestDb(c),
     `SELECT r.id, r.user_id, r.status, r.attendance_type, r.source_type, r.created_at, r.updated_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
@@ -119,7 +120,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   const waitlistSummaries =
     registrationIds.length > 0
       ? await all<WaitlistSummaryRow>(
-          c.env.DB,
+          requestDb(c),
           `SELECT
          w.registration_id,
          GROUP_CONCAT(CASE
@@ -150,20 +151,20 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   const [totalRow, statRows, bouncedCountRow] = await Promise.all([
     first<{ total: number }>(
-      c.env.DB,
+      requestDb(c),
       `SELECT COUNT(*) AS total FROM registrations r LEFT JOIN users u ON u.id = r.user_id WHERE ${whereClause}`,
       bindings,
     ),
     // Aggregate stats always cover all registrations for the event (unfiltered)
     all<{ attendance_type: string; status: string; count: number }>(
-      c.env.DB,
+      requestDb(c),
       `SELECT attendance_type, status, COUNT(*) AS count
        FROM registrations WHERE event_id = ?
        GROUP BY attendance_type, status`,
       [event.id],
     ),
     first<{ bounced_count: number }>(
-      c.env.DB,
+      requestDb(c),
       `SELECT COUNT(DISTINCT r.id) AS bounced_count
        FROM registrations r
        WHERE r.event_id = ? AND EXISTS (
@@ -199,7 +200,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

@@ -13,14 +13,15 @@ import {
   verifyAttendeeInvitePreviewToken,
 } from "../../../../../../../_lib/services/admin-invite-preview";
 import { adminBulkAttendeeInvitesSchema } from "../../../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 // Outcome buckets returned to the admin UI.
 type BulkItemResult = { email: string; inviteToken?: string };
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminBulkAttendeeInvitesSchema);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const secret = requireInternalSecret(c.env);
 
@@ -56,7 +57,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   // Bulk-create invites: 3 D1 round-trips total (pre-check batch + token hashing + insert batch)
   // instead of N×4-6 sequential round-trips for N invites.
-  const outcomes = await bulkCreateAttendeesAdmin(c.env.DB, {
+  const outcomes = await bulkCreateAttendeesAdmin(requestDb(c), {
     event,
     invites: body.invites.map((i) => ({
       inviteeEmail: i.email,
@@ -83,7 +84,7 @@ export async function onRequestPost(c: any): Promise<Response> {
         declineUrl: inviteDeclineUrl(appBaseUrl, event, o.token!),
       },
     }));
-  await bulkQueueInviteEmails(c.env.DB, emailRows);
+  await bulkQueueInviteEmails(requestDb(c), emailRows);
 
   const created: BulkItemResult[] = outcomes
     .filter((o) => o.status === "created")
@@ -94,7 +95,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   return json({ success: true, created, endorsed, skipped });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

@@ -2,8 +2,9 @@ import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import { onRequestPost as AdminAuthRequestLinkPost_l } from "./request-link";
 import { onRequestPost as AdminAuthVerifyLinkPost_l } from "./verify-link";
+import type { RequestDbContext } from "../../../../_lib/db/context";
 
-const app = new Hono();
+const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.post("/request-link", AdminAuthRequestLinkPost_l);

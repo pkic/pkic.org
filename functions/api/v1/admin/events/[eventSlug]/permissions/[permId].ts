@@ -8,6 +8,7 @@ import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../_lib/services/events";
 import { first, run } from "../../../../../../_lib/db/queries";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
+import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 
 interface PermRow {
   id: string;
@@ -15,12 +16,12 @@ interface PermRow {
   permission: string;
 }
 
-export async function onRequestDelete(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+export async function onRequestDelete(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
   const perm = await first<PermRow>(
-    c.env.DB,
+    requestDb(c),
     "SELECT id, user_email, permission FROM event_permissions WHERE id = ? AND event_id = ?",
     [c.req.param("permId"), event.id],
   );
@@ -29,9 +30,9 @@ export async function onRequestDelete(c: any): Promise<Response> {
     return json({ error: { code: "NOT_FOUND", message: "Permission grant not found" } }, 404);
   }
 
-  await run(c.env.DB, "DELETE FROM event_permissions WHERE id = ?", [perm.id]);
+  await run(requestDb(c), "DELETE FROM event_permissions WHERE id = ?", [perm.id]);
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "event_permission_revoked", "event", event.id, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "event_permission_revoked", "event", event.id, {
     email: perm.user_email,
     permission: perm.permission,
   });
@@ -39,7 +40,7 @@ export async function onRequestDelete(c: any): Promise<Response> {
   return json({ success: true });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "DELETE") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }
