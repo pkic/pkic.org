@@ -180,6 +180,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
 
   const { where, params } = buildWhereClause(status, messageType, search, dueNow);
+  const aggregateFrom = search ? "FROM email_outbox o LEFT JOIN events e ON e.id = o.event_id" : "FROM email_outbox o";
 
   const [rows, totalRow, statusCounts, messageTypeCounts, templateCounts, dueCounts, dueNextRow] = await Promise.all([
     all<OutboxListRow>(
@@ -222,16 +223,14 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     first<{ total: number }>(
       requestDb(c),
       `SELECT COUNT(*) AS total
-       FROM email_outbox o
-       LEFT JOIN events e ON e.id = o.event_id
+       ${aggregateFrom}
        ${where}`,
       params,
     ),
     all<CountRow>(
       requestDb(c),
       `SELECT o.status, COUNT(*) AS count
-       FROM email_outbox o
-       LEFT JOIN events e ON e.id = o.event_id
+       ${aggregateFrom}
        ${where}
        GROUP BY o.status`,
       params,
@@ -239,8 +238,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     all<MessageTypeCountRow>(
       requestDb(c),
       `SELECT o.message_type, COUNT(*) AS count
-       FROM email_outbox o
-       LEFT JOIN events e ON e.id = o.event_id
+       ${aggregateFrom}
        ${where}
        GROUP BY o.message_type`,
       params,
@@ -248,8 +246,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     all<TemplateCountRow>(
       requestDb(c),
       `SELECT o.template_key, COUNT(*) AS count
-       FROM email_outbox o
-       LEFT JOIN events e ON e.id = o.event_id
+       ${aggregateFrom}
        ${where}
        GROUP BY o.template_key
        ORDER BY count DESC, o.template_key ASC

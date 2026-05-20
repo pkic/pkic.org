@@ -38,7 +38,20 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   const events = await all<EventWithStats>(
     requestDb(c),
-    `SELECT
+    `WITH registration_counts AS (
+       SELECT event_id,
+              COUNT(*) AS total_registrations,
+              SUM(CASE WHEN status = 'registered' THEN 1 ELSE 0 END) AS confirmed_registrations
+       FROM registrations
+       GROUP BY event_id
+     ),
+     invite_counts AS (
+       SELECT event_id, COUNT(*) AS pending_invites
+       FROM invites
+       WHERE status = 'sent' AND invite_type = 'attendee'
+       GROUP BY event_id
+     )
+     SELECT
        e.id,
        e.slug,
        e.name,
@@ -52,10 +65,12 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
        e.settings_json,
        e.created_at,
        e.updated_at,
-       (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id)                                                                 AS total_registrations,
-       (SELECT COUNT(*) FROM registrations r WHERE r.event_id = e.id AND r.status = 'registered')                                     AS confirmed_registrations,
-       (SELECT COUNT(*) FROM invites i WHERE i.event_id = e.id AND i.status = 'sent' AND i.invite_type = 'attendee')                  AS pending_invites
+       COALESCE(registration_counts.total_registrations, 0) AS total_registrations,
+       COALESCE(registration_counts.confirmed_registrations, 0) AS confirmed_registrations,
+       COALESCE(invite_counts.pending_invites, 0) AS pending_invites
      FROM events e
+     LEFT JOIN registration_counts ON registration_counts.event_id = e.id
+     LEFT JOIN invite_counts ON invite_counts.event_id = e.id
      ORDER BY COALESCE(e.starts_at, '9999') DESC`,
     [],
   );
