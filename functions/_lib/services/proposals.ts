@@ -624,6 +624,7 @@ export async function updateProposalByManageToken(
            title = COALESCE(?, title),
            abstract = COALESCE(?, abstract),
            details_json = COALESCE(?, details_json),
+           status = CASE WHEN status = 'needs-work' THEN 'submitted' ELSE status END,
            updated_at = ?
        WHERE id = ?`,
       [
