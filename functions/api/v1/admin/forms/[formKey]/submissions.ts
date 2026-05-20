@@ -9,6 +9,7 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { all, first } from "../../../../../_lib/db/queries";
 import { parseJsonSafe } from "../../../../../_lib/utils/json";
 import { AppError } from "../../../../../_lib/errors";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 interface FormRow {
   id: string;
@@ -35,12 +36,12 @@ interface AnswerRow {
   data_json: string | null;
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
   const formKey = c.req.param("formKey");
 
-  const form = await first<FormRow>(c.env.DB, "SELECT id, key, title, purpose FROM forms WHERE key = ?", [formKey]);
+  const form = await first<FormRow>(requestDb(c), "SELECT id, key, title, purpose FROM forms WHERE key = ?", [formKey]);
   if (!form) throw new AppError(404, "FORM_NOT_FOUND", `Form '${formKey}' not found`);
 
   const url = new URL(c.req.raw.url);
@@ -54,7 +55,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   params.push(limit, offset);
 
   const submissions = await all<SubmissionRow>(
-    c.env.DB,
+    requestDb(c),
     `SELECT
        fs.id, fs.form_id, fs.submitted_by_user_id, fs.context_type, fs.context_ref,
        fs.status, fs.submitted_at,
@@ -76,7 +77,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   const submissionIds = submissions.map((s) => s.id);
   const placeholders = submissionIds.map(() => "?").join(",");
   const answers = await all<AnswerRow>(
-    c.env.DB,
+    requestDb(c),
     `SELECT submission_id, field_key, data_json
      FROM form_submission_answers
      WHERE submission_id IN (${placeholders})
@@ -119,7 +120,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }

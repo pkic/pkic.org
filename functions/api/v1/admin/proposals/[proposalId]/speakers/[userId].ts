@@ -13,26 +13,29 @@ import { updateSpeakerProfile } from "../../../../../../_lib/services/proposals-
 import { first } from "../../../../../../_lib/db/queries";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { adminSpeakerBioPatchSchema } from "../../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 
-export async function onRequestPatch(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+export async function onRequestPatch(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
   const userId = c.req.param("userId");
 
-  const proposal = await first<{ event_id: string }>(c.env.DB, "SELECT event_id FROM session_proposals WHERE id = ?", [
-    proposalId,
-  ]);
+  const proposal = await first<{ event_id: string }>(
+    requestDb(c),
+    "SELECT event_id FROM session_proposals WHERE id = ?",
+    [proposalId],
+  );
   if (!proposal) {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(c.env.DB, proposal.event_id, admin);
+  const access = await getProposalAccessForEvent(requestDb(c), proposal.event_id, admin);
   if (!access.canReview) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to edit speaker profiles" } }, 403);
   }
 
   const speaker = await first<{ user_id: string }>(
-    c.env.DB,
+    requestDb(c),
     "SELECT user_id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
     [proposalId, userId],
   );
@@ -41,9 +44,9 @@ export async function onRequestPatch(c: any): Promise<Response> {
   }
 
   const body = await parseJsonBody(c.req, adminSpeakerBioPatchSchema);
-  await updateSpeakerProfile(c.env.DB, userId, { biography: body.biography ?? undefined });
+  await updateSpeakerProfile(requestDb(c), userId, { biography: body.biography ?? undefined });
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "speaker_bio_updated", "proposal", proposalId, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "speaker_bio_updated", "proposal", proposalId, {
     speakerUserId: userId,
     adminEmail: admin.email,
   });

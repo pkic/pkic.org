@@ -10,13 +10,14 @@ import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../_lib
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
 import { buildProposalDecisionEmailPlan } from "./decision-emails";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
   const accessCheckProposal = await first<{ event_id: string }>(
-    c.env.DB,
+    requestDb(c),
     "SELECT event_id FROM session_proposals WHERE id = ?",
     [proposalId],
   );
@@ -24,7 +25,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(c.env.DB, accessCheckProposal.event_id, admin);
+  const access = await getProposalAccessForEvent(requestDb(c), accessCheckProposal.event_id, admin);
   if (!access.canFinalize) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to finalize proposals" } }, 403);
   }
@@ -32,7 +33,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, finalizeProposalSchema);
   const config = getConfig(c.env, c.req.raw);
   const previousDecision = await first<{ final_status: string | null; decision_note: string | null }>(
-    c.env.DB,
+    requestDb(c),
     `SELECT final_status, decision_note
      FROM proposal_decisions
      WHERE proposal_id = ?
@@ -43,7 +44,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const minReviewsRequired = config.minProposalReviews;
 
-  const finalized = await finalizeProposalDecision(c.env.DB, {
+  const finalized = await finalizeProposalDecision(requestDb(c), {
     proposalId,
     decidedByUserId: admin.id,
     finalStatus: body.finalStatus,
@@ -54,7 +55,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   // Store the presentation deadline on the proposal when accepting.
   if (body.finalStatus === "accepted" && body.presentationDeadline) {
     await run(
-      c.env.DB,
+      requestDb(c),
       "UPDATE session_proposals SET presentation_deadline = ?, updated_at = datetime('now') WHERE id = ?",
       [body.presentationDeadline, proposalId],
     );
@@ -62,7 +63,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const plan = await buildProposalDecisionEmailPlan(
-    c.env.DB,
+    requestDb(c),
     {
       proposalId,
       finalStatus: body.finalStatus,
@@ -79,7 +80,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   );
 
   for (const message of plan.messages) {
-    await queueEmail(c.env.DB, {
+    await queueEmail(requestDb(c), {
       eventId: plan.proposal.event_id,
       templateKey: message.templateKey,
       recipientEmail: message.recipientEmail,
@@ -89,7 +90,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       data: message.data,
     });
 
-    await writeAuditLog(c.env.DB, "admin", admin.id, "proposal_decision_email_queued", "proposal", proposalId, {
+    await writeAuditLog(requestDb(c), "admin", admin.id, "proposal_decision_email_queued", "proposal", proposalId, {
       templateKey: { from: null, to: message.templateKey },
       recipientEmail: { from: null, to: message.recipientEmail },
       recipientUserId: { from: null, to: message.recipientUserId },
@@ -98,7 +99,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   for (const userId of plan.presentationReminderUserIds) {
     await run(
-      c.env.DB,
+      requestDb(c),
       `UPDATE proposal_speakers
        SET presentation_last_communication_at = ?,
            presentation_reminders_paused_until = NULL
@@ -107,7 +108,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     );
   }
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "proposal_decision_recorded", "proposal", proposalId, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "proposal_decision_recorded", "proposal", proposalId, {
     adminEmail: { from: null, to: admin.email },
     finalStatus: { from: previousDecision?.final_status ?? null, to: body.finalStatus },
     decisionNote: { from: previousDecision?.decision_note ?? null, to: body.decisionNote ?? null },
@@ -118,7 +119,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   return json({ success: true, ...finalized, minReviewsRequired });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

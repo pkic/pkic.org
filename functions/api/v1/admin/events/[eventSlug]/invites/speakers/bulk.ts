@@ -7,16 +7,17 @@ import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { bulkQueueInviteEmails } from "../../../../../../../_lib/email/outbox";
 import { proposalPageUrl, inviteDeclineUrl } from "../../../../../../../_lib/services/frontend-links";
 import { adminBulkSpeakerInvitesSchema } from "../../../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminBulkSpeakerInvitesSchema);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
-  const outcomes = await bulkCreateSpeakersAdmin(c.env.DB, {
+  const outcomes = await bulkCreateSpeakersAdmin(requestDb(c), {
     event,
-    invites: body.invites.map((item: any) => ({
+    invites: body.invites.map((item) => ({
       inviteeEmail: item.email,
       inviteeFirstName: item.firstName,
       inviteeLastName: item.lastName,
@@ -70,13 +71,13 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   if (emailRows.length > 0) {
-    await bulkQueueInviteEmails(c.env.DB, emailRows);
+    await bulkQueueInviteEmails(requestDb(c), emailRows);
   }
 
   return json({ success: true, created, endorsed, skipped });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

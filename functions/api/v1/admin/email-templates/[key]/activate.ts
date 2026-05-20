@@ -4,12 +4,13 @@ import { handleError, json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { activateTemplateVersion } from "../../../../../_lib/email/templates";
 import { adminEmailTemplateActivateSchema } from "../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEmailTemplateActivateSchema);
 
-  await activateTemplateVersion(c.env.DB, {
+  await activateTemplateVersion(requestDb(c), {
     templateKey: c.req.param("key"),
     version: body.version,
   });
@@ -20,7 +21,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 export class AdminEmailTemplatesKeyActivatePost extends OpenAPIRoute {
   schema = {};
 
-  async handle(c: any) {
+  async handle(c: AdminContext) {
     try {
       return await onRequestPost(c);
     } catch (error) {

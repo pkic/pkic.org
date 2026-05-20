@@ -20,6 +20,7 @@ import { resetDb } from "./helpers/reset-db";
 import { SELF, env } from "cloudflare:test";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
+import { signAdminSessionToken } from "../functions/_lib/auth/admin";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { nowIso } from "../functions/_lib/utils/time";
 import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
@@ -81,17 +82,24 @@ async function insertSession(
   userId: string,
   rawToken: string,
   opts: { expiresAt?: string; revokedAt?: string } = {},
-): Promise<void> {
+): Promise<string> {
+  const sessionId = crypto.randomUUID();
   const tokenHash = await sha256Hex(rawToken);
   const expiresAt = opts.expiresAt ?? new Date(Date.now() + 8 * 3600 * 1000).toISOString();
   const revokedAt = opts.revokedAt ?? null;
   await env.DB.prepare(
     `
     INSERT INTO sessions (id, user_id, token_hash, expires_at, revoked_at, created_at)
-    VALUES ('${crypto.randomUUID()}', '${userId}', '${tokenHash}',
+    VALUES ('${sessionId}', '${userId}', '${tokenHash}',
             '${expiresAt}', ${revokedAt ? `'${revokedAt}'` : "NULL"}, '${nowIso()}');
   `,
   ).run();
+
+  return signAdminSessionToken(env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret", {
+    admin: { id: userId, email: "admin@example.test", role: "admin" },
+    sessionId,
+    expiresAt,
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -383,15 +391,15 @@ describe("session-token validation", () => {
 
   it("rejects an expired session → AUTH_EXPIRED", async () => {
     const expiredAt = new Date(Date.now() - 1000).toISOString(); // 1 s in the past
-    await insertSession(env.DB, adminId, "expired-token", { expiresAt: expiredAt });
-    const response = await callUsers("expired-token");
+    const token = await insertSession(env.DB, adminId, "expired-token", { expiresAt: expiredAt });
+    const response = await callUsers(token);
     expect(response.status).toBe(401);
     expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("AUTH_EXPIRED");
   });
 
   it("rejects a revoked session → AUTH_REVOKED", async () => {
-    await insertSession(env.DB, adminId, "revoked-token", { revokedAt: nowIso() });
-    const response = await callUsers("revoked-token");
+    const token = await insertSession(env.DB, adminId, "revoked-token", { revokedAt: nowIso() });
+    const response = await callUsers(token);
     expect(response.status).toBe(401);
     expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("AUTH_REVOKED");
   });
@@ -405,9 +413,9 @@ describe("session-token validation", () => {
               'user', 1, datetime('now'), datetime('now'));
     `,
     ).run();
-    await insertSession(env.DB, regularUserId, "user-token");
+    const token = await insertSession(env.DB, regularUserId, "user-token");
     // A regular user's session must not grant admin access
-    const response = await callUsers("user-token");
+    const response = await callUsers(token);
     expect(response.status).toBe(401);
     expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("AUTH_INVALID");
   });
@@ -421,8 +429,8 @@ describe("session-token validation", () => {
               'admin', 0, datetime('now'), datetime('now'));
     `,
     ).run();
-    await insertSession(env.DB, inactiveAdminId, "inactive-admin-token");
-    const response = await callUsers("inactive-admin-token");
+    const token = await insertSession(env.DB, inactiveAdminId, "inactive-admin-token");
+    const response = await callUsers(token);
     expect(response.status).toBe(401);
     expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("AUTH_INVALID");
   });
@@ -433,8 +441,8 @@ describe("session-token validation", () => {
   });
 
   it("accepts a valid active admin session token", async () => {
-    await createAdminSession(env.DB, adminId, "valid-admin-token");
-    const response = await callUsers("valid-admin-token");
+    const token = await createAdminSession(env.DB, adminId, "valid-admin-token");
+    const response = await callUsers(token);
     expect(response.status).toBe(200);
   });
 });

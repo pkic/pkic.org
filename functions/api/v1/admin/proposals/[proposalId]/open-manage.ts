@@ -12,9 +12,10 @@ import { json } from "../../../../../_lib/http";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { proposalManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { refreshProposalManageToken } from "../../../../../_lib/services/proposals";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
   const proposal = await first<{
@@ -25,7 +26,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     starts_at: string | null;
     settings_json: string;
   }>(
-    c.env.DB,
+    requestDb(c),
     `SELECT
        sp.id,
        sp.event_id,
@@ -43,16 +44,16 @@ export async function onRequestPost(c: any): Promise<Response> {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(c.env.DB, proposal.event_id, admin);
+  const access = await getProposalAccessForEvent(requestDb(c), proposal.event_id, admin);
   if (!access.canReview) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to manage proposals" } }, 403);
   }
 
-  const token = await refreshProposalManageToken(c.env.DB, proposalId);
+  const token = await refreshProposalManageToken(requestDb(c), proposalId);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const manageUrl = proposalManagePageUrl(appBaseUrl, proposal, token);
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "admin_opened_proposal_manage_page", "proposal", proposalId, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "admin_opened_proposal_manage_page", "proposal", proposalId, {
     adminEmail: admin.email,
     eventSlug: proposal.slug,
   });

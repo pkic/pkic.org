@@ -1,4 +1,5 @@
 import type { DatabaseLike, Env, PagesContext } from "../../functions/_lib/types";
+import type { AdminContext } from "../../functions/_lib/db/context";
 import type { RateLimitBinding } from "../../functions/_lib/rate-limit";
 
 /**
@@ -20,11 +21,17 @@ export function createContext<P extends Record<string, string>>(
   env: Env,
   request: Request,
   params: P,
-): PagesContext<P> {
+): PagesContext<P> & AdminContext<P> {
   const data: Record<string, unknown> = {};
   const waitUntil = (promise: Promise<unknown>) => {
     void promise.catch(() => undefined);
   };
+
+  function param(name: string): string;
+  function param(): P;
+  function param(name?: string): string | P {
+    return name ? params[name] : params;
+  }
 
   return {
     env,
@@ -33,9 +40,7 @@ export function createContext<P extends Record<string, string>>(
     data,
     req: {
       raw: request,
-      param(name?: string) {
-        return name ? params[name] : params;
-      },
+      param,
     },
     executionCtx: {
       waitUntil,

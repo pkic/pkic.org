@@ -11,8 +11,9 @@ import { onRequestPost as AdminProposalsProposalIdReviewsPost_l } from "./review
 import { onRequestGet as AdminProposalsProposalIdSpeakersGet_l } from "./speakers";
 import reviews_Router from "./reviews/router";
 import speakers_Router from "./speakers/router";
+import type { RequestDbContext } from "../../../../../_lib/db/context";
 
-const app = new Hono();
+const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.get("/", AdminProposalsProposalIdGet_l);

@@ -54,7 +54,7 @@ describe("proposal review and finalize", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id } = await seedProposal(env.DB, eventId);
 
-    await createAdminSession(env.DB, admin1Id, "token-admin-1");
+    const admin1Token = await createAdminSession(env.DB, admin1Id, "token-admin-1");
 
     const createResponse = await upsertReview(
       createContext(
@@ -63,7 +63,7 @@ describe("proposal review and finalize", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            authorization: "Bearer token-admin-1",
+            authorization: `Bearer ${admin1Token}`,
           },
           body: JSON.stringify({ recommendation: "accept", score: 9, reviewerComment: "Good" }),
         }),
@@ -91,7 +91,7 @@ describe("proposal review and finalize", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            authorization: "Bearer token-admin-1",
+            authorization: `Bearer ${admin1Token}`,
           },
           body: JSON.stringify({ recommendation: "accept", score: 9, reviewerComment: "Good" }),
         }),
@@ -120,7 +120,7 @@ describe("proposal review and finalize", () => {
           method: "PATCH",
           headers: {
             "content-type": "application/json",
-            authorization: "Bearer token-admin-1",
+            authorization: `Bearer ${admin1Token}`,
           },
           body: JSON.stringify({ score: 10, reviewerComment: "Excellent", applicantNote: "Ready for acceptance" }),
         }),
@@ -146,8 +146,8 @@ describe("proposal review and finalize", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id, admin2Id } = await seedProposal(env.DB, eventId);
 
-    await createAdminSession(env.DB, admin1Id, "token-admin-1");
-    await createAdminSession(env.DB, admin2Id, "token-admin-2");
+    const admin1Token = await createAdminSession(env.DB, admin1Id, "token-admin-1");
+    const admin2Token = await createAdminSession(env.DB, admin2Id, "token-admin-2");
 
     await upsertReview(
       createContext(
@@ -156,7 +156,7 @@ describe("proposal review and finalize", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            authorization: "Bearer token-admin-1",
+            authorization: `Bearer ${admin1Token}`,
           },
           body: JSON.stringify({ recommendation: "accept", score: 9, reviewerComment: "Good" }),
         }),
@@ -172,7 +172,7 @@ describe("proposal review and finalize", () => {
             method: "POST",
             headers: {
               "content-type": "application/json",
-              authorization: "Bearer token-admin-1",
+              authorization: `Bearer ${admin1Token}`,
             },
             body: JSON.stringify({ finalStatus: "accepted", minReviewsRequired: 2 }),
           }),
@@ -188,7 +188,7 @@ describe("proposal review and finalize", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            authorization: "Bearer token-admin-2",
+            authorization: `Bearer ${admin2Token}`,
           },
           body: JSON.stringify({ recommendation: "accept", score: 8, reviewerComment: "Also good" }),
         }),
@@ -203,7 +203,7 @@ describe("proposal review and finalize", () => {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            authorization: "Bearer token-admin-1",
+            authorization: `Bearer ${admin1Token}`,
           },
           body: JSON.stringify({ finalStatus: "accepted", minReviewsRequired: 2 }),
         }),

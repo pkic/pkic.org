@@ -7,24 +7,25 @@ import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { speakerManagePageUrl } from "../../../../../../../_lib/services/frontend-links";
 import { buildEventEmailVariables } from "../../../../../../../_lib/services/events";
 import { first } from "../../../../../../../_lib/db/queries";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
   const userId = c.req.param("userId");
 
   const proposal = await first<{ id: string; title: string; event_id: string }>(
-    c.env.DB,
+    requestDb(c),
     "SELECT * FROM session_proposals WHERE id = ?",
     [proposalId],
   );
   if (!proposal) return json({ error: { message: "Proposal not found" } }, 404);
 
-  const event = await first<any>(c.env.DB, "SELECT * FROM events WHERE id = ?", [proposal.event_id]);
+  const event = await first<any>(requestDb(c), "SELECT * FROM events WHERE id = ?", [proposal.event_id]);
   if (!event) return json({ error: { message: "Event not found" } }, 404);
 
   const speaker = await first<any>(
-    c.env.DB,
+    requestDb(c),
     `SELECT
        ps.id AS proposal_speaker_id,
        u.*
@@ -37,10 +38,10 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
-  const freshToken = await refreshSpeakerManageToken(c.env.DB, proposalId, userId);
+  const freshToken = await refreshSpeakerManageToken(requestDb(c), proposalId, userId);
   const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, freshToken);
 
-  await queueEmail(c.env.DB, {
+  await queueEmail(requestDb(c), {
     eventId: event.id,
     templateKey: "speaker_profile_request",
     recipientEmail: speaker.email,
@@ -58,7 +59,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
 
   await writeAuditLog(
-    c.env.DB,
+    requestDb(c),
     "admin",
     admin.id,
     "speaker_profile_request_resent",

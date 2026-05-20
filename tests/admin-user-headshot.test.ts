@@ -6,7 +6,7 @@ import { createAdminSession } from "./helpers/auth";
 import { onRequest as adminUserHeadshotRequest } from "../functions/api/v1/admin/users/[userId]/headshot";
 import app from "../functions/router";
 
-const ADMIN_TOKEN = "admin-session-token";
+let ADMIN_TOKEN = "admin-session-token";
 
 interface StoredObject {
   body: ArrayBuffer;
@@ -62,7 +62,7 @@ async function setup(): Promise<{ adminId: string; targetUserId: string }> {
   const adminId = (
     await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
   )[0].id;
-  await createAdminSession(env.DB, adminId, ADMIN_TOKEN);
+  ADMIN_TOKEN = await createAdminSession(env.DB, adminId, ADMIN_TOKEN);
 
   const targetUserId = crypto.randomUUID();
   await env.DB.prepare(

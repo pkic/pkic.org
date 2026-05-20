@@ -30,6 +30,7 @@ import { uuid } from "../../../../../../../_lib/utils/ids";
 import type { DatabaseLike } from "../../../../../../../_lib/types";
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { z } from "zod";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -100,10 +101,10 @@ async function fetchData(db: DatabaseLike, eventId: string, registrationId: stri
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const data = await fetchData(c.env.DB, event.id, c.req.param("registrationId"));
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const data = await fetchData(requestDb(c), event.id, c.req.param("registrationId"));
 
   if (!data) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
@@ -132,18 +133,18 @@ export async function onRequestGet(c: any): Promise<Response> {
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────
 
-export async function onRequestPatch(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+export async function onRequestPatch(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const body = await parseJsonBody(c.req, patchSchema);
-  const data = await fetchData(c.env.DB, event.id, c.req.param("registrationId"));
+  const data = await fetchData(requestDb(c), event.id, c.req.param("registrationId"));
 
   if (!data) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
 
   const { registration, participantRows } = data;
-  const db = c.env.DB;
+  const db = requestDb(c);
   const now = nowIso();
 
   // Remove any existing admin-sourced non-attendee participant row
@@ -199,7 +200,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
 
 // ── Catch-all ─────────────────────────────────────────────────────────────────
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "PATCH") return onRequestPatch(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

@@ -6,7 +6,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { DataTable } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
-import { authToken, authEmail } from "../../../state";
+import { authToken, authEmail, saveAuthToken } from "../../../state";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../../../shared/headshot/AdminHeadshotManager";
 import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../hooks/useData";
@@ -252,6 +252,8 @@ function SpeakerCard({
       headers,
       body: file,
     });
+    const nextToken = res.headers.get("x-admin-token");
+    if (nextToken) saveAuthToken(nextToken);
     const data = (await res.json().catch(() => ({}))) as {
       headshotUrl?: string;
       error?: { message?: string };

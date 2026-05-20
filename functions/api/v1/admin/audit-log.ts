@@ -16,6 +16,7 @@ import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { all, first } from "../../../_lib/db/queries";
 import type { DatabaseLike } from "../../../_lib/types";
+import { requestDb, type AdminContext } from "../../../_lib/db/context";
 
 interface AuditLogRow {
   id: string;
@@ -71,8 +72,8 @@ function buildQuery(
   return { where, params };
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
   const url = new URL(c.req.raw.url);
   const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 200);
@@ -83,7 +84,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   const action = (url.searchParams.get("action") ?? "").trim();
   const entityId = (url.searchParams.get("entityId") ?? "").trim();
 
-  const db: DatabaseLike = c.env.DB;
+  const db: DatabaseLike = requestDb(c);
   const { where, params } = buildQuery(q, entityType, actorType, action, entityId);
 
   const baseJoin = `FROM audit_log al LEFT JOIN users u ON al.actor_type = 'admin' AND u.id = al.actor_id`;

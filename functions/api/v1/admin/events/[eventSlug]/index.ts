@@ -9,17 +9,18 @@ import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { first } from "../../../../../_lib/db/queries";
 import { parseJsonSafe } from "../../../../../_lib/utils/json";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 interface RetentionPolicyRow {
   user_retention_days: number;
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
   const retention = await first<RetentionPolicyRow>(
-    c.env.DB,
+    requestDb(c),
     "SELECT user_retention_days FROM retention_policies WHERE event_id = ?",
     [event.id],
   );
@@ -48,7 +49,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

@@ -14,10 +14,14 @@ export const isAuthed = computed(() => Boolean(authToken.value));
 export const eventList = signal<EventSummary[]>([]);
 export const currentEvent = signal<EventDetail | null>(null);
 
-export function saveAuth(token: string, email: string | null): void {
+export function saveAuthToken(token: string): void {
   authToken.value = token;
-  authEmail.value = email;
   localStorage.setItem("pkic_at", token);
+}
+
+export function saveAuth(token: string, email: string | null): void {
+  saveAuthToken(token);
+  authEmail.value = email;
   if (email) localStorage.setItem("pkic_ae", email);
 }
 

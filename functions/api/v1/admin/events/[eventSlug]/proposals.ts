@@ -4,11 +4,12 @@ import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-acc
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { all, first } from "../../../../../_lib/db/queries";
 import type { ProposalListRecord } from "../../../../../_lib/services/proposals";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestGet(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const access = await getProposalAccessForEvent(c.env.DB, event.id, admin);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const access = await getProposalAccessForEvent(requestDb(c), event.id, admin);
 
   const url = new URL(c.req.raw.url);
   const status = url.searchParams.get("status")?.trim() ?? "";
@@ -33,7 +34,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   const rows = await all<ProposalListRecord>(
-    c.env.DB,
+    requestDb(c),
     `SELECT
        sp.*,
        u.email      AS proposer_email,
@@ -60,7 +61,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   const hasMore = rows.length > limit;
   const proposals = hasMore ? rows.slice(0, limit) : rows;
   const totalRow = await first<{ total: number }>(
-    c.env.DB,
+    requestDb(c),
     `SELECT COUNT(*) AS total
      FROM session_proposals sp
      JOIN users u ON u.id = sp.proposer_user_id
@@ -82,7 +83,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

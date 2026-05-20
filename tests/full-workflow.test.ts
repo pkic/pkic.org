@@ -162,7 +162,7 @@ describe("full workflow", () => {
       VALUES ('${reviewerUserId}', 'reviewer2@pkic.org', 'reviewer2@pkic.org', 'admin', 1, datetime('now'), datetime('now'));
     `,
       ).run();
-      await createAdminSession(env.DB, reviewerUserId, "reviewer-2-token");
+      const reviewerToken = await createAdminSession(env.DB, reviewerUserId, "reviewer-2-token");
 
       const speakerInviteResponse = await inviteSpeakersBulk(
         createContext(
@@ -242,7 +242,7 @@ describe("full workflow", () => {
             method: "POST",
             headers: {
               "content-type": "application/json",
-              authorization: "Bearer reviewer-2-token",
+              authorization: `Bearer ${reviewerToken}`,
             },
             body: JSON.stringify({
               recommendation: "accept",

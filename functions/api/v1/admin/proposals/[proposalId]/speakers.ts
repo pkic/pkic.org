@@ -15,9 +15,10 @@ import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-acc
 import { listProposalSpeakersWithStatus } from "../../../../../_lib/services/proposals";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { first } from "../../../../../_lib/db/queries";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestGet(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
   const proposal = await first<{
@@ -29,7 +30,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     presentation_r2_key: string | null;
     presentation_uploaded_at: string | null;
   }>(
-    c.env.DB,
+    requestDb(c),
     `SELECT id, title, status, event_id,
             presentation_deadline, presentation_r2_key, presentation_uploaded_at
      FROM session_proposals WHERE id = ?`,
@@ -40,12 +41,12 @@ export async function onRequestGet(c: any): Promise<Response> {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(c.env.DB, proposal.event_id, admin);
+  const access = await getProposalAccessForEvent(requestDb(c), proposal.event_id, admin);
   if (!access.canReview) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to review proposals" } }, 403);
   }
 
-  const speakers = await listProposalSpeakersWithStatus(c.env.DB, proposalId);
+  const speakers = await listProposalSpeakersWithStatus(requestDb(c), proposalId);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   // Summarise participation completeness for the admin overview.
@@ -98,7 +99,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

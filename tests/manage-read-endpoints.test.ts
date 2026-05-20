@@ -122,7 +122,7 @@ describe("manage read endpoints", () => {
   it("enforces admin manage JWT IP and user-agent binding", async () => {
     await seedEventAndAdmin(env.DB);
     const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
-    await createAdminSession(env.DB, admin.id, "admin-manage-token");
+    const adminToken = await createAdminSession(env.DB, admin.id, "admin-manage-token");
 
     await env.DB.prepare(
       `
@@ -146,7 +146,7 @@ describe("manage read endpoints", () => {
         new Request("https://app.test/api/v1/admin/events/pqc-2026/registrations/open-manage", {
           method: "POST",
           headers: {
-            authorization: "Bearer admin-manage-token",
+            authorization: `Bearer ${adminToken}`,
             "cf-connecting-ip": "203.0.113.30",
             "user-agent": "admin-browser",
           },

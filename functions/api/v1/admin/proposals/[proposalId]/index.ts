@@ -12,13 +12,14 @@ import { getConfig } from "../../../../../_lib/config";
 import { getActiveFormByPurpose } from "../../../../../_lib/services/forms";
 import { parseJsonSafe } from "../../../../../_lib/utils/json";
 import type { ProposalListRecord } from "../../../../../_lib/services/proposals";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestGet(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
   const proposal = await first<ProposalListRecord>(
-    c.env.DB,
+    requestDb(c),
     `SELECT
        sp.*,
        u.email      AS proposer_email,
@@ -44,9 +45,9 @@ export async function onRequestGet(c: any): Promise<Response> {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(c.env.DB, proposal.event_id, admin);
+  const access = await getProposalAccessForEvent(requestDb(c), proposal.event_id, admin);
   const config = getConfig(c.env, c.req.raw);
-  const proposalForm = await getActiveFormByPurpose(c.env.DB, proposal.event_id, "proposal_submission");
+  const proposalForm = await getActiveFormByPurpose(requestDb(c), proposal.event_id, "proposal_submission");
 
   return json({
     proposal: {

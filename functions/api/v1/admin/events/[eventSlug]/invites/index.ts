@@ -2,6 +2,7 @@ import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../_lib/services/events";
 import { all, first } from "../../../../../../_lib/db/queries";
+import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 
 /**
  * GET /api/v1/admin/events/:eventSlug/invites
@@ -11,10 +12,10 @@ import { all, first } from "../../../../../../_lib/db/queries";
  *   ?status=sent|accepted|declined|expired|revoked   (omit for all)
  *   ?type=attendee|speaker                            (omit for all)
  */
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
   const url = new URL(c.req.raw.url);
   const statusFilter = url.searchParams.get("status");
@@ -48,7 +49,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   const rows = await all(
-    c.env.DB,
+    requestDb(c),
     `SELECT
        i.id,
        i.invitee_email,
@@ -80,7 +81,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   const hasMore = rows.length > limit;
   const invites = hasMore ? rows.slice(0, limit) : rows;
   const totalRow = await first<{ total: number }>(
-    c.env.DB,
+    requestDb(c),
     `SELECT COUNT(*) AS total
      FROM invites i
      WHERE ${conditions.join(" AND ")}`,
@@ -99,7 +100,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

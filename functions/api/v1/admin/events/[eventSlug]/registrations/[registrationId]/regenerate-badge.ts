@@ -18,18 +18,19 @@ import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { first } from "../../../../../../../_lib/db/queries";
 import { prerenderAndCache } from "../../../../../../../_lib/services/og-badge-prerender";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 const R2_KEY_PREFIX = "og-badges/";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const registrationId = c.req.param("registrationId");
 
   // Look up the referral code owned by this registration
   const row = await first<{ code: string }>(
-    c.env.DB,
+    requestDb(c),
     `SELECT code FROM referral_codes
      WHERE owner_type = 'registration'
        AND owner_id   = ?
@@ -52,7 +53,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   // opens the badge URL immediately on success, so background-queue isn't safe here.
   await prerenderAndCache(row.code, c.env, appBaseUrl);
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "og_badge_regenerated", "registration", registrationId, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "og_badge_regenerated", "registration", registrationId, {
     referralCode: row.code,
   });
 

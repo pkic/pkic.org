@@ -50,7 +50,7 @@ describe("admin VIP admit", () => {
     const adminId = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
     )[0].id;
-    await createAdminSession(env.DB, adminId, "admin-token");
+    const adminToken = await createAdminSession(env.DB, adminId, "admin-token");
 
     const holderSeed = await seedInvite(env.DB, eventId, "holder@example.test");
     const vipSeed = await seedInvite(env.DB, eventId, "vip@example.test");
@@ -91,7 +91,7 @@ describe("admin VIP admit", () => {
         new Request("https://app.test/api/v1/admin/events/pqc-2026/registrations/x/admit", {
           method: "POST",
           headers: {
-            authorization: "Bearer admin-token",
+            authorization: `Bearer ${adminToken}`,
             "content-type": "application/json",
           },
           body: JSON.stringify({

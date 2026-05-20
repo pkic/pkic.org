@@ -147,13 +147,13 @@ describe("proposal participants", () => {
     )[0];
     expect(pendingParticipant.status).toBe("inactive");
 
-    await createAdminSession(env.DB, adminRow.id, "token-admin-badge-role");
+    const adminToken = await createAdminSession(env.DB, adminRow.id, "token-admin-badge-role");
 
     const pendingResponse = await getBadgeRole(
       createContext(
         env,
         new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
-          headers: { authorization: "Bearer token-admin-badge-role" },
+          headers: { authorization: `Bearer ${adminToken}` },
         }),
         { eventSlug: "pqc-2026", registrationId },
       ),
@@ -187,7 +187,7 @@ describe("proposal participants", () => {
       createContext(
         env,
         new Request(`https://app.test/api/v1/admin/events/pqc-2026/registrations/${registrationId}/badge-role`, {
-          headers: { authorization: "Bearer token-admin-badge-role" },
+          headers: { authorization: `Bearer ${adminToken}` },
         }),
         { eventSlug: "pqc-2026", registrationId },
       ),

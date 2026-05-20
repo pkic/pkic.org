@@ -26,6 +26,7 @@ import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 interface UserEmailRow {
   id: string;
@@ -35,11 +36,11 @@ interface UserEmailRow {
 
 // ── Handler ─────────────────────────────────────────────────────────────────
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const userId = c.req.param("userId");
 
-  const user = await first<UserEmailRow>(c.env.DB, "SELECT id, email, headshot_r2_key FROM users WHERE id = ?", [
+  const user = await first<UserEmailRow>(requestDb(c), "SELECT id, email, headshot_r2_key FROM users WHERE id = ?", [
     userId,
   ]);
   if (!user) throw new AppError(404, "NOT_FOUND", "User not found");
@@ -54,7 +55,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     return json({ error: { code: "NO_GRAVATAR", message: "No Gravatar found for this email address" } }, 404);
   }
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "headshot_imported_gravatar", "user", user.id, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "headshot_imported_gravatar", "user", user.id, {
     r2Key,
     gravatarHash: emailHash,
   });
@@ -65,7 +66,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   return json({ success: true, r2Key, source: "gravatar" });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "POST") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

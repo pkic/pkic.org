@@ -21,6 +21,7 @@ import { localDateTimeInTimeZoneToIso } from "../../../../../_lib/utils/timezone
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import type { DatabaseLike } from "../../../../../_lib/types";
 import { adminEventDaysReplaceSchema } from "../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 interface DayCountRow {
   event_day_id: string;
@@ -61,19 +62,19 @@ async function getDaysWithCounts(db: DatabaseLike, eventId: string) {
   }));
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const days = await getDaysWithCounts(c.env.DB, event.id);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const days = await getDaysWithCounts(requestDb(c), event.id);
   return json({ days });
 }
 
-export async function onRequestPut(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPut(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEventDaysReplaceSchema);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
-  const existing = await listEventDays(c.env.DB, event.id);
+  const existing = await listEventDays(requestDb(c), event.id);
   const existingByDate = new Map(existing.map((d) => [d.day_date, d]));
   const incomingDates = new Set(body.days.map((d) => d.date));
 
@@ -84,14 +85,14 @@ export async function onRequestPut(c: any): Promise<Response> {
   for (const day of existing) {
     if (!incomingDates.has(day.day_date)) {
       const reg = await first<{ n: number }>(
-        c.env.DB,
+        requestDb(c),
         "SELECT COUNT(*) AS n FROM registration_day_attendance WHERE event_day_id = ?",
         [day.id],
       );
       if ((reg?.n ?? 0) > 0) {
         skipped.push(day.day_date);
       } else {
-        await run(c.env.DB, "DELETE FROM event_days WHERE id = ?", [day.id]);
+        await run(requestDb(c), "DELETE FROM event_days WHERE id = ?", [day.id]);
       }
     }
   }
@@ -120,7 +121,7 @@ export async function onRequestPut(c: any): Promise<Response> {
     const existing_day = existingByDate.get(day.date);
     if (existing_day) {
       await run(
-        c.env.DB,
+        requestDb(c),
         `UPDATE event_days
          SET label = ?, starts_at = ?, ends_at = ?, in_person_capacity = ?, attendance_options_json = ?, sort_order = ?, updated_at = ?
          WHERE id = ?`,
@@ -128,7 +129,7 @@ export async function onRequestPut(c: any): Promise<Response> {
       );
     } else {
       await run(
-        c.env.DB,
+        requestDb(c),
         `INSERT INTO event_days
            (id, event_id, day_date, label, starts_at, ends_at, in_person_capacity, attendance_options_json, sort_order, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -137,16 +138,16 @@ export async function onRequestPut(c: any): Promise<Response> {
     }
   }
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "event_days_updated", "event", event.id, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "event_days_updated", "event", event.id, {
     dayCount: body.days.length,
     skipped,
   });
 
-  const updatedDays = await getDaysWithCounts(c.env.DB, event.id);
+  const updatedDays = await getDaysWithCounts(requestDb(c), event.id);
   return json({ success: true, days: updatedDays, skipped });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "PUT") return onRequestPut(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

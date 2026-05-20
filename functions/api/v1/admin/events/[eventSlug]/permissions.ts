@@ -11,6 +11,7 @@ import { nowIso } from "../../../../../_lib/utils/time";
 import { uuid } from "../../../../../_lib/utils/ids";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { adminEventPermissionSchema } from "../../../../../../assets/shared/schemas/api";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 interface PermissionRow {
   id: string;
@@ -26,12 +27,12 @@ interface ExistingPermRow {
   id: string;
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
   const permissions = await all<PermissionRow>(
-    c.env.DB,
+    requestDb(c),
     `SELECT ep.id, ep.user_email, ep.user_id, ep.permission,
             ep.granted_by_id, ep.created_at,
             u.email AS granter_email
@@ -45,16 +46,16 @@ export async function onRequestGet(c: any): Promise<Response> {
   return json({ permissions });
 }
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEventPermissionSchema);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
   const normalizedEmail = normalizeEmail(body.userEmail);
 
   // Check for duplicate
   const existing = await first<ExistingPermRow>(
-    c.env.DB,
+    requestDb(c),
     "SELECT id FROM event_permissions WHERE event_id = ? AND user_email = ? AND permission = ?",
     [event.id, normalizedEmail, body.permission],
   );
@@ -64,7 +65,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   // Resolve user_id if the person has an account
-  const userRow = await first<{ id: string }>(c.env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
+  const userRow = await first<{ id: string }>(requestDb(c), "SELECT id FROM users WHERE normalized_email = ?", [
     normalizedEmail,
   ]);
 
@@ -72,13 +73,13 @@ export async function onRequestPost(c: any): Promise<Response> {
   const now = nowIso();
 
   await run(
-    c.env.DB,
+    requestDb(c),
     `INSERT INTO event_permissions (id, event_id, user_email, user_id, permission, granted_by_id, created_at)
      VALUES (?, ?, ?, ?, ?, ?, ?)`,
     [id, event.id, normalizedEmail, userRow?.id ?? null, body.permission, admin.id, now],
   );
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "event_permission_granted", "event", event.id, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "event_permission_granted", "event", event.id, {
     email: normalizedEmail,
     permission: body.permission,
   });
@@ -86,7 +87,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   return json({ permission: { id, user_email: normalizedEmail, permission: body.permission, created_at: now } }, 201);
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "POST") return onRequestPost(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

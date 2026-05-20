@@ -148,4 +148,8 @@ export interface AuthAdmin {
   id: string;
   email: string;
   role: string;
+  scopes?: string[];
+  sessionId?: string;
+  expiresAt?: string;
+  state?: string | null;
 }

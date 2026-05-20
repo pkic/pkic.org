@@ -10,8 +10,8 @@ export function withD1Session(db: DatabaseLike, constraint: D1SessionConstraint)
   return db.withSession?.(constraint) ?? db;
 }
 
-export function readReplicaDb(db: DatabaseLike): DatabaseSessionLike {
-  return withD1Session(db, "first-unconstrained");
+export function readReplicaDb(db: DatabaseLike, bookmark?: string | null): DatabaseSessionLike {
+  return db.withSession?.(bookmark || "first-unconstrained") ?? db;
 }
 
 export function primaryFirstDb(db: DatabaseLike): DatabaseSessionLike {

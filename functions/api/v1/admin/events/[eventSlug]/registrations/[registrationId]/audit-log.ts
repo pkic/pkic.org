@@ -10,6 +10,7 @@ import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../../../_lib/services/events";
 import { first, all } from "../../../../../../../_lib/db/queries";
 import type { DatabaseLike } from "../../../../../../../_lib/types";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 interface AuditLogRow {
   id: string;
@@ -45,13 +46,13 @@ async function fetchAuditLog(db: DatabaseLike, registrationId: string): Promise<
   );
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const registrationId = c.req.param("registrationId");
 
   // Verify the registration belongs to this event
-  const reg = await first<{ id: string }>(c.env.DB, "SELECT id FROM registrations WHERE id = ? AND event_id = ?", [
+  const reg = await first<{ id: string }>(requestDb(c), "SELECT id FROM registrations WHERE id = ? AND event_id = ?", [
     registrationId,
     event.id,
   ]);
@@ -59,7 +60,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
 
-  const entries = await fetchAuditLog(c.env.DB, registrationId);
+  const entries = await fetchAuditLog(requestDb(c), registrationId);
 
   // Parse details_json for the caller so it does not have to JSON.parse each row
   const parsed = entries.map((e) => ({

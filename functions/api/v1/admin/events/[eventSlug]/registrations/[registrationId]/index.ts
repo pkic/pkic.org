@@ -29,6 +29,7 @@ import { z } from "zod";
 import { queueRegistrationStatusEmail } from "../../../../../../../_lib/services/registrations/status-notifications";
 import { registrationConfirmPageUrl } from "../../../../../../../_lib/services/frontend-links";
 import { buildAttendanceEmailData } from "../../../../../../../_lib/utils/attendance";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import {
   getAcceptedTermsTextForRegistration,
   getCustomAnswerRows,
@@ -74,17 +75,17 @@ async function fetchRegistrationWithDetails(
 
 // ── GET ───────────────────────────────────────────────────────────────────────
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const registration = await fetchRegistrationWithDetails(c.env.DB, event.id, c.req.param("registrationId"));
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const registration = await fetchRegistrationWithDetails(requestDb(c), event.id, c.req.param("registrationId"));
   if (!registration) {
     return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
   }
 
   const [dayAttendance, dayWaitlist] = await Promise.all([
-    getRegistrationDayAttendance(c.env.DB, registration.id),
-    listDayWaitlistForRegistration(c.env.DB, registration.id),
+    getRegistrationDayAttendance(requestDb(c), registration.id),
+    listDayWaitlistForRegistration(requestDb(c), registration.id),
   ]);
 
   return json({ registration, dayAttendance, dayWaitlist });
@@ -98,9 +99,9 @@ const adminRegistrationUpdateSchema = registrationManageSchema.omit({ action: tr
   status: z.enum(["pending_email_confirmation", "registered", "waitlisted", "cancelled"]).optional(),
 });
 
-export async function onRequestPatch(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+export async function onRequestPatch(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const config = getConfig(c.env, c.req.raw);
   const registrationId = c.req.param("registrationId");
 
@@ -111,15 +112,16 @@ export async function onRequestPatch(c: any): Promise<Response> {
     if (!body.status) {
       return json({ error: { code: "MISSING_STATUS", message: "status is required for force_status action" } }, 400);
     }
-    const current = await fetchRegistrationWithDetails(c.env.DB, event.id, registrationId);
+    const current = await fetchRegistrationWithDetails(requestDb(c), event.id, registrationId);
     if (!current) {
       return json({ error: { code: "REGISTRATION_NOT_FOUND", message: "Registration not found" } }, 404);
     }
-    await c.env.DB.prepare("UPDATE registrations SET status = ?, updated_at = ? WHERE id = ?")
+    await requestDb(c)
+      .prepare("UPDATE registrations SET status = ?, updated_at = ? WHERE id = ?")
       .bind(body.status, nowIso(), registrationId)
       .run();
     await writeAuditLog(
-      c.env.DB,
+      requestDb(c),
       "admin",
       admin.id,
       "admin_registration_force_status",
@@ -134,7 +136,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
 
     if (current.status !== body.status) {
       const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-      const outbox = await queueRegistrationStatusEmail(c.env.DB, {
+      const outbox = await queueRegistrationStatusEmail(requestDb(c), {
         event,
         registrationId,
         appBaseUrl,
@@ -144,16 +146,16 @@ export async function onRequestPatch(c: any): Promise<Response> {
             ? `Registration cancelled and data removed — ${event.name}`
             : `Registration updated for ${event.name}`,
       });
-      c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outbox.outboxId));
+      c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outbox.outboxId));
     }
 
-    const updated = await fetchRegistrationWithDetails(c.env.DB, event.id, registrationId);
+    const updated = await fetchRegistrationWithDetails(requestDb(c), event.id, registrationId);
     return json({ success: true, registration: updated });
   }
 
   // ── update / cancel / report_unauthorized — full shared service logic ──────
   const customAnswers = body.customAnswers
-    ? await validateCustomAnswersByPurpose(c.env.DB, {
+    ? await validateCustomAnswersByPurpose(requestDb(c), {
         eventId: event.id,
         purpose: "event_registration",
         customAnswers: body.customAnswers,
@@ -161,7 +163,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
     : {};
 
   const updated = await updateRegistrationById(
-    c.env.DB,
+    requestDb(c),
     {
       registrationId,
       action: body.action,
@@ -196,7 +198,8 @@ export async function onRequestPatch(c: any): Promise<Response> {
     }
     if (setParts.length > 0) {
       setValues.push(updated.user_id);
-      await c.env.DB.prepare(`UPDATE users SET ${setParts.join(", ")} WHERE id = ?`)
+      await requestDb(c)
+        .prepare(`UPDATE users SET ${setParts.join(", ")} WHERE id = ?`)
         .bind(...setValues)
         .run();
     }
@@ -208,12 +211,12 @@ export async function onRequestPatch(c: any): Promise<Response> {
   let emailChanged = false;
   if (body.action === "update" && body.email) {
     const currentUser = await first<{ normalized_email: string }>(
-      c.env.DB,
+      requestDb(c),
       "SELECT normalized_email FROM users WHERE id = ?",
       [updated.user_id],
     );
     if (currentUser && body.email.trim().toLowerCase() !== currentUser.normalized_email) {
-      const emailResult = await changeRegistrationEmail(c.env.DB, {
+      const emailResult = await changeRegistrationEmail(requestDb(c), {
         registrationId: updated.id,
         newEmail: body.email,
         confirmationTtlHours: config.manageTokenTtlHours,
@@ -242,13 +245,14 @@ export async function onRequestPatch(c: any): Promise<Response> {
         }
         if (setParts.length > 0) {
           setValues.push(emailResult.userId);
-          await c.env.DB.prepare(`UPDATE users SET ${setParts.join(", ")} WHERE id = ?`)
+          await requestDb(c)
+            .prepare(`UPDATE users SET ${setParts.join(", ")} WHERE id = ?`)
             .bind(...setValues)
             .run();
         }
       }
 
-      await writeAuditLog(c.env.DB, "admin", admin.id, "admin_email_changed", "registration", updated.id, {
+      await writeAuditLog(requestDb(c), "admin", admin.id, "admin_email_changed", "registration", updated.id, {
         eventId: event.id,
         previousEmail: emailResult.previousEmail,
         newEmail: emailResult.pendingEmail,
@@ -262,20 +266,20 @@ export async function onRequestPatch(c: any): Promise<Response> {
         last_name: string | null;
         organization_name: string | null;
         job_title: string | null;
-      }>(c.env.DB, "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [
+      }>(requestDb(c), "SELECT email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?", [
         emailResult.userId,
       ]);
       if (userRecord) {
-        const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
-        const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, updated.id);
+        const dayAttendanceRaw = await getRegistrationDayAttendance(requestDb(c), updated.id);
+        const dayWaitlist = await listDayWaitlistForRegistration(requestDb(c), updated.id);
         const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
           updated.attendance_type,
           dayAttendanceRaw,
           dayWaitlist,
         );
-        const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, updated.custom_answers_json);
-        const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, updated.id);
-        const outboxId = await queueEmail(c.env.DB, {
+        const customAnswerRows = await getCustomAnswerRows(requestDb(c), event.id, updated.custom_answers_json);
+        const acceptedTermsText = await getAcceptedTermsTextForRegistration(requestDb(c), updated.id);
+        const outboxId = await queueEmail(requestDb(c), {
           eventId: event.id,
           templateKey: "registration_confirm_email",
           recipientEmail: emailResult.pendingEmail,
@@ -301,7 +305,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
             shareUrl: null,
           },
         });
-        c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
+        c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outboxId));
       }
 
       emailChanged = true;
@@ -309,7 +313,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   }
 
   if (!emailChanged) {
-    const outbox = await queueRegistrationStatusEmail(c.env.DB, {
+    const outbox = await queueRegistrationStatusEmail(requestDb(c), {
       event,
       registrationId: updated.id,
       appBaseUrl,
@@ -319,21 +323,21 @@ export async function onRequestPatch(c: any): Promise<Response> {
           ? `Registration cancelled and data removed — ${event.name}`
           : `Registration updated for ${event.name}`,
     });
-    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outbox.outboxId));
+    c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outbox.outboxId));
   }
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "admin_registration_updated", "registration", updated.id, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "admin_registration_updated", "registration", updated.id, {
     eventId: event.id,
     action: body.action,
   });
 
-  const result = await fetchRegistrationWithDetails(c.env.DB, event.id, updated.id);
+  const result = await fetchRegistrationWithDetails(requestDb(c), event.id, updated.id);
   return json({ success: true, registration: result, emailChanged });
 }
 
 // ── Router ────────────────────────────────────────────────────────────────────
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method === "GET") return onRequestGet(c);
   if (c.req.raw.method === "PATCH") return onRequestPatch(c);
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);

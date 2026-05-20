@@ -157,13 +157,13 @@ describe("admin proposal endpoints", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { adminId } = await seedProposalWithReviews(env.DB, eventId);
 
-    await createAdminSession(env.DB, adminId, "token-admin-list");
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list");
 
     const response = await getEventProposals(
       createContext(
         env,
         new Request("https://app.test/api/v1/admin/events/pqc-2026/proposals", {
-          headers: { authorization: "Bearer token-admin-list" },
+          headers: { authorization: `Bearer ${adminToken}` },
         }),
         { eventSlug: "pqc-2026" },
       ),
@@ -188,13 +188,13 @@ describe("admin proposal endpoints", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
 
-    await createAdminSession(env.DB, adminId, "token-admin-detail");
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-detail");
 
     const response = await getProposalDetail(
       createContext(
         env,
         new Request(`https://app.test/api/v1/admin/proposals/${proposalId}`, {
-          headers: { authorization: "Bearer token-admin-detail" },
+          headers: { authorization: `Bearer ${adminToken}` },
         }),
         { proposalId },
       ),
@@ -220,13 +220,13 @@ describe("admin proposal endpoints", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
 
-    await createAdminSession(env.DB, adminId, "token-admin-reviews");
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-reviews");
 
     const response = await getProposalReviews(
       createContext(
         env,
         new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
-          headers: { authorization: "Bearer token-admin-reviews" },
+          headers: { authorization: `Bearer ${adminToken}` },
         }),
         { proposalId },
       ),
@@ -246,14 +246,14 @@ describe("admin proposal endpoints", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
 
-    await createAdminSession(env.DB, adminId, "token-admin-manage");
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-manage");
 
     const response = await openProposalManage(
       createContext(
         env,
         new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/open-manage`, {
           method: "POST",
-          headers: { authorization: "Bearer token-admin-manage" },
+          headers: { authorization: `Bearer ${adminToken}` },
         }),
         { proposalId },
       ),

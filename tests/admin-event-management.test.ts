@@ -11,7 +11,7 @@ import {
   updateRegistrationById,
 } from "../functions/_lib/services/registrations";
 
-const ADMIN_TOKEN = "event-admin-token";
+let ADMIN_TOKEN = "event-admin-token";
 
 function adminRequest(path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -39,7 +39,7 @@ async function setupAdmin(): Promise<{ baseEventId: string }> {
   const adminRow = (
     await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
   )[0];
-  await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
+  ADMIN_TOKEN = await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
   return { baseEventId: eventId };
 }
 

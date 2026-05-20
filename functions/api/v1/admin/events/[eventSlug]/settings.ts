@@ -16,12 +16,13 @@ import { parseJsonSafe, stringifyJson } from "../../../../../_lib/utils/json";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { adminEventSettingsSchema } from "../../../../../../assets/shared/schemas/api";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
-export async function onRequestPatch(c: any): Promise<Response> {
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestPatch(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEventSettingsSchema);
 
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
   // ── Merge settings_json — preserve existing keys and fold in updates ──────
   const existingSettings = parseJsonSafe<Record<string, unknown>>(event.settings_json, {});
@@ -78,7 +79,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   // ── Core event fields — use COALESCE so omitted fields are preserved ──────
   // starts_at / ends_at accept an explicit null to clear.
   await run(
-    c.env.DB,
+    requestDb(c),
     `UPDATE events
      SET name                  = COALESCE(?, name),
          timezone              = COALESCE(?, timezone),
@@ -107,7 +108,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
 
   if (body.userRetentionDays) {
     await run(
-      c.env.DB,
+      requestDb(c),
       `INSERT INTO retention_policies (event_id, user_retention_days, updated_at)
        VALUES (?, ?, ?)
        ON CONFLICT(event_id)
@@ -116,11 +117,11 @@ export async function onRequestPatch(c: any): Promise<Response> {
     );
   }
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "event_settings_updated", "event", event.id, body);
+  await writeAuditLog(requestDb(c), "admin", admin.id, "event_settings_updated", "event", event.id, body);
 
-  const updated = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const updated = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const retention = await first<{ user_retention_days: number }>(
-    c.env.DB,
+    requestDb(c),
     "SELECT user_retention_days FROM retention_policies WHERE event_id = ?",
     [event.id],
   );
@@ -135,7 +136,7 @@ export async function onRequestPatch(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "PATCH") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

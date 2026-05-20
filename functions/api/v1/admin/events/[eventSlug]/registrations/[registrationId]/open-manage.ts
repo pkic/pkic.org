@@ -18,21 +18,22 @@ import { registrationManagePageUrl } from "../../../../../../../_lib/services/fr
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { signAdminManageJwt } from "../../../../../../../_lib/utils/jwt";
 import { json } from "../../../../../../../_lib/http";
+import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 
 const ADMIN_MANAGE_SESSION_MINUTES = 15;
 
-export async function onRequestPost(c: any): Promise<Response> {
+export async function onRequestPost(c: AdminContext): Promise<Response> {
   const secret = c.env.INTERNAL_SIGNING_SECRET;
   if (!secret) {
     return json({ error: { code: "SERVER_ERROR", message: "Signing secret not configured" } }, 500);
   }
 
-  const admin = await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const registrationId = c.req.param("registrationId");
 
   const registration = await first<{ id: string }>(
-    c.env.DB,
+    requestDb(c),
     "SELECT id FROM registrations WHERE id = ? AND event_id = ?",
     [registrationId, event.id],
   );
@@ -53,7 +54,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     ttlSeconds: ADMIN_MANAGE_SESSION_MINUTES * 60,
   });
 
-  await writeAuditLog(c.env.DB, "admin", admin.id, "admin_opened_manage_page", "registration", registrationId, {
+  await writeAuditLog(requestDb(c), "admin", admin.id, "admin_opened_manage_page", "registration", registrationId, {
     adminEmail: admin.email,
     eventSlug: event.slug,
   });

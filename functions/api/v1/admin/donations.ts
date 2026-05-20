@@ -11,6 +11,7 @@
 import { json } from "../../../_lib/http";
 import { requireAdminFromRequest } from "../../../_lib/auth/admin";
 import { all } from "../../../_lib/db/queries";
+import { requestDb, type AdminContext } from "../../../_lib/db/context";
 
 interface DonationRow {
   id: string;
@@ -37,8 +38,8 @@ interface StatusCount {
   count: number;
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  await requireAdminFromRequest(c.env.DB, c.req.raw, c.env);
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
 
   const url = new URL(c.req.raw.url);
   const status = url.searchParams.get("status") ?? "";
@@ -57,7 +58,7 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   const [donations, counts, totalRow] = await Promise.all([
     all<DonationRow>(
-      c.env.DB,
+      requestDb(c),
       `SELECT id, checkout_session_id, payment_intent_id, name, email,
               organization, currency, gross_amount, net_amount, source,
               status, payment_method_type, session_expires_at,
@@ -69,8 +70,8 @@ export async function onRequestGet(c: any): Promise<Response> {
        LIMIT ? OFFSET ?`,
       [...params, limit, offset],
     ),
-    all<StatusCount>(c.env.DB, `SELECT status, COUNT(*) AS count FROM donations GROUP BY status`, []),
-    all<{ total: number }>(c.env.DB, `SELECT COUNT(*) AS total FROM donations ${where}`, [...params]),
+    all<StatusCount>(requestDb(c), `SELECT status, COUNT(*) AS count FROM donations GROUP BY status`, []),
+    all<{ total: number }>(requestDb(c), `SELECT COUNT(*) AS total FROM donations ${where}`, [...params]),
   ]);
 
   const summary = Object.fromEntries(counts.map((r) => [r.status, r.count]));
@@ -79,7 +80,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   return json({ donations, summary, limit, offset, total });
 }
 
-export async function onRequest(c: any): Promise<Response> {
+export async function onRequest(c: AdminContext): Promise<Response> {
   if (c.req.raw.method !== "GET") {
     return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
   }

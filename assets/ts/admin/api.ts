@@ -4,7 +4,7 @@
  * Thin fetch wrapper that attaches the auth token from the global signal and
  * handles 401 responses by clearing auth (triggering a re-render to Login).
  */
-import { clearAuth, authToken } from "./state";
+import { clearAuth, authToken, saveAuthToken } from "./state";
 import { ApiClientError } from "../shared/api-client";
 import type { ApiErrorPayload } from "../shared/types";
 
@@ -21,6 +21,8 @@ export async function api<T = unknown>(path: string, opts?: ApiOpts): Promise<T>
     ...opts,
     headers: { ...headers, ...(opts?.headers ?? {}) },
   });
+  const nextToken = res.headers.get("x-admin-token");
+  if (nextToken) saveAuthToken(nextToken);
 
   const data: { error?: { message?: string; code?: string } } =
     res.status === 204 ? {} : await res.json().catch(() => ({}));
