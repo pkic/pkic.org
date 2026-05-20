@@ -1,5 +1,5 @@
 import { all } from "../db/queries";
-import { bulkQueueInviteEmails } from "../email/outbox";
+import { prepareBulkQueueInviteEmailStatements, type InviteEmailQueueRow } from "../email/outbox";
 import {
   inviteDeclineUrl,
   proposalPageUrl,
@@ -84,6 +84,22 @@ async function batchStatements(db: DatabaseLike, stmts: StatementLike[]): Promis
   const MAX = 500;
   for (let i = 0; i < stmts.length; i += MAX) {
     await db.batch(stmts.slice(i, i + MAX));
+  }
+}
+
+async function batchQueueEmailsAndUpdateState(
+  db: DatabaseLike,
+  emailRows: InviteEmailQueueRow[],
+  stateStatements: StatementLike[],
+  queuedAt: string,
+): Promise<void> {
+  // Each reminder row emits two statements: one outbox INSERT and one source-record UPDATE.
+  // Keep batches at the same 500-statement size that existing bulk queueing uses.
+  const MAX_ROWS = 250;
+  for (let i = 0; i < emailRows.length; i += MAX_ROWS) {
+    const emailSlice = emailRows.slice(i, i + MAX_ROWS);
+    const stateSlice = stateStatements.slice(i, i + MAX_ROWS);
+    await db.batch([...prepareBulkQueueInviteEmailStatements(db, emailSlice, queuedAt), ...stateSlice]);
   }
 }
 
@@ -351,12 +367,9 @@ export async function runReminderCycle(
       };
     });
 
-    // 5. Batch queue all emails (1 round-trip instead of N)
-    await bulkQueueInviteEmails(db, emailRows);
-
-    // 6. Batch update all reminder states (1 round-trip instead of N)
-    await batchStatements(
+    await batchQueueEmailsAndUpdateState(
       db,
+      emailRows,
       filteredInvites.map((invite) =>
         db
           .prepare(
@@ -364,6 +377,7 @@ export async function runReminderCycle(
           )
           .bind(now, invite.id),
       ),
+      now,
     );
   }
 
@@ -503,12 +517,9 @@ export async function runReminderCycle(
       };
     });
 
-    // 4. Batch queue all emails (1 round-trip instead of N)
-    await bulkQueueInviteEmails(db, emailRows);
-
-    // 5. Batch update all speaker invite states (1 round-trip instead of N)
-    await batchStatements(
+    await batchQueueEmailsAndUpdateState(
       db,
+      emailRows,
       dueSpeakerInvites.map((row) =>
         db
           .prepare(
@@ -520,6 +531,7 @@ export async function runReminderCycle(
           )
           .bind(now, row.speaker_id),
       ),
+      now,
     );
   }
 
@@ -653,12 +665,9 @@ export async function runReminderCycle(
       };
     });
 
-    // 4. Batch queue all emails (1 round-trip instead of N)
-    await bulkQueueInviteEmails(db, emailRows);
-
-    // 5. Batch update all presentation reminder states (1 round-trip instead of N)
-    await batchStatements(
+    await batchQueueEmailsAndUpdateState(
       db,
+      emailRows,
       duePresentation.map((row) =>
         db
           .prepare(
@@ -670,6 +679,7 @@ export async function runReminderCycle(
           )
           .bind(now, row.speaker_id),
       ),
+      now,
     );
   }
 
@@ -874,12 +884,9 @@ export async function runReminderCycle(
       };
     });
 
-    // 3. Batch queue all emails (1 round-trip instead of N)
-    await bulkQueueInviteEmails(db, emailRows);
-
-    // 4. Batch update all registration states (1 round-trip instead of N)
-    await batchStatements(
+    await batchQueueEmailsAndUpdateState(
       db,
+      emailRows,
       tokenData.map((t) =>
         db
           .prepare(
@@ -891,6 +898,7 @@ export async function runReminderCycle(
           )
           .bind(now, t.hash, t.expiresAt, t.id),
       ),
+      now,
     );
   }
 

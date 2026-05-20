@@ -1,11 +1,8 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
-import { getConfig } from "./_lib/config";
-import { processPendingOutbox } from "./_lib/email/outbox";
 import { logError, logInfo } from "./_lib/logging";
-import { runReminderCycle } from "./_lib/services/reminders";
 import { runRetentionJob } from "./_lib/services/retention";
-import { runRsvpEnforcer } from "./_lib/services/rsvp-enforcer";
+import { runScheduledDueWork } from "./_lib/services/scheduled-due-work";
 import api_Router from "./api/router";
 import donate_Router from "./donate/router";
 import r_Router from "./r/router";
@@ -29,23 +26,11 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
 
   try {
     if (controller.cron === REMINDER_CRON) {
-      const config = getConfig(env);
-      const reminders = await runReminderCycle(env.DB, {
-        appBaseUrl: config.appBaseUrl,
-        reminderIntervalDays: config.reminderIntervalDays,
-        maxInviteReminders: config.maxInviteReminders,
-        maxPresentationReminders: config.maxPresentationReminders,
-        limit: config.scheduledReminderLimit,
-      });
-      const outbox = await processPendingOutbox(env.DB, env, config.scheduledOutboxLimit);
-
-      const rsvpEnforcement = await runRsvpEnforcer(env.DB, env);
+      const dueWork = await runScheduledDueWork(env);
 
       logInfo("SCHEDULED_REMINDERS_COMPLETED", {
         cron: controller.cron,
-        reminders,
-        outbox,
-        rsvpEnforcement,
+        dueWork,
       });
       return;
     }
