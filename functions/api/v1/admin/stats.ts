@@ -60,18 +60,30 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     ),
     all<{ date: string; registrations: number; invites: number }>(
       db,
-      `SELECT
-         date(r.created_at) AS date,
-         COUNT(DISTINCT r.id) AS registrations,
-         COUNT(DISTINCT i.id) AS invites
-       FROM (
-         SELECT created_at, id FROM registrations
+      `WITH registration_days AS (
+         SELECT date(created_at) AS date, COUNT(*) AS registrations
+         FROM registrations
          WHERE created_at >= date('now', '-30 days')
-       ) r
-       LEFT JOIN invites i
-         ON date(i.created_at) = date(r.created_at)
-       GROUP BY date(r.created_at)
-       ORDER BY date ASC`,
+         GROUP BY date(created_at)
+       ),
+       invite_days AS (
+         SELECT date(created_at) AS date, COUNT(*) AS invites
+         FROM invites
+         WHERE created_at >= date('now', '-30 days')
+         GROUP BY date(created_at)
+       ),
+       activity_days AS (
+         SELECT date FROM registration_days
+         UNION
+         SELECT date FROM invite_days
+       )
+       SELECT activity_days.date,
+              COALESCE(registration_days.registrations, 0) AS registrations,
+              COALESCE(invite_days.invites, 0) AS invites
+       FROM activity_days
+       LEFT JOIN registration_days ON registration_days.date = activity_days.date
+       LEFT JOIN invite_days ON invite_days.date = activity_days.date
+       ORDER BY activity_days.date ASC`,
       [],
     ),
     all<{

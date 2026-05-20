@@ -25,6 +25,12 @@ interface WaitlistSummaryRow {
   count: number;
 }
 
+const latestOutboxStatusForRegistrationSql = `(SELECT eo.status
+       FROM email_outbox eo
+       WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id
+       ORDER BY eo.updated_at DESC
+       LIMIT 1)`;
+
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
@@ -47,23 +53,9 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   }
 
   if (bouncedFilter === "true") {
-    conditions.push(`EXISTS (
-      SELECT 1 FROM email_outbox eo
-      WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
-      AND eo.updated_at = (
-        SELECT MAX(updated_at) FROM email_outbox
-        WHERE recipient_user_id = r.user_id AND event_id = r.event_id
-      )
-    )`);
+    conditions.push(`${latestOutboxStatusForRegistrationSql} = 'bounced'`);
   } else if (bouncedFilter === "false") {
-    conditions.push(`NOT EXISTS (
-      SELECT 1 FROM email_outbox eo
-      WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
-      AND eo.updated_at = (
-        SELECT MAX(updated_at) FROM email_outbox
-        WHERE recipient_user_id = r.user_id AND event_id = r.event_id
-      )
-    )`);
+    conditions.push(`COALESCE(${latestOutboxStatusForRegistrationSql}, '') <> 'bounced'`);
   }
 
   if (search) {
@@ -80,14 +72,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
             rc.code AS referral_code,
-            EXISTS (
-              SELECT 1 FROM email_outbox eo
-              WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
-              AND eo.updated_at = (
-                SELECT MAX(updated_at) FROM email_outbox
-                WHERE recipient_user_id = r.user_id AND event_id = r.event_id
-              )
-            ) AS has_bounced,
+            COALESCE(${latestOutboxStatusForRegistrationSql} = 'bounced', 0) AS has_bounced,
             (SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
                 'uid', ics_uid,
                 'status', response_status,
@@ -167,14 +152,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       requestDb(c),
       `SELECT COUNT(DISTINCT r.id) AS bounced_count
        FROM registrations r
-       WHERE r.event_id = ? AND EXISTS (
-         SELECT 1 FROM email_outbox eo
-         WHERE eo.recipient_user_id = r.user_id AND eo.event_id = r.event_id AND eo.status = 'bounced'
-         AND eo.updated_at = (
-           SELECT MAX(updated_at) FROM email_outbox
-           WHERE recipient_user_id = r.user_id AND event_id = r.event_id
-         )
-       )`,
+       WHERE r.event_id = ? AND ${latestOutboxStatusForRegistrationSql} = 'bounced'`,
       [event.id],
     ),
   ]);
