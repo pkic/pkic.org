@@ -1,8 +1,10 @@
 id: tuv-trust-it
-name: TÜV TRUST IT 
+name: TÜV TRUST IT
 slogan: Your Partner for effective Information Security
 website: https://it-tuv.com/
-
+# Business domains for email
+organizationDomains:
+  - tuv-austria.com
 # Short description, longer content can be placed in `content/members/`
 description: For many years the TÜV TRUST IT has been a successful IT-TÜV enterprise as part of the TÜV AUSTRIA Group. Operating from our locations in Cologne and Vienna, we are the impartial, objective and independent partner in commerce.
 
@@ -13,24 +15,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://it-tuv.com/en/news/
   feed: https://it-tuv.com/en/news/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://it-tuv.com/en/jobs/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -49,7 +51,7 @@ representatives:
   - name: Clemens Wanko
     role: Head Trust Infrastructure Div. TUV TRUST IT / Head Conformity Assessment Body at TUV AUSTRIA CERT
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/clemens-wanko-0947a5210/
     description: Clemens is the head of the conformity assessment body (CAB) at TUV AUSTRIA CERT and vice chair of the European accredited eIDAS/ETSI auditors in the ACAB council and is highly interested in harmonized secure interpretatiion and implementation of legal requirements and normative standards.
 

@@ -2,7 +2,9 @@ id: securetron
 name: Securetron
 slogan: Next Generation of PKI - No Going Back!
 website: https://securetron.net
-
+# Business domains for email
+organizationDomains:
+  - securetron.net
 # Short description, longer content can be placed in `content/members/`
 description: Securetron is a leading provider of Keys, Certificates, and Digital Signatures Management solution aimed at Simplifying Digital Identity and Data Protection.
 
@@ -16,24 +18,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.securetron.net/documentation/
   feed: https://securetron.net/feed/
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.securetron.net/newsroom/press-releases
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://www.securetron.net/careers
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -54,13 +56,13 @@ representatives:
     social:
       x: https://x.com/munisbadar
       linkedin: https://www.linkedin.com/in/munis-badar/
-    description: Munis Badar is the Founder & CEO of Securetron who has worked across multiple industries addressing complex security challenges over 20 years. He is a visionary leader with a passion for innovation and cybersecurity. 
+    description: Munis Badar is the Founder & CEO of Securetron who has worked across multiple industries addressing complex security challenges over 20 years. He is a visionary leader with a passion for innovation and cybersecurity.
 
   - name: Liubov Mikhalkina
     role: VP of Strategy and Business Development – Certificate Services
     social:
       linkedin: https://www.linkedin.com/in/liuba-mikhalkina-690475212/
-    description: Liubov Mikhalkina is the VP of Strategy and Business Development – Certificate Services at Securetron. 
+    description: Liubov Mikhalkina is the VP of Strategy and Business Development – Certificate Services at Securetron.
       She is a seasoned professional with a strong background in business development and strategic planning. She has previously worked at Ikea and Bell as a Cyber Security Export in Compliance and Risk Management.
 
 # Long-form content (markdown)

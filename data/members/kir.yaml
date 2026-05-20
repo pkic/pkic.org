@@ -1,46 +1,48 @@
 id: kir
 name: KIR
-slogan: Your trustworthy partner in building a secure digital world   
+slogan: Your trustworthy partner in building a secure digital world
 website: https://www.kir.pl
-
+# Business domains for email
+organizationDomains:
+  - kir.pl
 # Short description, longer content can be placed in `content/members/`
 description: KIR is a key entity of the Polish payment system infrastructure. Based on state-of-the-art technologies, we build solutions for digital processes in business and administration. We specialize in remote identity authentication, secure data exchange, settlements and open banking.
 
 # membership
 memberSince: 2023-01-09
 memberType: A
-workingGroups: 
+workingGroups:
   - CA
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
   x: https://x.com/KIR__pl
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/krajowa-izba-rozliczeniowa-s.a./
-  youtube: 
+  youtube:
 
 # Here you can list those who represent the member
 representatives:

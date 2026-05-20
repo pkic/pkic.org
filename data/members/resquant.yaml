@@ -2,7 +2,9 @@ id: resquant
 name: Resquant
 slogan: Stay secure in the era of quantum computers
 website: https://www.resquant.com
-
+# Business domains for email
+organizationDomains:
+  - resquant.com
 # Short description, longer content can be placed in `content/members/`
 description: ResQuant is a deep-tech, cybersecurity company operating on the border of science and business. We exist to protect sensitive data worldwide from current and future threats.
 
@@ -11,36 +13,36 @@ memberSince: 2024-01-09
 memberType: F
 workingGroups:
   - PQC
-  
+
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/id-secure/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +52,6 @@ representatives:
   - name: Sven Zagala
     role: Managing Director
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Sven is the Managing Director at Resquant Sp. z o.o. and represents the organization at the PKI Consortium.

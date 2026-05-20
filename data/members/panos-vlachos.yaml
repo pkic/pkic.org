@@ -1,0 +1,58 @@
+id: panos-vlachos
+name: Panos Vlachos
+slogan:
+website:
+# Business domains for email
+organizationDomains:
+  - qub.ac.uk
+# Short description, longer content can be placed in `content/members/`
+description: I am currently pursuing his PhD degree in Post-Quantum Cryptography at Queen's University, Belfast, UK. My research focuses on alternatives to traditional PKI, including innovative approaches to asymmetric cryptography that address emerging quantum threats.
+
+# membership
+memberSince: 2025-11-21
+memberType: H5
+workingGroups:
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/in/panosvl/
+  youtube:
+  github:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Panos Vlachos
+    role: PhD Student
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/panosvl/
+    description: Panos is a PhD student and participates at the PKI Consortium.

@@ -2,9 +2,12 @@ id: compumatica
 name: Compumatica secure networks
 slogan:
 website: https://compumatica.com
-
+# Business domains for email
+organizationDomains:
+  - compumatica.com
+  - compumatica.nl
 # Short description, longer content can be placed in `content/members/`
-description: Compumatica is an independent Dutch cybersecurity manufacturer in the field on encryption (network- & e-mail encryption) and network security/segmentation (firewall & diode technology). The solutions have different certifications from The Netherlands, European Union, and NATO. Compumatica is located in  Uden, The Hague and Würselen (Germany). 
+description: Compumatica is an independent Dutch cybersecurity manufacturer in the field on encryption (network- & e-mail encryption) and network security/segmentation (firewall & diode technology). The solutions have different certifications from The Netherlands, European Union, and NATO. Compumatica is located in  Uden, The Hague and Würselen (Germany).
 
 # membership
 memberSince: 2024-01-24
@@ -13,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +52,6 @@ representatives:
   - name: Ad Koolen
     role: Government Crypto Specialist
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Ad is the Government Crypto Specialist at Compumatica secure networks bv and represents the organization at the PKI Consortium.

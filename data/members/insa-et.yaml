@@ -1,9 +1,10 @@
-
 id: insa-et
 name: Information Network Security Administration of Ethiopia
 slogan: Realize national capability that ensures information superiority
 website: https://insa.gov.et/
-
+# Business domains for email
+organizationDomains:
+  - insa.gov.et
 # Short description, longer content can be placed in `content/members/`
 description: The Information Network Security Administration was established for the first time in 1999 under the Council of Ministers Regulation No. 130/1999 with the aim of protecting the national interests of our country's information and information infrastructures. However, the Agency's Council Regulation No. 250/2003 and recently Proclamation No. 808/2006 need to be restructured to address the increasingly complex cybercrime and protect national interests. Yet, in 2021, based on the Definition of Powers and Duties of the Executive Organs of the Federal Democratic Republic of Ethiopia Proclamation No. 1263/2014, INSA was renamed as Information Network Security Administration.
 
@@ -11,37 +12,37 @@ description: The Information Network Security Administration was established for
 memberSince: 2023-01-16
 memberType: H1
 workingGroups:
- - CM
- - PKIMM
- - PQC
- 
+  - CM
+  - PKIMM
+  - PQC
+
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
+  x:
   facebook: https://www.facebook.com/INSA.ETHIOPIA
   instagram:
   pinterest:
-  linkedin: 
+  linkedin:
   youtube: https://www.youtube.com/channel/UCTc5kO3p6xAQSObDdx_Eg3w

@@ -2,7 +2,10 @@ id: dtrust
 name: D-Trust
 slogan: Paving the way for social and economic progress
 website: https://www.d-trust.net/en/
-
+# Business domains for email
+organizationDomains:
+  - d-trust.net
+  - bdr.de
 # Short description, longer content can be placed in `content/members/`
 description: Berlin-based D-TRUST is a member of the Bundesdruckerei Group. D-TRUST is a pioneer in secure digital identities, delivering technologically mature solutions.
 
@@ -19,30 +22,30 @@ sponsor:
   sponsoring:
     "Post-Quantum Cryptography Conference Amsterdam 2023":
       level: Innovator
-      
+
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url: https://www.bundesdruckerei.de/en/Newsroom/Press-Releases
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url: https://www.bundesdruckerei.de/en/d-trust-careers
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/bundesdruckerei/
   youtube: https://www.youtube.com/channel/UCM8BovTkjFVVgRcsbwIZWDQ
   xing: https://www.xing.com/companies/bundesdruckereigmbh
@@ -63,7 +66,7 @@ content: |
 
   Trust is a decisive factor for communication in the digital world and when transmitting sensitive data. As an independent and certified trust service provider, D-TRUST has been listed with the Federal Network Agency under the eIDAS Regulation since 2016. As a member of the Bundesdruckerei Group, the D-TRUST provides legally compliant and certified trust services that include digital certificates and electronic signatures. These services meet the highest security standards of modern infrastructures and enable secure digital identities for companies, public authorities and private individuals.
 
-  > You can rely on us as a trust service provider – with no ifs and buts.  
+  > You can rely on us as a trust service provider – with no ifs and buts.
   > Fair conduct is our maxim. That's because we are keen to establish sustainable business relationships and with our high-quality service, we can offer our customers what they really need.
   >
   > **Dr. Kim Nguyen (CEO), Dr. Martin Riegel (CEO)**

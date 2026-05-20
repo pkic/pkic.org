@@ -2,7 +2,9 @@ id: savyint
 name: Savyint Group
 slogan:
 website: https://www.savyint.com
-
+# Business domains for email
+organizationDomains:
+  - savyint.com
 # Short description, longer content can be placed in `content/members/`
 description: Our expertise spans Open Banking solutions, information security, and FinTech, particularly in the Finance/Banking & FSI, Government, Manufacturing, Telecommunications, Healthcare, Education, and Media sectors.
 
@@ -16,33 +18,33 @@ workingGroups:
   - TCWG
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: null
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: Steve Huang
     role: CTO
     social:
-      x: 
+      x:
       linkedin: http://linkedin.com/in/steve-huang-4139b8158
     description: Steve is the CTO at Savyint Group and represents the organization at the PKI Consortium.

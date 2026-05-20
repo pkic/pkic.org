@@ -2,7 +2,9 @@ id: pqcee
 name: pQCee
 slogan: Be Quantum Ready
 website: https://www.pqcee.com
-
+# Business domains for email
+organizationDomains:
+  - pqcee.com
 # Short description, longer content can be placed in `content/members/`
 description: pQCee Pte Ltd is a deep-tech startup in the quantum cybersecurity space.  It is in the business of designing and building post-quantum products and services to strengthen and protect the next generation of computing against quantum attacks.
 

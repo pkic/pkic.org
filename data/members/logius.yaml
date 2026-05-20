@@ -2,45 +2,48 @@ id: logius
 name: Logius
 slogan: Public Key Infrastructure for the Dutch government
 website: https://www.logius.nl/english
-
+# Business domains for email
+organizationDomains:
+  - logius.nl
 # Short description, longer content can be placed in `content/members/`
 description: Logius manages PKIoverheid, which is the name for the PKI designed for trustworthy electronic communication within and with the Dutch government. To reach this goal a national PKI certificate hierarchy has been realized.
 
 # membership
 memberSince: 2021-06-22
-memberType: H2
+memberType:
+  H2
   #Government
 workingGroups:
-  - PKIMM 
+  - PKIMM
   - PQC
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
   x: https://x.com/logius_minbzk
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://nl.linkedin.com/company/logius
   youtube:
 
@@ -48,6 +51,6 @@ representatives:
   - name: Albert de Ruiter
     role: Policy Authority PKI (Dutch Government)
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Albert de Ruiter operates the Policy Authority at Logius, the digital government service organization of the Netherlands. He is also a member of the QvC (Quantum Secure Cryptography) working group of the Dutch government, a board member of HAPKIDO, and a member of the PKI Consortium. Albert is known for introducing the idea of a Post-Quantum Cryptography Conference to the PKI Consortium in 2022.

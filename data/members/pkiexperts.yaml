@@ -2,7 +2,9 @@ id: pkiexperts
 name: PKI Experts GmbH
 slogan:
 website: https://pkiexperts.com
-
+# Business domains for email
+organizationDomains:
+  - pkiexperts.com
 # Short description, longer content can be placed in `content/members/`
 description: PKI Experts consults to help you design and implement enterprise PKI and smart card management solutions that are vendor independent.
 
@@ -10,37 +12,36 @@ description: PKI Experts consults to help you design and implement enterprise PK
 memberSince: 2026-01-06
 memberType: H2
 workingGroups:
-  
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +51,6 @@ representatives:
   - name: Marco Schreiber
     role: Consultant
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/marco-schreiber-93a563b9/
     description: Marco is the Consultant at PKI Experts GmbH and represents the organization at the PKI Consortium.

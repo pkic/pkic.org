@@ -13,22 +13,26 @@
   representatives:
     - name: Patrick Nohe
       role: Senior Product Marketing Manager
+      from: 2019-11-01
+      till: 2023-05-31
     - name: Doug Beattie
       role: VP Product Management
+      from: 2013-11-01
+      till: 2026-03-13
 
 # DigiCert, former member
 - name: DigiCert
   description:
   website: https://www.digicert.com
   representatives:
-   - name: Corey Bonnell
-     role: Principal Industry Liaison
+    - name: Corey Bonnell
+      role: Principal Industry Liaison
 
 - name: Oracle
   description:
   website: https://www.oracle.com
   representatives:
-   - name: Erik Costlow
-     role: Principal Product Manager
-     from: 2013-07-01
-     till: 2016-11-30
+    - name: Erik Costlow
+      role: Principal Product Manager
+      from: 2013-07-01
+      till: 2016-11-30

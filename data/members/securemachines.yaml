@@ -2,9 +2,11 @@ id: securemachines
 name: SecureMachines
 slogan:
 website: https://www.securemachines.in
-
+# Business domains for email
+organizationDomains:
+  - securemachines.in
 # Short description, longer content can be placed in `content/members/`
-description: SecureMachines is a deep-tech security company building India's first Quantum-Safe Hardware Security Module (HSM) platform. 
+description: SecureMachines is a deep-tech security company building India's first Quantum-Safe Hardware Security Module (HSM) platform.
 
 # membership
 memberSince: 2025-03-07
@@ -15,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/secure-machines
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,7 +53,7 @@ representatives:
   - name: Shreenivas Hegde
     role: CTO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/shreenivas-hegde
     description: Shreenivas Hegde is the CTO at SecureMachines and represents the organization at the PKI Consortium.
 

@@ -2,7 +2,10 @@ id: zotrus-technology
 name: ZoTrus Technology
 slogan: Make Zero Trust Zero Threshold
 website: https://www.zotrus.com/
-
+# Business domains for email
+organizationDomains:
+  - ztbro.com
+  - zotrus.com
 # Short description, longer content can be placed in `content/members/`
 description: A Zero Trust Security Provider Based on Cryptographic Technology
 
@@ -14,31 +17,31 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.zotrus.com/en/blog/
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  pinterest: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  pinterest:
+  linkedin:
+  youtube:

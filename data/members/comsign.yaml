@@ -2,7 +2,9 @@ id: comsign
 name: ComSign
 slogan: Israel’s oldest and largest CA with over 20 years of experience in PKI solutions
 website: https://www.comsigntrust.com
-
+# Business domains for email
+organizationDomains:
+  - comda.co.il
 # Short description, longer content can be placed in `content/members/`
 description: ComSign has vast experience in providing digital signature and PKI solutions to any sized organizations
 
@@ -16,31 +18,31 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.comsigntrust.com/comsigntrust-press-kit/
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
+  x:
   facebook: https://www.facebook.com/comsign99/
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/comsign/
   youtube: https://www.youtube.com/channel/UCGK4OeeJhZz1oZyjeno8TsA
 
@@ -52,7 +54,7 @@ representatives:
   - name: Yair Eisenstein
     role: Business Development & Project Department Manager
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/yaireisenstein/
     description: Yair Eisenstein is the Business Development & Project Department Manager at ComSign and represents the organization at the PKI Consortium
 

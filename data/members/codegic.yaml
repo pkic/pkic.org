@@ -2,7 +2,9 @@ id: codegic
 name: Codegic
 slogan: Facilitating Enterprise Trust
 website: https://www.codegic.com
-
+# Business domains for email
+organizationDomains:
+  - codegic.com
 # Short description, longer content can be placed in `content/members/`
 description: Codegic specializes in innovative PKI and Digital Signatures solutions for its customers. Codegic delivers easy to use products covering Timestamping, Document Signing & Digital Certificates issuance helping enterprises solve complex security & identity issues that emerge during digital adoption.
 
@@ -22,15 +24,15 @@ blog:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media

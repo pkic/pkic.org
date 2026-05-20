@@ -2,7 +2,9 @@ id: harica
 name: HARICA
 slogan: Hellenic Academic and Research Institutions Certification Authority
 website: https://www.harica.gr/
-
+# Business domains for email
+organizationDomains:
+  - harica.gr
 # Short description, longer content can be placed in `content/members/`
 description: HARICA is the Hellenic Academic & Research Institutions Certification Authority. It participates in all major Global 'ROOT CA' Trust Programs, and operates as a 'Trust Anchor' in widely used Application Software and Operating Systems.
 
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
-  facebook: 
+  x:
+  facebook:
   instagram:
-  linkedin: 
-  youtube: 
+  linkedin:
+  youtube:
 
 # Here you can list those who represent the member
 representatives:
@@ -57,7 +59,7 @@ content: |
 
   HARICA is currently the only 'Root CA Operator' in Greece that participates in all major Global 'ROOT CA' Trust Programs (360, Adobe, Apple, Microsoft, Mozilla), and operates as a 'Trust Anchor' in widely used Application Software and Operating Systems (Adobe, Apple, Google, Microsoft, Mozilla, Linux).
 
-  HARICA, is currently funded by [Academic Network (GUnet)](http://www.gunet.gr/), a non-profit civil company. Its members are all the Higher Education and Academic Institutions of Greece. This GUnet service, referred to as the Hellenic Academic and Research Institutions Certification Authority (HARICA), is operated by the [IT Center](https://it.auth.gr/) of [Aristotle University of Thessaloniki](https://www.auth.gr/) and acts as a Trust Service Provider (TSP) also known as a "Certification Authority", and as a "Qualified" Trust Service Provider (QTSP). 
+  HARICA, is currently funded by [Academic Network (GUnet)](http://www.gunet.gr/), a non-profit civil company. Its members are all the Higher Education and Academic Institutions of Greece. This GUnet service, referred to as the Hellenic Academic and Research Institutions Certification Authority (HARICA), is operated by the [IT Center](https://it.auth.gr/) of [Aristotle University of Thessaloniki](https://www.auth.gr/) and acts as a Trust Service Provider (TSP) also known as a "Certification Authority", and as a "Qualified" Trust Service Provider (QTSP).
 
   It is listed in the [National Registry of Qualified Trust Service Providers](http://www.eett.gr/opencms/opencms/EETT_EN/Electronic_Communications/DigitalSignatures/EsignProviders.html) which is maintained by the National Supervisory Body ([Ε.Ε.Τ.Τ.](http://www.eett.gr/)) since June 2015, offering Qualified/Advanced electronic signatures for members of the Greek Academic and Research Community, along with third-party natural/legal entities.
 

@@ -2,7 +2,9 @@ id: i-314
 name: I-314
 slogan: Solving complex problems through mathemathical thinking
 website: https://i-314.com
-
+# Business domains for email
+organizationDomains:
+  - i-314.com
 # Short description, longer content can be placed in `content/members/`
 description: State of the Art Machine Learning & Quantum Computing techonolgy for problem solving
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Juan Brana
     role: CISO
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Juan is the CISO at I-314 S.A. and represents the organization at the PKI Consortium.

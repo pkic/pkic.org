@@ -2,7 +2,9 @@ id: techexcel
 name: TechExcel Inc.
 slogan:
 website: https://www.techexcel.com/
-
+# Business domains for email
+organizationDomains:
+  - techexcel.com
 # Short description, longer content can be placed in `content/members/`
 description: TechExcel bridges the gap between product development and service/support with a unified platform for ALM, ITSM and customer support.
 
@@ -17,31 +19,31 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://techexcel.com/news-events/
   feed: https://techexcel.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/techexcel
   facebook: https://www.facebook.com/TechExcel/
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/techexcel/
   youtube: https://www.youtube.com/user/TechExcelTV
 
@@ -53,6 +55,6 @@ representatives:
   - name: Amy Cowan
     role: Account Manager
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/amy-cowan-b55591152/
     description: Amy is the Account Manager at TechExcel Inc. and represents the organization at the PKI Consortium.

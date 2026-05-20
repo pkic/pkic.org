@@ -1,15 +1,16 @@
 id: ecac
 name: ECAC
 slogan: Electronic Certification Accreditation Council
-website: https://www.ecac.org.pk
-
+website: https://www.ecac.gov.pk
+# Business domains for email
+organizationDomains:
+  - ecac.gov.pk
 # Short description, longer content can be placed in `content/members/`
 description: ECAC, Government of Pakistan is a regulatory body for Certificate Service Providers
 
 # membership
 memberSince: 2021-07-20
-memberType: C
-  #Regulator
+memberType: H1
 workingGroups:
   - CM
   - PKIMM
@@ -18,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: https://www.ecac.org.pk/press
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: https://www.ecac.org.pk/careers
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/ecac_pak
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -61,6 +62,6 @@ representatives:
 # Long-form content (markdown)
 title: Electronic Certification Accreditation Council (ECAC)
 content: |
-  Electronic Certification and Accreditation Council (ECAC), established by Federal Government of Pakistan, under Section-18 of Electronic Transaction Ordinance, 2002 (ETO), is an autonomous body and operates under Ministry of Information Technology & Telecom (MoIT), Government of Pakistan. 
+  Electronic Certification and Accreditation Council (ECAC), established by Federal Government of Pakistan, under Section-18 of Electronic Transaction Ordinance, 2002 (ETO), is an autonomous body and operates under Ministry of Information Technology & Telecom (MoIT), Government of Pakistan.
 
   ECAC being fully functional regulatory body has enforcement powers to regulate electronic transactions in public and private sectors. ECAC is mandated to grant accreditation to approved crypto apparatus and accreditation to any Certificate Service Providers who intends to work as an Accredited Service Provider in Pakistan. The Council has started regulating PKI Certification Authority service providers in Pakistan under ETO and regulations framed thereunder.

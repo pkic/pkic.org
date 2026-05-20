@@ -2,7 +2,9 @@ id: adaptivesystemsinc
 name: Adaptive Systems Inc.
 slogan:
 website: https://www.adaptivesystemsinc.com
-
+# Business domains for email
+organizationDomains:
+  - adaptivesystemsinc.com
 # Short description, longer content can be placed in `content/members/`
 description: Data Security and Compliance Company Princeton NJ Adaptive Systems Data Security, Data Privacy and Compliance company Adaptive Systems specializing in database security, DLP, information security, data-at-rest encryption and encryption key management
 
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   #feed: https://www.adaptivesystemsinc.com/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +52,6 @@ representatives:
   - name: Raj Soni
     role: President
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/rajsoniadaptivesystems/
     description: Raj is the President at Adaptive Systems Inc. and represents the organization at the PKI Consortium.

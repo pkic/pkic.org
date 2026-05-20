@@ -2,7 +2,9 @@ id: trusthub
 name: TrustHub
 slogan: Your Trust Service Provider
 website: https://www.trusthub.cloud
-
+# Business domains for email
+organizationDomains:
+  - trusthub.cloud
 # Short description, longer content can be placed in `content/members/`
 description: Solutions for the electronic and digital signing of electronic documents
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.trusthub.cloud/category/all/
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
+  x:
+  facebook:
   instagram: https://www.instagram.com/trusthub.cloud/
   linkedin: https://www.linkedin.com/company/trusthub-llc
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: Roberto Minoletti
     role: Founder & CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/robertominoletti/
     description: Roberto is the Founder & CEO at Trusthub LLC and represents the organization at the PKI Consortium.

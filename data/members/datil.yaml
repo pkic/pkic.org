@@ -1,8 +1,10 @@
 id: datil
 name: Datil
-slogan: 
+slogan:
 website: https://datil.com
-
+# Business domains for email
+organizationDomains:
+  - datil.com
 # Short description, longer content can be placed in `content/members/`
 description: Dátil is an accredited Certificate Authority in Ecuador
 
@@ -14,24 +16,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
@@ -39,6 +41,6 @@ social:
   x: https://x.com/datilhq
   facebook: https://www.facebook.com/datilhq
   instagram: https://instagram.com/datilhq
-  pinterest: 
+  pinterest:
   linkedin: https://www.linkedin.com/company/datilmedia/
-  youtube: 
+  youtube:

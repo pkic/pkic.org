@@ -2,7 +2,9 @@ id: cisco
 name: Cisco Systems
 slogan:
 website: https://www.cisco.com
-
+# Business domains for email
+organizationDomains:
+  - cisco.com
 # Short description, longer content can be placed in `content/members/`
 description: Cisco is a worldwide technology leader. Our purpose is to power an inclusive future for all through software, networking, security, computing, and more solutions.
 
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +52,6 @@ representatives:
   - name: Scott Fluhrer
     role: Principal Engineer
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/scott-fluhrer-a824a0265
     description: Scott is the Principal Engineer at Cisco Systems and represents the organization at the PKI Consortium.

@@ -2,9 +2,11 @@ id: pradeep-kumar-mohanty
 name: Pradeep Kumar Mohanty
 slogan:
 website: https://www.nitrkl.ac.in/
-
+# Business domains for email
+organizationDomains:
+  - nitrkl.ac.in
 # Short description, longer content can be placed in `content/members/`
-description:  PhD researcher in hardware security and VLSI systems, specializing in lightweight cryptographic architectures (ASCON) and secure RISC-V processors. My work focuses on designing energy-efficient, attack-resilient hardware for edge AI and post-quantum environments. I aim to develop scalable secure architectures for next-generation embedded systems.
+description: PhD researcher in hardware security and VLSI systems, specializing in lightweight cryptographic architectures (ASCON) and secure RISC-V processors. My work focuses on designing energy-efficient, attack-resilient hardware for edge AI and post-quantum environments. I aim to develop scalable secure architectures for next-generation embedded systems.
 
 # membership
 memberSince: 2026-04-28
@@ -17,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,7 +55,7 @@ representatives:
   - name: Pradeep Kumar Mohanty
     role: Research Scholar
     social:
-      x: 
+      x:
       google: https://sites.google.com/view/erpkmohanty
       linkedin: https://www.linkedin.com/in/er-pradeep/
     description: Pradeep Kumar is a Ph.D. research scholar at National Institute of Technology Rourkela under the C2S program, specializing in secure VLSI design.

@@ -2,7 +2,9 @@ id: viavisolutions
 name: VIAVI Solutions
 slogan:
 website: https://www.viavisolutions.com
-
+# Business domains for email
+organizationDomains:
+  - viavisolutions.com
 # Short description, longer content can be placed in `content/members/`
 description: VIAVI Solutions offers security performance test solutions prior to deployment. SASE, PQC.
 
@@ -13,24 +15,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://blog.viavisolutions.com/
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.viavisolutions.com/en-uk/corporate/news-and-events/news-releases
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://www.viavisolutions.com/en-uk/corporate/careers/search-and-apply
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -49,7 +51,7 @@ representatives:
   - name: Sam Darwish
     role: 5G & Wireless Sales Director
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/sam-darwish-25915a2/
     description: Sam is the 5G & Wireless Sales Director at VIAVI Solutions and represents the organization at the PKI Consortium.
 

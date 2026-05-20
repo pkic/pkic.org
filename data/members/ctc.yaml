@@ -2,7 +2,9 @@ id: ctc
 name: Concurrent Technologies Corporation
 slogan:
 website: https://www.ctc.com
-
+# Business domains for email
+organizationDomains:
+  - ctc.com
 # Short description, longer content can be placed in `content/members/`
 description: Concurrent Technologies Corporation, is recognized as one of the top not-for-profit research and developers of comprehensive solutions in the areas of advanced engineering and manufacturing, information technology and readiness and training. Our engineers specialize in additive manufacturing, mechanical testing, prototyping, hypersonic technologies, and friction stir welding. CTC is a leader in artificial intelligence and machine learning, cloud architecture and security, cross domain solutions, cybersecurity, synthetic environments, and more. Our readiness division provides deep expertise and valuable technologies that support our nation’s efforts to be ready for and to act effectively during emergencies that disrupt normal activities. Our full-lifecycle solutions make the world safer and more productive.
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: Michele Stosick
     role: Senior Proposal Lead
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Michele is the Senior Proposal Lead at Concurrent Technologies Corporation and represents the organization at the PKI Consortium.

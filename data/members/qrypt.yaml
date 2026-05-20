@@ -2,7 +2,9 @@ id: qrypt
 name: Qrypt
 slogan:
 website: https://www.qrypt.com
-
+# Business domains for email
+organizationDomains:
+  - qrypt.com
 # Short description, longer content can be placed in `content/members/`
 description: Quantum-Secure, Qrypt makes everlasting encryption accessible to all by reimagining how data is encrypted, transmitted, and stored.
 
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.qrypt.com/resources/?postCategory=Blog+Post
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.qrypt.com/resources/?postCategory=News
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://www.qrypt.com/careers/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/qrypt_inc
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/qrypt-inc/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +52,6 @@ representatives:
   - name: Denis Mandich
     role: CTO
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Denis is the CTO at Qrypt and represents the organization at the PKI Consortium.

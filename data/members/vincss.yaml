@@ -2,7 +2,9 @@ id: vincss
 name: VinCSS JSC
 slogan:
 website: https://vincss.net/
-
+# Business domains for email
+organizationDomains:
+  - vincss.net
 # Short description, longer content can be placed in `content/members/`
 description: VinCSS Internet Security Services JSC, established in 2018, is a leading company in the cybersecurity industry, driven by its mission to Pioneer For A Better Digital World.
 
@@ -15,31 +17,31 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://blog.vincss.net/category/vincss-news-en/
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://twitter.com/VinCSSCyber
   facebook: https://www.facebook.com/vincss.net
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/vincss/
   youtube: https://www.youtube.com/@vincssofficial
 
@@ -51,7 +53,7 @@ representatives:
   - name: Simon Trac Do
     role: Founder & CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/simon-trac-do-1916a42/
     description: Simon Trac is the Founder & CEO at VinCSS JSC and represents the organization at the PKI Consortium.
 

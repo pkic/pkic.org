@@ -2,7 +2,9 @@ id: quantinuum
 name: Quantinuum
 slogan: Accelerate quantum computing and use its power to positively transform the world
 website: https://www.quantinuum.com/
-
+# Business domains for email
+organizationDomains:
+  - quantinuum.com
 # Short description, longer content can be placed in `content/members/`
 description: Quantinuum unites best-in-class software with high-fidelity hardware to accelerate quantum computing. With integrated full-stack technology, our world-class scientists are rapidly scaling quantum computing.
 
@@ -10,28 +12,28 @@ description: Quantinuum unites best-in-class software with high-fidelity hardwar
 memberSince: 2024-02-06
 memberType: G
 workingGroups:
- - PQC
+  - PQC
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -40,7 +42,7 @@ social:
   facebook: https://www.facebook.com/QuantinuumQC
   instagram: https://www.instagram.com/quantinuumqc/
   linkedin: https://www.linkedin.com/company/quantinuumqc/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +52,6 @@ representatives:
   - name: Marion Le Masson
     role: Senior Product Manager
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Marion is the Senior Product Manager at Quantinuum and represents the organization at the PKI Consortium.

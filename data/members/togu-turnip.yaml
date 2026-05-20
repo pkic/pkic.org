@@ -2,9 +2,11 @@ id: togu-turnip
 name: Togu Turnip
 slogan:
 website:
-
+# Business domains for email
+organizationDomains:
+  - dtu.dk
 # Short description, longer content can be placed in `content/members/`
-description:  I am currently pursuing his PhD degree in the Department of Technology Engineering at Denmark Technical University, Denmark. My research interests are in the areas of information security and cryptography, as well as network security.
+description: I am currently pursuing his PhD degree in the Department of Technology Engineering at Denmark Technical University, Denmark. My research interests are in the areas of information security and cryptography, as well as network security.
 
 # membership
 memberSince: 2025-06-24
@@ -13,34 +15,34 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/in/togu-novriansyah-turnip/
   youtube:
-  github: 
+  github:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +52,6 @@ representatives:
   - name: Togu Turnip
     role: PhD Student
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/togu-novriansyah-turnip/
     description: Togu is a PhD student and represents the organization at the PKI Consortium.

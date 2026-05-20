@@ -2,7 +2,9 @@ id: tilaka
 name: Tilaka Nusa Teknologi
 slogan: Your Digital ID and Certificate Trusted Partner
 website: https://www.tilaka.id
-
+# Business domains for email
+organizationDomains:
+  - tilaka.id
 # Short description, longer content can be placed in `content/members/`
 description: PT Tilaka Nusa Teknologi was established in 2019 to be the answer to business needs in various industries related to legality and data security in the digital world.
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
+  x:
+  facebook:
   instagram: https://www.instagram.com/tilaka_id/
   linkedin: https://www.linkedin.com/company/tilaka/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Abraham Ferdinand Inoerawan
     role: co-CTO
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Abraham Ferdinand is the co-CTO at Tilaka Nusa Teknologi and represents the organization at the PKI Consortium.

@@ -1,8 +1,10 @@
 id: wellsfargo
 name: Wells Fargo
-slogan: 
+slogan:
 website: https://www.wellsfargo.com
-
+# Business domains for email
+organizationDomains:
+  - wellsfargo.com
 # Short description, longer content can be placed in `content/members/`
 description: Wells Fargo is a financial institution that operates its own private PKI and relies on many public PKI, with a strong interest in industry standards (e.g. ASC X9, ISO TC68), and leading the industry towards the inevitable post-quantum cryptography (PQC) transition.
 
@@ -13,24 +15,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media

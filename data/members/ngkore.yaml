@@ -2,7 +2,9 @@ id: ngkore
 name: NgKore
 slogan: Driving OPEN SOURCE Innovation for the FUTURE
 website: https://ngkore.org/
-
+# Business domains for email
+organizationDomains:
+  - ngkore.org
 # Short description, longer content can be placed in `content/members/`
 description: NgKore is an open-source community driving innovation across Quantum Safe Network, Post-Quantum Cryptography (PQC), eBPF, 5G Advanced, 6G, O-RAN, NTN, AI/ML, Blockchain, and Quantum Simulations.
 

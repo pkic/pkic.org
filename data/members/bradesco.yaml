@@ -2,7 +2,9 @@ id: bradesco
 name: Banco Bradesco
 slogan:
 website: https://banco.bradesco
-
+# Business domains for email
+organizationDomains:
+  - bradesco.com.br
 # Short description, longer content can be placed in `content/members/`
 description: O Bradesco é um dos líderes do setor financeiro privado e um dos maiores empregadores na categoria. Além disso, apresenta o melhor índice de eficiência entre os bancos de varejo.
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/bradesco/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: Luciano Carolino
     role: IT Security Specialist
     social:
-      x: 
+      x:
       linkedin: https://br.linkedin.com/in/luciano-carolino
     description: Luciano is the IT Security Specialist at Banco Bradesco and represents the organization at the PKI Consortium.

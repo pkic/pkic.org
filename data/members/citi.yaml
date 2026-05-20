@@ -1,8 +1,10 @@
 id: citi
 name: Citi
-slogan: 
+slogan:
 website: https://www.citi.com/
-
+# Business domains for email
+organizationDomains:
+  - citi.com
 # Short description, longer content can be placed in `content/members/`
 description: Citi's mission is to serve as a trusted partner to our clients by responsibly providing financial services that enable growth and economic progress. We have set expectations for how we must act to bring our mission to life. These expectations are at the heart of our Leadership Principles – we take ownership, we deliver with pride and we succeed together.
 
@@ -13,27 +15,26 @@ workingGroups:
   - PQC
   - TCWG
 
-
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://www.citigroup.com/global/news
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://careers.citigroup.com/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -52,11 +53,11 @@ representatives:
   - name: Sudha Iyer
     role: CISO Cryptography
     social:
-      x: 
-      linkedin: https://www.linkedin.com/in/sudhaeiyer 
+      x:
+      linkedin: https://www.linkedin.com/in/sudhaeiyer
     description: I am the head of cryptographic key and certificate management modernization at Citi. I have been involved in senior level industry and open standards forums.
 
-  - name:  Kornél Réti
+  - name: Kornél Réti
     role: Senior PKI/Crypto Engineer at Citi
     social:
       x:

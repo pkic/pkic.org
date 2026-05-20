@@ -2,7 +2,9 @@ id: medtronic
 name: Medtronic
 slogan:
 website: https://www.medtronic.com/en-us/index.html
-
+# Business domains for email
+organizationDomains:
+  - medtronic.com
 # Short description, longer content can be placed in `content/members/`
 description: People-centered, data-driven, personalized. Solving our world’s biggest health challenges with advanced technology.
 
@@ -13,33 +15,33 @@ workingGroups:
   - PQC
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Tom Wolf
     role: Senior Distinguished Systems Security Engineer
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/tom-wolf-5ab920/
     description: Tom is the Senior Distinguished Systems Security Engineer at Medtronic and represents the organization at the PKI Consortium.

@@ -2,45 +2,47 @@ id: techsource
 name: Technology source
 slogan:
 website: https://techsource.iq
-
+# Business domains for email
+organizationDomains:
+  - techsource.iq
 # Short description, longer content can be placed in `content/members/`
-description: At Technology Source, we are the first Trust Service Provider (TSP) in Iraq. Our mission is to empower government institutions, businesses and individuals to securely sign and manage their documents with ease and efficiency. 
+description: At Technology Source, we are the first Trust Service Provider (TSP) in Iraq. Our mission is to empower government institutions, businesses and individuals to securely sign and manage their documents with ease and efficiency.
 
 # membership
 memberSince: 2024-04-16
 memberType: A
 workingGroups:
- - TCWG 
+  - TCWG
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://techsource.iq/#blog
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
+  x:
   facebook: https://www.facebook.com/profile.php?id=100083795857490
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/technology-source101/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +52,6 @@ representatives:
   - name: Noor Alazzawi
     role: Pki operation manager
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/noor-al-azzawi-561a921b7/
     description: Noor is the Pki operation manager at Technology source and represents the organization at the PKI Consortium.

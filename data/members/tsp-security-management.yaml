@@ -1,10 +1,12 @@
 id: tsp-security-management
 name: TSP Security Management
-slogan: 
+slogan:
 website: # https://tspsecuritymanagement.nl/
-
+# Business domains for email
+organizationDomains:
+  - tspsecuritymanagement.nl
 # Short description, longer content can be placed in `content/members/`
-description: TSP Security Management was founded by the experienced PKI specialist Remy Hoogerwerf and offers PKI consultancy and services cover the entire PKI lifecycle. The company's high-profile clientele includes banks, insurance companies, and government entities in the Netherlands. 
+description: TSP Security Management was founded by the experienced PKI specialist Remy Hoogerwerf and offers PKI consultancy and services cover the entire PKI lifecycle. The company's high-profile clientele includes banks, insurance companies, and government entities in the Netherlands.
 
 # membership
 memberSince: 2022-03-21
@@ -13,30 +15,30 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
-  facebook: 
+  x:
+  facebook:
   instagram:
-  linkedin: 
-  youtube: 
+  linkedin:
+  youtube:

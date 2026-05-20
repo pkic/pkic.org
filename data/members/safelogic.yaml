@@ -2,7 +2,9 @@ id: safelogic
 name: SafeLogic
 slogan:
 website: https://www.safelogic.com
-
+# Business domains for email
+organizationDomains:
+  - safelogic.com
 # Short description, longer content can be placed in `content/members/`
 description: SafeLogic provides validated & interoperable cryptography software that satisfies FIPS 140, CMMC v2.0, FedRAMP, and PQC requirements. Request consultation.
 
@@ -15,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,6 +53,6 @@ representatives:
   - name: Jake Maynard
     role: Director of Engineering
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/maynardjacob/
     description: Jake is the Director of Engineering at SafeLogic and represents the organization at the PKI Consortium.

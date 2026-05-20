@@ -2,7 +2,9 @@ id: tno
 name: The Netherlands Organisation for applied scientific research
 slogan: Innovation for life
 website: https://www.tno.nl
-
+# Business domains for email
+organizationDomains:
+  - tno.nl
 # Short description, longer content can be placed in `content/members/`
 description: TNO connects people and knowledge to create innovations that boost the competitive strength of industry and the well-being of society in a sustainable way.
 
@@ -13,24 +15,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -39,7 +41,7 @@ social:
   facebook: https://www.facebook.com/TNOresearch/
   instagram: https://www.instagram.com/tno.innovation/
   linkedin: https://www.linkedin.com/company/tno/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Mark Buningh
     role: Business development manager
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Mark is the Business development manager at The Netherlands Organisation for applied scientific research and represents the organization at the PKI Consortium.

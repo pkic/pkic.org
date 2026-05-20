@@ -2,7 +2,9 @@ id: desc
 name: Dubai Electronic Security Center
 slogan:
 website: https://www.desc.gov.ae
-
+# Business domains for email
+organizationDomains:
+  - desc.gov.ae
 # Short description, longer content can be placed in `content/members/`
 description: DESC implements the values of reliability, innovation and cooperation to achieve the goals set out by the Dubai Cyber Security Strategy.
 
@@ -15,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: null
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,6 +53,6 @@ representatives:
   - name: Afra Bin Fares
     role: Policy and Regulations Manager
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/afrabinfares/
     description: Afra is the Policy and Regulations Manager at Dubai Electronic Security Center and represents the organization at the PKI Consortium.

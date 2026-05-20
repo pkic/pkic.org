@@ -2,7 +2,9 @@ id: telia
 name: Telia Company AB
 slogan:
 website: https://cps.trust.telia.com
-
+# Business domains for email
+organizationDomains:
+  - teliacompany.com
 # Short description, longer content can be placed in `content/members/`
 description: Telia Company AB is a leading Nordic and Baltic digital communications provider headquartered in Sweden.
 
@@ -17,31 +19,31 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/teliacompany/
   youtube: https://www.youtube.com/@TeliaCompany
 
@@ -53,6 +55,6 @@ representatives:
   - name: Antti Backman
     role: Security and Compliance Manager, Telia Certificate Authority
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/antti-backman-aab9332/
     description: Antti is the Security and Compliance Manager, Telia Certificate Authority at Telia Company AB and represents the organization at the PKI Consortium.

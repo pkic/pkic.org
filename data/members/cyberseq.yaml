@@ -2,7 +2,9 @@ id: cyberseq
 name: CyberSeQ
 slogan:
 website: https://cyberseq.io/
-
+# Business domains for email
+organizationDomains:
+  - cyberseq.net
 # Short description, longer content can be placed in `content/members/`
 description: CyberSeQ™ - AI-powered post-quantum cryptography migration platform. Only solution combining CADI discovery with automated refactoring for enterprise PQC compliance. 90% faster than traditional crypto audits.
 
@@ -17,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +55,6 @@ representatives:
   - name: Mark Tehrani
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://de.linkedin.com/in/madjid-tehrani
     description: Mark is the CEO at CyberSeQ and represents the organization at the PKI Consortium.

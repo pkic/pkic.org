@@ -2,7 +2,9 @@ id: uwe-gradenegger
 name: Uwe Gradenegger
 slogan:
 website:
-
+# Business domains for email
+organizationDomains:
+  - gradenegger.eu
 # Short description, longer content can be placed in `content/members/`
 description: I work in the PKI team of Deutsche Bahn, the largest railroad organization in europe. I also own a part-time consulting business on PKI and run a blog on this topic. I worked six years for Microsoft on PKI and AD CS. I also develop Add-Ons for MS AD CS.
 
@@ -13,34 +15,34 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: https://www.gradenegger.eu/de/feed/
   language: de_DE
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: de_DE
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: de_DE
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/in/uwe-gradenegger-1b09a6303/
   youtube:
-  github: 
+  github:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -48,8 +50,8 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Uwe Gradenegger
-    role: Expert PKI 
+    role: Expert PKI
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/uwe-gradenegger-1b09a6303/
     description: Uwe is an expert in PKI and represents the organization at the PKI Consortium.

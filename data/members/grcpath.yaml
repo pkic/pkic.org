@@ -2,7 +2,9 @@ id: grcpath
 name: GRC PATH
 slogan:
 website: https://www.grcpath.com
-
+# Business domains for email
+organizationDomains:
+  - grcpath.com
 # Short description, longer content can be placed in `content/members/`
 description: "GRC PATH is the first Iraqi company that provides consultation services on : IT Audit, SWIFT CSP Assessment, PCI Compliance"
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
+  x:
   facebook: https://www.facebook.com/grcpathinfosec
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/grcpath
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Ali Alshekhli
     role: Principal
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/amh80/
     description: Ali is the Principal at GRC PATH and represents the organization at the PKI Consortium.

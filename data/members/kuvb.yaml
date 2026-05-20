@@ -2,7 +2,9 @@ id: kuvb
 name: KUVB
 slogan:
 website: https://www.kuvb.de
-
+# Business domains for email
+organizationDomains:
+  - kuvb.de
 # Short description, longer content can be placed in `content/members/`
 description: Ein Träger der gesetzlichen Unfallversicherung. Diese ist wie die Kranken-, Renten-, Pflege- und Arbeitslosenversicherung ein Zweig des Sozialversicherungssystems der Bundesrepublik Deutschland.
 
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,7 +52,7 @@ representatives:
   - name: Jürgen Renfer
     role: CDIO&CISO
     social:
-      x: 
+      x:
       linkedin: https://linkedin.com/in/jurede
     description: Jürgen is the CDIO&CISO at KUVB and represents the organization at the PKI Consortium.
 

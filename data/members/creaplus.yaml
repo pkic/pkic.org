@@ -1,8 +1,10 @@
 id: creaplus
 name: CREAPLUS
-slogan: 
+slogan:
 website: https://www.creaplus.com
-
+# Business domains for email
+organizationDomains:
+  - creaplus.com
 # Short description, longer content can be placed in `content/members/`
 description: CREAPLUS is dedicated to achieving a high level of cybersecurity for its customers and partners. Established in 2002 it helps organisations prepare for the cyber challenges of today and tomorrow. It offers a wide range of solutions and services that enable and ensure secure electronic business processes.
 
@@ -15,10 +17,10 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.creaplus.com/resources/blog
   # Temporarily disabled: RSS feed returns HTML (text/html; charset=utf-8) instead of XML/RSS
   # Reference: CI report - feed validation failure
@@ -40,7 +42,7 @@ representatives:
   - name: Nastja Cepak
     role: Lead Cryptographer
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/nastja-cepak-78b753a5/
     description: |
       Nastja is lead cryptographer in CREAPLUS and is active in these fields:
@@ -55,7 +57,7 @@ representatives:
   - name: Mitja Trampuz
     role: Managing director
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/mitjatrampuz/
     description: Mitja is managing director of CREAPLUS and business development professional skilled in the information security technology (cybersecurity, hardware security modules - HSMs, cryptography, PKI, network security, 2FA/MFA, ISO/IEC 27001 ISMS, risk management, encryption etc.) with more than 30 years of working experience. He is a holder of different certifications like (ISC)²’s Certified Information Systems Security Professional – CISSP and Certified Cloud Security Professional – CCSP, ISACA’s Certified Information Systems Auditor – CISA and Certified Information Security Manager – CISM, Internal Auditor for ISO/IEC 27001 and others.
 

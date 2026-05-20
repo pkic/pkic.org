@@ -2,7 +2,9 @@ id: dohatec-ca
 name: Dohatec Certifying Authority
 slogan: excellence,always
 website: http://www.dohatec-ca.com.bd/DohatecCA/index.jsp
-
+# Business domains for email
+organizationDomains:
+  - dohatec.net
 # Short description, longer content can be placed in `content/members/`
 description: An international software vendor fuelled by professional competence and pride in a Digital World, enhancing earnings from the global marketplace and enriching the workforce intellectually,professionally and economically.
 
@@ -13,10 +15,10 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://blog.dohatec.com/
   # Temporarily disabled: RSS feed returns HTML (text/html; charset=utf-8) instead of XML/RSS
   # Reference: CI report - feed validation failure
@@ -24,24 +26,24 @@ blog:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://dohatec.com/Career.aspx
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
+  x:
   facebook: https://www.facebook.com/dohatec
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/company/dohatec-new-media/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,7 +53,7 @@ representatives:
   - name: Nuzhat Atiqua Nafis
     role: Security Architect
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/nuzhat-nafis-42970656/
     description: Nuzhat is the Security Architect and operational head PKI at Dohatec New Media and represents the organization at the PKI Consortium.
 
@@ -67,7 +69,7 @@ content: |
 
   Dohatec CA is a trusted, qualified and licensed CA and issues Digital Certificates according to Bangladesh Law. Dohatec CA issues Digital Certificates for authentication, Digital Signature, Encryption, securing Website (SSL) and Email (Secure- Email).
 
-  Dohatec has procured the most proven and reputed CA solution from the region. It has purchased extensive know-how of CA Process. It designed and built own Data Centre and DR Centre. It has a fully fledged Test bed for testing solutions before implementing in production site. Dohatec CA has a complete CA setup infrastructure. It has a strong infrastructure team for 24/7 operations. 
+  Dohatec has procured the most proven and reputed CA solution from the region. It has purchased extensive know-how of CA Process. It designed and built own Data Centre and DR Centre. It has a fully fledged Test bed for testing solutions before implementing in production site. Dohatec CA has a complete CA setup infrastructure. It has a strong infrastructure team for 24/7 operations.
 
   PKI Competency
 

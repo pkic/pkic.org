@@ -1,8 +1,10 @@
 id: ng-sign
 name: NG Sign
-slogan: 
+slogan:
 website: https://www.ng-sign.com/
-
+# Business domains for email
+organizationDomains:
+  - ng-sign.com
 # Short description, longer content can be placed in `content/members/`
 description: NG Sign is a software development company with its headquarters in Tunisia.
 
@@ -13,31 +15,31 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
+  x:
   facebook: https://www.facebook.com/ngsign
   instagram:
   pinterest:
   linkedin: https://www.linkedin.com/company/ngsign/
-  youtube: 
+  youtube:

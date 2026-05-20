@@ -2,7 +2,9 @@ id: qaigs
 name: QAGs.com
 slogan:
 website: https://www.qaigs.com
-
+# Business domains for email
+organizationDomains:
+  - qaigs.com
 # Short description, longer content can be placed in `content/members/`
 description: Quantum and Generative AI solutions simplified
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: Hemanth Kannamarlapudi
     role: Founder and Product Manager
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/hemanth-rajk/
     description: Hemanth is the Founder and Product Manager at QAGs.com and represents the organization at the PKI Consortium.

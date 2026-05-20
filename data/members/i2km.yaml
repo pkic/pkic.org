@@ -2,7 +2,10 @@ id: i2km
 name: i2km, inc
 slogan: Intelligence in Key Management
 website: https://i2km.com
-
+# Business domains for email
+organizationDomains:
+  - i2km.com
+  - keymirror.io
 # Short description, longer content can be placed in `content/members/`
 description: Dedicated to providing real-time cryptographic visibility and intelligence to secure your key management infrastructure across all environments.
 
@@ -15,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,7 +54,7 @@ representatives:
   - name: Robert Fitzpatrick
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/rob-fitzpatrick-ph-d-27052b1a3/
     description: Robert is the CEO at i2km, inc and represents the organization at the PKI Consortium.
 

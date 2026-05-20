@@ -2,7 +2,9 @@ id: qizsecurity
 name: QIZ Security
 slogan:
 website: https://www.qizsecurity.com
-
+# Business domains for email
+organizationDomains:
+  - qizsecurity.com
 # Short description, longer content can be placed in `content/members/`
 description: QIZ helps organizations gain cryptographic visibility, manage risks, and prepare for the post-quantum era with crypto-agility at scale.
 
@@ -18,30 +20,30 @@ sponsor:
   level: Gold
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://qizsecurity.com/careers
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/qizsecurity/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,7 +53,7 @@ representatives:
   - name: Ben Volkow
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/benvolkow/
     description: Ben is the CEO of QIZ Security that focus on PQC migration and Crypto Posture Management, I've been SW Engineer by education and performing CEO roles in the networking and cyber domain for the last 20 years, working with PKI and Cryptography.
 
@@ -60,5 +62,5 @@ content: |
   QIZ was founded by serial entrepreneurs to address one of the most urgent challenges security leaders face today: managing the emerging cryptography challenges and preparing for the transition to Post Quantum Cryptography (PQC).
 
   QIZ helps organizations to align cryptographic management and PQC readiness with real-world risks and compliance demands. With over 6 years PQC field experience and +100 organizations that we’ve worked with on PQC readiness, we offer the market first next generation Crypto Agility platform.
-  
+
   Backed by some of the world's most prominent VC’s, we enable organizations to understand their cryptographic posture, prioritize action, and move confidently toward a post-quantum future.

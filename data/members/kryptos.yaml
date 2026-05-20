@@ -2,7 +2,9 @@ id: kryptos
 name: Cyber Quanta / Kryptos
 slogan:
 website: https://kryptos.com.tr/
-
+# Business domains for email
+organizationDomains:
+  - cyber-quanta.com
 # Short description, longer content can be placed in `content/members/`
 description: KRYPTOS is the perfect solution for anyone who wants to securely store data in the cloud, network or any local disk. You can always share your encrypted data with your other KRYPTOS user friends, colleagues or your groups in safe and can only be decrypted by the intended receiver(s).
 
@@ -14,35 +16,35 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   # Temporarily disabled: RSS feed returns HTML (text/html; charset=utf-8) instead of XML/RSS
   # Reference: CI report - feed validation failure
   # feed: https://kryptos.com.tr/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: FARUK SARI
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/faruk-sari-phd-753738a/
     description: FARUK is the CEO at Cyber Quanta / Kryptos and represents the organization at the PKI Consortium.

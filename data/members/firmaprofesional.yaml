@@ -2,7 +2,9 @@ id: firmaprofesional
 name: Firmaprofesional
 slogan: We innovate to create secure and efficient transaction environments
 website: https://www.firmaprofesional.com/
-
+# Business domains for email
+organizationDomains:
+  - firmaprofesional.com
 # Short description, longer content can be placed in `content/members/`
 description: With a long history of supplying digital ID and payment solutions, Firmaprofesional provides a safer and simpler working day for both individuals and companies.
 
@@ -24,24 +26,24 @@ blog:
   language: es_ES
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
   x: https://x.com/FIRMAPRO
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: http://www.linkedin.com/company/firmaprofesional
-  youtube: 
+  youtube:
 
 # Here you can list those who represent the member
 representatives:

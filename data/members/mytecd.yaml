@@ -2,9 +2,11 @@ id: mytecd
 name: Tec D Distribution (Malaysia) Sdn. Bhd.
 slogan:
 website: https://mytecd.com/
-
+# Business domains for email
+organizationDomains:
+  - mytecd.com
 # Short description, longer content can be placed in `content/members/`
-description: Leading IT distributor & solutions aggregator across Asia Pacific. Serving 22,000+ partners with enterprise technology distribution & enablement. 
+description: Leading IT distributor & solutions aggregator across Asia Pacific. Serving 22,000+ partners with enterprise technology distribution & enablement.
 
 # membership
 memberSince: 2025-09-18
@@ -15,36 +17,35 @@ workingGroups:
   - PQC
   - TCWG
 
-
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -54,6 +55,6 @@ representatives:
   - name: Ong Ru Chin
     role: Business Development Manager cum Product Manager, CyberSecurity
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/ong-ru-chin-a70b0bab/
     description: Ong is the Business Development Manager cum Product Manager, CyberSecurity at Tec D Distribution (Malaysia) Sdn. Bhd. and represents the organization at the PKI Consortium.

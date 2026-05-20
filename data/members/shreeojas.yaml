@@ -2,7 +2,9 @@ id: shreeojas
 name: Shree Ojas system and techinfra Pvt Ltd.
 slogan:
 website: https://shreeojas.com/index.html
-
+# Business domains for email
+organizationDomains:
+  - shreeojas.com
 # Short description, longer content can be placed in `content/members/`
 description: Shree Ojas system and techinfra Pvt Ltd is major PKI consultant and hardware, software integration company in India.
 
@@ -17,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: null
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +55,6 @@ representatives:
   - name: Sachin Kumar
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/sachin-kumar-2382b922/
     description: Sachin is the CEO at Shree Ojas system and techinfra Pvt Ltd. and represents the organization at the PKI Consortium.

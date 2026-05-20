@@ -2,7 +2,9 @@ id: data-warehouse
 name: Data-Warehouse
 slogan:
 website: https://datawh.info
-
+# Business domains for email
+organizationDomains:
+  - dwh.gmbh
 # Short description, longer content can be placed in `content/members/`
 description: Data-Warehouse provides a german native cryptographic inventorisation and management plattform with outstanding discovery capabilities PCert(TM) since more than 10 years.
 
@@ -10,8 +12,8 @@ description: Data-Warehouse provides a german native cryptographic inventorisati
 memberSince: 2024-01-09
 memberType: F
 workingGroups:
- - TCWG
- 
+  - TCWG
+
 # sponsor
 sponsor:
   level: Gold
@@ -20,30 +22,30 @@ sponsor:
       level: Ambassador
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: https://datawh.info/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,8 +55,8 @@ representatives:
   - name: Alexander Dr. Loew
     role: CEO
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Alexander is the CEO at Data-Warehouse GmbH and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)

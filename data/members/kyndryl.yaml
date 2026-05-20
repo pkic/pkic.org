@@ -2,7 +2,9 @@ id: kyndryl
 name: Kyndryl
 slogan:
 website: https://www.kyndryl.com
-
+# Business domains for email
+organizationDomains:
+  - kyndryl.com
 # Short description, longer content can be placed in `content/members/`
 description: At Kyndryl, we design, build, manage and modernize the mission-critical technology systems that the world depends on every day.
 
@@ -17,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +55,6 @@ representatives:
   - name: Michael Krehbiel
     role: Senior Managing Consultant
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/michael-krehbiel-42541326
     description: Michael is the Senior Managing Consultant at Kyndryl and represents the organization at the PKI Consortium.

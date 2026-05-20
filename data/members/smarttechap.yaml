@@ -2,7 +2,9 @@ id: smarttechap
 name: Smart Tech Asia Pacific Sdn Bhd
 slogan:
 website: https://smarttechap.com/
-
+# Business domains for email
+organizationDomains:
+  - smarttechap.com
 # Short description, longer content can be placed in `content/members/`
 description: We are committed to driving the transition from digital to the future of quantum technology. Our priority is investing in quantum technologies to help organizations migration and transformation to quantum safe digital infrastructure including quantum research, quantum-safe communications, quantum resistance cryptography, PKE and related technologies to ensure organizations are ready for the quantum era.
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: Thaib Mustafa
     role: MD and CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/thaib-mustafa-6510088/
     description: Thaib is the MD and CEO at Smart Tech Asia Pacific Sdn Bhd and represents the organization at the PKI Consortium.

@@ -2,7 +2,9 @@ id: hacken
 name: Hacken
 slogan:
 website: https://hacken.io
-
+# Business domains for email
+organizationDomains:
+  - hacken.io
 # Short description, longer content can be placed in `content/members/`
 description: Hacken is an end-to-end blockchain security & compliance partner for digital assets. Hacken was born on blockchain, combining deep Web3 expertise with enterprise-grade quality, AI-powered offensive security, and globally recognized certifications.
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Bryn Bennett
     role: SBDM
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/skrillah
     description: Bryn is the SBDM at Hacken and represents the organization at the PKI Consortium.

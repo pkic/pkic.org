@@ -2,7 +2,9 @@ id: digitalsignature
 name: Bangla Phone Limited
 slogan:
 website: https://www.digitalsignature.com.bd/Default.aspx
-
+# Business domains for email
+organizationDomains:
+  - banglaphone.net.bd
 # Short description, longer content can be placed in `content/members/`
 description: We provide Class-1, Class-2 and Class-3 certificates for individual and organizations according to CCA guideline.
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Tapan Kumar Kundu
     role: Manager, Technical Sales
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/tapan-kumar-kundu-4b2554115/
     description: Tapan Kumar is the Manager, Technical Sales at Bangla Phone Limited and represents the organization at the PKI Consortium.

@@ -1,0 +1,57 @@
+id: ing
+name: ING
+slogan:
+website: https://ing.com/
+# Business domains for email
+organizationDomains:
+  - ing.com
+# Short description, longer content can be placed in `content/members/`
+description: ING Group N.V. is a Dutch multinational banking and financial services corporation headquartered in Amsterdam.
+
+# membership
+memberSince: 2026-04-28
+memberType: H3
+workingGroups:
+  - PQC
+
+# sponsor since 2025-02-26
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://ing.com/newsroom/news
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url: https://ing.com/newsroom/news/press-release
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url: https://careers.ing.com/en/search-jobs
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook:
+  instagram:
+  linkedin: http://www.linkedin.com/company/ing
+  youtube: https://www.youtube.com/ing
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Lucas Mommers
+    role: IT Area Lead - Identity and Access Management
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/lucasmommers/
+    description: Lucas is the IT Area Lead - Identity and Access Management at ING and represents the organization at the PKI Consortium.

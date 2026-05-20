@@ -1,0 +1,74 @@
+id: afieldab
+name: Afield AB
+slogan:
+website:
+# Business domains for email
+organizationDomains:
+  - afieldconsulting.com
+# Short description, longer content can be placed in `content/members/`
+description: Afield AB is an independent consultancy providing enterprise architecture and digital transformation advisory services, with an emerging specialization in post-quantum cryptography readiness.
+
+# membership
+memberSince: 2026-01-05
+memberType: H2
+workingGroups:
+  - PKIMM
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those wo no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Kennedy Nwup
+    role: Principal Consultant
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/kennedy-nwup
+    description: Kennedy is the founder of Afield AB, an independent consultancy focused on enterprise architecture, AI strategy, and post-quantum cryptography readiness. I advise organizations navigating digital transformation where cryptographic trust is foundational.
+
+# Long-form content (markdown)
+title: Afield AB
+content: |
+  Afield AB is an independent consultancy providing enterprise architecture and digital transformation advisory services, with an emerging specialization in post-quantum cryptography readiness.
+
+  Our role in the PKI ecosystem is helping enterprises—particularly in automotive and manufacturing—understand and prepare for cryptographic transition:
+
+  - Assessing cryptographic dependencies across enterprise platforms
+  - Translating regulatory requirements (DORA, NIS2, ANSSI timelines) into migration strategies
+  - Bridging the gap between cryptographic standards and organizational implementation
+  - Advising on AI system security where long operational lifespans create unique PQC exposure
+
+  We serve clients whose PKI infrastructure underpins critical business operations—financial platforms, supply chain authentication, connected products—and who need practical guidance navigating the quantum transition.
+
+  Current client relationships include Volvo Group, where we advise on digital strategy transformation across platforms handling operations in 190+ markets.

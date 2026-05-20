@@ -2,7 +2,9 @@ id: dell-technologies
 name: Dell Technologies
 slogan: With Dell Technologies, your business is always ready to move forward
 website: https://www.dell.com/
-
+# Business domains for email
+organizationDomains:
+  - dell.com
 # Short description, longer content can be placed in `content/members/`
 description: Technology drives human progress. This tenet is the core of our business and vision. Our customers and team members are integral to our continuing success as we provide the essential infrastructure for organizations to transform their digital futures.
 
@@ -13,34 +15,34 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
-  language:  
+  feed:
+  language:
 
 # Social media
 social:
-  x: 
+  x:
   facebook: https://www.facebook.com/DellTechnologies/
   instagram:
   pinterest:
   linkedin: https://www.linkedin.com/company/delltechnologies/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -48,7 +50,7 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Anoop Gulati
-    role: Public Key Infrastrucutre & Cryptographic Services Product Owner 
+    role: Public Key Infrastrucutre & Cryptographic Services Product Owner
     social:
       x:
       linkedin: https://www.linkedin.com/in/anoop-gulati/

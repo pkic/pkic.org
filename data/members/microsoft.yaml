@@ -2,7 +2,9 @@ id: microsoft
 name: Microsoft
 slogan:
 website: https://www.microsoft.com
-
+# Business domains for email
+organizationDomains:
+  - microsoft.com
 # Short description, longer content can be placed in `content/members/`
 description: Explore Microsoft products and services for your home or business. Shop Surface, Microsoft 365, Xbox, Windows, Azure, and more. Find downloads and get support.
 
@@ -17,10 +19,10 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.microsoft.com/en-us/security/blog/
   # Temporarily disabled: RSS feed returns HTML (text/html) instead of XML/RSS
   # Reference: CI report - feed validation failure
@@ -28,15 +30,15 @@ blog:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://news.microsoft.com/category/press-releases/
   feed: https://news.microsoft.com/source/feed/
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://careers.microsoft.com/
-  feed: 
+  feed:
   language: en_US
 
 # Social media

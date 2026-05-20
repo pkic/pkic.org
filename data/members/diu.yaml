@@ -2,7 +2,9 @@ id: diu
 name: Defense Innovation Unit (DIU)
 slogan: The Defense Innovation Unit (DIU) fall under the US Department of Defense
 website: https://www.diu.mil/
-
+# Business domains for email
+organizationDomains:
+  - diu.mil
 # Short description, longer content can be placed in `content/members/`
 description: DIU strengthens US national security by accelerating the adoption of leading commercial technology throughout the military and growing the national security innovation base.
 
@@ -14,31 +16,31 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
   x: https://x.com/DIU_x
   facebook: https://www.facebook.com/defenseinnovationunitX/
-  instagram: 
+  instagram:
   pinterest:
   linkedin: https://www.linkedin.com/company/diux/
   youtube: https://www.youtube.com/c/DefenseInnovationUnit/

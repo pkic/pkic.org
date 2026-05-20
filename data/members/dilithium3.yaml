@@ -3,7 +3,7 @@ name: Dilithium3
 slogan:
 website: https://dilithium3.com
 # Business domains for email
-businessDomains:
+organizationDomains:
   - dilithium3.com
 # Short description, longer content can be placed in `content/members/`
 description: Dilithium3 is a technology company focused on post-quantum cryptography.

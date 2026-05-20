@@ -2,7 +2,9 @@ id: uom
 name: University of Malakand
 slogan:
 website: https://www.uom.edu.pk
-
+# Business domains for email
+organizationDomains:
+  - uom.edu.pk
 # Short description, longer content can be placed in `content/members/`
 description: A distinctive place of learning and academic discourse for innovations and discoveries, where students are prepared to solve the challenging problems of the changing world and Pakistan.
 
@@ -16,33 +18,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: Dr Mohammad Faisal
     role: Assistant Professor
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/dr-mohammad-faisal-6a49ab289/
     description: Dr Mohammad is the Assistant Professor at University of Malakand and represents the organization at the PKI Consortium.

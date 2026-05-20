@@ -2,7 +2,9 @@ id: exequantum
 name: ExeQuantum
 slogan:
 website: https://www.exequantum.com
-
+# Business domains for email
+organizationDomains:
+  - exequantum.com
 # Short description, longer content can be placed in `content/members/`
 description: ExeQuantum delivers end-to-end PQC migration, including cryptographic discovery & inventory, remediation, and maintenance
 
@@ -15,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
   url: https://www.exequantum.com/blog
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,7 +53,7 @@ representatives:
   - name: Samuel Tseitkin
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/samuel-tseitkin-2a4b9718a/
     description: Samuel is the CEO at ExeQuantum and represents the organization at the PKI Consortium.
 

@@ -3,7 +3,9 @@ name: Dr Sanjeev Mandal
 # Jain (Deemed to be University)
 slogan:
 website:
-
+# Business domains for email
+organizationDomains:
+  - jainuniversity.ac.in
 # Short description, longer content can be placed in `content/members/`
 description: Dr. Sanjeev Kumar Mandal is an Assistant Professor at the Department of CS & IT, Jain (Deemed-to-be-University), Bangalore, India.
 
@@ -15,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,6 +53,6 @@ representatives:
   - name: Dr Sanjeev Mandal
     role: Assistant professor
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Dr Sanjeev is the Assistant professor at Jain (Deemed to be University) and represents the organization at the PKI Consortium.

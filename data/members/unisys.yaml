@@ -2,7 +2,9 @@ id: unisys
 name: Unisys
 slogan: Inspired by possibility. Driven by performance.
 website: https://www.unisys.com/
-
+# Business domains for email
+organizationDomains:
+  - unisys.com
 # Short description, longer content can be placed in `content/members/`
 description: Unisys is a global technology solutions company dedicated to helping people and organizations reach the next breakthrough. And the one after that.
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Raj Kumar
     role: Vice President Technology
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/rajkrpandey/
     description: Raj is the Vice President Technology at Unisys and represents the organization at the PKI Consortium.

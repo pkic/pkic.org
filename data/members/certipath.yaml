@@ -2,7 +2,9 @@ id: certipath
 name: CertiPath
 slogan: Helping organizations achieve ubiquitous trust online
 website: https://certipath.com/
-
+# Business domains for email
+organizationDomains:
+  - certipath.com
 # Short description, longer content can be placed in `content/members/`
 description: CertiPath focuses on the use of digital identity in the modern connected world
 
@@ -18,21 +20,21 @@ sponsor:
   level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://certipath.com/press-releases/
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://workforcenow.adp.com/mascsr/default/mdf/recruitment/recruitment.html?cid=57c7c621-d53c-4343-b966-05c3847fda18&ccId=19000101_000001&lang=en_US
-  feed: 
+  feed:
   language: en_US
 
 # Social media

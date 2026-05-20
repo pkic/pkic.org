@@ -2,7 +2,9 @@ id: uod
 name: University of Delhi
 slogan:
 website: https://www.du.ac.in/
-
+# Business domains for email
+organizationDomains:
+  - ramanaujan.du.ac.in
 # Short description, longer content can be placed in `content/members/`
 description: The University of Delhi is a premier university in India with a venerable legacy and international acclaim for its high academic standards and diverse educational programs. It is recognized as an Institution of Eminence by the Government of India, fostering a rich environment for research and innovation across various disciplines.
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Rahul Prasad
     role: Laboratory Assistant
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Rahul is the Laboratory Assistant at University of Delhi and represents the organization at the PKI Consortium.

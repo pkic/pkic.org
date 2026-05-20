@@ -1,8 +1,9 @@
 id: marco-polo-garcia
 name: Marco Polo Garcia
 slogan:
-website: 
-
+website:
+# Business domains for email
+organizationDomains:
 # Short description, longer content can be placed in `content/members/`
 description: Marco Polo is an independent consultant that participates at the PKI Consortium.
 
@@ -16,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,7 +53,7 @@ representatives:
   - name: Marco Polo Garcia
     role: Independent Architect | SIDH™ Sovereignty Framework
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/marcopolocompliancegroup/
     description: Marco Polo has over 15 years of experience in high-assurance financial environments (Tier-1 Banking), focusing on cryptographic integrity and data hibernation protocols. Expert in designing secure enclaves for PII protection and implementing the Sovereign Isolation Protocol (SIP) to mitigate third-party cloud risks. Currently developing the SIDH™ framework for post-quantum resilience in critical infrastructure.
 

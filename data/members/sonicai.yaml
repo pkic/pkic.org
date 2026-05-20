@@ -2,7 +2,9 @@ id: sonicai
 name: Sonic AI
 slogan:
 website: https://www.sonicai.ai
-
+# Business domains for email
+organizationDomains:
+  - sonicai.ai
 # Short description, longer content can be placed in `content/members/`
 description: Sonic AI is a proprietary signal injection protocol working with numerous governing bodies and rights owners to achieve content authenticity and verification.
 
@@ -16,35 +18,35 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   # Temporarily disabled: RSS feed returns invalid Content-Type (text/plain; charset=utf-8) instead of XML/RSS
   # Reference: CI report - feed validation failure
   # feed: https://www.sonicai.ai/blog-feed.xml
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -54,6 +56,6 @@ representatives:
   - name: Marc Gray
     role: CEO
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Marc is the CEO at Sonic AI and represents the organization at the PKI Consortium.

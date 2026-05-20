@@ -2,7 +2,9 @@ id: ahead
 name: AHEAD
 slogan:
 website: https://www.ahead.com/
-
+# Business domains for email
+organizationDomains:
+  - ahead.com
 # Short description, longer content can be placed in `content/members/`
 description: AHEAD accelerates the impact of technology on clients by engineering customized data, developer, and infrastructure platforms that improve IT operations.
 
@@ -11,27 +13,26 @@ memberSince: 2026-04-28
 memberType: G
 workingGroups:
 
-
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
   url: https://www.ahead.com/news/
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
   url: https://www.ahead.com/careers/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -50,7 +51,7 @@ representatives:
   - name: Trevis Halladay
     role: Director, Identity and Platform Security
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/trevis-halladay/
     description: Trevis is the Director, Identity and Platform Security at AHEAD and represents the organization at the PKI Consortium.
 

@@ -2,42 +2,44 @@ id: notarchiv
 name: NOTARchiv
 slogan: Qualified Trust Service Provider in Hungary
 website: https://notarchiv.hu/
-
+# Business domains for email
+organizationDomains:
+  - notarchiv.hu
 # Short description, longer content can be placed in `content/members/`
-description: 
+description:
 
 # membership
 memberSince: 2023-01-09
 memberType: A
-workingGroups: 
+workingGroups:
   - CA
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:

@@ -2,7 +2,9 @@ id: itida
 name: ITIDA
 slogan: Egypt Information Technology Industry Development Agency
 website: https://itida.gov.eg/English/
-
+# Business domains for email
+organizationDomains:
+  - itida.gov.eg
 # Short description, longer content can be placed in `content/members/`
 description: The Information Technology Industry Development Agency (ITIDA) is a leading agency that champions a world-class IT industry in Egypt. With its long-term commitment and substantial ongoing investment, ITIDA aims to play an increasingly important role in Egypt’s economic growth. The agency delivers sustainable improvements to the entire IT ecosystem in Egypt and has won several awards for its excellence. ITIDA is also responsible for managing the Egyptian RootCA, the Root Certificate Authority that provides digital certificates and public key infrastructure services in Egypt.
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://itida.gov.eg/English/Blogs/
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://itida.gov.eg/English/PressReleases/Pages/
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://itida.gov.eg/English/Careers/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/ITIDA?ref_src=twsrc%5Etfw
-  facebook: 
+  facebook:
   instagram: https://www.instagram.com/itidaegypt/
   linkedin: https://www.linkedin.com/company/itida
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Mahmoud Elsaeed
     role: Egypt RootCA Manager
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Mahmoud is the Egypt RootCA Manager at ITIDA and represents the organization at the PKI Consortium.

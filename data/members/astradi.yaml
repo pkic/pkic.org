@@ -2,7 +2,9 @@ id: astradi
 name: Astradi GmbH
 slogan: PQC. Done Right.
 website: https://astradi.com
-
+# Business domains for email
+organizationDomains:
+  - astradi.com
 # Short description, longer content can be placed in `content/members/`
 description: Astradi is a provider of post-quantum cryptography (PQC) solutions, dedicated to securing digital communication and data against the threat of quantum computers.
 
@@ -17,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://astradi.com/news/
   feed: https://astradi.com/en/feed/
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/astradi-gmbh/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +55,6 @@ representatives:
   - name: Nikolaus Schlachter
     role: CEO
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/niko-schlachter-70ba7713b/
     description: Nikolaus is the CEO at Astradi GmbH and represents the organization at the PKI Consortium.

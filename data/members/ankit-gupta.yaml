@@ -2,9 +2,10 @@ id: ankit-gupta
 name: Ankit Gupta
 slogan:
 website:
-
+# Business domains for email
+organizationDomains:
 # Short description, longer content can be placed in `content/members/`
-description:  Ankit is the Senior Security Engineer and participates at the PKI Consortium.
+description: Ankit is the Senior Security Engineer and participates at the PKI Consortium.
 
 # membership
 memberSince: 2026-04-28
@@ -16,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
   url: https://exeterfinance.com/press
-  feed: 
+  feed:
   language: en_US
 
 # Careers
 careers:
   url: https://exeterfinance.com/careers
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,7 +53,7 @@ representatives:
   - name: Ankit Gupta
     role: Senior Security Engineer
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/ankytgupta/
     description: Ankit is a Senior Security Engineer with a primary focus on identity, cryptography, and enterprise data protection within large-scale cloud and hybrid environments. My experience with Public Key Infrastructure (PKI) and applied cryptography spans secure identity architectures, certificate lifecycle management, and cryptographic control design across Microsoft-centric ecosystems.
 

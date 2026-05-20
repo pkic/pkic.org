@@ -2,9 +2,11 @@ id: nour-mousa
 name: Nour Mousa
 slogan:
 website:
-
+# Business domains for email
+organizationDomains:
+  - torontomu.ca
 # Short description, longer content can be placed in `content/members/`
-description:  I am a PhD student researching PQC migration.
+description: I am a PhD student researching PQC migration.
 
 # membership
 memberSince: 2025-11-12
@@ -15,34 +17,34 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/in/nourm22/
   youtube:
-  github: 
+  github:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,6 +54,6 @@ representatives:
   - name: Nour Mousa
     role: PhD student
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/nourm22/
     description: Nour is a PhD student and represents the organization at the PKI Consortium.

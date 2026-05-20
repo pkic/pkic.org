@@ -2,7 +2,9 @@ id: f-i-ts
 name: Finanz Informatik Technologie Service
 slogan: The Bridge to Digitalization in Financial Industries
 website: https://www.f-i-ts.de/
-
+# Business domains for email
+organizationDomains:
+  - f-i-ts.de
 # Short description, longer content can be placed in `content/members/`
 description: We are the right partner and are reliably at your side. We have been building tailor-made solutions for our customers for over 30 years. We see opportunities in future challenges.
 
@@ -14,31 +16,31 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://www.f-i-ts.de/blog/
   feed: https://www.f-i-ts.de/blog/feed/
   language: de_DE
 
 # Press Releases
-press: 
+press:
   url: https://www.f-i-ts.de/newsroom/presse
   feed: https://www.f-i-ts.de/newsroom/presse/feed/
   language: de_DE
 
 # Careers
-careers: 
+careers:
   url: https://www.f-i-ts.de/arbeiten-bei-fi-ts
-  feed: 
+  feed:
   language: de_DE
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/finanz-informatik-technologie-service
   youtube: https://www.youtube.com/@FITechnologieService
   xing: https://www.xing.com/pages/finanzinformatiktechnologieservice

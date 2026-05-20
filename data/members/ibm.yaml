@@ -2,7 +2,13 @@ id: ibm
 name: IBM
 slogan: THINK
 website: https://www.ibm.com
-
+# Business domains for email
+organizationDomains:
+  - ibm.com
+  - br.ibm.com
+  - us.ibm.com
+  - uk.ibm.com
+  - zurich.ibm.com
 # Short description, longer content can be placed in `content/members/`
 description: For more than a century, IBM has been a global technology innovator, leading advances in AI, automation and hybrid cloud solutions that help businesses grow.
 
@@ -16,30 +22,30 @@ sponsor:
   level: Diamond
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: null
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +55,6 @@ representatives:
   - name: Saqib Mahmood
     role: Quantum Safe Consulting Lead EMEA
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Saqib is the Quantum Safe Consulting Lead EMEA at IBM and represents the organization at the PKI Consortium.

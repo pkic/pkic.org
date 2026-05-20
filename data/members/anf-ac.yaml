@@ -2,7 +2,10 @@ id: anf-ac
 name: ANF Autoridad de Certificación
 slogan: R + D + i, the only way to excellence
 website: https://anf.es/en/
-
+# Business domains for email
+organizationDomains:
+  - anf.es
+  - anfac.org
 # Short description, longer content can be placed in `content/members/`
 description: Focused on actively contributing to the progress of society and improving the competitiveness of our customers, all of our products and solutions have been developed by our own engineering team, based in PKI technology.
 
@@ -14,33 +17,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url: https://anf.es/en/blog-eng/
   #feed: https://anf.es/en/feed/
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://anf.es/en/press/
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://anf.es/en/work-with-us/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/anf-autoridad-de-certificaci-n/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -51,8 +54,8 @@ representatives:
     name: Pablo Díaz
     role: IT Manager & Product Manager PKI
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Pablo Díaz is the IT Manager and Product Manager PKI at ANF AC and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)

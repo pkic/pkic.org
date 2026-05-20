@@ -2,13 +2,16 @@ id: uoy
 name: University of York
 slogan: In limine sapientiae
 website: https://www.york.ac.uk/
-
+# Business domains for email
+organizationDomains:
+  - york.ac.uk
 # Short description, longer content can be placed in `content/members/`
 description: The University of York is a collegiate research university in York, England
 
 # membership
 memberSince: 2024-01-09
-memberType: H4
+memberType:
+  H4
   #University
 workingGroups:
 
@@ -17,21 +20,21 @@ sponsor:
   level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_GB
 
 # Press Releases
-press: 
+press:
   url: https://www.york.ac.uk/news-and-events/news/
-  feed: 
+  feed:
   language: en_GB
 
 # Careers
-careers: 
+careers:
   url: https://jobs.york.ac.uk/
-  feed: 
+  feed:
   language: en_GB
 
 # Social media

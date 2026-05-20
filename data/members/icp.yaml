@@ -2,7 +2,9 @@ id: icp
 name: Federal Authority for Identity, Citizenship, Customs & Port Security (ICP)
 slogan:
 website: https://icp.gov.ae/en/
-
+# Business domains for email
+organizationDomains:
+  - icp.gov.ae
 # Short description, longer content can be placed in `content/members/`
 description: Federal Authority for Identity, Citizenship, Customs & Port Security (ICP) was established on Sha’ban 15, 1425H corresponding to September 29, 2004 under the name “Emirates Identity Authority” under Federal Law No. (2) for the year 2004 to establish the “Population Register and Emirates Identity Card Program”, which included recording personal and vital data for all population in the state and keeping them in electronic databases in coordination with the competent authorities, and issuing the Emirates ID Card for each individual to be registered and to contain the Emirates ID number, readable data and data stored on an electronic chip, which can be used in all entities.
 
@@ -13,32 +15,32 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/UAEICP
-  facebook: 
+  facebook:
   instagram: https://www.instagram.com/uaeicp/
-  linkedin: 
+  linkedin:
   youtube: https://www.youtube.com/c/IdentityandCitizenshipUAE_ICAUAE
 
 # Here you can list those who represent or have represented the member.
@@ -49,6 +51,6 @@ representatives:
   - name: Joao Martins
     role: PKI & Trust Services Advisor
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/jo%C3%A3o-vaz-martins-mba-pmo-doctoral-candidate-1a76582/
     description: Joao is the PKI & Trust Services Advisor at Federal Authority for Identity, Citizenship, Customs & Port Security (ICP) and represents the organization at the PKI Consortium.

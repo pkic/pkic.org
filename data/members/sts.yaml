@@ -1,7 +1,9 @@
 id: sts
 name: Special Telecommunications Service
 website: https://www.sts.ro/en/
-
+# Business domains for email
+organizationDomains:
+  - stsnet.ro
 # Short description, longer content can be placed in `content/members/`
 description: Ensuring communications and information technology secured services for the Romanian authorities
 
@@ -14,24 +16,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url: https://www.sts.ro/en/press-releases
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://www.sts.ro/en/sts_career
-  feed: 
+  feed:
   language: en_US
 
 # Social media

@@ -2,7 +2,9 @@ id: quantag-it
 name: Quantag IT Solutions
 slogan:
 website: https://quantag-it.com
-
+# Business domains for email
+organizationDomains:
+  - quantag-it.com
 # Short description, longer content can be placed in `content/members/`
 description: We develop PQC software
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/QuantagITSolut
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/quantag-it-solutions
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,8 +51,8 @@ representatives:
   - name: Sergii Salata
     role: CEO
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Sergii is the CEO at Quantag IT Solutions GmbH and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)

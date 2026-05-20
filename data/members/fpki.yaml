@@ -2,7 +2,9 @@ id: fpki
 name: Federal Public Key Infrastructure (FPKI)
 slogan: US FPKI - General Services Administraton (GSA)
 website: https://www.idmanagement.gov/ficam/#federal-public-key-infrastructure-management-authority
-
+# Business domains for email
+organizationDomains:
+  - gsa.gov
 # Short description, longer content can be placed in `content/members/`
 description: The Federal Public Key Infrastructure Management Authority (FPKIMA) enables government-wide trust by providing trust infrastructure services to federal agencies. The FPKIMA is governed under the FPKI Policy Authority (FPKIPA) and managed by the GSA Federal Acquisition Service.
 
@@ -10,35 +12,35 @@ description: The Federal Public Key Infrastructure Management Authority (FPKIMA)
 memberSince: 2021-09-07
 memberType: H1
 workingGroups:
-  - PKIMM 
+  - PKIMM
   - TCWG
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
+blog:
   url:
-  feed: 
+  feed:
   language:
 
 # Press Releases
-press: 
+press:
   url:
-  feed: 
+  feed:
   language:
 
 # Careers
-careers: 
+careers:
   url:
-  feed: 
+  feed:
   language:
 
 # Social media
 social:
-  x: 
-  facebook: 
+  x:
+  facebook:
   instagram:
-  linkedin: 
-  youtube: 
+  linkedin:
+  youtube:

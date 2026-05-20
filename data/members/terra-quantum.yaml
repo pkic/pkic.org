@@ -2,7 +2,9 @@ id: terra-quantum
 name: Terra Quantum
 slogan: Quantum is Now
 website: https://terraquantum.swiss/
-
+# Business domains for email
+organizationDomains:
+  - terraquantum.swiss
 description: Terra Quantum is leading quantum technology company, pioneering deep tech innovations across software, hardware and quantum security.
 
 memberSince: 2025-02-28
@@ -32,8 +34,8 @@ careers:
 
 social:
   x: https://x.com/terraquantum_ag
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/terra-quantum-ag/
   youtube: https://www.youtube.com/channel/UCQq9JIV1S0-DkHv9AgkcS1w
 

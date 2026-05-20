@@ -2,7 +2,9 @@ id: chttl
 name: Chunghwa Telecom Laboratories
 slogan:
 website: https://www.chttl.com.tw/en/
-
+# Business domains for email
+organizationDomains:
+  - cht.com.tw
 # Short description, longer content can be placed in `content/members/`
 description: Chunghwa Telecom Laboratories specializes in developing PKI systems and serving as a PKI provider in Taiwan.
 
@@ -17,33 +19,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,6 +55,6 @@ representatives:
   - name: Abel C. H. Chen
     role: Senior Research Fellow
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/abel-c-h-chen-56314034/
     description: Abel C. H. is the Senior Research Fellow at Chunghwa Telecom Laboratories and represents the organization at the PKI Consortium.

@@ -2,7 +2,9 @@ id: cdac
 name: CDAC
 slogan: India Centre for Development of Advanced Computing
 website: https://www.cdac.in
-
+# Business domains for email
+organizationDomains:
+  - cdac.in
 # Short description, longer content can be placed in `content/members/`
 description: The Centre for Development of Advanced Computing (C-DAC) in India is the premier Research and Development organization of the Ministry of Electronics and Information Technology (MeitY) for carrying out Research and Development in IT, Electronics and associated areas.
 
@@ -13,32 +15,32 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/cdacindia
   facebook: https://www.facebook.com/CDACINDIA
-  instagram: 
-  linkedin: 
+  instagram:
+  linkedin:
   youtube: https://www.youtube.com/c/CDACOfficial
 
 # Here you can list those who represent or have represented the member.
@@ -49,6 +51,6 @@ representatives:
   - name: Lavanya Palani
     role: PTO
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Lavanya is the PTO at CDAC and represents the organization at the PKI Consortium.

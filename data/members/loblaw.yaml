@@ -2,7 +2,9 @@ id: loblaw
 name: Loblaw Companies Limited
 slogan:
 website: https://loblaw.ca
-
+# Business domains for email
+organizationDomains:
+  - loblaw.ca
 # Short description, longer content can be placed in `content/members/`
 description: Loblaw Companies Limited is a Canadian retailer with corporate and franchised supermarkets under various banners, as well as pharmacies, banking, and apparel services.
 
@@ -16,24 +18,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -52,6 +54,6 @@ representatives:
   - name: Sonam Devgan Kaul
     role: Lead, Cryptographic Governance
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/sonam-devgan-kaul-a1167953
     description: Sonam Devgan Kaul is the Lead, Cryptographic Governance at Loblaw Companies Limited and represents the organization at the PKI Consortium.

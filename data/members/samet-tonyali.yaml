@@ -3,7 +3,9 @@ name: Samet Tonyali
 # Gümüşhane University
 slogan:
 website:
-
+# Business domains for email
+organizationDomains:
+  - gumushane.edu.tr
 # Short description, longer content can be placed in `content/members/`
 description: Samet is an assistant professor in the Department of Software Engineering at Gümüşhane University in Turkey. His research area focuses on application of cryptographic algorithms on communication protocols.
 
@@ -14,33 +16,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/in/samet-tonyali-911ab922/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,6 +52,6 @@ representatives:
   - name: Samet Tonyali
     role: Assistant Professor
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/samet-tonyali-911ab922/
     description: Samet is the Assistant Professor at Gümüşhane University and represents the organization at the PKI Consortium.

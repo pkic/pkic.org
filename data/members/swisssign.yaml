@@ -2,7 +2,9 @@ id: swisssign
 name: SwissSign AG
 slogan:
 website: https://www.swisssign.com
-
+# Business domains for email
+organizationDomains:
+  - swisssign.com
 # Short description, longer content can be placed in `content/members/`
 description: CA issuing TLS and S/MIME certificates according to CABF standards; Trust Service Provider according to Swiss digital signature law and according to eIDAS.
 
@@ -13,33 +15,33 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
+blog:
+  url:
   feed: null
   language: en_US
 
 # Press Releases
-press: 
-  url: 
-  feed: 
+press:
+  url:
+  feed:
   language: en_US
 
 # Careers
-careers: 
-  url: 
-  feed: 
+careers:
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -49,6 +51,6 @@ representatives:
   - name: Adrian Mueller
     role: Product Manager Certificate Services
     social:
-      x: 
-      linkedin: 
+      x:
+      linkedin:
     description: Adrian is the Product Manager Certificate Services at SwissSign AG and represents the organization at the PKI Consortium.

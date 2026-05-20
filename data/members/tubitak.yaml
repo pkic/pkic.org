@@ -2,7 +2,9 @@ id: tubitak
 name: TÜBİTAK BİLGEM
 slogan: We are at the heart of technology
 website: https://bilgem.tubitak.gov.tr/en
-
+# Business domains for email
+organizationDomains:
+  - tubitak.gov.tr
 # Short description, longer content can be placed in `content/members/`
 description: TÜBİTAK BİLGEM continues to be an R&D center that shapes the future and directs the science and technology of the future by making our country a reference point.
 
@@ -13,24 +15,24 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level: 
+  level:
 
 # Blog posts
-blog: 
-  url: 
-  feed: 
+blog:
+  url:
+  feed:
   language: en_US
 
 # Press Releases
-press: 
+press:
   url: https://bilgem.tubitak.gov.tr/en/all-news
-  feed: 
+  feed:
   language: en_US
 
 # Careers
-careers: 
+careers:
   url: https://bilgem.tubitak.gov.tr/en/career
-  feed: 
+  feed:
   language: en_US
 
 # Social media
@@ -49,7 +51,7 @@ representatives:
   - name: Asil YARDIMCI
     role: Chief Researcher
     social:
-      x: 
+      x:
       linkedin: https://www.linkedin.com/in/asilyardimci
     description: |
       Asil YARDIMCI is chief research engineer and software developer at National Research Institute of Electronics and Cryptology (UEKAE) which is affiliated to TÜBİTAK BİLGEM.
