@@ -1,0 +1,62 @@
+id: siemens
+name: Siemens AG
+slogan:
+website: https://www.siemens.com
+# Business domains for email
+organizationDomains:
+  - siemens.com
+# Short description, longer content can be placed in `content/members/`
+description: Siemens: A global technology leader driving innovation in industry, infrastructure and mobility through digital transformation.
+
+# membership
+memberSince: 2026-05-21
+memberType: A
+workingGroups:
+  - CA
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://www.siemens.com/en-us/company/insights/
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: https://www.siemens.com/en-us/company/jobs/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Ilias Cotoulas
+    role: Service Owner CPKI
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/ilias-cotoulas-0396b1131/
+    description: Ilias is the Service Owner CPKI at Siemens AG and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
