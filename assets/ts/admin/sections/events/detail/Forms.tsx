@@ -7,7 +7,12 @@ import { DataTable } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
-import type { AdminEventFormSummary, AdminFormDetailField, AdminFormSubmission } from "../../../types";
+import type {
+  AdminAttendanceOption,
+  AdminEventFormSummary,
+  AdminFormDetailField,
+  AdminFormSubmission,
+} from "../../../types";
 import {
   buildFieldValidation,
   FieldConfigEditor,
@@ -16,6 +21,7 @@ import {
   type VisualizationConfig,
 } from "./FormFieldConfigEditor";
 import { FormResponseStats, FormSubmissionsTable, type ServerFieldStat } from "./FormResponses";
+import { loadEventAttendanceOptions } from "./eventAttendance";
 
 type FormTab = "responses" | "statistics" | "edit";
 
@@ -729,6 +735,7 @@ export function EventFormResponses({
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState("");
   const [attendanceTypeFilter, setAttendanceTypeFilter] = useState("");
+  const [attendanceOptions, setAttendanceOptions] = useState<AdminAttendanceOption[]>([]);
 
   const selected = useMemo(
     () => forms.find((form) => form.key === selectedKey) ?? forms[0] ?? null,
@@ -739,8 +746,12 @@ export function EventFormResponses({
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ forms: AdminEventFormSummary[] }>(`/api/v1/admin/events/${slug}/forms`);
-      setForms((data.forms ?? []).filter((form) => form.purpose === purpose));
+      const [formsData, attendance] = await Promise.all([
+        api<{ forms: AdminEventFormSummary[] }>(`/api/v1/admin/events/${slug}/forms`),
+        loadEventAttendanceOptions(slug, purpose),
+      ]);
+      setForms((formsData.forms ?? []).filter((form) => form.purpose === purpose));
+      setAttendanceOptions(attendance);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -806,16 +817,18 @@ export function EventFormResponses({
             </>
           )}
         </select>
-        {purpose === "event_registration" && (
+        {purpose === "event_registration" && attendanceOptions.length > 0 && (
           <select
             class="form-select form-select-sm adm-filter-select"
             value={attendanceTypeFilter}
             onChange={(event) => setAttendanceTypeFilter((event.target as HTMLSelectElement).value)}
           >
             <option value="">All attendance</option>
-            <option value="in_person">In-person</option>
-            <option value="virtual">Virtual</option>
-            <option value="on_demand">On-demand</option>
+            {attendanceOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
+              </option>
+            ))}
           </select>
         )}
       </div>

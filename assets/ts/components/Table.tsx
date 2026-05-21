@@ -1,4 +1,4 @@
-import { type ComponentChildren } from "preact";
+import { Fragment, type ComponentChildren } from "preact";
 import { useState, useEffect, useCallback, type MutableRef } from "preact/hooks";
 import { Pager, ADMIN_LIST_PAGE_SIZE_DEFAULT } from "./Pager";
 import { Spinner } from "./Spinner";
@@ -97,9 +97,8 @@ export function DataTable<T>({
               const key = rowKey ? rowKey(row, i) : i;
               const detail = detailRow?.(row, i);
               return (
-                <>
+                <Fragment key={key}>
                   <tr
-                    key={key}
                     class={
                       [rowClass?.(row, i), onRowClick ? "tbl-row-link" : ""].filter(Boolean).join(" ") || undefined
                     }
@@ -112,13 +111,13 @@ export function DataTable<T>({
                     ))}
                   </tr>
                   {detail && (
-                    <tr key={`${key}-detail`}>
+                    <tr>
                       <td colspan={columns.length} class="p-0">
                         {detail}
                       </td>
                     </tr>
                   )}
-                </>
+                </Fragment>
               );
             })
           )}

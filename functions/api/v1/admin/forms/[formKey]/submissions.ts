@@ -96,6 +96,11 @@ interface FieldStatPayload {
   entries: Array<{ label: string; count: number; percent: number; weight: number }>;
 }
 
+interface FieldStatContext {
+  field: FieldRow;
+  labels: Map<string, string>;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -126,9 +131,7 @@ function stringifyAnswer(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
 
-function formatAnswerValue(value: unknown, field: FieldRow): string[] {
-  const labels = optionLabelMap(parseJsonSafe(field.options_json, null));
-
+function formatAnswerValue(value: unknown, labels: Map<string, string>): string[] {
   if (Array.isArray(value)) {
     if (value.length === 0) return ["-"];
     return value.map((entry) => (typeof entry === "string" ? (labels.get(entry) ?? entry) : stringifyAnswer(entry)));
@@ -138,26 +141,33 @@ function formatAnswerValue(value: unknown, field: FieldRow): string[] {
   return [stringifyAnswer(value)];
 }
 
-function extractStatValues(value: unknown, field: FieldRow): string[] {
+function extractStatValues(value: unknown, field: FieldRow, labels: Map<string, string>): string[] {
   if (value == null || value === "") return [];
-  if (Array.isArray(value)) return formatAnswerValue(value, field).filter((entry) => entry !== "-");
+  if (Array.isArray(value)) return formatAnswerValue(value, labels).filter((entry) => entry !== "-");
   if (typeof value === "string" && field.field_type === "textarea") {
     return value
       .split(/[,;\n]/)
       .map((entry) => entry.trim())
       .filter(Boolean);
   }
-  return formatAnswerValue(value, field).filter((entry) => entry !== "-");
+  return formatAnswerValue(value, labels).filter((entry) => entry !== "-");
 }
 
-function buildStats(fields: FieldRow[], submissions: AdminSubmissionPayload[]): FieldStatPayload[] {
-  return fields
-    .map((field) => {
+function buildFieldStatContexts(fields: FieldRow[]): FieldStatContext[] {
+  return fields.map((field) => ({
+    field,
+    labels: optionLabelMap(parseJsonSafe(field.options_json, null)),
+  }));
+}
+
+function buildStats(fieldContexts: FieldStatContext[], submissions: AdminSubmissionPayload[]): FieldStatPayload[] {
+  return fieldContexts
+    .map(({ field, labels }) => {
       const counts = new Map<string, number>();
       let totalAnswers = 0;
 
       for (const submission of submissions) {
-        const values = extractStatValues(submission.answers[field.key], field);
+        const values = extractStatValues(submission.answers[field.key], field, labels);
         if (values.length === 0) continue;
         totalAnswers += 1;
         for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
@@ -232,6 +242,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
      ORDER BY sort_order ASC, key ASC`,
     [form.id],
   );
+  const fieldContexts = buildFieldStatContexts(fields);
 
   const whereStatus = statusFilter ? "AND fs.status = ?" : "";
   const joinAttendance = attendanceTypeFilter && form.purpose === "event_registration";
@@ -371,7 +382,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     offset,
     limit,
     page: { total: sorted.length, hasMore: offset + limit < sorted.length },
-    stats: buildStats(fields, sorted),
+    stats: limit === 0 ? buildStats(fieldContexts, sorted) : [],
     submissions: paged,
   });
 }

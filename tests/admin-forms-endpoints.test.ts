@@ -417,7 +417,6 @@ describe("admin forms endpoints", () => {
     const submissionsPayload = (await submissionsResponse.json()) as {
       total: number;
       page: { total: number; hasMore: boolean };
-      stats: Array<{ fieldKey: string; entries: Array<{ label: string; count: number }> }>;
       submissions: Array<{ answers: Record<string, unknown> }>;
     };
     expect(submissionsPayload.total).toBe(2);
@@ -425,16 +424,20 @@ describe("admin forms endpoints", () => {
     expect(submissionsPayload.submissions).toHaveLength(1);
     expect(submissionsPayload.submissions[0]?.answers.company).toBe("Example Org");
     expect(submissionsPayload.submissions[0]?.answers.tracks).toEqual(["PKI", "PQC"]);
-    expect(submissionsPayload.stats.find((stat) => stat.fieldKey === "company")?.entries).toEqual([
-      { label: "Example Org", count: 1, percent: 50, weight: 1 },
-      { label: "Other Org", count: 1, percent: 50, weight: 1 },
-    ]);
 
     const statsOnlyResponse = await callAdmin("/api/v1/admin/forms/event-workshop-form/submissions?limit=0");
     expect(statsOnlyResponse.status).toBe(200);
-    const statsOnlyPayload = (await statsOnlyResponse.json()) as { total: number; submissions: unknown[] };
+    const statsOnlyPayload = (await statsOnlyResponse.json()) as {
+      total: number;
+      submissions: unknown[];
+      stats: Array<{ fieldKey: string; entries: Array<{ label: string; count: number }> }>;
+    };
     expect(statsOnlyPayload.total).toBe(2);
     expect(statsOnlyPayload.submissions).toHaveLength(0);
+    expect(statsOnlyPayload.stats.find((stat) => stat.fieldKey === "company")?.entries).toEqual([
+      { label: "Example Org", count: 1, percent: 50, weight: 1 },
+      { label: "Other Org", count: 1, percent: 50, weight: 1 },
+    ]);
   });
 
   it("includes linked registration and proposal answers as form responses", async () => {
@@ -541,11 +544,21 @@ describe("admin forms endpoints", () => {
     const filteredRegistrationPayload = (await filteredRegistrationResponse.json()) as {
       total: number;
       submissions: Array<{ contextRef: string }>;
-      stats: Array<{ fieldKey: string; entries: Array<{ label: string; count: number }> }>;
     };
     expect(filteredRegistrationPayload.total).toBe(1);
     expect(filteredRegistrationPayload.submissions[0]?.contextRef).toBe(registrationId);
-    expect(filteredRegistrationPayload.stats.find((stat) => stat.fieldKey === "food")?.entries).toEqual([
+    const statsOnlyResponse = await callAdmin(
+      "/api/v1/admin/forms/linked-registration-form/submissions?eventSlug=pqc-2026&attendanceType=virtual&limit=0",
+    );
+    expect(statsOnlyResponse.status).toBe(200);
+    const statsOnlyPayload = (await statsOnlyResponse.json()) as {
+      total: number;
+      submissions: Array<unknown>;
+      stats: Array<{ fieldKey: string; entries: Array<{ label: string; count: number }> }>;
+    };
+    expect(statsOnlyPayload.total).toBe(1);
+    expect(statsOnlyPayload.submissions).toHaveLength(0);
+    expect(statsOnlyPayload.stats.find((stat) => stat.fieldKey === "food")?.entries).toEqual([
       { label: "No peanuts", count: 1, percent: 100, weight: 1 },
     ]);
 
