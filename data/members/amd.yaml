@@ -39,7 +39,7 @@ careers:
 social:
   x: https://x.com/AMD
   facebook: http://www.facebook.com/amd
-  instagram: ttps://www.instagram.com/amd
+  instagram: https://www.instagram.com/amd
   linkedin: https://www.linkedin.com/company/amd
   youtube: https://www.youtube.com/user/amd
 
@@ -53,7 +53,7 @@ representatives:
     social:
       x:
       linkedin: https://www.linkedin.com/in/jimlast/
-    description: James is the SMTS Product Security Group at Advanced Micro Devices Inc. and represents the organization at the PKI Consortium.
+      description: James is part of the SMTS Product Security Group at Advanced Micro Devices Inc. and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
