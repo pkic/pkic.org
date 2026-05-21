@@ -6,10 +6,10 @@ website: https://www.siemens.com
 organizationDomains:
   - siemens.com
 # Short description, longer content can be placed in `content/members/`
-description: Siemens: A global technology leader driving innovation in industry, infrastructure and mobility through digital transformation.
+description: A global technology leader driving innovation in industry, infrastructure and mobility through digital transformation.
 
 # membership
-memberSince: 2026-05-21
+memberSince: 2026-05-14
 memberType: A
 workingGroups:
   - CA
@@ -23,28 +23,28 @@ sponsor:
 # Blog posts
 blog:
   url: https://www.siemens.com/en-us/company/insights/
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
   url: https://www.siemens.com/en-us/company/jobs/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x: https://x.com/siemens
+  facebook: https://www.facebook.com/Siemens
+  instagram: https://www.instagram.com/siemens/
+  linkedin: https://www.linkedin.com/company/siemens
+  youtube: https://www.youtube.com/@siemens
 
 # Here you can list those who represent or have represented the member.
 #
