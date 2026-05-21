@@ -6,13 +6,12 @@ website: https://www.statestreet.com
 organizationDomains:
   - statestreet.com
 # Short description, longer content can be placed in `content/members/`
-description: Role master
+description: We are a global leader across investment servicing, markets and financing, and investment management.
 
 # membership
-memberSince: 2026-05-21
+memberSince: 2026-05-14
 memberType: H8
 workingGroups:
-
 
 # sponsor
 sponsor:
@@ -21,28 +20,28 @@ sponsor:
 # Blog posts
 blog:
   url: https://www.statestreet.com/#
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
 press:
   url: https://newsroom.statestreet.com/overview/default.aspx
-  feed: 
+  feed:
   language: en_US
 
 # Careers
 careers:
   url: https://careers.statestreet.com/global/en
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x: https://twitter.com/StateStreet
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/state-street
+  youtube: ttps://www.youtube.com/StateStreetCorp
 
 # Here you can list those who represent or have represented the member.
 #
