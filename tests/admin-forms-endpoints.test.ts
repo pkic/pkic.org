@@ -143,12 +143,15 @@ describe("admin forms endpoints", () => {
 
   it("lists event-scoped and global forms through the router", async () => {
     const { eventId } = await setupAdmin();
+    const adminUserId = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0]?.id;
 
     await insertForm({
       key: "pqc-registration-form",
       scopeType: "event",
       scopeRef: eventId,
-      purpose: "event_registration",
+      purpose: "survey",
       title: "Registration form",
       fields: [
         {
@@ -201,7 +204,7 @@ describe("admin forms endpoints", () => {
       .bind(
         doubleCountRegistrationContextRef,
         eventId,
-        null,
+        adminUserId,
         JSON.stringify({ company: "PKI Org" }),
         crypto.randomUUID(),
         nowIso(),
@@ -232,7 +235,7 @@ describe("admin forms endpoints", () => {
       .bind(
         doubleCountProposalContextRef,
         eventId,
-        null,
+        adminUserId,
         JSON.stringify({ abstract: "Talk abstract" }),
         crypto.randomUUID(),
         nowIso(),
