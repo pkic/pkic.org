@@ -1,0 +1,59 @@
+id: statestreet
+name: State Street Corp
+slogan:
+website: https://www.statestreet.com
+# Business domains for email
+organizationDomains:
+  - statestreet.com
+# Short description, longer content can be placed in `content/members/`
+description: We are a global leader across investment servicing, markets and financing, and investment management.
+
+# membership
+memberSince: 2026-05-14
+memberType: H8
+workingGroups:
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://www.statestreet.com/
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url: https://newsroom.statestreet.com/overview/default.aspx
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url: https://careers.statestreet.com/global/en
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x: https://twitter.com/StateStreet
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/state-street
+  youtube: ttps://www.youtube.com/StateStreetCorp
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Nilesh Gavali
+    role: Cryptographic keys - Operations Lead
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/nileshgavali
+    description: Nilesh is the Cryptographic keys - Operations Lead at State Street Corp and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
