@@ -1,0 +1,59 @@
+id: mecknc
+name: Mecklenburg County
+slogan:
+website: https://mecknc.gov
+# Business domains for email
+organizationDomains:
+  - mecknc.gov
+# Short description, longer content can be placed in `content/members/`
+description: The Mecklenburg County Government serves the communities of Charlotte, Cornelius, Davidson, Huntersville, Matthews, Mint Hill, Pineville, and all unincorporated regions within the County.
+
+# membership
+memberSince: 2026-05-14
+memberType: H1
+workingGroups:
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://mecknc.gov/news
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x: https://www.twitter.com/MeckCounty
+  facebook: https://www.facebook.com/MecklenburgCounty
+  instagram: https://www.instagram.com/mecklenburgcounty/
+  linkedin: https://www.linkedin.com/company/mecklenburg-county/
+  youtube: https://www.youtube.com/user/meckgov
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Sean Gray
+    role: Manager, InfoSec-Identity Access Management
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/sean-gray-518100ba/
+    description: Sean is the Manager, InfoSec-Identity Access Management at Mecklenburg County and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
