@@ -55,8 +55,8 @@ representatives:
     social:
       x:
       linkedin: https://www.linkedin.com/in/arunjr/
-    description: I am Cybersecurity Solutions Architect consultant, with 20+ years of experience, currently leading the cryptographic strategy for a next-generation software-defined vehicle platform at Coretura AB. My recent work includes designing & deploying a 4-tier PKI hierarchy (Root, Policy, Issuing, and Leaf) on AWS, and developing a long-term cryptographic roadmap for organization considering complexities of automotive platforms as well. Previously, at Volvo AB, I worked as a PKI Solution Architect. I also designed secure key distribution methods and worked on the procurement and integration of Hardware Security Modules (HSMs) for multi-tenant gateways.
-    Beyond work, I actively use Post-Quantum Cryptography research to build Proof-of-concept systems and publish on github and I am investing on gaining hands-on experience automating PKI lifecycles within AWS cloud environments.
+    description: |
+      I am Cybersecurity Solutions Architect consultant, with 20+ years of experience, currently leading the cryptographic strategy for a next-generation software-defined vehicle platform at Coretura AB. My recent work includes designing & deploying a 4-tier PKI hierarchy (Root, Policy, Issuing, and Leaf) on AWS, and developing a long-term cryptographic roadmap for organization considering complexities of automotive platforms as well. Previously, at Volvo AB, I worked as a PKI Solution Architect. I also designed secure key distribution methods and worked on the procurement and integration of Hardware Security Modules (HSMs) for multi-tenant gateways. Beyond work, I actively use Post-Quantum Cryptography research to build Proof-of-concept systems and publish on github and I am investing on gaining hands-on experience automating PKI lifecycles within AWS cloud environments.
 
 # Long-form content (markdown)
 content: |
