@@ -1,4 +1,4 @@
-import { type ComponentChildren } from "preact";
+import { Fragment, type ComponentChildren } from "preact";
 import { useState, useEffect, useCallback, type MutableRef } from "preact/hooks";
 import { Pager, ADMIN_LIST_PAGE_SIZE_DEFAULT } from "./Pager";
 import { Spinner } from "./Spinner";
@@ -66,6 +66,7 @@ interface DataTableProps<T> {
   rowKey?: (row: T, index: number) => string | number;
   rowClass?: (row: T, index: number) => string | undefined;
   onRowClick?: (row: T) => void;
+  detailRow?: (row: T, index: number) => ComponentChildren;
 }
 
 export function DataTable<T>({
@@ -76,6 +77,7 @@ export function DataTable<T>({
   rowKey,
   rowClass,
   onRowClick,
+  detailRow,
 }: DataTableProps<T>) {
   return (
     <div class="tbl-wrap">
@@ -91,19 +93,33 @@ export function DataTable<T>({
               </td>
             </tr>
           ) : (
-            data.map((row, i) => (
-              <tr
-                key={rowKey ? rowKey(row, i) : i}
-                class={[rowClass?.(row, i), onRowClick ? "tbl-row-link" : ""].filter(Boolean).join(" ") || undefined}
-                onClick={onRowClick ? () => onRowClick(row) : undefined}
-              >
-                {columns.map((col, ci) => (
-                  <td key={ci} class={col.className}>
-                    {col.cell(row, i)}
-                  </td>
-                ))}
-              </tr>
-            ))
+            data.map((row, i) => {
+              const key = rowKey ? rowKey(row, i) : i;
+              const detail = detailRow?.(row, i);
+              return (
+                <Fragment key={key}>
+                  <tr
+                    class={
+                      [rowClass?.(row, i), onRowClick ? "tbl-row-link" : ""].filter(Boolean).join(" ") || undefined
+                    }
+                    onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  >
+                    {columns.map((col, ci) => (
+                      <td key={ci} class={col.className}>
+                        {col.cell(row, i)}
+                      </td>
+                    ))}
+                  </tr>
+                  {detail && (
+                    <tr>
+                      <td colspan={columns.length} class="p-0">
+                        {detail}
+                      </td>
+                    </tr>
+                  )}
+                </Fragment>
+              );
+            })
           )}
         </tbody>
       </table>
@@ -148,6 +164,8 @@ export interface ApiDataTableProps<T> {
   rowClass?: (row: T, index: number) => string | undefined;
   /** Row click handler */
   onRowClick?: (row: T) => void;
+  /** Optional full-width detail row rendered after each data row */
+  detailRow?: (row: T, index: number) => ComponentChildren;
   /** Toolbar rendered between search and refresh (e.g., filter selects, action buttons) */
   toolbar?: (actions: ApiTableActions) => ComponentChildren;
   /** Ref to expose reload/resetPage to parent for cell-level actions */
@@ -169,6 +187,7 @@ export function ApiDataTable<T>({
   rowKey,
   rowClass,
   onRowClick,
+  detailRow,
   toolbar,
   actionsRef,
   deps = [],
@@ -287,6 +306,7 @@ export function ApiDataTable<T>({
             rowKey={rowKey}
             rowClass={rowClass}
             onRowClick={onRowClick}
+            detailRow={detailRow}
           />
           {paginate && <Pager {...pagerProps} />}
         </>

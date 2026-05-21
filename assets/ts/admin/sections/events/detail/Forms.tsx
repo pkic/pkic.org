@@ -7,7 +7,12 @@ import { DataTable } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
-import type { AdminEventFormSummary, AdminFormDetailField, AdminFormSubmission } from "../../../types";
+import type {
+  AdminAttendanceOption,
+  AdminEventFormSummary,
+  AdminFormDetailField,
+  AdminFormSubmission,
+} from "../../../types";
 import {
   buildFieldValidation,
   FieldConfigEditor,
@@ -15,7 +20,8 @@ import {
   type FieldType,
   type VisualizationConfig,
 } from "./FormFieldConfigEditor";
-import { FormResponseStats, FormSubmissionsTable } from "./FormResponses";
+import { FormResponseStats, FormSubmissionsTable, type ServerFieldStat } from "./FormResponses";
+import { loadEventAttendanceOptions } from "./eventAttendance";
 
 type FormTab = "responses" | "statistics" | "edit";
 
@@ -29,7 +35,26 @@ interface AdminFormDetail {
 
 interface FormSubmissionsResponse {
   total: number;
+  stats: ServerFieldStat[];
   submissions: AdminFormSubmission[];
+}
+
+interface FormResponseFilters {
+  status?: string;
+  attendanceType?: string;
+}
+
+function responseQueryParams(
+  slug?: string,
+  filters?: FormResponseFilters,
+  extra?: Record<string, string>,
+): Record<string, string> {
+  return {
+    ...(slug ? { eventSlug: slug } : {}),
+    ...(filters?.status ? { status: filters.status } : {}),
+    ...(filters?.attendanceType ? { attendanceType: filters.attendanceType } : {}),
+    ...(extra ?? {}),
+  };
 }
 
 interface FormDraft {
@@ -451,41 +476,45 @@ function FormDetailPanel({
   formKey,
   slug,
   summary,
+  filters,
   onChanged,
   showManagement = true,
 }: {
   formKey: string;
   slug?: string;
   summary?: AdminEventFormSummary;
+  filters?: FormResponseFilters;
   onChanged?: () => void;
   showManagement?: boolean;
 }) {
   const [tab, setTab] = useState<FormTab>("statistics");
   const [detail, setDetail] = useState<AdminFormDetail | null>(null);
-  const [submissions, setSubmissions] = useState<AdminFormSubmission[]>([]);
+  const [stats, setStats] = useState<ServerFieldStat[]>([]);
+  const [totalResponses, setTotalResponses] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const submissionEndpoint = `/api/v1/admin/forms/${formKey}/submissions`;
+  const submissionParams = responseQueryParams(slug, filters);
+  const statsParams = responseQueryParams(slug, filters, { limit: "0" });
 
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
+      const statsQuery = new URLSearchParams(statsParams).toString();
       const [detailRes, submissionRes] = await Promise.all([
         api<AdminFormDetail>(`/api/v1/admin/forms/${formKey}`),
-        api<FormSubmissionsResponse>(
-          slug
-            ? `/api/v1/admin/forms/${formKey}/submissions?eventSlug=${encodeURIComponent(slug)}`
-            : `/api/v1/admin/forms/${formKey}/submissions`,
-        ),
+        api<FormSubmissionsResponse>(`${submissionEndpoint}${statsQuery ? `?${statsQuery}` : ""}`),
       ]);
       setDetail(detailRes);
-      setSubmissions(submissionRes.submissions ?? []);
+      setStats(submissionRes.stats ?? []);
+      setTotalResponses(submissionRes.total ?? 0);
     } catch (err) {
       setError((err as Error).message);
     } finally {
       setLoading(false);
     }
-  }, [formKey, slug]);
+  }, [formKey, submissionEndpoint, JSON.stringify(statsParams)]);
 
   useEffect(() => {
     void load();
@@ -536,7 +565,7 @@ function FormDetailPanel({
       <div class="card-body">
         <Tabs
           items={[
-            { key: "statistics", label: `Statistics (${submissions.length})` },
+            { key: "statistics", label: `Statistics (${totalResponses})` },
             { key: "responses", label: "Responses" },
             ...(showManagement ? [{ key: "edit", label: "Edit" }] : []),
           ]}
@@ -544,8 +573,15 @@ function FormDetailPanel({
           onChange={(key) => setTab(key as FormTab)}
           className="mb-3"
         />
-        {tab === "statistics" && <FormResponseStats fields={detail.fields} submissions={submissions} />}
-        {tab === "responses" && <FormSubmissionsTable fields={detail.fields} submissions={submissions} />}
+        {tab === "statistics" && <FormResponseStats fields={detail.fields} stats={stats} total={totalResponses} />}
+        {tab === "responses" && (
+          <FormSubmissionsTable
+            fields={detail.fields}
+            endpoint={submissionEndpoint}
+            params={submissionParams}
+            deps={[formKey, slug, filters?.status, filters?.attendanceType]}
+          />
+        )}
         {tab === "edit" && (
           <FormEditor
             mode="edit"
@@ -697,6 +733,9 @@ export function EventFormResponses({
   const [error, setError] = useState<string | null>(null);
   const [forms, setForms] = useState<AdminEventFormSummary[]>([]);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState("");
+  const [attendanceTypeFilter, setAttendanceTypeFilter] = useState("");
+  const [attendanceOptions, setAttendanceOptions] = useState<AdminAttendanceOption[]>([]);
 
   const selected = useMemo(
     () => forms.find((form) => form.key === selectedKey) ?? forms[0] ?? null,
@@ -707,8 +746,12 @@ export function EventFormResponses({
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ forms: AdminEventFormSummary[] }>(`/api/v1/admin/events/${slug}/forms`);
-      setForms((data.forms ?? []).filter((form) => form.purpose === purpose));
+      const [formsData, attendance] = await Promise.all([
+        api<{ forms: AdminEventFormSummary[] }>(`/api/v1/admin/events/${slug}/forms`),
+        loadEventAttendanceOptions(slug, purpose),
+      ]);
+      setForms((formsData.forms ?? []).filter((form) => form.purpose === purpose));
+      setAttendanceOptions(attendance);
     } catch (err) {
       setError((err as Error).message);
     } finally {
@@ -728,25 +771,68 @@ export function EventFormResponses({
   if (error) return <ErrorAlert error={error} />;
   if (!selected) return <p class="small text-body-secondary fst-italic mb-0">No linked forms found.</p>;
 
+  const filters: FormResponseFilters = {
+    ...(statusFilter ? { status: statusFilter } : {}),
+    ...(purpose === "event_registration" && attendanceTypeFilter ? { attendanceType: attendanceTypeFilter } : {}),
+  };
+
   return (
     <div>
-      {forms.length > 1 && (
-        <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
-          <label class="form-label small fw-semibold mb-0">Form</label>
+      <div class="d-flex align-items-center gap-2 mb-3 flex-wrap">
+        {forms.length > 1 && (
+          <>
+            <label class="form-label small fw-semibold mb-0">Form</label>
+            <select
+              class="form-select form-select-sm adm-filter-select"
+              value={selected.key}
+              onChange={(event) => setSelectedKey((event.target as HTMLSelectElement).value)}
+            >
+              {forms.map((form) => (
+                <option key={form.key} value={form.key}>
+                  {form.title}
+                </option>
+              ))}
+            </select>
+          </>
+        )}
+        <select
+          class="form-select form-select-sm adm-filter-select"
+          value={statusFilter}
+          onChange={(event) => setStatusFilter((event.target as HTMLSelectElement).value)}
+        >
+          <option value="">All statuses</option>
+          {purpose === "event_registration" ? (
+            <>
+              <option value="registered">Confirmed</option>
+              <option value="pending_email_confirmation">Pending confirmation</option>
+              <option value="waitlisted">Waitlisted</option>
+              <option value="cancelled">Cancelled</option>
+            </>
+          ) : (
+            <>
+              <option value="submitted">Submitted</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+              <option value="withdrawn">Withdrawn</option>
+            </>
+          )}
+        </select>
+        {purpose === "event_registration" && attendanceOptions.length > 0 && (
           <select
             class="form-select form-select-sm adm-filter-select"
-            value={selected.key}
-            onChange={(event) => setSelectedKey((event.target as HTMLSelectElement).value)}
+            value={attendanceTypeFilter}
+            onChange={(event) => setAttendanceTypeFilter((event.target as HTMLSelectElement).value)}
           >
-            {forms.map((form) => (
-              <option key={form.key} value={form.key}>
-                {form.title}
+            <option value="">All attendance</option>
+            {attendanceOptions.map((option) => (
+              <option key={option.value} value={option.value}>
+                {option.label}
               </option>
             ))}
           </select>
-        </div>
-      )}
-      <FormDetailPanel formKey={selected.key} slug={slug} summary={selected} showManagement={false} />
+        )}
+      </div>
+      <FormDetailPanel formKey={selected.key} slug={slug} summary={selected} filters={filters} showManagement={false} />
     </div>
   );
 }
