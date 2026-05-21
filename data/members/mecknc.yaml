@@ -6,13 +6,12 @@ website: https://mecknc.gov
 organizationDomains:
   - mecknc.gov
 # Short description, longer content can be placed in `content/members/`
-description: Official website for the Mecklenburg County Government. The Mecklenburg County Government serves the communities of Charlotte, Cornelius, Davidson, Huntersville, Matthews, Mint Hill, Pineville, and all unincorporated regions within the County.
+description: The Mecklenburg County Government serves the communities of Charlotte, Cornelius, Davidson, Huntersville, Matthews, Mint Hill, Pineville, and all unincorporated regions within the County.
 
 # membership
-memberSince: 2026-05-21
+memberSince: 2026-05-14
 memberType: H1
 workingGroups:
-
 
 # sponsor
 sponsor:
@@ -21,19 +20,19 @@ sponsor:
 # Blog posts
 blog:
   url: https://mecknc.gov/news
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
