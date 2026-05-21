@@ -78,18 +78,20 @@ representatives:
 # Long-form content (markdown)
 title: Keyfactor
 content: |
-  ## The machine and IoT identity platform for modern enterprises
+  ## Leading Digital Trust in the AI & Quantum Era
+  ### Trust Infrastructure for AI & Machines
 
-  Keyfactor is the machine and IoT identity platform for modern enterprises. The company helps security teams manage cryptography as critical infrastructure by simplifying PKI, automating certificate lifecycle management, and enabling crypto-agility at scale. Companies trust Keyfactor to secure every digital key and certificate for multi-cloud enterprises, DevOps, and embedded IoT security.
+  Keyfactor puts enterprises in control of the machine identities and cryptography that secure their data, machines, and AI - now and into the quantum era.
 
-  Keyfactor develops products in the PKI and digital signature space, as well as cryptographic APIs.
+  With a foundation in open-source security software and FIPS and Common Criteria certified products, Keyfactor helps security teams manage cryptography as critical infrastructure - simplifying PKI, automating certificate lifecycle management, and enabling crypto-agility at scale. Trusted by over 2,000 enterprises worldwide, Keyfactor secures every digital key and certificate across multi-cloud environments, DevOps pipelines, and embedded IoT and OT devices.
 
-  With a foundation in open-source security software, we provide global businesses and organizations the ability to implement security solutions using PKI, digital signatures and cryptography, with FIPS and Common Criteria certified products.
+  **The Keyfactor Platform** is for trust infrastructure, delivering visibility, automation, and orchestration across every key and certificate through four core capabilities:
 
-  Products include PrimeKey EJBCA® Enterprise and SignServer Enterprise, Keyfactor Command and Control, SEE (Secure Execution Environment), Identity Authority Manager and the Bouncy Castle Cryptography APIs. Deploy solutions your way; as software, hardware, in the cloud or SaaS.
+  - Visibility & Context — Continuously discover and monitor all cryptographic assets, identify risk in real time, and take action before it impacts your business
+  - Trust & Identity — Issue trusted identities for every machine, workload, and AI agent with a modern, quantum-ready PKI and secure code signing
+  - Lifecycle Automation — Orchestrate certificate lifecycles end-to-end to eliminate manual effort, prevent outages, and remediate cryptographic risk at scale
+  - Resilience & Agility — Transition to post-quantum cryptography, maintain continuous compliance, and keep your business running without interruption
 
-  ### Global presence
-
-  Keyfactor have offices in the United States, Europe, Asia and Australia.
+  Keyfactor operates globally with offices across the United States, Canada, Europe, Asia, and Australia.
 
   {{< youtube HGoZW7MCF60>}}
