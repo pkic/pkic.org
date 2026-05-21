@@ -56,6 +56,8 @@ export interface AdminEventFormSummary {
   key: string;
   scope_type: string;
   scope_ref: string | null;
+  event_slug?: string | null;
+  event_name?: string | null;
   purpose: string;
   status: string;
   title: string;

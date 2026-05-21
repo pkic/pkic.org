@@ -143,12 +143,15 @@ describe("admin forms endpoints", () => {
 
   it("lists event-scoped and global forms through the router", async () => {
     const { eventId } = await setupAdmin();
+    const adminUserId = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0]?.id;
 
     await insertForm({
       key: "pqc-registration-form",
       scopeType: "event",
       scopeRef: eventId,
-      purpose: "event_registration",
+      purpose: "survey",
       title: "Registration form",
       fields: [
         {
@@ -178,6 +181,68 @@ describe("admin forms endpoints", () => {
       ],
     });
 
+    const doubleCountRegistrationContextRef = crypto.randomUUID();
+    await insertForm({
+      key: "pqc-registration-double-count-form",
+      scopeType: "event",
+      scopeRef: eventId,
+      purpose: "event_registration",
+      title: "Registration form with linked row",
+      fields: [],
+      submission: {
+        contextType: "registration",
+        contextRef: doubleCountRegistrationContextRef,
+        answers: { company: "PKI Org" },
+      },
+    });
+    await env.DB.prepare(
+      `INSERT INTO registrations (
+         id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
+         manage_token_hash, created_at, updated_at
+       ) VALUES (?, ?, ?, 'registered', 'virtual', 'admin', ?, ?, ?, ?)`,
+    )
+      .bind(
+        doubleCountRegistrationContextRef,
+        eventId,
+        adminUserId,
+        JSON.stringify({ company: "PKI Org" }),
+        crypto.randomUUID(),
+        nowIso(),
+        nowIso(),
+      )
+      .run();
+
+    const doubleCountProposalContextRef = crypto.randomUUID();
+    await insertForm({
+      key: "pqc-proposal-double-count-form",
+      scopeType: "event",
+      scopeRef: eventId,
+      purpose: "proposal_submission",
+      title: "Proposal form with linked row",
+      fields: [],
+      submission: {
+        contextType: "proposal",
+        contextRef: doubleCountProposalContextRef,
+        answers: { abstract: "Talk abstract" },
+      },
+    });
+    await env.DB.prepare(
+      `INSERT INTO session_proposals (
+         id, event_id, proposer_user_id, status, proposal_type, title, abstract, details_json,
+         manage_token_hash, submitted_at, updated_at
+       ) VALUES (?, ?, ?, 'submitted', 'talk', 'Talk title', 'Talk abstract', ?, ?, ?, ?)`,
+    )
+      .bind(
+        doubleCountProposalContextRef,
+        eventId,
+        adminUserId,
+        JSON.stringify({ abstract: "Talk abstract" }),
+        crypto.randomUUID(),
+        nowIso(),
+        nowIso(),
+      )
+      .run();
+
     const response = await callAdmin("/api/v1/admin/events/pqc-2026/forms");
 
     expect(response.status).toBe(200);
@@ -185,11 +250,72 @@ describe("admin forms endpoints", () => {
       forms: Array<{ key: string; field_count: number; submission_count: number }>;
     };
     expect(payload.forms.map((form) => form.key)).toEqual(
-      expect.arrayContaining(["pqc-registration-form", "global-feedback-form"]),
+      expect.arrayContaining([
+        "pqc-registration-form",
+        "global-feedback-form",
+        "pqc-registration-double-count-form",
+        "pqc-proposal-double-count-form",
+      ]),
     );
     const eventForm = payload.forms.find((form) => form.key === "pqc-registration-form");
     expect(eventForm?.field_count).toBe(1);
     expect(eventForm?.submission_count).toBe(0);
+    expect(payload.forms.find((form) => form.key === "pqc-registration-double-count-form")?.submission_count).toBe(1);
+    expect(payload.forms.find((form) => form.key === "pqc-proposal-double-count-form")?.submission_count).toBe(1);
+  });
+
+  it("lists and creates global forms through the admin forms root", async () => {
+    const { eventId } = await setupAdmin();
+
+    await insertForm({
+      key: "event-linked-survey",
+      scopeType: "event",
+      scopeRef: eventId,
+      purpose: "survey",
+      title: "Event linked survey",
+      fields: [],
+    });
+
+    const createResponse = await callAdmin("/api/v1/admin/forms", {
+      method: "POST",
+      body: JSON.stringify({
+        key: "community-survey",
+        purpose: "survey",
+        title: "Community survey",
+        description: "Questions not linked to a single event",
+        status: "active",
+        fields: [
+          {
+            key: "topic",
+            label: "Topic",
+            fieldType: "text",
+            required: true,
+            sortOrder: 10,
+          },
+        ],
+      }),
+    });
+
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()) as { key: string };
+    expect(created.key).toBe("community-survey");
+
+    const rootResponse = await callAdmin("/api/v1/admin/forms");
+    expect(rootResponse.status).toBe(200);
+    const rootPayload = (await rootResponse.json()) as {
+      forms: Array<{
+        key: string;
+        scope_type: string;
+        scope_ref: string | null;
+        event_slug: string | null;
+        event_name: string | null;
+        field_count: number;
+      }>;
+    };
+    const form = rootPayload.forms.find((entry) => entry.key === "community-survey");
+    expect(form).toMatchObject({ scope_type: "global", scope_ref: null, field_count: 1 });
+    const eventForm = rootPayload.forms.find((entry) => entry.key === "event-linked-survey");
+    expect(eventForm).toMatchObject({ event_slug: "pqc-2026", event_name: "PQC Conference 2026" });
   });
 
   it("creates and reads a form, including submissions and answers", async () => {
@@ -278,6 +404,96 @@ describe("admin forms endpoints", () => {
     expect(submissionsPayload.total).toBe(1);
     expect(submissionsPayload.submissions[0]?.answers.company).toBe("Example Org");
     expect(submissionsPayload.submissions[0]?.answers.tracks).toEqual(["PKI", "PQC"]);
+  });
+
+  it("includes linked registration and proposal answers as form responses", async () => {
+    const { eventId } = await setupAdmin();
+    const [adminUser] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
+    const timestamp = nowIso();
+
+    await insertForm({
+      key: "linked-registration-form",
+      scopeType: "event",
+      scopeRef: eventId,
+      purpose: "event_registration",
+      title: "Registration questions",
+      fields: [
+        { key: "food", label: "Food", fieldType: "text", sortOrder: 10 },
+        { key: "topics", label: "Topics", fieldType: "multi_select", sortOrder: 20, options: ["PKI", "PQC"] },
+      ],
+    });
+    await insertForm({
+      key: "linked-proposal-form",
+      scopeType: "event",
+      scopeRef: eventId,
+      purpose: "proposal_submission",
+      title: "Proposal questions",
+      fields: [{ key: "audience", label: "Audience", fieldType: "text", sortOrder: 10 }],
+    });
+
+    const registrationId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO registrations (
+         id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
+         manage_token_hash, created_at, updated_at
+       ) VALUES (?, ?, ?, 'registered', 'virtual', 'admin', ?, ?, ?, ?)`,
+    )
+      .bind(
+        registrationId,
+        eventId,
+        adminUser.id,
+        JSON.stringify({ food: "No peanuts", topics: ["PKI", "PQC"] }),
+        crypto.randomUUID(),
+        timestamp,
+        timestamp,
+      )
+      .run();
+
+    const proposalId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO session_proposals (
+         id, event_id, proposer_user_id, status, proposal_type, title, abstract, details_json,
+         manage_token_hash, submitted_at, updated_at
+       ) VALUES (?, ?, ?, 'submitted', 'talk', 'Test proposal', 'Abstract', ?, ?, ?, ?)`,
+    )
+      .bind(
+        proposalId,
+        eventId,
+        adminUser.id,
+        JSON.stringify({ audience: "Operators" }),
+        crypto.randomUUID(),
+        timestamp,
+        timestamp,
+      )
+      .run();
+
+    const registrationResponse = await callAdmin(
+      "/api/v1/admin/forms/linked-registration-form/submissions?eventSlug=pqc-2026",
+    );
+    expect(registrationResponse.status).toBe(200);
+    const registrationPayload = (await registrationResponse.json()) as {
+      total: number;
+      submissions: Array<{ contextType: string; contextRef: string; answers: Record<string, unknown> }>;
+    };
+    expect(registrationPayload.total).toBe(1);
+    expect(registrationPayload.submissions[0]).toMatchObject({
+      contextType: "registration",
+      contextRef: registrationId,
+      answers: { food: "No peanuts", topics: ["PKI", "PQC"] },
+    });
+
+    const proposalResponse = await callAdmin("/api/v1/admin/forms/linked-proposal-form/submissions?eventSlug=pqc-2026");
+    expect(proposalResponse.status).toBe(200);
+    const proposalPayload = (await proposalResponse.json()) as {
+      total: number;
+      submissions: Array<{ contextType: string; contextRef: string; answers: Record<string, unknown> }>;
+    };
+    expect(proposalPayload.total).toBe(1);
+    expect(proposalPayload.submissions[0]).toMatchObject({
+      contextType: "proposal",
+      contextRef: proposalId,
+      answers: { audience: "Operators" },
+    });
   });
 
   it("replaces fields on patch and archives submitted forms on delete", async () => {

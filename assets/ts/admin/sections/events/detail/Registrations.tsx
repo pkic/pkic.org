@@ -8,6 +8,7 @@ import { fmt, toast } from "../../../ui";
 import type { Registration } from "../../../types";
 import { Invites } from "./Invites";
 import { EventEmail } from "./EventEmail";
+import { EventFormResponses } from "./Forms";
 
 const ATT_LABELS: Record<string, string> = { in_person: "In-person", virtual: "Virtual", on_demand: "On-demand" };
 
@@ -189,13 +190,14 @@ function RegistrationsList({ slug }: { slug: string }) {
 
 export function Registrations({ slug, subTab }: { slug: string; subTab?: string }) {
   const [, navigate] = useHashLocation();
-  const tab = subTab === "invites" || subTab === "email" ? subTab : "overview";
+  const tab = subTab === "invites" || subTab === "email" || subTab === "responses" ? subTab : "overview";
 
   return (
     <div>
       <Tabs
         items={[
           { key: "overview", label: "Overview" },
+          { key: "responses", label: "Responses" },
           { key: "invites", label: "Attendee Invites" },
           { key: "email", label: "Email" },
         ]}
@@ -204,6 +206,7 @@ export function Registrations({ slug, subTab }: { slug: string; subTab?: string 
       />
 
       {tab === "overview" && <RegistrationsList slug={slug} />}
+      {tab === "responses" && <EventFormResponses slug={slug} purpose="event_registration" />}
       {tab === "invites" && <Invites slug={slug} inviteType="attendee" />}
       {tab === "email" && <EventEmail slug={slug} audience="attendees" />}
     </div>

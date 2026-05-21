@@ -14,6 +14,7 @@ import { Templates } from "../sections/Templates";
 import { Users } from "../sections/Users";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
+import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
 import { RegistrationDetailPage } from "../sections/events/detail/RegistrationDetailPage";
 import { ProposalDetailPage } from "../sections/events/detail/ProposalDetailPage";
 
@@ -102,6 +103,23 @@ export function AdminShell() {
               component={({ params }: { params: { slug: string; tab?: string } }) => (
                 <SectionWrapper title="Event">
                   <EventDetailView slug={params.slug} tab={params.tab} />
+                </SectionWrapper>
+              )}
+            />
+
+            <Route
+              path="/forms/:formKey"
+              component={({ params }: { params: { formKey: string } }) => (
+                <SectionWrapper title="Form">
+                  <FormDetailPage formKey={params.formKey} />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/forms"
+              component={() => (
+                <SectionWrapper title="Forms">
+                  <Forms />
                 </SectionWrapper>
               )}
             />

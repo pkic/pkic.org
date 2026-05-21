@@ -17,7 +17,7 @@ import type {
   ProposalSpeaker,
   AdminFormDetailField,
 } from "../../../types";
-import { buildProposalAnswerRows } from "./proposal-detail-utils";
+import { FormAnswerTable } from "./FormResponses";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -512,7 +512,6 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const { proposal, access, form, minReviewsRequired } = data;
   const proposer =
     [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ") || proposal.proposer_email;
-  const answerRows = buildProposalAnswerRows(proposal.details, form?.fields);
   const quorumMet = reviews.length >= minReviewsRequired;
   const needsWorkRequiresNote = isNeedsWorkDecision(decisionStatus) && !decisionNote.trim();
   const selectedDecisionPreview =
@@ -765,7 +764,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                 )}
               </div>
 
-              {answerRows.length > 0 && (
+              {proposal.details && Object.keys(proposal.details).length > 0 && (
                 <>
                   <div class="card-header border-top">
                     <h6 class="mb-0 small">
@@ -774,32 +773,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                     </h6>
                   </div>
                   <div class="card-body p-0">
-                    <div class="table-responsive">
-                      <table class="table table-sm align-middle mb-0">
-                        <tbody>
-                          {answerRows.map((row) => (
-                            <tr key={row.key}>
-                              <th class="text-muted fw-semibold ps-3 adm-table-label-col" scope="row">
-                                {row.label}
-                              </th>
-                              <td class="pe-3">
-                                {row.kind === "list" ? (
-                                  <ul class="small mb-0 ps-3">
-                                    {row.values.map((v, i) => (
-                                      <li key={i}>{v}</li>
-                                    ))}
-                                  </ul>
-                                ) : row.kind === "pre" ? (
-                                  <pre class="small bg-light border rounded p-2 mb-0 adm-pre-wrap">{row.values[0]}</pre>
-                                ) : (
-                                  <span class="small">{row.values[0]}</span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    <FormAnswerTable answers={proposal.details} fields={form?.fields} />
                   </div>
                 </>
               )}

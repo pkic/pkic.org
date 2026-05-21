@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback } from "preact/hooks";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { DataTable } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { toast } from "../../../ui";
@@ -14,6 +13,9 @@ import type {
 } from "../../../types";
 import { Team } from "./Team";
 
+type FormLinkPurpose = "event_registration" | "proposal_submission";
+type FormLinkMode = "unset" | "none" | "explicit";
+
 // ─── General tab ────────────────────────────────────────────────────────────
 
 function toLocalDt(iso: string | null | undefined): string {
@@ -23,6 +25,18 @@ function toLocalDt(iso: string | null | undefined): string {
   } catch {
     return "";
   }
+}
+
+function formLinkValue(settings: Record<string, unknown>, purpose: FormLinkPurpose): string | null | undefined {
+  const forms = settings.forms as Record<string, unknown> | undefined;
+  const value = forms?.[purpose];
+  if (typeof value === "string") return value;
+  if (value === null) return null;
+  return undefined;
+}
+
+function formOptionLabel(form: AdminEventFormSummary): string {
+  return form.event_name ? `${form.title} · ${form.event_name}` : form.title;
 }
 
 function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated: (d: EventDetail) => void }) {
@@ -35,6 +49,21 @@ function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated: (d: E
   const [heroImageUrl, setHeroImageUrl] = useState(event.hero_image_url ?? "");
   const [location, setLocation] = useState(event.location ?? "");
   const [sessionTypes, setSessionTypes] = useState((event.session_types ?? []).join(", "));
+  const registrationLink = formLinkValue(event.settings, "event_registration");
+  const proposalLink = formLinkValue(event.settings, "proposal_submission");
+  const [registrationFormKey, setRegistrationFormKey] = useState(
+    typeof registrationLink === "string" ? registrationLink : "",
+  );
+  const [registrationFormMode, setRegistrationFormMode] = useState<FormLinkMode>(
+    registrationLink === undefined ? "unset" : registrationLink === null ? "none" : "explicit",
+  );
+  const [proposalFormKey, setProposalFormKey] = useState(typeof proposalLink === "string" ? proposalLink : "");
+  const [proposalFormMode, setProposalFormMode] = useState<FormLinkMode>(
+    proposalLink === undefined ? "unset" : proposalLink === null ? "none" : "explicit",
+  );
+  const [forms, setForms] = useState<AdminEventFormSummary[]>([]);
+  const [formsLoading, setFormsLoading] = useState(true);
+  const [formsLoaded, setFormsLoaded] = useState(false);
   const [mode, setMode] = useState(event.registration_mode ?? "invite_or_open");
   const [inviteLimit, setInviteLimit] = useState(event.invite_limit_attendee ?? 5);
   const [retentionDays, setRetentionDays] = useState(
@@ -64,6 +93,8 @@ function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated: (d: E
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean),
+          registrationFormKey: registrationFormMode === "none" ? null : registrationFormKey.trim() || null,
+          proposalFormKey: proposalFormMode === "none" ? null : proposalFormKey.trim() || null,
           inviteLimitAttendee: inviteLimit,
         };
         if (retentionDays.trim()) body.userRetentionDays = parseInt(retentionDays.trim(), 10) || undefined;
@@ -93,12 +124,86 @@ function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated: (d: E
       heroImageUrl,
       location,
       sessionTypes,
+      registrationFormKey,
+      proposalFormKey,
       inviteLimit,
       retentionDays,
       event.slug,
       onUpdated,
     ],
   );
+
+  useEffect(() => {
+    setName(event.name ?? "");
+    setTimezone(event.timezone ?? "UTC");
+    setStartsAt(toLocalDt(event.starts_at));
+    setEndsAt(toLocalDt(event.ends_at));
+    setVenue(event.venue ?? "");
+    setVirtualUrl(event.virtual_url ?? "");
+    setHeroImageUrl(event.hero_image_url ?? "");
+    setLocation(event.location ?? "");
+    setSessionTypes((event.session_types ?? []).join(", "));
+    const nextRegistrationLink = formLinkValue(event.settings, "event_registration");
+    const nextProposalLink = formLinkValue(event.settings, "proposal_submission");
+    setRegistrationFormKey(typeof nextRegistrationLink === "string" ? nextRegistrationLink : "");
+    setRegistrationFormMode(
+      nextRegistrationLink === undefined ? "unset" : nextRegistrationLink === null ? "none" : "explicit",
+    );
+    setProposalFormKey(typeof nextProposalLink === "string" ? nextProposalLink : "");
+    setProposalFormMode(nextProposalLink === undefined ? "unset" : nextProposalLink === null ? "none" : "explicit");
+    setMode(event.registration_mode ?? "invite_or_open");
+    setInviteLimit(event.invite_limit_attendee ?? 5);
+    setRetentionDays(event.user_retention_days ? String(event.user_retention_days) : "");
+  }, [
+    event.name,
+    event.timezone,
+    event.starts_at,
+    event.ends_at,
+    event.venue,
+    event.virtual_url,
+    event.hero_image_url,
+    event.location,
+    event.session_types,
+    event.settings,
+    event.registration_mode,
+    event.invite_limit_attendee,
+    event.user_retention_days,
+  ]);
+
+  const loadForms = useCallback(async () => {
+    setFormsLoading(true);
+    setFormsLoaded(false);
+    try {
+      const data = await api<{ forms: AdminEventFormSummary[] }>(`/api/v1/admin/events/${event.slug}/forms`);
+      setForms(data.forms ?? []);
+    } catch {
+      setForms([]);
+    } finally {
+      setFormsLoading(false);
+      setFormsLoaded(true);
+    }
+  }, [event.slug]);
+
+  useEffect(() => {
+    void loadForms();
+  }, [loadForms]);
+
+  const registrationForms = forms.filter((form) => form.purpose === "event_registration" && form.status === "active");
+  const proposalForms = forms.filter((form) => form.purpose === "proposal_submission" && form.status === "active");
+
+  useEffect(() => {
+    if (!formsLoaded) return;
+    if (registrationFormMode === "unset") {
+      const currentRegistration = registrationForms[0]?.key ?? "";
+      setRegistrationFormKey(currentRegistration);
+      setRegistrationFormMode(currentRegistration ? "explicit" : "none");
+    }
+    if (proposalFormMode === "unset") {
+      const currentProposal = proposalForms[0]?.key ?? "";
+      setProposalFormKey(currentProposal);
+      setProposalFormMode(currentProposal ? "explicit" : "none");
+    }
+  }, [formsLoaded, registrationFormMode, registrationForms, proposalFormMode, proposalForms]);
 
   return (
     <form onSubmit={handleSubmit}>
@@ -202,6 +307,56 @@ function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated: (d: E
           placeholder="talk, keynote, panel, tutorial"
         />
         <div class="form-text">Comma-separated</div>
+      </div>
+      <div class="row g-2 mb-3">
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Registration form</label>
+          <select
+            class="form-select form-select-sm"
+            value={registrationFormKey}
+            onChange={(e) => {
+              const value = (e.target as HTMLSelectElement).value;
+              setRegistrationFormKey(value);
+              setRegistrationFormMode(value ? "explicit" : "none");
+            }}
+            disabled={formsLoading}
+          >
+            <option value="">No form</option>
+            {registrationFormKey && !registrationForms.some((form) => form.key === registrationFormKey) && (
+              <option value={registrationFormKey}>{registrationFormKey} (linked, unavailable)</option>
+            )}
+            {registrationForms.map((form) => (
+              <option key={form.key} value={form.key}>
+                {formOptionLabel(form)}
+              </option>
+            ))}
+          </select>
+          <div class="form-text">Choose the form this event should use for registrations.</div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label small fw-semibold">Proposal form</label>
+          <select
+            class="form-select form-select-sm"
+            value={proposalFormKey}
+            onChange={(e) => {
+              const value = (e.target as HTMLSelectElement).value;
+              setProposalFormKey(value);
+              setProposalFormMode(value ? "explicit" : "none");
+            }}
+            disabled={formsLoading}
+          >
+            <option value="">No form</option>
+            {proposalFormKey && !proposalForms.some((form) => form.key === proposalFormKey) && (
+              <option value={proposalFormKey}>{proposalFormKey} (linked, unavailable)</option>
+            )}
+            {proposalForms.map((form) => (
+              <option key={form.key} value={form.key}>
+                {formOptionLabel(form)}
+              </option>
+            ))}
+          </select>
+          <div class="form-text">Choose the form this event should use for proposals.</div>
+        </div>
       </div>
       <div class="row g-2 mb-3">
         <div class="col-md-6">
@@ -738,74 +893,14 @@ function TermsTab({ slug }: { slug: string }) {
   );
 }
 
-// ─── Forms tab ───────────────────────────────────────────────────────────────
-
-function FormsTab({ slug }: { slug: string }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [forms, setForms] = useState<AdminEventFormSummary[]>([]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api<{ forms: AdminEventFormSummary[] }>(`/api/v1/admin/events/${slug}/forms`);
-      setForms(data.forms ?? []);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
-
-  return (
-    <div>
-      <div class="d-flex justify-content-end mb-2">
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => void load()}>
-          ↺ Refresh
-        </button>
-      </div>
-      <DataTable
-        columns={[
-          { header: "Key", cell: (f) => f.key, className: "mono small" },
-          { header: "Purpose", cell: (f) => f.purpose, className: "small" },
-          { header: "Status", cell: (f) => <span class="badge text-bg-secondary">{f.status}</span> },
-          {
-            header: { label: "Fields", className: "text-end" },
-            cell: (f) => f.field_count,
-            className: "mono text-end",
-          },
-          {
-            header: { label: "Submissions", className: "text-end" },
-            cell: (f) => f.submission_count,
-            className: "mono text-end",
-          },
-          { header: "Title", cell: (f) => f.title, className: "small" },
-        ]}
-        data={forms}
-        empty="No forms configured"
-        rowKey={(f) => f.id}
-      />
-    </div>
-  );
-}
-
 // ─── Settings compositor ─────────────────────────────────────────────────────
 
-type SettingsTab = "general" | "days" | "terms" | "forms" | "team";
+type SettingsTab = "general" | "days" | "terms" | "team";
 
 const SETTINGS_TABS: Array<{ key: SettingsTab; label: string }> = [
   { key: "general", label: "General" },
   { key: "days", label: "Days" },
   { key: "terms", label: "Terms" },
-  { key: "forms", label: "Forms" },
   { key: "team", label: "Team" },
 ];
 
@@ -833,7 +928,6 @@ export function Settings({
       {tab === "general" && <GeneralTab event={event} onUpdated={onUpdated} />}
       {tab === "days" && <DaysTab slug={event.slug} timezone={event.timezone} />}
       {tab === "terms" && <TermsTab slug={event.slug} />}
-      {tab === "forms" && <FormsTab slug={event.slug} />}
       {tab === "team" && <Team slug={event.slug} />}
     </div>
   );

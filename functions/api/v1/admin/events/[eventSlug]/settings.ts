@@ -18,6 +18,27 @@ import { adminEventSettingsSchema } from "../../../../../../assets/shared/schema
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
+function setFormLink(
+  settings: Record<string, unknown>,
+  purpose: "event_registration" | "proposal_submission",
+  formKey: string | null | undefined,
+): void {
+  if (formKey === undefined) return;
+
+  const forms = (settings.forms as Record<string, unknown> | undefined) ?? {};
+  if (formKey === null) {
+    forms[purpose] = null;
+  } else {
+    forms[purpose] = formKey;
+  }
+
+  if (Object.keys(forms).length === 0) {
+    delete settings.forms;
+  } else {
+    settings.forms = forms;
+  }
+}
+
 export async function onRequestPatch(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminEventSettingsSchema);
@@ -75,6 +96,8 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
   if (body.settings) {
     Object.assign(updatedSettings, body.settings);
   }
+  setFormLink(updatedSettings, "event_registration", body.registrationFormKey);
+  setFormLink(updatedSettings, "proposal_submission", body.proposalFormKey);
 
   // ── Core event fields — use COALESCE so omitted fields are preserved ──────
   // starts_at / ends_at accept an explicit null to clear.
