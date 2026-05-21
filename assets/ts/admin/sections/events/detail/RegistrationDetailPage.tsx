@@ -6,8 +6,9 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { DataTable } from "../../../../components/Table";
 import { api } from "../../../api";
 import { fmt, toast } from "../../../ui";
-import type { Registration, AdminEventDay, BadgeRoleInfo } from "../../../types";
+import type { Registration, AdminEventDay, BadgeRoleInfo, AdminFormDetailField } from "../../../types";
 import { useData } from "../../../../hooks/useData";
+import { FormAnswerTable } from "./FormResponses";
 
 const ROLE_BADGE_COLOUR: Record<string, string> = {
   attendee: "primary",
@@ -491,7 +492,8 @@ function ForceStatusPanel({
 // ─── Main detail page ─────────────────────────────────────────────────────────
 
 interface DetailResponse {
-  registration: Registration;
+  registration: Registration & { customAnswers?: Record<string, unknown> | null };
+  form: { id: string; title: string; description: string | null; fields: AdminFormDetailField[] } | null;
   dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
   dayWaitlist: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
 }
@@ -513,6 +515,7 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
   );
 
   const reg = data?.registration;
+  const form = data?.form ?? null;
   const dayAttendance = data?.dayAttendance ?? [];
   const dayWaitlist = data?.dayWaitlist ?? [];
   const eventDays = daysData?.days ?? [];
@@ -632,6 +635,21 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
           />
         </div>
       </div>
+
+      {/* Linked form responses */}
+      {(form || (reg.customAnswers && Object.keys(reg.customAnswers).length > 0)) && (
+        <div class="card mb-3">
+          <div class="card-header">
+            <h6 class="mb-0">
+              Registration Answers
+              {form?.title && <span class="text-muted fw-normal ms-2">— {form.title}</span>}
+            </h6>
+          </div>
+          <div class="card-body p-0">
+            <FormAnswerTable answers={reg.customAnswers} fields={form?.fields} />
+          </div>
+        </div>
+      )}
 
       {/* Day waitlist (only if entries exist) */}
       {dayWaitlist.length > 0 && (

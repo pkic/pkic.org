@@ -1,17 +1,10 @@
 import { useState, useEffect, useCallback } from "preact/hooks";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { DataTable } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
 import { toast } from "../../../ui";
-import type {
-  EventDetail,
-  AdminEventDay,
-  AdminAttendanceOption,
-  AdminEventTerm,
-  AdminEventFormSummary,
-} from "../../../types";
+import type { EventDetail, AdminEventDay, AdminAttendanceOption, AdminEventTerm } from "../../../types";
 import { Team } from "./Team";
 
 // ─── General tab ────────────────────────────────────────────────────────────
@@ -738,74 +731,14 @@ function TermsTab({ slug }: { slug: string }) {
   );
 }
 
-// ─── Forms tab ───────────────────────────────────────────────────────────────
-
-function FormsTab({ slug }: { slug: string }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [forms, setForms] = useState<AdminEventFormSummary[]>([]);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await api<{ forms: AdminEventFormSummary[] }>(`/api/v1/admin/events/${slug}/forms`);
-      setForms(data.forms ?? []);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [slug]);
-
-  useEffect(() => {
-    void load();
-  }, [load]);
-
-  if (loading) return <Spinner />;
-  if (error) return <ErrorAlert error={error} />;
-
-  return (
-    <div>
-      <div class="d-flex justify-content-end mb-2">
-        <button class="btn btn-sm btn-outline-secondary" onClick={() => void load()}>
-          ↺ Refresh
-        </button>
-      </div>
-      <DataTable
-        columns={[
-          { header: "Key", cell: (f) => f.key, className: "mono small" },
-          { header: "Purpose", cell: (f) => f.purpose, className: "small" },
-          { header: "Status", cell: (f) => <span class="badge text-bg-secondary">{f.status}</span> },
-          {
-            header: { label: "Fields", className: "text-end" },
-            cell: (f) => f.field_count,
-            className: "mono text-end",
-          },
-          {
-            header: { label: "Submissions", className: "text-end" },
-            cell: (f) => f.submission_count,
-            className: "mono text-end",
-          },
-          { header: "Title", cell: (f) => f.title, className: "small" },
-        ]}
-        data={forms}
-        empty="No forms configured"
-        rowKey={(f) => f.id}
-      />
-    </div>
-  );
-}
-
 // ─── Settings compositor ─────────────────────────────────────────────────────
 
-type SettingsTab = "general" | "days" | "terms" | "forms" | "team";
+type SettingsTab = "general" | "days" | "terms" | "team";
 
 const SETTINGS_TABS: Array<{ key: SettingsTab; label: string }> = [
   { key: "general", label: "General" },
   { key: "days", label: "Days" },
   { key: "terms", label: "Terms" },
-  { key: "forms", label: "Forms" },
   { key: "team", label: "Team" },
 ];
 
@@ -833,7 +766,6 @@ export function Settings({
       {tab === "general" && <GeneralTab event={event} onUpdated={onUpdated} />}
       {tab === "days" && <DaysTab slug={event.slug} timezone={event.timezone} />}
       {tab === "terms" && <TermsTab slug={event.slug} />}
-      {tab === "forms" && <FormsTab slug={event.slug} />}
       {tab === "team" && <Team slug={event.slug} />}
     </div>
   );

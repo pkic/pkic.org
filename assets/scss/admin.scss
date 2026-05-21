@@ -2,12 +2,12 @@
 // All shared utility classes are scoped under #admin-main to prevent collision with main website styles
 // (e.g. the main site has a dark .stat-grid; scoping ensures admin's version wins via higher specificity).
 
-$adm-bg:        #f4f5f7;
-$adm-surface:   #fff;
-$adm-border:    #dee2e6;
-$adm-muted:     #6c757d;
-$adm-green:     #198754;
-$adm-danger:    #dc3545;
+$adm-bg: #f4f5f7;
+$adm-surface: #fff;
+$adm-border: #dee2e6;
+$adm-muted: #6c757d;
+$adm-green: #198754;
+$adm-danger: #dc3545;
 
 @import "admin-users";
 @import "admin-email-templates";
@@ -55,7 +55,7 @@ $adm-danger:    #dc3545;
   color: #adb5bd;
   word-break: break-all;
   margin-top: 0.2rem;
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
 }
 
 // ── Sidebar nav links ─────────────────────────────────────────────────────────
@@ -74,7 +74,9 @@ $adm-danger:    #dc3545;
   background: transparent;
   width: 100%;
   text-align: left;
-  transition: background 0.12s, color 0.12s;
+  transition:
+    background 0.12s,
+    color 0.12s;
   margin-bottom: 1px;
   position: relative;
 
@@ -89,7 +91,7 @@ $adm-danger:    #dc3545;
     font-weight: 600;
 
     &::before {
-      content: '';
+      content: "";
       position: absolute;
       left: 0;
       top: 15%;
@@ -127,7 +129,9 @@ $adm-danger:    #dc3545;
   opacity: 0.5;
   display: flex;
   align-items: center;
-  transition: transform 0.2s ease, opacity 0.12s;
+  transition:
+    transform 0.2s ease,
+    opacity 0.12s;
 
   &.open {
     transform: rotate(180deg);
@@ -224,7 +228,6 @@ $adm-danger:    #dc3545;
 // ─────────────────────────────────────────────────────────────────────────────
 
 #admin-main {
-
   // ── Page heading ────────────────────────────────────────────────────────────
 
   .page-heading {
@@ -298,7 +301,9 @@ $adm-danger:    #dc3545;
       border-color: #f5c2c7;
       background: #fff8f8;
 
-      .val { color: #842029; }
+      .val {
+        color: #842029;
+      }
     }
 
     &.ok {
@@ -358,11 +363,22 @@ $adm-danger:    #dc3545;
     border-radius: 3px;
     background: $adm-green;
 
-    &.CONFIRMED, &.sent     { background: $adm-green; }
-    &.PENDING, &.retrying,
-    &.queued                 { background: #fd7e14; }
-    &.CANCELLED, &.failed   { background: $adm-danger; }
-    &.WAITLISTED             { background: #ffc107; }
+    &.CONFIRMED,
+    &.sent {
+      background: $adm-green;
+    }
+    &.PENDING,
+    &.retrying,
+    &.queued {
+      background: #fd7e14;
+    }
+    &.CANCELLED,
+    &.failed {
+      background: $adm-danger;
+    }
+    &.WAITLISTED {
+      background: #ffc107;
+    }
   }
 
   .bar-cnt {
@@ -372,6 +388,190 @@ $adm-danger:    #dc3545;
     text-align: right;
     flex-shrink: 0;
     font-family: monospace;
+  }
+
+  // ── Form response statistics ───────────────────────────────────────────────
+
+  .adm-form-stat-card {
+    min-height: 180px;
+  }
+
+  .adm-form-meter {
+    flex: 1;
+    height: 0.45rem;
+    border: 0;
+    border-radius: 0.25rem;
+    background: #e9ecef;
+
+    &::-webkit-meter-bar {
+      border: 0;
+      border-radius: 0.25rem;
+      background: #e9ecef;
+    }
+
+    &::-webkit-meter-optimum-value {
+      background: $adm-green;
+    }
+    &::-moz-meter-bar {
+      background: $adm-green;
+    }
+  }
+
+  .adm-form-pie-wrap {
+    display: flex;
+    gap: 0.75rem;
+    align-items: center;
+  }
+
+  .adm-form-pie {
+    width: 88px;
+    height: 88px;
+    flex-shrink: 0;
+    transform: rotate(-90deg);
+  }
+
+  .adm-form-pie-bg {
+    fill: none;
+    stroke: #e9ecef;
+    stroke-width: 8;
+  }
+
+  .adm-form-pie-segment {
+    fill: none;
+    stroke-width: 8;
+  }
+
+  .adm-form-pie-segment-0,
+  .adm-form-pie-dot-0 {
+    stroke: $adm-green;
+    background: $adm-green;
+  }
+  .adm-form-pie-segment-1,
+  .adm-form-pie-dot-1 {
+    stroke: #0d6efd;
+    background: #0d6efd;
+  }
+  .adm-form-pie-segment-2,
+  .adm-form-pie-dot-2 {
+    stroke: #fd7e14;
+    background: #fd7e14;
+  }
+  .adm-form-pie-segment-3,
+  .adm-form-pie-dot-3 {
+    stroke: #6f42c1;
+    background: #6f42c1;
+  }
+  .adm-form-pie-segment-4,
+  .adm-form-pie-dot-4 {
+    stroke: #20c997;
+    background: #20c997;
+  }
+  .adm-form-pie-segment-5,
+  .adm-form-pie-dot-5 {
+    stroke: $adm-danger;
+    background: $adm-danger;
+  }
+  .adm-form-pie-segment-6,
+  .adm-form-pie-dot-6 {
+    stroke: $adm-muted;
+    background: $adm-muted;
+  }
+
+  .adm-form-pie-dot {
+    display: inline-block;
+  }
+
+  .adm-form-pie-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+
+  .adm-form-pie-legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    font-size: 0.75rem;
+    color: $adm-muted;
+
+    > span {
+      width: 0.65rem;
+      height: 0.65rem;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+  }
+
+  .adm-form-wordcloud {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3rem 0.7rem;
+    align-items: center;
+    justify-content: center;
+    padding: 0.5rem 0.25rem;
+    line-height: 1.3;
+
+    span {
+      position: relative;
+      font-weight: 600;
+      cursor: default;
+      transition: opacity 0.12s;
+
+      // CSS tooltip via data-count
+      &::after {
+        content: attr(data-count);
+        position: absolute;
+        bottom: calc(100% + 5px);
+        left: 50%;
+        transform: translateX(-50%);
+        background: #1e1e2e;
+        color: #cdd6f4;
+        font-size: 0.7rem;
+        font-weight: 400;
+        white-space: nowrap;
+        padding: 0.2rem 0.5rem;
+        border-radius: 0.3rem;
+        pointer-events: none;
+        opacity: 0;
+        transition: opacity 0.15s;
+        z-index: 10;
+      }
+
+      &:hover {
+        opacity: 0.75;
+
+        &::after {
+          opacity: 1;
+        }
+      }
+    }
+
+    .adm-word-weight-1 {
+      font-size: 0.78rem;
+      font-weight: 400;
+      color: #9eb8ae;
+    }
+    .adm-word-weight-2 {
+      font-size: 1rem;
+      font-weight: 500;
+      color: #5c9e82;
+    }
+    .adm-word-weight-3 {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #2e7d5e;
+    }
+    .adm-word-weight-4 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      color: #1a6b4a;
+    }
+    .adm-word-weight-5 {
+      font-size: 2rem;
+      font-weight: 800;
+      color: $adm-green;
+    }
   }
 
   // ── Action cards ────────────────────────────────────────────────────────────
@@ -386,7 +586,9 @@ $adm-danger:    #dc3545;
     gap: 0.75rem;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 
-    strong { font-size: 0.9rem; }
+    strong {
+      font-size: 0.9rem;
+    }
 
     p {
       font-size: 0.8rem;
@@ -409,15 +611,20 @@ $adm-danger:    #dc3545;
     border: 1px solid $adm-border;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 
-    table { margin: 0; min-width: 500px; }
+    table {
+      margin: 0;
+      min-width: 500px;
+    }
   }
 
-  .tbl-row-link { cursor: pointer; }
+  .tbl-row-link {
+    cursor: pointer;
+  }
 
   // ── Code / JSON output ──────────────────────────────────────────────────────
 
   .mono {
-    font-family: 'Courier New', monospace;
+    font-family: "Courier New", monospace;
     font-size: 0.8rem;
   }
 
@@ -457,22 +664,52 @@ $adm-danger:    #dc3545;
 
   // ── Common utility classes ──────────────────────────────────────────────────
 
-  .adm-filter-select   { width: auto; }
-  .adm-search-input    { max-width: 260px; }
-  .adm-pre-wrap        { white-space: pre-wrap; }
-  .adm-cell-title      { max-width: 260px; }
-  .adm-cell-sub-email  { font-size: 0.72rem; }
-  .adm-cell-name       { font-size: 0.85rem; }
-  .adm-flex-1          { flex: 1; }
-  .adm-snippet-disabled { opacity: 0.4; }
-  .adm-speaker-headshot { width: 48px; height: 48px; object-fit: cover; }
-  .adm-initials-avatar {
-    width: 48px; height: 48px; border-radius: 50%;
-    background-color: #6c757d; color: #fff;
-    display: flex; align-items: center; justify-content: center;
-    font-weight: 600; font-size: 1rem; flex-shrink: 0;
+  .adm-filter-select {
+    width: auto;
   }
-  .adm-table-label-col { width: 30%; min-width: 100px; }
+  .adm-search-input {
+    max-width: 260px;
+  }
+  .adm-pre-wrap {
+    white-space: pre-wrap;
+  }
+  .adm-cell-title {
+    max-width: 260px;
+  }
+  .adm-cell-sub-email {
+    font-size: 0.72rem;
+  }
+  .adm-cell-name {
+    font-size: 0.85rem;
+  }
+  .adm-flex-1 {
+    flex: 1;
+  }
+  .adm-snippet-disabled {
+    opacity: 0.4;
+  }
+  .adm-speaker-headshot {
+    width: 48px;
+    height: 48px;
+    object-fit: cover;
+  }
+  .adm-initials-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: #6c757d;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 600;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .adm-table-label-col {
+    width: 30%;
+    min-width: 100px;
+  }
 
   // ── Pagination ──────────────────────────────────────────────────────────────
 
@@ -494,7 +731,7 @@ $adm-danger:    #dc3545;
   }
 
   .adm-pager-range {
-    font-family: 'Courier New', monospace;
+    font-family: "Courier New", monospace;
     font-size: 0.75rem;
   }
 
@@ -523,11 +760,31 @@ $adm-danger:    #dc3545;
     font-weight: 700;
     font-size: 0.6rem;
 
-    &.gold    { background: #fff3cd; color: #997404; border: 1.5px solid #ffc107; }
-    &.silver  { background: #e9ecef; color: #495057; border: 1.5px solid #adb5bd; }
-    &.bronze  { background: #fde8d0; color: #984c0c; border: 1.5px solid #fd7e14; }
-    &.top-ten { background: #f0f7f4; color: #0f5132; border: 1.5px solid #badbcc; }
-    &.other   { background: #f8f9fa; color: #6c757d; border: 1px solid #dee2e6; }
+    &.gold {
+      background: #fff3cd;
+      color: #997404;
+      border: 1.5px solid #ffc107;
+    }
+    &.silver {
+      background: #e9ecef;
+      color: #495057;
+      border: 1.5px solid #adb5bd;
+    }
+    &.bronze {
+      background: #fde8d0;
+      color: #984c0c;
+      border: 1.5px solid #fd7e14;
+    }
+    &.top-ten {
+      background: #f0f7f4;
+      color: #0f5132;
+      border: 1.5px solid #badbcc;
+    }
+    &.other {
+      background: #f8f9fa;
+      color: #6c757d;
+      border: 1px solid #dee2e6;
+    }
   }
 
   .adm-promoter-avatar {
@@ -558,16 +815,26 @@ $adm-danger:    #dc3545;
     align-items: center;
     gap: 0.75rem;
     flex-wrap: wrap;
-    transition: box-shadow 0.15s, border-color 0.15s;
+    transition:
+      box-shadow 0.15s,
+      border-color 0.15s;
 
     &:hover {
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
     }
 
-    &.top-1   { border-left: 3px solid #ffc107; }
-    &.top-2   { border-left: 3px solid #adb5bd; }
-    &.top-3   { border-left: 3px solid #fd7e14; }
-    &.top-ten { border-left: 3px solid #badbcc; }
+    &.top-1 {
+      border-left: 3px solid #ffc107;
+    }
+    &.top-2 {
+      border-left: 3px solid #adb5bd;
+    }
+    &.top-3 {
+      border-left: 3px solid #fd7e14;
+    }
+    &.top-ten {
+      border-left: 3px solid #badbcc;
+    }
   }
 
   .adm-promoter-info {
@@ -651,12 +918,16 @@ $adm-danger:    #dc3545;
       transition: width 0.4s ease;
     }
 
-    &.mid .fill  { background: #ffc107; }
-    &.high .fill { background: $adm-green; }
+    &.mid .fill {
+      background: #ffc107;
+    }
+    &.high .fill {
+      background: $adm-green;
+    }
   }
 
   .adm-referral-code {
-    font-family: 'Courier New', monospace;
+    font-family: "Courier New", monospace;
     font-size: 0.82rem;
     padding: 0.15rem 0.5rem;
     background: #f0f7f4;
@@ -723,13 +994,125 @@ $adm-danger:    #dc3545;
     padding: 0 0.1rem;
   }
 
-  .adm-invite-col-name   { flex: 1.2; }
-  .adm-invite-col-email  { flex: 2; }
-  .adm-invite-col-action { width: 1.8rem; }
+  .adm-invite-col-name {
+    flex: 1.2;
+  }
+  .adm-invite-col-email {
+    flex: 2;
+  }
+  .adm-invite-col-action {
+    width: 1.8rem;
+  }
 
   .adm-invite-action-btn {
     width: 1.8rem;
     padding: 0;
+  }
+
+  // ── Form field editor ────────────────────────────────────────────────────────
+
+  // Compact, single-row card header for form field cards
+  .adm-field-card {
+    border: 1px solid $adm-border;
+    border-radius: 0.5rem;
+    overflow: hidden;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+
+  .adm-field-card-head {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: #f8f9fa;
+    border-bottom: 1px solid $adm-border;
+    flex-wrap: wrap;
+  }
+
+  .adm-field-num {
+    font-size: 0.7rem;
+    font-weight: 700;
+    color: $adm-muted;
+    background: #e9ecef;
+    border-radius: 0.25rem;
+    padding: 0.15rem 0.4rem;
+    flex-shrink: 0;
+    font-family: "Courier New", monospace;
+  }
+
+  .adm-fkey-input {
+    width: 130px;
+    flex-shrink: 0;
+    font-family: "Courier New", monospace;
+    font-size: 0.8rem;
+  }
+
+  .adm-flabel-input {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .adm-ftype-select {
+    width: 120px;
+    flex-shrink: 0;
+  }
+
+  .adm-field-move-btn {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    flex-shrink: 0;
+  }
+
+  // Visual / JSON mode segmented toggle
+  .adm-field-mode-toggle {
+    display: inline-flex;
+    border: 1px solid $adm-border;
+    border-radius: 0.375rem;
+    overflow: hidden;
+  }
+
+  .adm-field-mode-btn {
+    padding: 0.2rem 0.65rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+    border: none;
+    background: transparent;
+    color: $adm-muted;
+    cursor: pointer;
+    transition:
+      background 0.12s,
+      color 0.12s;
+
+    &:hover:not(.active) {
+      background: #f0f0f0;
+    }
+
+    &.active {
+      background: $adm-green;
+      color: #fff;
+    }
+  }
+
+  // Raw JSON textarea
+  .adm-field-raw-json {
+    font-family: "Courier New", monospace;
+    font-size: 0.78rem;
+    background: #1e1e2e;
+    color: #cdd6f4;
+    border-color: #313244;
+    border-radius: 0.375rem;
+
+    &:focus {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      border-color: $adm-green;
+      box-shadow: 0 0 0 0.2rem rgba($adm-green, 0.2);
+    }
   }
 }
 

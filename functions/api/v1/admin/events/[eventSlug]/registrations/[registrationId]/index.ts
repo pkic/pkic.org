@@ -19,10 +19,11 @@ import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { updateRegistrationById, changeRegistrationEmail } from "../../../../../../../_lib/services/registrations";
-import { validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
+import { getActiveFormByPurpose, validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
 import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
 import { nowIso } from "../../../../../../../_lib/utils/time";
+import { parseJsonSafe } from "../../../../../../../_lib/utils/json";
 import type { DatabaseLike } from "../../../../../../../_lib/types";
 import { registrationManageSchema } from "../../../../../../../../assets/shared/schemas/api";
 import { z } from "zod";
@@ -50,6 +51,7 @@ interface RegistrationRow {
   display_name: string | null;
   referral_code: string | null;
   rsvp_status: string | null;
+  custom_answers_json: string | null;
 }
 
 async function fetchRegistrationWithDetails(
@@ -60,6 +62,7 @@ async function fetchRegistrationWithDetails(
   return first<RegistrationRow>(
     db,
     `SELECT r.id, r.event_id, r.user_id, r.status, r.attendance_type, r.source_type,
+          r.custom_answers_json,
             r.created_at, r.updated_at,
             u.email AS user_email,
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
@@ -87,8 +90,25 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     getRegistrationDayAttendance(requestDb(c), registration.id),
     listDayWaitlistForRegistration(requestDb(c), registration.id),
   ]);
+  const registrationForm = await getActiveFormByPurpose(requestDb(c), event.id, "event_registration");
 
-  return json({ registration, dayAttendance, dayWaitlist });
+  return json({
+    registration: {
+      ...registration,
+      customAnswers: parseJsonSafe<Record<string, unknown> | null>(registration.custom_answers_json, null),
+    },
+    form:
+      registrationForm == null
+        ? null
+        : {
+            id: registrationForm.id,
+            title: registrationForm.title,
+            description: registrationForm.description,
+            fields: registrationForm.fields,
+          },
+    dayAttendance,
+    dayWaitlist,
+  });
 }
 
 // ── PATCH ─────────────────────────────────────────────────────────────────────

@@ -13,6 +13,7 @@ import { api } from "../../../api";
 import { fmt } from "../../../ui";
 import type { ProposalSummary, ProposalAccess } from "../../../types";
 import { EventEmail } from "./EventEmail";
+import { EventFormResponses } from "./Forms";
 import { Invites } from "./Invites";
 
 // ─── Proposals list ───────────────────────────────────────────────────────────
@@ -129,13 +130,14 @@ function ProposalsList({ slug }: { slug: string }) {
 
 export function Proposals({ slug, subTab }: { slug: string; subTab?: string }) {
   const [, navigate] = useHashLocation();
-  const tab = subTab === "invites" || subTab === "email" ? subTab : "proposals";
+  const tab = subTab === "invites" || subTab === "email" || subTab === "responses" ? subTab : "proposals";
 
   return (
     <div>
       <Tabs
         items={[
           { key: "proposals", label: "Overview" },
+          { key: "responses", label: "Responses" },
           { key: "invites", label: "Speaker Invites" },
           { key: "email", label: "Email" },
         ]}
@@ -143,6 +145,7 @@ export function Proposals({ slug, subTab }: { slug: string; subTab?: string }) {
         onChange={(key) => navigate(`/events/${slug}/proposals/${key === "proposals" ? "" : key}`)}
       />
       {tab === "proposals" && <ProposalsList slug={slug} />}
+      {tab === "responses" && <EventFormResponses slug={slug} purpose="proposal_submission" />}
       {tab === "invites" && <Invites slug={slug} inviteType="speaker" />}
       {tab === "email" && <EventEmail slug={slug} audience="speakers" />}
     </div>
