@@ -358,30 +358,47 @@ describe("admin forms endpoints", () => {
     ]);
     await env.DB.prepare(
       `INSERT INTO form_submissions (id, form_id, status, submitted_at)
-       VALUES (?, ?, 'submitted', ?)`,
+       VALUES (?, ?, 'submitted', ?), (?, ?, 'submitted', ?)`,
     )
-      .bind(crypto.randomUUID(), detailRow.id, nowIso())
+      .bind(
+        crypto.randomUUID(),
+        detailRow.id,
+        nowIso(),
+        crypto.randomUUID(),
+        detailRow.id,
+        new Date(Date.now() - 1000).toISOString(),
+      )
       .run();
 
-    const [submission] = await queryAll<{ id: string }>(
+    const submissions = await queryAll<{ id: string }>(
       env.DB,
-      "SELECT id FROM form_submissions WHERE form_id = ? ORDER BY submitted_at DESC LIMIT 1",
+      "SELECT id FROM form_submissions WHERE form_id = ? ORDER BY submitted_at DESC",
       [detailRow.id],
     );
     await env.DB.prepare(
       `INSERT INTO form_submission_answers (id, submission_id, field_key, data_json, created_at)
-       VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
+       VALUES (?, ?, ?, ?, ?), (?, ?, ?, ?, ?), (?, ?, ?, ?, ?), (?, ?, ?, ?, ?)`,
     )
       .bind(
         crypto.randomUUID(),
-        submission.id,
+        submissions[0].id,
         "company",
         JSON.stringify("Example Org"),
         nowIso(),
         crypto.randomUUID(),
-        submission.id,
+        submissions[0].id,
         "tracks",
         JSON.stringify(["PKI", "PQC"]),
+        nowIso(),
+        crypto.randomUUID(),
+        submissions[1].id,
+        "company",
+        JSON.stringify("Other Org"),
+        nowIso(),
+        crypto.randomUUID(),
+        submissions[1].id,
+        "tracks",
+        JSON.stringify(["PKI"]),
         nowIso(),
       )
       .run();
@@ -395,21 +412,43 @@ describe("admin forms endpoints", () => {
     expect(detailPayload.form.key).toBe("event-workshop-form");
     expect(detailPayload.fields.map((field) => field.key)).toEqual(["company", "tracks"]);
 
-    const submissionsResponse = await callAdmin("/api/v1/admin/forms/event-workshop-form/submissions");
+    const submissionsResponse = await callAdmin("/api/v1/admin/forms/event-workshop-form/submissions?limit=1");
     expect(submissionsResponse.status).toBe(200);
     const submissionsPayload = (await submissionsResponse.json()) as {
       total: number;
+      page: { total: number; hasMore: boolean };
+      stats: Array<{ fieldKey: string; entries: Array<{ label: string; count: number }> }>;
       submissions: Array<{ answers: Record<string, unknown> }>;
     };
-    expect(submissionsPayload.total).toBe(1);
+    expect(submissionsPayload.total).toBe(2);
+    expect(submissionsPayload.page).toMatchObject({ total: 2, hasMore: true });
+    expect(submissionsPayload.submissions).toHaveLength(1);
     expect(submissionsPayload.submissions[0]?.answers.company).toBe("Example Org");
     expect(submissionsPayload.submissions[0]?.answers.tracks).toEqual(["PKI", "PQC"]);
+    expect(submissionsPayload.stats.find((stat) => stat.fieldKey === "company")?.entries).toEqual([
+      { label: "Example Org", count: 1, percent: 50, weight: 1 },
+      { label: "Other Org", count: 1, percent: 50, weight: 1 },
+    ]);
+
+    const statsOnlyResponse = await callAdmin("/api/v1/admin/forms/event-workshop-form/submissions?limit=0");
+    expect(statsOnlyResponse.status).toBe(200);
+    const statsOnlyPayload = (await statsOnlyResponse.json()) as { total: number; submissions: unknown[] };
+    expect(statsOnlyPayload.total).toBe(2);
+    expect(statsOnlyPayload.submissions).toHaveLength(0);
   });
 
   it("includes linked registration and proposal answers as form responses", async () => {
     const { eventId } = await setupAdmin();
     const [adminUser] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
     const timestamp = nowIso();
+    const secondUserId = crypto.randomUUID();
+
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+       VALUES (?, 'forms-attendee@example.test', 'forms-attendee@example.test', 'user', 1, ?, ?)`,
+    )
+      .bind(secondUserId, timestamp, timestamp)
+      .run();
 
     await insertForm({
       key: "linked-registration-form",
@@ -432,17 +471,26 @@ describe("admin forms endpoints", () => {
     });
 
     const registrationId = crypto.randomUUID();
+    const inPersonRegistrationId = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO registrations (
          id, event_id, user_id, status, attendance_type, source_type, custom_answers_json,
          manage_token_hash, created_at, updated_at
-       ) VALUES (?, ?, ?, 'registered', 'virtual', 'admin', ?, ?, ?, ?)`,
+       ) VALUES (?, ?, ?, 'registered', 'virtual', 'admin', ?, ?, ?, ?),
+                (?, ?, ?, 'registered', 'in_person', 'admin', ?, ?, ?, ?)`,
     )
       .bind(
         registrationId,
         eventId,
         adminUser.id,
         JSON.stringify({ food: "No peanuts", topics: ["PKI", "PQC"] }),
+        crypto.randomUUID(),
+        timestamp,
+        timestamp,
+        inPersonRegistrationId,
+        eventId,
+        secondUserId,
+        JSON.stringify({ food: "Vegetarian", topics: ["PKI"] }),
         crypto.randomUUID(),
         timestamp,
         timestamp,
@@ -475,12 +523,31 @@ describe("admin forms endpoints", () => {
       total: number;
       submissions: Array<{ contextType: string; contextRef: string; answers: Record<string, unknown> }>;
     };
-    expect(registrationPayload.total).toBe(1);
-    expect(registrationPayload.submissions[0]).toMatchObject({
-      contextType: "registration",
-      contextRef: registrationId,
-      answers: { food: "No peanuts", topics: ["PKI", "PQC"] },
-    });
+    expect(registrationPayload.total).toBe(2);
+    expect(registrationPayload.submissions).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          contextType: "registration",
+          contextRef: registrationId,
+          answers: { food: "No peanuts", topics: ["PKI", "PQC"] },
+        }),
+      ]),
+    );
+
+    const filteredRegistrationResponse = await callAdmin(
+      "/api/v1/admin/forms/linked-registration-form/submissions?eventSlug=pqc-2026&attendanceType=virtual",
+    );
+    expect(filteredRegistrationResponse.status).toBe(200);
+    const filteredRegistrationPayload = (await filteredRegistrationResponse.json()) as {
+      total: number;
+      submissions: Array<{ contextRef: string }>;
+      stats: Array<{ fieldKey: string; entries: Array<{ label: string; count: number }> }>;
+    };
+    expect(filteredRegistrationPayload.total).toBe(1);
+    expect(filteredRegistrationPayload.submissions[0]?.contextRef).toBe(registrationId);
+    expect(filteredRegistrationPayload.stats.find((stat) => stat.fieldKey === "food")?.entries).toEqual([
+      { label: "No peanuts", count: 1, percent: 100, weight: 1 },
+    ]);
 
     const proposalResponse = await callAdmin("/api/v1/admin/forms/linked-proposal-form/submissions?eventSlug=pqc-2026");
     expect(proposalResponse.status).toBe(200);

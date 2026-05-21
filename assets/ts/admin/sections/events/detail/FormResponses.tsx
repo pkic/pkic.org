@@ -1,5 +1,5 @@
-import { useMemo, useState } from "preact/hooks";
-import { Table } from "../../../../components/Table";
+import { useMemo, useEffect, useState } from "preact/hooks";
+import { ApiDataTable } from "../../../../components/Table";
 import type { AdminFormDetailField, AdminFormSubmission } from "../../../types";
 import { fmt } from "../../../ui";
 
@@ -11,12 +11,20 @@ export interface FormAnswerRow {
 }
 
 type VisualizationKind = "bar" | "pie" | "wordcloud" | "list";
+type VisualizationChoice = "auto" | VisualizationKind;
 
 interface FieldStat {
   field: AdminFormDetailField;
   totalAnswers: number;
   uniqueAnswers: number;
   visualization: VisualizationKind;
+  entries: Array<{ label: string; count: number; percent: number; weight: number }>;
+}
+
+export interface ServerFieldStat {
+  fieldKey: string;
+  totalAnswers: number;
+  uniqueAnswers: number;
   entries: Array<{ label: string; count: number; percent: number; weight: number }>;
 }
 
@@ -161,51 +169,21 @@ function autoVisualization(field: AdminFormDetailField, uniqueAnswers: number): 
   return "list";
 }
 
-function extractStatValues(value: unknown, field: AdminFormDetailField): string[] {
-  if (value == null || value === "") return [];
-  if (Array.isArray(value)) return formatFormAnswerValue(value, field).filter((entry) => entry !== "-");
-  if (typeof value === "string" && field.fieldType === "textarea") {
-    return value
-      .split(/[,;\n]/)
-      .map((entry) => entry.trim())
-      .filter(Boolean);
-  }
-  return formatFormAnswerValue(value, field).filter((entry) => entry !== "-");
-}
-
-function buildFieldStats(fields: AdminFormDetailField[], submissions: AdminFormSubmission[]): FieldStat[] {
-  return fields
-    .map((field) => {
-      const counts = new Map<string, number>();
-      let totalAnswers = 0;
-
-      for (const submission of submissions) {
-        const values = extractStatValues(submission.answers[field.key], field);
-        if (values.length === 0) continue;
-        totalAnswers += 1;
-        for (const value of values) counts.set(value, (counts.get(value) ?? 0) + 1);
-      }
-
-      const maxCount = Math.max(1, ...counts.values());
-      const countedValues = Array.from(counts.values()).reduce((sum, count) => sum + count, 0) || 1;
-      const entries = Array.from(counts.entries())
-        .map(([label, count]) => ({
-          label,
-          count,
-          percent: Math.round((count / countedValues) * 100),
-          weight: count / maxCount,
-        }))
-        .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
-
+function mapServerStats(fields: AdminFormDetailField[], stats: ServerFieldStat[]): FieldStat[] {
+  const fieldMap = new Map(fields.map((field) => [field.key, field]));
+  return stats
+    .map((stat) => {
+      const field = fieldMap.get(stat.fieldKey);
+      if (!field) return null;
       return {
         field,
-        totalAnswers,
-        uniqueAnswers: entries.length,
-        visualization: configuredVisualization(field) ?? autoVisualization(field, entries.length),
-        entries,
-      };
+        totalAnswers: stat.totalAnswers,
+        uniqueAnswers: stat.uniqueAnswers,
+        visualization: configuredVisualization(field) ?? autoVisualization(field, stat.uniqueAnswers),
+        entries: stat.entries,
+      } satisfies FieldStat;
     })
-    .filter((stat) => stat.entries.length > 0);
+    .filter((stat): stat is FieldStat => stat !== null);
 }
 
 function BarStat({ stat }: { stat: FieldStat }) {
@@ -294,25 +272,89 @@ function ListStat({ stat }: { stat: FieldStat }) {
   );
 }
 
-function FieldStatCard({ stat }: { stat: FieldStat }) {
+function StatChartContent({ stat }: { stat: FieldStat }) {
+  if (stat.visualization === "bar") return <BarStat stat={stat} />;
+  if (stat.visualization === "pie") return <PieStat stat={stat} />;
+  if (stat.visualization === "wordcloud") return <WordCloudStat stat={stat} />;
+  return <ListStat stat={stat} />;
+}
+
+function compactAnswer(value: unknown, field: AdminFormDetailField): { text: string; title: string } {
+  const values = formatFormAnswerValue(value, field).filter((entry) => entry !== "-");
+  const text = values.length ? values.join(", ") : "-";
+  return { text: text.length > 90 ? `${text.slice(0, 87)}...` : text, title: text };
+}
+
+function StatCardHeader({
+  stat,
+  choice,
+  onChoiceChange,
+  onExpand,
+}: {
+  stat: FieldStat;
+  choice: VisualizationChoice;
+  onChoiceChange: (choice: VisualizationChoice) => void;
+  onExpand?: () => void;
+}) {
+  const visualizationLabel = stat.visualization[0].toUpperCase() + stat.visualization.slice(1);
+
+  return (
+    <div class="adm-stat-card-header">
+      <div class="min-w-0 flex-grow-1">
+        <div class="adm-stat-card-title mb-0" title={stat.field.label}>
+          {stat.field.label}
+        </div>
+        <div class="adm-stat-card-meta">
+          {stat.totalAnswers} answer{stat.totalAnswers === 1 ? "" : "s"} · {stat.uniqueAnswers} unique
+        </div>
+      </div>
+      <select
+        class="adm-stat-select"
+        value={choice}
+        aria-label={`Presentation for ${stat.field.label}`}
+        onChange={(event) => onChoiceChange((event.target as HTMLSelectElement).value as VisualizationChoice)}
+      >
+        <option value="auto">Auto ({visualizationLabel})</option>
+        <option value="bar">Bar</option>
+        <option value="pie">Pie</option>
+        <option value="wordcloud">Word cloud</option>
+        <option value="list">List</option>
+      </select>
+      {onExpand && (
+        <button
+          type="button"
+          class="adm-stat-expand-btn"
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+            onExpand();
+          }}
+          title="Expand"
+          aria-label="Expand chart"
+        >
+          ⤢
+        </button>
+      )}
+    </div>
+  );
+}
+
+function FieldStatCard({
+  stat,
+  choice,
+  onChoiceChange,
+  onExpand,
+}: {
+  stat: FieldStat;
+  choice: VisualizationChoice;
+  onChoiceChange: (choice: VisualizationChoice) => void;
+  onExpand: () => void;
+}) {
   return (
     <div class="card h-100 adm-form-stat-card">
-      <div class="card-body p-3">
-        <div class="d-flex align-items-start gap-2 mb-2">
-          <div class="min-w-0">
-            <h6 class="mb-0 text-truncate" title={stat.field.label}>
-              {stat.field.label}
-            </h6>
-            <div class="small text-muted">
-              {stat.totalAnswers} answer{stat.totalAnswers === 1 ? "" : "s"} · {stat.uniqueAnswers} unique
-            </div>
-          </div>
-          <span class="badge text-bg-light border text-body ms-auto">{stat.visualization}</span>
-        </div>
-        {stat.visualization === "bar" && <BarStat stat={stat} />}
-        {stat.visualization === "pie" && <PieStat stat={stat} />}
-        {stat.visualization === "wordcloud" && <WordCloudStat stat={stat} />}
-        {stat.visualization === "list" && <ListStat stat={stat} />}
+      <div class="card-body">
+        <StatCardHeader stat={stat} choice={choice} onChoiceChange={onChoiceChange} onExpand={onExpand} />
+        <StatChartContent stat={stat} />
       </div>
     </div>
   );
@@ -320,85 +362,178 @@ function FieldStatCard({ stat }: { stat: FieldStat }) {
 
 export function FormResponseStats({
   fields,
-  submissions,
+  stats,
+  total,
 }: {
   fields: AdminFormDetailField[];
-  submissions: AdminFormSubmission[];
+  stats: ServerFieldStat[];
+  total: number;
 }) {
-  const stats = useMemo(() => buildFieldStats(fields, submissions), [fields, submissions]);
+  const fieldStats = useMemo(() => mapServerStats(fields, stats), [fields, stats]);
+  const [presentationByField, setPresentationByField] = useState<Record<string, VisualizationChoice>>({});
+  const [expandedFieldKey, setExpandedFieldKey] = useState<string | null>(null);
+  const displayedStats = useMemo(
+    () =>
+      fieldStats.map((stat) => {
+        const choice = presentationByField[stat.field.key] ?? "auto";
+        return choice === "auto" ? stat : { ...stat, visualization: choice };
+      }),
+    [fieldStats, presentationByField],
+  );
 
-  if (!submissions.length) return <p class="small text-body-secondary fst-italic mb-0">No responses yet.</p>;
-  if (!stats.length) return <p class="small text-body-secondary fst-italic mb-0">No answer statistics available.</p>;
+  useEffect(() => {
+    if (!expandedFieldKey) return;
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpandedFieldKey(null);
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [expandedFieldKey]);
+
+  if (!total) return <p class="small text-body-secondary fst-italic mb-0">No responses yet.</p>;
+  if (!displayedStats.length)
+    return <p class="small text-body-secondary fst-italic mb-0">No answer statistics available.</p>;
+
+  const expandedStat = expandedFieldKey
+    ? (displayedStats.find((stat) => stat.field.key === expandedFieldKey) ?? null)
+    : null;
 
   return (
-    <div class="row g-3">
-      {stats.map((stat) => (
-        <div class="col-md-6 col-xl-4" key={stat.field.key}>
-          <FieldStatCard stat={stat} />
+    <>
+      <div class="row g-3">
+        {displayedStats.map((stat) => (
+          <div class="col-md-6 col-xl-4" key={stat.field.key}>
+            <FieldStatCard
+              stat={stat}
+              choice={presentationByField[stat.field.key] ?? "auto"}
+              onChoiceChange={(choice) =>
+                setPresentationByField((current) => ({
+                  ...current,
+                  [stat.field.key]: choice,
+                }))
+              }
+              onExpand={() => setExpandedFieldKey((current) => (current === stat.field.key ? null : stat.field.key))}
+            />
+          </div>
+        ))}
+      </div>
+      {expandedStat && (
+        <div
+          class="adm-stat-overlay"
+          role="dialog"
+          aria-modal="true"
+          aria-label={expandedStat.field.label}
+          onClick={() => setExpandedFieldKey(null)}
+        >
+          <div class="adm-stat-modal" onClick={(event) => event.stopPropagation()}>
+            <button
+              class="btn-close adm-stat-modal-close"
+              onClick={() => setExpandedFieldKey(null)}
+              aria-label="Close"
+            />
+            <StatCardHeader
+              stat={expandedStat}
+              choice={presentationByField[expandedStat.field.key] ?? "auto"}
+              onChoiceChange={(choice) =>
+                setPresentationByField((current) => ({
+                  ...current,
+                  [expandedStat.field.key]: choice,
+                }))
+              }
+            />
+            <div class="adm-stat-modal-chart">
+              <StatChartContent stat={expandedStat} />
+            </div>
+          </div>
         </div>
-      ))}
-    </div>
+      )}
+    </>
   );
 }
 
 export function FormSubmissionsTable({
   fields,
-  submissions,
+  endpoint,
+  params,
+  deps = [],
 }: {
   fields: AdminFormDetailField[];
-  submissions: AdminFormSubmission[];
+  endpoint: string;
+  params?: Record<string, string>;
+  deps?: unknown[];
 }) {
   const [expandedId, setExpandedId] = useState<string | null>(null);
+  const answerColumns = fields.map((field) => ({
+    header: { label: field.label, className: "adm-form-answer-col" },
+    cell: (submission: AdminFormSubmission) => {
+      const answer = compactAnswer(submission.answers?.[field.key], field);
+      return (
+        <span class="small adm-form-answer-cell" title={answer.title}>
+          {answer.text}
+        </span>
+      );
+    },
+    className: "adm-form-answer-col",
+  }));
 
   return (
-    <Table
-      heads={["Submitted", "Submitter", "Context", "Status", { label: "Answers", className: "text-end" }, ""]}
+    <ApiDataTable<AdminFormSubmission>
+      endpoint={endpoint}
+      resolve={(data) => (data as { submissions: AdminFormSubmission[] }).submissions}
+      resolvePage={(data) => (data as { page: { total: number; hasMore: boolean } }).page}
+      paginate
+      params={params}
+      deps={deps}
       empty="No responses found"
-    >
-      {submissions.length > 0 &&
-        submissions.map((submission) => {
-          const submitter = submission.submitter;
-          const name = [submitter?.firstName, submitter?.lastName].filter(Boolean).join(" ");
-          const expanded = expandedId === submission.id;
-          return (
-            <>
-              <tr key={submission.id}>
-                <td class="mono small">{fmt(submission.submittedAt)}</td>
-                <td>
-                  <span class="small">{name || submitter?.email || "-"}</span>
-                  {name && submitter?.email && (
-                    <>
-                      <br />
-                      <span class="text-muted small">{submitter.email}</span>
-                    </>
-                  )}
-                </td>
-                <td class="small">{submission.contextType ?? "-"}</td>
-                <td>
-                  <span class="badge text-bg-secondary">{submission.status}</span>
-                </td>
-                <td class="mono text-end">{Object.keys(submission.answers ?? {}).length}</td>
-                <td>
-                  <button
-                    class="btn btn-sm btn-outline-secondary"
-                    onClick={() => setExpandedId(expanded ? null : submission.id)}
-                  >
-                    {expanded ? "Hide" : "View"}
-                  </button>
-                </td>
-              </tr>
-              {expanded && (
-                <tr key={`${submission.id}-detail`}>
-                  <td colspan={6} class="p-0">
-                    <div class="p-3 bg-light border-top">
-                      <FormAnswerTable answers={submission.answers} fields={fields} />
-                    </div>
-                  </td>
-                </tr>
-              )}
-            </>
-          );
-        })}
-    </Table>
+      rowKey={(submission) => submission.id}
+      columns={[
+        {
+          header: "Submitter",
+          cell: (submission) => {
+            const submitter = submission.submitter;
+            const name = [submitter?.firstName, submitter?.lastName].filter(Boolean).join(" ");
+            return (
+              <>
+                <span class="small">{name || submitter?.email || "-"}</span>
+                {name && submitter?.email && (
+                  <>
+                    <br />
+                    <span class="text-muted small">{submitter.email}</span>
+                  </>
+                )}
+              </>
+            );
+          },
+          className: "adm-form-submitter-col",
+        },
+        ...answerColumns,
+        { header: "Submitted", cell: (submission) => fmt(submission.submittedAt), className: "mono small" },
+        {
+          header: "Status",
+          cell: (submission) => <span class="badge text-bg-secondary">{submission.status}</span>,
+        },
+        {
+          header: "",
+          cell: (submission) => {
+            const expanded = expandedId === submission.id;
+            return (
+              <button
+                class="btn btn-sm btn-outline-secondary"
+                onClick={() => setExpandedId(expanded ? null : submission.id)}
+              >
+                {expanded ? "Hide" : "View"}
+              </button>
+            );
+          },
+        },
+      ]}
+      detailRow={(submission) =>
+        expandedId === submission.id ? (
+          <div class="p-3 bg-light border-top">
+            <FormAnswerTable answers={submission.answers} fields={fields} />
+          </div>
+        ) : null
+      }
+    />
   );
 }
