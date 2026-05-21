@@ -486,6 +486,22 @@ export const adminEventSettingsSchema = z.object({
   location: trimmedString(2, 200).nullable().optional(),
   // ── Proposal / session settings ────────────────────────────────────────────
   sessionTypes: z.array(z.string().trim().min(1).max(80)).max(20).nullable().optional(),
+  registrationFormKey: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z][a-z0-9-]*$/)
+    .nullable()
+    .optional(),
+  proposalFormKey: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z][a-z0-9-]*$/)
+    .nullable()
+    .optional(),
   // ── Registration settings ──────────────────────────────────────────────────
   registrationMode: z.enum(["invite_only", "invite_or_open", "open"]).optional(),
   inviteLimitAttendee: z.number().int().positive().max(50).optional(),

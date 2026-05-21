@@ -149,4 +149,91 @@ describe("event frontend routes and hydration contracts", () => {
     expect(payload.requiredTerms.length).toBeGreaterThan(0);
     expect(payload.requiredTerms[0]).toHaveProperty("termKey");
   });
+
+  it("honours an explicit form link over the current active form", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const registrationLinkedKey = "reg-linked";
+    const registrationNewestKey = "reg-newest";
+    const proposalLinkedKey = "prop-linked";
+
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO forms (id, key, scope_type, scope_ref, purpose, status, title, description, created_at, updated_at)
+         VALUES (?, ?, 'global', NULL, 'event_registration', 'active', ?, NULL, datetime('now', '-2 days'), datetime('now', '-2 days'))`,
+      ).bind(crypto.randomUUID(), registrationLinkedKey, "Linked registration form"),
+      env.DB.prepare(
+        `INSERT INTO form_fields (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)
+         VALUES (?, (SELECT id FROM forms WHERE key = ?), 'interest', 'Interest', 'text', 0, NULL, NULL, 0, datetime('now'))`,
+      ).bind(crypto.randomUUID(), registrationLinkedKey),
+      env.DB.prepare(
+        `INSERT INTO forms (id, key, scope_type, scope_ref, purpose, status, title, description, created_at, updated_at)
+         VALUES (?, ?, 'event', ?, 'event_registration', 'active', ?, NULL, datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), registrationNewestKey, eventId, "Newest registration form"),
+      env.DB.prepare(
+        `INSERT INTO form_fields (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)
+         VALUES (?, (SELECT id FROM forms WHERE key = ?), 'country', 'Country', 'text', 0, NULL, NULL, 0, datetime('now'))`,
+      ).bind(crypto.randomUUID(), registrationNewestKey),
+      env.DB.prepare(
+        `INSERT INTO forms (id, key, scope_type, scope_ref, purpose, status, title, description, created_at, updated_at)
+         VALUES (?, ?, 'event', ?, 'proposal_submission', 'active', ?, NULL, datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), proposalLinkedKey, eventId, "Linked proposal form"),
+      env.DB.prepare(
+        `INSERT INTO form_fields (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)
+         VALUES (?, (SELECT id FROM forms WHERE key = ?), 'topic', 'Topic', 'text', 0, NULL, NULL, 0, datetime('now'))`,
+      ).bind(crypto.randomUUID(), proposalLinkedKey),
+      env.DB.prepare(
+        `UPDATE events
+         SET settings_json = json_set(json_set(settings_json, '$.forms.event_registration', ?), '$.forms.proposal_submission', ?)
+         WHERE id = ?`,
+      ).bind(registrationLinkedKey, proposalLinkedKey, eventId),
+    ]);
+
+    const registrationResponse = await app.fetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=event_registration"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(registrationResponse.status).toBe(200);
+    const registrationPayload = (await registrationResponse.json()) as { form: { key: string } | null };
+    expect(registrationPayload.form?.key).toBe(registrationLinkedKey);
+
+    const proposalResponse = await app.fetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=proposal_submission"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(proposalResponse.status).toBe(200);
+    const proposalPayload = (await proposalResponse.json()) as { form: { key: string } | null };
+    expect(proposalPayload.form?.key).toBe(proposalLinkedKey);
+  });
+
+  it("treats an explicit null form link as no form", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO forms (id, key, scope_type, scope_ref, purpose, status, title, description, created_at, updated_at)
+         VALUES (?, ?, 'event', ?, 'event_registration', 'active', ?, NULL, datetime('now'), datetime('now'))`,
+      ).bind(crypto.randomUUID(), "reg-current", eventId, "Current registration form"),
+      env.DB.prepare(
+        `INSERT INTO form_fields (id, form_id, key, label, field_type, required, options_json, validation_json, sort_order, created_at)
+         VALUES (?, (SELECT id FROM forms WHERE key = ?), 'interest', 'Interest', 'text', 0, NULL, NULL, 0, datetime('now'))`,
+      ).bind(crypto.randomUUID(), "reg-current"),
+      env.DB.prepare(
+        `UPDATE events
+         SET settings_json = json_set(settings_json, '$.forms.event_registration', json('null'))
+         WHERE id = ?`,
+      ).bind(eventId),
+    ]);
+
+    const response = await app.fetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=event_registration"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { form: { key: string } | null };
+    expect(payload.form).toBeNull();
+  });
 });

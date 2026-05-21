@@ -112,6 +112,8 @@ describe("admin event management endpoints", () => {
         virtualUrl: "https://pkic.org/live/pqc-2026/",
         userRetentionDays: 180,
         sessionTypes: ["talk", "panel"],
+        registrationFormKey: "pqc-reg-form",
+        proposalFormKey: null,
       }),
     });
 
@@ -134,6 +136,14 @@ describe("admin event management endpoints", () => {
       "talk",
       "panel",
     ]);
+    expect(
+      patchPayload.event.settings.forms as
+        | { event_registration?: string | null; proposal_submission?: string | null }
+        | undefined,
+    ).toEqual({
+      event_registration: "pqc-reg-form",
+      proposal_submission: null,
+    });
   });
 
   it("replaces event days and exposes permission grants", async () => {

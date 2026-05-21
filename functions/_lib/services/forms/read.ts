@@ -13,6 +13,13 @@ interface FormRow {
   description: string | null;
 }
 
+interface EventSettings {
+  forms?: {
+    event_registration?: string | null;
+    proposal_submission?: string | null;
+  };
+}
+
 interface FormFieldRow {
   id: string;
   key: string;
@@ -49,6 +56,28 @@ export interface ActiveFormDefinition {
 }
 
 async function findActiveForm(db: DatabaseLike, eventId: string, purpose: string): Promise<FormRow | null> {
+  const event = await first<{ settings_json: string }>(db, "SELECT settings_json FROM events WHERE id = ?", [eventId]);
+  if (event) {
+    const settings = parseJsonSafe<EventSettings>(event.settings_json, {});
+    const linkedKey = settings.forms?.[purpose as keyof NonNullable<EventSettings["forms"]>];
+    if (linkedKey === null) {
+      return null;
+    }
+    if (typeof linkedKey === "string" && linkedKey) {
+      const linked = await first<FormRow>(
+        db,
+        `SELECT *
+         FROM forms
+         WHERE status = 'active' AND purpose = ? AND key = ?
+         LIMIT 1`,
+        [purpose, linkedKey],
+      );
+      if (linked) {
+        return linked;
+      }
+    }
+  }
+
   const eventScoped = await first<FormRow>(
     db,
     `SELECT *

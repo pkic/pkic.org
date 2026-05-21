@@ -46,10 +46,18 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
          + CASE WHEN f.purpose = 'event_registration' THEN (
              SELECT COUNT(*) FROM registrations r
              WHERE r.event_id = ? AND r.custom_answers_json IS NOT NULL
+               AND NOT EXISTS (
+                 SELECT 1 FROM form_submissions fs2
+                 WHERE fs2.form_id = f.id AND fs2.context_type = 'registration' AND fs2.context_ref = r.id
+               )
            ) ELSE 0 END
          + CASE WHEN f.purpose = 'proposal_submission' THEN (
              SELECT COUNT(*) FROM session_proposals sp
              WHERE sp.event_id = ? AND sp.details_json IS NOT NULL
+               AND NOT EXISTS (
+                 SELECT 1 FROM form_submissions fs2
+                 WHERE fs2.form_id = f.id AND fs2.context_type = 'proposal' AND fs2.context_ref = sp.id
+               )
            ) ELSE 0 END AS submission_count
      FROM forms f
      LEFT JOIN form_fields ff ON ff.form_id = f.id
