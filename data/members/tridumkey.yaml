@@ -1,0 +1,62 @@
+id: tridumkey
+name: Tridum e-Security LLC
+slogan:
+website: https://www.tridumkey.mn
+# Business domains for email
+organizationDomains:
+  - tridum.mn
+  - tridumkey.mn
+# Short description, longer content can be placed in `content/members/`
+description: Тоон гарын үсэг , tridum , tridumkey, тридум, тридумкэй, , Цахим гарын үсэг, байгууллагын тоон гарын үсэг авах, toon gariin useg , toon gariin useg avah
+
+# membership
+memberSince: 2026-05-21
+memberType: A
+workingGroups:
+  - CA
+  - PKIMM
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://tridumkey.mn/category/news/
+  feed: https://tridumkey.mn/feed/
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: https://www.facebook.com/Tridum-Key-%D0%A6%D0%B0%D1%85%D0%B8%D0%BC-%D0%B3%D0%B0%D1%80%D1%8B%D0%BD-%D2%AF%D1%81%D1%8D%D0%B3-443362696492323
+  instagram: 
+  linkedin: 
+  youtube: https://www.youtube.com/channel/UC-NEXIuLBvsOHfFnntUUWKA
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Ayushjav Lkhagvasuren
+    role: Chief Executive Officer
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/ayushjav-lkhagvasuren-2a038b66/
+    description: Ayushjav is the Chief Executive Officer at Tridum e-Security LLC and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
