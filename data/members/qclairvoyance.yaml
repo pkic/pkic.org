@@ -1,15 +1,15 @@
 id: qclairvoyance
 name: Qclairvoyance Quantum Labs Pvt Ltd
-slogan:
+slogan: Rewriting Reality With Quantum Tech
 website: https://qc-secure.qclairvoyance.com
 # Business domains for email
 organizationDomains:
   - qclairvoyance.in
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: QClairvoyance is a deep-tech startup working on developing next-generation applications that leverage Post-Moore computing architectures, specifically in the form of quantum computing hardware.
 
 # membership
-memberSince: 2026-05-21
+memberSince: 2026-05-14
 memberType: F
 workingGroups:
   - CM
@@ -23,41 +23,41 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/qclairvoyance/
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
 # Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: sai shankar
+  - name: Sai Shankar
     role: Founder
     social:
       x:
-      linkedin: www.linkedin.com/in/saishankarp
-    description: sai is the Founder at Qclairvoyance Quantum Labs Pvt Ltd and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/saishankarp
+      description: Sai is the Founder at Qclairvoyance Quantum Labs Pvt Ltd and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
