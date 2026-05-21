@@ -6,10 +6,10 @@ website: https://www.vgcit.com
 organizationDomains:
   - vgcit.com
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: We offer Information Technology Solutions to the federal, state and local government as well as private businesses throughout the US.
 
 # membership
-memberSince: 2026-05-21
+memberSince: 2026-05-14
 memberType: H2
 workingGroups:
   - CM
@@ -22,29 +22,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
+  url:
   feed: https://www.vgcit.com/feed/
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://twitter.com/vgcit
   facebook: https://www.facebook.com/Vgcit/
-  instagram: 
+  instagram:
   linkedin: https://linkedin.com/company/vgcit-inc
-  youtube: https://www.youtube.com/embed
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,11 +52,11 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Vartan Chukhadarian
-    role: Lead
+    role: President/Founder
     social:
       x:
       linkedin: https://www.linkedin.com/in/vartanc
-    description: Vartan is the Lead at VGC IT and represents the organization at the PKI Consortium.
+    description: Vartan is the President/Founder at VGC IT and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
