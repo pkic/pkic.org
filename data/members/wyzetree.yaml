@@ -1,0 +1,62 @@
+id: wyzetree
+name: Wyzetree
+slogan:
+website: https://wyzetree.com
+# Business domains for email
+organizationDomains:
+  - wyzetree.com
+# Short description, longer content can be placed in `content/members/`
+description: Wyzetree is a specialist advisory firm focused on cryptographic infrastructure, digital trust systems, digital signatures consulting, and post-quantum cryptography readiness.
+
+# membership
+memberSince: 2026-05-21
+memberType: H2
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: 
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Maeson Maherry
+    role: CSO
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/maeson/
+    description: Maeson is the CSO at Wyzetree and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
