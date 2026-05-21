@@ -6,13 +6,12 @@ website: https://www.amd.com
 organizationDomains:
   - amd.com
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Advanced Micro Devices, Inc. (AMD) is a global semiconductor company that develops computer processors and related technologies for business and consumer markets.
 
 # membership
-memberSince: 2026-05-21
+memberSince: 2026-05-14
 memberType: H8
 workingGroups:
-
 
 # sponsor
 sponsor:
@@ -20,29 +19,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url: https://www.amd.com/en/newsroom/press-release-search.html#q=AI
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url: https://www.amd.com/en/corporate/careers.html
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x: https://x.com/AMD
+  facebook: http://www.facebook.com/amd
+  instagram: ttps://www.instagram.com/amd
+  linkedin: https://www.linkedin.com/company/amd
+  youtube: https://www.youtube.com/user/amd
 
 # Here you can list those who represent or have represented the member.
 #
@@ -50,11 +49,11 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: James Last
-    role: SMTS Product Security Group, AMD
+    role: SMTS Product Security Group
     social:
       x:
       linkedin: https://www.linkedin.com/in/jimlast/
-    description: James is the SMTS Product Security Group, AMD at Advanced Micro Devices Inc. and represents the organization at the PKI Consortium.
+    description: James is the SMTS Product Security Group at Advanced Micro Devices Inc. and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
