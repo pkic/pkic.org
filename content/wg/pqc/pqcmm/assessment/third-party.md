@@ -1,7 +1,7 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Third-Party Assessment"
-title: "Third-Party Assessment - Post-Quantum Cryptography Maturity Model (PQCMM)"
+title: "Third-Party Assessment - PQC Maturity Model (PQCMM)"
 description: A third-party PQCMM assessment is an independent, evidence-based evaluation of a product's PQC maturity level, performed by an accredited assessor and resulting in a formal report.
 summary: An accredited independent assessor evaluates the product against PQCMM criteria, reviews evidence, and produces a formal assessment report — suitable for customer-facing disclosure and as the basis for PKI Consortium certification.
 weight: 20
@@ -20,13 +20,14 @@ A third-party assessment provides significantly higher assurance than a [self-as
 
 The PKI Consortium is developing an **assessor accreditation programme** for PQCMM. Once established, only accredited assessors will be eligible to produce reports that are accepted for certification purposes. The starting accreditation criteria are described on the [Accredited Assessors](/wg/pqc/pqcmm/assessment/assessors/) page.
 
-In the meantime, the following types of organisations are well-positioned to perform PQCMM third-party assessments:
+In the meantime, PQCMM third-party assessments are best performed by organisations with demonstrated capability in:
 
-- Cryptography consulting firms with demonstrated PQC expertise.
-- Security audit firms experienced in post-quantum algorithm evaluation.
-- PKI consulting organisations familiar with NIST PQC standards.
+- **Post-quantum cryptography review** — practical familiarity with the algorithms, parameter sets, and standards bodies the model references.
+- **Cryptographic implementation and standards-conformance assessment** — verifying that an implementation behaves as the relevant specification requires.
+- **Security audit** — applying an independent, evidence-based methodology and producing a defensible written opinion.
+- **Interoperability and, where the product's use cases warrant it, performance evaluation.**
 
-Organizations seeking assessors are encouraged to contact the PKI Consortium at contact at pkic dot org for guidance.
+Organisation type (consultancy, audit firm, laboratory, in-house assessment group) is not what determines suitability; demonstrated capability against the criteria above is. Organisations seeking assessors are encouraged to contact the PKI Consortium at contact at pkic dot org for guidance.
 
 ### Independence
 
