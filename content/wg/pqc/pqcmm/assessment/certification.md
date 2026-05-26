@@ -1,7 +1,7 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Certification"
-title: "PKI Consortium Certification - Post-Quantum Cryptography Maturity Model (PQCMM)"
+title: "PKI Consortium Certification - PQC Maturity Model (PQCMM)"
 description: PKI Consortium PQCMM Certification is an authoritative, consortium-issued certificate confirming that an independent third-party assessment of a product's PQC maturity has been reviewed and accepted by the PKI Consortium.
 summary: The PKI Consortium reviews a qualifying third-party assessment report and, where it meets expectations, issues a PQCMM Certificate — the highest level of assurance in the PQCMM framework.
 weight: 30

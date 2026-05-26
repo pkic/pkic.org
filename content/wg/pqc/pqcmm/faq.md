@@ -2,7 +2,7 @@
 date: 2026-05-07T00:00:00Z
 linkTitle: "FAQ"
 title: "Frequently Asked Questions"
-description: Frequently asked questions about the Post-Quantum Cryptography Maturity Model, including scope, levels, assessment methods, certification, evidence, software bills of materials, cryptographic bills of materials, and how the model relates to other PKI Consortium work.
+description: Frequently asked questions about the PQC Maturity Model, including scope, levels, assessment methods, certification, evidence, software bills of materials, cryptographic bills of materials, and how the model relates to other PKI Consortium work.
 summary: Answers to common questions about what the model measures, how levels work, how assessment and certification differ, and how organizations and vendors should use it.
 weight: 40
 ---
@@ -16,7 +16,7 @@ groups:
       - question: "What does the PQCMM measure?"
         open: true
         answer: |
-          The Post-Quantum Cryptography Maturity Model measures the post-quantum cryptography maturity of a specific product or service. It asks whether quantum-safe cryptography is absent, available for testing, production-ready, inventory-backed, managed, or enabled by default.
+          The PQC Maturity Model measures the post-quantum cryptography maturity of a specific product or service. It asks whether quantum-safe cryptography is absent, available for testing, production-ready, inventory-backed, managed, or enabled by default.
       - question: "Does the PQCMM assess an organization?"
         answer: |
           No. It is product and service-centric. An organization may have one product at [Level 4](/wg/pqc/pqcmm/levels/4-managed/), another at [Level 2](/wg/pqc/pqcmm/levels/2-basic/), and another at [Level 0](/wg/pqc/pqcmm/levels/0-none/).

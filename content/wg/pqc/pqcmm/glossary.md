@@ -1,8 +1,8 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Glossary"
-title: "Glossary - Post-Quantum Cryptography Maturity Model (PQCMM)"
-description: Plain-English definitions for common terms used in the Post-Quantum Cryptography Maturity Model, including PQC, PQCMM, SBOM, CBOM, crypto agility, hybrid cryptography, and certification.
+title: "Glossary - PQC Maturity Model (PQCMM)"
+description: Plain-English definitions for common terms used in the PQC Maturity Model, including PQC, PQCMM, SBOM, CBOM, crypto agility, hybrid cryptography, and certification.
 summary: Plain-English definitions for terms used across the model, assessment, procurement, scoring, and adoption guidance.
 weight: 35
 ---
@@ -13,7 +13,7 @@ terms:
     definition: |
       Cryptographic algorithms designed to resist attacks by both classical computers and cryptographically relevant quantum computers.
       
-  - term: "Post-Quantum Cryptography Maturity Model (PQCMM)"
+  - term: "PQC Maturity Model (PQCMM)"
     definition: |
       The PKI Consortium model for describing how mature a specific product or service is in its adoption of post-quantum cryptography.
       

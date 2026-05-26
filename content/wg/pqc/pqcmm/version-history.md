@@ -1,7 +1,7 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Version History"
-title: "Version History & Log - Post-Quantum Cryptography Maturity Model"
+title: "Version History & Log - PQC Maturity Model"
 description: A timeline of changes, updates, and releases to the PQCMM.
 summary: Review past releases and revisions of the PQC Maturity Model to ensure you are assessing products against the current standard.
 weight: 90
@@ -13,7 +13,7 @@ weight: 90
 
 **Released:** May 8, 2026
 
-This is the initial public release of the Post-Quantum Cryptography Maturity Model (PQCMM), establishing the core six-level framework (Levels 0 through 5) and the foundational criteria for supply chain risk management.
+This is the initial public release of the PQC Maturity Model (PQCMM), establishing the core six-level framework (Levels 0 through 5) and the foundational criteria for supply chain risk management.
 
 Key introductions in this version:
 - Defined the product-centric scope (separating it from the organizational PKI Maturity Model).

@@ -2,14 +2,14 @@
 date: 2026-05-07T00:00:00Z
 linkTitle: "Assessing a Product"
 title: "Assessing a Product (PQCMM)"
-description: A complete guide for vendors to assess their products against the Post-Quantum Cryptography Maturity Model and demonstrate readiness to customers.
+description: A complete guide for vendors to assess their products against the PQC Maturity Model and demonstrate readiness to customers.
 summary: Use the PQCMM to evaluate your products and services internally, engage third-party assessors, or seek PKIC Certification to prove your maturity to the market.
 weight: 30
 ---
 
 ## Proving Post-Quantum Readiness to the Market
 
-Terms like *quantum-ready* and *quantum-safe* are ambiguous. The Post-Quantum Cryptography Maturity Model (PQCMM) provides a standardized language for you to communicate the maturity of your products to your customers and downstream supply chain.
+Terms like *quantum-ready* and *quantum-safe* are ambiguous. The PQC Maturity Model (PQCMM) provides a standardized language for you to communicate the maturity of your products to your customers and downstream supply chain.
 
 The PQCMM is **product and service-centric**. You do not assess your entire organization at once; you assess specific products, services, and deployment configurations.
 

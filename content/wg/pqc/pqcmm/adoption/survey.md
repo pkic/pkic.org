@@ -1,8 +1,8 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Vendor Survey"
-title: "Vendor Assessment Survey - Post-Quantum Cryptography Maturity Model (PQCMM)"
-description: How to require vendors to submit a Post-Quantum Cryptography Maturity Model assessment or certification report, including mandatory intake questions, existing supply chain evaluations, evidence expectations, and red flags.
+title: "Vendor Assessment Survey - PQC Maturity Model (PQCMM)"
+description: How to require vendors to submit a PQC Maturity Model assessment or certification report, including mandatory intake questions, existing supply chain evaluations, evidence expectations, and red flags.
 summary: Use this standardized question set in your procurement tenders and supply chain surveys to require vendors to state and support their PQCMM level for both new contracts and existing inventory.
 weight: 10
 
@@ -23,7 +23,7 @@ Almost any product today is digitally connected. Even physical offline products 
 
 ## Principle
 
-The vendor assessment survey should be centred on the Post-Quantum Cryptography Maturity Model (PQCMM) itself. Do not ask a long list of disconnected cryptography questions and then infer a level yourself. Require the vendor to submit a PQCMM assessment or certification report for the product or service in scope.
+The vendor assessment survey should be centred on the PQC Maturity Model (PQCMM) itself. Do not ask a long list of disconnected cryptography questions and then infer a level yourself. Require the vendor to submit a PQCMM assessment or certification report for the product or service in scope.
 
 The assessment report is the deliverable. The individual criteria and evidence are used to verify the report.
 
@@ -72,11 +72,11 @@ Do not accept an assessment report unless it clearly states:
 
 Use or adapt this language:
 
-> *For each product or service in scope, the supplier shall provide a Post-Quantum Cryptography Maturity Model (PQCMM) assessment or certification report. The response must state the claimed PQCMM level, the assurance method (self-assessed, third-party assessed, or PKI Consortium certified), the assessment date, the assessor or certifier where applicable, and evidence supporting each criterion for the claimed level and all lower levels. Claims not supported by evidence may be treated as non-responsive or scored as unverified.*
+> *For each product or service in scope, the supplier shall provide a PQC Maturity Model (PQCMM) assessment or certification report. The response must state the claimed PQCMM level, the assurance method (self-assessed, third-party assessed, or PKI Consortium certified), the assessment date, the assessor or certifier where applicable, and evidence supporting each criterion for the claimed level and all lower levels. Claims not supported by evidence may be treated as non-responsive or scored as unverified.*
 
 If certification is mandatory:
 
-> *PKI Consortium Post-Quantum Cryptography Maturity Model (PQCMM) certification at Level [X] or higher is a mandatory condition of award. Self-assessment or third-party assessment may be submitted for context but will not satisfy this requirement unless accompanied by a valid certificate covering the product, version, deployment model, and configuration offered.*
+> *PKI Consortium PQC Maturity Model (PQCMM) certification at Level [X] or higher is a mandatory condition of award. Self-assessment or third-party assessment may be submitted for context but will not satisfy this requirement unless accompanied by a valid certificate covering the product, version, deployment model, and configuration offered.*
 
 ## Required Evidence Package
 

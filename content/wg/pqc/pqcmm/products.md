@@ -1,7 +1,7 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Certified Products"
-title: "Certified Products & Services - Post-Quantum Cryptography Maturity Model"
+title: "Certified Products & Services - PQC Maturity Model"
 description: A directory of products and services that hold a valid PQCMM certification or third-party assessment.
 summary: Browse products and services that have achieved independently verified Post-Quantum Cryptography Maturity.
 weight: 35
@@ -9,7 +9,7 @@ weight: 35
 
 ## Certified Products & Services Registry
 
-This registry provides a transparent, opt-in list of products and services that have achieved independent verification of their Post-Quantum Cryptography Maturity Model (PQCMM) level. Procurement teams and organizations evaluating their supply chain can use this registry to easily verify vendor claims.
+This registry provides a transparent, opt-in list of products and services that have achieved independent verification of their PQC Maturity Model (PQCMM) level. Procurement teams and organizations evaluating their supply chain can use this registry to easily verify vendor claims.
 
 Products are eligible for listing if they have:
 1. Achieved **PKI Consortium Certification** (Authoritative)

@@ -1,7 +1,7 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Accredited Assessors"
-title: "Accredited Assessors - Post-Quantum Cryptography Maturity Model"
+title: "Accredited Assessors - PQC Maturity Model"
 description: A directory of independent assessors accredited to perform Third-Party Assessments for the PQCMM.
 summary: Find an accredited independent assessor to evaluate your product's post-quantum cryptography maturity.
 weight: 35

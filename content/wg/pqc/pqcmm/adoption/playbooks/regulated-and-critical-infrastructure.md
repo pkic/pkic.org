@@ -1,8 +1,8 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Regulated & Critical"
-title: "Regulated and Critical Infrastructure Playbook - Post-Quantum Cryptography Maturity Model (PQCMM)"
-description: Additional considerations for regulated sectors, critical infrastructure, public trust, and high-assurance use cases adopting the Post-Quantum Cryptography Maturity Model.
+title: "Regulated and Critical Infrastructure Playbook - PQC Maturity Model (PQCMM)"
+description: Additional considerations for regulated sectors, critical infrastructure, public trust, and high-assurance use cases adopting the PQC Maturity Model.
 summary: Apply stronger gates, independent assurance, audit-ready evidence, exception expiry, and supplier replacement planning for regulated and critical infrastructure use cases.
 weight: 40
 ---

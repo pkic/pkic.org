@@ -1,7 +1,7 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Self-Assessment"
-title: "Self-Assessment - Post-Quantum Cryptography Maturity Model (PQCMM)"
+title: "Self-Assessment - PQC Maturity Model (PQCMM)"
 description: A self-assessment lets vendors and procuring organizations quickly determine the PQCMM maturity level of a product using the criteria and assessment questions defined for each level.
 summary: Use the per-level criteria and assessment questions to determine the PQCMM maturity level of a product without external involvement.
 weight: 10

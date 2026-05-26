@@ -1,7 +1,7 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Brand and Mark Usage"
-title: "Brand and Mark Usage Guidelines - Post-Quantum Cryptography Maturity Model (PQCMM)"
+title: "Brand and Mark Usage Guidelines - PQC Maturity Model (PQCMM)"
 description: How vendors holding a PKI Consortium PQCMM Certificate may display the certification mark, what they must include, and what they must not claim.
 summary: Rules for displaying the PKI Consortium PQCMM certification mark, with the mandatory disclaimer that protects buyers from over-broad guarantees.
 weight: 40

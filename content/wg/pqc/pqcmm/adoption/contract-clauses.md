@@ -1,7 +1,7 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Example Contract Clauses"
-title: "Example Contract Clauses - Post-Quantum Cryptography Maturity Model (PQCMM)"
+title: "Example Contract Clauses - PQC Maturity Model (PQCMM)"
 description: Example contract clauses that organizations can adapt to require a PQCMM level, assurance method, reassessment, and remediation from suppliers.
 summary: Drop-in example clauses for procurement, master service, and supply-chain contracts that reference the PQCMM. These are illustrative starting points, not legal advice.
 weight: 25
@@ -32,7 +32,7 @@ Bracketed text such as `[Supplier]`, `[Level X]`, `[N days]` should be replaced 
 
 ### 1. Definitions
 
-> *"PQCMM" means the Post-Quantum Cryptography Maturity Model published by the PKI Consortium at https://pkic.org/wg/pqc/pqcmm/, version [X.Y.Z] as in effect on [the Effective Date / the date of this Agreement]. "PQCMM Level" means a level (0–5) defined in the PQCMM. "Third-Party Assessment" and "PKI Consortium Certification" have the meanings given to them in the PQCMM.*
+> *"PQCMM" means the PQC Maturity Model published by the PKI Consortium at https://pkic.org/wg/pqc/pqcmm/, version [X.Y.Z] as in effect on [the Effective Date / the date of this Agreement]. "PQCMM Level" means a level (0–5) defined in the PQCMM. "Third-Party Assessment" and "PKI Consortium Certification" have the meanings given to them in the PQCMM.*
 
 ### 2. Representation at Award
 

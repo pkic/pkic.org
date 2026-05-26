@@ -1,8 +1,8 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Small Organizations"
-title: "Small Organization Playbook - Post-Quantum Cryptography Maturity Model (PQCMM)"
-description: A lightweight adoption playbook for small organizations using the Post-Quantum Cryptography Maturity Model without building a large governance programme.
+title: "Small Organization Playbook - PQC Maturity Model (PQCMM)"
+description: A lightweight adoption playbook for small organizations using the PQC Maturity Model without building a large governance programme.
 summary: |
     Start small: identify critical suppliers, require assessment reports for new purchases and renewals, record maturity levels, and review annually.
 weight: 10
