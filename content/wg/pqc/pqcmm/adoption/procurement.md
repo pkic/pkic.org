@@ -1,15 +1,17 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Procurement"
-title: "Procurement and Tender Guidance - Post-Quantum Cryptography Maturity Model (PQCMM)"
-description: How to use Post-Quantum Cryptography Maturity Model levels, assessment methods, tender clauses, contract milestones, and renewal controls in procurement processes.
-summary: "Apply the Post-Quantum Cryptography Maturity Model throughout procurement: market research, request for information, request for proposal, tender evaluation, contract award, onboarding, renewal, and supplier remediation."
+title: "Procurement and Tender Guidance - PQC Maturity Model (PQCMM)"
+description: How to use PQC Maturity Model levels, assessment methods, tender clauses, contract milestones, and renewal controls in procurement processes.
+summary: "Apply the PQC Maturity Model throughout procurement: market research, request for information, request for proposal, tender evaluation, contract award, onboarding, renewal, and supplier remediation."
 weight: 20
 ---
 
 ## Where the PQCMM Fits
 
-The Post-Quantum Cryptography Maturity Model (PQCMM) can be used throughout the procurement lifecycle. It is most effective when it is introduced early, before the organization has already selected a vendor.
+The PQC Maturity Model (PQCMM) can be used throughout the procurement lifecycle. It is most effective when it is introduced early, before the organization has already selected a vendor.
+
+For teams that need a ready-made due-diligence questionnaire, the [Vendor Assessment Survey](../survey/) provides the mandatory intake questions and a downloadable scorecard template that can be dropped into a tender, request for information, or renewal review without further drafting. The [Evaluation rubric](../evaluation/) covers how to score the responses and weigh evidence quality. The rest of this page focuses on **where** in the procurement lifecycle to apply the model and **what** contract language to use.
 
 ```mermaid
 flowchart LR
@@ -44,17 +46,27 @@ This keeps complexity out of the organization: the buyer sets the required level
 
 ## Setting Minimum Requirements
 
-Minimum PQCMM levels should be risk-based. A single organization may use different thresholds for different purchases.
+Minimum PQCMM levels should be risk-based. A single organization may use different thresholds for different purchases. For each use case the buyer should state **two** values: a *minimum acceptable* level (below which a bid is non-responsive) and a *recommended target* (which scores higher in evaluation and is the basis for the contract roadmap). Distinguishing the two avoids forcing buyers to choose between an immediately-available floor and the level they actually want.
 
-| Use case | Typical minimum | Assurance expectation |
-|-----|--|------|
-| Low sensitivity, short-lived data, easily replaceable product | [Level 1](/wg/pqc/pqcmm/levels/1-initial/) with roadmap to [Level 2](/wg/pqc/pqcmm/levels/2-basic/) | Self-assessment may be acceptable |
-| Standard production system using cryptography | [Level 2](/wg/pqc/pqcmm/levels/2-basic/) | Self-assessment with evidence; third-party assessment preferred for material suppliers |
-| Regulated data, multi-year confidentiality need, identity infrastructure, or high supplier dependency | [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) | Third-party assessment recommended |
-| Public trust, root or issuing infrastructure, firmware signing, payment, healthcare, critical infrastructure, or long-lived sensitive data | [Level 4](/wg/pqc/pqcmm/levels/4-managed/) | Third-party assessment expected; certification preferred |
-| National security, high-assurance government, critical public infrastructure, or strategic trust services | [Level 5](/wg/pqc/pqcmm/levels/5-optimized/) or explicit [Level 4](/wg/pqc/pqcmm/levels/4-managed/)+ migration plan | PKI Consortium certification or equivalent highest-assurance route should be required where available |
+| Use case | Minimum acceptable | Recommended target | Assurance expectation |
+|-----|--|--|------|
+| Low sensitivity, short-lived data, easily replaceable product | [Level 1](/wg/pqc/pqcmm/levels/1-initial/) with roadmap to [Level 2](/wg/pqc/pqcmm/levels/2-basic/) | [Level 2](/wg/pqc/pqcmm/levels/2-basic/) | Self-assessment may be acceptable |
+| Standard production system using cryptography | [Level 2](/wg/pqc/pqcmm/levels/2-basic/) | [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) | Self-assessment with evidence; third-party assessment preferred for material suppliers |
+| Regulated data, multi-year confidentiality need, identity infrastructure, or high supplier dependency | [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) | [Level 4](/wg/pqc/pqcmm/levels/4-managed/) | Third-party assessment recommended |
+| Public trust, root or issuing infrastructure, firmware signing, payment, healthcare, critical infrastructure, or long-lived sensitive data | [Level 4](/wg/pqc/pqcmm/levels/4-managed/) | [Level 5](/wg/pqc/pqcmm/levels/5-optimized/) | Third-party assessment expected; certification preferred |
+| National security, high-assurance government, critical public infrastructure, or strategic trust services | [Level 5](/wg/pqc/pqcmm/levels/5-optimized/) or explicit [Level 4](/wg/pqc/pqcmm/levels/4-managed/)+ migration plan | [Level 5](/wg/pqc/pqcmm/levels/5-optimized/) with active maintenance | PKI Consortium certification or equivalent highest-assurance route should be required where available |
 
 When the market cannot yet meet the desired level, keep the target but define a temporary exception, compensating controls, and a contractual milestone.
+
+### Worked Example — Standard Production System Using Cryptography
+
+A mid-sized organization is renewing a customer-facing **business application** that uses TLS for client traffic, stores customer records in a managed database, signs outbound webhooks, and integrates with two external identity providers. Data is moderately sensitive (some personally identifiable information), but most records have a retention horizon of two to three years.
+
+- **Minimum acceptable:** Level 2. The vendor must demonstrate production-ready, standards-conformant PQC in the components named above (TLS termination, database encryption-at-rest, webhook signing), backed by a self-assessment with evidence references the renewal team can spot-check.
+- **Recommended target:** Level 3. Preferred for award scoring, and required at contract renewal in two years. Drives an SBOM and crypto-agility commitment so the organization can plan migrations without re-procuring.
+- **Procurement actions:** ask question 2 of the [Vendor Assessment Survey](../survey/) at the request-for-information stage; include both the Level Commitment and Milestone Commitment clauses below; record the result in the [Supplier Inventory](../inventory/) at *Moderate* risk tier; reassess at the next major version or at renewal, whichever comes first.
+
+The same pattern — declare both a minimum acceptable and a recommended target, derive the survey questions, write the milestone into the contract, record in the inventory — applies to every row of the table above.
 
 ## Procurement Timelines
 
@@ -74,7 +86,7 @@ Give vendors explicit deadlines so evidence review does not slip until the end o
 
 Use a request for information to understand market readiness before setting a hard tender requirement:
 
-> *For the product or service in scope, state the current Post-Quantum Cryptography Maturity Model level, the assurance method supporting the claim (self-assessed, third-party assessed, or PKI Consortium certified), and whether an assessment or certification report is available. If the product does not currently meet Level [X], describe the roadmap, target date, dependencies, and evidence that will demonstrate completion.*
+> *For the product or service in scope, state the current PQC Maturity Model level, the assurance method supporting the claim (self-assessed, third-party assessed, or PKI Consortium certified), and whether an assessment or certification report is available. If the product does not currently meet Level [X], describe the roadmap, target date, dependencies, and evidence that will demonstrate completion.*
 
 ## Request for Proposal or Tender Requirement
 
@@ -90,7 +102,7 @@ Use the lightest clause that matches the risk.
 |---|-----|
 | Baseline supplier visibility | Supplier must submit a product-specific PQCMM self-assessment report with evidence references. |
 | Standard production procurement | Supplier must meet Level [X] and provide an assessment report covering the offered product and version. |
-| High-criticality procurement | Supplier must provide a third-party assessment report, or a time-limited exception approved before award. |
+| High-tier procurement | Supplier must provide a third-party assessment report, or a time-limited exception approved before award. |
 | Certification precondition | Supplier must provide a valid PKI Consortium PQCMM certificate for the product, version, deployment model, and configuration offered. |
 | Roadmap-based award | Supplier must meet Level [X] by [date], with contract milestones, reporting obligations, and remedies for missed dates. |
 
@@ -102,7 +114,7 @@ For higher-risk procurements, define explicit gates:
 |---|-----|
 | Report gate | Vendor must submit a PQCMM assessment or certification report |
 | Level gate | Product must meet Level 2, 3, 4, or 5 depending on risk |
-| Assurance gate | High-criticality products must have third-party assessment or certification |
+| Assurance gate | High-tier products must have third-party assessment or certification |
 | Scope gate | Report must cover the exact product, version, deployment model, and configuration |
 | Evidence gate | Criteria-level evidence must be provided or made available under appropriate confidentiality terms |
 
@@ -141,5 +153,5 @@ Exceptions should be formal, time-limited, and visible. A waiver should include:
 - Review cadence.
 - Executive or risk-committee approval for critical products.
 
-Do not let exceptions become permanent procurement defaults. If a high-criticality vendor remains below the required level across repeated review cycles, treat it as a supplier risk requiring escalation or replacement planning.
+Do not let exceptions become permanent procurement defaults. If a High-tier vendor remains below the required level across repeated review cycles, treat it as a supplier risk requiring escalation or replacement planning.
 
