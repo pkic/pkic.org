@@ -25,7 +25,9 @@ cascade:
 
 ## Overview
 
-Terms like *quantum-ready* and *quantum-safe* are widely used, but their meaning varies from vendor to vendor. The **Post-Quantum Cryptography Maturity Model (PQCMM)** addresses this ambiguity by providing a clear, structured framework that defines what PQC maturity looks like across **all products and services that rely on cryptography**.
+The **PQC Maturity Model (PQCMM)** is a framework developed and maintained by the **PKI Consortium PQC Working Group**. Unlike most maturity models — which assess an organisation's internal posture — the PQCMM evaluates the post-quantum readiness of **products and services in the supply chain**.
+
+Terms like *quantum-ready* and *quantum-safe* are widely used, but their meaning varies from vendor to vendor. The PQCMM addresses this ambiguity by providing a clear, structured framework that defines what PQC maturity looks like across **all products and services that rely on cryptography**.
 
 The model serves two primary audiences:
 
@@ -37,7 +39,7 @@ The model serves two primary audiences:
 > This isn't a project with a finish line, but the operationalization of a **Modern Cryptographic Lifecycle** that ensures security remains resilient against both current and future threats.
 {.callout-info}
 
-*The PQCMM is currently at **Version {{< param version >}}**. As an active, living standard, it is continuously shaped by community feedback. You can [join the discussion](/discussions) to share your thoughts, or simply select any text and click **Edit** to propose changes to the model or its documentation.*
+*The PQCMM is currently at **Version {{< param version >}}**. As an actively maintained framework, it is continuously shaped by community feedback. You can [join the discussion](/discussions) to share your thoughts, or simply select any text and click **Edit** to propose changes to the model or its documentation.*
 
 ## Choosing Your Path
 
@@ -57,7 +59,7 @@ You build products or provide services that use cryptography. The PQCMM helps yo
 
 The PQCMM is explicitly **product and service-centric** — it evaluates the PQC capabilities of a specific product or service offering, rather than the organization that produces or operates it.
 
-**In scope:** Any product or service, such as but not limited to, hardware, software, cloud services, and enterprise platforms, including the underlying platforms they are built on or depend on. The assessment covers **the product or service as named, released, and shipped** — all of its cryptographic functionality. Vendors cannot exclude parts of the product from the assessment; if a feature is part of the product, it is part of the assessment.
+**In scope:** Any product or service, such as but not limited to, hardware, **firmware**, software, cloud services, and enterprise platforms, including the underlying platforms they are built on or depend on. The assessment covers **the product or service as named, released, and shipped** — all of its cryptographic functionality. Vendors cannot exclude parts of the product from the assessment; if a feature is part of the product, it is part of the assessment.
 
 **Out of scope:** Internal services used by the vendor that do not form part of the product offering, such as HR, ERP, CRM, email, and document processing systems. It also excludes the assessment of an organization's internal public key infrastructure operations or governance, which is covered by the [PKI Maturity Model](/wg/pkimm/model/).
 
@@ -67,6 +69,10 @@ This explicit focus makes it a powerful supply-chain tool: procurement teams, in
 
 The scope of any PQCMM assessment is defined by a clear, unambiguous description of the product or service being evaluated. A vendor selling multiple products assesses each separately; a vendor with materially different editions or deployment modes (e.g., cloud vs. on-premises) should describe these in the assessment report so buyers can compare like-for-like. The aim is simplicity for procurement: ask for the report covering the product you intend to buy.
 
+### Using the PQCMM as a PKI or Trust-Service Consumer
+
+The PQCMM is intended for any organisation that relies on cryptography in its supply chain — not only enterprise IT procurement. Relying parties of public key infrastructure, users of qualified trust services, financial institutions consuming signing or sealing services, and operators that integrate certificate authorities, time-stamping authorities, or HSMs into their own offerings can all use the PQCMM in the same way: by asking each supplier for an assessment report covering the specific product or service consumed. The model deliberately does not distinguish between "vendor-supplied" and "service-consumed" cryptography — if cryptography crosses an organisational boundary, the supplier's product or service is in scope.
+
 ### Relationship with Other Standards and Frameworks
 
 The PQCMM focuses specifically on post-quantum readiness at the product or service level. It is intended to complement — not replace — broader standards and certifications. The following are commonly referenced but address different concerns:
@@ -75,6 +81,7 @@ The PQCMM focuses specifically on post-quantum readiness at the product or servi
 |---|---|---|
 | NIST FIPS 203/204/205 | Specifications for ML-KEM, ML-DSA, SLH-DSA | The PQCMM references these as the standards a quantum-safe implementation should conform to. |
 | NIST FIPS 140-3 | Validation of cryptographic modules | Useful evidence for higher PQCMM levels, but a FIPS 140 certificate does not by itself imply PQC support. |
+| Common Criteria (ISO/IEC 15408) | Product security evaluation against Protection Profiles | Complementary product-level evaluation; a Common Criteria certificate may overlap with PQCMM evidence where the Security Target covers PQC functionality, but does not by itself imply any PQCMM level. |
 | ISO/IEC 27001 | Organisational information-security management | Organisation-level scope; the PQCMM is product-level and complementary. |
 | SOC 2 | Service organisation controls | Service-level controls; does not assess specific cryptographic algorithms or PQC readiness. |
 | EU Cyber Resilience Act | Vulnerability handling and product cybersecurity in the EU | Regulatory; PQCMM evidence may inform CRA compliance but does not satisfy it. |
