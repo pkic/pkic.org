@@ -1,7 +1,7 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Evaluation"
-title: "Evaluation - Post-Quantum Cryptography Maturity Model (PQCMM)"
+title: "Evaluation - PQC Maturity Model (PQCMM)"
 description: A structured approach to scoring and evaluating vendors using the PQCMM framework.
 summary: Remove the heavy lifting from your procurement team by relying directly on the PQCMM maturity levels and independent assurance methods.
 weight: 30
@@ -22,7 +22,7 @@ Before applying any subjective scoring, ensure the vendor's submission meets you
 | **Assessment Report** | The vendor has provided a formal PQCMM assessment or certification report. |
 | **Product Scope** | The report explicitly covers the exact product, version, and deployment model being procured. |
 | **Minimum Level** | The achieved level meets your predefined minimum requirement (e.g., Level 2 or Level 3). |
-| **Required Assurance** | The assurance method (Self-Assessed, Third-Party, or Certified) meets the requirement for your risk tier. |
+| **Required Assurance** | The assurance method (Self-Assessed, Third-Party, or Certified) meets the requirement for the supplier's [risk tier](/wg/pqc/pqcmm/adoption/inventory/#supplier-risk-tiers). |
 | **Authenticity** | The report is authentic (independently verified via digital signature or the PKIC Certified Products registry). |
 
 If a response fails a mandatory gate, it should be treated as non-compliant or routed through your organization's standard exception process.

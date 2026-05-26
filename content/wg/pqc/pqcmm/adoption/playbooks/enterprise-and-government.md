@@ -1,8 +1,8 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Enterprise & Government"
-title: "Enterprise and Government Playbook - Post-Quantum Cryptography Maturity Model (PQCMM)"
-description: A formal adoption playbook for enterprises and governments using the Post-Quantum Cryptography Maturity Model as a supply-chain control.
+title: "Enterprise and Government Playbook - PQC Maturity Model (PQCMM)"
+description: A formal adoption playbook for enterprises and governments using the PQC Maturity Model as a supply-chain control.
 summary: Treat the model as a formal supply-chain control with risk-tiered gates, independent assurance, exception governance, executive metrics, and reassessment triggers.
 weight: 30
 ---
@@ -26,12 +26,12 @@ The ultimate end state is a supply chain running entirely at **[Level 5 (Optimiz
 
 | Step | Practical action |
 |---|---|
-| Buy | Define required level and assurance method by risk tier before tender publication |
+| Buy | Define required level and assurance method by [risk tier](/wg/pqc/pqcmm/adoption/inventory/#supplier-risk-tiers) before tender publication |
 | Evaluate | Use pass/fail gates for report, scope, level, assurance, and evidence |
 | Contract | Include milestone, audit, reassessment, notification, and remedy clauses |
 | Monitor | Report maturity, assurance, exceptions, and overdue remediation to governance bodies |
 
 ## Minimum Policy
 
-Use quarterly reporting for critical suppliers, formal exception governance, contractual milestones, and executive metrics showing maturity by supplier tier.
+Use quarterly reporting for High-tier suppliers, formal exception governance, contractual milestones, and executive metrics showing maturity by [risk tier](/wg/pqc/pqcmm/adoption/inventory/#supplier-risk-tiers).
 

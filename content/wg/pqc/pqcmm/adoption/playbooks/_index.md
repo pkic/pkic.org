@@ -1,15 +1,15 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Playbooks"
-title: "Adoption Playbooks - Post-Quantum Cryptography Maturity Model (PQCMM)"
-description: Practical adoption paths for small organizations, large organizations, enterprises, governments, regulated sectors, and critical infrastructure using the Post-Quantum Cryptography Maturity Model.
+title: "Adoption Playbooks - PQC Maturity Model (PQCMM)"
+description: Practical adoption paths for small organizations, large organizations, enterprises, governments, regulated sectors, and critical infrastructure using the PQC Maturity Model.
 summary: Adopt the model at the right level of formality for your organization, from a lightweight supplier register to enterprise and government-grade procurement controls.
 weight: 50
 ---
 
 ## Choose the Right Starting Point
 
-Every organization can use the Post-Quantum Cryptography Maturity Model (PQCMM), but not every organization needs the same operating model. The right approach depends on supplier criticality, data lifetime, procurement formality, and available security expertise.
+Every organization can use the PQC Maturity Model (PQCMM), but not every organization needs the same operating model. The right approach depends on supplier [risk tier](/wg/pqc/pqcmm/adoption/inventory/#supplier-risk-tiers), data lifetime, procurement formality, and available security expertise.
 
 | Organization or use case | Start here |
 |---|-----|

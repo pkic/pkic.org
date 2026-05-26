@@ -1,8 +1,8 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Inventory"
-title: "Inventory and Governance - Post-Quantum Cryptography Maturity Model (PQCMM)"
-description: How to build and operate a Post-Quantum Cryptography Maturity Model supplier inventory, evaluate already contracted products, and manage compliance exceptions.
+title: "Inventory and Governance - PQC Maturity Model (PQCMM)"
+description: How to build and operate a PQC Maturity Model supplier inventory, evaluate already contracted products, and manage compliance exceptions.
 summary: Maintain an organization-wide supplier inventory that evaluates existing products as well as new ones. Track risk tier, downstream assessments, exceptions, and remediation commitments.
 weight: 40
 ---
@@ -13,9 +13,23 @@ Evaluating new vendors is only half the battle. Organizations must also establis
 
 You don't have long to build this baseline. Apply the PQCMM to your entire supply chain to gain awareness. Reporting existing vendors at [Level 0](/wg/pqc/pqcmm/levels/0-none/) might not result in an immediate contract termination, but it gives you insight—*now you know your risk.*
 
+## Supplier Risk Tiers
+
+Before building the inventory, decide how each supplier is tiered. A supplier's risk tier is determined by the **impact of compromise** and the **exposure of the integration in your environment** — not by whether the product is labelled "cryptographic". Almost every modern product depends on cryptography somewhere; listing cryptographic product categories tends to be ignored by the wider audience this model is intended to reach.
+
+| Tier | When to apply it |
+|---|---|
+| Low | Limited blast radius on failure; data is non-sensitive or short-lived; the product is easily replaced or isolated; downstream dependencies are minimal. |
+| Moderate | Failure causes meaningful operational disruption or affects moderate-sensitivity data; replacement requires planning; the product is integrated with other business systems but is not on the critical path. |
+| High | The product is on a critical path, carries mass user impact on failure, holds regulated or long-lived sensitive data, materially affects safety or trust, or is hard to replace within the relevant migration window. |
+
+The same product can fall into different tiers in different organizations — and even into different tiers across deployments within the same organization. Assess **your own integration and exposure**, not the product label. Organizations operating in regulated sectors or with government-grade assurance obligations should treat the High tier as the floor for that scope, and apply additional sector-specific controls on top of the cadence and assurance expectations below.
+
+This tier is recorded against every supplier in the inventory below and drives the [Review Cadence](#review-cadence), the [Assurance expectation](/wg/pqc/pqcmm/adoption/procurement/#setting-minimum-requirements) in procurement, and the threshold for exception escalation.
+
 ## Supplier Inventory
 
-Once vendor responses are collected, record them in a Post-Quantum Cryptography Maturity Model (PQCMM) supplier inventory. The inventory turns individual assessments into supply-chain visibility.
+Once vendor responses are collected, record them in a PQC Maturity Model (PQCMM) supplier inventory. The inventory turns individual assessments into supply-chain visibility.
 
 [Download a supplier inventory template](../downloads/pqcmm-supplier-inventory-template.csv) and adapt it to your procurement, vendor-risk, or governance tooling.
 
@@ -25,7 +39,7 @@ Once vendor responses are collected, record them in a Post-Quantum Cryptography 
 | Product / service | SecureSign HSM 3.x |
 | Business owner | Trust Services Platform Owner |
 | Risk owner | CISO or delegated crypto risk owner |
-| Criticality | High |
+| Risk tier | High (see [Supplier Risk Tiers](#supplier-risk-tiers)) |
 | Data lifespan | 10+ years |
 | Current PQCMM level | 2 |
 | Assesses Downstream? | Yes (using PQCMM) |
@@ -65,8 +79,10 @@ Reassess a supplier when any of the following occurs:
 - Deployment model change, such as on-premises to SaaS or single-tenant to multi-tenant.
 - Security incident affecting cryptographic implementation or supply-chain integrity.
 - New NIST, IETF, ETSI, ISO, regulatory, or sector requirement that affects the product.
-- Contract renewal, material expansion, or new high-criticality use case.
+- Contract renewal, material expansion, or a use case that moves the supplier into a higher [risk tier](#supplier-risk-tiers).
 - Evidence or assessment report becomes stale under your policy.
+- Change of control of the supplier, such as merger, acquisition, divestiture, or transfer of the product line to a new entity — reassess even if the product version has not changed, because the assessor, ownership, and roadmap commitments may have changed materially.
+- Mixed-maturity integration, such as joining a Level 4 trust service to a Level 2 application or routing data between products at materially different levels — reassess both ends and record the effective maturity of the combined data flow.
 
 ## Exception Governance
 
@@ -108,14 +124,15 @@ For your inventory, simply record the metadata of the assessment:
 | Assessment report | Report title, date, PQCMM version, assessor/certifier, and storage location of the verified PDF |
 | Certification link | URL to the [Certified Products](/wg/pqc/pqcmm/products/) listing on the PKIC website |
 
-*Note: If you are accepting a Self-Assessment for a higher risk-tier, your organization may still choose to collect sensitive underlying evidence (like CBOMs or test reports) under NDA. In these cases, use your standard secure data room or GRC evidence-handling procedures.*
+*Note: If you are accepting a Self-Assessment for a higher risk tier, your organization may still choose to collect sensitive underlying evidence (like CBOMs or test reports) under NDA. In these cases, use your standard secure data room or GRC evidence-handling procedures.*
 
 ## Review Cadence
 
-| Supplier tier | Suggested review cadence |
+Review cadence is driven by the [risk tier](#supplier-risk-tiers) assigned to the supplier:
+
+| Risk tier | Suggested review cadence |
 |---|-----|
-| Low risk | Annual or at renewal |
-| Moderate risk | Annual plus major-change triggers |
-| High risk | Semi-annual or at each material release |
-| Critical or government high assurance | Quarterly status review plus formal reassessment triggers |
+| Low | Annual or at renewal. |
+| Moderate | Annual, plus any reassessment trigger above. |
+| High | Semi-annual or at each material release, plus any reassessment trigger above. Organizations with regulatory or government-grade assurance obligations should treat quarterly status reviews and formal reassessment at every material change as the floor for High-tier suppliers in that scope. |
 

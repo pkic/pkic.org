@@ -1,8 +1,8 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "Large Organizations"
-title: "Large Organization Playbook - Post-Quantum Cryptography Maturity Model (PQCMM)"
-description: A practical adoption playbook for large organizations integrating the Post-Quantum Cryptography Maturity Model into procurement, vendor-risk, and architecture-review processes.
+title: "Large Organization Playbook - PQC Maturity Model (PQCMM)"
+description: A practical adoption playbook for large organizations integrating the PQC Maturity Model into procurement, vendor-risk, and architecture-review processes.
 summary: Integrate the model into supplier questionnaires, procurement templates, vendor-risk records, architecture reviews, renewals, and contract milestones.
 weight: 20
 ---
@@ -15,8 +15,8 @@ Large organizations normally already have procurement, vendor-risk, security arc
 
 The long-term objective is for all in-scope suppliers to achieve **[Level 5 (Optimized)](/wg/pqc/pqcmm/levels/5-optimized/)**. Moving a massive supply chain is a continuous process, so prioritize your efforts based on risk and data lifespan.
 
-- **Baseline the entire supply chain**: Add mandatory assessment intake questions to all supplier questionnaires and renewal templates. Ask everyone, but focus your manual follow-ups on the highest risk tiers.
-- **Define supplier tiers**: Categorize your vendors based on data sensitivity, data lifespan, and operational criticality. Identify the critical infrastructure providers (cloud, IAM, VPNs, HSMs, payment, and core SaaS) that need immediate assessment.
+- **Baseline the entire supply chain**: Add mandatory assessment intake questions to all supplier questionnaires and renewal templates. Ask everyone, but focus your manual follow-ups on the High-tier suppliers.
+- **Assign risk tiers**: Categorize every supplier as Low, Moderate, or High using the [Supplier Risk Tiers](/wg/pqc/pqcmm/adoption/inventory/#supplier-risk-tiers) definition — by impact of compromise and exposure of the integration, not by product category. The products most likely to land in the High tier in a large organization include cloud infrastructure, identity providers, virtual private networks, hardware security modules, payment platforms, and core software-as-a-service — confirm rather than assume.
 - **Run targeted campaigns**: Actively chase assessment reports from your Tier 1 and Tier 2 suppliers first. 
 - **Set procurement floors**: Require assessment reports for all new high-risk procurements. Define minimum acceptable levels for new contracts.
 - **Address HNDL exposure**: Products protecting long-lived sensitive data (e.g., health records, financial history, state secrets) must not remain at [Level 0](/wg/pqc/pqcmm/levels/0-none/). Escalate these immediately to mitigate **Harvest Now, Decrypt Later (HNDL)** risk.
@@ -33,5 +33,5 @@ The long-term objective is for all in-scope suppliers to achieve **[Level 5 (Opt
 
 ## Minimum Policy
 
-Require self-assessment for all in-scope suppliers, third-party assessment for high-criticality suppliers, and contract milestones for suppliers below the required level.
+Require self-assessment for all in-scope suppliers, third-party assessment for High-tier suppliers, and contract milestones for suppliers below the required level.
 
