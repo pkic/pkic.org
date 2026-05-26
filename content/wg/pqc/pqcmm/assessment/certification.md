@@ -37,10 +37,37 @@ A PKIC-accepted third-party assessment report is required before applying for ce
 The accredited independent assessor submits the certification application to the PKI Consortium on behalf of the vendor. The application must include:
 
 - The digitally signed third-party assessment report (PDF), signed by both the assessor (attesting that the assessment was conducted in line with PQCMM methodology) and the vendor (warranting that the evidence package provided to the assessor is true and complete to the best of the vendor's knowledge).
+- A **senior-executive attestation** signed on behalf of the vendor (see *Senior-Executive Attestation* below).
 - The vendor's confirmation that the product assessed corresponds to a currently shipping version.
+- The **product identifier(s)** for the assessed version, including a Common Platform Enumeration (CPE) 2.3 identifier where one exists (see *Product Identifiers* below).
 - The assessor's prior-engagement disclosure (see [Third-Party Assessment](/wg/pqc/pqcmm/assessment/third-party/#prior-engagement-disclosure)).
 - Acceptance of the PKI Consortium's certification terms (see *Certification Terms and Liability* below).
 - Payment of the certification fee (see below).
+
+### Senior-Executive Attestation
+
+The vendor's certification application must be accompanied by a written attestation, signed by a **senior executive** of the vendor organisation who is accountable for the assessed product. The signatory must hold an executive role such as Chief Executive Officer, Chief Technology Officer, Chief Information Security Officer, Chief Product Officer, or an equivalent named officer with documented decision-making authority over the product's cryptographic posture. A signature from a delegated representative without that authority does not satisfy this requirement.
+
+The attestation states that, to the best of the signatory's knowledge:
+
+- The product, version, edition, deployment model, and configuration described in the assessment report correspond to what is shipped to customers under that name.
+- The evidence package provided to the assessor is true and complete, with no material omissions.
+- The signatory accepts personal accountability, on behalf of the organisation, for the accuracy of the claims made in the certification application.
+- The vendor will notify the PKI Consortium of any material change in line with the *Material Change and Vendor Notification* section below.
+
+The PKI Consortium records the name, title, and date of the executive signatory in the certification application. False attestation is grounds for refusal, suspension, or revocation of certification and may be referenced in any subsequent complaint or appeal.
+
+### Product Identifiers
+
+So that certified products can be unambiguously identified by procurement teams, vulnerability databases, and asset-management tooling, the application must record machine-readable product identifiers for the assessed version:
+
+- A **Common Platform Enumeration (CPE)** identifier (current published version of the CPE specification) where one is published for the product. If no CPE has been issued, the vendor should request one from the NIST National Vulnerability Database (NVD) and may submit the application with an explanation in the interim.
+- A **Package URL (purl)** where the product is distributed through a recognised package ecosystem.
+- The vendor's own product, edition, and version identifiers as they appear in the SBOM/CBOM (see [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) and [Level 4](/wg/pqc/pqcmm/levels/4-managed/)).
+
+The model references these schemes by name rather than by version so that adoption of an updated specification (e.g., a future CPE revision) does not invalidate the requirement; see the [design principle on algorithm- and scheme-neutral criteria](/wg/pqc/pqcmm/#design-principles).
+
+Recorded identifiers are published with the certificate in the [Certified Products & Services](/wg/pqc/pqcmm/products/) registry so they can be correlated with CVE feeds and automated supply-chain tooling.
 
 ### 3. PKI Consortium Review
 
@@ -72,9 +99,10 @@ Upon a positive decision, the PKI Consortium issues a **PQCMM Certificate** spec
 - The version of the PQCMM specification against which the assessment was performed.
 - The date of certification and expiry date (12 months from the assessment report date).
 - A unique certificate identifier for public verification.
+- The recorded product identifiers, including the CPE identifier and any Package URL (purl) submitted with the application.
 - The mandatory certification disclaimer (see *Certification Terms and Liability* below).
 
-Certified products are listed on the PKI Consortium website together with their certificate identifier, level, PQCMM version, issue date, and expiry date.
+Certified products are listed on the PKI Consortium website together with their certificate identifier, level, PQCMM version, issue date, expiry date, and recorded product identifiers (CPE and purl where available) so that the listing can be cross-referenced with CVE feeds and asset-management tooling.
 
 ## Certification Terms and Liability
 

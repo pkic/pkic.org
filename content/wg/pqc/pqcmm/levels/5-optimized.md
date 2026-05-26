@@ -25,7 +25,7 @@ A product meets Level 5 when all Level 4 criteria are met, plus:
 
 - Quantum-safe algorithms are the **default and preferred setting** for all relevant features; any legacy algorithm requires explicit enablement by the operator.
 - Algorithms are **benchmarked and tuned**: the vendor has measured and documented that quantum-safe configurations meet or exceed operational performance requirements for the product's target environments.
-- The product primarily follows **NIST-approved PQC standards** (FIPS 203/ML-KEM, FIPS 204/ML-DSA, FIPS 205/SLH-DSA), with additional support for other internationally recognised standards where relevant.
+- The product primarily follows post-quantum cryptography standards approved by a recognised national or international standards body (such as NIST, ETSI, or ISO/IEC), as applicable to the product's target markets. The PQCMM does not prescribe a specific algorithm or parameter set; see the [model's design principle on algorithm-neutral criteria](/wg/pqc/pqcmm/#design-principles).
 - The cryptographic implementation is **independently verified or certified** — through FIPS 140 validation covering the PQC algorithms, an applicable Common Criteria evaluation whose Security Target includes the cryptographic implementation, or a widely scrutinised cryptographic library with a published, third-party formal security analysis specifically covering the implemented PQC algorithms. Where a library-based claim is made, the audit report submitted with the assessment must identify the library, version, the analysing organisation, and the analysis publication.
 {{< /criteria >}}
 

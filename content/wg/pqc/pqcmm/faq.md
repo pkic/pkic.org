@@ -147,5 +147,13 @@ groups:
       - question: "How can we provide feedback?"
         answer: |
           The PQCMM is a living model. Feedback is welcome through [PKI Consortium discussions](/discussions).
+  - title: Identifiers and Accountability
+    questions:
+      - question: "Is a Common Platform Enumeration (CPE) identifier required?"
+        answer: |
+          A CPE identifier is required at certification where one has been issued for the product, and is requested in the SBOM at [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) and bound to CBOM entries at [Level 4](/wg/pqc/pqcmm/levels/4-managed/). CPE (with Package URL (purl) as an equivalent for package-distributed software) enables automated correlation between PQCMM certificates, SBOM/CBOM data, and CVE feeds such as the NIST National Vulnerability Database. The model references the CPE scheme by name rather than by version so that adoption of an updated CPE specification does not invalidate the requirement. If no CPE has been issued, the vendor should request one and may submit a certification application with an explanation in the interim.
+      - question: "Who inside the vendor organisation must sign a certification application?"
+        answer: |
+          A [senior executive](/wg/pqc/pqcmm/assessment/certification/#senior-executive-attestation) accountable for the assessed product — typically the CEO, CTO, CISO, CPO, or an equivalent named officer with decision-making authority over the product's cryptographic posture. Delegated representatives without that authority do not satisfy the attestation requirement.
 {{< /faq >}}
 

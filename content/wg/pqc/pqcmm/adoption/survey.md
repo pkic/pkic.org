@@ -59,11 +59,13 @@ Do not accept an assessment report unless it clearly states:
 |---|-----|
 | Product or service name | Prevents organization-level claims from being treated as product evidence |
 | Version, edition, deployment model, and configuration | Confirms the report covers what is being bought |
+| Standardised product identifier(s) (Common Platform Enumeration (CPE) and/or Package URL (purl)) | Enables automated correlation with CVE feeds, asset inventories, and the PKI Consortium [Certified Products & Services](/wg/pqc/pqcmm/products/) registry |
 | Claimed PQCMM level | Provides the maturity claim being evaluated |
 | Assessment method | Separates self-assessed, third-party assessed, and certified claims |
 | Assessment date and report version | Supports recency checks and reassessment policy |
 | Assessor or certifier identity, where applicable | Supports reliance on independent assurance |
 | PQCMM version used | Ensures criteria are interpreted against a known version of the model |
+| Senior-executive attestation (for certified or third-party reports submitted as supplier evidence) | Confirms named accountability inside the vendor organisation for the accuracy of the claim |
 | Evidence availability and confidentiality status | Helps procurement teams plan review access and retention |
 
 ## Procurement Clause

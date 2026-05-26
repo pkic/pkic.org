@@ -84,8 +84,11 @@ The assessor produces a formal written report containing:
 - Executive summary with the assessed level and rationale.
 - Detailed findings for each criterion assessed, including evidence references.
 - Identification of any criteria that were partially met (gap analysis for the next level).
+- Product identifiers for the assessed version, including the Common Platform Enumeration (CPE) identifier where one exists and any Package URL (purl), recorded as supplied by the vendor (see [Certification — Product Identifiers](/wg/pqc/pqcmm/assessment/certification/#product-identifiers)).
 - Assessor's declaration of independence.
 - Report date and version of the PQCMM specification used.
+
+Where the report is intended to support a [certification](/wg/pqc/pqcmm/assessment/certification/) application, it must also be accompanied by the vendor's [senior-executive attestation](/wg/pqc/pqcmm/assessment/certification/#senior-executive-attestation). Vendors are encouraged to provide the same attestation alongside a third-party report submitted directly to customers; without it, the report carries only the assessor's signature and the vendor's evidence warranty.
 
 ## Using the Report
 

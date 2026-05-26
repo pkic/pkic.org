@@ -24,7 +24,7 @@ This level is the **minimum acceptable baseline** for new production deployments
 A product meets Level 2 when all Level 1 criteria are met, plus:
 
 - Quantum-safe algorithms are supported in the product's **core production functionality** — not only in a beta or preview channel.
-- The implementation demonstrates **compatibility with at least one relevant standard** (e.g., FIPS 203/ML-KEM, FIPS 204/ML-DSA, FIPS 205/SLH-DSA, IETF hybrid KEMs, or equivalent ETSI/ISO standards).
+- The implementation demonstrates **compatibility with at least one post-quantum cryptography standard** published or recognised by a national or international standards body (such as NIST, ETSI, ISO/IEC, IETF, or an equivalent national authority), as applicable to the product's target markets. The PQCMM does not prescribe a specific algorithm; see the [model's design principle on algorithm-neutral criteria](/wg/pqc/pqcmm/#design-principles).
 - The quantum-safe feature is **documented for production use**, including any known limitations or configuration requirements.
 {{< /criteria >}}
 

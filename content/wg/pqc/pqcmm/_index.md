@@ -94,6 +94,17 @@ A product holding any of the above does **not** automatically meet any PQCMM lev
 
 The PKI Maturity Model includes a post-quantum cryptography category within its broader assessment framework; the PQCMM is a standalone model solely focused on post-quantum readiness at the product level.
 
+## Design Principles
+
+The PQCMM is intentionally written to remain useful as the cryptographic and standards landscape evolves. The following principles govern how its criteria are phrased:
+
+- **Algorithm- and parameter-neutral criteria.** The model's normative criteria require *capabilities and behaviours* — such as production availability, standards conformance, inventory completeness, crypto agility, and zero-legacy capability — rather than a fixed list of algorithms or parameter sets. Specific algorithms (for example ML-KEM, ML-DSA, SLH-DSA) appear in *Assessment guidance* as illustrative examples of what acceptable evidence looks like, not as hard-coded requirements. This avoids the maturity model becoming obsolete as standards mature or are superseded.
+- **Delegation to recognised standards bodies.** Where conformance with a published standard is required, the criterion names the *body* (NIST, ETSI, ISO/IEC, IETF, or an equivalent national authority) rather than the *document*, leaving the choice of currently-applicable specification to the standards body and to the product's target market.
+- **Scheme references over scheme versions.** External schemes used in the model (for example Common Platform Enumeration, Package URL, SPDX, CycloneDX) are referenced by name. The currently published version of each scheme applies; adoption of a future revision does not invalidate the model.
+- **Crypto agility as the primary control.** Because specific algorithm choices will change, the model treats the ability to *update* algorithms (Levels 3–5) as more important than the choice of any single algorithm at a point in time.
+
+Vendors and assessors should read the criteria as *what* must be achieved and the assessment guidance as *how* it is typically demonstrated today.
+
 ## Maturity Levels
 
 The model defines **six levels (0–5)**. Level 0 represents a state where no post-quantum capabilities are available in the product. Levels 1 through 5 are cumulative — a product claiming Level 3 must satisfy all requirements of Levels 1 and 2 as well.
