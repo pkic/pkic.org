@@ -1,7 +1,7 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "5 — Optimized"
-title: "Level 5 (Optimized) - Post-Quantum Cryptography Maturity Model (PQCMM)"
+title: "Level 5 (Optimized) - PQC Maturity Model (PQCMM)"
 description: A product at Level 5 defaults to quantum-safe algorithms, meets performance benchmarks, follows NIST-approved standards, and uses independently verified cryptographic implementations.
 summary: Level 5 is the gold standard — PQC is the default, performance is benchmarked, implementations are independently verified. The product is fully optimised for a post-quantum world.
 
@@ -60,7 +60,7 @@ The assessment report must record:
 | # | Question | Assessment guidance |
 |---|---|---|
 | 5.4 | Has the vendor benchmarked the product in its default quantum-safe configuration? Request the benchmark report. | Record all of the following methodology fields from the report: hardware (CPU model, core count, RAM, whether results are from cloud instances or bare metal), operating system and version, runtime/JVM version if applicable, test tool name and version (e.g., wrk 4.x, JMeter 5.x, vendor-specific harness — record tool and version), algorithm and parameter set tested, load profile (requests/second or key operations/second), test duration, warm-up period, and classical comparison baseline (algorithm and parameter set). A benchmark that does not specify hardware and test tool cannot be reproduced by an independent party — flag it as non-reproducible. |
-| 5.5 | Do quantum-safe configurations meet performance requirements for the product's stated use cases? | Record the vendor's SLA or performance specification (document title, version, URL) and compare it against the benchmark results field by field. Note the hardware on which the benchmarks were run versus the customer's expected deployment hardware — a result on premium hardware may not translate to the customer's environment. Performance shortfalls relative to the SLA must be documented and risk-assessed. |
+| 5.5 | Do quantum-safe configurations meet performance requirements for the product's stated use cases? | Record the vendor's SLA or performance specification (document title, version, URL) and compare it against the benchmark results field by field. *Note the hardware on which the benchmarks were run versus the customer's expected deployment hardware — a result on premium hardware may not translate to the customer's environment.* Performance shortfalls relative to the SLA must be documented and risk-assessed. |
 | 5.6 | Have algorithm implementations been optimised for the product's target hardware? | Ask which optimisation paths are enabled: AVX2, AVX-512, ARMv8 crypto extensions, hardware accelerator offload. Record each optimisation with: whether it is enabled by default (yes/no), the documentation URL confirming it, and whether the assessor verified it is active (e.g., by checking CPU feature flag usage in a running process, reviewing build flags in the binary, or consulting the documentation). An unoptimised software reference implementation in a performance-sensitive production deployment is a risk signal — record the optimisation status explicitly. |
 
 ### Standards Alignment

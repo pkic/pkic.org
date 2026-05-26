@@ -1,7 +1,7 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "1 — Initial"
-title: "Level 1 (Initial) - Post-Quantum Cryptography Maturity Model (PQCMM)"
+title: "Level 1 (Initial) - PQC Maturity Model (PQCMM)"
 description: A product at Level 1 has quantum-safe algorithms available for testing and evaluation, typically via manual configuration or beta features.
 summary: Level 1 means PQC is available for testing and evaluation. The vendor has started the journey — integration teams can begin compatibility assessments.
 
@@ -28,7 +28,7 @@ A product meets Level 1 when **all** of the following are true:
 - The vendor has documented how to enable and use the quantum-safe feature for evaluation purposes.
 {{< /criteria >}}
 
-Level 1 does **not** require the feature to be production-ready, standards-compliant, or enabled by default.
+Level 1 does **not** require the feature to be production-ready, standards-compliant, or enabled by default. Level 1 is intentionally permissive: any post-quantum algorithm available in a released build qualifies. Standards conformance is introduced at [Level 2](/wg/pqc/pqcmm/levels/2-basic/).
 
 ## Assessment Questions
 

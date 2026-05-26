@@ -1,7 +1,7 @@
 ---
 date: 2026-05-07T00:00:00Z
 linkTitle: "3 — Advanced"
-title: "Level 3 (Advanced) - Post-Quantum Cryptography Maturity Model (PQCMM)"
+title: "Level 3 (Advanced) - PQC Maturity Model (PQCMM)"
 description: A product at Level 3 maintains a full cryptographic inventory, documents non-quantum-safe features as risks, produces an SBOM, and has crypto-agility mechanisms for key features.
 summary: Level 3 adds full cryptographic visibility and agility. Vendors can account for all cryptographic use cases and update algorithms without major redesign.
 
@@ -110,6 +110,12 @@ The assessment report must record:
 |---|---|---|
 | 3.16 | Does the vendor maintain a written HNDL exposure register identifying data flows handled by the product that carry long-lived confidentiality requirements? | Request the register. Record document title, version, and date. Each entry should identify: the data class (e.g., "customer-uploaded documents", "signed audit logs"), the expected confidentiality lifetime (years), the algorithm currently protecting it, and whether it is quantum-safe. A register that lists no HNDL-exposed data despite the product handling long-lived data is a finding — record the gap and the vendor's justification. |
 
+### Production-Scale Validation
+
+| # | Question | Assessment guidance |
+|---|---|---|
+| 3.17 | Has the quantum-safe implementation been exercised at a scale and in an environment representative of real production use — not only in a developer or lab setting? | Request the test report. Record: test environment (cloud region, instance class, network topology, peer implementations), workload profile (request rate, concurrent sessions, key-operation rate, payload sizes), duration, and the algorithm/parameter sets exercised. The test must simulate conditions the product is expected to encounter in production — a single-instance lab measurement, a unit test, or a notebook-scale benchmark is **not sufficient evidence** for this question. Record any production deployment where the configuration has been run in earnest. Absence of any representative test is a finding; deeper benchmarking and SLA correlation is required at [Level 5](/wg/pqc/pqcmm/levels/5-optimized/). |
+
 ## Evidence Checklist
 
 The items below are a level-specific summary of the artefacts a vendor should be able to produce. They can serve as a concise request list for an assessor, or as a self-assessment reference for a vendor preparing evidence before a formal assessment. The detailed requirements and acceptance criteria for each item are in the assessment questions above. All artefacts from [Level 1](/wg/pqc/pqcmm/levels/1-initial/#evidence-checklist) and [Level 2](/wg/pqc/pqcmm/levels/2-basic/#evidence-checklist) remain required.
@@ -121,6 +127,7 @@ The items below are a level-specific summary of the artefacts a vendor should be
 - Algorithm deprecation policy.
 - HNDL exposure register.
 - Identification of the DRBG / RNG used for cryptographic key material and its seed strength.
+- A production-representative test or deployment record demonstrating the quantum-safe configuration operating under realistic load.
 
 ## Suggested Procurement Actions
 
