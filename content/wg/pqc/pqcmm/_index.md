@@ -219,5 +219,4 @@ To ensure consistency, the PKI Consortium aims to collaborate with certification
 
 - **Check terminology:** [PQCMM Glossary](/wg/pqc/pqcmm/glossary/)
 - **Read common questions:** [PQCMM FAQ](/wg/pqc/pqcmm/faq/)
-- **Follow updates:** [PQC Maturity Model announcement](/blog/2025/10/defining-quantum-readiness-introducing-the-post-quantum-cryptography-maturity-model/)
 - **Discuss and comment:** [Join the discussion](https://pkic.org/discussions)
