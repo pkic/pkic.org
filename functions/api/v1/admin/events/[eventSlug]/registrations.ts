@@ -161,7 +161,11 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const byAttendanceType: Record<string, number> = {};
   const byStatus: Record<string, number> = {};
   for (const row of statRows) {
-    byAttendanceType[row.attendance_type] = (byAttendanceType[row.attendance_type] ?? 0) + Number(row.count);
+    // Only include confirmed/registered rows in the attendance-type totals
+    if (row.status === "registered") {
+      byAttendanceType[row.attendance_type] = (byAttendanceType[row.attendance_type] ?? 0) + Number(row.count);
+    }
+    // Keep the full per-status totals
     byStatus[row.status] = (byStatus[row.status] ?? 0) + Number(row.count);
   }
 
