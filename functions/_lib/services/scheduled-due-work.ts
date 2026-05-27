@@ -201,7 +201,9 @@ export async function runScheduledDueWork(env: Env): Promise<ScheduledDueWorkRes
     const cycle = await runReminderCycle(env.DB, {
       appBaseUrl: config.appBaseUrl,
       reminderIntervalDays: config.reminderIntervalDays,
+      pendingConfirmationReminderIntervalDays: config.pendingConfirmationReminderIntervalDays,
       maxInviteReminders: config.maxInviteReminders,
+      maxPendingConfirmationReminders: config.maxPendingConfirmationReminders,
       maxPresentationReminders: config.maxPresentationReminders,
       limit: config.scheduledReminderLimit,
     });

@@ -18,6 +18,10 @@ export async function onRequestGet(c: any): Promise<Response> {
   const origin = resolveAppBaseUrl(c.env, c.req.raw);
   const url = new URL("/invite/decline/", origin);
   url.searchParams.set("token", c.req.param("token"));
+  const inviteId = new URL(c.req.raw.url).searchParams.get("id");
+  if (inviteId) {
+    url.searchParams.set("id", inviteId);
+  }
   return Response.redirect(url.toString(), 302);
 }
 
@@ -25,7 +29,8 @@ export async function onRequestGet(c: any): Promise<Response> {
 
 export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, inviteDeclineSchema);
-  const invite = await findInviteByToken(c.env.DB, c.req.param("token"));
+  const inviteId = new URL(c.req.raw.url).searchParams.get("id");
+  const invite = await findInviteByToken(c.env.DB, c.req.param("token"), inviteId);
 
   // Forward the invite to nominated contacts before declining
   const forwardedEmails: string[] = [];
@@ -65,6 +70,7 @@ export async function onRequestPost(c: any): Promise<Response> {
             invite.invite_type === "attendee"
               ? registrationPageUrl(appBaseUrl, event, {
                   invite: inviteToken,
+                  inviteId: newInvite.id,
                   source: "invite",
                 })
               : undefined;
@@ -72,10 +78,11 @@ export async function onRequestPost(c: any): Promise<Response> {
             invite.invite_type === "speaker"
               ? proposalPageUrl(appBaseUrl, event, {
                   invite: inviteToken,
+                  inviteId: newInvite.id,
                   source: "speaker_invite_forward",
                 })
               : undefined;
-          const declineUrl = inviteDeclineUrl(appBaseUrl, event, inviteToken);
+          const declineUrl = inviteDeclineUrl(appBaseUrl, event, inviteToken, newInvite.id);
 
           const outboxId = await queueEmail(c.env.DB, {
             eventId: event.id,

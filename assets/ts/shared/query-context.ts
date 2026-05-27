@@ -2,7 +2,9 @@ import { SOURCE_TYPES } from "../../shared/constants/source-types";
 
 export interface QueryContext {
   eventSlug: string | null;
+  id: string | null;
   inviteToken: string | null;
+  inviteId: string | null;
   referralCode: string | null;
   sourceType: string | null;
   token: string | null;
@@ -72,7 +74,9 @@ export function parseQueryContext(search: string): QueryContext {
 
   return {
     eventSlug: read(query, "event"),
+    id: read(query, "id"),
     inviteToken: read(query, "invite"),
+    inviteId: read(query, "id"),
     referralCode,
     sourceType: readSourceType(query),
     token: read(query, "token"),

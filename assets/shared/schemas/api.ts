@@ -159,6 +159,7 @@ export const registrationCreateSchema = z
     sourceRef: trimmedString(2, 200).optional(),
     customAnswers: customAnswersSchema.optional(),
     inviteToken: tokenSchema.optional(),
+    inviteId: z.uuid().optional(),
     referralCode: z
       .string()
       .trim()
@@ -177,6 +178,7 @@ export const registrationCreateSchema = z
   });
 
 export const registrationConfirmSchema = z.object({
+  id: z.uuid().optional(),
   token: tokenSchema,
 });
 
@@ -257,6 +259,7 @@ const proposalAbstractSchema = trimmedString(80, 8000);
 export const proposalCreateSchema = boundedJsonObject(
   {
     inviteToken: tokenSchema.optional(),
+    inviteId: z.uuid().optional(),
     sourceType: sourceTypeSchema.catch("direct").default("direct"),
     sourceRef: trimmedString(2, 200).optional(),
     referralCode: z
@@ -336,7 +339,7 @@ export const finalizeProposalSchema = z.object({
   finalStatus: z.enum(["accepted", "rejected", "needs-work"]),
   decisionNote: trimmedString(3, 10_000).optional(),
   /** ISO-8601 date by which speakers must upload their presentation slides. */
-  presentationDeadline: z.string().datetime().optional(),
+  presentationDeadline: z.iso.datetime().optional(),
 });
 
 export const adminProposalPatchSchema = z.object({
@@ -379,11 +382,11 @@ export const adminAuthVerifySchema = z.object({
 
 export const adminRetryOutboxSchema = z.object({
   limit: z.number().int().positive().max(500).default(20),
-  ids: z.array(z.string().uuid()).max(100).optional(),
+  ids: z.array(z.uuid()).max(100).optional(),
 });
 
 export const adminResetFailedOutboxSchema = z.object({
-  ids: z.array(z.string().uuid()).max(100).optional(),
+  ids: z.array(z.uuid()).max(100).optional(),
 });
 
 export const adminRunRemindersSchema = z.object({
@@ -406,7 +409,7 @@ export const internalCalendarRsvpIngestSchema = z
   .object({
     provider: z.string().trim().min(2).max(80).default("cloudflare_email_route"),
     sourceMessageId: z.string().trim().min(1).max(500).optional(),
-    receivedAt: z.string().datetime().optional(),
+    receivedAt: z.iso.datetime().optional(),
     fromEmail: normalizedEmailSchema.optional(),
     toEmail: normalizedEmailSchema.optional(),
     subject: z.string().trim().min(1).max(500).optional(),

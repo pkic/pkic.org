@@ -129,7 +129,6 @@ export async function changeRegistrationEmail(
   const now = nowIso();
   const confirmationToken = randomToken(24);
   const confirmationTokenHash = await sha256Hex(confirmationToken);
-  const confirmationExpiresAt = addHours(now, params.confirmationTtlHours);
   const confirmationDeadlineAt = addHours(now, PENDING_CONFIRMATION_DEADLINE_HOURS);
   const pendingEmailExpiresAt = addHours(now, params.confirmationTtlHours);
 
@@ -160,7 +159,7 @@ export async function changeRegistrationEmail(
          confirmed_at = NULL,
          updated_at = ?
      WHERE id = ?`,
-    [confirmationTokenHash, confirmationExpiresAt, confirmationDeadlineAt, now, registration.id],
+    [confirmationTokenHash, null, confirmationDeadlineAt, now, registration.id],
   );
 
   const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);

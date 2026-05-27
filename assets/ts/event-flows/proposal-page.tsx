@@ -349,6 +349,7 @@ async function main(): Promise<void> {
 
         const payload = proposalCreateSchema.parse({
           inviteToken: query.inviteToken ?? undefined,
+          inviteId: query.inviteId ?? undefined,
           sourceType: query.sourceType ?? "direct",
           sourceRef: query.sourceType ?? undefined,
           referralCode: query.referralCode ?? undefined,

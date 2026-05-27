@@ -26,7 +26,7 @@
 {{- $pkimmVersions := slice -}}
 {{- $pkimmCurrentBase := "" -}}
 {{- if $isPkimm -}}
-  {{- $data := index $.Site.Data "pkimm-versions" -}}
+  {{- $data := index hugo.Data "pkimm-versions" -}}
   {{- if and $data $data.versions -}}
     {{- $pkimmVersions = $data.versions -}}
     {{- range $pkimmVersions -}}

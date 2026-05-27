@@ -30,6 +30,7 @@ export function registrationPageUrl(
   event: EventRouteSource,
   query: {
     invite?: string;
+    inviteId?: string | null;
     ref?: string;
     source?: string;
     event?: string;
@@ -39,15 +40,22 @@ export function registrationPageUrl(
   return buildUrl(appBaseUrl, routes.registrationPath, {
     event: query.event ?? event.slug,
     invite: query.invite,
+    id: query.inviteId,
     ref: query.ref,
     source: query.source,
   });
 }
 
-export function registrationConfirmPageUrl(appBaseUrl: string, event: EventRouteSource, token: string): string {
+export function registrationConfirmPageUrl(
+  appBaseUrl: string,
+  event: EventRouteSource,
+  token: string,
+  registrationId?: string | null,
+): string {
   const routes = routesForEvent(event);
   return buildUrl(appBaseUrl, routes.registrationConfirmPath, {
     event: event.slug,
+    id: registrationId,
     token,
   });
 }
@@ -60,9 +68,14 @@ export function registrationManagePageUrl(appBaseUrl: string, event: EventRouteS
   });
 }
 
-export function inviteDeclineUrl(appBaseUrl: string, event: EventRouteSource, inviteToken: string): string {
+export function inviteDeclineUrl(
+  appBaseUrl: string,
+  event: EventRouteSource,
+  inviteToken: string,
+  inviteId?: string | null,
+): string {
   const routes = routesForEvent(event);
-  return buildUrl(appBaseUrl, routes.inviteDeclinePath, { token: inviteToken });
+  return buildUrl(appBaseUrl, routes.inviteDeclinePath, { id: inviteId, token: inviteToken });
 }
 
 export function proposalPageUrl(
@@ -70,6 +83,7 @@ export function proposalPageUrl(
   event: EventRouteSource,
   query: {
     invite?: string;
+    inviteId?: string | null;
     ref?: string;
     source?: string;
     event?: string;
@@ -79,6 +93,7 @@ export function proposalPageUrl(
   return buildUrl(appBaseUrl, routes.proposalPath, {
     event: query.event ?? event.slug,
     invite: query.invite,
+    id: query.inviteId,
     ref: query.ref,
     source: query.source,
   });

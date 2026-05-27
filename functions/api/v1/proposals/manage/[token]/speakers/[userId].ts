@@ -23,7 +23,7 @@ const speakerProfileSchema = z.object({
     .array(
       z.object({
         label: z.string().trim().max(128),
-        url: z.string().url().max(2048),
+        url: z.url().max(2048),
       }),
     )
     .max(10)

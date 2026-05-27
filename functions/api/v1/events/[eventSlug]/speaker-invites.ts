@@ -95,9 +95,10 @@ export async function onRequestPost(c: any): Promise<Response> {
         nominationCount++;
         const proposalUrl = proposalPageUrl(appBaseUrl, event, {
           invite: inviteToken,
+          inviteId: invite.id,
           source: "speaker_peer_nomination",
         });
-        const declineUrl = inviteDeclineUrl(appBaseUrl, event, inviteToken);
+        const declineUrl = inviteDeclineUrl(appBaseUrl, event, inviteToken, invite.id);
         const outboxId = await queueEmail(c.env.DB, {
           eventId: event.id,
           templateKey: "speaker_invite",

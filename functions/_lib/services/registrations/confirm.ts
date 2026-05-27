@@ -18,14 +18,16 @@ import type { RegistrationRecord } from "./types";
 
 export async function confirmRegistrationByToken(
   db: DatabaseLike,
-  payload: { token: string; waitlistClaimWindowHours: number },
+  payload: { token: string; registrationId?: string | null; waitlistClaimWindowHours: number },
 ): Promise<{ registration: RegistrationRecord; manageToken: string }> {
   const tokenHash = await sha256Hex(payload.token);
   const registration = await first<RegistrationRecord>(
     db,
     `SELECT * FROM registrations
-     WHERE confirmation_token_hash = ? AND status = 'pending_email_confirmation'`,
-    [tokenHash],
+     WHERE confirmation_token_hash = ?
+       AND status = 'pending_email_confirmation'
+       AND (? IS NULL OR id = ?)`,
+    [tokenHash, payload.registrationId ?? null, payload.registrationId ?? null],
   );
   if (!registration) {
     throw new AppError(404, "CONFIRM_TOKEN_INVALID", "Invalid or already-used confirmation token");

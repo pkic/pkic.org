@@ -317,9 +317,17 @@ export async function getInviteInviters(db: DatabaseLike, inviteId: string): Pro
   );
 }
 
-export async function findInviteByToken(db: DatabaseLike, token: string): Promise<InviteRecord> {
+export async function findInviteByToken(
+  db: DatabaseLike,
+  token: string,
+  inviteId?: string | null,
+): Promise<InviteRecord> {
   const tokenHash = await sha256Hex(token);
-  const invite = await first<InviteRecord>(db, "SELECT * FROM invites WHERE token_hash = ?", [tokenHash]);
+  const invite = await first<InviteRecord>(db, "SELECT * FROM invites WHERE token_hash = ? AND (? IS NULL OR id = ?)", [
+    tokenHash,
+    inviteId ?? null,
+    inviteId ?? null,
+  ]);
   if (!invite) {
     throw new AppError(404, "INVITE_NOT_FOUND", "Invite token is invalid");
   }

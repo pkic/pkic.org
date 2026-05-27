@@ -43,7 +43,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
 
-  // Look up the user + any active registration for this event by email.
+  // Look up the user + any registration that can still be managed for this event by email.
   // Silently no-op when not found to prevent enumeration.
   const row = await first<{
     reg_id: string;
@@ -58,7 +58,7 @@ export async function onRequestPost(c: any): Promise<Response> {
      JOIN   users u ON u.id = r.user_id
      WHERE  lower(u.email) = lower(?)
        AND  r.event_id = ?
-       AND  r.status NOT IN ('cancelled', 'cancelled_unauthorized')
+      AND  r.status != 'cancelled_unauthorized'
      ORDER  BY r.created_at DESC
      LIMIT  1`,
     [body.email, event.id],

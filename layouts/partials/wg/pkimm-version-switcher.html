@@ -12,7 +12,7 @@
   version root. This eliminates runtime 404s when versions diverge
   structurally and removes the need for any client-side href rewriting.
 */}}
-{{- $versions := index $.Site.Data "pkimm-versions" -}}
+{{- $versions := index hugo.Data "pkimm-versions" -}}
 {{- if and $versions $versions.versions -}}
   {{- $current := "" -}}
   {{- $currentPath := "" -}}

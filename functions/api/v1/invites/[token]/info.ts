@@ -38,10 +38,11 @@ export async function onRequestGet(c: any): Promise<Response> {
   c.set("sensitive", true);
 
   const tokenHash = await sha256Hex(c.req.param("token"));
+  const inviteId = new URL(c.req.raw.url).searchParams.get("id");
   const invite = await first<InviteRow>(
     c.env.DB,
-    "SELECT id, event_id, invitee_first_name, invite_type, status, expires_at FROM invites WHERE token_hash = ?",
-    [tokenHash],
+    "SELECT id, event_id, invitee_first_name, invite_type, status, expires_at FROM invites WHERE token_hash = ? AND (? IS NULL OR id = ?)",
+    [tokenHash, inviteId, inviteId],
   );
 
   if (!invite) {
@@ -66,11 +67,15 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   const registrationUrl =
     event && invite.invite_type === "attendee"
-      ? registrationPageUrl(appBaseUrl, event, { invite: c.req.param("token"), source: "invite" })
+      ? registrationPageUrl(appBaseUrl, event, { invite: c.req.param("token"), inviteId: invite.id, source: "invite" })
       : null;
   const proposalUrl =
     event && invite.invite_type === "speaker"
-      ? proposalPageUrl(appBaseUrl, event, { invite: c.req.param("token"), source: "speaker_invite" })
+      ? proposalPageUrl(appBaseUrl, event, {
+          invite: c.req.param("token"),
+          inviteId: invite.id,
+          source: "speaker_invite",
+        })
       : null;
 
   // Fetch all named inviters for social proof.  Only expose first/last name.

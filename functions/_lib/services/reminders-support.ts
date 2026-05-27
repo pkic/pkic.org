@@ -87,6 +87,7 @@ export interface ConfirmationReminderRow {
   confirmation_token_expires_at: string;
   confirmation_reminder_sent_at: string | null;
   pending_confirmation_deadline_at: string | null;
+  reminder_count: number;
   created_at: string;
   event_name: string;
   event_slug: string;
@@ -176,8 +177,13 @@ export function formatPendingConfirmationTimeLeft(deadlineIso: string, now = Dat
   return `${daysLeft} day${daysLeft === 1 ? "" : "s"}`;
 }
 
-export function confirmationReminderSubject(eventName: string, deadlineIso: string, now = Date.now()): string {
-  return hoursUntilIso(deadlineIso, now) <= 24
+export function confirmationReminderSubject(
+  eventName: string,
+  deadlineIso: string,
+  now = Date.now(),
+  isFinalReminder = false,
+): string {
+  return isFinalReminder || hoursUntilIso(deadlineIso, now) <= 24
     ? `Final reminder: confirm your registration or it will be cancelled — ${eventName}`
     : `Reminder: please confirm your registration for ${eventName}`;
 }

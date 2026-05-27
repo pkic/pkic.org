@@ -279,7 +279,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
       });
 
       // Send confirmation email to the pending email address
-      const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, emailResult.confirmationToken);
+      const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, emailResult.confirmationToken, updated.id);
       const userRecord = await first<{
         email: string;
         first_name: string | null;

@@ -40,7 +40,7 @@ import { OpenAPIRoute } from "chanfana";
 import { json } from "../../../_lib/http";
 import type { Env } from "../../../_lib/types";
 import { logInfo, logError } from "../../../_lib/logging";
-import { prepareAuditLog, writeAuditLog } from "../../../_lib/services/audit";
+import { writeAuditLog } from "../../../_lib/services/audit";
 
 interface SendgridEvent {
   event: string;
@@ -138,11 +138,7 @@ function extractBaseMessageId(sgMessageId: string): string {
   return dotIndex !== -1 ? sgMessageId.slice(0, dotIndex) : sgMessageId;
 }
 
-/**
- * Cancel any active registration for the user+event whose confirmation email bounced.
- * Without a working email the attendee cannot receive event details, so the seat is freed.
- */
-async function cancelRegistrationDueToBounce(
+async function auditRegistrationDeliveryFailure(
   db: NonNullable<Env["DB"]>,
   providerMessageId: string,
   reason: string,
@@ -155,17 +151,19 @@ async function cancelRegistrationDueToBounce(
   if (!outbox?.recipient_user_id || !outbox?.event_id) return;
 
   const reg = await db
-    .prepare(`SELECT id FROM registrations WHERE event_id = ? AND user_id = ? AND status != 'cancelled'`)
+    .prepare(
+      `SELECT id FROM registrations WHERE event_id = ? AND user_id = ? AND status = 'pending_email_confirmation'`,
+    )
     .bind(outbox.event_id, outbox.recipient_user_id)
     .first<{ id: string }>();
 
   if (!reg) return;
 
-  await db.batch([
-    db.prepare(`UPDATE registrations SET status = 'cancelled', updated_at = datetime('now') WHERE id = ?`).bind(reg.id),
-    prepareAuditLog(db, "system", null, "cancelled_bounce", "registration", reg.id, { reason }),
-  ]);
-  logInfo("REGISTRATION_CANCELLED_BOUNCE", { registrationId: reg.id, reason });
+  await writeAuditLog(db, "system", null, "registration_confirmation_delivery_failed", "registration", reg.id, {
+    reason,
+    providerMessageId,
+  });
+  logInfo("REGISTRATION_CONFIRMATION_DELIVERY_FAILED", { registrationId: reg.id, reason });
 }
 
 async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<void> {
@@ -200,7 +198,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
           .bind(`Hard bounce: ${reason}`, baseId)
           .run();
         await writeAuditLog(env.DB, "system", null, "email_hard_bounce", "email_outbox", outboxId, { reason, baseId });
-        await cancelRegistrationDueToBounce(env.DB, baseId, `Hard bounce: ${reason}`);
+        await auditRegistrationDeliveryFailure(env.DB, baseId, `Hard bounce: ${reason}`);
       } else {
         await env.DB.prepare(
           `UPDATE email_outbox
@@ -237,7 +235,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
         .bind(`Dropped: ${reason}`, baseId)
         .run();
       await writeAuditLog(env.DB, "system", null, "email_dropped", "email_outbox", outboxId, { reason, baseId });
-      await cancelRegistrationDueToBounce(env.DB, baseId, `Dropped: ${reason}`);
+      await auditRegistrationDeliveryFailure(env.DB, baseId, `Dropped: ${reason}`);
       break;
     }
 
@@ -253,7 +251,7 @@ async function processSendgridEvent(env: Env, event: SendgridEvent): Promise<voi
         email: event.email,
         baseId,
       });
-      await cancelRegistrationDueToBounce(env.DB, baseId, "Spam report received");
+      await auditRegistrationDeliveryFailure(env.DB, baseId, "Spam report received");
       if (event.email) {
         await env.DB.prepare(
           `INSERT OR IGNORE INTO unsubscribes (id, email, channel, scope_type, scope_ref, reason, created_at)

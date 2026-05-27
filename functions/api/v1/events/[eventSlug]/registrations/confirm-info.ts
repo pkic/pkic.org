@@ -4,6 +4,7 @@ import { nowIso } from "../../../../../_lib/utils/time";
 import { first } from "../../../../../_lib/db/queries";
 
 interface ConfirmInfoRow {
+  token_matches: number;
   first_name: string | null;
   last_name: string | null;
   email: string | null;
@@ -20,6 +21,7 @@ interface ConfirmInfoResponse {
   eventName: string | null;
   /** True when the confirmation token exists but has passed its expiry time. */
   expired: boolean;
+  recoverable: boolean;
 }
 
 /**
@@ -37,6 +39,7 @@ interface ConfirmInfoResponse {
 export async function onRequestGet(c: any): Promise<Response> {
   c.set("sensitive", true);
   const token = new URL(c.req.raw.url).searchParams.get("token");
+  const registrationId = new URL(c.req.raw.url).searchParams.get("id");
 
   const empty: ConfirmInfoResponse = {
     firstName: null,
@@ -45,6 +48,7 @@ export async function onRequestGet(c: any): Promise<Response> {
     organizationName: null,
     eventName: null,
     expired: false,
+    recoverable: false,
   };
 
   if (!token || token.trim().length === 0) {
@@ -55,14 +59,17 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   const row = await first<ConfirmInfoRow>(
     c.env.DB,
-    `SELECT u.first_name, u.last_name, u.email, u.organization_name, e.name AS event_name, r.confirmation_token_expires_at
+    `SELECT CASE WHEN r.confirmation_token_hash = ? THEN 1 ELSE 0 END AS token_matches,
+            u.first_name, u.last_name, u.email, u.organization_name,
+            e.name AS event_name, r.confirmation_token_expires_at
      FROM registrations r
      JOIN users u ON u.id = r.user_id
      JOIN events e ON e.id = r.event_id
-     WHERE r.confirmation_token_hash = ?
+     WHERE (r.confirmation_token_hash = ? OR (? IS NOT NULL AND r.id = ?))
        AND r.status = 'pending_email_confirmation'
+       AND e.slug = ?
      LIMIT 1`,
-    [tokenHash],
+    [tokenHash, tokenHash, registrationId, registrationId, c.req.param("eventSlug")],
   );
 
   if (!row) {
@@ -70,14 +77,18 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   const now = nowIso();
-  const expired = Boolean(row.confirmation_token_expires_at && row.confirmation_token_expires_at < now);
+  const tokenMatches = row.token_matches === 1;
+  const expired = Boolean(
+    !tokenMatches || (row.confirmation_token_expires_at && row.confirmation_token_expires_at < now),
+  );
 
   return json({
-    firstName: row.first_name ?? null,
-    lastName: row.last_name ?? null,
-    email: row.email ?? null,
-    organizationName: row.organization_name ?? null,
+    firstName: tokenMatches ? (row.first_name ?? null) : null,
+    lastName: tokenMatches ? (row.last_name ?? null) : null,
+    email: tokenMatches ? (row.email ?? null) : null,
+    organizationName: tokenMatches ? (row.organization_name ?? null) : null,
     eventName: row.event_name,
     expired,
+    recoverable: !tokenMatches,
   } satisfies ConfirmInfoResponse);
 }

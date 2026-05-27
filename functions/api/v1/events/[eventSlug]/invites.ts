@@ -116,10 +116,11 @@ export async function onRequestPost(c: any): Promise<Response> {
         inviteCount++;
         const registrationUrl = registrationPageUrl(appBaseUrl, event, {
           invite: inviteToken,
+          inviteId: invite.id,
           ref: referralCode.code,
           source: "invite",
         });
-        const declineUrl = inviteDeclineUrl(appBaseUrl, event, inviteToken);
+        const declineUrl = inviteDeclineUrl(appBaseUrl, event, inviteToken, invite.id);
         const outboxId = await queueEmail(c.env.DB, {
           eventId: event.id,
           templateKey: "attendee_invite",

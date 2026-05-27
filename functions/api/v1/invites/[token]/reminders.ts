@@ -12,7 +12,8 @@ import { inviteReminderPreferenceSchema } from "../../../../../assets/shared/sch
 export async function onRequestPost(c: any): Promise<Response> {
   c.set("sensitive", true);
   const body = await parseJsonBody(c.req, inviteReminderPreferenceSchema);
-  const invite = await findInviteByToken(c.env.DB, c.req.param("token"));
+  const inviteId = new URL(c.req.raw.url).searchParams.get("id");
+  const invite = await findInviteByToken(c.env.DB, c.req.param("token"), inviteId);
 
   if (body.action === "unsubscribe") {
     await declineInvite(c.env.DB, {
