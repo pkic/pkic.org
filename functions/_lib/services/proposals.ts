@@ -796,27 +796,35 @@ export async function updateReviewById(
   const status = payload.status ?? existing.status;
   const submittedAt = status === "submitted" ? (existing.submitted_at ?? now) : null;
 
+  const fields: string[] = ["status = ?", "submitted_at = ?", "updated_at = ?"];
+  const params: Array<string | number | null> = [status, submittedAt, now];
+
+  if (payload.recommendation !== undefined) {
+    fields.push("recommendation = ?");
+    params.push(payload.recommendation);
+  }
+
+  if (payload.score !== undefined) {
+    fields.push("score = ?");
+    params.push(payload.score);
+  }
+
+  if (payload.reviewerComment !== undefined) {
+    fields.push("reviewer_comment = ?");
+    params.push(payload.reviewerComment);
+  }
+
+  if (payload.applicantNote !== undefined) {
+    fields.push("applicant_note = ?");
+    params.push(payload.applicantNote);
+  }
+
+  params.push(reviewId);
+
   await run(
     db,
-    `UPDATE proposal_reviews
-     SET recommendation = COALESCE(?, recommendation),
-         status = ?,
-         score = COALESCE(?, score),
-         reviewer_comment = COALESCE(?, reviewer_comment),
-         applicant_note = COALESCE(?, applicant_note),
-         submitted_at = ?,
-         updated_at = ?
-     WHERE id = ?`,
-    [
-      payload.recommendation ?? null,
-      status,
-      payload.score ?? null,
-      payload.reviewerComment ?? null,
-      payload.applicantNote ?? null,
-      submittedAt,
-      now,
-      reviewId,
-    ],
+    `UPDATE proposal_reviews SET ${fields.join(", ")} WHERE id = ?`,
+    params,
   );
 
   const updated = await first<ProposalReviewRecord>(db, "SELECT * FROM proposal_reviews WHERE id = ?", [reviewId]);

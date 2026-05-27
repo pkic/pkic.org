@@ -21,12 +21,12 @@ interface McpToolDefinition {
 
 const eventTools: McpToolDefinition[] = [
   {
-    name: "events.list",
+    name: "events_list",
     description: "List events the authenticated user can access.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "events.proposals.list",
+    name: "events_proposals_list",
     description: "List event proposals visible to the authenticated reviewer.",
     inputSchema: {
       type: "object",
@@ -39,7 +39,7 @@ const eventTools: McpToolDefinition[] = [
     },
   },
   {
-    name: "events.proposals.read",
+    name: "events_proposals_read",
     description: "Read one proposal, including abstract and review metadata.",
     inputSchema: {
       type: "object",
@@ -48,7 +48,7 @@ const eventTools: McpToolDefinition[] = [
     },
   },
   {
-    name: "events.reviews.getMine",
+    name: "events_reviews_get_mine",
     description: "Read the authenticated user's review or draft for a proposal.",
     inputSchema: {
       type: "object",
@@ -57,7 +57,7 @@ const eventTools: McpToolDefinition[] = [
     },
   },
   {
-    name: "events.reviews.saveDraft",
+    name: "events_reviews_save_draft",
     description: "Save a complete draft review for the authenticated reviewer.",
     inputSchema: {
       type: "object",
@@ -72,7 +72,7 @@ const eventTools: McpToolDefinition[] = [
     },
   },
   {
-    name: "events.reviews.submit",
+    name: "events_reviews_submit",
     description: "Submit a complete review as the authenticated reviewer.",
     inputSchema: {
       type: "object",

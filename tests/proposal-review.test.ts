@@ -140,6 +140,51 @@ describe("proposal review and finalize", () => {
       reviewerComment: { from: "Good", to: "Excellent" },
       applicantNote: { from: null, to: "Ready for acceptance" },
     });
+
+    const clearResponse = await patchReview(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews/${reviews[0].id}`, {
+          method: "PATCH",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${admin1Token}`,
+          },
+          body: JSON.stringify({ score: null, reviewerComment: null, applicantNote: null }),
+        }),
+        { proposalId, reviewId: reviews[0].id },
+      ),
+    );
+
+    expect(clearResponse.status).toBe(200);
+
+    const clearedReviewRows = await queryAll<{
+      score: number | null;
+      reviewer_comment: string | null;
+      applicant_note: string | null;
+    }>(
+      env.DB,
+      "SELECT score, reviewer_comment, applicant_note FROM proposal_reviews WHERE id = ?",
+      [reviews[0].id],
+    );
+    expect(clearedReviewRows).toEqual([
+      {
+        score: null,
+        reviewer_comment: null,
+        applicant_note: null,
+      },
+    ]);
+
+    const clearedAuditRows = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'proposal_review_upserted' ORDER BY created_at ASC",
+    );
+    expect(clearedAuditRows).toHaveLength(3);
+    expect(JSON.parse(clearedAuditRows[2].details_json)).toMatchObject({
+      score: { from: 10, to: null },
+      reviewerComment: { from: "Excellent", to: null },
+      applicantNote: { from: "Ready for acceptance", to: null },
+    });
   });
 
   it("enforces minimum reviews before final decision", async () => {
