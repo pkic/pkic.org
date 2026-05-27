@@ -40,12 +40,13 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
 
   const existing = await first<{
     recommendation: string;
+    status: string;
     score: number | null;
     reviewer_comment: string | null;
     applicant_note: string | null;
   }>(
     requestDb(c),
-    `SELECT recommendation, score, reviewer_comment, applicant_note
+    `SELECT recommendation, status, score, reviewer_comment, applicant_note
      FROM proposal_reviews
      WHERE id = ?`,
     [reviewId],
@@ -57,12 +58,14 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     const changes = buildProposalReviewAuditDetails(
       {
         recommendation: existing.recommendation,
+        status: existing.status,
         score: existing.score,
         reviewerComment: existing.reviewer_comment ?? null,
         applicantNote: existing.applicant_note ?? null,
       },
       {
         recommendation: review.recommendation,
+        status: review.status,
         score: review.score,
         reviewerComment: review.reviewer_comment ?? null,
         applicantNote: review.applicant_note ?? null,

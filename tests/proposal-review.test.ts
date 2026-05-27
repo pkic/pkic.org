@@ -225,4 +225,111 @@ describe("proposal review and finalize", () => {
     ]);
     expect(status[0].status).toBe("accepted");
   });
+
+  it("does not count draft reviews toward final decision threshold", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, admin1Id, admin2Id } = await seedProposal(env.DB, eventId);
+
+    const admin1Token = await createAdminSession(env.DB, admin1Id, "token-admin-1");
+    const admin2Token = await createAdminSession(env.DB, admin2Id, "token-admin-2");
+
+    await upsertReview(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${admin1Token}`,
+          },
+          body: JSON.stringify({ recommendation: "accept", score: 9, reviewerComment: "Good", status: "draft" }),
+        }),
+        { proposalId },
+      ),
+    );
+
+    const draftRows = await queryAll<{ status: string; submitted_at: string | null }>(
+      env.DB,
+      "SELECT status, submitted_at FROM proposal_reviews WHERE proposal_id = ? AND reviewer_user_id = ?",
+      [proposalId, admin1Id],
+    );
+    expect(draftRows).toEqual([{ status: "draft", submitted_at: null }]);
+
+    await expect(
+      finalizeProposal(
+        createContext(
+          env,
+          new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
+            method: "POST",
+            headers: {
+              "content-type": "application/json",
+              authorization: `Bearer ${admin1Token}`,
+            },
+            body: JSON.stringify({ finalStatus: "accepted", minReviewsRequired: 1 }),
+          }),
+          { proposalId },
+        ),
+      ),
+    ).rejects.toMatchObject({ code: "PROPOSAL_REVIEW_THRESHOLD_NOT_MET" });
+
+    await upsertReview(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${admin1Token}`,
+          },
+          body: JSON.stringify({ recommendation: "accept", score: 9, reviewerComment: "Good", status: "submitted" }),
+        }),
+        { proposalId },
+      ),
+    );
+
+    await upsertReview(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/reviews`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${admin2Token}`,
+          },
+          body: JSON.stringify({
+            recommendation: "accept",
+            score: 8,
+            reviewerComment: "Also good",
+            status: "submitted",
+          }),
+        }),
+        { proposalId },
+      ),
+    );
+
+    const submittedRows = await queryAll<{ status: string; submitted_at: string | null }>(
+      env.DB,
+      "SELECT status, submitted_at FROM proposal_reviews WHERE proposal_id = ? AND reviewer_user_id = ?",
+      [proposalId, admin1Id],
+    );
+    expect(submittedRows[0].status).toBe("submitted");
+    expect(submittedRows[0].submitted_at).toBeTruthy();
+
+    const finalizeResponse = await finalizeProposal(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/finalize`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${admin1Token}`,
+          },
+          body: JSON.stringify({ finalStatus: "accepted", minReviewsRequired: 1 }),
+        }),
+        { proposalId },
+      ),
+    );
+
+    expect(finalizeResponse.status).toBe(200);
+  });
 });

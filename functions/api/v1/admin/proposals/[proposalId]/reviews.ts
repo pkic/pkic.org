@@ -54,12 +54,13 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const existing = await first<{
     id: string;
     recommendation: string;
+    status: string;
     score: number | null;
     reviewer_comment: string | null;
     applicant_note: string | null;
   }>(
     requestDb(c),
-    `SELECT id, recommendation, score, reviewer_comment, applicant_note
+    `SELECT id, recommendation, status, score, reviewer_comment, applicant_note
      FROM proposal_reviews
      WHERE proposal_id = ? AND reviewer_user_id = ?`,
     [proposalId, admin.id],
@@ -69,6 +70,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     proposalId,
     reviewerUserId: admin.id,
     recommendation: body.recommendation,
+    status: body.status,
     score: body.score,
     reviewerComment: body.reviewerComment,
     applicantNote: body.applicantNote,
@@ -76,12 +78,14 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const before = {
     recommendation: existing?.recommendation ?? null,
+    status: existing?.status ?? null,
     score: existing?.score ?? null,
     reviewerComment: existing?.reviewer_comment ?? null,
     applicantNote: existing?.applicant_note ?? null,
   };
   const after = {
     recommendation: review.recommendation,
+    status: review.status,
     score: review.score,
     reviewerComment: review.reviewer_comment ?? null,
     applicantNote: review.applicant_note ?? null,

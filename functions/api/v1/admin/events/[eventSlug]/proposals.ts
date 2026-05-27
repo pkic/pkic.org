@@ -49,6 +49,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
      LEFT JOIN (
        SELECT proposal_id, COUNT(*) AS review_count
        FROM proposal_reviews
+       WHERE status = 'submitted'
        GROUP BY proposal_id
      ) rv ON rv.proposal_id = sp.id
      LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id

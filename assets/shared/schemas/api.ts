@@ -312,6 +312,7 @@ export const proposalManageSchema = boundedJsonObject(
 export const reviewUpsertSchema = z.object({
   recommendation: z.enum(["accept", "reject", "needs-work"]),
   score: z.number().int().min(1).max(10),
+  status: z.enum(["draft", "submitted"]).optional().default("submitted"),
   reviewerComment: z.preprocess(
     (value) => (typeof value === "string" && value.trim() === "" ? undefined : value),
     trimmedString(3, 10_000).optional(),
@@ -325,6 +326,7 @@ export const reviewUpsertSchema = z.object({
 export const reviewPatchSchema = z.object({
   recommendation: z.enum(["accept", "reject", "needs-work"]).optional(),
   score: z.number().int().min(1).max(10).nullable().optional(),
+  status: z.enum(["draft", "submitted"]).optional(),
   reviewerComment: z.preprocess(
     (value) => (typeof value === "string" && value.trim() === "" ? null : value),
     trimmedString(3, 10_000).nullable().optional(),

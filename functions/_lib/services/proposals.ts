@@ -32,9 +32,11 @@ export interface ProposalReviewRecord {
   proposal_id: string;
   reviewer_user_id: string;
   recommendation: "accept" | "reject" | "needs-work";
+  status: "draft" | "submitted";
   score: number | null;
   reviewer_comment: string | null;
   applicant_note: string | null;
+  submitted_at: string | null;
   created_at: string;
   updated_at: string;
   reviewer_email?: string;
@@ -651,12 +653,15 @@ export async function upsertProposalReview(
     proposalId: string;
     reviewerUserId: string;
     recommendation: "accept" | "reject" | "needs-work";
+    status?: "draft" | "submitted";
     score?: number | null;
     reviewerComment?: string | null;
     applicantNote?: string | null;
   },
 ): Promise<ProposalReviewRecord> {
   const now = nowIso();
+  const status = payload.status ?? "submitted";
+  const submittedAt = status === "submitted" ? now : null;
   const existing = await first<ProposalReviewRecord>(
     db,
     `SELECT * FROM proposal_reviews
@@ -670,9 +675,11 @@ export async function upsertProposalReview(
       proposal_id: payload.proposalId,
       reviewer_user_id: payload.reviewerUserId,
       recommendation: payload.recommendation,
+      status,
       score: payload.score ?? null,
       reviewer_comment: payload.reviewerComment ?? null,
       applicant_note: payload.applicantNote ?? null,
+      submitted_at: submittedAt,
       created_at: now,
       updated_at: now,
     };
@@ -680,17 +687,19 @@ export async function upsertProposalReview(
     await run(
       db,
       `INSERT INTO proposal_reviews (
-        id, proposal_id, reviewer_user_id, recommendation, score,
-        reviewer_comment, applicant_note, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        id, proposal_id, reviewer_user_id, recommendation, status, score,
+        reviewer_comment, applicant_note, submitted_at, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         review.id,
         review.proposal_id,
         review.reviewer_user_id,
         review.recommendation,
+        review.status,
         review.score,
         review.reviewer_comment,
         review.applicant_note,
+        review.submitted_at,
         review.created_at,
         review.updated_at,
       ],
@@ -702,13 +711,15 @@ export async function upsertProposalReview(
   await run(
     db,
     `UPDATE proposal_reviews
-     SET recommendation = ?, score = ?, reviewer_comment = ?, applicant_note = ?, updated_at = ?
+     SET recommendation = ?, status = ?, score = ?, reviewer_comment = ?, applicant_note = ?, submitted_at = ?, updated_at = ?
      WHERE id = ?`,
     [
       payload.recommendation,
+      status,
       payload.score ?? null,
       payload.reviewerComment ?? null,
       payload.applicantNote ?? null,
+      status === "submitted" ? (existing.submitted_at ?? now) : null,
       now,
       existing.id,
     ],
@@ -725,12 +736,14 @@ export async function upsertProposalReview(
 export function buildProposalReviewAuditDetails(
   before: {
     recommendation: string | null;
+    status: string | null;
     score: number | null;
     reviewerComment: string | null;
     applicantNote: string | null;
   },
   after: {
     recommendation: string | null;
+    status: string | null;
     score: number | null;
     reviewerComment: string | null;
     applicantNote: string | null;
@@ -768,6 +781,7 @@ export async function updateReviewById(
   reviewId: string,
   payload: {
     recommendation?: "accept" | "reject" | "needs-work";
+    status?: "draft" | "submitted";
     score?: number | null;
     reviewerComment?: string | null;
     applicantNote?: string | null;
@@ -778,21 +792,29 @@ export async function updateReviewById(
     throw new AppError(404, "PROPOSAL_REVIEW_NOT_FOUND", "Proposal review not found");
   }
 
+  const now = nowIso();
+  const status = payload.status ?? existing.status;
+  const submittedAt = status === "submitted" ? (existing.submitted_at ?? now) : null;
+
   await run(
     db,
     `UPDATE proposal_reviews
      SET recommendation = COALESCE(?, recommendation),
+         status = ?,
          score = COALESCE(?, score),
          reviewer_comment = COALESCE(?, reviewer_comment),
          applicant_note = COALESCE(?, applicant_note),
+         submitted_at = ?,
          updated_at = ?
      WHERE id = ?`,
     [
       payload.recommendation ?? null,
+      status,
       payload.score ?? null,
       payload.reviewerComment ?? null,
       payload.applicantNote ?? null,
-      nowIso(),
+      submittedAt,
+      now,
       reviewId,
     ],
   );
@@ -825,7 +847,7 @@ export async function finalizeProposalDecision(
 
   const reviewCountRow = await first<{ total: number }>(
     db,
-    "SELECT COUNT(*) AS total FROM proposal_reviews WHERE proposal_id = ?",
+    "SELECT COUNT(*) AS total FROM proposal_reviews WHERE proposal_id = ? AND status = 'submitted'",
     [payload.proposalId],
   );
   const reviewCount = Number(reviewCountRow?.total ?? 0);
@@ -915,6 +937,7 @@ export async function listProposalsForEvent(db: DatabaseLike, eventId: string): 
      LEFT JOIN (
        SELECT proposal_id, COUNT(*) AS review_count
        FROM proposal_reviews
+       WHERE status = 'submitted'
        GROUP BY proposal_id
      ) rv ON rv.proposal_id = sp.id
      LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id

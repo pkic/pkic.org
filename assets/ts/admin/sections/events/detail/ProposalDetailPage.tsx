@@ -410,6 +410,7 @@ function ReviewCard({ review }: { review: ProposalReview }) {
       <div class="card-body py-2 px-3">
         <div class="d-flex gap-2 align-items-center mb-2 flex-wrap">
           <span class={`badge text-bg-${recColour}`}>{review.recommendation}</span>
+          {review.status === "draft" && <span class="badge text-bg-secondary">Draft</span>}
           {review.score != null && <span class="badge text-bg-light border text-body">Score {review.score}/10</span>}
           <span class="small text-muted">{reviewer}</span>
           <span class="small text-muted ms-auto">{fmt(review.updated_at)}</span>
@@ -512,7 +513,9 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const { proposal, access, form, minReviewsRequired } = data;
   const proposer =
     [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ") || proposal.proposer_email;
-  const quorumMet = reviews.length >= minReviewsRequired;
+  const submittedReviewCount = reviews.filter((review) => review.status === "submitted").length;
+  const myReview = reviews.find((review) => review.reviewer_email === authEmail.value);
+  const quorumMet = submittedReviewCount >= minReviewsRequired;
   const needsWorkRequiresNote = isNeedsWorkDecision(decisionStatus) && !decisionNote.trim();
   const selectedDecisionPreview =
     decisionPreview?.messages.find((message) => message.id === selectedDecisionPreviewId) ??
@@ -543,7 +546,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const tabItems = [
     { key: "submission", label: "Submission" },
     { key: "speakers", label: `Speakers (${loadingSub ? "…" : speakers.length})` },
-    { key: "reviews", label: `Reviews (${loadingSub ? "…" : reviews.length})` },
+    { key: "reviews", label: `Reviews (${loadingSub ? "…" : submittedReviewCount})` },
     { key: "audit-log", label: "Audit Log" },
     ...(access.canFinalize ? [{ key: "decision", label: "Decision" }] : []),
   ];
@@ -578,12 +581,12 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     }
   }
 
-  async function handleReview(e: Event) {
+  async function handleReview(e: Event, status: "draft" | "submitted" = "submitted") {
     e.preventDefault();
     setSavingReview(true);
     try {
       const score = parseInt(reviewScore, 10);
-      const body: Record<string, unknown> = { recommendation: reviewRec, score };
+      const body: Record<string, unknown> = { recommendation: reviewRec, score, status };
       if (reviewComment.trim()) body.reviewerComment = reviewComment.trim();
       if (reviewApplicantNote.trim()) body.applicantNote = reviewApplicantNote.trim();
       const result = await api<{ review: ProposalReview }>(`/api/v1/admin/proposals/${proposalId}/reviews`, {
@@ -594,7 +597,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
         const idx = prev.findIndex((r) => r.reviewer_user_id === result.review.reviewer_user_id);
         return idx >= 0 ? prev.map((r, i) => (i === idx ? result.review : r)) : [...prev, result.review];
       });
-      toast("Review saved", "success");
+      toast(status === "draft" ? "Review draft saved" : "Review submitted", "success");
       void reload();
     } catch (err) {
       toast((err as Error).message, "error");
@@ -693,7 +696,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
           <div class="card card-body p-3 h-100">
             <div class="small text-muted mb-1">Reviews</div>
             <div>
-              {loadingSub ? "…" : reviews.length} / {minReviewsRequired} required
+              {loadingSub ? "…" : submittedReviewCount} / {minReviewsRequired} required
             </div>
             <div class={`small ${quorumMet ? "text-success" : "text-warning"}`}>
               {quorumMet ? "Quorum met ✓" : "Quorum not met"}
@@ -811,13 +814,13 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                   <div class="d-flex align-items-center gap-3 flex-wrap">
                     <span class="text-muted small">Review progress</span>
                     <strong class="small">
-                      {loadingSub ? "…" : reviews.length} / {minReviewsRequired}
+                      {loadingSub ? "…" : submittedReviewCount} / {minReviewsRequired}
                     </strong>
                     {quorumMet ? (
                       <span class="badge text-bg-success">Quorum met</span>
                     ) : (
                       <span class="badge text-bg-warning">
-                        {minReviewsRequired - (loadingSub ? 0 : reviews.length)} more needed
+                        {minReviewsRequired - (loadingSub ? 0 : submittedReviewCount)} more needed
                       </span>
                     )}
                   </div>
@@ -836,11 +839,15 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                 <div class="card mt-3">
                   <div class="card-header">
                     <h6 class="mb-0">
-                      {reviews.some((r) => r.reviewer_email === authEmail.value) ? "Edit My Review" : "Add Review"}
+                      {myReview?.status === "submitted"
+                        ? "Edit My Review"
+                        : myReview?.status === "draft"
+                          ? "Edit My Draft"
+                          : "Add Review"}
                     </h6>
                   </div>
                   <div class="card-body">
-                    <form onSubmit={(e) => void handleReview(e)}>
+                    <form onSubmit={(e) => void handleReview(e, "submitted")}>
                       <div class="row g-3">
                         <div class="col-md-5">
                           <label class="form-label fw-semibold">Recommendation</label>
@@ -896,9 +903,21 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                             placeholder="Feedback or clarification request for the applicant…"
                           />
                         </div>
-                        <div class="col-12">
+                        <div class="col-12 d-flex gap-2 flex-wrap">
+                          <button
+                            type="button"
+                            class="btn btn-outline-secondary"
+                            disabled={savingReview}
+                            onClick={(e) => void handleReview(e, "draft")}
+                          >
+                            {savingReview ? "Saving…" : "Save Draft"}
+                          </button>
                           <button type="submit" class="btn btn-primary" disabled={savingReview}>
-                            {savingReview ? "Saving…" : "Submit Review"}
+                            {savingReview
+                              ? "Saving…"
+                              : myReview?.status === "submitted"
+                                ? "Update Review"
+                                : "Submit Review"}
                           </button>
                         </div>
                       </div>
@@ -943,7 +962,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                   <>
                     {!quorumMet && !loadingSub && (
                       <div class="alert alert-warning">
-                        <strong>Quorum not met.</strong> {reviews.length} of {minReviewsRequired} required review
+                        <strong>Quorum not met.</strong> {submittedReviewCount} of {minReviewsRequired} required review
                         {minReviewsRequired !== 1 ? "s" : ""} completed. Add more reviews before finalizing.
                       </div>
                     )}
@@ -1142,7 +1161,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                 </dd>
                 <dt>Reviews</dt>
                 <dd class="mb-2">
-                  {loadingSub ? "…" : reviews.length} / {minReviewsRequired} required
+                  {loadingSub ? "…" : submittedReviewCount} / {minReviewsRequired} required
                 </dd>
                 <dt>Last updated</dt>
                 <dd class="mb-0">{fmt(proposal.updated_at)}</dd>

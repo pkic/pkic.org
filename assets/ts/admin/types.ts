@@ -163,9 +163,11 @@ export interface ProposalReview {
   id: string;
   reviewer_user_id: string;
   recommendation: "accept" | "reject" | "needs-work";
+  status: "draft" | "submitted";
   score: number | null;
   reviewer_comment: string | null;
   applicant_note: string | null;
+  submitted_at: string | null;
   updated_at: string;
   reviewer_email?: string;
   reviewer_first_name?: string | null;
