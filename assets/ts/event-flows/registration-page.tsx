@@ -227,6 +227,7 @@ async function main(): Promise<void> {
           sourceRef: query.sourceType ?? undefined,
           customAnswers: readCustomFieldValues(form),
           inviteToken: query.inviteToken ?? undefined,
+          inviteId: query.inviteId ?? undefined,
           referralCode: query.referralCode ?? undefined,
           consents: readConsentValues(form),
         });

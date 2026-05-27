@@ -17,13 +17,14 @@ import { registrationManagePageUrl } from "../../../../../_lib/services/frontend
 import type { UserRecord } from "../../../../../_lib/services/users";
 import { registrationConfirmSchema } from "../../../../../../assets/shared/schemas/api";
 
-async function confirmRegistration(c: any, token: string): Promise<Response> {
+async function confirmRegistration(c: any, token: string, registrationId?: string | null): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
   const { registration, manageToken } = await confirmRegistrationByToken(c.env.DB, {
     token,
+    registrationId,
     waitlistClaimWindowHours: config.waitlistClaimWindowHours,
   });
 
@@ -136,21 +137,23 @@ async function confirmRegistration(c: any, token: string): Promise<Response> {
 
 export async function onRequestPost(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, registrationConfirmSchema);
-  return confirmRegistration(c, body.token);
+  return confirmRegistration(c, body.token, body.id);
 }
 
 export async function onRequestGet(c: any): Promise<Response> {
-  const token = new URL(c.req.raw.url).searchParams.get("token");
+  const params = new URL(c.req.raw.url).searchParams;
+  const token = params.get("token");
+  const id = params.get("id");
   if (!token) {
     return json({ error: { code: "TOKEN_REQUIRED", message: "token query parameter is required" } }, 400);
   }
 
-  const parsed = registrationConfirmSchema.safeParse({ token });
+  const parsed = registrationConfirmSchema.safeParse({ token, id: id ?? undefined });
   if (!parsed.success) {
     return json({ error: { code: "VALIDATION_ERROR", message: "Invalid token" } }, 400);
   }
 
-  return confirmRegistration(c, parsed.data.token);
+  return confirmRegistration(c, parsed.data.token, parsed.data.id);
 }
 
 export async function onRequest(c: any): Promise<Response> {

@@ -10,8 +10,8 @@ import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../../../_lib/services/events";
 import { first, run } from "../../../../../../../_lib/db/queries";
 import { randomToken, sha256Hex } from "../../../../../../../_lib/utils/crypto";
-import { nowIso, addHours } from "../../../../../../../_lib/utils/time";
-import { getConfig, resolveAppBaseUrl } from "../../../../../../../_lib/config";
+import { nowIso } from "../../../../../../../_lib/utils/time";
+import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { buildBadgeAttachment } from "../../../../../../../_lib/email/attachments";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
@@ -34,7 +34,6 @@ import { requestDb, type AdminContext } from "../../../../../../../_lib/db/conte
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
-  const config = getConfig(c.env, c.req.raw);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const registrationId = c.req.param("registrationId");
@@ -85,17 +84,16 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     // Rotate confirmation token and resend the confirm-email
     const newToken = randomToken(24);
     const newTokenHash = await sha256Hex(newToken);
-    const newExpiresAt = addHours(now, config.manageTokenTtlHours);
 
     await run(
       requestDb(c),
       `UPDATE registrations
        SET confirmation_token_hash = ?, confirmation_token_expires_at = ?, confirmation_reminder_sent_at = ?, updated_at = ?
        WHERE id = ?`,
-      [newTokenHash, newExpiresAt, now, now, registration.id],
+      [newTokenHash, null, now, now, registration.id],
     );
 
-    const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, newToken);
+    const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, newToken, registration.id);
 
     outboxId = await queueEmail(requestDb(c), {
       eventId: event.id,

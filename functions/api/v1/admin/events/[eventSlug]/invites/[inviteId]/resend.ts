@@ -60,7 +60,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const token = await refreshInviteToken(requestDb(c), invite.id);
-  const declineUrl = inviteDeclineUrl(appBaseUrl, event, token);
+  const declineUrl = inviteDeclineUrl(appBaseUrl, event, token, invite.id);
 
   const now = nowIso();
   await run(
@@ -79,8 +79,8 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const actionUrl =
     invite.invite_type === "attendee"
-      ? registrationPageUrl(appBaseUrl, event, { invite: token, source: "invite_resend" })
-      : proposalPageUrl(appBaseUrl, event, { invite: token, source: "speaker_invite_resend" });
+      ? registrationPageUrl(appBaseUrl, event, { invite: token, inviteId: invite.id, source: "invite_resend" })
+      : proposalPageUrl(appBaseUrl, event, { invite: token, inviteId: invite.id, source: "speaker_invite_resend" });
 
   const templateKey = invite.invite_type === "attendee" ? "attendee_invite" : "speaker_invite";
   const subject = invite.invite_type === "attendee" ? `Invitation: ${event.name}` : `Speaker invitation: ${event.name}`;

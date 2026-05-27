@@ -27,6 +27,7 @@ import { buildAttendanceEmailData } from "../../../../_lib/utils/attendance";
 import { buildAcceptedTermsText, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
 import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../_lib/services/frontend-links";
 import { checkEmailDomainMx } from "../../../../_lib/email/mx-check";
+import { first } from "../../../../_lib/db/queries";
 import { registrationCreateSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(c: any): Promise<Response> {
@@ -53,7 +54,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   let inviteId: string | null = null;
   if (body.inviteToken) {
-    const invite = await findInviteByToken(c.env.DB, body.inviteToken);
+    const invite = await findInviteByToken(c.env.DB, body.inviteToken, body.inviteId);
     if (invite.event_id !== event.id || invite.invite_type !== "attendee") {
       throw new AppError(400, "INVITE_INVALID", "Invite token is not valid for attendee registration for this event");
     }
@@ -106,7 +107,8 @@ export async function onRequestPost(c: any): Promise<Response> {
     customAnswersJson: Object.keys(customAnswers).length > 0 ? JSON.stringify(customAnswers) : null,
     inviteId,
     referredByCode: body.referralCode,
-    confirmationTtlHours: config.manageTokenTtlHours,
+    pendingConfirmationDeadlineHours:
+      (config.maxPendingConfirmationReminders + 1) * config.pendingConfirmationReminderIntervalDays * 24,
   });
 
   await persistConsents(c.env.DB, {
@@ -129,13 +131,20 @@ export async function onRequestPost(c: any): Promise<Response> {
     });
   }
 
-  const referralCode = await createReferralCode(c.env.DB, {
-    eventId: event.id,
-    ownerType: "registration",
-    ownerId: created.registration.id,
-    createdByUserId: user.id,
-    length: config.referralCodeLength,
-  });
+  const existingReferral = await first<{ code: string }>(
+    c.env.DB,
+    "SELECT code FROM referral_codes WHERE owner_type = 'registration' AND owner_id = ? ORDER BY created_at ASC LIMIT 1",
+    [created.registration.id],
+  );
+  const referralCode =
+    existingReferral?.code ??
+    (await createReferralCode(c.env.DB, {
+      eventId: event.id,
+      ownerType: "registration",
+      ownerId: created.registration.id,
+      createdByUserId: user.id,
+      length: config.referralCodeLength,
+    }));
 
   c.executionCtx.waitUntil(trySeedGravatarThenPrerender(user.id, user.email, referralCode, c.env, appBaseUrl));
 
@@ -153,7 +162,12 @@ export async function onRequestPost(c: any): Promise<Response> {
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
 
   if (created.registration.status === "pending_email_confirmation") {
-    const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, created.confirmationToken as string);
+    const confirmationUrl = registrationConfirmPageUrl(
+      appBaseUrl,
+      event,
+      created.confirmationToken as string,
+      created.registration.id,
+    );
     const outboxId = await queueEmail(c.env.DB, {
       eventId: event.id,
       baseUrl: appBaseUrl,
@@ -263,10 +277,18 @@ export async function onRequestPost(c: any): Promise<Response> {
     c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
   }
 
-  await writeAuditLog(c.env.DB, "user", user.id, "registration_created", "registration", created.registration.id, {
-    eventId: event.id,
-    status: created.registration.status,
-  });
+  await writeAuditLog(
+    c.env.DB,
+    "user",
+    user.id,
+    created.reactivated ? "registration_reactivated" : "registration_created",
+    "registration",
+    created.registration.id,
+    {
+      eventId: event.id,
+      status: created.registration.status,
+    },
+  );
 
   return json({
     success: true,

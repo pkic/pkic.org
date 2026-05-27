@@ -23,7 +23,9 @@ export async function onRequestPost(c: any): Promise<Response> {
     ? await runReminderCycle(c.env.DB, {
         appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
         reminderIntervalDays: config.reminderIntervalDays,
+        pendingConfirmationReminderIntervalDays: config.pendingConfirmationReminderIntervalDays,
         maxInviteReminders: config.maxInviteReminders,
+        maxPendingConfirmationReminders: config.maxPendingConfirmationReminders,
         maxPresentationReminders: config.maxPresentationReminders,
         limit: body.reminderLimit,
         dryRun: body.dryRun,

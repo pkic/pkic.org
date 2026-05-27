@@ -37,7 +37,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   let inviteId: string | null = null;
   if (body.inviteToken) {
-    const invite = await findInviteByToken(c.env.DB, body.inviteToken);
+    const invite = await findInviteByToken(c.env.DB, body.inviteToken, body.inviteId);
     if (invite.event_id !== event.id || invite.invite_type !== "speaker") {
       return json({ error: { code: "INVITE_INVALID", message: "Invalid speaker invite" } }, 400);
     }

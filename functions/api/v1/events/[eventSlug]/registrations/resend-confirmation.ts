@@ -2,9 +2,8 @@
  * POST /api/v1/events/:eventSlug/registrations/resend-confirmation
  *
  * Rotates the confirmation token and resends the confirm-email for a
- * `pending_email_confirmation` registration. Accepts either an expired or a
- * still-valid confirmation token so the confirm page can always offer a
- * "send me a new link" action.
+ * `pending_email_confirmation` registration. Accepts either the current
+ * confirmation token or an email address for stale-token recovery.
  *
  * Rate limiting / abuse prevention is handled at the edge (Cloudflare WAF) —
  * the endpoint itself enforces only that the registration is unconfirmed.
@@ -15,11 +14,11 @@ import { z } from "zod";
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { AppError } from "../../../../../_lib/errors";
-import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
+import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
 import { first, run } from "../../../../../_lib/db/queries";
 import { randomToken, sha256Hex } from "../../../../../_lib/utils/crypto";
-import { nowIso, addHours } from "../../../../../_lib/utils/time";
+import { nowIso } from "../../../../../_lib/utils/time";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../_lib/email/outbox";
 import { getRegistrationDayAttendance } from "../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../_lib/services/registrations/day-waitlist";
@@ -28,31 +27,73 @@ import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../
 import { registrationConfirmPageUrl } from "../../../../../_lib/services/frontend-links";
 import type { UserRecord } from "../../../../../_lib/services/users";
 import type { RegistrationRecord } from "../../../../../_lib/services/registrations/types";
-const resendConfirmationSchema = z.object({
-  token: z.string().min(1),
-});
+import { normalizedEmailSchema } from "../../../../../../assets/shared/schemas/api";
+
+const resendConfirmationSchema = z
+  .object({
+    id: z.uuid().optional(),
+    token: z.string().min(1).optional(),
+    email: normalizedEmailSchema.optional(),
+  })
+  .refine((value) => Boolean(value.token || value.email), {
+    message: "token or email is required",
+  });
 
 export async function onRequestPost(c: any): Promise<Response> {
   c.set("sensitive", true);
 
-  const config = getConfig(c.env, c.req.raw);
   const body = await parseJsonBody(c.req, resendConfirmationSchema);
 
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
 
-  // Look up the registration by the (possibly-expired) confirmation token.
-  // The token hash is cleared when confirmed, so a used token naturally returns 404.
-  const tokenHash = await sha256Hex(body.token);
-  const registration = await first<RegistrationRecord>(
+  // Look up the registration by the current confirmation token first. When a
+  // stale rotated token is used, the non-secret id from the link identifies
+  // the pending registration so we can send a fresh token to the stored email
+  // without accepting the stale token or using outbox/token history.
+  const tokenHash = body.token ? await sha256Hex(body.token) : null;
+  let registration = await first<RegistrationRecord>(
     c.env.DB,
     `SELECT r.*
      FROM   registrations r
      WHERE  r.confirmation_token_hash = ?
        AND  r.status = 'pending_email_confirmation'
-       AND  r.event_id = ?`,
-    [tokenHash, event.id],
+       AND  r.event_id = ?
+       AND  (? IS NULL OR r.id = ?)`,
+    [tokenHash, event.id, body.id ?? null, body.id ?? null],
   );
+
+  if (!registration && body.id && body.token) {
+    registration = await first<RegistrationRecord>(
+      c.env.DB,
+      `SELECT r.*
+       FROM   registrations r
+       WHERE  r.id = ?
+         AND  r.event_id = ?
+         AND  r.status = 'pending_email_confirmation'
+       LIMIT 1`,
+      [body.id, event.id],
+    );
+  }
+
+  if (!registration && body.email) {
+    registration = await first<RegistrationRecord>(
+      c.env.DB,
+      `SELECT r.*
+       FROM   registrations r
+       JOIN   users u ON u.id = r.user_id
+       WHERE  r.event_id = ?
+         AND  r.status = 'pending_email_confirmation'
+         AND  lower(u.email) = lower(?)
+       ORDER BY datetime(r.created_at) DESC
+       LIMIT 1`,
+      [event.id, body.email],
+    );
+  }
+
+  if (!registration && body.email) {
+    return json({ ok: true });
+  }
 
   if (!registration) {
     throw new AppError(
@@ -62,12 +103,9 @@ export async function onRequestPost(c: any): Promise<Response> {
     );
   }
 
-  // Rotate the confirmation token so the old (possibly-shared or phished) link
-  // is immediately invalidated.
   const now = nowIso();
   const newToken = randomToken(24);
   const newTokenHash = await sha256Hex(newToken);
-  const newExpiresAt = addHours(now, config.manageTokenTtlHours);
 
   await run(
     c.env.DB,
@@ -77,7 +115,7 @@ export async function onRequestPost(c: any): Promise<Response> {
             confirmation_reminder_sent_at = ?,
             updated_at = ?
      WHERE  id = ?`,
-    [newTokenHash, newExpiresAt, now, now, registration.id],
+    [newTokenHash, null, now, now, registration.id],
   );
 
   // Retrieve the attendee so we can personalise the email.
@@ -91,7 +129,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   // registration by email there.
   const manageUrl = `${appBaseUrl}/events/${event.slug}/manage`;
 
-  const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, newToken);
+  const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, newToken, registration.id);
   const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, registration.id);
   const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
   const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(

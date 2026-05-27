@@ -137,7 +137,9 @@ function boot(): void {
   if (!root) return;
 
   const apiBase = root.dataset.apiBase ?? "/api/v1";
-  const token = new URLSearchParams(window.location.search).get("token")?.trim();
+  const query = new URLSearchParams(window.location.search);
+  const token = query.get("token")?.trim();
+  const inviteId = query.get("id")?.trim() || null;
 
   const loadingEl = $("[data-decline-loading]", root);
   const statusEl = $("[data-decline-status]", root);
@@ -149,7 +151,7 @@ function boot(): void {
     return;
   }
 
-  void run(token, apiBase);
+  void run(token, apiBase, inviteId);
 
   // ── Status helper ───────────────────────────────────────────────────────────
 
@@ -169,10 +171,11 @@ function boot(): void {
 
   // ── Main flow ───────────────────────────────────────────────────────────────
 
-  async function run(tok: string, base: string): Promise<void> {
+  async function run(tok: string, base: string, id: string | null): Promise<void> {
+    const inviteIdQuery = id ? `?id=${encodeURIComponent(id)}` : "";
     let info: DeclineInfo;
     try {
-      info = await getJson<DeclineInfo>(`${base}/invites/${tok}/decline-info`);
+      info = await getJson<DeclineInfo>(`${base}/invites/${tok}/decline-info${inviteIdQuery}`);
     } catch {
       showStatus(
         "Something went wrong",
@@ -210,12 +213,12 @@ function boot(): void {
     }
 
     // Valid invite — personalise and show the form
-    initForm(tok, base, info as DeclineInfoValid);
+    initForm(tok, base, info as DeclineInfoValid, inviteIdQuery);
   }
 
   // ── Form initialisation ─────────────────────────────────────────────────────
 
-  function initForm(tok: string, base: string, info: DeclineInfoValid): void {
+  function initForm(tok: string, base: string, info: DeclineInfoValid, inviteIdQuery: string): void {
     // Personalise greeting
     const firstName = info.inviteeFirstName ?? "";
     root!.querySelectorAll<HTMLElement>("[data-placeholder='firstName']").forEach((el) => {
@@ -242,7 +245,7 @@ function boot(): void {
     buildNpsButtons();
     wireReasonRadios(info);
     wireForwardToggle();
-    wireSubmit(tok, base, info);
+    wireSubmit(tok, base, info, inviteIdQuery);
 
     show(formWrapEl);
   }
@@ -438,7 +441,7 @@ function boot(): void {
 
   // ── Submit ──────────────────────────────────────────────────────────────────
 
-  function wireSubmit(tok: string, base: string, _info: DeclineInfoValid): void {
+  function wireSubmit(tok: string, base: string, _info: DeclineInfoValid, inviteIdQuery: string): void {
     const formEl = $("[data-decline-form-el]", root!) as HTMLFormElement | null;
     if (!formEl) return;
 
@@ -522,7 +525,7 @@ function boot(): void {
 
       try {
         const result = await postJson<{ success: boolean; forwarded: string[] }>(
-          `${base}/invites/${tok}/decline`,
+          `${base}/invites/${tok}/decline${inviteIdQuery}`,
           payload,
         );
 

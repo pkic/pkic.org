@@ -1,5 +1,5 @@
 import { render, createRef } from "preact";
-import { useState } from "preact/hooks";
+import { useCallback, useEffect, useState } from "preact/hooks";
 import { getJson, postJson, ApiClientError } from "../shared/api-client";
 import { normalizeValidation } from "../shared/form/validation-map";
 import { renderSharePanel } from "../shared/widgets/share-panel";
@@ -27,6 +27,7 @@ interface ConfirmInfoResponse {
   eventName: string | null;
   /** True when the pending token exists but has passed its expiry time. */
   expired: boolean;
+  recoverable?: boolean;
 }
 
 /**
@@ -251,26 +252,48 @@ function ResendButton({
   apiBase,
   eventSlug,
   token,
+  registrationId,
   statusEl,
+  email,
+  autoSend = false,
 }: {
   apiBase: string;
   eventSlug: string;
   token: string;
+  registrationId: string | null;
   statusEl: HTMLElement;
+  email: string;
+  autoSend?: boolean;
 }) {
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
+  const [enteredEmail, setEnteredEmail] = useState(email);
 
-  const handleClick = async () => {
+  const sendFreshLink = useCallback(async () => {
+    const recoveryEmail = (email || enteredEmail).trim();
+    if (!registrationId && !email && !recoveryEmail) {
+      setStatus(statusEl, "Enter the email address you used for registration.", true);
+      return;
+    }
     setState("sending");
     try {
-      await postJson(`${apiBase}/events/${eventSlug}/registrations/resend-confirmation`, { token });
+      await postJson(`${apiBase}/events/${eventSlug}/registrations/resend-confirmation`, {
+        ...(registrationId ? { id: registrationId } : {}),
+        token,
+        ...(recoveryEmail ? { email: recoveryEmail } : {}),
+      });
       setState("sent");
     } catch (error) {
       const normalized = normalizeValidation(error);
       setStatus(statusEl, normalized.globalMessage, true);
       setState("error");
     }
-  };
+  }, [apiBase, email, enteredEmail, eventSlug, registrationId, statusEl, token]);
+
+  useEffect(() => {
+    if (autoSend && state === "idle") {
+      void sendFreshLink();
+    }
+  }, [autoSend, sendFreshLink, state]);
 
   if (state === "sent") {
     return (
@@ -280,8 +303,38 @@ function ResendButton({
     );
   }
 
+  if (!email && !registrationId) {
+    return (
+      <form
+        class="mt-3"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void sendFreshLink();
+        }}
+      >
+        <label class="form-label" for="confirmation-recovery-email">
+          Email address
+        </label>
+        <div class="d-flex gap-2 flex-wrap">
+          <input
+            id="confirmation-recovery-email"
+            class="form-control"
+            type="email"
+            autocomplete="email"
+            value={enteredEmail}
+            onInput={(event) => setEnteredEmail((event.currentTarget as HTMLInputElement).value)}
+            required
+          />
+          <button type="submit" class="btn btn-primary px-4" disabled={state === "sending"}>
+            {state === "error" ? "Try again" : "Send me a new link"}
+          </button>
+        </div>
+      </form>
+    );
+  }
+
   return (
-    <button type="button" class="btn btn-primary px-4" onClick={handleClick} disabled={state === "sending"}>
+    <button type="button" class="btn btn-primary px-4" onClick={sendFreshLink} disabled={state === "sending"}>
       {state === "error" ? "Try again" : "Send me a new link"}
     </button>
   );
@@ -293,16 +346,18 @@ function showExpiredPanel(
   apiBase: string,
   eventSlug: string,
   token: string,
+  registrationId: string | null,
   statusEl: HTMLElement,
   firstName: string,
   eventName: string,
+  email: string,
 ): void {
   form.classList.add("d-none");
 
-  const expiredTitle = root.dataset["expiredTitle"] ?? "Your confirmation link has expired";
+  const expiredTitle = root.dataset["expiredTitle"] ?? "Your confirmation link needs refreshing";
   const expiredBody =
     root.dataset["expiredBody"] ??
-    "The verification link{forEvent} is no longer valid — these links expire after 48 hours for security. Click the button below and we'll send a fresh one to the same email address.";
+    "The verification link{forEvent} is no longer current. We'll send a fresh one to the email address used for this registration.";
 
   const greeting = firstName ? `Hi ${firstName}!` : "Hi there!";
   const title = interpolate(expiredTitle, firstName, eventName);
@@ -313,7 +368,15 @@ function showExpiredPanel(
       <p class="event-flow-success-body">
         {greeting} {interpolate(expiredBody, firstName, eventName)}
       </p>
-      <ResendButton apiBase={apiBase} eventSlug={eventSlug} token={token} statusEl={statusEl} />
+      <ResendButton
+        apiBase={apiBase}
+        eventSlug={eventSlug}
+        token={token}
+        registrationId={registrationId}
+        statusEl={statusEl}
+        email={email}
+        autoSend={Boolean(email || registrationId)}
+      />
     </SuccessPanel>,
     container,
   );
@@ -330,6 +393,7 @@ async function main(): Promise<void> {
   const contentEl = boot.root.querySelector<HTMLElement>("[data-confirm-content]");
 
   const token = boot.query.token;
+  const registrationId = boot.query.id;
   if (!token) {
     loadingEl?.classList.add("d-none");
     setStatus(boot.statusEl, "Missing confirmation token — please use the link from your email.", true);
@@ -345,9 +409,10 @@ async function main(): Promise<void> {
   let organizationName = "";
   let eventName = "";
   let isExpired = false;
+  let isRecoverable = false;
   try {
     const info = await getJson<ConfirmInfoResponse>(
-      `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-info?token=${encodeURIComponent(token)}`,
+      `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-info?token=${encodeURIComponent(token)}${registrationId ? `&id=${encodeURIComponent(registrationId)}` : ""}`,
     );
     firstName = info.firstName ?? "";
     lastName = info.lastName ?? "";
@@ -355,18 +420,30 @@ async function main(): Promise<void> {
     organizationName = info.organizationName ?? "";
     eventName = info.eventName ?? "";
     isExpired = info.expired ?? false;
+    isRecoverable = info.recoverable ?? false;
   } catch {
     // Non-critical — page degrades to default placeholder text
   }
 
   // If the token is already expired before the user clicks Confirm, show the
   // resend panel immediately rather than making them click through to an error.
-  if (isExpired) {
+  if (isExpired || isRecoverable) {
     loadingEl?.classList.add("d-none");
     // We need the form reference — reveal content briefly to get the element
     // then let showExpiredPanel hide it again.
     contentEl?.classList.remove("d-none");
-    showExpiredPanel(boot.root, boot.form, boot.apiBase, boot.eventSlug, token, boot.statusEl, firstName, eventName);
+    showExpiredPanel(
+      boot.root,
+      boot.form,
+      boot.apiBase,
+      boot.eventSlug,
+      token,
+      registrationId,
+      boot.statusEl,
+      firstName,
+      eventName,
+      email,
+    );
     return;
   }
 
@@ -386,7 +463,7 @@ async function main(): Promise<void> {
       try {
         const result = await postJson<ConfirmResponse>(
           `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-email`,
-          { token },
+          { token, ...(registrationId ? { id: registrationId } : {}) },
         );
         showConfirmedPanel(
           boot.root,
@@ -404,16 +481,21 @@ async function main(): Promise<void> {
         );
       } catch (error) {
         const normalized = normalizeValidation(error);
-        if (error instanceof ApiClientError && error.code === "CONFIRM_TOKEN_EXPIRED") {
+        if (
+          error instanceof ApiClientError &&
+          (error.code === "CONFIRM_TOKEN_EXPIRED" || error.code === "CONFIRM_TOKEN_INVALID")
+        ) {
           showExpiredPanel(
             boot.root,
             boot.form,
             boot.apiBase,
             boot.eventSlug,
             token,
+            registrationId,
             boot.statusEl,
             firstName,
             eventName,
+            email,
           );
         } else {
           setStatus(boot.statusEl, normalized.globalMessage, true);

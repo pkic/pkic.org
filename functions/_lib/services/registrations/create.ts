@@ -16,7 +16,7 @@ import { upsertAttendeeParticipant } from "./participant-registration";
 import type { DatabaseLike } from "../../types";
 import type { RegistrationRecord } from "./types";
 
-const PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
+const DEFAULT_PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
 async function initialRegistrationStatus(
   db: DatabaseLike,
@@ -72,16 +72,24 @@ export async function createRegistration(
     customAnswersJson?: string | null;
     inviteId?: string | null;
     referredByCode?: string | null;
-    confirmationTtlHours: number;
+    pendingConfirmationDeadlineHours?: number;
+    confirmationTtlHours?: number;
   },
-): Promise<{ registration: RegistrationRecord; manageToken: string; confirmationToken: string | null }> {
+): Promise<{
+  registration: RegistrationRecord;
+  manageToken: string;
+  confirmationToken: string | null;
+  reactivated: boolean;
+}> {
   const existing = await first<RegistrationRecord>(
     db,
     "SELECT * FROM registrations WHERE event_id = ? AND user_id = ?",
     [payload.event.id, payload.userId],
   );
   if (existing) {
-    throw new AppError(409, "REGISTRATION_EXISTS", "This user is already registered for the event");
+    if (existing.status !== "cancelled") {
+      throw new AppError(409, "REGISTRATION_EXISTS", "This user is already registered for the event");
+    }
   }
   const now = nowIso();
   const manageToken = randomToken(24);
@@ -101,16 +109,20 @@ export async function createRegistration(
   );
   let confirmationToken: string | null = null;
   let confirmationHash: string | null = null;
-  let confirmationExpiresAt: string | null = null;
+  const confirmationExpiresAt: string | null = null;
   let pendingConfirmationDeadlineAt: string | null = null;
   if (status === "pending_email_confirmation") {
     confirmationToken = randomToken(24);
     confirmationHash = await sha256Hex(confirmationToken);
-    confirmationExpiresAt = addHours(now, payload.confirmationTtlHours);
-    pendingConfirmationDeadlineAt = addHours(now, PENDING_CONFIRMATION_DEADLINE_HOURS);
+    pendingConfirmationDeadlineAt = addHours(
+      now,
+      payload.pendingConfirmationDeadlineHours ??
+        payload.confirmationTtlHours ??
+        DEFAULT_PENDING_CONFIRMATION_DEADLINE_HOURS,
+    );
   }
   const registration: RegistrationRecord = {
-    id: uuid(),
+    id: existing?.id ?? uuid(),
     event_id: payload.event.id,
     user_id: payload.userId,
     invite_id: payload.inviteId ?? null,
@@ -128,41 +140,72 @@ export async function createRegistration(
     capacity_exempt_reason: capacityExemptReason,
     confirmed_at: status === "registered" ? now : null,
     cancelled_at: null,
-    created_at: now,
+    created_at: existing?.created_at ?? now,
     updated_at: now,
   };
-  await run(
-    db,
-    `INSERT INTO registrations (
+  if (existing) {
+    await run(
+      db,
+      `UPDATE registrations
+       SET invite_id = ?, status = ?, attendance_type = ?, source_type = ?, source_ref = ?,
+           custom_answers_json = ?, referred_by_code = ?, confirmation_token_hash = ?,
+           confirmation_token_expires_at = ?, pending_confirmation_deadline_at = ?,
+           manage_token_hash = ?, capacity_exempt_in_person = ?, capacity_exempt_reason = ?,
+           confirmed_at = ?, cancelled_at = NULL, updated_at = ?
+       WHERE id = ?`,
+      [
+        registration.invite_id,
+        registration.status,
+        registration.attendance_type,
+        registration.source_type,
+        registration.source_ref,
+        registration.custom_answers_json,
+        registration.referred_by_code,
+        registration.confirmation_token_hash,
+        registration.confirmation_token_expires_at,
+        registration.pending_confirmation_deadline_at,
+        registration.manage_token_hash,
+        registration.capacity_exempt_in_person,
+        registration.capacity_exempt_reason,
+        registration.confirmed_at,
+        now,
+        registration.id,
+      ],
+    );
+  } else {
+    await run(
+      db,
+      `INSERT INTO registrations (
       id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
       custom_answers_json, referred_by_code, confirmation_token_hash, confirmation_token_expires_at,
       pending_confirmation_deadline_at,
       manage_token_hash, capacity_exempt_in_person, capacity_exempt_reason,
       confirmed_at, cancelled_at, created_at, updated_at
     ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-    [
-      registration.id,
-      registration.event_id,
-      registration.user_id,
-      registration.invite_id,
-      registration.status,
-      registration.attendance_type,
-      registration.source_type,
-      registration.source_ref,
-      registration.custom_answers_json,
-      registration.referred_by_code,
-      registration.confirmation_token_hash,
-      registration.confirmation_token_expires_at,
-      registration.pending_confirmation_deadline_at,
-      registration.manage_token_hash,
-      registration.capacity_exempt_in_person,
-      registration.capacity_exempt_reason,
-      registration.confirmed_at,
-      registration.cancelled_at,
-      registration.created_at,
-      registration.updated_at,
-    ],
-  );
+      [
+        registration.id,
+        registration.event_id,
+        registration.user_id,
+        registration.invite_id,
+        registration.status,
+        registration.attendance_type,
+        registration.source_type,
+        registration.source_ref,
+        registration.custom_answers_json,
+        registration.referred_by_code,
+        registration.confirmation_token_hash,
+        registration.confirmation_token_expires_at,
+        registration.pending_confirmation_deadline_at,
+        registration.manage_token_hash,
+        registration.capacity_exempt_in_person,
+        registration.capacity_exempt_reason,
+        registration.confirmed_at,
+        registration.cancelled_at,
+        registration.created_at,
+        registration.updated_at,
+      ],
+    );
+  }
   await replaceRegistrationDayAttendance(db, {
     registrationId: registration.id,
     eventId: registration.event_id,
@@ -200,5 +243,5 @@ export async function createRegistration(
   if (payload.referredByCode) {
     await recordReferralConversion(db, payload.referredByCode);
   }
-  return { registration, manageToken, confirmationToken };
+  return { registration, manageToken, confirmationToken, reactivated: Boolean(existing) };
 }

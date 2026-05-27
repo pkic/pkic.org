@@ -47,9 +47,10 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       created.push({ email: o.email, inviteToken: o.token! });
       const proposalUrl = proposalPageUrl(appBaseUrl, event, {
         invite: o.token!,
+        inviteId: o.inviteId,
         source: "speaker_invite",
       });
-      const declineUrl = inviteDeclineUrl(appBaseUrl, event, o.token!);
+      const declineUrl = inviteDeclineUrl(appBaseUrl, event, o.token!, o.inviteId);
       emailRows.push({
         eventId: event.id,
         recipientEmail: o.email,

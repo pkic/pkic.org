@@ -80,8 +80,12 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       subject: `Invitation: ${event.name}`,
       data: {
         ...sharedEmailVars,
-        registrationUrl: registrationPageUrl(appBaseUrl, event, { invite: o.token!, source: "invite" }),
-        declineUrl: inviteDeclineUrl(appBaseUrl, event, o.token!),
+        registrationUrl: registrationPageUrl(appBaseUrl, event, {
+          invite: o.token!,
+          inviteId: o.inviteId,
+          source: "invite",
+        }),
+        declineUrl: inviteDeclineUrl(appBaseUrl, event, o.token!, o.inviteId),
       },
     }));
   await bulkQueueInviteEmails(requestDb(c), emailRows);
