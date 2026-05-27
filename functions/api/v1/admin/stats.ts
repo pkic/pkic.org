@@ -34,9 +34,10 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       `SELECT status, COUNT(*) AS count FROM registrations GROUP BY status`,
       [],
     ),
+    // Count attendance types only for confirmed/registered registrations
     all<{ attendance_type: string; count: number }>(
       db,
-      `SELECT attendance_type, COUNT(*) AS count FROM registrations GROUP BY attendance_type`,
+      `SELECT attendance_type, COUNT(*) AS count FROM registrations WHERE status = 'registered' GROUP BY attendance_type`,
       [],
     ),
     all<{ status: string; count: number }>(db, `SELECT status, COUNT(*) AS count FROM invites GROUP BY status`, []),

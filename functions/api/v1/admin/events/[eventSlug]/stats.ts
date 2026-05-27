@@ -41,10 +41,10 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       `SELECT status, COUNT(*) AS count FROM registrations WHERE event_id = ? GROUP BY status`,
       [event.id],
     ),
-    // Registration counts by attendance type
+    // Registration counts by attendance type (only confirmed/registered)
     all<{ attendance_type: string; count: number }>(
       db,
-      `SELECT attendance_type, COUNT(*) AS count FROM registrations WHERE event_id = ? GROUP BY attendance_type`,
+      `SELECT attendance_type, COUNT(*) AS count FROM registrations WHERE event_id = ? AND status = 'registered' GROUP BY attendance_type`,
       [event.id],
     ),
     // Cross-tab: status × attendance type
