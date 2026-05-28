@@ -12,4 +12,4 @@ app.get("/promoters", AdminDonationsPromotersGet_l);
 app.post("/sync", AdminDonationsSyncPost_l);
 app.get("/:id", AdminDonationsIdGet_l);
 
-export default app;
+export default openapi;

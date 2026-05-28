@@ -5,6 +5,6 @@ import eventSlug_Router from "./[eventSlug]/router";
 const app = new Hono();
 export const openapi = fromHono(app);
 
-app.route("/:eventSlug", eventSlug_Router);
+openapi.route("/:eventSlug", eventSlug_Router);
 
-export default app;
+export default openapi;

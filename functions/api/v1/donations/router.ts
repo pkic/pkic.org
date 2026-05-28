@@ -11,4 +11,4 @@ app.post("/checkout", DonationsCheckoutPost_l);
 openapi.post("/promoter", DonationsPromoterPost);
 openapi.get("/session", DonationsSessionGet);
 
-export default app;
+export default openapi;

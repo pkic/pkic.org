@@ -10,4 +10,4 @@ export const openapi = fromHono(app);
 app.patch("/:userId", AdminSpeakerPatch);
 app.post("/:userId/remind", AdminSpeakerRemindPost);
 
-export default app;
+export default openapi;

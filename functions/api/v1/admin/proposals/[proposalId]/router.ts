@@ -25,7 +25,7 @@ app.get("/audit-log", AdminProposalsProposalIdAuditLogGet_l);
 app.get("/reviews", AdminProposalsProposalIdReviewsGet_l);
 app.post("/reviews", AdminProposalsProposalIdReviewsPost_l);
 app.get("/speakers", AdminProposalsProposalIdSpeakersGet_l);
-app.route("/reviews", reviews_Router);
-app.route("/speakers", speakers_Router);
+openapi.route("/reviews", reviews_Router);
+openapi.route("/speakers", speakers_Router);
 
-export default app;
+export default openapi;

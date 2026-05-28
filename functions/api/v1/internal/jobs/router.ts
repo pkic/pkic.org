@@ -7,4 +7,4 @@ export const openapi = fromHono(app);
 
 app.post("/run", InternalJobsRunPost_l);
 
-export default app;
+export default openapi;

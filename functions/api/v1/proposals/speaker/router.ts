@@ -11,6 +11,6 @@ export const openapi = fromHono(app);
 app.get("/:token", ProposalsSpeakerTokenGet_l);
 app.post("/:token", ProposalsSpeakerTokenPost_l);
 app.patch("/:token", ProposalsSpeakerTokenPatch_l);
-app.route("/:token", token_Router);
+openapi.route("/:token", token_Router);
 
-export default app;
+export default openapi;

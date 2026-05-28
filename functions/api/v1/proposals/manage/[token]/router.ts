@@ -7,6 +7,6 @@ const app = new Hono();
 export const openapi = fromHono(app);
 
 app.post("/speakers", ProposalsManageTokenSpeakersPost_l);
-app.route("/speakers", speakers_Router);
+openapi.route("/speakers", speakers_Router);
 
-export default app;
+export default openapi;

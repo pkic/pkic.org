@@ -9,4 +9,4 @@ export const openapi = fromHono(app);
 app.use("*", middleware_l);
 app.get("/:code", onRequestGet);
 
-export default app;
+export default openapi;

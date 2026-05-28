@@ -38,10 +38,10 @@ app.patch("/settings", AdminEventsEventSlugSettingsPatch_l);
 app.get("/stats", AdminEventsEventSlugStatsGet_l);
 app.get("/terms", AdminEventsEventSlugTermsGet_l);
 app.put("/terms", AdminEventsEventSlugTermsPut_l);
-app.route("/emails", emails_Router);
-app.route("/invites", invites_Router);
-app.route("/permissions", permissions_Router);
-app.route("/registrations", registrations_Router);
-app.route("/waitlist", waitlist_Router);
+openapi.route("/emails", emails_Router);
+openapi.route("/invites", invites_Router);
+openapi.route("/permissions", permissions_Router);
+openapi.route("/registrations", registrations_Router);
+openapi.route("/waitlist", waitlist_Router);
 
-export default app;
+export default openapi;

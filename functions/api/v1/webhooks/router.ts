@@ -9,4 +9,4 @@ export const openapi = fromHono(app);
 openapi.post("/stripe", WebhooksStripePost);
 openapi.post("/sendgrid", WebhooksSendgridPost);
 
-export default app;
+export default openapi;

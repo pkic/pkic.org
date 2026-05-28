@@ -8,4 +8,4 @@ export const openapi = fromHono(app);
 
 openapi.get("/outbox", AdminEmailOutboxGet);
 
-export default app;
+export default openapi;

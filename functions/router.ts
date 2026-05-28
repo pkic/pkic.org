@@ -11,15 +11,23 @@ import type { Env } from "./_lib/types";
 import { processIncomingEmail } from "./_lib/email/ingest";
 
 const app = new Hono<{ Bindings: Env }>();
-export const openapi = fromHono(app);
+export const openapi = fromHono(app, {
+  openapi_url: "/api/openapi.json",
+  schema: {
+    info: {
+      title: "PKI Consortium API",
+      version: "v1",
+    },
+  },
+});
 
 const REMINDER_CRON = "*/15 * * * *";
 const RETENTION_CRON = "0 3 * * *";
 
 app.get("/og/*", OgCardGet);
-app.route("/api", api_Router);
-app.route("/donate", donate_Router);
-app.route("/r", r_Router);
+openapi.route("/api", api_Router);
+openapi.route("/donate", donate_Router);
+openapi.route("/r", r_Router);
 
 async function runScheduledJob(controller: ScheduledController, env: Env): Promise<void> {
   logInfo("SCHEDULED_JOB_STARTED", { cron: controller.cron, scheduledTime: controller.scheduledTime });

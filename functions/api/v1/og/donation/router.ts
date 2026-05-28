@@ -7,4 +7,4 @@ export const openapi = fromHono(app);
 
 app.get("/:session_id", OgDonationSessionIdGet_l);
 
-export default app;
+export default openapi;

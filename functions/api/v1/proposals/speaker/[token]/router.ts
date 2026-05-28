@@ -15,4 +15,4 @@ app.delete("/headshot", proposalSpeakerHeadshotDelete_l);
 app.put("/presentation", ProposalsSpeakerTokenPresentationPut_l);
 app.post("/reminders", ProposalsSpeakerTokenRemindersPost_l);
 
-export default app;
+export default openapi;

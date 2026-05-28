@@ -28,15 +28,15 @@ app.onError((error, c) => {
 app.use("*", middleware_l);
 app.get("/geo", GeoGet_l);
 openapi.get("/", RouteGet);
-app.route("/admin", admin_Router);
-app.route("/donations", donations_Router);
-app.route("/events", events_Router);
-app.route("/headshots", headshots_Router);
-app.route("/internal", internal_Router);
-app.route("/invites", invites_Router);
-app.route("/og", og_Router);
-app.route("/proposals", proposals_Router);
-app.route("/registrations", registrations_Router);
-app.route("/webhooks", webhooks_Router);
+openapi.route("/admin", admin_Router);
+openapi.route("/donations", donations_Router);
+openapi.route("/events", events_Router);
+openapi.route("/headshots", headshots_Router);
+openapi.route("/internal", internal_Router);
+openapi.route("/invites", invites_Router);
+openapi.route("/og", og_Router);
+openapi.route("/proposals", proposals_Router);
+openapi.route("/registrations", registrations_Router);
+openapi.route("/webhooks", webhooks_Router);
 
-export default app;
+export default openapi;

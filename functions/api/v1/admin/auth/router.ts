@@ -10,4 +10,4 @@ export const openapi = fromHono(app);
 app.post("/request-link", AdminAuthRequestLinkPost_l);
 app.post("/verify-link", AdminAuthVerifyLinkPost_l);
 
-export default app;
+export default openapi;

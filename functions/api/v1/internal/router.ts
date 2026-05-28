@@ -9,10 +9,10 @@ import retention_Router from "./retention/router";
 const app = new Hono();
 export const openapi = fromHono(app);
 
-app.route("/calendar", calendar_Router);
-app.route("/email", email_Router);
-app.route("/jobs", jobs_Router);
-app.route("/reminders", reminders_Router);
-app.route("/retention", retention_Router);
+openapi.route("/calendar", calendar_Router);
+openapi.route("/email", email_Router);
+openapi.route("/jobs", jobs_Router);
+openapi.route("/reminders", reminders_Router);
+openapi.route("/retention", retention_Router);
 
-export default app;
+export default openapi;

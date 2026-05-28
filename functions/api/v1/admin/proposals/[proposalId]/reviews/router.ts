@@ -8,4 +8,4 @@ export const openapi = fromHono(app);
 
 app.patch("/:reviewId", AdminProposalsProposalIdReviewsReviewIdPatch_l);
 
-export default app;
+export default openapi;

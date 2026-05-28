@@ -26,4 +26,4 @@ app.post("/open-manage", AdminEventsEventSlugRegistrationsRegistrationIdOpenMana
 app.post("/regenerate-badge", AdminEventsEventSlugRegistrationsRegistrationIdRegenerateBadgePost_l);
 app.post("/resend-confirmation", AdminEventsEventSlugRegistrationsRegistrationIdResendConfirmationPost_l);
 
-export default app;
+export default openapi;

@@ -13,4 +13,4 @@ app.get("/:userId/headshot", ProposalsManageTokenSpeakerHeadshot_l);
 app.put("/:userId/headshot", ProposalsManageTokenSpeakerHeadshot_l);
 app.delete("/:userId/headshot", ProposalsManageTokenSpeakerHeadshot_l);
 
-export default app;
+export default openapi;

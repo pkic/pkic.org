@@ -10,8 +10,8 @@ const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.get("/", AdminEventsEventSlugInvitesGet_l);
-app.route("/:inviteId", inviteId_Router);
-app.route("/attendees", attendees_Router);
-app.route("/speakers", speakers_Router);
+openapi.route("/:inviteId", inviteId_Router);
+openapi.route("/attendees", attendees_Router);
+openapi.route("/speakers", speakers_Router);
 
-export default app;
+export default openapi;

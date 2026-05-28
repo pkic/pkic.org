@@ -8,4 +8,4 @@ export const openapi = fromHono(app);
 
 app.delete("/:permId", AdminEventsEventSlugPermissionsPermIdDelete_l);
 
-export default app;
+export default openapi;

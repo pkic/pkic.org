@@ -8,6 +8,6 @@ const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.patch("/:userId", AdminUsersUserIdPatch_l);
-app.route("/:userId", userId_Router);
+openapi.route("/:userId", userId_Router);
 
-export default app;
+export default openapi;
