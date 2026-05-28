@@ -162,11 +162,7 @@ describe("proposal review and finalize", () => {
       score: number | null;
       reviewer_comment: string | null;
       applicant_note: string | null;
-    }>(
-      env.DB,
-      "SELECT score, reviewer_comment, applicant_note FROM proposal_reviews WHERE id = ?",
-      [reviews[0].id],
-    );
+    }>(env.DB, "SELECT score, reviewer_comment, applicant_note FROM proposal_reviews WHERE id = ?", [reviews[0].id]);
     expect(clearedReviewRows).toEqual([
       {
         score: null,

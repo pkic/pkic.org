@@ -4,6 +4,7 @@ import { logError, logInfo } from "./_lib/logging";
 import { runRetentionJob } from "./_lib/services/retention";
 import { runScheduledDueWork } from "./_lib/services/scheduled-due-work";
 import api_Router from "./api/router";
+import { handleOAuthAuthorizationServerMetadata, handleOAuthProtectedResourceMetadata } from "./api/mcp/router";
 import donate_Router from "./donate/router";
 import r_Router from "./r/router";
 import { onRequestGet as OgCardGet } from "./api/v1/og/card/[...path]";
@@ -17,6 +18,9 @@ const REMINDER_CRON = "*/15 * * * *";
 const RETENTION_CRON = "0 3 * * *";
 
 app.get("/og/*", OgCardGet);
+app.get("/.well-known/oauth-protected-resource", (c) => handleOAuthProtectedResourceMetadata(c.req.raw));
+app.get("/.well-known/oauth-protected-resource/*", (c) => handleOAuthProtectedResourceMetadata(c.req.raw));
+app.get("/.well-known/oauth-authorization-server", (c) => handleOAuthAuthorizationServerMetadata(c.req.raw));
 app.route("/api", api_Router);
 app.route("/donate", donate_Router);
 app.route("/r", r_Router);

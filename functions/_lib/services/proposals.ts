@@ -821,11 +821,7 @@ export async function updateReviewById(
 
   params.push(reviewId);
 
-  await run(
-    db,
-    `UPDATE proposal_reviews SET ${fields.join(", ")} WHERE id = ?`,
-    params,
-  );
+  await run(db, `UPDATE proposal_reviews SET ${fields.join(", ")} WHERE id = ?`, params);
 
   const updated = await first<ProposalReviewRecord>(db, "SELECT * FROM proposal_reviews WHERE id = ?", [reviewId]);
   if (!updated) {

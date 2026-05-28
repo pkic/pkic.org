@@ -1,6 +1,8 @@
 import { useState } from "preact/hooks";
 import { saveAuth } from "../state";
 
+const MCP_AUTHORIZE_STORAGE_KEY = "pkic_mcp_authorize";
+
 async function requestMagicLink(email: string): Promise<void> {
   await fetch("/api/v1/admin/auth/request-link", {
     method: "POST",
@@ -23,10 +25,20 @@ async function verifyMagicLink(token: string): Promise<void> {
     throw new Error(d.error?.message ?? "The link may have expired or already been used.");
   }
   saveAuth(d.token!, d.admin?.email ?? null);
+  const pendingMcpAuthorize = localStorage.getItem(MCP_AUTHORIZE_STORAGE_KEY);
+  if (pendingMcpAuthorize) {
+    localStorage.removeItem(MCP_AUTHORIZE_STORAGE_KEY);
+    history.replaceState({}, "", `/admin/?mcp_authorize=${encodeURIComponent(pendingMcpAuthorize)}`);
+    return;
+  }
   history.replaceState({}, "", "/admin/");
 }
 
 export function Login() {
+  const pendingMcpAuthorize = new URLSearchParams(window.location.search).get("mcp_authorize");
+  if (pendingMcpAuthorize) {
+    localStorage.setItem(MCP_AUTHORIZE_STORAGE_KEY, pendingMcpAuthorize);
+  }
   const [sent, setSent] = useState(false);
   const [verifying, setVerifying] = useState(() => Boolean(new URLSearchParams(window.location.search).get("token")));
   const [error, setError] = useState<string | null>(null);
