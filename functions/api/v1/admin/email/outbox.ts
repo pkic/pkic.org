@@ -22,6 +22,7 @@ import { resolveTemplate } from "../../../../_lib/email/templates";
 import { json } from "../../../../_lib/http";
 import { parseJsonSafe } from "../../../../_lib/utils/json";
 import { requestDb, type AdminContext } from "../../../../_lib/db/context";
+import { adminEmailOutboxGetRouteSchema } from "../../../../../assets/shared/schemas/route-contracts";
 interface OutboxListRow {
   id: string;
   event_id: string | null;
@@ -338,7 +339,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 }
 
 export class AdminEmailOutboxGet extends OpenAPIRoute {
-  schema = {};
+  schema = adminEmailOutboxGetRouteSchema;
 
   async handle(c: AdminContext) {
     return onRequestGet(c);

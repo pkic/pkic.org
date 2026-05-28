@@ -7,7 +7,6 @@
  * Always responds with { success: true } to prevent account enumeration.
  */
 import { OpenAPIRoute } from "chanfana";
-import { z } from "zod";
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
@@ -18,15 +17,13 @@ import { getClientIp } from "../../../../../_lib/request";
 import { enforceRateLimit } from "../../../../../_lib/rate-limit";
 import { speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { buildProposalInviteEmailContext, refreshSpeakerManageToken } from "../../../../../_lib/services/proposals";
-import { normalizedEmailSchema } from "../../../../../../assets/shared/schemas/api";
-const schema = z.object({
-  email: normalizedEmailSchema,
-});
+import { proposalResendSpeakerManageLinkSchema } from "../../../../../../assets/shared/schemas/api";
+import { proposalResendSpeakerManageLinkRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 
 export async function onRequestPost(c: any): Promise<Response> {
   c.set("sensitive", true);
 
-  const body = await parseJsonBody(c.req, schema);
+  const body = await parseJsonBody(c.req, proposalResendSpeakerManageLinkSchema);
   await enforceRateLimit({
     binding: c.env.EMAIL_RATE_LIMITER,
     namespace: "proposal-resend-speaker-manage-link:email",
@@ -106,7 +103,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 }
 
 export class EventsEventSlugProposalsResendSpeakerManageLinkPost extends OpenAPIRoute {
-  schema = {};
+  schema = proposalResendSpeakerManageLinkRouteSchema;
 
   async handle(c: any) {
     return onRequestPost(c);

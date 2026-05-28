@@ -7,12 +7,14 @@
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { first } from "../../../../../_lib/db/queries";
 import { getConfig } from "../../../../../_lib/config";
 import { getActiveFormByPurpose } from "../../../../../_lib/services/forms";
 import { parseJsonSafe } from "../../../../../_lib/utils/json";
 import type { ProposalListRecord } from "../../../../../_lib/services/proposals";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { proposalIdParamsSchema } from "../../../../../../assets/shared/schemas/api";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -67,3 +69,19 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     minReviewsRequired: config.minProposalReviews,
   });
 }
+
+export const AdminProposalsProposalIdGet = openApiRoute(
+  {
+    tags: ["Admin proposals"],
+    summary: "Get proposal details",
+    request: {
+      params: proposalIdParamsSchema,
+    },
+    responses: {
+      "200": { description: "Proposal details visible to the authenticated actor." },
+      "401": { description: "Missing or invalid authentication." },
+      "404": { description: "Proposal not found." },
+    },
+  },
+  onRequestGet,
+);

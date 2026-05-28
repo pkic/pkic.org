@@ -2,10 +2,12 @@ import { parseJsonBody } from "../../../../../../_lib/validation";
 import { json } from "../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../../_lib/auth/proposal-access";
+import { MCP_EXTENSION } from "../../../../../../_lib/openapi/mcp";
+import { openApiRoute } from "../../../../../../_lib/openapi/route";
 import { first } from "../../../../../../_lib/db/queries";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import { buildProposalReviewAuditDetails, updateReviewById } from "../../../../../../_lib/services/proposals";
-import { reviewPatchSchema } from "../../../../../../../assets/shared/schemas/api";
+import { proposalReviewIdParamsSchema, reviewPatchSchema } from "../../../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
 
 export async function onRequestPatch(c: AdminContext): Promise<Response> {
@@ -92,3 +94,32 @@ export async function onRequest(c: AdminContext): Promise<Response> {
 
   return onRequestPatch(c);
 }
+
+export const AdminProposalsProposalIdReviewsReviewIdPatch = openApiRoute(
+  {
+    tags: ["Admin proposal reviews"],
+    summary: "Update a proposal review",
+    request: {
+      params: proposalReviewIdParamsSchema,
+      body: {
+        content: {
+          "application/json": {
+            schema: reviewPatchSchema,
+          },
+        },
+        required: true,
+      },
+    },
+    responses: {
+      "200": { description: "The proposal review was updated." },
+      "400": { description: "Invalid review payload." },
+      "401": { description: "Missing or invalid authentication." },
+      "403": { description: "The actor lacks review access for this proposal." },
+      "404": { description: "Proposal or review not found." },
+    },
+    [MCP_EXTENSION]: {
+      expose: true,
+    },
+  } as any,
+  onRequestPatch,
+);

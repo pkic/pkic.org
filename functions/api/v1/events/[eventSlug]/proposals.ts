@@ -22,6 +22,7 @@ import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/
 import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../_lib/services/frontend-links";
 import { proposalCreateSchema } from "../../../../../assets/shared/schemas/api";
+import { eventProposalCreateRouteSchema } from "../../../../../assets/shared/schemas/route-contracts";
 import { requireInternalSecret } from "../../../../_lib/request";
 
 export async function onRequestPost(c: any): Promise<Response> {
@@ -197,7 +198,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 }
 
 export class EventsEventSlugProposalsPost extends OpenAPIRoute {
-  schema = {};
+  schema = eventProposalCreateRouteSchema;
 
   async handle(c: any) {
     return onRequestPost(c);

@@ -21,6 +21,11 @@ import { AppError } from "../../../../../_lib/errors";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import type { DatabaseLike } from "../../../../../_lib/types";
 import { adminFormUpdateSchema } from "../../../../../../assets/shared/schemas/api";
+import {
+  adminFormDeleteRouteSchema,
+  adminFormGetRouteSchema,
+  adminFormPatchRouteSchema,
+} from "../../../../../../assets/shared/schemas/route-contracts";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 interface FormRow {
@@ -160,7 +165,7 @@ export async function onRequestDelete(c: AdminContext): Promise<Response> {
 }
 
 export class AdminFormsFormKeyGet extends OpenAPIRoute {
-  schema = {};
+  schema = adminFormGetRouteSchema;
 
   async handle(c: AdminContext) {
     try {
@@ -172,7 +177,7 @@ export class AdminFormsFormKeyGet extends OpenAPIRoute {
 }
 
 export class AdminFormsFormKeyPatch extends OpenAPIRoute {
-  schema = {};
+  schema = adminFormPatchRouteSchema;
 
   async handle(c: AdminContext) {
     try {
@@ -184,7 +189,7 @@ export class AdminFormsFormKeyPatch extends OpenAPIRoute {
 }
 
 export class AdminFormsFormKeyDelete extends OpenAPIRoute {
-  schema = {};
+  schema = adminFormDeleteRouteSchema;
 
   async handle(c: AdminContext) {
     try {

@@ -10,7 +10,7 @@ import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
 import { registrationPageUrl, inviteDeclineUrl } from "../../../../_lib/services/frontend-links";
 import { AppError } from "../../../../_lib/errors";
-import { registrationInviteCreateSchema } from "../../../../../assets/shared/schemas/api";
+import { eventSlugParamsSchema, registrationInviteCreateSchema } from "../../../../../assets/shared/schemas/api";
 
 function getManageTokenFromRequest(request: Request): string | null {
   const auth = request.headers.get("authorization") ?? "";
@@ -159,7 +159,28 @@ export async function onRequestPost(c: any): Promise<Response> {
 }
 
 export class EventsEventSlugInvitesPost extends OpenAPIRoute {
-  schema = {};
+  schema = {
+    tags: ["Events", "Invites"],
+    summary: "Create attendee peer invites",
+    request: {
+      params: eventSlugParamsSchema,
+      body: {
+        content: {
+          "application/json": {
+            schema: registrationInviteCreateSchema,
+          },
+        },
+        required: true,
+      },
+    },
+    responses: {
+      "200": { description: "Invites were created or endorsed." },
+      "400": { description: "Invalid invite payload." },
+      "401": { description: "Registration manage token required." },
+      "403": { description: "The manage token is not valid for this event." },
+      "429": { description: "Invite limit exceeded." },
+    },
+  };
 
   async handle(c: any) {
     return onRequestPost(c);

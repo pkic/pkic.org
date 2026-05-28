@@ -140,8 +140,28 @@ export async function onRequestPost(c: any): Promise<Response> {
   return json({ processed: 1 });
 }
 
+import { internalCalendarRsvpIngestSchema } from "../../../../../assets/shared/schemas/api";
+
 export class InternalCalendarRsvpPost extends OpenAPIRoute {
-  schema = {};
+  schema = {
+    tags: ["Internal", "Calendar"],
+    summary: "Ingest calendar RSVP events",
+    request: {
+      body: {
+        content: {
+          "application/json": {
+            schema: internalCalendarRsvpIngestSchema,
+          },
+        },
+        required: true,
+      },
+    },
+    responses: {
+      "200": {
+        description: "RSVP event ingested successfully.",
+      },
+    },
+  };
 
   async handle(c: any) {
     try {

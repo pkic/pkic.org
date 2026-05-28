@@ -11,6 +11,7 @@
  */
 
 import { OpenAPIRoute } from "chanfana";
+import { donationSessionGetRouteSchema, donationSessionQuerySchema } from "../../../../assets/shared/schemas/donation";
 import { json } from "../../../_lib/http";
 import type { Env } from "../../../_lib/types";
 interface DonationBadgeRow {
@@ -29,11 +30,11 @@ export async function onRequestGet(c: any): Promise<Response> {
   const request = c.req.raw;
 
   const url = new URL(request.url);
-  const sessionId = url.searchParams.get("session_id");
-
-  if (!sessionId || !sessionId.startsWith("cs_")) {
+  const query = donationSessionQuerySchema.safeParse({ session_id: url.searchParams.get("session_id") });
+  if (!query.success) {
     return json({ error: "Invalid session_id" }, 400);
   }
+  const sessionId = query.data.session_id;
 
   const row = await env.DB.prepare(
     `SELECT gross_amount, currency, name, source, completed_at, status, payment_method_type, session_expires_at
@@ -85,7 +86,7 @@ export async function onRequestGet(c: any): Promise<Response> {
 }
 
 export class DonationsSessionGet extends OpenAPIRoute {
-  schema = {};
+  schema = donationSessionGetRouteSchema;
 
   async handle(c: any) {
     return onRequestGet(c);
