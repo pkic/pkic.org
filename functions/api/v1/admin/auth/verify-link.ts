@@ -1,6 +1,6 @@
 import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
-import { signAdminSessionToken, verifyAdminMagicLink } from "../../../../_lib/auth/admin";
+import { serializeAdminSessionCookie, signAdminSessionToken, verifyAdminMagicLink } from "../../../../_lib/auth/admin";
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../../../../_lib/request";
 import { enforceRateLimit } from "../../../../_lib/rate-limit";
@@ -42,12 +42,14 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     state: db.getBookmark?.(),
   });
 
-  return json({
+  const response = json({
     success: true,
     token,
     expiresAt: verified.expiresAt,
     admin: verified.admin,
   });
+  response.headers.append("Set-Cookie", serializeAdminSessionCookie(token, c.req.raw));
+  return response;
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {

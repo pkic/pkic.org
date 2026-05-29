@@ -13,16 +13,15 @@ async function requestMagicLink(email: string): Promise<void> {
 async function verifyMagicLink(token: string): Promise<void> {
   const res = await fetch("/api/v1/admin/auth/verify-link", {
     method: "POST",
+    credentials: "same-origin",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ token }),
   });
-  const d: { token?: string; admin?: { email?: string }; error?: { message?: string } } = await res
-    .json()
-    .catch(() => ({}));
+  const d: { admin?: { email?: string }; error?: { message?: string } } = await res.json().catch(() => ({}));
   if (!res.ok) {
     throw new Error(d.error?.message ?? "The link may have expired or already been used.");
   }
-  saveAuth(d.token!, d.admin?.email ?? null);
+  saveAuth(d.admin?.email ?? null);
   history.replaceState({}, "", "/admin/");
 }
 

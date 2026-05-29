@@ -35,8 +35,13 @@ export interface AdminSessionTokenClaims {
 }
 
 const ADMIN_SESSION_TOKEN_TYPE = "admin-session";
+export const ADMIN_SESSION_COOKIE_NAME = "pkic_admin_session";
+export const ADMIN_SESSION_COOKIE_PATH = "/api/v1/admin";
 
 const adminByRequest = new WeakMap<Request, AuthAdmin>();
+const adminAuthTransportByRequest = new WeakMap<Request, AdminAuthTransport>();
+
+type AdminAuthTransport = "bearer" | "cookie" | "api-key";
 
 function constantTimeEqual(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
@@ -47,12 +52,82 @@ function constantTimeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
-export function cacheAdminForRequest(request: Request, admin: AuthAdmin): void {
+export function cacheAdminForRequest(request: Request, admin: AuthAdmin, transport?: AdminAuthTransport): void {
   adminByRequest.set(request, admin);
+  if (transport) {
+    adminAuthTransportByRequest.set(request, transport);
+  }
 }
 
 export function getCachedAdminForRequest(request: Request): AuthAdmin | undefined {
   return adminByRequest.get(request);
+}
+
+export function getCachedAdminAuthTransport(request: Request): AdminAuthTransport | undefined {
+  return adminAuthTransportByRequest.get(request);
+}
+
+function parseCookieHeader(cookieHeader: string): Map<string, string> {
+  const values = new Map<string, string>();
+  for (const part of cookieHeader.split(";")) {
+    const trimmed = part.trim();
+    if (!trimmed) continue;
+    const separatorIndex = trimmed.indexOf("=");
+    if (separatorIndex <= 0) continue;
+    const name = trimmed.slice(0, separatorIndex).trim();
+    const value = trimmed.slice(separatorIndex + 1).trim();
+    if (!name) continue;
+    values.set(name, decodeURIComponent(value));
+  }
+  return values;
+}
+
+function getBearerToken(request: Request): string | null {
+  const auth = request.headers.get("authorization") ?? "";
+  const match = auth.match(/^Bearer\s+(.+)$/i);
+  return match?.[1] ?? null;
+}
+
+export function getAdminSessionCookieToken(request: Request): string | null {
+  const cookieHeader = request.headers.get("cookie") ?? "";
+  if (!cookieHeader) return null;
+  return parseCookieHeader(cookieHeader).get(ADMIN_SESSION_COOKIE_NAME) ?? null;
+}
+
+function isSecureAdminSessionRequest(request: Request): boolean {
+  return new URL(request.url).protocol === "https:";
+}
+
+export function serializeAdminSessionCookie(token: string, request: Request): string {
+  const parts = [
+    `${ADMIN_SESSION_COOKIE_NAME}=${encodeURIComponent(token)}`,
+    `Path=${ADMIN_SESSION_COOKIE_PATH}`,
+    "HttpOnly",
+    "SameSite=Strict",
+  ];
+
+  if (isSecureAdminSessionRequest(request)) {
+    parts.push("Secure");
+  }
+
+  return parts.join("; ");
+}
+
+export function serializeExpiredAdminSessionCookie(request: Request): string {
+  const parts = [
+    `${ADMIN_SESSION_COOKIE_NAME}=`,
+    `Path=${ADMIN_SESSION_COOKIE_PATH}`,
+    "HttpOnly",
+    "SameSite=Strict",
+    "Max-Age=0",
+    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
+  ];
+
+  if (isSecureAdminSessionRequest(request)) {
+    parts.push("Secure");
+  }
+
+  return parts.join("; ");
 }
 
 function sessionExpiresAtToExp(expiresAt: string): number {
@@ -129,19 +204,18 @@ export async function requireAdminFromRequest(
     return cached;
   }
 
-  const auth = request.headers.get("authorization") ?? "";
-  const match = auth.match(/^Bearer\s+(.+)$/i);
-  if (!match) {
+  const bearerToken = getBearerToken(request);
+  const cookieToken = getAdminSessionCookieToken(request);
+  const token = bearerToken ?? cookieToken;
+  if (!token) {
     throw new AppError(401, "AUTH_REQUIRED", "Missing bearer token");
   }
-
-  const token = match[1];
 
   // API key auth — no DB lookup needed, returns a synthetic admin identity.
   // Use constant-time comparison to avoid leaking the configured key via timing.
   if (env?.ADMIN_API_KEY && constantTimeEqual(token, env.ADMIN_API_KEY)) {
     const admin = { id: "api-key", email: "api-key", role: "admin" };
-    cacheAdminForRequest(request, admin);
+    cacheAdminForRequest(request, admin, "api-key");
     return admin;
   }
 
@@ -159,8 +233,12 @@ export async function requireAdminFromRequest(
   }
 
   const admin = await getAdminBySessionClaims(db, verified.claims);
-  cacheAdminForRequest(request, admin);
+  cacheAdminForRequest(request, admin, bearerToken ? "bearer" : "cookie");
   return admin;
+}
+
+export async function revokeAdminSession(db: DatabaseLike, sessionId: string): Promise<void> {
+  await run(db, "UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?", [nowIso(), sessionId]);
 }
 
 export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSessionTokenClaims): Promise<AuthAdmin> {

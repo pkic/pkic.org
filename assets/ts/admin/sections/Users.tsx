@@ -3,7 +3,6 @@ import { Spinner } from "../../components/Spinner";
 import { ErrorAlert } from "../../components/ErrorAlert";
 import { ApiDataTable, type ApiTableActions } from "../../components/Table";
 import { api } from "../api";
-import { authToken, saveAuthToken } from "../state";
 import { fmt, toast } from "../ui";
 import type { AdminUser } from "../types";
 import { confirmHeadshotUsage } from "../../shared/headshot/controller";
@@ -83,11 +82,12 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
 
   async function uploadHeadshotFile(uid: string, file: Blob) {
     const headers: Record<string, string> = { "Content-Type": file.type || "application/octet-stream" };
-    const token = authToken.value;
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-    const res = await fetch(`/api/v1/admin/users/${uid}/headshot`, { method: "PUT", headers, body: file });
-    const nextToken = res.headers.get("x-admin-token");
-    if (nextToken) saveAuthToken(nextToken);
+    const res = await fetch(`/api/v1/admin/users/${uid}/headshot`, {
+      method: "PUT",
+      credentials: "same-origin",
+      headers,
+      body: file,
+    });
     const data = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
     if (!res.ok) throw new Error(data.error?.message ?? `HTTP ${res.status}`);
   }

@@ -1,10 +1,10 @@
 /**
  * Admin API client.
  *
- * Thin fetch wrapper that attaches the auth token from the global signal and
- * handles 401 responses by clearing auth (triggering a re-render to Login).
+ * Thin fetch wrapper that sends same-origin admin session cookies and handles
+ * 401 responses by clearing auth (triggering a re-render to Login).
  */
-import { clearAuth, authToken, saveAuthToken } from "./state";
+import { clearAuth } from "./state";
 import { ApiClientError } from "../shared/api-client";
 import type { ApiErrorPayload } from "../shared/types";
 
@@ -14,15 +14,12 @@ interface ApiOpts extends RequestInit {
 
 export async function api<T = unknown>(path: string, opts?: ApiOpts): Promise<T> {
   const headers: Record<string, string> = { "Content-Type": "application/json" };
-  const token = authToken.value;
-  if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(path, {
     ...opts,
+    credentials: "same-origin",
     headers: { ...headers, ...(opts?.headers ?? {}) },
   });
-  const nextToken = res.headers.get("x-admin-token");
-  if (nextToken) saveAuthToken(nextToken);
 
   const data: { error?: { message?: string; code?: string } } =
     res.status === 204 ? {} : await res.json().catch(() => ({}));

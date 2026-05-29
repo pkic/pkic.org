@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
+import { ADMIN_SESSION_COOKIE_NAME } from "../functions/_lib/auth/admin";
+import { onRequestPost as logout } from "../functions/api/v1/admin/auth/logout";
 import { onRequestPost as requestLink } from "../functions/api/v1/admin/auth/request-link";
+import { onRequestGet as session } from "../functions/api/v1/admin/auth/session";
 import { onRequestPost as verifyLink } from "../functions/api/v1/admin/auth/verify-link";
 import { createContext, createTestRateLimiter, seedEventAndAdmin, queryAll } from "./helpers/context";
 
@@ -9,6 +12,10 @@ function extractTokenFromMagicLinkPayload(payloadJson: string): string {
   const payload = JSON.parse(payloadJson) as { magicLinkUrl: string };
   const url = new URL(payload.magicLinkUrl);
   return url.searchParams.get("token") as string;
+}
+
+function extractCookiePair(setCookie: string): string {
+  return setCookie.split(";", 1)[0];
 }
 
 describe("admin magic-link auth", () => {
@@ -48,6 +55,14 @@ describe("admin magic-link auth", () => {
     );
 
     expect(verifyResponse.status).toBe(200);
+    const setCookie = verifyResponse.headers.get("set-cookie") ?? "";
+    expect(setCookie).toContain(`${ADMIN_SESSION_COOKIE_NAME}=`);
+    expect(setCookie).toContain("HttpOnly");
+    expect(setCookie).toContain("SameSite=Strict");
+    expect(setCookie).toContain("Secure");
+    expect(setCookie).not.toContain("Domain=");
+    expect(setCookie).not.toContain("Max-Age=");
+    expect(setCookie).not.toContain("Expires=");
 
     await expect(
       verifyLink(
@@ -173,5 +188,70 @@ describe("admin magic-link auth", () => {
       ),
     );
     expect(verifyResponse.status).toBe(200);
+  });
+
+  it("authenticates, exposes session details, and clears the session cookie on logout", async () => {
+    await seedEventAndAdmin(env.DB);
+
+    await requestLink(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/admin/auth/request-link", {
+          method: "POST",
+          body: JSON.stringify({ email: "admin@pkic.org" }),
+          headers: { "content-type": "application/json" },
+        }),
+        {},
+      ),
+    );
+
+    const outboxRows = await queryAll<{ payload_json: string }>(env.DB, "SELECT payload_json FROM email_outbox");
+    const token = extractTokenFromMagicLinkPayload(outboxRows[0].payload_json);
+
+    const verifyResponse = await verifyLink(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/admin/auth/verify-link", {
+          method: "POST",
+          body: JSON.stringify({ token }),
+          headers: { "content-type": "application/json" },
+        }),
+        {},
+      ),
+    );
+
+    const cookiePair = extractCookiePair(verifyResponse.headers.get("set-cookie") ?? "");
+    expect(cookiePair).toMatch(new RegExp(`^${ADMIN_SESSION_COOKIE_NAME}=`));
+
+    const sessionResponse = await session(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/admin/auth/session", {
+          method: "GET",
+          headers: { cookie: cookiePair },
+        }),
+        {},
+      ),
+    );
+    expect(sessionResponse.status).toBe(200);
+    await expect(sessionResponse.json()).resolves.toMatchObject({ admin: { email: "admin@pkic.org" } });
+
+    const logoutResponse = await logout(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/admin/auth/logout", {
+          method: "POST",
+          headers: { cookie: cookiePair },
+        }),
+        {},
+      ),
+    );
+
+    expect(logoutResponse.status).toBe(200);
+    expect(logoutResponse.headers.get("set-cookie")).toContain(`${ADMIN_SESSION_COOKIE_NAME}=`);
+    expect(logoutResponse.headers.get("set-cookie")).toContain("Max-Age=0");
+
+    const sessions = await queryAll<{ revoked_at: string | null }>(env.DB, "SELECT revoked_at FROM sessions");
+    expect(sessions.some((row) => row.revoked_at)).toBe(true);
   });
 });

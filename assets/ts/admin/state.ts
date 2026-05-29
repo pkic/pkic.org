@@ -7,27 +7,25 @@
 import { signal, computed } from "@preact/signals";
 import type { EventSummary, EventDetail } from "./types";
 
-export const authToken = signal<string | null>(localStorage.getItem("pkic_at"));
-export const authEmail = signal<string | null>(localStorage.getItem("pkic_ae"));
-export const isAuthed = computed(() => Boolean(authToken.value));
+export type AuthStatus = "loading" | "authenticated" | "anonymous";
+
+export const authStatus = signal<AuthStatus>("loading");
+export const authEmail = signal<string | null>(null);
+export const isAuthed = computed(() => authStatus.value === "authenticated");
 
 export const eventList = signal<EventSummary[]>([]);
 export const currentEvent = signal<EventDetail | null>(null);
 
-export function saveAuthToken(token: string): void {
-  authToken.value = token;
-  localStorage.setItem("pkic_at", token);
+export function setAuthChecking(): void {
+  authStatus.value = "loading";
 }
 
-export function saveAuth(token: string, email: string | null): void {
-  saveAuthToken(token);
+export function saveAuth(email: string | null): void {
+  authStatus.value = "authenticated";
   authEmail.value = email;
-  if (email) localStorage.setItem("pkic_ae", email);
 }
 
 export function clearAuth(): void {
-  authToken.value = null;
+  authStatus.value = "anonymous";
   authEmail.value = null;
-  localStorage.removeItem("pkic_at");
-  localStorage.removeItem("pkic_ae");
 }

@@ -1,6 +1,12 @@
 import { Hono, type Context, type Next } from "hono";
 import { fromHono } from "chanfana";
-import { getCachedAdminForRequest, requireAdminFromRequest, signAdminSessionToken } from "../../../_lib/auth/admin";
+import {
+  getCachedAdminAuthTransport,
+  getCachedAdminForRequest,
+  requireAdminFromRequest,
+  serializeAdminSessionCookie,
+  signAdminSessionToken,
+} from "../../../_lib/auth/admin";
 import { REQUEST_DB_CONTEXT_KEY, type RequestDbContext } from "../../../_lib/db/context";
 import { primaryFirstDb, readReplicaDb } from "../../../_lib/db/session";
 import type { DatabaseSessionLike } from "../../../_lib/db/session";
@@ -27,7 +33,8 @@ const ADMIN_TOKEN_HEADER = "x-admin-token";
 async function rotateAdminToken(c: Context<RequestDbContext>, sessionDb: DatabaseSessionLike): Promise<void> {
   const state = sessionDb.getBookmark?.();
   const admin = getCachedAdminForRequest(c.req.raw);
-  if (!state || !admin?.sessionId || !admin.expiresAt || !c.env.INTERNAL_SIGNING_SECRET) {
+  const transport = getCachedAdminAuthTransport(c.req.raw);
+  if (!state || !admin?.sessionId || !admin.expiresAt || !c.env.INTERNAL_SIGNING_SECRET || transport === "api-key") {
     return;
   }
 
@@ -37,6 +44,12 @@ async function rotateAdminToken(c: Context<RequestDbContext>, sessionDb: Databas
     expiresAt: admin.expiresAt,
     state,
   });
+
+  if (transport === "cookie") {
+    c.res.headers.append("Set-Cookie", serializeAdminSessionCookie(token, c.req.raw));
+    return;
+  }
+
   c.header(ADMIN_TOKEN_HEADER, token);
 }
 
