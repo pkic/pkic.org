@@ -7,9 +7,11 @@ import {
   serializeAdminSessionCookie,
   signAdminSessionToken,
 } from "../../../_lib/auth/admin";
+import { requireAuthScope } from "../../../_lib/auth/scopes";
 import { REQUEST_DB_CONTEXT_KEY, type RequestDbContext } from "../../../_lib/db/context";
 import { primaryFirstDb, readReplicaDb } from "../../../_lib/db/session";
 import type { DatabaseSessionLike } from "../../../_lib/db/session";
+import { inferredScopesForOperation } from "../../../_lib/openapi/mcp";
 import { onRequestGet as AdminAuditLogGet_l } from "./audit-log";
 import { onRequestGet as AdminDonationsGet_l } from "./donations";
 import { onRequestGet as AdminEmailTemplatesGet_l } from "./email-templates";
@@ -29,6 +31,33 @@ import users_Router from "./users/router";
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 const ADMIN_TOKEN_HEADER = "x-admin-token";
+
+function normalizedAdminPath(path: string): string {
+  if (path.startsWith("/api/v1/admin/")) {
+    return path;
+  }
+
+  if (path === "/" || path === "") {
+    return "/api/v1/admin/";
+  }
+
+  return `/api/v1/admin${path.startsWith("/") ? path : `/${path}`}`;
+}
+
+function isAdminAuthPath(path: string): boolean {
+  return normalizedAdminPath(path).startsWith("/api/v1/admin/auth/");
+}
+
+function enforceAdminScopes(c: Context<RequestDbContext>): void {
+  const admin = getCachedAdminForRequest(c.req.raw);
+  if (!admin) {
+    return;
+  }
+
+  for (const scope of inferredScopesForOperation(normalizedAdminPath(c.req.path), c.req.method.toLowerCase())) {
+    requireAuthScope(admin, scope);
+  }
+}
 
 async function rotateAdminToken(c: Context<RequestDbContext>, sessionDb: DatabaseSessionLike): Promise<void> {
   const state = sessionDb.getBookmark?.();
@@ -60,12 +89,19 @@ async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Nex
   if (method !== "GET" && method !== "HEAD") {
     const sessionDb = primaryFirstDb(primaryDb);
     c.set(REQUEST_DB_CONTEXT_KEY, sessionDb);
+    if (!isAdminAuthPath(c.req.path)) {
+      await requireAdminFromRequest(primaryDb, c.req.raw, c.env);
+      enforceAdminScopes(c);
+    }
     await next();
     await rotateAdminToken(c, sessionDb);
     return;
   }
 
   const admin = await requireAdminFromRequest(primaryDb, c.req.raw, c.env);
+  if (!isAdminAuthPath(c.req.path)) {
+    enforceAdminScopes(c);
+  }
   // Validate state bookmark: must be a reasonable string (null is ok for default session)
   const bookmark = admin.state ? (admin.state.length > 0 && admin.state.length < 1024 ? admin.state : null) : null;
   const sessionDb = readReplicaDb(primaryDb, bookmark);

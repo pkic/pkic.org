@@ -71,7 +71,7 @@ function withRequiredScopesDescription(operation: JsonObject, scopes: AuthScope[
   };
 }
 
-function inferredScopesForOperation(path: string, method: string): AuthScope[] {
+export function inferredScopesForOperation(path: string, method: string): AuthScope[] {
   const scopes: AuthScope[] = [];
 
   if (!isBearerAuthPath(path)) {

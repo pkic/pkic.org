@@ -44,7 +44,6 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const response = json({
     success: true,
-    token,
     expiresAt: verified.expiresAt,
     admin: verified.admin,
   });

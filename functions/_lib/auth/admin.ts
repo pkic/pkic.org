@@ -5,6 +5,7 @@ import { nowIso, addMinutes, addHours } from "../utils/time";
 import { randomToken, sha256Hex } from "../utils/crypto";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
 import { uuid } from "../utils/ids";
+import { AUTH_SCOPES } from "./scopes";
 import type { AuthAdmin, DatabaseLike, Env } from "../types";
 
 interface AdminUserRow {
@@ -43,11 +44,16 @@ const adminAuthTransportByRequest = new WeakMap<Request, AdminAuthTransport>();
 
 type AdminAuthTransport = "bearer" | "cookie" | "api-key";
 
-function constantTimeEqual(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
+async function sha256Bytes(value: string): Promise<Uint8Array> {
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
+  return new Uint8Array(digest);
+}
+
+async function constantTimeEqual(a: string, b: string): Promise<boolean> {
+  const [aHash, bHash] = await Promise.all([sha256Bytes(a), sha256Bytes(b)]);
   let diff = 0;
-  for (let i = 0; i < a.length; i++) {
-    diff |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  for (let i = 0; i < aHash.length; i++) {
+    diff |= aHash[i] ^ bHash[i];
   }
   return diff === 0;
 }
@@ -169,7 +175,7 @@ export async function signAdminSessionToken(
     sid: payload.sessionId,
     email: payload.admin.email,
     role: payload.admin.role,
-    scopes: payload.scopes ?? payload.admin.scopes ?? [],
+    scopes: payload.scopes ?? payload.admin.scopes ?? [...AUTH_SCOPES],
     exp: sessionExpiresAtToExp(payload.expiresAt),
   };
 
@@ -213,8 +219,8 @@ export async function requireAdminFromRequest(
 
   // API key auth — no DB lookup needed, returns a synthetic admin identity.
   // Use constant-time comparison to avoid leaking the configured key via timing.
-  if (env?.ADMIN_API_KEY && constantTimeEqual(token, env.ADMIN_API_KEY)) {
-    const admin = { id: "api-key", email: "api-key", role: "admin" };
+  if (env?.ADMIN_API_KEY && (await constantTimeEqual(token, env.ADMIN_API_KEY))) {
+    const admin = { id: "api-key", email: "api-key", role: "admin", scopes: [...AUTH_SCOPES] };
     cacheAdminForRequest(request, admin, "api-key");
     return admin;
   }
@@ -393,6 +399,7 @@ export async function verifyAdminMagicLink(
       id: row.user_id,
       email: row.email,
       role: row.role,
+      scopes: [...AUTH_SCOPES],
     },
     sessionId,
     expiresAt,

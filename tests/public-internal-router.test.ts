@@ -67,6 +67,29 @@ describe("public and internal router smoke tests", () => {
   });
 
   it("serves the MCP Streamable HTTP endpoint", async () => {
+    const protectedResource = await callApp(
+      new Request("https://app.test/.well-known/oauth-protected-resource/api/v1/mcp"),
+    );
+
+    expect(protectedResource.status).toBe(200);
+    const protectedPayload = (await protectedResource.json()) as {
+      authorization_servers?: string[];
+      bearer_methods_supported?: string[];
+    };
+    expect(protectedPayload.authorization_servers).toContain("https://app.test");
+    expect(protectedPayload.bearer_methods_supported).toContain("header");
+
+    const metadata = await callApp(new Request("https://app.test/.well-known/oauth-authorization-server"));
+    expect(metadata.status).toBe(200);
+    const metadataPayload = (await metadata.json()) as {
+      authorization_endpoint?: string;
+      token_endpoint?: string;
+      registration_endpoint?: string;
+    };
+    expect(metadataPayload.authorization_endpoint).toBe("https://app.test/api/v1/mcp/oauth/authorize");
+    expect(metadataPayload.token_endpoint).toBe("https://app.test/api/v1/mcp/oauth/token");
+    expect(metadataPayload.registration_endpoint).toBe("https://app.test/api/v1/mcp/oauth/register");
+
     const response = await callApp(
       new Request("https://app.test/api/v1/mcp", {
         method: "POST",
@@ -88,7 +111,6 @@ describe("public and internal router smoke tests", () => {
       }),
     );
 
-    expect(response.status).not.toBe(404);
-    expect(response.status).toBeLessThan(500);
+    expect(response.status).toBe(401);
   });
 });

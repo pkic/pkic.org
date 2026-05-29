@@ -1,8 +1,5 @@
 import { Hono } from "hono";
 import { fromHono, getReDocUI, getSwaggerUI } from "chanfana";
-import { DynamicWorkerExecutor, type Executor, type ExecuteResult } from "@cloudflare/codemode";
-import { openApiMcpServer, type RequestOptions } from "@cloudflare/codemode/mcp";
-import { createMcpHandler } from "agents/mcp";
 import { logError, logInfo } from "./_lib/logging";
 import { runRetentionJob } from "./_lib/services/retention";
 import { runScheduledDueWork } from "./_lib/services/scheduled-due-work";
@@ -13,10 +10,9 @@ import { onRequestGet as OgCardGet } from "./api/v1/og/card/[...path]";
 import type { Env } from "./_lib/types";
 import { processIncomingEmail } from "./_lib/email/ingest";
 import { decorateOpenApiSpec, filterOpenApiSpecForMcp } from "./_lib/openapi/mcp";
+import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/mcp/worker";
 
 const OPENAPI_JSON_PATH = "/api/v1/openapi.json";
-const MCP_PATH = "/api/v1/mcp";
-const MCP_OPENAPI_JSON_PATH = "/api/v1/mcp/openapi.json";
 const DOCS_PATH = "/api/v1/docs";
 const REDOC_PATH = "/api/v1/redocs";
 
@@ -53,77 +49,13 @@ function mcpOpenApiSpecResponse(): Response {
   return jsonResponse(filterOpenApiSpecForMcp(openapi.schema));
 }
 
-class MissingWorkerLoaderExecutor implements Executor {
-  async execute(): Promise<ExecuteResult> {
-    return {
-      result: null,
-      error: "MCP code execution is unavailable because the LOADER binding is not configured.",
-    };
-  }
-}
-
-function mcpExecutor(env: Env): Executor {
-  return env.LOADER ? new DynamicWorkerExecutor({ loader: env.LOADER }) : new MissingWorkerLoaderExecutor();
-}
-
-function apiRequestFromMcp(
-  request: Request,
-  env: Env,
-  ctx: ExecutionContext,
-): (options: RequestOptions) => Promise<unknown> {
-  const authorization = request.headers.get("authorization");
-
-  return async ({ method, path, query, body, contentType, rawBody }) => {
-    const url = new URL(path, request.url);
-    for (const [key, value] of Object.entries(query ?? {})) {
-      if (value !== undefined) {
-        url.searchParams.set(key, String(value));
-      }
-    }
-
-    const headers = new Headers({ accept: "application/json" });
-    if (authorization) {
-      headers.set("authorization", authorization);
-    }
-
-    let requestBody: BodyInit | undefined;
-    if (body !== undefined && method !== "GET") {
-      requestBody = rawBody && typeof body === "string" ? body : JSON.stringify(body);
-      headers.set("content-type", contentType ?? "application/json");
-    }
-
-    const response = await app.fetch(new Request(url, { method, headers, body: requestBody }), env, ctx);
-    const responseType = response.headers.get("content-type") ?? "";
-    if (responseType.includes("application/json")) {
-      return response.json();
-    }
-
-    return {
-      status: response.status,
-      body: await response.text(),
-    };
-  };
-}
-
-function mcpResponse(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  const server = openApiMcpServer({
-    spec: filterOpenApiSpecForMcp(openapi.schema),
-    executor: mcpExecutor(env),
-    request: apiRequestFromMcp(request, env, ctx),
-    name: "pkic-api",
-    version: "v1",
-    description: "Search and call PKI Consortium API operations exposed for MCP.",
-  });
-
-  return createMcpHandler(server, { route: MCP_PATH })(request, env, ctx);
-}
+const fetchWithMcp = createMcpWorkerFetch({ app, openApiSchema: openapi.schema });
 
 const REMINDER_CRON = "*/15 * * * *";
 const RETENTION_CRON = "0 3 * * *";
 
 app.get("/og/*", OgCardGet);
 app.get(OPENAPI_JSON_PATH, openApiSpecResponse);
-app.all(MCP_PATH, (c) => mcpResponse(c.req.raw, c.env, c.executionCtx));
 app.get(MCP_OPENAPI_JSON_PATH, mcpOpenApiSpecResponse);
 app.get(DOCS_PATH, () => htmlResponse(getSwaggerUI(OPENAPI_JSON_PATH)));
 app.get(REDOC_PATH, () => htmlResponse(getReDocUI(OPENAPI_JSON_PATH)));
@@ -167,7 +99,9 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
 }
 
 export default {
-  fetch: app.fetch,
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    return await fetchWithMcp(request, env, ctx);
+  },
   email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): void {
     ctx.waitUntil(processIncomingEmail(message, env));
   },

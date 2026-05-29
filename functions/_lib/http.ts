@@ -52,12 +52,11 @@ export function handleError(error: unknown): Response {
     );
   }
 
-  const message = error instanceof Error ? error.message : "Unknown error";
   return json(
     {
       error: {
         code: "INTERNAL_ERROR",
-        message,
+        message: "Internal server error",
       },
     },
     500,

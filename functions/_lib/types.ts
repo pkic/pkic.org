@@ -60,6 +60,8 @@ export interface Env {
   BROWSER?: Fetcher;
   /** Cloudflare Worker Loader binding for MCP codemode sandbox execution. */
   LOADER?: WorkerLoader;
+  /** KV namespace used by the Workers OAuth Provider for MCP auth state and tokens. */
+  OAUTH_KV?: KVNamespace;
   /** Cloudflare Rate Limiting binding for low-volume per-email public email triggers. */
   EMAIL_RATE_LIMITER?: RateLimitBinding;
   /** Cloudflare Rate Limiting binding for higher-volume per-IP public email triggers. */
@@ -73,6 +75,8 @@ export interface Env {
   WAITLIST_CLAIM_WINDOW_HOURS?: string;
   MAGIC_LINK_TTL_MINUTES?: string;
   MANAGE_TOKEN_TTL_HOURS?: string;
+  MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS?: string;
+  MCP_OAUTH_REFRESH_TOKEN_TTL_SECONDS?: string;
   REMINDER_INTERVAL_DAYS?: string;
   PENDING_CONFIRMATION_REMINDER_INTERVAL_DAYS?: string;
   MAX_INVITE_REMINDERS?: string;
