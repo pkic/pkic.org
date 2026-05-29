@@ -3,6 +3,7 @@
   "name": "pkic-org-base",
   "compatibility_date": "2026-03-17",
   "compatibility_flags": ["nodejs_compat"],
+  "worker_loaders": [{ "binding": "LOADER" }],
   "main": "functions/router.ts",
   "observability": {
     "enabled": true
@@ -10,6 +11,7 @@
   "env": {
     "production": {
       "name": "pkic-org",
+      "worker_loaders": [{ "binding": "LOADER" }],
       "triggers": {
         "crons": ["*/15 * * * *", "0 3 * * *"]
       },
@@ -97,6 +99,7 @@
     },
     "preview": {
       "name": "pkic-org-preview",
+      "worker_loaders": [{ "binding": "LOADER" }],
       "assets": {
         "directory": "./public/",
         "binding": "ASSETS_PUBLIC",
@@ -174,6 +177,7 @@
     },
     "local": {
       "name": "pkic-org-local",
+      "worker_loaders": [{ "binding": "LOADER" }],
       "assets": {
         "directory": "./public/",
         "binding": "ASSETS_PUBLIC",

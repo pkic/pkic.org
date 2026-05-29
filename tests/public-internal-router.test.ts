@@ -65,4 +65,30 @@ describe("public and internal router smoke tests", () => {
     const payload = (await response.json()) as { error?: { code?: string } };
     expect(payload.error?.code).toBe("INVALID_SIGNATURE");
   });
+
+  it("serves the MCP Streamable HTTP endpoint", async () => {
+    const response = await callApp(
+      new Request("https://app.test/api/v1/mcp", {
+        method: "POST",
+        headers: {
+          accept: "application/json, text/event-stream",
+          "content-type": "application/json",
+          "mcp-protocol-version": "2025-06-18",
+        },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          id: 1,
+          method: "initialize",
+          params: {
+            protocolVersion: "2025-06-18",
+            capabilities: {},
+            clientInfo: { name: "vitest", version: "0" },
+          },
+        }),
+      }),
+    );
+
+    expect(response.status).not.toBe(404);
+    expect(response.status).toBeLessThan(500);
+  });
 });

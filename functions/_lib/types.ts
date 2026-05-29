@@ -58,6 +58,8 @@ export interface Env {
   IMAGES?: ImagesBinding;
   /** Cloudflare Browser Rendering binding — headless Chromium for HTML-to-image rendering. */
   BROWSER?: Fetcher;
+  /** Cloudflare Worker Loader binding for MCP codemode sandbox execution. */
+  LOADER?: WorkerLoader;
   /** Cloudflare Rate Limiting binding for low-volume per-email public email triggers. */
   EMAIL_RATE_LIMITER?: RateLimitBinding;
   /** Cloudflare Rate Limiting binding for higher-volume per-IP public email triggers. */
