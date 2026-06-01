@@ -15,4 +15,4 @@ app.get("/confirm-info", EventsEventSlugRegistrationsConfirmInfoGet_l);
 openapi.post("/resend-confirmation", EventsEventSlugRegistrationsResendConfirmationPost);
 app.post("/resend-manage-link", EventsEventSlugRegistrationsResendManageLinkPost_l);
 
-export default app;
+export default openapi;

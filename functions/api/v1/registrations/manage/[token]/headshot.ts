@@ -24,8 +24,14 @@ import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-prerender";
 import { AppError } from "../../../../../_lib/errors";
-const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
-const MAX_HEADSHOT_BYTES = 2 * 1024 * 1024; // 2 MB — cropped JPEG from the client crop UI should be well under 500 KB
+import {
+  REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES,
+  REGISTRATION_HEADSHOT_MAX_BYTES,
+  registrationHeadshotDeleteRouteSchema,
+  registrationHeadshotUploadRouteSchema,
+} from "../../../../../../assets/shared/schemas/api";
+const ALLOWED_MIME_TYPES = new Set<string>(REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES);
+const MAX_HEADSHOT_BYTES = REGISTRATION_HEADSHOT_MAX_BYTES;
 
 // ── PUT — upload / replace headshot ──────────────────────────────────────────
 
@@ -179,7 +185,7 @@ export async function onRequest(c: any): Promise<Response> {
 }
 
 export class RegistrationsManageTokenHeadshotPut extends OpenAPIRoute {
-  schema = {};
+  schema = registrationHeadshotUploadRouteSchema;
 
   async handle(c: any) {
     return onPut(c);
@@ -187,7 +193,7 @@ export class RegistrationsManageTokenHeadshotPut extends OpenAPIRoute {
 }
 
 export class RegistrationsManageTokenHeadshotDelete extends OpenAPIRoute {
-  schema = {};
+  schema = registrationHeadshotDeleteRouteSchema;
 
   async handle(c: any) {
     return onDelete(c);

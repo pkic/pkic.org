@@ -1,10 +1,12 @@
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { all, first } from "../../../../../_lib/db/queries";
 import type { ProposalListRecord } from "../../../../../_lib/services/proposals";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { adminEventProposalsQuerySchema, eventSlugParamsSchema } from "../../../../../../assets/shared/schemas/api";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
@@ -90,3 +92,20 @@ export async function onRequest(c: AdminContext): Promise<Response> {
 
   return onRequestGet(c);
 }
+
+export const AdminEventsEventSlugProposalsGet = openApiRoute(
+  {
+    tags: ["Admin proposals"],
+    summary: "List event proposals",
+    request: {
+      params: eventSlugParamsSchema,
+      query: adminEventProposalsQuerySchema,
+    },
+    responses: {
+      "200": { description: "Event proposals visible to the authenticated actor." },
+      "401": { description: "Missing or invalid authentication." },
+      "403": { description: "The actor lacks access to proposals for this event." },
+    },
+  },
+  onRequestGet,
+);

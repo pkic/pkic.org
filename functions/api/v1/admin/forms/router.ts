@@ -9,6 +9,6 @@ export const openapi = fromHono(app);
 
 app.get("/", AdminFormsGet_l);
 app.post("/", AdminFormsPost_l);
-app.route("/:formKey", formKey_Router);
+openapi.route("/:formKey", formKey_Router);
 
-export default app;
+export default openapi;

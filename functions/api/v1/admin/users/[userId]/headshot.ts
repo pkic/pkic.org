@@ -18,6 +18,11 @@ import { invalidateAndRerender } from "../../../../../_lib/services/og-badge-pre
 import { AppError } from "../../../../../_lib/errors";
 import { readUploadedImage, resizeHeadshot } from "../../../../../_lib/utils/headshot-upload";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import {
+  adminUserHeadshotDeleteRouteSchema,
+  adminUserHeadshotGetRouteSchema,
+  adminUserHeadshotPutRouteSchema,
+} from "../../../../../../assets/shared/schemas/route-contracts";
 const ALLOWED_MIME_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_HEADSHOT_BYTES = 5 * 1024 * 1024; // 5 MB (raw input before admin crop UI; result will be a small JPEG)
 
@@ -172,7 +177,7 @@ export async function onRequest(c: AdminContext): Promise<Response> {
 }
 
 export class AdminUsersUserIdHeadshotGet extends OpenAPIRoute {
-  schema = {};
+  schema = adminUserHeadshotGetRouteSchema;
 
   async handle(c: AdminContext) {
     return onGet(c);
@@ -180,7 +185,7 @@ export class AdminUsersUserIdHeadshotGet extends OpenAPIRoute {
 }
 
 export class AdminUsersUserIdHeadshotPut extends OpenAPIRoute {
-  schema = {};
+  schema = adminUserHeadshotPutRouteSchema;
 
   async handle(c: AdminContext) {
     return onPut(c);
@@ -188,7 +193,7 @@ export class AdminUsersUserIdHeadshotPut extends OpenAPIRoute {
 }
 
 export class AdminUsersUserIdHeadshotDelete extends OpenAPIRoute {
-  schema = {};
+  schema = adminUserHeadshotDeleteRouteSchema;
 
   async handle(c: AdminContext) {
     return onDelete(c);

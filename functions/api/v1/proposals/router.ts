@@ -6,7 +6,7 @@ import speaker_Router from "./speaker/router";
 const app = new Hono();
 export const openapi = fromHono(app);
 
-app.route("/manage", manage_Router);
-app.route("/speaker", speaker_Router);
+openapi.route("/manage", manage_Router);
+openapi.route("/speaker", speaker_Router);
 
-export default app;
+export default openapi;

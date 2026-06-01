@@ -9,4 +9,4 @@ export const openapi = fromHono(app);
 app.put("/headshot", registrationManageHeadshotRequest_l);
 openapi.delete("/headshot", RegistrationsManageTokenHeadshotDelete);
 
-export default app;
+export default openapi;

@@ -20,4 +20,4 @@ openapi.delete("/headshot", AdminUsersUserIdHeadshotDelete);
 app.get("/", AdminUsersUserIdGet_l);
 app.patch("/", AdminUsersUserIdPatch_l);
 
-export default app;
+export default openapi;

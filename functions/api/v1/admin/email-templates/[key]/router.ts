@@ -16,4 +16,4 @@ app.get("/versions", AdminEmailTemplatesKeyVersionsGet_l);
 app.post("/versions", AdminEmailTemplatesKeyVersionsPost_l);
 app.get("/exists", AdminEmailTemplatesKeyExistsGet_l);
 
-export default app;
+export default openapi;

@@ -14,13 +14,28 @@ test("renders the admin proposal detail workflow with submission answers and ope
   });
 
   await page.addInitScript(() => {
-    localStorage.setItem("pkic_at", "e2e-admin-token");
-    localStorage.setItem("pkic_ae", "admin@pkic.org");
     (window as Window & { __openedUrls?: string[] }).__openedUrls = [];
     window.open = ((url?: string | URL) => {
       (window as Window & { __openedUrls?: string[] }).__openedUrls?.push(String(url ?? ""));
       return null;
     }) as typeof window.open;
+  });
+
+  await page.route("**/api/v1/admin/auth/session", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        success: true,
+        admin: {
+          id: "admin-1",
+          email: "admin@pkic.org",
+          role: "admin",
+          scopes: ["proposals:read", "proposal-reviews:write", "proposal-finalization:write"],
+          expiresAt: null,
+        },
+      }),
+    });
   });
 
   await page.route("**/api/v1/admin/proposals/proposal-1/open-manage", async (route) => {

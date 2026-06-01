@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { fromHono } from "chanfana";
+import { fromHono, getReDocUI, getSwaggerUI } from "chanfana";
 import { logError, logInfo } from "./_lib/logging";
 import { runRetentionJob } from "./_lib/services/retention";
 import { runScheduledDueWork } from "./_lib/services/scheduled-due-work";
@@ -9,17 +9,70 @@ import r_Router from "./r/router";
 import { onRequestGet as OgCardGet } from "./api/v1/og/card/[...path]";
 import type { Env } from "./_lib/types";
 import { processIncomingEmail } from "./_lib/email/ingest";
+import { decorateOpenApiSpec, filterOpenApiSpecForMcp } from "./_lib/openapi/mcp";
+import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/mcp/worker";
+
+const OPENAPI_JSON_PATH = "/api/v1/openapi.json";
+const DOCS_PATH = "/api/v1/docs";
+const REDOC_PATH = "/api/v1/redocs";
 
 const app = new Hono<{ Bindings: Env }>();
-export const openapi = fromHono(app);
+export const openapi = fromHono(app, {
+  openapi_url: null,
+  docs_url: null,
+  redoc_url: null,
+  schema: {
+    info: {
+      title: "PKI Consortium API",
+      version: "v1",
+    },
+  },
+});
+
+function htmlResponse(html: string): Response {
+  return new Response(html, {
+    headers: { "content-type": "text/html; charset=UTF-8" },
+  });
+}
+
+let cachedOpenApiSpecBody: string | null = null;
+
+function openApiSpecResponse(): Response {
+  if (!cachedOpenApiSpecBody) {
+    cachedOpenApiSpecBody = JSON.stringify(decorateOpenApiSpec(openapi.schema));
+  }
+
+  return new Response(cachedOpenApiSpecBody, {
+    headers: { "content-type": "application/json;charset=UTF-8" },
+  });
+}
+
+let cachedMcpOpenApiSpecBody: string | null = null;
+
+function mcpOpenApiSpecResponse(): Response {
+  if (!cachedMcpOpenApiSpecBody) {
+    cachedMcpOpenApiSpecBody = JSON.stringify(filterOpenApiSpecForMcp(openapi.schema));
+  }
+
+  return new Response(cachedMcpOpenApiSpecBody, {
+    headers: { "content-type": "application/json;charset=UTF-8" },
+  });
+}
 
 const REMINDER_CRON = "*/15 * * * *";
 const RETENTION_CRON = "0 3 * * *";
 
 app.get("/og/*", OgCardGet);
-app.route("/api", api_Router);
-app.route("/donate", donate_Router);
-app.route("/r", r_Router);
+app.get(OPENAPI_JSON_PATH, openApiSpecResponse);
+app.get(MCP_OPENAPI_JSON_PATH, mcpOpenApiSpecResponse);
+app.get(DOCS_PATH, () => htmlResponse(getSwaggerUI(OPENAPI_JSON_PATH)));
+app.get(REDOC_PATH, () => htmlResponse(getReDocUI(OPENAPI_JSON_PATH)));
+openapi.route("/api", api_Router);
+openapi.route("/donate", donate_Router);
+openapi.route("/r", r_Router);
+
+// Build the MCP fetch handler after OpenAPI routes are registered.
+const fetchWithMcp = createMcpWorkerFetch({ app, openApiSchema: openapi.schema });
 
 async function runScheduledJob(controller: ScheduledController, env: Env): Promise<void> {
   logInfo("SCHEDULED_JOB_STARTED", { cron: controller.cron, scheduledTime: controller.scheduledTime });
@@ -57,7 +110,9 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
 }
 
 export default {
-  fetch: app.fetch,
+  async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    return await fetchWithMcp(request, env, ctx);
+  },
   email(message: ForwardableEmailMessage, env: Env, ctx: ExecutionContext): void {
     ctx.waitUntil(processIncomingEmail(message, env));
   },

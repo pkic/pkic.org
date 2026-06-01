@@ -16,6 +16,10 @@ import { generateSignedRsvpAddress } from "../../../../../_lib/email/rsvp";
 import { registrationManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import type { UserRecord } from "../../../../../_lib/services/users";
 import { registrationConfirmSchema } from "../../../../../../assets/shared/schemas/api";
+import {
+  registrationConfirmEmailGetRouteSchema,
+  registrationConfirmEmailPostRouteSchema,
+} from "../../../../../../assets/shared/schemas/route-contracts";
 
 async function confirmRegistration(c: any, token: string, registrationId?: string | null): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
@@ -167,7 +171,7 @@ export async function onRequest(c: any): Promise<Response> {
 }
 
 export class EventsEventSlugRegistrationsConfirmEmailGet extends OpenAPIRoute {
-  schema = {};
+  schema = registrationConfirmEmailGetRouteSchema;
 
   async handle(c: any) {
     try {
@@ -179,7 +183,7 @@ export class EventsEventSlugRegistrationsConfirmEmailGet extends OpenAPIRoute {
 }
 
 export class EventsEventSlugRegistrationsConfirmEmailPost extends OpenAPIRoute {
-  schema = {};
+  schema = registrationConfirmEmailPostRouteSchema;
 
   async handle(c: any) {
     try {

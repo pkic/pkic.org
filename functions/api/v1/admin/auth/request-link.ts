@@ -72,7 +72,6 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       reason:
         "No active admin user found for the requested email address. " +
         "Check that the user exists in the database with role='admin' and active=1.",
-      email: body.email,
     });
   }
 

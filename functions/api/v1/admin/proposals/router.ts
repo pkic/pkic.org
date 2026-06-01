@@ -6,6 +6,6 @@ import type { RequestDbContext } from "../../../../_lib/db/context";
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
-app.route("/:proposalId", proposalId_Router);
+openapi.route("/:proposalId", proposalId_Router);
 
-export default app;
+export default openapi;

@@ -10,7 +10,6 @@
  */
 
 import { OpenAPIRoute } from "chanfana";
-import { z } from "zod";
 import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { AppError } from "../../../../../_lib/errors";
@@ -27,22 +26,13 @@ import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../
 import { registrationConfirmPageUrl } from "../../../../../_lib/services/frontend-links";
 import type { UserRecord } from "../../../../../_lib/services/users";
 import type { RegistrationRecord } from "../../../../../_lib/services/registrations/types";
-import { normalizedEmailSchema } from "../../../../../../assets/shared/schemas/api";
-
-const resendConfirmationSchema = z
-  .object({
-    id: z.uuid().optional(),
-    token: z.string().min(1).optional(),
-    email: normalizedEmailSchema.optional(),
-  })
-  .refine((value) => Boolean(value.token || value.email), {
-    message: "token or email is required",
-  });
+import { registrationResendConfirmationSchema } from "../../../../../../assets/shared/schemas/api";
+import { registrationResendConfirmationRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 
 export async function onRequestPost(c: any): Promise<Response> {
   c.set("sensitive", true);
 
-  const body = await parseJsonBody(c.req, resendConfirmationSchema);
+  const body = await parseJsonBody(c.req, registrationResendConfirmationSchema);
 
   const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
@@ -177,7 +167,7 @@ export async function onRequestPost(c: any): Promise<Response> {
 }
 
 export class EventsEventSlugRegistrationsResendConfirmationPost extends OpenAPIRoute {
-  schema = {};
+  schema = registrationResendConfirmationRouteSchema;
 
   async handle(c: any) {
     return onRequestPost(c);

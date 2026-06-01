@@ -7,4 +7,4 @@ export const openapi = fromHono(app);
 
 openapi.post("/resend-speaker-manage-link", EventsEventSlugProposalsResendSpeakerManageLinkPost);
 
-export default app;
+export default openapi;

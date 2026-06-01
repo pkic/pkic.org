@@ -152,8 +152,9 @@ describe("full workflow", () => {
         ),
       );
       expect(verifyResponse.status).toBe(200);
-      const verifyPayload = (await verifyResponse.json()) as { token: string };
-      const adminSessionToken = verifyPayload.token;
+      await verifyResponse.json();
+      const adminSessionCookie = verifyResponse.headers.get("set-cookie") ?? "";
+      const adminSessionToken = decodeURIComponent(adminSessionCookie.match(/^pkic_admin_session=([^;]+)/)?.[1] ?? "");
 
       const reviewerUserId = crypto.randomUUID();
       await env.DB.prepare(
@@ -171,7 +172,7 @@ describe("full workflow", () => {
             method: "POST",
             headers: {
               "content-type": "application/json",
-              authorization: `Bearer ${adminSessionToken}`,
+              cookie: adminSessionCookie,
             },
             body: JSON.stringify({
               invites: [{ email: "speaker@example.test", firstName: "Speaker", lastName: "One", sourceType: "direct" }],
@@ -222,7 +223,7 @@ describe("full workflow", () => {
             method: "POST",
             headers: {
               "content-type": "application/json",
-              authorization: `Bearer ${adminSessionToken}`,
+              cookie: adminSessionCookie,
             },
             body: JSON.stringify({
               recommendation: "accept",
@@ -262,7 +263,7 @@ describe("full workflow", () => {
             method: "POST",
             headers: {
               "content-type": "application/json",
-              authorization: `Bearer ${adminSessionToken}`,
+              cookie: adminSessionCookie,
             },
             body: JSON.stringify({
               finalStatus: "accepted",

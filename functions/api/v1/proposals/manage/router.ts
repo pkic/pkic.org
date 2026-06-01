@@ -9,6 +9,6 @@ export const openapi = fromHono(app);
 
 app.get("/:token", ProposalsManageTokenGet_l);
 app.patch("/:token", ProposalsManageTokenPatch_l);
-app.route("/:token", token_Router);
+openapi.route("/:token", token_Router);
 
-export default app;
+export default openapi;

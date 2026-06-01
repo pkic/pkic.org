@@ -9,4 +9,4 @@ export const openapi = fromHono(app);
 app.post("/reset-failed", InternalEmailResetFailedPost_l);
 openapi.post("/retry", InternalEmailRetryPost);
 
-export default app;
+export default openapi;

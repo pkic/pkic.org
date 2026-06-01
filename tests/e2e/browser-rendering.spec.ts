@@ -311,7 +311,7 @@ async function fillProposal(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Continue/i }).click();
 }
 
-async function signInAsAdmin(page: Page): Promise<string> {
+async function signInAsAdmin(page: Page): Promise<void> {
   await page.goto("/admin/");
   await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
 
@@ -324,28 +324,21 @@ async function signInAsAdmin(page: Page): Promise<string> {
 
   await page.goto(magicUrl);
   await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
-
-  const adminToken = await page.evaluate(() => window.localStorage.getItem("pkic_at"));
-  expect(adminToken).toBeTruthy();
-
-  return adminToken as string;
 }
 
 async function setEventDayInPersonCapacity(
   page: Page,
-  adminToken: string,
   eventSlug: string,
   dayDate: string,
   capacity: number,
 ): Promise<void> {
   const result = await page.evaluate(
-    async ({ adminToken: token, eventSlug: slug, dayDate: date, capacity: nextCapacity }) => {
+    async ({ eventSlug: slug, dayDate: date, capacity: nextCapacity }) => {
       const headers = {
-        Authorization: `Bearer ${token}`,
         "content-type": "application/json",
       };
 
-      const getResponse = await fetch(`/api/v1/admin/events/${slug}/days`, { headers });
+      const getResponse = await fetch(`/api/v1/admin/events/${slug}/days`, { headers, credentials: "same-origin" });
       const getBody = (await getResponse.json()) as {
         days?: Array<{
           date: string;
@@ -389,6 +382,7 @@ async function setEventDayInPersonCapacity(
       const putResponse = await fetch(`/api/v1/admin/events/${slug}/days`, {
         method: "PUT",
         headers,
+        credentials: "same-origin",
         body: JSON.stringify({ days }),
       });
 
@@ -407,7 +401,7 @@ async function setEventDayInPersonCapacity(
         reason: putResponse.ok ? null : "put_failed",
       };
     },
-    { adminToken, eventSlug, dayDate, capacity },
+    { eventSlug, dayDate, capacity },
   );
 
   expect(result.ok, `admin day capacity update failed: ${JSON.stringify(result)}`).toBe(true);
@@ -423,13 +417,13 @@ test.describe("browser workflows", () => {
     });
     const screenshot = createScreenshotter(page);
 
-    const adminToken = await signInAsAdmin(page);
+    await signInAsAdmin(page);
     const eventSlug = "pqc-conference-amsterdam-nl";
     const dayDate = "2026-12-01";
     const restoredCapacity = 800;
 
     try {
-      await setEventDayInPersonCapacity(page, adminToken, eventSlug, dayDate, 1);
+      await setEventDayInPersonCapacity(page, eventSlug, dayDate, 1);
 
       await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
       await fillRegistrationStep1(page, {
@@ -488,7 +482,7 @@ test.describe("browser workflows", () => {
 
       errorMonitor.assertClean();
     } finally {
-      await setEventDayInPersonCapacity(page, adminToken, eventSlug, dayDate, restoredCapacity);
+      await setEventDayInPersonCapacity(page, eventSlug, dayDate, restoredCapacity);
     }
   });
 

@@ -1,5 +1,7 @@
 import { z } from "zod";
-import { SOURCE_TYPES } from "../constants/source-types";
+import { defaultedSourceTypeSchema, sourceTypeSchema } from "./source";
+
+export { sourceTypeSchema };
 
 const namePattern = /^[\p{L}\p{N} .,'’\-()&/]+$/u;
 const slugPattern = /^[a-z0-9]+(?:[a-z0-9-]*[a-z0-9])?$/;
@@ -36,6 +38,138 @@ export const organizationNameSchema = trimmedString(2, 160);
 export const jobTitleSchema = trimmedString(2, 120);
 export const tokenSchema = z.string().trim().regex(tokenPattern, "Invalid token format");
 
+export const eventSlugParamsSchema = z.object({
+  eventSlug: z.string().trim().regex(slugPattern),
+});
+
+export const proposalIdParamsSchema = z.object({
+  proposalId: z.uuid(),
+});
+
+export const proposalReviewIdParamsSchema = proposalIdParamsSchema.extend({
+  reviewId: z.uuid(),
+});
+
+export const formKeyParamsSchema = z.object({
+  formKey: z.string().trim().min(1).max(120),
+});
+
+export const adminUserIdParamsSchema = z.object({
+  userId: z.uuid(),
+});
+
+export const emailTemplateKeyParamsSchema = z.object({
+  key: z.string().trim().min(1).max(200),
+});
+
+export const registrationManageTokenParamsSchema = z.object({
+  token: z.string().trim().min(1).max(4096).describe("Attendee self-service registration manage token"),
+});
+
+export const adminEmailOutboxQuerySchema = z.object({
+  status: z.string().trim().optional(),
+  messageType: z.enum(["transactional", "promotional"]).optional(),
+  dueNow: z.coerce.boolean().optional(),
+  q: z.string().trim().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+});
+
+export const adminEventProposalsQuerySchema = z.object({
+  status: z.string().trim().optional(),
+  search: z.string().trim().optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+});
+
+export const REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES = ["image/jpeg", "image/png", "image/webp"] as const;
+export const REGISTRATION_HEADSHOT_MAX_BYTES = 2 * 1024 * 1024;
+
+export const registrationHeadshotUploadFormSchema = z.object({
+  consent: z
+    .enum(["true"])
+    .describe("Consent declaring the attendee owns/has rights to the uploaded photo of themselves"),
+  file: z
+    .any()
+    .describe(
+      `Headshot image binary file (accepted MIME types: ${REGISTRATION_HEADSHOT_ALLOWED_MIME_TYPES.join(", ")})`,
+    ),
+});
+
+export const registrationHeadshotUploadResponseSchema = z.object({
+  success: z.boolean(),
+  headshotUrl: z.string().url().describe("The permanent URL pointing to the new uploaded headshot profile asset"),
+});
+
+export const successResponseSchema = z.object({
+  success: z.boolean(),
+});
+
+export const registrationHeadshotUploadRouteSchema = {
+  tags: ["Registrations", "Headshots"],
+  summary: "Upload or replace registration headshot",
+  description:
+    "Uploads or replaces the attendee's profile headshot image which is dynamically rendered in social badge images. Requires a valid registration management token as path parameter.",
+  request: {
+    params: registrationManageTokenParamsSchema,
+    body: {
+      content: {
+        "multipart/form-data": {
+          schema: registrationHeadshotUploadFormSchema,
+        },
+      },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "Headshot image uploaded and processed successfully.",
+      content: {
+        "application/json": {
+          schema: registrationHeadshotUploadResponseSchema,
+        },
+      },
+    },
+    "400": {
+      description: "Invalid request payload format, or file parameter is missing.",
+    },
+    "413": {
+      description: "Uploaded file exceeds the maximum allowed size.",
+    },
+    "503": {
+      description: "R2 upload buckets are not configured/reachable.",
+    },
+  },
+};
+
+export const registrationHeadshotDeleteRouteSchema = {
+  tags: ["Registrations", "Headshots"],
+  summary: "Delete registration headshot",
+  description:
+    "Deletes the attendee's profile headshot image from active storage and clears references. Requires a valid registration management token.",
+  request: {
+    params: registrationManageTokenParamsSchema,
+  },
+  responses: {
+    "200": {
+      description: "Headshot removed successfully.",
+      content: {
+        "application/json": {
+          schema: successResponseSchema,
+        },
+      },
+    },
+    "404": {
+      description: "User details matching parent token were not found.",
+    },
+  },
+};
+
+export const adminHeadshotUploadResponseSchema = z.object({
+  success: z.boolean(),
+  r2Key: z.string().describe("R2 object key for the uploaded headshot"),
+});
+
 export const attendanceTypeSchema = z.enum(["in_person", "virtual", "on_demand"]);
 // dayAttendanceTypeSchema accepts any non-empty string because attendance options
 // are now configurable per event day (e.g. 'in_person', 'on_demand', 'virtual').
@@ -46,7 +180,6 @@ export const dayAttendanceTypeSchema = z
   .min(1)
   .max(64)
   .regex(/^[a-z_][a-z0-9_]*$/, "Invalid attendance type");
-export const sourceTypeSchema = z.enum(SOURCE_TYPES);
 export const inviteTypeSchema = z.enum(["attendee", "speaker"]);
 export const declineReasonCodeSchema = z.enum([
   "not_interested",
@@ -70,6 +203,13 @@ const dayDateSchema = z
 export const dayAttendanceItemSchema = z.object({
   dayDate: dayDateSchema,
   attendanceType: dayAttendanceTypeSchema,
+});
+
+export const dayWaitlistItemSchema = z.object({
+  dayDate: dayDateSchema,
+  status: z.enum(["waiting", "offered", "accepted"]),
+  priorityLane: z.enum(["continuity", "general"]),
+  offerExpiresAt: z.string().trim().nullable(),
 });
 
 const customAnswerScalarSchema = z.union([z.string().trim().max(500), z.number().finite(), z.boolean()]);
@@ -155,7 +295,7 @@ export const registrationCreateSchema = z
     jobTitle: jobTitleSchema.optional(),
     attendanceType: attendanceTypeSchema.optional(),
     dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
-    sourceType: sourceTypeSchema.catch("direct").default("direct"),
+    sourceType: defaultedSourceTypeSchema,
     sourceRef: trimmedString(2, 200).optional(),
     customAnswers: customAnswersSchema.optional(),
     inviteToken: tokenSchema.optional(),
@@ -180,6 +320,32 @@ export const registrationCreateSchema = z
 export const registrationConfirmSchema = z.object({
   id: z.uuid().optional(),
   token: tokenSchema,
+});
+
+export const registrationConfirmQuerySchema = registrationConfirmSchema;
+
+export const registrationConfirmResponseSchema = z.object({
+  success: z.boolean(),
+  status: z.string(),
+  shareUrl: z.string().url().nullable(),
+  manageUrl: z.string().url(),
+  manageToken: z.string(),
+  dayAttendance: z.array(dayAttendanceItemSchema),
+  dayWaitlist: z.array(dayWaitlistItemSchema),
+});
+
+export const registrationResendConfirmationSchema = z
+  .object({
+    id: z.uuid().optional(),
+    token: z.string().min(1).optional(),
+    email: normalizedEmailSchema.optional(),
+  })
+  .refine((value) => Boolean(value.token || value.email), {
+    message: "token or email is required",
+  });
+
+export const okResponseSchema = z.object({
+  ok: z.boolean(),
 });
 
 export const registrationManageSchema = z.object({
@@ -260,7 +426,7 @@ export const proposalCreateSchema = boundedJsonObject(
   {
     inviteToken: tokenSchema.optional(),
     inviteId: z.uuid().optional(),
-    sourceType: sourceTypeSchema.catch("direct").default("direct"),
+    sourceType: defaultedSourceTypeSchema,
     sourceRef: trimmedString(2, 200).optional(),
     referralCode: z
       .string()
@@ -296,6 +462,19 @@ export const proposalCreateSchema = boundedJsonObject(
       });
     }
   }
+});
+
+export const proposalCreateResponseSchema = z.object({
+  success: z.boolean(),
+  proposalId: z.uuid(),
+  status: z.string(),
+  manageToken: z.string(),
+  manageUrl: z.string().url(),
+  shareUrl: z.string().url(),
+});
+
+export const proposalResendSpeakerManageLinkSchema = z.object({
+  email: normalizedEmailSchema,
 });
 
 export const proposalManageSchema = boundedJsonObject(

@@ -2,6 +2,8 @@ import { parseJsonBody } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
+import { MCP_EXTENSION } from "../../../../../_lib/openapi/mcp";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
   buildProposalReviewAuditDetails,
   listProposalReviews,
@@ -9,7 +11,7 @@ import {
 } from "../../../../../_lib/services/proposals";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { first } from "../../../../../_lib/db/queries";
-import { reviewUpsertSchema } from "../../../../../../assets/shared/schemas/api";
+import { proposalIdParamsSchema, reviewUpsertSchema } from "../../../../../../assets/shared/schemas/api";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
@@ -114,3 +116,49 @@ export async function onRequest(c: AdminContext): Promise<Response> {
 
   return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
 }
+
+export const AdminProposalsProposalIdReviewsGet = openApiRoute(
+  {
+    tags: ["Admin proposal reviews"],
+    summary: "List proposal reviews",
+    request: {
+      params: proposalIdParamsSchema,
+    },
+    responses: {
+      "200": { description: "Proposal reviews visible to the authenticated actor." },
+      "401": { description: "Missing or invalid authentication." },
+      "403": { description: "The actor lacks review access for this proposal." },
+      "404": { description: "Proposal not found." },
+    },
+  },
+  onRequestGet,
+);
+
+export const AdminProposalsProposalIdReviewsPost = openApiRoute(
+  {
+    tags: ["Admin proposal reviews"],
+    summary: "Create or update my proposal review",
+    request: {
+      params: proposalIdParamsSchema,
+      body: {
+        content: {
+          "application/json": {
+            schema: reviewUpsertSchema,
+          },
+        },
+        required: true,
+      },
+    },
+    responses: {
+      "200": { description: "The proposal review was saved." },
+      "400": { description: "Invalid review payload." },
+      "401": { description: "Missing or invalid authentication." },
+      "403": { description: "The actor lacks review access for this proposal." },
+      "404": { description: "Proposal not found." },
+    },
+    [MCP_EXTENSION]: {
+      expose: true,
+    },
+  } as any,
+  onRequestPost,
+);

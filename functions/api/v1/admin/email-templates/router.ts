@@ -8,6 +8,6 @@ const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.post("/preview", AdminEmailTemplatesPreviewPost_l);
-app.route("/:key", key_Router);
+openapi.route("/:key", key_Router);
 
-export default app;
+export default openapi;

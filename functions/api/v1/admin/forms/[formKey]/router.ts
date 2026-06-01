@@ -14,4 +14,4 @@ openapi.patch("/", AdminFormsFormKeyPatch);
 openapi.delete("/", AdminFormsFormKeyDelete);
 app.get("/submissions", AdminFormsFormKeySubmissionsGet_l);
 
-export default app;
+export default openapi;

@@ -21,6 +21,7 @@ import { SELF, env } from "cloudflare:test";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { signAdminSessionToken } from "../functions/_lib/auth/admin";
+import type { AuthScope } from "../functions/_lib/auth/scopes";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { nowIso } from "../functions/_lib/utils/time";
 import type { DatabaseLike, Env as AppEnv } from "../functions/_lib/types";
@@ -81,7 +82,7 @@ async function insertSession(
   _db: DatabaseLike,
   userId: string,
   rawToken: string,
-  opts: { expiresAt?: string; revokedAt?: string } = {},
+  opts: { expiresAt?: string; revokedAt?: string; scopes?: AuthScope[] } = {},
 ): Promise<string> {
   const sessionId = crypto.randomUUID();
   const tokenHash = await sha256Hex(rawToken);
@@ -99,6 +100,7 @@ async function insertSession(
     admin: { id: userId, email: "admin@example.test", role: "admin" },
     sessionId,
     expiresAt,
+    scopes: opts.scopes,
   });
 }
 
@@ -444,6 +446,13 @@ describe("session-token validation", () => {
     const token = await createAdminSession(env.DB, adminId, "valid-admin-token");
     const response = await callUsers(token);
     expect(response.status).toBe(200);
+  });
+
+  it("rejects scoped sessions when the endpoint requires a different scope", async () => {
+    const token = await insertSession(env.DB, adminId, "proposal-read-token", { scopes: ["proposals:read"] });
+    const response = await callUsers(token);
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error?: { code?: string } }).error?.code).toBe("SCOPE_REQUIRED");
   });
 });
 

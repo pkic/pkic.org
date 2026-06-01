@@ -7,4 +7,4 @@ export const openapi = fromHono(app);
 
 app.get("/:file", HeadshotsUserIdFileGet_l);
 
-export default app;
+export default openapi;

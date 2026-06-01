@@ -24,6 +24,7 @@
  */
 
 import { OpenAPIRoute } from "chanfana";
+import { stripeWebhookPostRouteSchema } from "../../../../assets/shared/schemas/route-contracts";
 import { json } from "../../../_lib/http";
 import type { Env } from "../../../_lib/types";
 import { buildBadgeAttachment } from "../../../_lib/email/attachments";
@@ -551,7 +552,7 @@ async function fetchPaymentDetails(
 }
 
 export class WebhooksStripePost extends OpenAPIRoute {
-  schema = {};
+  schema = stripeWebhookPostRouteSchema;
 
   async handle(c: any) {
     return onRequestPost(c as any);

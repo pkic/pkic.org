@@ -37,6 +37,7 @@
  */
 
 import { OpenAPIRoute } from "chanfana";
+import { sendgridWebhookPostRouteSchema } from "../../../../assets/shared/schemas/route-contracts";
 import { json } from "../../../_lib/http";
 import type { Env } from "../../../_lib/types";
 import { logInfo, logError } from "../../../_lib/logging";
@@ -347,7 +348,7 @@ async function onRequestPost(c: any): Promise<Response> {
 }
 
 export class WebhooksSendgridPost extends OpenAPIRoute {
-  schema = {};
+  schema = sendgridWebhookPostRouteSchema;
 
   async handle(c: any) {
     return onRequestPost(c);

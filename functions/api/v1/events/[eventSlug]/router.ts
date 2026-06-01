@@ -18,7 +18,7 @@ openapi.post("/proposals", EventsEventSlugProposalsPost);
 app.post("/registrations", EventsEventSlugRegistrationsPost_l);
 openapi.post("/speaker-invites", EventsEventSlugSpeakerInvitesPost);
 openapi.get("/terms", TermsGet);
-app.route("/proposals", proposals_Router);
-app.route("/registrations", registrations_Router);
+openapi.route("/proposals", proposals_Router);
+openapi.route("/registrations", registrations_Router);
 
-export default app;
+export default openapi;

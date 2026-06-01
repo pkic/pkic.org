@@ -4,6 +4,7 @@ import { handleError, json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { activateTemplateVersion } from "../../../../../_lib/email/templates";
 import { adminEmailTemplateActivateSchema } from "../../../../../../assets/shared/schemas/api";
+import { adminEmailTemplateActivateRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
@@ -19,7 +20,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 }
 
 export class AdminEmailTemplatesKeyActivatePost extends OpenAPIRoute {
-  schema = {};
+  schema = adminEmailTemplateActivateRouteSchema;
 
   async handle(c: AdminContext) {
     try {

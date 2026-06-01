@@ -22,7 +22,28 @@ export async function onRequest(c: any): Promise<Response> {
 }
 
 export class InternalEmailRetryPost extends OpenAPIRoute {
-  schema = {};
+  schema = {
+    tags: ["Internal", "Email"],
+    summary: "Retry failed/pending outbox email messages",
+    request: {
+      body: {
+        content: {
+          "application/json": {
+            schema: adminRetryOutboxSchema,
+          },
+        },
+        required: true,
+      },
+    },
+    responses: {
+      "200": {
+        description: "Retry batch completed successfully.",
+      },
+      "401": {
+        description: "Admin authorization required.",
+      },
+    },
+  };
 
   async handle(c: any) {
     return onRequestPost(c);

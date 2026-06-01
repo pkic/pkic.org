@@ -7,6 +7,6 @@ const app = new Hono();
 export const openapi = fromHono(app);
 
 app.get("/:code", OgCodeGet_l);
-app.route("/donation", donation_Router);
+openapi.route("/donation", donation_Router);
 
-export default app;
+export default openapi;

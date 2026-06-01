@@ -8,4 +8,4 @@ export const openapi = fromHono(app);
 
 app.post("/bulk", AdminEventsEventSlugInvitesSpeakersBulkPost_l);
 
-export default app;
+export default openapi;

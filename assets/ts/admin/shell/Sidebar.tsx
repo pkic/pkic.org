@@ -197,9 +197,13 @@ export function Sidebar() {
       <div class="adm-sidebar-footer px-1 pt-3">
         <button
           class="btn btn-sm btn-outline-secondary w-100"
-          onClick={() => {
-            clearAuth();
-            window.location.reload();
+          onClick={async () => {
+            try {
+              await fetch("/api/v1/admin/auth/logout", { method: "POST", credentials: "same-origin" });
+            } finally {
+              clearAuth();
+              window.location.assign("/admin/");
+            }
           }}
         >
           Sign out

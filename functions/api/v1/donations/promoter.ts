@@ -17,7 +17,13 @@
  */
 
 import { OpenAPIRoute } from "chanfana";
+import {
+  donationPromoterPostRouteSchema,
+  donationPromoterRequestSchema,
+} from "../../../../assets/shared/schemas/donation";
 import { json } from "../../../_lib/http";
+import { parseJsonBody } from "../../../_lib/validation";
+import { isAppError } from "../../../_lib/errors";
 import { first, run } from "../../../_lib/db/queries";
 import { randomBase62 } from "../../../_lib/utils/ids";
 import { resolveAppBaseUrl } from "../../../_lib/config";
@@ -38,20 +44,16 @@ export async function onRequestPost(c: any): Promise<Response> {
   const request = c.req.raw;
   const db = env.DB;
 
-  let body: { session_id?: unknown };
+  let body: { session_id: string };
   try {
-    body = (await request.json()) as { session_id?: unknown };
-  } catch {
-    return json({ error: { code: "BAD_REQUEST", message: "Invalid JSON body" } }, 400);
+    body = await parseJsonBody(request, donationPromoterRequestSchema);
+  } catch (error) {
+    if (isAppError(error) && (error.code === "INVALID_JSON" || error.code === "VALIDATION_ERROR")) {
+      return json({ error: { code: "BAD_REQUEST", message: error.message } }, 400);
+    }
+    throw error;
   }
-
-  const sessionId = typeof body.session_id === "string" ? body.session_id.trim() : null;
-  if (!sessionId || !sessionId.startsWith("cs_")) {
-    return json(
-      { error: { code: "BAD_REQUEST", message: "session_id must be a valid Stripe checkout session ID" } },
-      400,
-    );
-  }
+  const sessionId = body.session_id;
 
   // Must be a completed donation
   const donation = await first<DonationRow>(
@@ -147,7 +149,7 @@ export async function getOrCreatePromoterCode(
 }
 
 export class DonationsPromoterPost extends OpenAPIRoute {
-  schema = {};
+  schema = donationPromoterPostRouteSchema;
 
   async handle(c: any) {
     return onRequestPost(c);

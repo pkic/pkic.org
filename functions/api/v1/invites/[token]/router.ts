@@ -17,4 +17,4 @@ app.post("/decline", InvitesTokenDeclinePost_l);
 app.get("/info", InvitesTokenInfoGet_l);
 app.post("/reminders", InvitesTokenRemindersPost_l);
 
-export default app;
+export default openapi;

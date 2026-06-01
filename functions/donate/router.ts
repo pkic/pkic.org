@@ -5,6 +5,6 @@ import r_Router from "./r/router";
 const app = new Hono();
 export const openapi = fromHono(app);
 
-app.route("/r", r_Router);
+openapi.route("/r", r_Router);
 
-export default app;
+export default openapi;

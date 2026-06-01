@@ -6,7 +6,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { DataTable } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
-import { authToken, authEmail, saveAuthToken } from "../../../state";
+import { authEmail } from "../../../state";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../../../shared/headshot/AdminHeadshotManager";
 import { fmt, toast } from "../../../ui";
 import { useData } from "../../../../hooks/useData";
@@ -244,16 +244,13 @@ function SpeakerCard({
   }, [speaker.userId, speaker.headshotUrl]);
 
   async function uploadHeadshotFile(file: Blob) {
-    const token = authToken.value;
     const headers: Record<string, string> = { "Content-Type": file.type || "image/jpeg" };
-    if (token) headers["Authorization"] = `Bearer ${token}`;
     const res = await fetch(`/api/v1/admin/users/${speaker.userId}/headshot`, {
       method: "PUT",
+      credentials: "same-origin",
       headers,
       body: file,
     });
-    const nextToken = res.headers.get("x-admin-token");
-    if (nextToken) saveAuthToken(nextToken);
     const data = (await res.json().catch(() => ({}))) as {
       headshotUrl?: string;
       error?: { message?: string };

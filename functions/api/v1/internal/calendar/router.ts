@@ -7,4 +7,4 @@ export const openapi = fromHono(app);
 
 openapi.post("/rsvp", InternalCalendarRsvpPost);
 
-export default app;
+export default openapi;

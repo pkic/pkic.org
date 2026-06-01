@@ -1,13 +1,21 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
-import { onRequestGet as AdminProposalsProposalIdGet_l } from "./index";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
+import {
+  adminProposalAuditLogRouteSchema,
+  adminProposalFinalizePreviewRouteSchema,
+  adminProposalFinalizeRouteSchema,
+  adminProposalOpenManageRouteSchema,
+  adminProposalPatchRouteSchema,
+  adminProposalSpeakersRouteSchema,
+} from "../../../../../../assets/shared/schemas/route-contracts";
+import { AdminProposalsProposalIdGet } from "./index";
 import { onRequestPost as AdminProposalsProposalIdOpenManagePost_l } from "./open-manage";
 import { onRequestPatch as AdminProposalsProposalIdPatch_l } from "./patch";
 import { onRequestPost as AdminProposalsProposalIdFinalizePost_l } from "./finalize";
 import { onRequestPost as AdminProposalsProposalIdFinalizePreviewPost_l } from "./finalize-preview";
 import { onRequestGet as AdminProposalsProposalIdAuditLogGet_l } from "./audit-log";
-import { onRequestGet as AdminProposalsProposalIdReviewsGet_l } from "./reviews";
-import { onRequestPost as AdminProposalsProposalIdReviewsPost_l } from "./reviews";
+import { AdminProposalsProposalIdReviewsGet, AdminProposalsProposalIdReviewsPost } from "./reviews";
 import { onRequestGet as AdminProposalsProposalIdSpeakersGet_l } from "./speakers";
 import reviews_Router from "./reviews/router";
 import speakers_Router from "./speakers/router";
@@ -16,16 +24,38 @@ import type { RequestDbContext } from "../../../../../_lib/db/context";
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
-app.get("/", AdminProposalsProposalIdGet_l);
-app.post("/open-manage", AdminProposalsProposalIdOpenManagePost_l);
-app.patch("/", AdminProposalsProposalIdPatch_l);
-app.post("/finalize", AdminProposalsProposalIdFinalizePost_l);
-app.post("/finalize-preview", AdminProposalsProposalIdFinalizePreviewPost_l);
-app.get("/audit-log", AdminProposalsProposalIdAuditLogGet_l);
-app.get("/reviews", AdminProposalsProposalIdReviewsGet_l);
-app.post("/reviews", AdminProposalsProposalIdReviewsPost_l);
-app.get("/speakers", AdminProposalsProposalIdSpeakersGet_l);
-app.route("/reviews", reviews_Router);
-app.route("/speakers", speakers_Router);
+const AdminProposalsProposalIdOpenManagePost = openApiRoute(
+  adminProposalOpenManageRouteSchema,
+  AdminProposalsProposalIdOpenManagePost_l,
+);
+const AdminProposalsProposalIdPatch = openApiRoute(adminProposalPatchRouteSchema, AdminProposalsProposalIdPatch_l);
+const AdminProposalsProposalIdFinalizePost = openApiRoute(
+  adminProposalFinalizeRouteSchema,
+  AdminProposalsProposalIdFinalizePost_l,
+);
+const AdminProposalsProposalIdFinalizePreviewPost = openApiRoute(
+  adminProposalFinalizePreviewRouteSchema,
+  AdminProposalsProposalIdFinalizePreviewPost_l,
+);
+const AdminProposalsProposalIdAuditLogGet = openApiRoute(
+  adminProposalAuditLogRouteSchema,
+  AdminProposalsProposalIdAuditLogGet_l,
+);
+const AdminProposalsProposalIdSpeakersGet = openApiRoute(
+  adminProposalSpeakersRouteSchema,
+  AdminProposalsProposalIdSpeakersGet_l,
+);
 
-export default app;
+openapi.get("/", AdminProposalsProposalIdGet);
+openapi.post("/open-manage", AdminProposalsProposalIdOpenManagePost);
+openapi.patch("/", AdminProposalsProposalIdPatch);
+openapi.post("/finalize", AdminProposalsProposalIdFinalizePost);
+openapi.post("/finalize-preview", AdminProposalsProposalIdFinalizePreviewPost);
+openapi.get("/audit-log", AdminProposalsProposalIdAuditLogGet);
+openapi.get("/reviews", AdminProposalsProposalIdReviewsGet);
+openapi.post("/reviews", AdminProposalsProposalIdReviewsPost);
+openapi.get("/speakers", AdminProposalsProposalIdSpeakersGet);
+openapi.route("/reviews", reviews_Router);
+openapi.route("/speakers", speakers_Router);
+
+export default openapi;

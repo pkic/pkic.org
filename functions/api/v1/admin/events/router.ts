@@ -8,6 +8,6 @@ const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 app.post("/sync-from-hugo", AdminEventsSyncFromHugoPost_l);
-app.route("/:eventSlug", eventSlug_Router);
+openapi.route("/:eventSlug", eventSlug_Router);
 
-export default app;
+export default openapi;
