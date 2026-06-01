@@ -1,0 +1,14 @@
+section,item,max_points,score,notes
+Mandatory gate,Assessment or certification report provided,Pass/Fail,,Vendor must provide a product-specific report
+Mandatory gate,Report scope matches offered product and version,Pass/Fail,,Check deployment model and configuration
+Mandatory gate,Minimum required level met,Pass/Fail,,Highest fully met cumulative level only
+Mandatory gate,Required assurance method met,Pass/Fail,,Self-assessed third-party assessed or PKI Consortium certified
+Mandatory gate,Criteria-level evidence available,Pass/Fail,,Evidence may be public NDA portal redacted or assessor-only
+Scored category,PQCMM level achieved,45,,Score only highest fully met level
+Scored category,Assurance method,20,,Score confidence in the claim separately from maturity
+Scored category,Evidence quality,15,,Score completeness recency traceability and product specificity
+Scored category,Roadmap credibility,10,,Do not inflate current level for future plans
+Scored category,Operational fit,10,,Deployment interoperability performance support reassessment
+Tie-breaker,Report recency,N/A,,Prefer current assessments covering the offered version
+Tie-breaker,Crypto agility,N/A,,Prefer products with stronger migration flexibility
+Tie-breaker,Scope match,N/A,,Prefer reports matching exact configuration and deployment model

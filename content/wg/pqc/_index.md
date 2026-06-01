@@ -36,11 +36,14 @@ card:
   gradient: ["#4a1d8e", "#1c0852"]
   description: "Facilitating information exchange and sharing insights on post-quantum cryptography adoption across the PKI ecosystem."
   links:
-    - text: "PQC Conference"
+    - text: "Conference"
       url: "/wg/pqc/conferences/"
       chip: warning
     - text: "Capabilities Matrix"
       url: "/wg/pqc/pqccm/"
+      chip: primary
+    - text: "Maturity Model"
+      url: "/wg/pqc/pqcmm/"
       chip: primary
     - text: "Blog Posts"
       url: "/tags/pqc/"
@@ -79,10 +82,30 @@ focus:
     description: Facilitating testing and interoperability of PQC implementations across vendors and across protocols.
     icon: "🔗"
 
+keyDeliverables:
+  - title: PQC Maturity Model
+    description: A six-level framework defining what quantum-readiness means for products and services — enabling consistent vendor assessment and supply-chain evaluation.
+    url: /wg/pqc/pqcmm/
+    icon: pqc
+    cta: Explore the Model
+    badge: Active
+  - title: PQC Capabilities Matrix
+    description: A living document tracking support for post-quantum cryptography algorithms across vendors, libraries, and hardware.
+    url: /wg/pqc/pqccm/
+    icon: cm
+    cta: View the Matrix
+    badge: Active
+
 deliverables:
   - title: PQC Capabilities Matrix
+    menuTitle: Capability Matrix
     description: A living document tracking support for post-quantum cryptography algorithms across vendors and products.
-    url: /pqccm/
+    url: /wg/pqc/pqccm/
+    status: active
+  - title: PQC Maturity Model
+    menuTitle: Maturity Model
+    description: A six-level framework defining what quantum-readiness means for products and services — enabling consistent vendor assessment and supply-chain evaluation.
+    url: /wg/pqc/pqcmm/
     status: active
 
 resources:
