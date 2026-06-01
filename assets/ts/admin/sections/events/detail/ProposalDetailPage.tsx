@@ -3,6 +3,7 @@ import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Markdown } from "../../../../components/Markdown";
 import { DataTable } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
@@ -411,11 +412,12 @@ function ReviewCard({ review }: { review: ProposalReview }) {
           <span class="small text-muted">{reviewer}</span>
           <span class="small text-muted ms-auto">{fmt(review.updated_at)}</span>
         </div>
-        {review.reviewer_comment && <p class="small mb-1">{review.reviewer_comment}</p>}
+        {review.reviewer_comment && <Markdown markdown={review.reviewer_comment} className="small mb-1" />}
         {review.applicant_note && (
-          <p class="small text-muted mb-0 border-start border-warning border-2 ps-2 fst-italic">
-            Note to applicant: {review.applicant_note}
-          </p>
+          <div class="small text-muted mb-0 border-start border-warning border-2 ps-2">
+            <div class="fw-semibold fst-italic mb-1">Note to applicant</div>
+            <Markdown markdown={review.applicant_note} />
+          </div>
         )}
       </div>
     </div>

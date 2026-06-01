@@ -174,14 +174,87 @@ describe("admin proposal endpoints", () => {
       proposals: Array<{
         proposer_email: string;
         review_count: number;
+        average_review_score: number | null;
+        recommendation_accept_count: number;
         decision_status: string | null;
       }>;
+      pagination: { total: number; hasMore: boolean };
     };
 
     expect(payload.proposals.length).toBe(1);
     expect(payload.proposals[0].proposer_email).toBe("speaker@pkic.org");
     expect(Number(payload.proposals[0].review_count)).toBe(1);
+    expect(Number(payload.proposals[0].average_review_score)).toBe(9);
+    expect(Number(payload.proposals[0].recommendation_accept_count)).toBe(1);
     expect(payload.proposals[0].decision_status).toBe("accepted");
+    expect(payload.pagination.total).toBe(1);
+  });
+
+  it("filters proposal list by recommendation and sorts by average score", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const secondProposalId = crypto.randomUUID();
+    const secondProposerId = crypto.randomUUID();
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
+        VALUES ('${secondProposerId}', 'speaker-two@pkic.org', 'speaker-two@pkic.org', 'Speaker', 'Two', 'Org', 'Role', NULL, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO session_proposals (
+          id, event_id, proposer_user_id, status, proposal_type, title, abstract,
+          details_json, referral_code, manage_token_hash, submitted_at, updated_at, withdrawn_at
+        ) VALUES (
+          '${secondProposalId}', '${eventId}', '${secondProposerId}', 'submitted', 'talk', 'Lower Score Proposal',
+          'Another proposal abstract that is long enough to represent realistic content for testing.',
+          NULL, NULL, 'hash-two', datetime('now', '-1 minute'), datetime('now'), NULL
+        )
+      `),
+      env.DB.prepare(`
+        INSERT INTO proposal_reviews (
+          id, proposal_id, reviewer_user_id, recommendation, score,
+          reviewer_comment, applicant_note, created_at, updated_at
+        ) VALUES (
+          '${crypto.randomUUID()}', '${secondProposalId}', '${adminId}', 'reject', 3,
+          'Too narrow for this event', NULL, datetime('now'), datetime('now')
+        )
+      `),
+    ]);
+
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list-sort");
+    const scoreResponse = await getEventProposals(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/admin/events/pqc-2026/proposals?sort=score_asc", {
+          headers: { authorization: `Bearer ${adminToken}` },
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+    const scorePayload = (await scoreResponse.json()) as { proposals: Array<{ title: string }> };
+    expect(scorePayload.proposals.map((proposal) => proposal.title)).toEqual([
+      "Lower Score Proposal",
+      "Endpoint Proposal",
+    ]);
+
+    const filterResponse = await getEventProposals(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/admin/events/pqc-2026/proposals?recommendation=reject", {
+          headers: { authorization: `Bearer ${adminToken}` },
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+    const filterPayload = (await filterResponse.json()) as {
+      proposals: Array<{ title: string; recommendation_reject_count: number }>;
+      pagination: { total: number };
+    };
+    expect(filterPayload.proposals).toHaveLength(1);
+    expect(filterPayload.proposals[0].title).toBe("Lower Score Proposal");
+    expect(Number(filterPayload.proposals[0].recommendation_reject_count)).toBe(1);
+    expect(filterPayload.pagination.total).toBe(1);
   });
 
   it("returns proposal detail with parsed answers and active form fields", async () => {

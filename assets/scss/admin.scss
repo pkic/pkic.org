@@ -823,6 +823,55 @@ $adm-danger: #dc3545;
   .adm-pre-wrap {
     white-space: pre-wrap;
   }
+  .adm-markdown {
+    line-height: 1.5;
+
+    > :last-child {
+      margin-bottom: 0;
+    }
+
+    p,
+    ul,
+    ol,
+    blockquote,
+    pre {
+      margin-bottom: 0.5rem;
+    }
+
+    h2,
+    h3,
+    h4 {
+      font-size: 0.95rem;
+      margin: 0.25rem 0 0.4rem;
+    }
+
+    blockquote {
+      border-left: 3px solid $adm-border;
+      color: $adm-muted;
+      padding-left: 0.75rem;
+    }
+
+    code {
+      background: #f8f9fa;
+      border: 1px solid $adm-border;
+      border-radius: 0.25rem;
+      padding: 0.05rem 0.25rem;
+    }
+
+    pre {
+      background: #f8f9fa;
+      border: 1px solid $adm-border;
+      border-radius: 0.375rem;
+      padding: 0.5rem;
+      white-space: pre-wrap;
+    }
+
+    pre code {
+      background: transparent;
+      border: 0;
+      padding: 0;
+    }
+  }
   .adm-cell-title {
     max-width: 260px;
   }

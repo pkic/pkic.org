@@ -21,23 +21,55 @@ import { Invites } from "./Invites";
 interface ProposalsResponse {
   proposals: ProposalSummary[];
   access: ProposalAccess;
-  pagination: { offset: number; limit: number; total: number; hasMore: boolean };
+  page?: { offset: number; limit: number; total: number; hasMore: boolean };
+  pagination?: { offset: number; limit: number; total: number; hasMore: boolean };
+}
+
+type RecommendationFilter = "" | "accept" | "needs-work" | "reject";
+type ProposalSort = "submitted_desc" | "score_desc" | "score_asc";
+
+function formatAverageScore(score: number | null): string {
+  if (score == null) return "—";
+  return score.toFixed(1).replace(/\.0$/, "");
+}
+
+function recommendationSummary(p: ProposalSummary) {
+  const entries = [
+    ["accept", "Accept", Number(p.recommendation_accept_count ?? 0)],
+    ["needs-work", "Needs work", Number(p.recommendation_needs_work_count ?? 0)],
+    ["reject", "Reject", Number(p.recommendation_reject_count ?? 0)],
+  ] as const;
+  const visible = entries.filter(([, , count]) => count > 0);
+  if (visible.length === 0) return <span class="text-muted small">—</span>;
+
+  return (
+    <div class="d-flex gap-1 flex-wrap">
+      {visible.map(([status, label, count]) => (
+        <Badge key={status} status={status} label={`${label} ${count}`} />
+      ))}
+    </div>
+  );
 }
 
 function ProposalsList({ slug }: { slug: string }) {
   const { offset, pageSize, resetPage, pagerProps } = usePageState();
   const [statusFilter, setStatusFilter] = useState("");
+  const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>("");
+  const [sort, setSort] = useState<ProposalSort>("submitted_desc");
   const [, navigate] = useHashLocation();
 
   const { data, loading, error, reload } = useData<ProposalsResponse>(() => {
     const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
     if (statusFilter) params.set("status", statusFilter);
+    if (recommendationFilter) params.set("recommendation", recommendationFilter);
+    if (sort !== "submitted_desc") params.set("sort", sort);
     return api<ProposalsResponse>(`/api/v1/admin/events/${slug}/proposals?${params}`);
-  }, [slug, statusFilter, offset, pageSize]);
+  }, [slug, statusFilter, recommendationFilter, sort, offset, pageSize]);
 
   const proposals = data?.proposals ?? [];
-  const total = data?.pagination?.total ?? 0;
-  const hasMore = data?.pagination?.hasMore ?? false;
+  const page = data?.pagination ?? data?.page;
+  const total = page?.total ?? 0;
+  const hasMore = page?.hasMore ?? false;
 
   return (
     <div>
@@ -59,6 +91,33 @@ function ProposalsList({ slug }: { slug: string }) {
           <option value="needs-work">Needs Work</option>
           <option value="withdrawn">Withdrawn</option>
         </select>
+        <label class="form-label mb-0 small fw-semibold">Recommendation</label>
+        <select
+          class="form-select form-select-sm adm-filter-select"
+          value={recommendationFilter}
+          onChange={(e) => {
+            setRecommendationFilter((e.target as HTMLSelectElement).value as RecommendationFilter);
+            resetPage();
+          }}
+        >
+          <option value="">All</option>
+          <option value="accept">Accept</option>
+          <option value="needs-work">Needs Work</option>
+          <option value="reject">Reject</option>
+        </select>
+        <label class="form-label mb-0 small fw-semibold">Sort</label>
+        <select
+          class="form-select form-select-sm adm-filter-select"
+          value={sort}
+          onChange={(e) => {
+            setSort((e.target as HTMLSelectElement).value as ProposalSort);
+            resetPage();
+          }}
+        >
+          <option value="submitted_desc">Submitted newest</option>
+          <option value="score_desc">Score high to low</option>
+          <option value="score_asc">Score low to high</option>
+        </select>
         <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void reload()}>
           ↺ Refresh
         </button>
@@ -71,7 +130,18 @@ function ProposalsList({ slug }: { slug: string }) {
       ) : (
         <>
           <Table
-            heads={["Title", "Proposer", "Type", "Status", "Decision", "Reviews", "Submitted", ""]}
+            heads={[
+              "Title",
+              "Proposer",
+              "Type",
+              "Status",
+              "Decision",
+              "Avg Score",
+              "Recommendations",
+              "Reviews",
+              "Submitted",
+              "",
+            ]}
             empty="No proposals found"
           >
             {proposals.length > 0 &&
@@ -104,6 +174,8 @@ function ProposalsList({ slug }: { slug: string }) {
                           <span class="text-muted small">—</span>
                         )}
                       </td>
+                      <td class="mono">{formatAverageScore(p.average_review_score)}</td>
+                      <td>{recommendationSummary(p)}</td>
                       <td class="mono">{p.review_count}</td>
                       <td class="mono small">{fmt(p.submitted_at)}</td>
                       <td>
