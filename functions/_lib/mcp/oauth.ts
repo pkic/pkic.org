@@ -23,10 +23,10 @@ import { enforceRateLimit } from "../rate-limit";
 import { writeAuditLog } from "../services/audit";
 import type { AuthAdmin, Env } from "../types";
 
-export const MCP_OAUTH_AUTHORIZE_PATH = "/api/v1/mcp/oauth/authorize";
-export const MCP_OAUTH_AUTHORIZE_VERIFY_PATH = "/api/v1/mcp/oauth/authorize/verify";
-export const MCP_OAUTH_TOKEN_PATH = "/api/v1/mcp/oauth/token";
-export const MCP_OAUTH_REGISTER_PATH = "/api/v1/mcp/oauth/register";
+export const MCP_OAUTH_AUTHORIZE_PATH = "/api/v1/oauth/authorize";
+export const MCP_OAUTH_AUTHORIZE_VERIFY_PATH = "/api/v1/oauth/authorize/verify";
+export const MCP_OAUTH_TOKEN_PATH = "/api/v1/oauth/token";
+export const MCP_OAUTH_REGISTER_PATH = "/api/v1/oauth/register";
 
 const MCP_OAUTH_LOGIN_COOKIE_NAME = "pkic_mcp_oauth";
 const MCP_OAUTH_LOGIN_COOKIE_PATH = MCP_OAUTH_AUTHORIZE_PATH;

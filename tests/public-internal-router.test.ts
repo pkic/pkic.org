@@ -86,9 +86,9 @@ describe("public and internal router smoke tests", () => {
       token_endpoint?: string;
       registration_endpoint?: string;
     };
-    expect(metadataPayload.authorization_endpoint).toBe("https://app.test/api/v1/mcp/oauth/authorize");
-    expect(metadataPayload.token_endpoint).toBe("https://app.test/api/v1/mcp/oauth/token");
-    expect(metadataPayload.registration_endpoint).toBe("https://app.test/api/v1/mcp/oauth/register");
+    expect(metadataPayload.authorization_endpoint).toBe("https://app.test/api/v1/oauth/authorize");
+    expect(metadataPayload.token_endpoint).toBe("https://app.test/api/v1/oauth/token");
+    expect(metadataPayload.registration_endpoint).toBe("https://app.test/api/v1/oauth/register");
 
     const response = await callApp(
       new Request("https://app.test/api/v1/mcp", {
