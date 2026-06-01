@@ -29,24 +29,34 @@ export const openapi = fromHono(app, {
   },
 });
 
-function jsonResponse(data: unknown): Response {
-  return new Response(JSON.stringify(data), {
-    headers: { "content-type": "application/json;charset=UTF-8" },
-  });
-}
-
 function htmlResponse(html: string): Response {
   return new Response(html, {
     headers: { "content-type": "text/html; charset=UTF-8" },
   });
 }
 
+let cachedOpenApiSpecBody: string | null = null;
+
 function openApiSpecResponse(): Response {
-  return jsonResponse(decorateOpenApiSpec(openapi.schema));
+  if (!cachedOpenApiSpecBody) {
+    cachedOpenApiSpecBody = JSON.stringify(decorateOpenApiSpec(openapi.schema));
+  }
+
+  return new Response(cachedOpenApiSpecBody, {
+    headers: { "content-type": "application/json;charset=UTF-8" },
+  });
 }
 
+let cachedMcpOpenApiSpecBody: string | null = null;
+
 function mcpOpenApiSpecResponse(): Response {
-  return jsonResponse(filterOpenApiSpecForMcp(openapi.schema));
+  if (!cachedMcpOpenApiSpecBody) {
+    cachedMcpOpenApiSpecBody = JSON.stringify(filterOpenApiSpecForMcp(openapi.schema));
+  }
+
+  return new Response(cachedMcpOpenApiSpecBody, {
+    headers: { "content-type": "application/json;charset=UTF-8" },
+  });
 }
 
 const REMINDER_CRON = "*/15 * * * *";

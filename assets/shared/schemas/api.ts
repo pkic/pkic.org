@@ -205,6 +205,13 @@ export const dayAttendanceItemSchema = z.object({
   attendanceType: dayAttendanceTypeSchema,
 });
 
+export const dayWaitlistItemSchema = z.object({
+  dayDate: dayDateSchema,
+  status: z.enum(["waiting", "offered", "accepted"]),
+  priorityLane: z.enum(["continuity", "general"]),
+  offerExpiresAt: z.string().trim().nullable(),
+});
+
 const customAnswerScalarSchema = z.union([z.string().trim().max(500), z.number().finite(), z.boolean()]);
 const customAnswerDateRangeSchema = z
   .object({
@@ -323,8 +330,8 @@ export const registrationConfirmResponseSchema = z.object({
   shareUrl: z.string().url().nullable(),
   manageUrl: z.string().url(),
   manageToken: z.string(),
-  dayAttendance: z.array(z.unknown()),
-  dayWaitlist: z.array(z.unknown()),
+  dayAttendance: z.array(dayAttendanceItemSchema),
+  dayWaitlist: z.array(dayWaitlistItemSchema),
 });
 
 export const registrationResendConfirmationSchema = z

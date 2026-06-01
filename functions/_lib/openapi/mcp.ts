@@ -61,13 +61,11 @@ function withRequiredScopesDescription(operation: JsonObject, scopes: AuthScope[
 
   const requiredScopes = `Required scopes: ${formatRequiredScopes(scopes)}.`;
   const description = typeof operation.description === "string" ? operation.description.trim() : "";
-  if (description.includes(requiredScopes)) {
-    return operation;
-  }
+  const cleanedDescription = description.replace(/\s*Required scopes: .*\.$/s, "").trim();
 
   return {
     ...operation,
-    description: description ? `${description}\n\n${requiredScopes}` : requiredScopes,
+    description: cleanedDescription ? `${cleanedDescription}\n\n${requiredScopes}` : requiredScopes,
   };
 }
 

@@ -86,6 +86,34 @@ describe("OpenAPI auth decoration", () => {
     expect(decorated.paths["/api/v1/events/{eventSlug}/terms"].get.security).toBeUndefined();
   });
 
+  it("replaces stale required-scope text when MCP filtering narrows scopes", () => {
+    const filtered = filterOpenApiSpecForMcp({
+      openapi: "3.1.0",
+      info: { title: "PKI Consortium API", version: "v1" },
+      paths: {
+        "/api/v1/admin/proposals/{proposalId}/reviews": {
+          post: {
+            operationId: "upsertReview",
+            description: "Existing operation summary.",
+            [AUTH_EXTENSION]: {
+              required: true,
+              scheme: "BearerAuth",
+              scopes: ["proposal-reviews:read", "proposal-reviews:write"],
+            },
+            [MCP_EXTENSION]: {
+              expose: true,
+              scopes: ["proposal-reviews:write"],
+            },
+          },
+        },
+      },
+    });
+
+    expect(filtered.paths["/api/v1/admin/proposals/{proposalId}/reviews"].post.description).toBe(
+      "Existing operation summary.\n\nRequired scopes: `proposal-reviews:write`.",
+    );
+  });
+
   it("marks internal admin routes and leaves non-admin token workflows as schema-documented inputs", () => {
     const decorated = decorateOpenApiSpec({
       openapi: "3.1.0",
