@@ -77,6 +77,8 @@ export const adminEmailOutboxQuerySchema = z.object({
 
 export const adminEventProposalsQuerySchema = z.object({
   status: z.string().trim().optional(),
+  recommendation: z.enum(["accept", "reject", "needs-work"]).optional(),
+  sort: z.enum(["submitted_desc", "score_desc", "score_asc"]).optional(),
   search: z.string().trim().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
   offset: z.coerce.number().int().min(0).optional(),

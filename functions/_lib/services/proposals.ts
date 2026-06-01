@@ -47,6 +47,10 @@ export interface ProposalListRecord extends ProposalRecord {
   proposer_first_name: string | null;
   proposer_last_name: string | null;
   review_count: number;
+  average_review_score?: number | null;
+  recommendation_accept_count?: number;
+  recommendation_needs_work_count?: number;
+  recommendation_reject_count?: number;
   decision_status: "accepted" | "rejected" | "needs-work" | null;
   decision_note: string | null;
   decision_decided_at: string | null;
