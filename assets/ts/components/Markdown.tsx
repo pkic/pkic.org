@@ -9,7 +9,10 @@ type Block =
   | ListBlock;
 
 function isSafeHref(href: string): boolean {
-  return /^(https?:|mailto:|\/(?!\/)|#)/i.test(href);
+  if (/^[a-z0-9+.-]+:/i.test(href)) {
+    return /^(https?:|mailto:|tel:)/i.test(href);
+  }
+  return !href.startsWith("//");
 }
 
 function renderInline(text: string): ComponentChildren[] {
@@ -20,18 +23,19 @@ function renderInline(text: string): ComponentChildren[] {
 
   while ((match = pattern.exec(text))) {
     if (match.index > last) nodes.push(text.slice(last, match.index));
+    const key = `${match.index}-${pattern.lastIndex}`;
 
     if (match[2]) {
-      nodes.push(<code>{match[2]}</code>);
+      nodes.push(<code key={key}>{match[2]}</code>);
     } else if (match[4]) {
-      nodes.push(<strong>{renderInline(match[4])}</strong>);
+      nodes.push(<strong key={key}>{renderInline(match[4])}</strong>);
     } else if (match[6]) {
-      nodes.push(<em>{renderInline(match[6])}</em>);
+      nodes.push(<em key={key}>{renderInline(match[6])}</em>);
     } else if (match[8] && match[9]) {
       const href = match[9];
       nodes.push(
         isSafeHref(href) ? (
-          <a href={href} target={href.startsWith("http") ? "_blank" : undefined} rel="noopener noreferrer">
+          <a href={href} target={/^https?:/i.test(href) ? "_blank" : undefined} rel="noopener noreferrer" key={key}>
             {renderInline(match[8])}
           </a>
         ) : (
@@ -122,8 +126,8 @@ function parseMarkdown(markdown: string): Block[] {
   return blocks;
 }
 
-export function Markdown({ markdown, className }: { markdown: string; className?: string }) {
-  const blocks = parseMarkdown(markdown);
+export function Markdown({ markdown = "", className }: { markdown?: string | null; className?: string }) {
+  const blocks = parseMarkdown(markdown ?? "");
 
   return (
     <div class={`adm-markdown${className ? ` ${className}` : ""}`}>
