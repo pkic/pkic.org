@@ -49,8 +49,6 @@ function mcpOpenApiSpecResponse(): Response {
   return jsonResponse(filterOpenApiSpecForMcp(openapi.schema));
 }
 
-const fetchWithMcp = createMcpWorkerFetch({ app, openApiSchema: openapi.schema });
-
 const REMINDER_CRON = "*/15 * * * *";
 const RETENTION_CRON = "0 3 * * *";
 
@@ -62,6 +60,9 @@ app.get(REDOC_PATH, () => htmlResponse(getReDocUI(OPENAPI_JSON_PATH)));
 openapi.route("/api", api_Router);
 openapi.route("/donate", donate_Router);
 openapi.route("/r", r_Router);
+
+// Build the MCP fetch handler after OpenAPI routes are registered.
+const fetchWithMcp = createMcpWorkerFetch({ app, openApiSchema: openapi.schema });
 
 async function runScheduledJob(controller: ScheduledController, env: Env): Promise<void> {
   logInfo("SCHEDULED_JOB_STARTED", { cron: controller.cron, scheduledTime: controller.scheduledTime });

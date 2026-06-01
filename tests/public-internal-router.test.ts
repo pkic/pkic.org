@@ -10,6 +10,13 @@ function callApp(request: Request): Promise<Response> {
   );
 }
 
+function callAppWithoutOauth(request: Request): Promise<Response> {
+  const envWithoutOauth = { ...(env as any), OAUTH_KV: undefined };
+  return Promise.resolve(
+    app.fetch(request, envWithoutOauth, { passThroughOnException: () => {}, waitUntil: () => {} } as any),
+  );
+}
+
 describe("public and internal router smoke tests", () => {
   beforeEach(async () => {
     await resetDb();
@@ -124,5 +131,13 @@ describe("public and internal router smoke tests", () => {
     );
 
     expect(response.status).toBe(401);
+  });
+
+  it("serves a non-empty MCP OpenAPI document", async () => {
+    const response = await callAppWithoutOauth(new Request("https://app.test/api/v1/mcp/openapi.json"));
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { paths?: Record<string, unknown> };
+    expect(Object.keys(payload.paths ?? {})).not.toHaveLength(0);
   });
 });
