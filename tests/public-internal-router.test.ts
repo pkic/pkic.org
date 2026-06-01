@@ -90,6 +90,18 @@ describe("public and internal router smoke tests", () => {
     expect(metadataPayload.token_endpoint).toBe("https://app.test/api/v1/oauth/token");
     expect(metadataPayload.registration_endpoint).toBe("https://app.test/api/v1/oauth/register");
 
+    const verifyResponse = await callApp(
+      new Request("https://app.test/api/v1/oauth/verify-link", {
+        method: "POST",
+        headers: {
+          accept: "application/json",
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({}),
+      }),
+    );
+    expect(verifyResponse.status).toBe(400);
+
     const response = await callApp(
       new Request("https://app.test/api/v1/mcp", {
         method: "POST",

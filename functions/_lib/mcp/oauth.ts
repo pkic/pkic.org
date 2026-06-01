@@ -1,7 +1,6 @@
 import {
   OAuthError,
   type AuthRequest,
-  type ClientInfo,
   type OAuthHelpers,
   type ResolveExternalTokenInput,
 } from "@cloudflare/workers-oauth-provider";
@@ -14,6 +13,7 @@ import {
   verifyAdminMagicLink,
   verifyAdminSessionToken,
 } from "../auth/admin";
+import { first, run } from "../db/queries";
 import { AUTH_SCOPES, grantableScopesForActor, type AuthScope } from "../auth/scopes";
 import { getConfig, resolveAppBaseUrl } from "../config";
 import { processOutboxByIdBackground, queueEmail } from "../email/outbox";
@@ -21,12 +21,14 @@ import { AppError } from "../errors";
 import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../request";
 import { enforceRateLimit } from "../rate-limit";
 import { writeAuditLog } from "../services/audit";
+import { sha256Hex } from "../utils/crypto";
 import type { AuthAdmin, Env } from "../types";
 
 export const MCP_OAUTH_AUTHORIZE_PATH = "/api/v1/oauth/authorize";
-export const MCP_OAUTH_AUTHORIZE_VERIFY_PATH = "/api/v1/oauth/authorize/verify";
+export const MCP_OAUTH_VERIFY_API_PATH = "/api/v1/oauth/verify-link";
 export const MCP_OAUTH_TOKEN_PATH = "/api/v1/oauth/token";
 export const MCP_OAUTH_REGISTER_PATH = "/api/v1/oauth/register";
+export const MCP_OAUTH_UI_PATH = "/admin/";
 
 const MCP_OAUTH_LOGIN_COOKIE_NAME = "pkic_mcp_oauth";
 const MCP_OAUTH_LOGIN_COOKIE_PATH = MCP_OAUTH_AUTHORIZE_PATH;
@@ -51,35 +53,11 @@ export type McpOAuthEnv = Env & {
   OAUTH_PROVIDER: OAuthHelpers;
 };
 
-function escapeHtml(value: string): string {
-  return value
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#39;");
-}
-
-function htmlResponse(title: string, body: string, status = 200): Response {
-  return new Response(
-    [
-      "<!doctype html>",
-      '<html lang="en">',
-      "<head>",
-      '<meta charset="utf-8">',
-      '<meta name="viewport" content="width=device-width, initial-scale=1">',
-      `<title>${escapeHtml(title)}</title>`,
-      "</head>",
-      "<body>",
-      `<main><h1>${escapeHtml(title)}</h1>${body}</main>`,
-      "</body>",
-      "</html>",
-    ].join(""),
-    {
-      status,
-      headers: { "content-type": "text/html; charset=UTF-8" },
-    },
-  );
+function jsonResponse(data: unknown, status = 200): Response {
+  return new Response(JSON.stringify(data), {
+    status,
+    headers: { "content-type": "application/json;charset=UTF-8" },
+  });
 }
 
 function parseCookieHeader(cookieHeader: string): Map<string, string> {
@@ -105,6 +83,29 @@ function getMcpOauthLoginToken(request: Request): string | null {
   const cookieHeader = request.headers.get("cookie") ?? "";
   if (!cookieHeader) return null;
   return parseCookieHeader(cookieHeader).get(MCP_OAUTH_LOGIN_COOKIE_NAME) ?? null;
+}
+
+async function storeMcpOauthReturnTo(env: Env, magicLinkToken: string, returnTo: string): Promise<void> {
+  const tokenHash = await sha256Hex(magicLinkToken);
+  const storedReturnTo = sanitizeAuthorizeReturnTo(returnTo);
+  await run(env.DB, "UPDATE auth_magic_links SET return_to = ? WHERE token_hash = ?", [storedReturnTo, tokenHash]);
+}
+
+async function consumeMcpOauthReturnTo(env: Env, magicLinkToken: string): Promise<string> {
+  const tokenHash = await sha256Hex(magicLinkToken);
+  const row = await first<{ return_to: string | null }>(
+    env.DB,
+    `SELECT return_to
+     FROM auth_magic_links
+     WHERE token_hash = ?`,
+    [tokenHash],
+  );
+
+  if (!row?.return_to) {
+    throw new AppError(400, "MCP_OAUTH_RETURN_TO_MISSING", "Missing OAuth return target");
+  }
+
+  return sanitizeAuthorizeReturnTo(row.return_to);
 }
 
 export function isAuthScope(scope: string): scope is AuthScope {
@@ -174,6 +175,39 @@ export function currentAuthorizeReturnTo(request: Request): string {
   return `${url.pathname}${url.search}`;
 }
 
+export function resolveAuthorizeReturnTo(request: Request): string {
+  const requested = new URL(request.url).searchParams.get("return_to");
+  return requested ? sanitizeAuthorizeReturnTo(requested) : currentAuthorizeReturnTo(request);
+}
+
+export function wantsJsonResponse(request: Request): boolean {
+  return (request.headers.get("accept") ?? "").includes("application/json");
+}
+
+export function buildMcpOauthUiUrl(
+  env: Pick<Env, "APP_BASE_URL">,
+  request: Request,
+  returnTo: string,
+  error?: string,
+): string {
+  const url = new URL(MCP_OAUTH_UI_PATH, resolveAppBaseUrl(env, request));
+  url.searchParams.set("flow", "mcp-oauth");
+  url.searchParams.set("return_to", sanitizeAuthorizeReturnTo(returnTo));
+  if (error) {
+    url.searchParams.set("error", error);
+  }
+  return url.toString();
+}
+
+export function redirectToMcpOauthUi(
+  env: Pick<Env, "APP_BASE_URL">,
+  request: Request,
+  returnTo: string,
+  error?: string,
+): Response {
+  return Response.redirect(buildMcpOauthUiUrl(env, request, returnTo, error), 302);
+}
+
 export function sanitizeAuthorizeReturnTo(value: string | null | undefined): string {
   if (!value) return MCP_OAUTH_AUTHORIZE_PATH;
 
@@ -214,6 +248,36 @@ export async function requireMcpOauthAdmin(request: Request, env: Env): Promise<
   }
 }
 
+export async function describeMcpAuthorization(
+  request: Request,
+  env: McpOAuthEnv,
+  returnTo: string,
+): Promise<{
+  authenticated: boolean;
+  returnTo: string;
+  clientId: string;
+  clientName: string;
+  requestedScopes: AuthScope[];
+  grantedScopes: AuthScope[];
+  adminEmail: string | null;
+}> {
+  const authRequest = await parseOauthRequestFromReturnTo(request, env.OAUTH_PROVIDER, returnTo);
+  const clientInfo = await env.OAUTH_PROVIDER.lookupClient(authRequest.clientId);
+  const admin = await requireMcpOauthAdmin(request, env);
+  const requestedScopes = normalizeMcpOauthScopes(authRequest.scope);
+  const grantedScopes = admin ? grantedMcpOauthScopes(admin, requestedScopes) : [];
+
+  return {
+    authenticated: admin !== null,
+    returnTo,
+    clientId: authRequest.clientId,
+    clientName: clientInfo?.clientName ?? clientInfo?.clientId ?? authRequest.clientId,
+    requestedScopes,
+    grantedScopes,
+    adminEmail: admin?.email ?? null,
+  };
+}
+
 export async function resolveMcpExternalToken({
   token,
   request,
@@ -240,66 +304,6 @@ export function redirectAuthorizationDenied(authRequest: AuthRequest): Response 
   redirectUrl.searchParams.set("error_description", "The user denied the authorization request.");
   redirectUrl.searchParams.set("state", authRequest.state);
   return Response.redirect(redirectUrl.toString(), 302);
-}
-
-export function renderMcpAuthorizeLoginPage(options: {
-  clientInfo: ClientInfo | null;
-  returnTo: string;
-  sentTo?: string | null;
-  error?: string | null;
-}): Response {
-  const clientName = options.clientInfo?.clientName ?? options.clientInfo?.clientId ?? "the MCP client";
-  const pieces = [
-    `<p>Sign in as an active PKI Consortium admin to authorize ${escapeHtml(clientName)}.</p>`,
-    options.error ? `<p>${escapeHtml(options.error)}</p>` : "",
-    options.sentTo
-      ? `<p>If ${escapeHtml(options.sentTo)} belongs to an active admin, a sign-in link has been emailed.</p>`
-      : "",
-    `<form method="post" action="${MCP_OAUTH_AUTHORIZE_PATH}">`,
-    '<input type="hidden" name="action" value="request-link">',
-    `<input type="hidden" name="return_to" value="${escapeHtml(options.returnTo)}">`,
-    '<p><label>Email <input type="email" name="email" autocomplete="email" required></label></p>',
-    '<p><button type="submit">Email sign-in link</button></p>',
-    "</form>",
-  ];
-
-  return htmlResponse("Authorize MCP Access", pieces.join(""));
-}
-
-export function renderMcpAuthorizeConsentPage(options: {
-  admin: AuthAdmin;
-  clientInfo: ClientInfo | null;
-  requestedScopes: readonly AuthScope[];
-  grantedScopes: readonly AuthScope[];
-  returnTo: string;
-}): Response {
-  const clientName = options.clientInfo?.clientName ?? options.clientInfo?.clientId ?? "the MCP client";
-  const requested = options.requestedScopes.map((scope) => `<li>${escapeHtml(scope)}</li>`).join("");
-  const granted = options.grantedScopes.map((scope) => `<li>${escapeHtml(scope)}</li>`).join("");
-  const downscoped =
-    options.grantedScopes.length !== options.requestedScopes.length
-      ? "<p>The grant will be limited to the scopes listed below.</p>"
-      : "";
-
-  const pieces = [
-    `<p>Signed in as ${escapeHtml(options.admin.email)}.</p>`,
-    `<p>${escapeHtml(clientName)} is requesting access to the PKI Consortium MCP server.</p>`,
-    requested ? `<h2>Requested scopes</h2><ul>${requested}</ul>` : "",
-    downscoped,
-    granted ? `<h2>Granted scopes</h2><ul>${granted}</ul>` : "<p>No scopes can be granted for this request.</p>",
-    `<form method="post" action="${MCP_OAUTH_AUTHORIZE_PATH}">`,
-    '<input type="hidden" name="action" value="approve">',
-    `<input type="hidden" name="return_to" value="${escapeHtml(options.returnTo)}">`,
-    '<p><button type="submit">Approve</button></p>',
-    "</form>",
-    `<form method="post" action="${MCP_OAUTH_AUTHORIZE_PATH}">`,
-    '<input type="hidden" name="action" value="deny">',
-    `<input type="hidden" name="return_to" value="${escapeHtml(options.returnTo)}">`,
-    '<p><button type="submit">Deny</button></p>',
-    "</form>",
-  ];
-
-  return htmlResponse("Approve MCP Access", pieces.join(""));
 }
 
 export async function sendMcpAuthorizeMagicLink(options: {
@@ -339,7 +343,8 @@ export async function sendMcpAuthorizeMagicLink(options: {
   }
 
   const appBaseUrl = resolveAppBaseUrl(options.env, options.request);
-  const magicLinkUrl = `${appBaseUrl}${MCP_OAUTH_AUTHORIZE_VERIFY_PATH}?token=${encodeURIComponent(magic.token)}&return_to=${encodeURIComponent(options.returnTo)}`;
+  await storeMcpOauthReturnTo(options.env, magic.token, options.returnTo);
+  const magicLinkUrl = `${appBaseUrl}${MCP_OAUTH_UI_PATH}?flow=mcp-oauth&token=${encodeURIComponent(magic.token)}`;
   const outboxId = await queueEmail(options.env.DB, {
     templateKey: "admin_magic_link",
     recipientEmail: magic.admin.email,
@@ -354,7 +359,7 @@ export async function sendMcpAuthorizeMagicLink(options: {
     },
   });
 
-  options.executionCtx.waitUntil(processOutboxByIdBackground(options.env.DB, options.env, outboxId));
+  await processOutboxByIdBackground(options.env.DB, options.env, outboxId);
   await writeAuditLog(
     options.env.DB,
     "admin",
@@ -372,7 +377,7 @@ export async function sendMcpAuthorizeMagicLink(options: {
 export async function verifyMcpAuthorizeMagicLink(
   request: Request,
   env: Env,
-): Promise<{ response: Response; admin: AuthAdmin }> {
+): Promise<{ admin: AuthAdmin; sessionToken: string; expiresAt: string; returnTo: string }> {
   const token = new URL(request.url).searchParams.get("token");
   if (!token) {
     throw new AppError(400, "MAGIC_LINK_INVALID", "Missing admin magic link token");
@@ -407,10 +412,12 @@ export async function verifyMcpAuthorizeMagicLink(
     channel: "mcp_oauth",
   });
 
-  const returnTo = sanitizeAuthorizeReturnTo(new URL(request.url).searchParams.get("return_to"));
-  const response = Response.redirect(new URL(returnTo, request.url).toString(), 302);
-  response.headers.append("Set-Cookie", serializeMcpOauthLoginCookie(sessionToken, request));
-  return { response, admin };
+  return {
+    admin,
+    sessionToken,
+    expiresAt: verified.expiresAt,
+    returnTo: await consumeMcpOauthReturnTo(env, token),
+  };
 }
 
 export function grantedMcpOauthScopes(admin: AuthAdmin, requestedScopes: readonly AuthScope[]): AuthScope[] {
@@ -419,12 +426,12 @@ export function grantedMcpOauthScopes(admin: AuthAdmin, requestedScopes: readonl
 
 export function toOAuthErrorResponse(error: unknown): Response {
   if (error instanceof OAuthError) {
-    return htmlResponse(error.code, `<p>${escapeHtml(error.description)}</p>`, error.statusCode);
+    return jsonResponse({ error: { code: error.code, message: error.description } }, error.statusCode);
   }
 
   if (error instanceof AppError) {
-    return htmlResponse(error.message, `<p>${escapeHtml(error.message)}</p>`, error.status);
+    return jsonResponse({ error: { code: error.code, message: error.message } }, error.status);
   }
 
-  return htmlResponse("OAuth Error", "<p>Unexpected OAuth authorization error.</p>", 500);
+  return jsonResponse({ error: { code: "OAUTH_ERROR", message: "Unexpected OAuth authorization error." } }, 500);
 }

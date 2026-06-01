@@ -1,6 +1,7 @@
 import { useEffect } from "preact/hooks";
 import { authStatus, clearAuth, isAuthed, saveAuth, setAuthChecking } from "./state";
 import { Login } from "./shell/Login";
+import { McpOauth } from "./shell/McpOauth";
 import { AdminShell } from "./shell/AdminShell";
 
 /**
@@ -11,7 +12,13 @@ import { AdminShell } from "./shell/AdminShell";
  * without a full page reload.
  */
 export function App() {
+  const isMcpOauthFlow = new URLSearchParams(window.location.search).get("flow") === "mcp-oauth";
+
   useEffect(() => {
+    if (isMcpOauthFlow) {
+      return;
+    }
+
     let cancelled = false;
 
     async function loadSession() {
@@ -36,7 +43,11 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isMcpOauthFlow]);
+
+  if (isMcpOauthFlow) {
+    return <McpOauth />;
+  }
 
   if (authStatus.value === "loading") {
     return (
