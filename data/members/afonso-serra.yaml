@@ -1,0 +1,62 @@
+id: afonso-serra
+name: Afonso Serra
+slogan:
+website: https://www.linkedin.com/in/afonso-serra-b7a16b1a5/
+# Business domains for email
+organizationDomains:
+
+# Short description, longer content can be placed in `content/members/`
+description: i like cheesy music from the 80s · Experience: WISOUT · Education: Departamento de Engenharia Informática - Universidade de Coimbra · Location: Coimbra · 82 connections on LinkedIn. View Afonso Serra’s profile on LinkedIn, a professional community of 1 billion members.
+
+# membership
+memberSince: 2026-06-02
+memberType: H6
+workingGroups:
+  - CM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: https://www.linkedin.com/jobs/jobs-in-san-jose-ca?trk=public_profile_guest_nav_menu_jobs
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/in/afonso-serra-b7a16b1a5/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Afonso Serra
+    role: Backend developer
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/afonso-serra-b7a16b1a5/
+    description: Afonso is the Backend developer at Afonso Serra and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
