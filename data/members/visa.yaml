@@ -12,6 +12,8 @@ description: Visa is a trusted world leader in digital payment technology that c
 memberSince: 2023-09-05
 memberType: A
 workingGroups:
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
