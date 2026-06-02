@@ -54,8 +54,8 @@ export async function onRequestPost(c: any): Promise<Response> {
     lastName: body.proposer.lastName,
     organizationName: body.proposer.organizationName,
     jobTitle: body.proposer.jobTitle,
-    biography: body.proposer.bio ?? null,
-    linksJson: body.proposer.links.length > 0 ? JSON.stringify(body.proposer.links) : null,
+    biography: body.proposer.bio,
+    linksJson: body.proposer.links.length > 0 ? JSON.stringify(body.proposer.links) : undefined,
   });
 
   const requiredTerms = await getRequiredTerms(c.env.DB, event.id, "speaker");
@@ -79,7 +79,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   await addProposalSpeaker(c.env.DB, {
     proposalId: created.proposal.id,
     userId: proposer.id,
-    role: "proposer",
+    role: body.proposer.role,
   });
 
   // Add co-speakers and email each one to confirm participation.
@@ -92,7 +92,7 @@ export async function onRequestPost(c: any): Promise<Response> {
       organizationName: speaker.organizationName,
       jobTitle: speaker.jobTitle,
       biography: speaker.bio,
-      linksJson: speaker.links.length > 0 ? JSON.stringify(speaker.links) : null,
+      linksJson: speaker.links.length > 0 ? JSON.stringify(speaker.links) : undefined,
     });
 
     const { manageToken: speakerToken } = await addProposalSpeaker(c.env.DB, {

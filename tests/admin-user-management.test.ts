@@ -96,6 +96,33 @@ describe("admin user deactivation", () => {
     expect(data.user.active).toBe(false);
   });
 
+  it("updates profile biography and links", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "profile@example.test");
+
+    const response = await patchUser(
+      createContext(
+        env,
+        adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", {
+          biography: "Admin maintained speaker biography.",
+          links: ["https://example.test/profile", "https://github.com/profile"],
+        }),
+        { userId },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const row = (
+      await queryAll<{ biography: string | null; links_json: string | null }>(
+        env.DB,
+        "SELECT biography, links_json FROM users WHERE id = ?",
+        [userId],
+      )
+    )[0];
+    expect(row.biography).toBe("Admin maintained speaker biography.");
+    expect(JSON.parse(row.links_json ?? "[]")).toEqual(["https://example.test/profile", "https://github.com/profile"]);
+  });
+
   it("refuses to deactivate the calling admin's own account", async () => {
     const { env, adminId } = await setup();
 

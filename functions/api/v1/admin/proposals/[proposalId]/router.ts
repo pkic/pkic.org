@@ -3,6 +3,7 @@ import { fromHono } from "chanfana";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
   adminProposalAuditLogRouteSchema,
+  adminProposalCommentsRouteSchema,
   adminProposalFinalizePreviewRouteSchema,
   adminProposalFinalizeRouteSchema,
   adminProposalOpenManageRouteSchema,
@@ -15,6 +16,10 @@ import { onRequestPatch as AdminProposalsProposalIdPatch_l } from "./patch";
 import { onRequestPost as AdminProposalsProposalIdFinalizePost_l } from "./finalize";
 import { onRequestPost as AdminProposalsProposalIdFinalizePreviewPost_l } from "./finalize-preview";
 import { onRequestGet as AdminProposalsProposalIdAuditLogGet_l } from "./audit-log";
+import {
+  onRequestGet as AdminProposalsProposalIdCommentsGet_l,
+  onRequestPost as AdminProposalsProposalIdCommentsPost_l,
+} from "./comments";
 import { AdminProposalsProposalIdReviewsGet, AdminProposalsProposalIdReviewsPost } from "./reviews";
 import { onRequestGet as AdminProposalsProposalIdSpeakersGet_l } from "./speakers";
 import reviews_Router from "./reviews/router";
@@ -41,6 +46,14 @@ const AdminProposalsProposalIdAuditLogGet = openApiRoute(
   adminProposalAuditLogRouteSchema,
   AdminProposalsProposalIdAuditLogGet_l,
 );
+const AdminProposalsProposalIdCommentsGet = openApiRoute(
+  adminProposalCommentsRouteSchema,
+  AdminProposalsProposalIdCommentsGet_l,
+);
+const AdminProposalsProposalIdCommentsPost = openApiRoute(
+  adminProposalCommentsRouteSchema,
+  AdminProposalsProposalIdCommentsPost_l,
+);
 const AdminProposalsProposalIdSpeakersGet = openApiRoute(
   adminProposalSpeakersRouteSchema,
   AdminProposalsProposalIdSpeakersGet_l,
@@ -52,6 +65,8 @@ openapi.patch("/", AdminProposalsProposalIdPatch);
 openapi.post("/finalize", AdminProposalsProposalIdFinalizePost);
 openapi.post("/finalize-preview", AdminProposalsProposalIdFinalizePreviewPost);
 openapi.get("/audit-log", AdminProposalsProposalIdAuditLogGet);
+openapi.get("/comments", AdminProposalsProposalIdCommentsGet);
+openapi.post("/comments", AdminProposalsProposalIdCommentsPost);
 openapi.get("/reviews", AdminProposalsProposalIdReviewsGet);
 openapi.post("/reviews", AdminProposalsProposalIdReviewsPost);
 openapi.get("/speakers", AdminProposalsProposalIdSpeakersGet);

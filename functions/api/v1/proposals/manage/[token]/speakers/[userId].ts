@@ -3,7 +3,7 @@ import { json } from "../../../../../../_lib/http";
 import { parseJsonBody } from "../../../../../../_lib/validation";
 import { first } from "../../../../../../_lib/db/queries";
 import { AppError } from "../../../../../../_lib/errors";
-import { getProposalByManageToken } from "../../../../../../_lib/services/proposals";
+import { getProposalByManageToken, updateProposalSpeakerRole } from "../../../../../../_lib/services/proposals";
 import { updateSpeakerProfile } from "../../../../../../_lib/services/proposals-speaker-profile";
 import { writeAuditLog } from "../../../../../../_lib/services/audit";
 import {
@@ -13,7 +13,10 @@ import {
   jobTitleSchema,
 } from "../../../../../../../assets/shared/schemas/api";
 
+const speakerRoleSchema = z.enum(["proposer", "speaker", "co_speaker", "moderator", "panelist"]);
+
 const speakerProfileSchema = z.object({
+  role: speakerRoleSchema.optional(),
   firstName: z.union([firstNameSchema, z.literal(""), z.null()]).optional(),
   lastName: z.union([lastNameSchema, z.literal(""), z.null()]).optional(),
   organizationName: z.union([organizationNameSchema, z.literal(""), z.null()]).optional(),
@@ -36,6 +39,7 @@ async function loadSpeakerContext(db: D1Database, manageToken: string, userId: s
     id: string;
     user_id: string;
     status: string;
+    role: string;
     first_name: string | null;
     last_name: string | null;
     organization_name: string | null;
@@ -44,7 +48,7 @@ async function loadSpeakerContext(db: D1Database, manageToken: string, userId: s
     links_json: string | null;
   }>(
     db,
-    `SELECT ps.id, ps.user_id, ps.status,
+    `SELECT ps.id, ps.user_id, ps.status, ps.role,
             u.first_name, u.last_name, u.organization_name, u.job_title, u.biography, u.links_json
      FROM proposal_speakers ps
      JOIN users u ON u.id = ps.user_id
@@ -88,6 +92,14 @@ export async function onRequestPatch(c: any): Promise<Response> {
   if (body.jobTitle !== undefined) details.jobTitle = { from: speaker.job_title, to: nextValues.jobTitle ?? null };
   if (body.biography !== undefined) details.biography = { from: speaker.biography, to: nextValues.biography ?? null };
   if (body.links !== undefined) details.links = { from: previousLinks, to: body.links };
+  if (body.role !== undefined && body.role !== speaker.role) {
+    await updateProposalSpeakerRole(c.env.DB, {
+      proposalId: proposal.id,
+      userId: speaker.user_id,
+      role: body.role,
+    });
+    details.role = { from: speaker.role, to: body.role };
+  }
 
   if (Object.keys(details).length > 0) {
     await writeAuditLog(

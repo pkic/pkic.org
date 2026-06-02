@@ -20,11 +20,13 @@ interface SpeakerFormCardProps {
   emailHelp: string;
   bioHelp: string;
   autocomplete?: boolean;
+  defaultRole?: string;
   errorPaths?: Partial<Record<"firstName" | "lastName" | "email" | "bio", string>>;
   onRemove?: () => void;
 }
 
 const ROLES = [
+  { value: "proposer", label: "Proposer" },
   { value: "speaker", label: "Speaker" },
   { value: "co_speaker", label: "Co-speaker" },
   { value: "moderator", label: "Moderator" },
@@ -48,6 +50,7 @@ export function SpeakerFormCard({
   emailHelp,
   bioHelp,
   autocomplete,
+  defaultRole = "speaker",
   errorPaths,
   onRemove,
 }: SpeakerFormCardProps) {
@@ -157,7 +160,7 @@ export function SpeakerFormCard({
                     name={fields.role}
                     id={`role-${idPrefix}-${role.value}`}
                     value={role.value}
-                    checked={i === 0}
+                    defaultChecked={role.value === defaultRole || (!defaultRole && i === 0)}
                   />
                   <label class="btn btn-outline-secondary btn-sm" htmlFor={`role-${idPrefix}-${role.value}`}>
                     {role.label}

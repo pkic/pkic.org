@@ -30,6 +30,7 @@ describe("proposal participants", () => {
               jobTitle: "Researcher",
               bio: "Leads cross-industry cryptography migration planning and public policy coordination programs.",
               links: ["https://example.test/lead", "https://linkedin.com/in/lead"],
+              role: "moderator",
             },
             proposal: {
               type: "panel",
@@ -76,6 +77,7 @@ describe("proposal participants", () => {
     );
     expect(roles.map((entry) => entry.role)).toContain("panelist");
     expect(roles.map((entry) => entry.role)).toContain("moderator");
+    expect(roles.map((entry) => entry.role)).not.toContain("proposer");
 
     const participantRoles = await queryAll<{ role: string }>(
       env.DB,
@@ -91,6 +93,72 @@ describe("proposal participants", () => {
       [payload.proposalId],
     );
     expect(linkRows.some((entry) => Boolean(entry.links_json))).toBe(true);
+  });
+
+  it("does not clear an existing proposer's bio or links when no updated profile fields are provided", async () => {
+    await seedEventAndAdmin(env.DB);
+
+    await env.DB.prepare(
+      `INSERT INTO users (
+        id, email, normalized_email, first_name, last_name, organization_name, job_title,
+        biography, links_json, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(
+        "11111111-1111-4111-8111-111111111111",
+        "existing-proposer@example.test",
+        "existing-proposer@example.test",
+        "Existing",
+        "Proposer",
+        "Existing Org",
+        "Existing Role",
+        "Existing biography that should remain attached to the user profile.",
+        JSON.stringify(["https://example.test/existing", "https://github.com/existing"]),
+      )
+      .run();
+
+    const response = await submitProposal(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sourceType: "direct",
+            proposer: {
+              firstName: "Existing",
+              lastName: "Proposer",
+              email: "existing-proposer@example.test",
+              organizationName: "Existing Org",
+              jobTitle: "Existing Role",
+              role: "proposer",
+            },
+            proposal: {
+              type: "talk",
+              title: "Operational Lessons for Certificate Migration",
+              abstract:
+                "A practical talk covering certificate migration lessons, stakeholder coordination, operational sequencing, and governance decisions for production security teams.",
+            },
+            consents: [{ termKey: "speaker-terms", version: "v1" }],
+          }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const row = (
+      await queryAll<{ biography: string | null; links_json: string | null }>(
+        env.DB,
+        "SELECT biography, links_json FROM users WHERE email = ?",
+        ["existing-proposer@example.test"],
+      )
+    )[0];
+    expect(row.biography).toBe("Existing biography that should remain attached to the user profile.");
+    expect(JSON.parse(row.links_json ?? "[]")).toEqual([
+      "https://example.test/existing",
+      "https://github.com/existing",
+    ]);
   });
 
   it("keeps pending proposal speakers off the badge until acceptance", async () => {

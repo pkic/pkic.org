@@ -100,6 +100,22 @@ async function upsertProposalParticipant(
   );
 }
 
+async function deactivateProposalParticipantRoles(
+  db: DatabaseLike,
+  payload: { eventId: string; userId: string; sourceRef: string },
+): Promise<void> {
+  await run(
+    db,
+    `UPDATE event_participants
+     SET status = 'inactive', updated_at = ?
+     WHERE event_id = ?
+       AND user_id = ?
+       AND source_type = 'proposal'
+       AND source_ref = ?`,
+    [nowIso(), payload.eventId, payload.userId, payload.sourceRef],
+  );
+}
+
 export async function createProposal(
   db: DatabaseLike,
   payload: {
@@ -241,6 +257,11 @@ export async function addProposalSpeaker(
   );
 
   if (proposal) {
+    await deactivateProposalParticipantRoles(db, {
+      eventId: proposal.event_id,
+      userId: payload.userId,
+      sourceRef: payload.proposalId,
+    });
     await upsertProposalParticipant(db, {
       eventId: proposal.event_id,
       userId: payload.userId,
@@ -251,6 +272,42 @@ export async function addProposalSpeaker(
   }
 
   return { manageToken };
+}
+
+export async function updateProposalSpeakerRole(
+  db: DatabaseLike,
+  payload: { proposalId: string; userId: string; role: string },
+): Promise<void> {
+  const proposal = await first<{ event_id: string; status: string }>(
+    db,
+    "SELECT event_id, status FROM session_proposals WHERE id = ?",
+    [payload.proposalId],
+  );
+  if (!proposal) {
+    throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found");
+  }
+
+  const result = await run(db, "UPDATE proposal_speakers SET role = ? WHERE proposal_id = ? AND user_id = ?", [
+    payload.role,
+    payload.proposalId,
+    payload.userId,
+  ]);
+  if (result.changes === 0) {
+    throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
+  }
+
+  await deactivateProposalParticipantRoles(db, {
+    eventId: proposal.event_id,
+    userId: payload.userId,
+    sourceRef: payload.proposalId,
+  });
+  await upsertProposalParticipant(db, {
+    eventId: proposal.event_id,
+    userId: payload.userId,
+    proposalRole: payload.role,
+    sourceRef: payload.proposalId,
+    status: proposal.status === "accepted" ? "active" : "inactive",
+  });
 }
 
 export interface SpeakerWithContext {
@@ -458,6 +515,7 @@ export interface ProposalSpeakerWithUser {
   organization_name: string | null;
   job_title: string | null;
   biography: string | null;
+  links_json: string | null;
   headshot_r2_key: string | null;
   headshot_updated_at: string | null;
 }
@@ -563,6 +621,7 @@ export async function listProposalSpeakersWithStatus(
        u.organization_name,
        u.job_title,
        u.biography,
+       u.links_json,
        u.headshot_r2_key,
        u.headshot_updated_at
      FROM proposal_speakers ps

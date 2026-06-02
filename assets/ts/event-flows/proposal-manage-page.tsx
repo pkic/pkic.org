@@ -32,6 +32,14 @@ function displaySpeakerName(speaker: ProposalManageResponse["speakers"][number])
   return [speaker.firstName, speaker.lastName].filter(Boolean).join(" ") || speaker.email;
 }
 
+const SPEAKER_ROLES = [
+  { value: "proposer", label: "Proposer" },
+  { value: "speaker", label: "Speaker" },
+  { value: "co_speaker", label: "Co-speaker" },
+  { value: "moderator", label: "Moderator" },
+  { value: "panelist", label: "Panelist" },
+] as const;
+
 function SpeakerCard({
   speaker,
   token,
@@ -50,6 +58,7 @@ function SpeakerCard({
   const [organizationName, setOrganizationName] = useState(speaker.organizationName ?? "");
   const [jobTitle, setJobTitle] = useState(speaker.jobTitle ?? "");
   const [biography, setBiography] = useState(speaker.bio ?? "");
+  const [role, setRole] = useState(speaker.role);
   const [saving, setSaving] = useState(false);
   const [reminding, setReminding] = useState(false);
   const [headshotStatus, setHeadshotStatus] = useState("");
@@ -61,6 +70,7 @@ function SpeakerCard({
     setOrganizationName(speaker.organizationName ?? "");
     setJobTitle(speaker.jobTitle ?? "");
     setBiography(speaker.bio ?? "");
+    setRole(speaker.role);
     setHeadshotStatus(
       speaker.headshotUpdatedAt ? `Updated: ${new Date(speaker.headshotUpdatedAt).toLocaleString("en-GB")}` : "",
     );
@@ -78,6 +88,7 @@ function SpeakerCard({
       await patchJson(profileEndpoint, {
         firstName: firstName.trim() || null,
         lastName: lastName.trim() || null,
+        role,
         organizationName: organizationName.trim() || null,
         jobTitle: jobTitle.trim() || null,
         biography: biography.trim() || null,
@@ -204,6 +215,23 @@ function SpeakerCard({
                   value={lastName}
                   onInput={(event) => setLastName((event.target as HTMLInputElement).value)}
                 />
+              </div>
+              <div class="col-12 col-md-6">
+                <label class="form-label" for={`speaker-role-${speaker.userId}`}>
+                  Role
+                </label>
+                <select
+                  id={`speaker-role-${speaker.userId}`}
+                  class="form-select"
+                  value={role}
+                  onChange={(event) => setRole((event.target as HTMLSelectElement).value)}
+                >
+                  {SPEAKER_ROLES.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
               </div>
               <div class="col-12 col-md-6">
                 <label class="form-label" for={`speaker-organization-${speaker.userId}`}>

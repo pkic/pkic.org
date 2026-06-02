@@ -302,6 +302,22 @@ export const adminProposalAuditLogRouteSchema = {
   },
 };
 
+export const adminProposalCommentsRouteSchema = {
+  tags: ["Admin proposals"],
+  summary: "List or add internal proposal comments",
+  description: "Returns or appends private programme committee comments for a proposal.",
+  request: {
+    params: proposalIdParamsSchema,
+  },
+  responses: {
+    "200": { description: "Proposal internal comments." },
+    "400": { description: "Invalid comment payload." },
+    "401": { description: "Admin authorization required." },
+    "403": { description: "The admin lacks review permission for this proposal." },
+    "404": { description: "Proposal not found." },
+  },
+};
+
 export const adminProposalSpeakersRouteSchema = {
   tags: ["Admin proposal speakers"],
   summary: "List proposal speakers",

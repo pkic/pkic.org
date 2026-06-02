@@ -3,16 +3,49 @@ import { useState, useEffect, useCallback, type MutableRef } from "preact/hooks"
 import { Pager, ADMIN_LIST_PAGE_SIZE_DEFAULT } from "./Pager";
 import { Spinner } from "./Spinner";
 import { ErrorAlert } from "./ErrorAlert";
+import { api } from "../admin/api";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
 type HeadCell = string | { label: string; className?: string };
+type SortDirection = "asc" | "desc";
 
-function renderHead(h: HeadCell, i: number) {
+export interface ColumnSort {
+  asc: string;
+  desc: string;
+  defaultDirection?: SortDirection;
+}
+
+function renderHead(
+  h: HeadCell,
+  i: number,
+  sort?: ColumnSort,
+  currentSort?: string,
+  onSort?: (nextSort: string) => void,
+) {
   const cell = typeof h === "string" ? { label: h } : h;
+  const isAsc = sort ? currentSort === sort.asc : false;
+  const isDesc = sort ? currentSort === sort.desc : false;
+  const active = isAsc || isDesc;
+  const nextSort = sort ? (isDesc ? sort.asc : isAsc ? sort.desc : sort[sort.defaultDirection ?? "desc"]) : "";
+
   return (
     <th key={i} class={cell.className}>
-      {cell.label}
+      {sort && onSort ? (
+        <button
+          type="button"
+          class={`tbl-sort-btn${active ? " is-active" : ""}`}
+          onClick={() => onSort(nextSort)}
+          aria-sort={isAsc ? "ascending" : isDesc ? "descending" : "none"}
+        >
+          <span>{cell.label}</span>
+          <span aria-hidden="true" class="tbl-sort-indicator">
+            {isAsc ? "▲" : isDesc ? "▼" : "↕"}
+          </span>
+        </button>
+      ) : (
+        cell.label
+      )}
     </th>
   );
 }
@@ -32,7 +65,7 @@ export function Table({ heads, empty = "No data", className, children }: TablePr
     <div class="tbl-wrap">
       <table class={`table table-sm table-hover mb-0${className ? ` ${className}` : ""}`}>
         <thead class="table-dark">
-          <tr>{heads.map(renderHead)}</tr>
+          <tr>{heads.map((head, i) => renderHead(head, i))}</tr>
         </thead>
         <tbody>
           {hasRows ? (
@@ -56,6 +89,7 @@ export interface Column<T> {
   header: HeadCell;
   cell: (row: T, index: number) => ComponentChildren;
   className?: string;
+  sort?: ColumnSort;
 }
 
 interface DataTableProps<T> {
@@ -67,6 +101,8 @@ interface DataTableProps<T> {
   rowClass?: (row: T, index: number) => string | undefined;
   onRowClick?: (row: T) => void;
   detailRow?: (row: T, index: number) => ComponentChildren;
+  currentSort?: string;
+  onSort?: (nextSort: string) => void;
 }
 
 export function DataTable<T>({
@@ -78,12 +114,14 @@ export function DataTable<T>({
   rowClass,
   onRowClick,
   detailRow,
+  currentSort,
+  onSort,
 }: DataTableProps<T>) {
   return (
     <div class="tbl-wrap">
       <table class={`table table-sm table-hover mb-0${className ? ` ${className}` : ""}`}>
         <thead class="table-dark">
-          <tr>{columns.map((col, i) => renderHead(col.header, i))}</tr>
+          <tr>{columns.map((col, i) => renderHead(col.header, i, col.sort, currentSort, onSort))}</tr>
         </thead>
         <tbody>
           {data.length === 0 ? (
@@ -166,6 +204,8 @@ export interface ApiDataTableProps<T> {
   onRowClick?: (row: T) => void;
   /** Optional full-width detail row rendered after each data row */
   detailRow?: (row: T, index: number) => ComponentChildren;
+  /** Initial server-side sort value. Sortable columns send their configured value as `sort`. */
+  initialSort?: string;
   /** Toolbar rendered between search and refresh (e.g., filter selects, action buttons) */
   toolbar?: (actions: ApiTableActions) => ComponentChildren;
   /** Ref to expose reload/resetPage to parent for cell-level actions */
@@ -188,6 +228,7 @@ export function ApiDataTable<T>({
   rowClass,
   onRowClick,
   detailRow,
+  initialSort = "",
   toolbar,
   actionsRef,
   deps = [],
@@ -197,6 +238,13 @@ export function ApiDataTable<T>({
   const [pageSize, setPageSize] = useState(ADMIN_LIST_PAGE_SIZE_DEFAULT);
   const page = pageSize > 0 ? Math.floor(offset / pageSize) + 1 : 1;
   function resetPage() {
+    setOffset(0);
+  }
+
+  // ── sorting state ───────────────────────────────────────────────────────
+  const [sort, setSort] = useState(initialSort);
+  function applySort(nextSort: string) {
+    setSort(nextSort);
     setOffset(0);
   }
 
@@ -223,10 +271,9 @@ export function ApiDataTable<T>({
         qs.set("offset", String(offset));
       }
       if (search) qs.set("q", search);
+      if (sort) qs.set("sort", sort);
       const qstr = qs.toString();
       const url = qstr ? `${endpoint}?${qstr}` : endpoint;
-      // Dynamic import to avoid circular dependency with api module
-      const { api } = await import("../admin/api");
       const result = await api(url);
       setData(result);
       setLoading(false);
@@ -234,7 +281,7 @@ export function ApiDataTable<T>({
       setError((e as Error).message);
       setLoading(false);
     }
-  }, [endpoint, search, pageSize, offset, JSON.stringify(params), ...deps]);
+  }, [endpoint, search, sort, pageSize, offset, JSON.stringify(params), ...deps]);
 
   useEffect(() => {
     void load();
@@ -307,6 +354,8 @@ export function ApiDataTable<T>({
             rowClass={rowClass}
             onRowClick={onRowClick}
             detailRow={detailRow}
+            currentSort={sort}
+            onSort={applySort}
           />
           {paginate && <Pager {...pagerProps} />}
         </>

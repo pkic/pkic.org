@@ -5,7 +5,11 @@ import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { onRequestGet as getRegistration } from "../functions/api/v1/registrations/manage/[token]";
-import { onRequestGet as getProposal } from "../functions/api/v1/proposals/manage/[token]";
+import {
+  onRequestGet as getProposal,
+  onRequestPatch as updateProposal,
+} from "../functions/api/v1/proposals/manage/[token]";
+import { onRequestPatch as updateProposalSpeaker } from "../functions/api/v1/proposals/manage/[token]/speakers/[userId]";
 import { onRequestPost as openRegistrationManage } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/open-manage";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
@@ -228,5 +232,71 @@ describe("manage read endpoints", () => {
     const payload = (await response.json()) as { proposal: { id: string }; speakers: Array<{ email: string }> };
     expect(payload.proposal.id).toBe(proposalId);
     expect(payload.speakers[0].email).toBe("speaker@example.test");
+  });
+
+  it("lets proposers update session type and speaker roles from the manage flow", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    const userId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    const token = "proposal-update-token";
+    const tokenHash = await sha256Hex(token);
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, biography, created_at, updated_at)
+        VALUES ('${userId}', 'panel-lead@example.test', 'panel-lead@example.test', 'Panel', 'Lead', 'Speaker bio with enough detail for testing.', datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO session_proposals (
+          id, event_id, proposer_user_id, status, proposal_type, title, abstract,
+          manage_token_hash, submitted_at, updated_at
+        ) VALUES (
+          '${proposalId}', '${eventId}', '${userId}', 'submitted', 'talk', 'Proposal title',
+          'Proposal abstract text that is sufficiently long for test payload validation.',
+          '${tokenHash}', datetime('now'), datetime('now')
+        )
+      `),
+      env.DB.prepare(`
+        INSERT INTO proposal_speakers (id, proposal_id, user_id, role, status, created_at)
+        VALUES ('${crypto.randomUUID()}', '${proposalId}', '${userId}', 'proposer', 'confirmed', datetime('now'))
+      `),
+    ]);
+
+    const updateResponse = await updateProposal(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "update", proposalType: "panel" }),
+        }),
+        { token },
+      ),
+    );
+    expect(updateResponse.status).toBe(200);
+
+    const speakerResponse = await updateProposalSpeaker(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/proposals/manage/${token}/speakers/${userId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ role: "moderator" }),
+        }),
+        { token, userId },
+      ),
+    );
+    expect(speakerResponse.status).toBe(200);
+
+    const rows = await queryAll<{ proposal_type: string; role: string }>(
+      env.DB,
+      `SELECT sp.proposal_type, ps.role
+       FROM session_proposals sp
+       JOIN proposal_speakers ps ON ps.proposal_id = sp.id
+       WHERE sp.id = ? AND ps.user_id = ?`,
+      [proposalId, userId],
+    );
+    expect(rows[0]).toEqual({ proposal_type: "panel", role: "moderator" });
   });
 });

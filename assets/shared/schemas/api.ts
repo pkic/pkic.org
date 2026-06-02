@@ -78,7 +78,29 @@ export const adminEmailOutboxQuerySchema = z.object({
 export const adminEventProposalsQuerySchema = z.object({
   status: z.string().trim().optional(),
   recommendation: z.enum(["accept", "reject", "needs-work"]).optional(),
-  sort: z.enum(["submitted_desc", "score_desc", "score_asc"]).optional(),
+  sort: z
+    .enum([
+      "submitted_desc",
+      "submitted_asc",
+      "score_desc",
+      "score_asc",
+      "reviews_desc",
+      "reviews_asc",
+      "title_desc",
+      "title_asc",
+      "proposer_desc",
+      "proposer_asc",
+      "type_desc",
+      "type_asc",
+      "status_desc",
+      "status_asc",
+      "decision_desc",
+      "decision_asc",
+      "recommendations_desc",
+      "recommendations_asc",
+    ])
+    .optional(),
+  q: z.string().trim().optional(),
   search: z.string().trim().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional(),
   offset: z.coerce.number().int().min(0).optional(),
@@ -280,6 +302,7 @@ export const participantProfileSchema = userProfileSchema.extend({
 export const proposerProfileSchema = userProfileSchema.extend({
   bio: speakerBioSchema.optional(),
   links: linksSchema.default([]),
+  role: speakerRoleSchema.default("proposer"),
 });
 
 export const inviteeSchema = z.object({
@@ -529,10 +552,16 @@ export const adminProposalPatchSchema = z.object({
 });
 
 export const adminSpeakerBioPatchSchema = z.object({
+  role: speakerRoleSchema.optional(),
+  firstName: z.string().trim().max(80).nullable().optional(),
+  lastName: z.string().trim().max(120).nullable().optional(),
+  organizationName: z.string().trim().max(200).nullable().optional(),
+  jobTitle: z.string().trim().max(200).nullable().optional(),
   biography: z.preprocess(
     (value) => (typeof value === "string" && value.trim() === "" ? null : value),
     z.string().trim().max(5000).nullable().optional(),
   ),
+  links: linksSchema.nullable().optional(),
 });
 
 export const adminEmailTemplateVersionSchema = z.object({
@@ -817,6 +846,7 @@ export const adminUserUpdateSchema = z
     organizationName: z.string().trim().max(200).nullable().optional(),
     jobTitle: z.string().trim().max(200).nullable().optional(),
     biography: z.string().trim().max(5000).nullable().optional(),
+    links: linksSchema.nullable().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: "At least one field must be provided",

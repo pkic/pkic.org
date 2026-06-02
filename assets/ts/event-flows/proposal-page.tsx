@@ -44,7 +44,7 @@ function renderSessionTypes(root: HTMLElement, types: string[]): void {
         const label = SESSION_TYPE_LABELS[type] ?? type.replace(/_/g, " ");
         return (
           <>
-            <input class="btn-check" type="radio" name="proposalType" id={id} value={type} checked={i === 0} />
+            <input class="btn-check" type="radio" name="proposalType" id={id} value={type} defaultChecked={i === 0} />
             <label class="btn btn-outline-secondary btn-sm" htmlFor={id}>
               {label}
             </label>
@@ -86,7 +86,10 @@ function readRadio(container: HTMLElement, name: string): string {
  * are pre-filled from step 1 and editable in-place.
  * The backend always records the proposer with role "proposer".
  */
-function createProposerCard(): { el: HTMLElement; linksRef: ReturnType<typeof createRef<ProfileLinksHandle>> } {
+function createProposerCard(defaultRole: string): {
+  el: HTMLElement;
+  linksRef: ReturnType<typeof createRef<ProfileLinksHandle>>;
+} {
   const container = document.createElement("div");
   const linksRef = createRef<ProfileLinksHandle>();
   render(
@@ -100,7 +103,9 @@ function createProposerCard(): { el: HTMLElement; linksRef: ReturnType<typeof cr
         organizationName: "proposerSpeakerOrg",
         jobTitle: "proposerSpeakerTitle",
         bio: "proposerBio",
+        role: "proposerSpeakerRole",
       }}
+      defaultRole={defaultRole}
       linksFieldName="proposerLink"
       linksRef={linksRef}
       emailHelp="Your management link is sent here. You will also receive a personal link to confirm your participation once the proposal is submitted."
@@ -263,13 +268,18 @@ async function main(): Promise<void> {
 
   let proposerCardEl: HTMLElement | null = null;
 
+  function defaultProposerRole(): string {
+    return readField(form, "proposalType") === "panel" ? "moderator" : "speaker";
+  }
+
   function ensureProposerCard(): void {
     if (proposerCardEl || !speakersContainer) return;
-    const { el, linksRef } = createProposerCard();
+    const { el, linksRef } = createProposerCard(defaultProposerRole());
     proposerCardEl = el;
     proposerLinksRef = linksRef;
     speakersContainer.prepend(el);
     prefillProposerCard();
+    syncProposerRoleDefault();
   }
 
   function removeProposerCard(): void {
@@ -291,6 +301,15 @@ async function main(): Promise<void> {
     setIfEmpty("proposerSpeakerEmail", readField(form, "email"));
     setIfEmpty("proposerSpeakerOrg", readField(form, "organizationName"));
     setIfEmpty("proposerSpeakerTitle", readField(form, "jobTitle"));
+  }
+
+  function syncProposerRoleDefault(): void {
+    if (!proposerCardEl) return;
+    const role = defaultProposerRole();
+    const selected = form.querySelector<HTMLInputElement>('input[name="proposerSpeakerRole"]:checked');
+    if (selected && selected.value !== "speaker" && selected.value !== "moderator") return;
+    const target = form.querySelector<HTMLInputElement>(`input[name="proposerSpeakerRole"][value="${role}"]`);
+    if (target) target.checked = true;
   }
 
   isPresentingCheckbox?.addEventListener("change", () => {
@@ -318,6 +337,11 @@ async function main(): Promise<void> {
     const { el, linksRef } = createSpeakerCard(speakerCount);
     additionalSpeakers.push({ index: speakerCount, container: el, linksRef });
     speakersContainer.append(el);
+  });
+
+  boot.root.addEventListener("change", (event) => {
+    const target = event.target as HTMLInputElement | null;
+    if (target?.name === "proposalType") syncProposerRoleDefault();
   });
 
   // ── Load form metadata ────────────────────────────────────────────────────
@@ -362,6 +386,7 @@ async function main(): Promise<void> {
             jobTitle: readField(form, "jobTitle") || undefined,
             bio: isPresenting ? readField(form, "proposerBio") || undefined : undefined,
             links: isPresenting && proposerLinksRef?.current ? proposerLinksRef.current.getLinks() : [],
+            role: isPresenting ? readRadio(form, "proposerSpeakerRole") || defaultProposerRole() : "proposer",
           },
 
           proposal: {
