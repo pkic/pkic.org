@@ -7,6 +7,7 @@ import { fmt, toast } from "../ui";
 import type { AdminUser } from "../types";
 import { confirmHeadshotUsage } from "../../shared/headshot/controller";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../shared/headshot/AdminHeadshotManager";
+import { ProfileLinksInput, type ProfileLinksHandle } from "../../components/ProfileLinksInput";
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -21,6 +22,7 @@ interface UserDetail {
   organization_name: string | null;
   job_title: string | null;
   biography: string | null;
+  links?: Array<string | { label?: string | null; url?: string | null }>;
   role: string;
   active: boolean;
   headshot_r2_key: string | null;
@@ -32,6 +34,18 @@ interface UserDetail {
 }
 
 const ROLE_COLOR: Record<string, string> = { admin: "danger", user: "secondary", guest: "light" };
+
+function normalizeProfileLinks(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      if (typeof entry === "string") return entry;
+      if (entry && typeof entry === "object" && "url" in entry && typeof entry.url === "string") return entry.url;
+      return "";
+    })
+    .map((url) => url.trim())
+    .filter(Boolean);
+}
 
 // ────────────────────────────────────────────────────────
 // User detail component
@@ -45,6 +59,7 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
   const [editing, setEditing] = useState(false);
   const [editError, setEditError] = useState("");
   const [editSaving, setEditSaving] = useState(false);
+  const editLinksRef = useRef<ProfileLinksHandle>(null);
   const [editForm, setEditForm] = useState<{
     email: string;
     firstName: string;
@@ -53,6 +68,7 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
     organizationName: string;
     jobTitle: string;
     biography: string;
+    links: string[];
     role: string;
     active: boolean;
   } | null>(null);
@@ -80,6 +96,11 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
     );
   }, [user]);
 
+  useEffect(() => {
+    if (!editing || !editForm) return;
+    editLinksRef.current?.setLinks(editForm.links);
+  }, [editing, editForm?.links]);
+
   async function uploadHeadshotFile(uid: string, file: Blob) {
     const headers: Record<string, string> = { "Content-Type": file.type || "application/octet-stream" };
     const res = await fetch(`/api/v1/admin/users/${uid}/headshot`, {
@@ -106,6 +127,7 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
       organizationName: user.organization_name ?? "",
       jobTitle: user.job_title ?? "",
       biography: user.biography ?? "",
+      links: normalizeProfileLinks(user.links),
       role: user.role,
       active: user.active,
     });
@@ -128,6 +150,7 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
           organizationName: editForm.organizationName || null,
           jobTitle: editForm.jobTitle || null,
           biography: editForm.biography || null,
+          links: editLinksRef.current?.getLinks() ?? editForm.links,
           role: editForm.role,
           active: editForm.active,
         }),
@@ -166,6 +189,7 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
   if (!user) return null;
 
   const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
+  const profileLinks = normalizeProfileLinks(user.links);
 
   return (
     <div>
@@ -251,6 +275,20 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
                           <td class="small">{user.biography}</td>
                         </tr>
                       )}
+                      {profileLinks.length > 0 && (
+                        <tr>
+                          <th class="text-muted small adm-user-info-label">Links</th>
+                          <td class="small">
+                            <div class="d-flex flex-column gap-1">
+                              {profileLinks.map((url) => (
+                                <a key={url} href={url} target="_blank" rel="noreferrer">
+                                  {url}
+                                </a>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                       {user.pii_redacted_at && (
                         <tr>
                           <th class="text-muted small adm-user-info-label">PII redacted</th>
@@ -304,6 +342,10 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
                           }
                           disabled={editSaving}
                         />
+                      </div>
+                      <div class="col-12">
+                        <label class="form-label small mb-1">Profile links</label>
+                        <ProfileLinksInput ref={editLinksRef} fieldName="adminUserProfileLink" max={15} />
                       </div>
                       <div class="col-12">
                         <label class="form-label small mb-1">Email</label>

@@ -4,6 +4,7 @@ import { Badge } from "../../../../components/Badge";
 import { Spinner } from "../../../../components/Spinner";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Markdown } from "../../../../components/Markdown";
+import { ProfileLinksInput, type ProfileLinksHandle } from "../../../../components/ProfileLinksInput";
 import { DataTable } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
@@ -33,6 +34,18 @@ interface ProposalFormSummary {
   fields: AdminFormDetailField[];
 }
 
+function normalizeProfileLinks(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((entry) => {
+      if (typeof entry === "string") return entry;
+      if (entry && typeof entry === "object" && "url" in entry && typeof entry.url === "string") return entry.url;
+      return "";
+    })
+    .map((url) => url.trim())
+    .filter(Boolean);
+}
+
 interface ProposalResponse {
   proposal: ProposalDetailRecord;
   access: ProposalAccess;
@@ -52,6 +65,18 @@ interface ProposalAuditLogEntry {
   entity_type: string;
   entity_id?: string | null;
   details?: Record<string, unknown> | null;
+}
+
+interface ProposalInternalComment {
+  id: string;
+  proposal_id: string;
+  author_user_id: string;
+  comment: string;
+  created_at: string;
+  updated_at: string;
+  author_email: string | null;
+  author_first_name: string | null;
+  author_last_name: string | null;
 }
 
 interface DecisionPreviewMessage {
@@ -121,6 +146,8 @@ function renderAuditDetailsMap(details: Record<string, unknown>) {
 
 function formatProposalAuditAction(entry: ProposalAuditLogEntry): string {
   switch (entry.action) {
+    case "proposal_internal_comment_added":
+      return "Internal comment added";
     case "proposal_review_upserted": {
       const deltas = auditDeltaMap(entry.details);
       const recommendation = deltas.find(([key]) => key === "recommendation")?.[1];
@@ -155,6 +182,8 @@ function formatProposalAuditAction(entry: ProposalAuditLogEntry): string {
     }
     case "speaker_bio_updated":
       return "Speaker bio updated";
+    case "speaker_profile_updated":
+      return "Speaker profile updated";
     case "speaker_confirmed":
       return "Speaker confirmed participation";
     case "speaker_declined":
@@ -234,15 +263,33 @@ function SpeakerCard({
   onSaved: (userId: string, patch: Partial<ProposalSpeaker>) => void;
 }) {
   const [editing, setEditing] = useState(false);
+  const [firstName, setFirstName] = useState(speaker.firstName ?? "");
+  const [lastName, setLastName] = useState(speaker.lastName ?? "");
+  const [organizationName, setOrganizationName] = useState(speaker.organizationName ?? "");
+  const [jobTitle, setJobTitle] = useState(speaker.jobTitle ?? "");
   const [bio, setBio] = useState(speaker.biography ?? "");
+  const [role, setRole] = useState(speaker.role);
   const [saving, setSaving] = useState(false);
   const [headshotStatus, setHeadshotStatus] = useState("");
+  const linksRef = useRef<ProfileLinksHandle>(null);
 
   const name = [speaker.firstName, speaker.lastName].filter(Boolean).join(" ") || speaker.email;
 
   useEffect(() => {
     setHeadshotStatus("");
-  }, [speaker.userId, speaker.headshotUrl]);
+    setRole(speaker.role);
+    setFirstName(speaker.firstName ?? "");
+    setLastName(speaker.lastName ?? "");
+    setOrganizationName(speaker.organizationName ?? "");
+    setJobTitle(speaker.jobTitle ?? "");
+    setBio(speaker.biography ?? "");
+    linksRef.current?.setLinks(normalizeProfileLinks(speaker.links));
+  }, [speaker.userId, speaker.headshotUrl, speaker.links]);
+
+  useEffect(() => {
+    if (!editing) return;
+    linksRef.current?.setLinks(normalizeProfileLinks(speaker.links));
+  }, [editing, speaker.links]);
 
   async function uploadHeadshotFile(file: Blob) {
     const headers: Record<string, string> = { "Content-Type": file.type || "image/jpeg" };
@@ -290,17 +337,37 @@ function SpeakerCard({
     try {
       await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}`, {
         method: "PATCH",
-        body: JSON.stringify({ biography: bio.trim() || null }),
+        body: JSON.stringify({
+          firstName: firstName.trim() || null,
+          lastName: lastName.trim() || null,
+          organizationName: organizationName.trim() || null,
+          jobTitle: jobTitle.trim() || null,
+          biography: bio.trim() || null,
+          links: linksRef.current?.getLinks() ?? [],
+          role,
+        }),
       });
-      onSaved(speaker.userId, { biography: bio.trim() || null, hasBio: Boolean(bio.trim()) });
+      const links = linksRef.current?.getLinks() ?? [];
+      onSaved(speaker.userId, {
+        firstName: firstName.trim() || null,
+        lastName: lastName.trim() || null,
+        organizationName: organizationName.trim() || null,
+        jobTitle: jobTitle.trim() || null,
+        biography: bio.trim() || null,
+        links,
+        hasBio: Boolean(bio.trim()),
+        role,
+      });
       setEditing(false);
-      toast("Speaker bio updated", "success");
+      toast("Speaker profile updated", "success");
     } catch (err) {
       toast((err as Error).message, "error");
     } finally {
       setSaving(false);
     }
   }
+
+  const profileLinks = normalizeProfileLinks(speaker.links);
 
   return (
     <div class="card mb-3">
@@ -350,6 +417,15 @@ function SpeakerCard({
             {!editing && speaker.biography && (
               <p class="small text-muted mt-2 mb-0 adm-pre-wrap">{speaker.biography}</p>
             )}
+            {!editing && profileLinks.length > 0 && (
+              <div class="small mt-2 d-flex flex-column gap-1">
+                {profileLinks.map((url) => (
+                  <a key={url} href={url} target="_blank" rel="noreferrer">
+                    {url}
+                  </a>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Actions */}
@@ -367,6 +443,52 @@ function SpeakerCard({
         {editing && (
           <form onSubmit={(e) => void handleSave(e)} class="mt-3 border-top pt-3">
             <div class="row g-3">
+              <div class="col-sm-6">
+                <label class="form-label fw-semibold">First name</label>
+                <input
+                  class="form-control"
+                  value={firstName}
+                  onInput={(e) => setFirstName((e.target as HTMLInputElement).value)}
+                />
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label fw-semibold">Last name</label>
+                <input
+                  class="form-control"
+                  value={lastName}
+                  onInput={(e) => setLastName((e.target as HTMLInputElement).value)}
+                />
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label fw-semibold">Organisation</label>
+                <input
+                  class="form-control"
+                  value={organizationName}
+                  onInput={(e) => setOrganizationName((e.target as HTMLInputElement).value)}
+                />
+              </div>
+              <div class="col-sm-6">
+                <label class="form-label fw-semibold">Job title</label>
+                <input
+                  class="form-control"
+                  value={jobTitle}
+                  onInput={(e) => setJobTitle((e.target as HTMLInputElement).value)}
+                />
+              </div>
+              <div class="col-12">
+                <label class="form-label fw-semibold">Role</label>
+                <select
+                  class="form-select"
+                  value={role}
+                  onChange={(e) => setRole((e.target as HTMLSelectElement).value)}
+                >
+                  <option value="proposer">Proposer</option>
+                  <option value="speaker">Speaker</option>
+                  <option value="co_speaker">Co-speaker</option>
+                  <option value="moderator">Moderator</option>
+                  <option value="panelist">Panelist</option>
+                </select>
+              </div>
               <div class="col-12">
                 <label class="form-label fw-semibold">Biography</label>
                 <textarea
@@ -378,8 +500,12 @@ function SpeakerCard({
                 />
               </div>
               <div class="col-12">
+                <label class="form-label fw-semibold">Profile links</label>
+                <ProfileLinksInput ref={linksRef} fieldName={`speakerProfileLink.${speaker.userId}`} max={15} />
+              </div>
+              <div class="col-12">
                 <button type="submit" class="btn btn-primary" disabled={saving}>
-                  {saving ? "Saving…" : "Save bio"}
+                  {saving ? "Saving…" : "Save profile"}
                 </button>
                 <button type="button" class="btn btn-outline-secondary ms-2" onClick={() => setEditing(false)}>
                   Cancel
@@ -412,11 +538,16 @@ function ReviewCard({ review }: { review: ProposalReview }) {
           <span class="small text-muted">{reviewer}</span>
           <span class="small text-muted ms-auto">{fmt(review.updated_at)}</span>
         </div>
-        {review.reviewer_comment && <Markdown markdown={review.reviewer_comment} className="small mb-1" />}
+        {review.reviewer_comment && (
+          <div class="mb-2">
+            <div class="small text-muted fw-semibold mb-1">Internal review notes</div>
+            <Markdown markdown={review.reviewer_comment} className="small mb-0" />
+          </div>
+        )}
         {review.applicant_note && (
-          <div class="small text-muted mb-0 border-start border-warning border-2 ps-2">
-            <div class="fw-semibold fst-italic mb-1">Note to applicant</div>
-            <Markdown markdown={review.applicant_note} />
+          <div class="adm-applicant-note">
+            <div class="small fw-semibold mb-1">Suggested note to applicant</div>
+            <Markdown markdown={review.applicant_note} className="small mb-0" />
           </div>
         )}
       </div>
@@ -437,6 +568,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
 
   const [reviews, setReviews] = useState<ProposalReview[]>([]);
   const [speakers, setSpeakers] = useState<ProposalSpeaker[]>([]);
+  const [comments, setComments] = useState<ProposalInternalComment[]>([]);
   const [loadingSub, setLoadingSub] = useState(true);
 
   // Abstract editing
@@ -450,6 +582,10 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const [reviewComment, setReviewComment] = useState("");
   const [reviewApplicantNote, setReviewApplicantNote] = useState("");
   const [savingReview, setSavingReview] = useState(false);
+
+  // Internal comments
+  const [commentDraft, setCommentDraft] = useState("");
+  const [savingComment, setSavingComment] = useState(false);
 
   // Sync review form from the admin's own review whenever reviews load
   useEffect(() => {
@@ -476,12 +612,14 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const loadSubData = useCallback(async () => {
     setLoadingSub(true);
     try {
-      const [r, s] = await Promise.all([
+      const [r, s, c] = await Promise.all([
         api<{ reviews: ProposalReview[] }>(`/api/v1/admin/proposals/${proposalId}/reviews`),
         api<{ speakers: ProposalSpeaker[] }>(`/api/v1/admin/proposals/${proposalId}/speakers`),
+        api<{ comments: ProposalInternalComment[] }>(`/api/v1/admin/proposals/${proposalId}/comments`),
       ]);
       setReviews(r.reviews ?? []);
       setSpeakers(s.speakers ?? []);
+      setComments(c.comments ?? []);
     } catch {
       // non-fatal
     } finally {
@@ -517,6 +655,18 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     decisionPreview?.messages.find((message) => message.id === selectedDecisionPreviewId) ??
     decisionPreview?.messages[0] ??
     null;
+  const scoredReviews = reviews.filter((review) => review.score != null);
+  const averageScore =
+    scoredReviews.length > 0
+      ? scoredReviews.reduce((sum, review) => sum + (review.score ?? 0), 0) / scoredReviews.length
+      : null;
+  const recommendationCounts = reviews.reduce(
+    (counts, review) => {
+      counts[review.recommendation] += 1;
+      return counts;
+    },
+    { accept: 0, "needs-work": 0, reject: 0 } as Record<ProposalReview["recommendation"], number>,
+  );
 
   useEffect(() => {
     setDecisionPreview(null);
@@ -599,6 +749,28 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
       toast((err as Error).message, "error");
     } finally {
       setSavingReview(false);
+    }
+  }
+
+  async function handleComment(e: Event) {
+    e.preventDefault();
+    const comment = commentDraft.trim();
+    if (!comment) return;
+    setSavingComment(true);
+    try {
+      const result = await api<{ comment: ProposalInternalComment }>(`/api/v1/admin/proposals/${proposalId}/comments`, {
+        method: "POST",
+        body: JSON.stringify({ comment }),
+      });
+      if (result.comment) {
+        setComments((prev) => [result.comment, ...prev]);
+      }
+      setCommentDraft("");
+      toast("Comment added", "success");
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setSavingComment(false);
     }
   }
 
@@ -870,7 +1042,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                         <div class="col-12">
                           <label class="form-label fw-semibold">
                             Internal review notes
-                            <span class="text-muted fw-normal ms-2 small">Private — not shared with applicant</span>
+                            <span class="text-muted fw-normal ms-2 small">Private · Markdown supported</span>
                           </label>
                           <textarea
                             class="form-control"
@@ -881,10 +1053,11 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                           />
                         </div>
                         <div class="col-12">
+                          <hr class="my-2" />
                           <label class="form-label fw-semibold">
                             Suggested note to applicant
                             <span class="text-muted fw-normal ms-2 small">
-                              Optional · shared if a decision email is sent
+                              Optional · private draft · Markdown supported
                             </span>
                           </label>
                           <textarea
@@ -933,7 +1106,9 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                       <strong>Decision recorded:</strong>
                       <Badge status={proposal.decision_status} />
                     </div>
-                    {proposal.decision_note && <p class="mb-0 mt-2 adm-pre-wrap small">{proposal.decision_note}</p>}
+                    {proposal.decision_note && (
+                      <Markdown markdown={proposal.decision_note} className="small mt-2 mb-0" />
+                    )}
                     {proposal.decision_decided_at && (
                       <div class="small text-muted mt-2">Recorded {fmt(proposal.decision_decided_at)}</div>
                     )}
@@ -1142,12 +1317,83 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                 <dt>Reviews</dt>
                 <dd class="mb-2">
                   {loadingSub ? "…" : reviews.length} / {minReviewsRequired} required
+                  <div class={`small ${quorumMet ? "text-success" : "text-warning"}`}>
+                    {quorumMet ? "Quorum met" : "Quorum not met"}
+                  </div>
+                  {!loadingSub && reviews.length > 0 && (
+                    <div class="small text-muted mt-1">
+                      Avg score {averageScore == null || Number.isNaN(averageScore) ? "—" : averageScore.toFixed(1)}
+                    </div>
+                  )}
+                  {!loadingSub && reviews.length > 0 && (
+                    <div class="d-flex gap-1 flex-wrap mt-1">
+                      {recommendationCounts.accept > 0 && (
+                        <Badge status="accept" label={`Accept ${recommendationCounts.accept}`} />
+                      )}
+                      {recommendationCounts["needs-work"] > 0 && (
+                        <Badge status="needs-work" label={`Needs work ${recommendationCounts["needs-work"]}`} />
+                      )}
+                      {recommendationCounts.reject > 0 && (
+                        <Badge status="reject" label={`Reject ${recommendationCounts.reject}`} />
+                      )}
+                    </div>
+                  )}
                 </dd>
                 <dt>Last updated</dt>
                 <dd class="mb-0">{fmt(proposal.updated_at)}</dd>
               </dl>
             </div>
           </div>
+
+          {access.canReview && (
+            <div class="card mt-3">
+              <div class="card-header">
+                <h6 class="mb-0">Internal Comments</h6>
+              </div>
+              <div class="card-body">
+                <form onSubmit={(e) => void handleComment(e)} class="mb-3">
+                  <textarea
+                    class="form-control"
+                    rows={3}
+                    value={commentDraft}
+                    onInput={(e) => setCommentDraft((e.target as HTMLTextAreaElement).value)}
+                    placeholder="Add a private committee comment…"
+                  />
+                  <div class="d-flex justify-content-between align-items-center gap-2 mt-2">
+                    <span class="small text-muted">Markdown supported</span>
+                    <button
+                      type="submit"
+                      class="btn btn-sm btn-primary"
+                      disabled={savingComment || !commentDraft.trim()}
+                    >
+                      {savingComment ? "Adding…" : "Add Comment"}
+                    </button>
+                  </div>
+                </form>
+                {comments.length === 0 ? (
+                  <p class="small text-muted mb-0">No internal comments yet.</p>
+                ) : (
+                  <div class="d-flex flex-column gap-2">
+                    {comments.map((comment) => {
+                      const author =
+                        [comment.author_first_name, comment.author_last_name].filter(Boolean).join(" ") ||
+                        comment.author_email ||
+                        "Admin";
+                      return (
+                        <div class="adm-internal-comment" key={comment.id}>
+                          <div class="d-flex gap-2 align-items-center mb-1">
+                            <strong class="small">{author}</strong>
+                            <span class="small text-muted ms-auto">{fmt(comment.created_at)}</span>
+                          </div>
+                          <Markdown markdown={comment.comment} className="small mb-0" />
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

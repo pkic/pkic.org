@@ -6,6 +6,11 @@ import { onRequestGet as getEventProposals } from "../functions/api/v1/admin/eve
 import { onRequestGet as getProposalDetail } from "../functions/api/v1/admin/proposals/[proposalId]";
 import { onRequestPost as openProposalManage } from "../functions/api/v1/admin/proposals/[proposalId]/open-manage";
 import { onRequestGet as getProposalReviews } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
+import { onRequestPatch as updateProposalSpeaker } from "../functions/api/v1/admin/proposals/[proposalId]/speakers/[userId]";
+import {
+  onRequestGet as getProposalComments,
+  onRequestPost as addProposalComment,
+} from "../functions/api/v1/admin/proposals/[proposalId]/comments";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { getProposalByManageToken } from "../functions/_lib/services/proposals";
@@ -179,6 +184,13 @@ describe("admin proposal endpoints", () => {
         decision_status: string | null;
       }>;
       pagination: { total: number; hasMore: boolean };
+      stats: {
+        byStatus: Record<string, number>;
+        byRecommendation: Record<string, number>;
+        reviewedCount: number;
+        unreviewedCount: number;
+        total: number;
+      };
     };
 
     expect(payload.proposals.length).toBe(1);
@@ -188,6 +200,11 @@ describe("admin proposal endpoints", () => {
     expect(Number(payload.proposals[0].recommendation_accept_count)).toBe(1);
     expect(payload.proposals[0].decision_status).toBe("accepted");
     expect(payload.pagination.total).toBe(1);
+    expect(payload.stats.byStatus.submitted).toBe(1);
+    expect(payload.stats.byRecommendation.accept).toBe(1);
+    expect(payload.stats.reviewedCount).toBe(1);
+    expect(payload.stats.unreviewedCount).toBe(0);
+    expect(payload.stats.total).toBe(1);
   });
 
   it("filters proposal list by recommendation and sorts by average score", async () => {
@@ -257,6 +274,91 @@ describe("admin proposal endpoints", () => {
     expect(filterPayload.pagination.total).toBe(1);
   });
 
+  it("updates a proposal speaker profile including links", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const speakerId = crypto.randomUUID();
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-speaker-profile");
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, biography, links_json, created_at, updated_at)
+        VALUES ('${speakerId}', 'profile-speaker@example.test', 'profile-speaker@example.test', 'Profile', 'Speaker', 'Old Org', 'Old Role', NULL, NULL, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO proposal_speakers (id, proposal_id, user_id, role, status, manage_token_hash, created_at)
+        VALUES ('${crypto.randomUUID()}', '${proposalId}', '${speakerId}', 'speaker', 'pending', NULL, datetime('now'))
+      `),
+    ]);
+
+    const response = await updateProposalSpeaker(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${speakerId}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
+          body: JSON.stringify({
+            firstName: "Updated",
+            lastName: "Speaker",
+            organizationName: "PKIC Labs",
+            jobTitle: "Moderator",
+            biography: "Updated biography from the admin proposal detail screen.",
+            links: ["https://example.test/speaker", "https://github.com/speaker"],
+            role: "moderator",
+          }),
+        }),
+        { proposalId, userId: speakerId },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const user = (
+      await queryAll<{
+        first_name: string | null;
+        organization_name: string | null;
+        job_title: string | null;
+        biography: string | null;
+        links_json: string | null;
+      }>(env.DB, "SELECT first_name, organization_name, job_title, biography, links_json FROM users WHERE id = ?", [
+        speakerId,
+      ])
+    )[0];
+    const speaker = (
+      await queryAll<{ role: string }>(
+        env.DB,
+        "SELECT role FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+        [proposalId, speakerId],
+      )
+    )[0];
+    expect(user.first_name).toBe("Updated");
+    expect(user.organization_name).toBe("PKIC Labs");
+    expect(user.job_title).toBe("Moderator");
+    expect(user.biography).toBe("Updated biography from the admin proposal detail screen.");
+    expect(JSON.parse(user.links_json ?? "[]")).toEqual(["https://example.test/speaker", "https://github.com/speaker"]);
+    expect(speaker.role).toBe("moderator");
+  });
+
+  it("searches proposal and review text", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-list-search");
+
+    const response = await getEventProposals(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/admin/events/pqc-2026/proposals?q=relevance", {
+          headers: { authorization: `Bearer ${adminToken}` },
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as { proposals: Array<{ title: string }>; pagination: { total: number } };
+    expect(payload.proposals.map((proposal) => proposal.title)).toEqual(["Endpoint Proposal"]);
+    expect(payload.pagination.total).toBe(1);
+  });
+
   it("returns proposal detail with parsed answers and active form fields", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
@@ -313,6 +415,46 @@ describe("admin proposal endpoints", () => {
     expect(payload.reviews.length).toBe(1);
     expect(payload.reviews[0].reviewer_email).toBe("admin@pkic.org");
     expect(payload.reviews[0].reviewer_first_name ?? null).toBeNull();
+  });
+
+  it("stores and returns internal proposal comments", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-comments");
+
+    const addResponse = await addProposalComment(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/comments`, {
+          method: "POST",
+          headers: {
+            authorization: `Bearer ${adminToken}`,
+            "content-type": "application/json",
+          },
+          body: JSON.stringify({ comment: "Discuss **schedule fit** before final email." }),
+        }),
+        { proposalId },
+      ),
+    );
+
+    expect(addResponse.status).toBe(200);
+    const addPayload = (await addResponse.json()) as { comment: { comment: string; author_email: string } };
+    expect(addPayload.comment.comment).toContain("schedule fit");
+    expect(addPayload.comment.author_email).toBe("admin@pkic.org");
+
+    const listResponse = await getProposalComments(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/comments`, {
+          headers: { authorization: `Bearer ${adminToken}` },
+        }),
+        { proposalId },
+      ),
+    );
+    expect(listResponse.status).toBe(200);
+    const listPayload = (await listResponse.json()) as { comments: Array<{ comment: string }> };
+    expect(listPayload.comments).toHaveLength(1);
+    expect(listPayload.comments[0].comment).toBe("Discuss **schedule fit** before final email.");
   });
 
   it("refreshes the proposer manage token and returns a working manage URL", async () => {

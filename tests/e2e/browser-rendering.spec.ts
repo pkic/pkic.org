@@ -283,7 +283,11 @@ async function fillInviteRegistration(
   await page.getByRole("button", { name: /Secure my spot/i }).click();
 }
 
-async function fillProposal(page: Page): Promise<void> {
+async function fillProposal(
+  page: Page,
+  options: { type?: "talk" | "panel"; proposerPresenting?: boolean; addPanelist?: boolean } = {},
+): Promise<void> {
+  const type = options.type ?? "talk";
   // Step 1: accept all speaker consent terms
   const consentCards = page.locator("div.event-flow-consent-card");
   await consentCards.first().waitFor({ state: "visible", timeout: 10_000 });
@@ -298,17 +302,54 @@ async function fillProposal(page: Page): Promise<void> {
   await page.getByLabel("Work email").fill("proposal-speaker@example.test");
   await page.getByLabel("Organization").fill("Example Org");
   await page.getByLabel("Job title").fill("Engineer");
+  if (options.proposerPresenting) {
+    await setNativeChecked(page, "input#proposal-is-presenting");
+  }
   await page.getByRole("button", { name: /Continue/i }).click();
-  await page.getByRole("radio", { name: /^Talk$/i }).check();
-  await page.locator("#proposal-title").fill("Operational Trust in a Post-Quantum Transition");
+  await setNativeChecked(page, type === "panel" ? "input#type-panel" : "input#type-talk");
+  await page
+    .locator("#proposal-title")
+    .fill(
+      type === "panel"
+        ? "Operational Trust in a Post-Quantum Transition Panel"
+        : "Operational Trust in a Post-Quantum Transition",
+    );
   await page
     .locator("#proposal-abstract")
     .fill(
-      "This talk covers practical migration decision-making, governance trade-offs, and the operational work required to move from pilot planning to production readiness in a post-quantum transition.",
+      type === "panel"
+        ? "This panel covers practical migration decision-making, governance trade-offs, and the operational work required to move from pilot planning to production readiness in a post-quantum transition."
+        : "This talk covers practical migration decision-making, governance trade-offs, and the operational work required to move from pilot planning to production readiness in a post-quantum transition.",
     );
   await page.getByLabel("Preferred track").selectOption("Technical Deep Dive");
   await page.getByLabel("Target audience level").selectOption("Intermediate");
   await page.getByRole("button", { name: /Continue/i }).click();
+
+  if (options.proposerPresenting) {
+    const proposerCard = page.locator(".proposal-speaker-card").filter({ hasText: "You — as a speaker" });
+    await expect(proposerCard).toBeVisible();
+    await expect(proposerCard.locator('input[name="proposerSpeakerRole"][value="moderator"]')).toBeChecked();
+    await proposerCard
+      .locator('textarea[name="proposerBio"]')
+      .fill("Moderator biography with enough detail to satisfy validation for this panel proposal.");
+  }
+
+  if (options.addPanelist) {
+    await page.locator("[data-add-speaker]").click();
+    const panelistCard = page.locator(".proposal-speaker-card").filter({ hasText: "Speaker 1" });
+    await expect(panelistCard).toBeVisible();
+    await panelistCard.locator('input[name="speaker.1.firstName"]').fill("Panelist");
+    await panelistCard.locator('input[name="speaker.1.lastName"]').fill("One");
+    await panelistCard.locator('input[name="speaker.1.email"]').fill("panelist-one@example.test");
+    await panelistCard.locator('input[name="speaker.1.organizationName"]').fill("Panelist Org");
+    await panelistCard.locator('input[name="speaker.1.jobTitle"]').fill("Migration Lead");
+    await panelistCard
+      .locator('input[name="speaker.1.role"][value="panelist"]')
+      .evaluate((el) => (el as HTMLInputElement).click());
+    await panelistCard
+      .locator('textarea[name="speaker.1.bio"]')
+      .fill("Panelist biography with enough detail to satisfy validation and represent a real panel participant.");
+  }
 }
 
 async function signInAsAdmin(page: Page): Promise<void> {
@@ -605,7 +646,7 @@ test.describe("browser workflows", () => {
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/propose/");
     await expect(page).toHaveTitle(/Submit a Session Proposal/);
 
-    await fillProposal(page);
+    await fillProposal(page, { type: "panel", proposerPresenting: true, addPanelist: true });
     await page.getByRole("button", { name: /Submit proposal/i }).click();
     await expect(page.getByRole("heading", { name: /Proposal submitted, Priya!/i })).toBeVisible();
     await screenshot("01-proposal-submitted");
@@ -616,7 +657,18 @@ test.describe("browser workflows", () => {
     const proposalManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(proposalManageUrl).searchParams.get("token") ?? "")}`;
     await page.goto(proposalManageRoute);
     await expect(page.getByText(/Open this page from your proposal management link/i)).toBeVisible();
-    await page.locator("#manage-proposal-type").selectOption("panel");
+    await expect(page.locator("#manage-proposal-type")).toHaveValue("panel");
+    const proposerSpeakerCard = page
+      .locator("[data-speaker-card]")
+      .filter({ hasText: "proposal-speaker@example.test" });
+    await expect(proposerSpeakerCard).toBeVisible();
+    await expect(proposerSpeakerCard.getByLabel("Role")).toHaveValue("moderator");
+    await proposerSpeakerCard.getByLabel("Role").selectOption("speaker");
+    await proposerSpeakerCard.getByRole("button", { name: /Save speaker details/i }).click();
+    await expect(page.getByText(/Saved speaker details for proposal-speaker@example.test/i)).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(proposerSpeakerCard.getByLabel("Role")).toHaveValue("speaker");
     await page.locator("#manage-proposal-title").fill("Operational Trust in a Post-Quantum Transition, Revised");
     await page
       .locator("#manage-proposal-abstract")

@@ -17,7 +17,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const status = url.searchParams.get("status")?.trim() ?? "";
   const recommendation = url.searchParams.get("recommendation")?.trim() ?? "";
   const sort = url.searchParams.get("sort")?.trim() ?? "submitted_desc";
-  const search = url.searchParams.get("search")?.trim().toLowerCase() ?? "";
+  const search = (url.searchParams.get("q") ?? url.searchParams.get("search") ?? "").trim().toLowerCase();
   const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10) || 50));
   const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
 
@@ -38,18 +38,58 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   if (search) {
     conditions.push(
-      "(LOWER(sp.title) LIKE ? OR LOWER(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '') || ' ' || u.email) LIKE ?)",
+      `(LOWER(sp.title) LIKE ?
+        OR LOWER(sp.abstract) LIKE ?
+        OR LOWER(sp.proposal_type) LIKE ?
+        OR LOWER(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '') || ' ' || u.email) LIKE ?
+        OR EXISTS (
+          SELECT 1
+          FROM proposal_reviews pr_search
+          LEFT JOIN users ru ON ru.id = pr_search.reviewer_user_id
+          WHERE pr_search.proposal_id = sp.id
+            AND (
+              LOWER(COALESCE(pr_search.reviewer_comment, '')) LIKE ?
+              OR LOWER(COALESCE(pr_search.applicant_note, '')) LIKE ?
+              OR LOWER(pr_search.recommendation) LIKE ?
+              OR LOWER(COALESCE(ru.first_name, '') || ' ' || COALESCE(ru.last_name, '') || ' ' || COALESCE(ru.email, '')) LIKE ?
+            )
+        )
+        OR EXISTS (
+          SELECT 1
+          FROM proposal_decisions pd_search
+          WHERE pd_search.proposal_id = sp.id
+            AND LOWER(COALESCE(pd_search.decision_note, '') || ' ' || COALESCE(pd_search.final_status, '')) LIKE ?
+        ))`,
     );
     const pattern = `%${search}%`;
-    params.push(pattern, pattern);
+    params.push(pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern, pattern);
   }
 
-  const orderBy =
-    sort === "score_desc"
-      ? "rv.average_review_score IS NULL ASC, rv.average_review_score DESC, sp.submitted_at DESC"
-      : sort === "score_asc"
-        ? "rv.average_review_score IS NULL ASC, rv.average_review_score ASC, sp.submitted_at DESC"
-        : "sp.submitted_at DESC";
+  const orderByMap: Record<string, string> = {
+    submitted_desc: "sp.submitted_at DESC",
+    submitted_asc: "sp.submitted_at ASC",
+    score_desc: "rv.average_review_score IS NULL ASC, rv.average_review_score DESC, sp.submitted_at DESC",
+    score_asc: "rv.average_review_score IS NULL ASC, rv.average_review_score ASC, sp.submitted_at DESC",
+    reviews_desc: "COALESCE(rv.review_count, 0) DESC, sp.submitted_at DESC",
+    reviews_asc: "COALESCE(rv.review_count, 0) ASC, sp.submitted_at DESC",
+    title_desc: "LOWER(sp.title) DESC, sp.submitted_at DESC",
+    title_asc: "LOWER(sp.title) ASC, sp.submitted_at DESC",
+    proposer_desc:
+      "LOWER(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '') || ' ' || u.email) DESC, sp.submitted_at DESC",
+    proposer_asc:
+      "LOWER(COALESCE(u.first_name, '') || ' ' || COALESCE(u.last_name, '') || ' ' || u.email) ASC, sp.submitted_at DESC",
+    type_desc: "LOWER(sp.proposal_type) DESC, sp.submitted_at DESC",
+    type_asc: "LOWER(sp.proposal_type) ASC, sp.submitted_at DESC",
+    status_desc: "LOWER(sp.status) DESC, sp.submitted_at DESC",
+    status_asc: "LOWER(sp.status) ASC, sp.submitted_at DESC",
+    decision_desc: "LOWER(COALESCE(pd.final_status, '')) DESC, sp.submitted_at DESC",
+    decision_asc: "LOWER(COALESCE(pd.final_status, '')) ASC, sp.submitted_at DESC",
+    recommendations_desc:
+      "(COALESCE(rv.accept_count, 0) - COALESCE(rv.reject_count, 0)) DESC, COALESCE(rv.needs_work_count, 0) DESC, sp.submitted_at DESC",
+    recommendations_asc:
+      "(COALESCE(rv.accept_count, 0) - COALESCE(rv.reject_count, 0)) ASC, COALESCE(rv.needs_work_count, 0) ASC, sp.submitted_at DESC",
+  };
+  const orderBy = orderByMap[sort] ?? orderByMap.submitted_desc;
 
   const rows = await all<ProposalListRecord>(
     requestDb(c),
@@ -88,20 +128,61 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   const hasMore = rows.length > limit;
   const proposals = hasMore ? rows.slice(0, limit) : rows;
-  const totalRow = await first<{ total: number }>(
-    requestDb(c),
-    `SELECT COUNT(*) AS total
+  const [totalRow, statusRows, recommendationRows, reviewedRow] = await Promise.all([
+    first<{ total: number }>(
+      requestDb(c),
+      `SELECT COUNT(*) AS total
      FROM session_proposals sp
      JOIN users u ON u.id = sp.proposer_user_id
      WHERE ${conditions.join(" AND ")}`,
-    params,
-  );
+      params,
+    ),
+    all<{ status: string; count: number }>(
+      requestDb(c),
+      `SELECT status, COUNT(*) AS count
+       FROM session_proposals
+       WHERE event_id = ?
+       GROUP BY status`,
+      [event.id],
+    ),
+    all<{ recommendation: string; count: number }>(
+      requestDb(c),
+      `SELECT pr.recommendation, COUNT(*) AS count
+       FROM proposal_reviews pr
+       JOIN session_proposals sp ON sp.id = pr.proposal_id
+       WHERE sp.event_id = ?
+       GROUP BY pr.recommendation`,
+      [event.id],
+    ),
+    first<{ reviewed_count: number }>(
+      requestDb(c),
+      `SELECT COUNT(DISTINCT sp.id) AS reviewed_count
+       FROM session_proposals sp
+       JOIN proposal_reviews pr ON pr.proposal_id = sp.id
+       WHERE sp.event_id = ?`,
+      [event.id],
+    ),
+  ]);
   const total = Number(totalRow?.total ?? 0);
+  const byStatus: Record<string, number> = {};
+  const byRecommendation: Record<string, number> = {};
+  for (const row of statusRows) byStatus[row.status] = Number(row.count);
+  for (const row of recommendationRows) byRecommendation[row.recommendation] = Number(row.count);
+  const statsTotal = Object.values(byStatus).reduce((sum, count) => sum + count, 0);
+  const reviewedCount = Number(reviewedRow?.reviewed_count ?? 0);
 
   return json({
     event: { id: event.id, slug: event.slug, name: event.name },
     permissions: access,
+    access,
     proposals,
+    stats: {
+      byStatus,
+      byRecommendation,
+      reviewedCount,
+      unreviewedCount: Math.max(0, statsTotal - reviewedCount),
+      total: statsTotal,
+    },
     pagination: {
       limit,
       offset,

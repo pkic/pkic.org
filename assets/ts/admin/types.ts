@@ -186,6 +186,7 @@ export interface ProposalSpeaker {
   organizationName: string | null;
   jobTitle: string | null;
   biography: string | null;
+  links?: Array<string | { label?: string | null; url?: string | null }>;
   headshotUrl: string | null;
   confirmedAt: string | null;
   declinedAt: string | null;

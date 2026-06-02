@@ -33,6 +33,9 @@ export function setStatus(target: HTMLElement, message: string, isError = false)
  */
 export function readField(form: HTMLFormElement, name: string): string {
   const el = form.elements.namedItem(name);
+  if (el instanceof RadioNodeList) {
+    return el.value.trim();
+  }
   if (el instanceof HTMLInputElement || el instanceof HTMLSelectElement || el instanceof HTMLTextAreaElement) {
     return el.value.trim();
   }
@@ -44,6 +47,10 @@ export function readField(form: HTMLFormElement, name: string): string {
  */
 export function setField(form: HTMLFormElement, name: string, value: string | null | undefined): void {
   const el = form.elements.namedItem(name);
+  if (el instanceof RadioNodeList) {
+    el.value = value ?? "";
+    return;
+  }
   if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el instanceof HTMLSelectElement) {
     el.value = value ?? "";
   }

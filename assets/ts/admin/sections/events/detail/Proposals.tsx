@@ -1,15 +1,8 @@
-import { Fragment } from "preact";
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
-import { Spinner } from "../../../../components/Spinner";
-import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { Pager } from "../../../../components/Pager";
-import { Table } from "../../../../components/Table";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
 import { Tabs } from "../../../../components/Tabs";
-import { useData } from "../../../../hooks/useData";
-import { usePageState } from "../../../../hooks/usePageState";
-import { api } from "../../../api";
 import { fmt } from "../../../ui";
 import type { ProposalSummary, ProposalAccess } from "../../../types";
 import { EventEmail } from "./EventEmail";
@@ -21,12 +14,20 @@ import { Invites } from "./Invites";
 interface ProposalsResponse {
   proposals: ProposalSummary[];
   access: ProposalAccess;
+  stats?: ProposalStats;
   page?: { offset: number; limit: number; total: number; hasMore: boolean };
   pagination?: { offset: number; limit: number; total: number; hasMore: boolean };
 }
 
 type RecommendationFilter = "" | "accept" | "needs-work" | "reject";
-type ProposalSort = "submitted_desc" | "score_desc" | "score_asc";
+
+interface ProposalStats {
+  byStatus: Record<string, number>;
+  byRecommendation: Record<string, number>;
+  reviewedCount: number;
+  unreviewedCount: number;
+  total: number;
+}
 
 function formatAverageScore(score: number | null): string {
   if (score == null) return "—";
@@ -52,148 +53,208 @@ function recommendationSummary(p: ProposalSummary) {
 }
 
 function ProposalsList({ slug }: { slug: string }) {
-  const { offset, pageSize, resetPage, pagerProps } = usePageState();
   const [statusFilter, setStatusFilter] = useState("");
   const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>("");
-  const [sort, setSort] = useState<ProposalSort>("submitted_desc");
+  const [stats, setStats] = useState<ProposalStats | null>(null);
   const [, navigate] = useHashLocation();
+  const tableRef = useRef<ApiTableActions | null>(null);
 
-  const { data, loading, error, reload } = useData<ProposalsResponse>(() => {
-    const params = new URLSearchParams({ limit: String(pageSize), offset: String(offset) });
-    if (statusFilter) params.set("status", statusFilter);
-    if (recommendationFilter) params.set("recommendation", recommendationFilter);
-    if (sort !== "submitted_desc") params.set("sort", sort);
-    return api<ProposalsResponse>(`/api/v1/admin/events/${slug}/proposals?${params}`);
-  }, [slug, statusFilter, recommendationFilter, sort, offset, pageSize]);
-
-  const proposals = data?.proposals ?? [];
-  const page = data?.pagination ?? data?.page;
-  const total = page?.total ?? 0;
-  const hasMore = page?.hasMore ?? false;
+  const submitted = stats?.byStatus?.submitted ?? 0;
+  const underReview = stats?.byStatus?.under_review ?? 0;
+  const accepted = stats?.byStatus?.accepted ?? 0;
+  const rejected = stats?.byStatus?.rejected ?? 0;
+  const needsWork = stats?.byStatus?.["needs-work"] ?? stats?.byStatus?.needs_work ?? 0;
+  const withdrawn = stats?.byStatus?.withdrawn ?? 0;
+  const acceptRecommended = stats?.byRecommendation?.accept ?? 0;
+  const needsWorkRecommended = stats?.byRecommendation?.["needs-work"] ?? 0;
+  const rejectRecommended = stats?.byRecommendation?.reject ?? 0;
 
   return (
     <div>
-      <div class="d-flex gap-2 align-items-center mb-3 flex-wrap">
-        <label class="form-label mb-0 small fw-semibold">Status</label>
-        <select
-          class="form-select form-select-sm adm-filter-select"
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter((e.target as HTMLSelectElement).value);
-            resetPage();
-          }}
-        >
-          <option value="">All</option>
-          <option value="submitted">Submitted</option>
-          <option value="under_review">Under Review</option>
-          <option value="accepted">Accepted</option>
-          <option value="rejected">Rejected</option>
-          <option value="needs-work">Needs Work</option>
-          <option value="withdrawn">Withdrawn</option>
-        </select>
-        <label class="form-label mb-0 small fw-semibold">Recommendation</label>
-        <select
-          class="form-select form-select-sm adm-filter-select"
-          value={recommendationFilter}
-          onChange={(e) => {
-            setRecommendationFilter((e.target as HTMLSelectElement).value as RecommendationFilter);
-            resetPage();
-          }}
-        >
-          <option value="">All</option>
-          <option value="accept">Accept</option>
-          <option value="needs-work">Needs Work</option>
-          <option value="reject">Reject</option>
-        </select>
-        <label class="form-label mb-0 small fw-semibold">Sort</label>
-        <select
-          class="form-select form-select-sm adm-filter-select"
-          value={sort}
-          onChange={(e) => {
-            setSort((e.target as HTMLSelectElement).value as ProposalSort);
-            resetPage();
-          }}
-        >
-          <option value="submitted_desc">Submitted newest</option>
-          <option value="score_desc">Score high to low</option>
-          <option value="score_asc">Score low to high</option>
-        </select>
-        <button class="btn btn-sm btn-outline-secondary ms-auto" onClick={() => void reload()}>
-          ↺ Refresh
-        </button>
-      </div>
-
-      {loading ? (
-        <Spinner />
-      ) : error ? (
-        <ErrorAlert error={error} />
-      ) : (
-        <>
-          <Table
-            heads={[
-              "Title",
-              "Proposer",
-              "Type",
-              "Status",
-              "Decision",
-              "Avg Score",
-              "Recommendations",
-              "Reviews",
-              "Submitted",
-              "",
-            ]}
-            empty="No proposals found"
-          >
-            {proposals.length > 0 &&
-              proposals.map((p) => {
-                const proposer =
-                  [p.proposer_first_name, p.proposer_last_name].filter(Boolean).join(" ") || p.proposer_email;
-                return (
-                  <Fragment key={p.id}>
-                    <tr>
-                      <td class="adm-cell-title">
-                        <span class="small">{p.title}</span>
-                      </td>
-                      <td>
-                        <span class="small">{proposer}</span>
-                        {proposer !== p.proposer_email && (
-                          <>
-                            <br />
-                            <span class="text-muted small adm-cell-sub-email">{p.proposer_email}</span>
-                          </>
-                        )}
-                      </td>
-                      <td class="small">{p.proposal_type}</td>
-                      <td>
-                        <Badge status={p.status} />
-                      </td>
-                      <td>
-                        {p.decision_status ? (
-                          <Badge status={p.decision_status} />
-                        ) : (
-                          <span class="text-muted small">—</span>
-                        )}
-                      </td>
-                      <td class="mono">{formatAverageScore(p.average_review_score)}</td>
-                      <td>{recommendationSummary(p)}</td>
-                      <td class="mono">{p.review_count}</td>
-                      <td class="mono small">{fmt(p.submitted_at)}</td>
-                      <td>
-                        <button
-                          class="btn btn-sm btn-outline-secondary"
-                          onClick={() => navigate(`/events/${slug}/proposal/${p.id}`)}
-                        >
-                          Review →
-                        </button>
-                      </td>
-                    </tr>
-                  </Fragment>
-                );
-              })}
-          </Table>
-          <Pager {...pagerProps(proposals.length, total, hasMore)} />
-        </>
+      {stats && (
+        <div class="adm-mini-stats mb-3">
+          <span class="adm-mini-stat">
+            <strong>{stats.total}</strong> total
+          </span>
+          {submitted > 0 && (
+            <span class="adm-mini-stat">
+              <strong>{submitted}</strong> submitted
+            </span>
+          )}
+          {underReview > 0 && (
+            <span class="adm-mini-stat">
+              <strong>{underReview}</strong> under review
+            </span>
+          )}
+          {accepted > 0 && (
+            <span class="adm-mini-stat">
+              <strong class="text-success">{accepted}</strong> accepted
+            </span>
+          )}
+          {needsWork > 0 && (
+            <span class="adm-mini-stat">
+              <strong class="text-warning">{needsWork}</strong> needs work
+            </span>
+          )}
+          {rejected > 0 && (
+            <span class="adm-mini-stat">
+              <strong class="text-danger">{rejected}</strong> rejected
+            </span>
+          )}
+          {withdrawn > 0 && (
+            <span class="adm-mini-stat">
+              <strong>{withdrawn}</strong> withdrawn
+            </span>
+          )}
+          <span class="adm-mini-stat-sep" />
+          <span class="adm-mini-stat">
+            <strong>{stats.reviewedCount}</strong> reviewed
+          </span>
+          {stats.unreviewedCount > 0 && (
+            <span class="adm-mini-stat">
+              <strong class="text-warning">{stats.unreviewedCount}</strong> no reviews
+            </span>
+          )}
+          <span class="adm-mini-stat">
+            <strong class="text-success">{acceptRecommended}</strong> accept recs
+          </span>
+          <span class="adm-mini-stat">
+            <strong class="text-warning">{needsWorkRecommended}</strong> needs work recs
+          </span>
+          <span class="adm-mini-stat">
+            <strong class="text-danger">{rejectRecommended}</strong> reject recs
+          </span>
+        </div>
       )}
+
+      <ApiDataTable<ProposalSummary>
+        endpoint={`/api/v1/admin/events/${slug}/proposals`}
+        resolve={(d) => {
+          const resp = d as ProposalsResponse;
+          if (resp.stats) setStats(resp.stats);
+          return resp.proposals;
+        }}
+        resolvePage={(d) => ((d as ProposalsResponse).pagination ?? (d as ProposalsResponse).page)!}
+        paginate
+        initialSort="submitted_desc"
+        searchPlaceholder="Search proposals / reviews…"
+        params={{
+          ...(statusFilter && { status: statusFilter }),
+          ...(recommendationFilter && { recommendation: recommendationFilter }),
+        }}
+        actionsRef={tableRef}
+        deps={[slug, statusFilter, recommendationFilter]}
+        toolbar={({ resetPage }) => (
+          <>
+            <select
+              class="form-select form-select-sm adm-filter-select"
+              value={statusFilter}
+              onChange={(e) => {
+                setStatusFilter((e.target as HTMLSelectElement).value);
+                resetPage();
+              }}
+            >
+              <option value="">All statuses</option>
+              <option value="submitted">Submitted</option>
+              <option value="under_review">Under Review</option>
+              <option value="accepted">Accepted</option>
+              <option value="rejected">Rejected</option>
+              <option value="needs-work">Needs Work</option>
+              <option value="withdrawn">Withdrawn</option>
+            </select>
+            <select
+              class="form-select form-select-sm adm-filter-select"
+              value={recommendationFilter}
+              onChange={(e) => {
+                setRecommendationFilter((e.target as HTMLSelectElement).value as RecommendationFilter);
+                resetPage();
+              }}
+            >
+              <option value="">All recommendations</option>
+              <option value="accept">Accept</option>
+              <option value="needs-work">Needs Work</option>
+              <option value="reject">Reject</option>
+            </select>
+          </>
+        )}
+        columns={[
+          {
+            header: "Title",
+            cell: (p) => <span class="small">{p.title}</span>,
+            className: "adm-cell-title",
+            sort: { asc: "title_asc", desc: "title_desc", defaultDirection: "asc" },
+          },
+          {
+            header: "Proposer",
+            cell: (p) => {
+              const proposer =
+                [p.proposer_first_name, p.proposer_last_name].filter(Boolean).join(" ") || p.proposer_email;
+              return (
+                <>
+                  <span class="small">{proposer}</span>
+                  {proposer !== p.proposer_email && (
+                    <>
+                      <br />
+                      <span class="text-muted small adm-cell-sub-email">{p.proposer_email}</span>
+                    </>
+                  )}
+                </>
+              );
+            },
+            sort: { asc: "proposer_asc", desc: "proposer_desc", defaultDirection: "asc" },
+          },
+          {
+            header: { label: "Type", className: "text-center" },
+            cell: (p) => p.proposal_type,
+            className: "small text-center",
+            sort: { asc: "type_asc", desc: "type_desc", defaultDirection: "asc" },
+          },
+          {
+            header: { label: "Status", className: "text-center" },
+            cell: (p) => <Badge status={p.status} />,
+            className: "text-center",
+            sort: { asc: "status_asc", desc: "status_desc", defaultDirection: "asc" },
+          },
+          {
+            header: { label: "Decision", className: "text-center" },
+            cell: (p) =>
+              p.decision_status ? <Badge status={p.decision_status} /> : <span class="text-muted small">—</span>,
+            className: "text-center",
+            sort: { asc: "decision_asc", desc: "decision_desc", defaultDirection: "asc" },
+          },
+          {
+            header: { label: "Avg Score", className: "text-end" },
+            cell: (p) => formatAverageScore(p.average_review_score),
+            className: "mono text-end",
+            sort: { asc: "score_asc", desc: "score_desc" },
+          },
+          {
+            header: { label: "Recommendations", className: "text-center" },
+            cell: (p) => recommendationSummary(p),
+            className: "text-center",
+            sort: { asc: "recommendations_asc", desc: "recommendations_desc" },
+          },
+          {
+            header: { label: "Reviews", className: "text-end" },
+            cell: (p) => p.review_count,
+            className: "mono text-end",
+            sort: { asc: "reviews_asc", desc: "reviews_desc" },
+          },
+          {
+            header: "Submitted",
+            cell: (p) => fmt(p.submitted_at),
+            className: "mono small",
+            sort: { asc: "submitted_asc", desc: "submitted_desc" },
+          },
+          {
+            header: "",
+            cell: () => <span class="btn btn-sm btn-outline-secondary">Review →</span>,
+          },
+        ]}
+        empty="No proposals found"
+        rowKey={(p) => p.id}
+        onRowClick={(p) => navigate(`/events/${slug}/proposal/${p.id}`)}
+      />
     </div>
   );
 }

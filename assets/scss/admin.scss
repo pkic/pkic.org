@@ -771,6 +771,31 @@ $adm-danger: #dc3545;
     cursor: pointer;
   }
 
+  .tbl-sort-btn {
+    align-items: center;
+    appearance: none;
+    background: transparent;
+    border: 0;
+    color: inherit;
+    display: inline-flex;
+    font: inherit;
+    gap: 0.3rem;
+    padding: 0;
+    text-align: inherit;
+  }
+
+  .tbl-sort-btn:hover,
+  .tbl-sort-btn.is-active {
+    color: #fff;
+    text-decoration: underline;
+    text-underline-offset: 0.15rem;
+  }
+
+  .tbl-sort-indicator {
+    color: rgba(255, 255, 255, 0.72);
+    font-size: 0.68rem;
+  }
+
   // ── Code / JSON output ──────────────────────────────────────────────────────
 
   .mono {
@@ -823,6 +848,22 @@ $adm-danger: #dc3545;
   .adm-pre-wrap {
     white-space: pre-wrap;
   }
+
+  .adm-applicant-note {
+    background: #fff8e6;
+    border: 1px solid #f3df9f;
+    border-radius: 0.375rem;
+    color: #5f4700;
+    padding: 0.6rem 0.75rem;
+  }
+
+  .adm-internal-comment {
+    background: #f8f9fa;
+    border: 1px solid $adm-border;
+    border-radius: 0.375rem;
+    padding: 0.65rem 0.75rem;
+  }
+
   .adm-markdown {
     line-height: 1.5;
 

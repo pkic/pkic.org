@@ -31,6 +31,7 @@ interface UserDetailRow {
   organization_name: string | null;
   job_title: string | null;
   biography: string | null;
+  links_json: string | null;
   role: string;
   active: number;
   headshot_r2_key: string | null;
@@ -49,7 +50,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const user = await first<UserDetailRow>(
     requestDb(c),
     `SELECT id, email, first_name, last_name, preferred_name,
-            organization_name, job_title, biography, role, active,
+            organization_name, job_title, biography, links_json, role, active,
             headshot_r2_key, headshot_updated_at,
             created_at, updated_at, pii_redacted_at
      FROM users WHERE id = ?`,
@@ -71,6 +72,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     user: {
       ...user,
       active: Boolean(user.active),
+      links: user.links_json ? JSON.parse(user.links_json) : [],
       headshotUrl,
     },
   });
@@ -130,6 +132,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     "organization_name",
     "job_title",
     "biography",
+    "links_json",
   ]);
 
   const piiUpdates: Record<string, string | null> = {};
@@ -139,6 +142,8 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
   if (body.organizationName !== undefined) piiUpdates.organization_name = body.organizationName || null;
   if (body.jobTitle !== undefined) piiUpdates.job_title = body.jobTitle || null;
   if (body.biography !== undefined) piiUpdates.biography = body.biography || null;
+  if (body.links !== undefined)
+    piiUpdates.links_json = body.links && body.links.length > 0 ? JSON.stringify(body.links) : null;
 
   const safeKeys = Object.keys(piiUpdates).filter((col) => ALLOWED_PII_COLUMNS.has(col));
   const hasPiiUpdates = safeKeys.length > 0;
@@ -148,7 +153,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
   if (hasPiiUpdates) {
     currentDetail = await first<UserDetailRow>(
       requestDb(c),
-      `SELECT id, email, first_name, last_name, preferred_name, organization_name, job_title, biography,
+      `SELECT id, email, first_name, last_name, preferred_name, organization_name, job_title, biography, links_json,
               role, active, headshot_r2_key, headshot_updated_at, created_at, updated_at, pii_redacted_at
        FROM users WHERE id = ?`,
       [user.id],

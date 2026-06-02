@@ -69,6 +69,14 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
+  await page.route("**/api/v1/admin/proposals/proposal-1/comments", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ comments: [] }),
+    });
+  });
+
   await page.route("**/api/v1/admin/proposals/proposal-1/speakers", async (route) => {
     await route.fulfill({
       status: 200,
@@ -77,7 +85,7 @@ test("renders the admin proposal detail workflow with submission answers and ope
         speakers: [
           {
             userId: "speaker-1",
-            role: "primary",
+            role: "speaker",
             status: "confirmed",
             email: "speaker@pkic.org",
             firstName: "Sam",

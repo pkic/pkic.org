@@ -87,6 +87,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       hasHeadshot: Boolean(s.headshot_r2_key),
       hasBio: Boolean(s.biography),
       biography: s.biography,
+      links: s.links_json ? JSON.parse(s.links_json) : [],
       headshotUrl: s.headshot_r2_key
         ? (() => {
             const urlPath = s.headshot_r2_key.split("/").slice(1).join("/");
