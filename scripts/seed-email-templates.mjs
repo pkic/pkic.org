@@ -961,6 +961,38 @@ function runWrangler(args, options = {}) {
   });
 }
 
+function parseWranglerJsonOutput(output) {
+  const text = String(output ?? "").trim();
+  if (!text) {
+    throw new Error("Wrangler returned empty output when JSON was expected.");
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Wrangler may print informational text before the JSON payload.
+  }
+
+  const lines = text.split(/\r?\n/);
+  const jsonStartLine = lines.findIndex((line) => {
+    const trimmed = line.trimStart();
+    return trimmed.startsWith("[") || trimmed.startsWith("{");
+  });
+
+  if (jsonStartLine >= 0) {
+    const candidate = lines.slice(jsonStartLine).join("\n").trim();
+    try {
+      return JSON.parse(candidate);
+    } catch {
+      // Fall through to a richer error below.
+    }
+  }
+
+  throw new Error(
+    `Unable to parse Wrangler JSON output. First output lines:\n${lines.slice(0, 6).join("\n")}`,
+  );
+}
+
 function seedConfig(config, cli) {
   const configured = Array.isArray(config?.emailTemplates?.templates)
     ? config.emailTemplates.templates
@@ -1016,7 +1048,7 @@ function ensureAdminExists(cli) {
   ];
 
   const output = runWrangler(queryArgs, { captureOutput: true });
-  const parsed = JSON.parse(output);
+  const parsed = parseWranglerJsonOutput(output);
   const resultRows = parsed?.[0]?.results ?? [];
   if (!Array.isArray(resultRows) || resultRows.length === 0) {
     throw new Error(
