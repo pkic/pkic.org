@@ -20,6 +20,7 @@ import type {
   AdminFormDetailField,
 } from "../../../types";
 import { FormAnswerTable } from "./FormResponses";
+import { normalizeProfileLinks } from "../../profile-links";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,18 +33,6 @@ interface ProposalFormSummary {
   title: string;
   description: string | null;
   fields: AdminFormDetailField[];
-}
-
-function normalizeProfileLinks(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((entry) => {
-      if (typeof entry === "string") return entry;
-      if (entry && typeof entry === "object" && "url" in entry && typeof entry.url === "string") return entry.url;
-      return "";
-    })
-    .map((url) => url.trim())
-    .filter(Boolean);
 }
 
 interface ProposalResponse {
@@ -613,9 +602,15 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     setLoadingSub(true);
     try {
       const [r, s, c] = await Promise.all([
-        api<{ reviews: ProposalReview[] }>(`/api/v1/admin/proposals/${proposalId}/reviews`),
-        api<{ speakers: ProposalSpeaker[] }>(`/api/v1/admin/proposals/${proposalId}/speakers`),
-        api<{ comments: ProposalInternalComment[] }>(`/api/v1/admin/proposals/${proposalId}/comments`),
+        api<{ reviews: ProposalReview[] }>(`/api/v1/admin/proposals/${proposalId}/reviews`).catch(() => ({
+          reviews: [],
+        })),
+        api<{ speakers: ProposalSpeaker[] }>(`/api/v1/admin/proposals/${proposalId}/speakers`).catch(() => ({
+          speakers: [],
+        })),
+        api<{ comments: ProposalInternalComment[] }>(`/api/v1/admin/proposals/${proposalId}/comments`).catch(() => ({
+          comments: [],
+        })),
       ]);
       setReviews(r.reviews ?? []);
       setSpeakers(s.speakers ?? []);
@@ -662,7 +657,9 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
       : null;
   const recommendationCounts = reviews.reduce(
     (counts, review) => {
-      counts[review.recommendation] += 1;
+      if (review.recommendation in counts) {
+        counts[review.recommendation] += 1;
+      }
       return counts;
     },
     { accept: 0, "needs-work": 0, reject: 0 } as Record<ProposalReview["recommendation"], number>,

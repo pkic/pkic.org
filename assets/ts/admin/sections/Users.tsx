@@ -8,6 +8,7 @@ import type { AdminUser } from "../types";
 import { confirmHeadshotUsage } from "../../shared/headshot/controller";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../../components/ProfileLinksInput";
+import { normalizeProfileLinks } from "./profile-links";
 
 // ────────────────────────────────────────────────────────
 // Types
@@ -34,18 +35,6 @@ interface UserDetail {
 }
 
 const ROLE_COLOR: Record<string, string> = { admin: "danger", user: "secondary", guest: "light" };
-
-function normalizeProfileLinks(raw: unknown): string[] {
-  if (!Array.isArray(raw)) return [];
-  return raw
-    .map((entry) => {
-      if (typeof entry === "string") return entry;
-      if (entry && typeof entry === "object" && "url" in entry && typeof entry.url === "string") return entry.url;
-      return "";
-    })
-    .map((url) => url.trim())
-    .filter(Boolean);
-}
 
 // ────────────────────────────────────────────────────────
 // User detail component
