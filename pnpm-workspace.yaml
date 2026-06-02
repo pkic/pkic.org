@@ -1,2 +1,25 @@
 allowBuilds:
   better-sqlite3: true
+  core-js-pure: true
+  esbuild: true
+  sharp: true
+  workerd: true
+minimumReleaseAgeExclude:
+  - '@cloudflare/vite-plugin@1.39.1'
+  - '@cloudflare/workers-types@4.20260602.1'
+  - '@typescript-eslint/eslint-plugin@8.60.1'
+  - '@typescript-eslint/parser@8.60.1'
+  - '@typescript-eslint/project-service@8.60.1'
+  - '@typescript-eslint/scope-manager@8.60.1'
+  - '@typescript-eslint/tsconfig-utils@8.60.1'
+  - '@typescript-eslint/type-utils@8.60.1'
+  - '@typescript-eslint/types@8.60.1'
+  - '@typescript-eslint/typescript-estree@8.60.1'
+  - '@typescript-eslint/utils@8.60.1'
+  - '@typescript-eslint/visitor-keys@8.60.1'
+  - miniflare@4.20260529.0
+  - typescript-eslint@8.60.1
+  - wrangler@4.96.0
+  - ws@8.20.1
+overrides:
+  ws@>=8.0.0 <8.20.1: ^8.20.1
