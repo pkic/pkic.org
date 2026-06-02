@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, type MutableRef } from "preact/hooks"
 import { Pager, ADMIN_LIST_PAGE_SIZE_DEFAULT } from "./Pager";
 import { Spinner } from "./Spinner";
 import { ErrorAlert } from "./ErrorAlert";
+import { api } from "../admin/api";
 
 // ─── Shared types ─────────────────────────────────────────────────────────────
 
@@ -273,8 +274,6 @@ export function ApiDataTable<T>({
       if (sort) qs.set("sort", sort);
       const qstr = qs.toString();
       const url = qstr ? `${endpoint}?${qstr}` : endpoint;
-      // Dynamic import to avoid circular dependency with api module
-      const { api } = await import("../admin/api");
       const result = await api(url);
       setData(result);
       setLoading(false);
