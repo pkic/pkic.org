@@ -1,6 +1,5 @@
 import { AppError } from "../../errors";
 import { first, run } from "../../db/queries";
-import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { claimWaitlistOffer } from "./waitlist";
 import {
@@ -167,6 +166,7 @@ async function applyRegistrationUpdate(
       registrationId: registration.id,
       eventId: registration.event_id,
       selections: payload.dayAttendance,
+      changedBy,
     });
     await syncRegistrationDayWaitlist(db, {
       registrationId: registration.id,
@@ -196,15 +196,6 @@ async function applyRegistrationUpdate(
     attendance_type: effectiveAttendanceType,
     source_ref: payload.sourceRef ?? registration.source_ref,
   });
-  if (effectiveAttendanceType !== registration.attendance_type) {
-    await run(
-      db,
-      `INSERT INTO registration_attendance_history (
-        id, registration_id, from_type, to_type, changed_by, changed_at
-      ) VALUES (?, ?, ?, ?, ?, ?)`,
-      [uuid(), registration.id, registration.attendance_type, effectiveAttendanceType, changedBy, nowIso()],
-    );
-  }
   const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
   if (!updated) {
     throw new AppError(500, "REGISTRATION_UPDATE_FAILED", "Unable to update registration");

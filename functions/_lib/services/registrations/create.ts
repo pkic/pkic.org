@@ -210,6 +210,7 @@ export async function createRegistration(
     registrationId: registration.id,
     eventId: registration.event_id,
     selections: payload.dayAttendance,
+    changedBy: "system",
   });
   await syncRegistrationDayWaitlist(db, {
     registrationId: registration.id,
@@ -230,13 +231,6 @@ export async function createRegistration(
     sourceRef: registration.id,
     data: { status: registration.status, attendanceType: registration.attendance_type },
   });
-  await run(
-    db,
-    `INSERT INTO registration_attendance_history (
-      id, registration_id, from_type, to_type, changed_by, changed_at
-    ) VALUES (?, ?, ?, ?, ?, ?)`,
-    [uuid(), registration.id, null, registration.attendance_type, "system", now],
-  );
   if (status === "waitlisted") {
     await addToWaitlist(db, payload.event.id, registration.id);
   }

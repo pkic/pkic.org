@@ -233,16 +233,20 @@ export async function replaceRegistrationDayAttendance(
     registrationId: string;
     eventId: string;
     selections?: DayAttendanceSelection[];
+    changedBy?: string;
   },
 ): Promise<void> {
   const selections = normalizeSelections(payload.selections);
-  await run(db, "DELETE FROM registration_day_attendance WHERE registration_id = ?", [payload.registrationId]);
-  if (selections.length === 0) {
-    return;
-  }
+  const previousRows = await all<{ event_day_id: string; attendance_type: string }>(
+    db,
+    "SELECT event_day_id, attendance_type FROM registration_day_attendance WHERE registration_id = ?",
+    [payload.registrationId],
+  );
+  const previousByDayId = new Map(previousRows.map((row) => [row.event_day_id, row.attendance_type]));
 
   const eventDays = await listEventDays(db, payload.eventId);
   const dayMap = new Map(eventDays.map((day) => [day.day_date, day]));
+  const nextByDayId = new Map<string, string>();
 
   for (const selection of selections) {
     const day = dayMap.get(selection.dayDate);
@@ -250,12 +254,48 @@ export async function replaceRegistrationDayAttendance(
       throw new AppError(400, "DAY_NOT_CONFIGURED", `Day '${selection.dayDate}' is not configured for this event`);
     }
 
+    nextByDayId.set(day.id, selection.attendanceType);
+  }
+
+  await run(db, "DELETE FROM registration_day_attendance WHERE registration_id = ?", [payload.registrationId]);
+  if (selections.length === 0 && previousByDayId.size === 0) {
+    return;
+  }
+
+  for (const selection of selections) {
+    const day = dayMap.get(selection.dayDate);
+    if (!day) continue;
+
     await run(
       db,
       `INSERT INTO registration_day_attendance (
         id, registration_id, event_day_id, attendance_type, created_at, updated_at
       ) VALUES (?, ?, ?, ?, ?, ?)`,
       [uuid(), payload.registrationId, day.id, selection.attendanceType, nowIso(), nowIso()],
+    );
+  }
+
+  const changedBy = payload.changedBy ?? "system";
+  const changedAt = nowIso();
+  const allDayIds = new Set([...previousByDayId.keys(), ...nextByDayId.keys()]);
+  for (const dayId of allDayIds) {
+    const fromType = previousByDayId.get(dayId) ?? null;
+    const toType = nextByDayId.get(dayId) ?? null;
+    if (fromType === toType) continue;
+    await run(
+      db,
+      `INSERT INTO registration_attendance_history (
+         id, registration_id, event_day_id, from_type, to_type, changed_by, changed_at
+       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        uuid(),
+        payload.registrationId,
+        dayId,
+        fromType ?? "not_attending",
+        toType ?? "not_attending",
+        changedBy,
+        changedAt,
+      ],
     );
   }
 }

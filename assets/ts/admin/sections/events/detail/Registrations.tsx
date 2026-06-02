@@ -20,6 +20,8 @@ interface RegistrationStats {
   byAttendanceType: Record<string, number>;
   byStatus: Record<string, number>;
   bouncedCount?: number;
+  consentCount?: number;
+  dietaryCounts?: Record<string, number>;
 }
 
 // ─── Registration list ────────────────────────────────────────────────────────
@@ -27,6 +29,7 @@ interface RegistrationStats {
 function RegistrationsList({ slug }: { slug: string }) {
   const [statusFilter, setStatusFilter] = useState("");
   const [bouncedFilter, setBouncedFilter] = useState("");
+  const [consentFilter, setConsentFilter] = useState("");
   const [stats, setStats] = useState<RegistrationStats | null>(null);
   const [, navigate] = useHashLocation();
   const tableRef = useRef<ApiTableActions | null>(null);
@@ -39,6 +42,10 @@ function RegistrationsList({ slug }: { slug: string }) {
     } catch (e) {
       toast((e as Error).message, "error");
     }
+  }
+
+  function downloadCsv() {
+    window.location.href = `/api/v1/admin/events/${slug}/registrations/export`;
   }
 
   const confirmed = stats?.byStatus?.registered ?? 0;
@@ -106,9 +113,13 @@ function RegistrationsList({ slug }: { slug: string }) {
         resolvePage={(d) => (d as { page: { total: number; hasMore: boolean } }).page}
         paginate
         searchPlaceholder="Search name / email…"
-        params={{ ...(statusFilter && { status: statusFilter }), ...(bouncedFilter && { bounced: bouncedFilter }) }}
+        params={{
+          ...(statusFilter && { status: statusFilter }),
+          ...(bouncedFilter && { bounced: bouncedFilter }),
+          ...(consentFilter && { consent: consentFilter }),
+        }}
         actionsRef={tableRef}
-        deps={[slug, statusFilter, bouncedFilter]}
+        deps={[slug, statusFilter, bouncedFilter, consentFilter]}
         toolbar={({ resetPage }) => (
           <>
             <select
@@ -137,8 +148,23 @@ function RegistrationsList({ slug }: { slug: string }) {
               <option value="true">Bounced</option>
               <option value="false">Not bounced</option>
             </select>
+            <select
+              class="form-select form-select-sm adm-filter-select"
+              value={consentFilter}
+              onChange={(e) => {
+                setConsentFilter((e.target as HTMLSelectElement).value);
+                resetPage();
+              }}
+            >
+              <option value="">All consent</option>
+              <option value="true">Sponsor consent given</option>
+              <option value="false">No sponsor consent</option>
+            </select>
             <button class="btn btn-sm btn-outline-warning" onClick={() => void runWaitlistPromotions()}>
               Run waitlist promotions
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" onClick={downloadCsv}>
+              Download CSV
             </button>
           </>
         )}
@@ -172,6 +198,20 @@ function RegistrationsList({ slug }: { slug: string }) {
             cell: (r) =>
               r.dayWaitlistSummary ??
               (r.dayWaitlistCount ? `${r.dayWaitlistCount} day${r.dayWaitlistCount !== 1 ? "s" : ""}` : "—"),
+          },
+          {
+            header: "Consent",
+            cell: (r) =>
+              r.sponsor_consent === true ? (
+                <span class="text-success" title="Consented to share with sponsors">
+                  ✓
+                </span>
+              ) : r.sponsor_consent === false ? (
+                <span class="text-muted">—</span>
+              ) : (
+                "—"
+              ),
+            className: "text-center",
           },
           { header: "Source", cell: (r) => r.source_type ?? "—", className: "small text-muted" },
           { header: "Registered", cell: (r) => fmt(r.created_at), className: "mono small" },

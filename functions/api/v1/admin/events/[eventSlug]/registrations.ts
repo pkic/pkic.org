@@ -17,6 +17,8 @@ interface RegistrationRow {
   referral_code: string | null;
   rsvp_events_json: string | null;
   has_bounced: number;
+  sponsor_consent: number;
+  dietary_restrictions: string | null;
 }
 
 interface WaitlistSummaryRow {
@@ -43,6 +45,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   const validStatuses = new Set(["registered", "pending_email_confirmation", "waitlisted", "cancelled"]);
   const bouncedFilter = url.searchParams.get("bounced") ?? "";
+  const consentFilter = url.searchParams.get("consent") ?? "";
 
   const conditions: string[] = ["r.event_id = ?"];
   const bindings: unknown[] = [event.id];
@@ -56,6 +59,16 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     conditions.push(`${latestOutboxStatusForRegistrationSql} = 'bounced'`);
   } else if (bouncedFilter === "false") {
     conditions.push(`COALESCE(${latestOutboxStatusForRegistrationSql}, '') <> 'bounced'`);
+  }
+
+  if (consentFilter === "true") {
+    conditions.push(
+      "EXISTS(SELECT 1 FROM consent_acceptances ca WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing')",
+    );
+  } else if (consentFilter === "false") {
+    conditions.push(
+      "NOT EXISTS(SELECT 1 FROM consent_acceptances ca WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing')",
+    );
   }
 
   if (search) {
@@ -73,6 +86,9 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
             rc.code AS referral_code,
             COALESCE(${latestOutboxStatusForRegistrationSql} = 'bounced', 0) AS has_bounced,
+            EXISTS(SELECT 1 FROM consent_acceptances ca
+                   WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing') AS sponsor_consent,
+            JSON_EXTRACT(r.custom_answers_json, '$.dietary_restrictions') AS dietary_restrictions,
             (SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
                 'uid', ics_uid,
                 'status', response_status,
@@ -126,15 +142,20 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   const registrationsWithSummary = rows.map((row) => {
     const summary = waitlistByRegistrationId.get(row.id);
+    const dietary: string[] | null = row.dietary_restrictions
+      ? (JSON.parse(row.dietary_restrictions) as string[])
+      : null;
     return {
       ...row,
       has_bounced: !!row.has_bounced,
+      sponsor_consent: !!row.sponsor_consent,
+      dietary_restrictions: dietary,
       dayWaitlistSummary: summary?.summary ?? null,
       dayWaitlistCount: summary?.count ?? 0,
     };
   });
 
-  const [totalRow, statRows, bouncedCountRow] = await Promise.all([
+  const [totalRow, statRows, bouncedCountRow, consentCountRow, dietaryRows] = await Promise.all([
     first<{ total: number }>(
       requestDb(c),
       `SELECT COUNT(*) AS total FROM registrations r LEFT JOIN users u ON u.id = r.user_id WHERE ${whereClause}`,
@@ -155,6 +176,21 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
        WHERE r.event_id = ? AND ${latestOutboxStatusForRegistrationSql} = 'bounced'`,
       [event.id],
     ),
+    first<{ consent_count: number }>(
+      requestDb(c),
+      `SELECT COUNT(DISTINCT registration_id) AS consent_count
+       FROM consent_acceptances
+       WHERE event_id = ? AND term_key = 'sponsor-data-sharing'`,
+      [event.id],
+    ),
+    all<{ dietary_restrictions: string | null }>(
+      requestDb(c),
+      `SELECT JSON_EXTRACT(r.custom_answers_json, '$.dietary_restrictions') AS dietary_restrictions
+       FROM registrations r
+       WHERE r.event_id = ? AND r.status IN ('registered', 'waitlisted')
+         AND JSON_EXTRACT(r.custom_answers_json, '$.dietary_restrictions') IS NOT NULL`,
+      [event.id],
+    ),
   ]);
   const total = Number(totalRow?.total ?? 0);
 
@@ -169,10 +205,26 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     byStatus[row.status] = (byStatus[row.status] ?? 0) + Number(row.count);
   }
 
+  const dietaryCounts: Record<string, number> = {};
+  for (const row of dietaryRows) {
+    if (row.dietary_restrictions) {
+      const items = JSON.parse(row.dietary_restrictions) as string[];
+      for (const item of items) {
+        dietaryCounts[item] = (dietaryCounts[item] ?? 0) + 1;
+      }
+    }
+  }
+
   return json({
     event: { id: event.id, slug: event.slug, name: event.name },
     registrations: registrationsWithSummary,
-    stats: { byAttendanceType, byStatus, bouncedCount: Number(bouncedCountRow?.bounced_count ?? 0) },
+    stats: {
+      byAttendanceType,
+      byStatus,
+      bouncedCount: Number(bouncedCountRow?.bounced_count ?? 0),
+      consentCount: Number(consentCountRow?.consent_count ?? 0),
+      dietaryCounts,
+    },
     page: {
       limit,
       offset,

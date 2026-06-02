@@ -26,6 +26,10 @@ interface RegistrationRow {
   event_id: string;
 }
 
+interface ExistingDayAttendanceRow {
+  attendance_type: string;
+}
+
 export async function onRequestPatch(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminManageDayAttendanceSchema);
@@ -51,6 +55,14 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
       throw new AppError(400, "DAY_NOT_CONFIGURED", `Day '${dayDate}' is not configured for this event`);
     }
 
+    const existing = await first<ExistingDayAttendanceRow>(
+      requestDb(c),
+      "SELECT attendance_type FROM registration_day_attendance WHERE registration_id = ? AND event_day_id = ?",
+      [registration.id, day.id],
+    );
+    const fromType = existing?.attendance_type ?? "not_attending";
+    const toType = body.action === "remove" ? "not_attending" : body.action;
+
     if (body.action === "remove") {
       await run(
         requestDb(c),
@@ -66,6 +78,16 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
          ON CONFLICT(registration_id, event_day_id)
          DO UPDATE SET attendance_type = excluded.attendance_type, updated_at = excluded.updated_at`,
         [uuid(), registration.id, day.id, body.action, nowIso(), nowIso()],
+      );
+    }
+
+    if (fromType !== toType) {
+      await run(
+        requestDb(c),
+        `INSERT INTO registration_attendance_history (
+           id, registration_id, event_day_id, from_type, to_type, changed_by, changed_at
+         ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [uuid(), registration.id, day.id, fromType, toType, admin.id, nowIso()],
       );
     }
   }

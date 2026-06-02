@@ -100,6 +100,8 @@ export interface Registration {
   dayWaitlist?: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
   dayWaitlistSummary?: string | null;
   dayWaitlistCount?: number;
+  sponsor_consent?: boolean;
+  dietary_restrictions?: string[] | null;
 }
 
 export interface AdminRegistrationDay {
@@ -479,8 +481,38 @@ export interface EventStatsResponse {
     byStatus: Record<string, number>;
     byAttendanceType: Record<string, number>;
     byStatusAndType: Array<{ status: string; attendance_type: string; count: number }>;
+    sponsorConsent: { granted: number; notGranted: number };
+    dietary: { totalWithRequirements: number; byOption: Record<string, number> };
     total: number;
     growthByDay: Array<{ date: string; attendance_type: string; count: number }>;
+  };
+  waitlistByEventDay: Array<{
+    day_date: string;
+    label: string | null;
+    sort_order: number;
+    status: string;
+    priority_lane: string;
+    count: number;
+  }>;
+  waitlistTotals: {
+    total: number;
+    byStatus: Record<string, number>;
+    byPriorityLane: Record<string, number>;
+  };
+  attendanceChanges: {
+    totalChanges: number;
+    changedRegistrations: number;
+    byTransition: Array<{ from_type: string; to_type: string; count: number }>;
+    recent: Array<{
+      registration_id: string;
+      changed_at: string;
+      day_date: string;
+      day_label: string | null;
+      from_type: string;
+      to_type: string;
+      user_email: string | null;
+      display_name: string | null;
+    }>;
   };
   registrationsByEventDay: Array<{
     day_date: string;

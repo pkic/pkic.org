@@ -25,6 +25,10 @@ interface RegistrationRow {
   attendance_type: "in_person" | "virtual" | "on_demand";
 }
 
+interface ExistingDayAttendanceRow {
+  attendance_type: string;
+}
+
 export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, adminRegistrationAdmitSchema);
@@ -85,6 +89,13 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
         );
       }
 
+      const existing = await first<ExistingDayAttendanceRow>(
+        requestDb(c),
+        "SELECT attendance_type FROM registration_day_attendance WHERE registration_id = ? AND event_day_id = ?",
+        [registration.id, day.id],
+      );
+      const fromType = existing?.attendance_type ?? "not_attending";
+
       await run(
         requestDb(c),
         `INSERT INTO registration_day_attendance (
@@ -94,6 +105,16 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
         DO UPDATE SET attendance_type = 'in_person', updated_at = excluded.updated_at`,
         [uuid(), registration.id, day.id, nowIso(), nowIso()],
       );
+
+      if (fromType !== "in_person") {
+        await run(
+          requestDb(c),
+          `INSERT INTO registration_attendance_history (
+             id, registration_id, event_day_id, from_type, to_type, changed_by, changed_at
+           ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          [uuid(), registration.id, day.id, fromType, "in_person", admin.id, nowIso()],
+        );
+      }
     }
   }
 
