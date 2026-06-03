@@ -27,7 +27,6 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     growthByDayRows,
     registrationTotalRow,
     sponsorConsentRow,
-    dietaryRows,
     waitlistByDayRows,
     waitlistStatusRows,
     waitlistLaneRows,
@@ -80,15 +79,6 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       `SELECT COUNT(DISTINCT registration_id) AS count
        FROM consent_acceptances
        WHERE event_id = ? AND term_key = 'sponsor-data-sharing'`,
-      [event.id],
-    ),
-    all<{ dietary_restrictions: string | null }>(
-      db,
-      `SELECT JSON_EXTRACT(custom_answers_json, '$.dietary_restrictions') AS dietary_restrictions
-       FROM registrations
-       WHERE event_id = ?
-         AND status IN ('registered', 'waitlisted')
-         AND JSON_EXTRACT(custom_answers_json, '$.dietary_restrictions') IS NOT NULL`,
       [event.id],
     ),
     // Per-day waitlist breakdown by status and priority lane
@@ -297,22 +287,6 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const sponsorConsentGranted = Number(sponsorConsentRow[0]?.count ?? 0);
   const sponsorConsentNotGranted = Math.max(0, registrationTotal - sponsorConsentGranted);
 
-  const dietaryByOption: Record<string, number> = {};
-  let dietaryTotalWithRequirements = 0;
-  for (const row of dietaryRows) {
-    if (!row.dietary_restrictions) continue;
-    try {
-      const items = JSON.parse(row.dietary_restrictions) as string[];
-      if (!Array.isArray(items) || items.length === 0) continue;
-      dietaryTotalWithRequirements += 1;
-      for (const item of items) {
-        dietaryByOption[item] = (dietaryByOption[item] ?? 0) + 1;
-      }
-    } catch {
-      // Ignore malformed JSON from legacy rows.
-    }
-  }
-
   const attendeeTotal = inviteAttendeeRows.reduce((s, r) => s + r.count, 0);
   const speakerTotal = inviteSpeakerRows.reduce((s, r) => s + r.count, 0);
   const proposalTotal = proposalStatusRows.reduce((s, r) => s + r.count, 0);
@@ -327,7 +301,6 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       byAttendanceType: Object.fromEntries(regAttendanceRows.map((r) => [r.attendance_type, r.count])),
       byStatusAndType: regStatusAndTypeRows,
       sponsorConsent: { granted: sponsorConsentGranted, notGranted: sponsorConsentNotGranted },
-      dietary: { totalWithRequirements: dietaryTotalWithRequirements, byOption: dietaryByOption },
       total: regTotal,
       growthByDay: growthByDayRows,
     },

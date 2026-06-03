@@ -185,7 +185,11 @@ If what we do is valuable to you or your organization, please consider a volunta
     subjectTemplate: "Please confirm your registration for {{eventName}}",
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
-Thank you for registering for **{{eventName}}**! Please confirm your email address to activate your registration.
+Thank you for starting your registration for **{{eventName}}**.
+
+<div class="notice notice-warning"><strong>You are not registered yet.</strong> Please confirm this email address to continue your registration. After you confirm, you will receive a final confirmation email. That final email may still show that you are on the waitlist for one or more days.</div>
+
+This registration was submitted with the email address **{{email}}**.
 
 <div class="cta"><a href="{{confirmationUrl}}">Confirm my registration &rarr;</a></div>
 
@@ -195,7 +199,7 @@ Thank you for registering for **{{eventName}}**! Please confirm your email addre
 
 {{> reg_details}}
 
-Use your [registration management link]({{manageUrl}}) to review, update, or cancel this registration at any time.
+Use your [registration management link]({{manageUrl}}) to review, update your email address, or cancel this registration at any time.
 
 Know someone who should attend? Share your personal referral link: [{{shareUrl}}]({{shareUrl}})
 
@@ -262,11 +266,14 @@ We look forward to seeing you at the *{{eventName}}**!
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_updated",
-    subjectTemplate: `{{#if waitlistOfferNotice}}Waitlist availability update — {{eventName}}{{else}}{{#if eq status "waitlisted"}}Waitlisted registration updated — {{eventName}}{{else}}Registration updated — {{eventName}}{{/if}}{{/if}}`,
+    subjectTemplate: `{{#if adminAdmitNotice}}In-person registration accepted — {{eventName}}{{else}}{{#if waitlistOfferNotice}}Waitlist availability update — {{eventName}}{{else}}{{#if eq status "waitlisted"}}Waitlisted registration updated — {{eventName}}{{else}}Registration updated — {{eventName}}{{/if}}{{/if}}{{/if}}`,
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
 This email confirms that your registration for **{{eventName}}** has been successfully updated.
 
+{{#if adminAdmitNotice}}
+<div class="notice notice-success"><strong>Accepted for in-person attendance:</strong> you have been admitted from the waitlist for the in-person day(s) shown as confirmed below.</div>
+{{/if}}
 {{#if eq status "waitlisted"}}
   <div class="notice notice-warning"><strong>Waitlisted:</strong> your attendance is not yet confirmed. You can use your registration management link to review, update, or cancel this registration.</div>
 {{/if}}

@@ -667,11 +667,14 @@ Share your attendance:
     substr(lower(hex(randomblob(2))),2) || '-' || lower(hex(randomblob(2))) || '-' ||
     lower(hex(randomblob(6))),
     'registration_updated', 1,
-    'Registration updated for {{eventName}}',
+    '{{#if adminAdmitNotice}}In-person registration accepted — {{eventName}}{{else}}Registration updated for {{eventName}}{{/if}}',
     'Hi {{attendeeName}},
 
 Your registration for **{{eventName}}** has been updated.
 
+{{#if adminAdmitNotice}}You have been accepted as an in-person attendee for the confirmed day(s) below.
+
+{{/if}}
 Status: **{{status}}**
 
 [Manage registration]({{manageUrl}})',

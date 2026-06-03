@@ -1,8 +1,11 @@
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getEventBySlug } from "../../../../../_lib/services/events";
+import { getActiveFormByPurpose } from "../../../../../_lib/services/forms";
 import { all, first } from "../../../../../_lib/db/queries";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import { parseJsonSafe } from "../../../../../_lib/utils/json";
+import { extractDietarySelections } from "../../../../../_lib/utils/registration-dietary";
 
 interface RegistrationRow {
   id: string;
@@ -18,7 +21,7 @@ interface RegistrationRow {
   rsvp_events_json: string | null;
   has_bounced: number;
   sponsor_consent: number;
-  dietary_restrictions: string | null;
+  custom_answers_json: string | null;
 }
 
 interface WaitlistSummaryRow {
@@ -78,6 +81,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   }
 
   const whereClause = conditions.join(" AND ");
+  const registrationForm = await getActiveFormByPurpose(requestDb(c), event.id, "event_registration");
 
   const registrationRows = await all<RegistrationRow>(
     requestDb(c),
@@ -88,7 +92,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
             COALESCE(${latestOutboxStatusForRegistrationSql} = 'bounced', 0) AS has_bounced,
             EXISTS(SELECT 1 FROM consent_acceptances ca
                    WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing') AS sponsor_consent,
-            JSON_EXTRACT(r.custom_answers_json, '$.dietary_restrictions') AS dietary_restrictions,
+                 r.custom_answers_json,
             (SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
                 'uid', ics_uid,
                 'status', response_status,
@@ -142,14 +146,15 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   const registrationsWithSummary = rows.map((row) => {
     const summary = waitlistByRegistrationId.get(row.id);
-    const dietary: string[] | null = row.dietary_restrictions
-      ? (JSON.parse(row.dietary_restrictions) as string[])
-      : null;
+    const dietarySelections = extractDietarySelections(
+      parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null),
+      registrationForm?.fields,
+    );
     return {
       ...row,
       has_bounced: !!row.has_bounced,
       sponsor_consent: !!row.sponsor_consent,
-      dietary_restrictions: dietary,
+      dietary_restrictions: dietarySelections.length > 0 ? dietarySelections : null,
       dayWaitlistSummary: summary?.summary ?? null,
       dayWaitlistCount: summary?.count ?? 0,
     };
@@ -183,12 +188,12 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
        WHERE event_id = ? AND term_key = 'sponsor-data-sharing'`,
       [event.id],
     ),
-    all<{ dietary_restrictions: string | null }>(
+    all<{ custom_answers_json: string | null }>(
       requestDb(c),
-      `SELECT JSON_EXTRACT(r.custom_answers_json, '$.dietary_restrictions') AS dietary_restrictions
+      `SELECT r.custom_answers_json
        FROM registrations r
        WHERE r.event_id = ? AND r.status IN ('registered', 'waitlisted')
-         AND JSON_EXTRACT(r.custom_answers_json, '$.dietary_restrictions') IS NOT NULL`,
+         AND r.custom_answers_json IS NOT NULL`,
       [event.id],
     ),
   ]);
@@ -207,11 +212,12 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   const dietaryCounts: Record<string, number> = {};
   for (const row of dietaryRows) {
-    if (row.dietary_restrictions) {
-      const items = JSON.parse(row.dietary_restrictions) as string[];
-      for (const item of items) {
-        dietaryCounts[item] = (dietaryCounts[item] ?? 0) + 1;
-      }
+    const items = extractDietarySelections(
+      parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null),
+      registrationForm?.fields,
+    );
+    for (const item of items) {
+      dietaryCounts[item] = (dietaryCounts[item] ?? 0) + 1;
     }
   }
 

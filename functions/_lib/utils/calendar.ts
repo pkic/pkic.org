@@ -2,6 +2,7 @@ import { AppError } from "../errors";
 import ICAL from "ical.js";
 import type { EventRecord } from "../services/events";
 import { resolveEventVenue, resolveEventVirtualUrl } from "../services/events";
+import { generateSignedRsvpAddress } from "../email/rsvp";
 
 type IcsDateTuple = [number, number, number, number, number];
 
@@ -232,7 +233,6 @@ export async function buildRegistrationIcs(
         // (subject-line declines without an ICS attachment) can be mapped to the correct day.
         let eventRsvpEmail = rsvpEmail;
         if (isMultiDay && rsvpEmail && signingSecret) {
-          const { generateSignedRsvpAddress } = await import("../email/rsvp");
           eventRsvpEmail = await generateSignedRsvpAddress(registrationId, signingSecret, rsvpEmail, day.dayDate);
         }
 

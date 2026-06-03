@@ -3,8 +3,6 @@
   "name": "pkic-org-base",
   "compatibility_date": "2026-03-17",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "worker_loaders": [{ "binding": "LOADER" }],
-  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
   "main": "functions/router.ts",
   "observability": {
     "enabled": true,
@@ -13,7 +11,12 @@
     "production": {
       "name": "pkic-org",
       "worker_loaders": [{ "binding": "LOADER" }],
-      "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+      "kv_namespaces": [
+        {
+          "binding": "OAUTH_KV",
+          "id": "fda3b4a29dc54c49a2e6a44a92e324f3",
+        },
+      ],
       "triggers": {
         "crons": ["*/15 * * * *", "0 3 * * *"],
       },
@@ -27,13 +30,7 @@
         "directory": "./public/",
         "binding": "ASSETS_PUBLIC",
         "not_found_handling": "404-page",
-        "run_worker_first": [
-          "/api/*",
-          "/.well-known/oauth-*",
-          "/og/*",
-          "/r/*",
-          "/donate/r/*",
-        ],
+        "run_worker_first": ["/api/*", "/.well-known/oauth-*", "/og/*", "/r/*", "/donate/r/*"],
       },
       "preview_urls": true,
       "workers_dev": true,
@@ -110,18 +107,17 @@
     "preview": {
       "name": "pkic-org-preview",
       "worker_loaders": [{ "binding": "LOADER" }],
-      "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+      "kv_namespaces": [
+        {
+          "binding": "OAUTH_KV",
+          "id": "fda3b4a29dc54c49a2e6a44a92e324f3",
+        },
+      ],
       "assets": {
         "directory": "./public/",
         "binding": "ASSETS_PUBLIC",
         "not_found_handling": "404-page",
-        "run_worker_first": [
-          "/api/*",
-          "/.well-known/oauth-*",
-          "/og/*",
-          "/r/*",
-          "/donate/r/*",
-        ],
+        "run_worker_first": ["/api/*", "/.well-known/oauth-*", "/og/*", "/r/*", "/donate/r/*"],
       },
       "preview_urls": true,
       "workers_dev": true,
@@ -197,18 +193,17 @@
     "local": {
       "name": "pkic-org-local",
       "worker_loaders": [{ "binding": "LOADER" }],
-      "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+      "kv_namespaces": [
+        {
+          "binding": "OAUTH_KV",
+          "id": "fda3b4a29dc54c49a2e6a44a92e324f3",
+        },
+      ],
       "assets": {
         "directory": "./public/",
         "binding": "ASSETS_PUBLIC",
         "not_found_handling": "404-page",
-        "run_worker_first": [
-          "/api/*",
-          "/.well-known/oauth-*",
-          "/og/*",
-          "/r/*",
-          "/donate/r/*",
-        ],
+        "run_worker_first": ["/api/*", "/.well-known/oauth-*", "/og/*", "/r/*", "/donate/r/*"],
       },
       "d1_databases": [
         {
