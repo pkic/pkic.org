@@ -51,6 +51,48 @@ describe("manage read endpoints", () => {
     expect(payload.registration.id).toBe(registrationId);
   });
 
+  it("does not confirm a pending registration when the manage link is opened", async () => {
+    await seedEventAndAdmin(env.DB);
+
+    await env.DB.prepare(
+      `
+      INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+      VALUES ('pending-user', 'pending@example.test', 'pending@example.test', 'Pending', 'User', datetime('now'), datetime('now'))
+    `,
+    ).run();
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistration(env.DB, {
+      event,
+      userId: "pending-user",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+
+    const response = await getRegistration(
+      createContext(env, new Request(`https://app.test/api/v1/registrations/manage/${created.manageToken}`), {
+        token: created.manageToken,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const payload = (await response.json()) as {
+      registration: { id: string; status: string; isEmailVerified: boolean };
+    };
+    expect(payload.registration.id).toBe(created.registration.id);
+    expect(payload.registration.status).toBe("pending_email_confirmation");
+    expect(payload.registration.isEmailVerified).toBe(false);
+
+    const [registration] = await queryAll<{ confirmed_at: string | null; confirmation_token_hash: string | null }>(
+      env.DB,
+      "SELECT confirmed_at, confirmation_token_hash FROM registrations WHERE id = ?",
+      [created.registration.id],
+    );
+    expect(registration.confirmed_at).toBeNull();
+    expect(registration.confirmation_token_hash).toBeTruthy();
+  });
+
   it("returns confirmed registrations with day-specific waitlist state", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
