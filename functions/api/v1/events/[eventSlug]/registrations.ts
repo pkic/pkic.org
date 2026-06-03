@@ -92,6 +92,10 @@ export async function onRequestPost(c: any): Promise<Response> {
     eventId: event.id,
     purpose: "event_registration",
     customAnswers: body.customAnswers,
+    context: {
+      attendanceType: body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined,
+      dayAttendance: body.dayAttendance,
+    },
   });
 
   const created = await createRegistration(c.env.DB, {

@@ -482,7 +482,6 @@ export interface EventStatsResponse {
     byAttendanceType: Record<string, number>;
     byStatusAndType: Array<{ status: string; attendance_type: string; count: number }>;
     sponsorConsent: { granted: number; notGranted: number };
-    dietary: { totalWithRequirements: number; byOption: Record<string, number> };
     total: number;
     growthByDay: Array<{ date: string; attendance_type: string; count: number }>;
   };

@@ -5,7 +5,7 @@
 set -e
 
 STATE_DIR=$(mktemp -d)
-INTERCEPT_PORT=48765
+INTERCEPT_URL_FILE="test-results/e2e-sendgrid-url"
 E2E_ENV_FILE="$STATE_DIR/.e2e.vars"
 
 # Some environments inject npm_config_* keys that newer npm versions warn
@@ -15,13 +15,8 @@ unset npm_config_npm_globalconfig NPM_CONFIG_NPM_GLOBALCONFIG
 unset npm_config_verify_deps_before_run NPM_CONFIG_VERIFY_DEPS_BEFORE_RUN
 unset npm_config__jsr_registry NPM_CONFIG__JSR_REGISTRY
 
-cat .dev.vars > "$E2E_ENV_FILE"
-cat >> "$E2E_ENV_FILE" <<EOF
-SENDGRID_API_BASE=http://127.0.0.1:${INTERCEPT_PORT}
-SENDGRID_API_KEY=e2e-test-dummy-key
-APP_BASE_URL=http://127.0.0.1:8788
-EMAIL_BADGE_DELAY_SECONDS=0
-EOF
+mkdir -p "$(dirname "$INTERCEPT_URL_FILE")"
+rm -f "$INTERCEPT_URL_FILE"
 
 # ── 0. Clean stale build artifacts ───────────────────────────────────────────
 # A previous `pnpm build` or `deploy:preview` may have left dist/ and
@@ -41,10 +36,10 @@ node scripts/seed-event.mjs          --env local --local --db pkic-db-local --pe
 node scripts/seed-email-templates.mjs --env local --local --db pkic-db-local --persist-to "$STATE_DIR"
 
 # ── 3. Start servers ────────────────────────────────────────────────────────
-node scripts/e2e-interceptor.mjs "$INTERCEPT_PORT" &
+node scripts/e2e-interceptor.mjs 0 "$INTERCEPT_URL_FILE" &
 INTERCEPTOR_PID=$!
 
-trap 'kill "$INTERCEPTOR_PID" 2>/dev/null; rm -rf "$STATE_DIR"' EXIT INT TERM
+trap 'kill "$INTERCEPTOR_PID" 2>/dev/null; rm -rf "$STATE_DIR"; rm -f "$INTERCEPT_URL_FILE"' EXIT INT TERM
 
 INTERCEPTOR_READY=0
 INTERCEPTOR_ATTEMPTS=0
@@ -53,7 +48,7 @@ while [ "$INTERCEPTOR_ATTEMPTS" -lt 50 ]; do
     echo "[e2e-start] SendGrid interceptor exited before becoming ready" >&2
     exit 1
   fi
-  if curl -sf "http://127.0.0.1:${INTERCEPT_PORT}/outbox" >/dev/null 2>&1; then
+  if [ -s "$INTERCEPT_URL_FILE" ] && curl -sf "$(cat "$INTERCEPT_URL_FILE")/outbox" >/dev/null 2>&1; then
     INTERCEPTOR_READY=1
     break
   fi
@@ -62,9 +57,18 @@ while [ "$INTERCEPTOR_ATTEMPTS" -lt 50 ]; do
 done
 
 if [ "$INTERCEPTOR_READY" -ne 1 ]; then
-  echo "[e2e-start] Timed out waiting for SendGrid interceptor on port ${INTERCEPT_PORT}" >&2
+  echo "[e2e-start] Timed out waiting for SendGrid interceptor" >&2
   exit 1
 fi
+
+INTERCEPT_URL=$(cat "$INTERCEPT_URL_FILE")
+cat .dev.vars > "$E2E_ENV_FILE"
+cat >> "$E2E_ENV_FILE" <<EOF
+SENDGRID_API_BASE=${INTERCEPT_URL}
+SENDGRID_API_KEY=e2e-test-dummy-key
+APP_BASE_URL=http://127.0.0.1:8788
+EMAIL_BADGE_DELAY_SECONDS=0
+EOF
 
 npx wrangler dev \
   --env=local \

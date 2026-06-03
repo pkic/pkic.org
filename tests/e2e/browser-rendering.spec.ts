@@ -1,9 +1,13 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 
-const SENDGRID_SERVER = process.env.E2E_SENDGRID_API_BASE ?? "http://127.0.0.1:48765";
+const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
+
+function sendgridServer(): string {
+  return process.env.E2E_SENDGRID_API_BASE ?? readFileSync(SENDGRID_URL_FILE, "utf8").trim();
+}
 
 async function setNativeChecked(page: Page, selector: string): Promise<void> {
   const el = page.locator(selector);
@@ -92,7 +96,7 @@ function createScreenshotter(page: Page): (label: string) => Promise<void> {
 // ── Email helpers (talk to the SendGrid intercept server) ─────────────────────
 
 async function clearOutbox(): Promise<void> {
-  await fetch(`${SENDGRID_SERVER}/clear`, { method: "POST" });
+  await fetch(`${sendgridServer()}/clear`, { method: "POST" });
 }
 
 /**
@@ -103,7 +107,7 @@ async function waitForEmail(to: string, subjectFragment: string, timeoutMs = 15_
   const deadline = Date.now() + timeoutMs;
   let lastEmails: CapturedEmail[] = [];
   while (Date.now() < deadline) {
-    const resp = await fetch(`${SENDGRID_SERVER}/outbox`);
+    const resp = await fetch(`${sendgridServer()}/outbox`);
     lastEmails = (await resp.json()) as CapturedEmail[];
     // Search from newest first so we pick up the latest matching email
     for (let i = lastEmails.length - 1; i >= 0; i--) {
@@ -250,18 +254,29 @@ async function fillRegistrationStep2(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Continue/i }).click();
 }
 
-async function fillRegistrationStep3(page: Page): Promise<void> {
+async function fillRegistrationStep3(page: Page, options?: { dietaryRestriction?: string }): Promise<void> {
   await page.getByLabel("Organization").fill("Test Org");
   await page.getByLabel("Job title").fill("Engineer");
   await page.getByLabel("Country").selectOption("US");
+  if (options?.dietaryRestriction) {
+    await setNativeChecked(page, `input[name='custom.dietary_restrictions[]'][value='${options.dietaryRestriction}']`);
+  }
   await page.getByRole("button", { name: /Continue/i }).click();
 }
 
-async function fillRegistrationStep4(page: Page): Promise<void> {
+async function fillRegistrationStep4(page: Page, expectedEmail?: string): Promise<void> {
+  await expect(page.locator("[data-registration-review]")).toBeVisible();
+  if (expectedEmail) {
+    await expect(page.locator("[data-registration-review-email]")).toHaveText(expectedEmail);
+    await expect(page.locator("label[for='registration-email-review-confirmed']")).toContainText(expectedEmail);
+  }
+  await expect(page.locator("[data-registration-review]")).toContainText("Contact");
+  await expect(page.locator("[data-registration-review]")).toContainText("Profile details");
+  await setNativeChecked(page, "#registration-email-review-confirmed");
   await clickConsentCard(page, "privacy policy");
   await clickConsentCard(page, "code of conduct");
   await clickConsentCard(page, "photos and videos");
-  await page.getByRole("button", { name: /Secure my spot/i }).click();
+  await page.getByRole("button", { name: /Submit registration/i }).click();
 }
 
 async function fillInviteRegistration(
@@ -277,10 +292,15 @@ async function fillInviteRegistration(
   await page.getByLabel("Job title").fill("Engineer");
   await page.getByLabel("Country").selectOption("US");
   await page.getByRole("button", { name: /Continue/i }).click();
+  await expect(page.locator("[data-registration-review-email]")).toHaveText(values.email);
+  await expect(page.locator("[data-registration-review]")).toContainText("State / Province");
+  await expect(page.locator("[data-registration-review]")).toContainText("Interests (topics)");
+  await expect(page.locator("[data-registration-review]")).toContainText("None provided");
+  await setNativeChecked(page, "#registration-email-review-confirmed");
   await clickConsentCard(page, "privacy policy");
   await clickConsentCard(page, "code of conduct");
   await clickConsentCard(page, "photos and videos");
-  await page.getByRole("button", { name: /Secure my spot/i }).click();
+  await page.getByRole("button", { name: /Submit registration/i }).click();
 }
 
 async function fillProposal(
@@ -474,12 +494,12 @@ test.describe("browser workflows", () => {
       });
       await fillRegistrationStep2(page);
       await fillRegistrationStep3(page);
-      await fillRegistrationStep4(page);
+      await fillRegistrationStep4(page, "capacity-one@example.test");
 
       const firstConfirmEmail = await waitForEmail("capacity-one@example.test", "confirm");
       const firstConfirmationUrl = extractUrlFromEmail(firstConfirmEmail, "/register/confirm");
       await page.goto(firstConfirmationUrl);
-      await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+      await page.getByRole("button", { name: /Confirm my registration/i }).click();
       await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
       await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
@@ -490,12 +510,12 @@ test.describe("browser workflows", () => {
       });
       await fillRegistrationStep2(page);
       await fillRegistrationStep3(page);
-      await fillRegistrationStep4(page);
+      await fillRegistrationStep4(page, "capacity-two@example.test");
 
       const secondConfirmEmail = await waitForEmail("capacity-two@example.test", "confirm");
       const secondConfirmationUrl = extractUrlFromEmail(secondConfirmEmail, "/register/confirm");
       await page.goto(secondConfirmationUrl);
-      await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+      await page.getByRole("button", { name: /Confirm my registration/i }).click();
       await expect(page.getByRole("heading", { name: /registration is in place/i })).toBeVisible({ timeout: 15_000 });
       await expect(
         page.getByText(
@@ -541,10 +561,22 @@ test.describe("browser workflows", () => {
       email: "alice@example.test",
     });
     await fillRegistrationStep2(page);
-    await fillRegistrationStep3(page);
-    await fillRegistrationStep4(page);
+    await fillRegistrationStep3(page, { dietaryRestriction: "Vegetarian" });
+    await expect(page.getByRole("button", { name: "Return to step 3" })).toBeVisible();
+    await page.getByRole("button", { name: "Return to step 3" }).click();
+    await expect(page.getByLabel("Organization")).toBeVisible();
+    await page.getByRole("button", { name: /Continue/i }).click();
+    await expect(page.locator("[data-registration-review]")).toContainText("Vegetarian");
+    await page.getByRole("button", { name: /Edit profile details/i }).click();
+    await expect(page.getByLabel("Organization")).toBeVisible();
+    await page.getByRole("button", { name: /Continue/i }).click();
+    await fillRegistrationStep4(page, "alice@example.test");
 
-    await expect(page.getByRole("heading", { name: /Almost there, Alice!/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Check your email to finish registration, Alice/i })).toBeVisible();
+    await expect(page.getByText(/IMPORTANT: Click the link in the email/i)).toBeVisible();
+    await expect(page.locator(".event-flow-stepper")).toBeHidden();
+    await expect(page.locator(".event-flow-submission-review-value")).toHaveText("alice@example.test");
+    await expect(page.getByRole("link", { name: /Edit email address/i })).toBeVisible();
     await screenshot("01-registration-pending-email-confirmation");
 
     // Wait for the confirmation email to arrive at the intercept server
@@ -553,7 +585,7 @@ test.describe("browser workflows", () => {
 
     await page.goto(confirmationUrl);
     await expect(page.getByText(/one click away/i)).toBeVisible();
-    await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+    await page.getByRole("button", { name: /Confirm my registration/i }).click();
     // The confirmed-state heading appears once the API call completes
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
     await screenshot("02-registration-confirmed");
@@ -565,6 +597,7 @@ test.describe("browser workflows", () => {
     const registrationManageRoute = `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(manageUrl).searchParams.get("token") ?? "")}`;
     await page.goto(registrationManageRoute);
     await expect(page.getByText(/Hi Alice, we're looking forward to seeing you/i)).toBeVisible();
+    await expect(page.locator("input[name='custom.dietary_restrictions[]'][value='Vegetarian']")).toBeChecked();
     const onDemandRadio = page.getByRole("radio", { name: /On-demand/i }).first();
     await onDemandRadio.scrollIntoViewIfNeeded();
     await onDemandRadio.evaluate((el) => (el as HTMLInputElement).click());
@@ -809,7 +842,7 @@ test.describe("browser workflows", () => {
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
-    await fillRegistrationStep4(page);
+    await fillRegistrationStep4(page, "sec@example.test");
 
     const confirmEmail = await waitForEmail("sec@example.test", "confirm");
     const confirmationUrl = extractUrlFromEmail(confirmEmail, "/register/confirm");
@@ -823,7 +856,7 @@ test.describe("browser workflows", () => {
     // ── 2. Confirm the registration ──────────────────────────────────────
     const [confirmResponse] = await Promise.all([
       page.waitForResponse((r) => r.url().includes("/registrations/confirm-email")),
-      page.getByRole("button", { name: /Please click here to confirm your registration/i }).click(),
+      page.getByRole("button", { name: /Confirm my registration/i }).click(),
     ]);
     expect(confirmResponse.status()).toBe(200);
     expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__xss_fired)).toBeUndefined();
@@ -835,7 +868,7 @@ test.describe("browser workflows", () => {
 
     // ── 3. Confirmation token is single-use ────────────────────────────────
     await page.goto(confirmationUrl);
-    const retryBtn = page.getByRole("button", { name: /Please click here to confirm/i });
+    const retryBtn = page.getByRole("button", { name: /Confirm my registration/i });
     if (await retryBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
       const [retryResponse] = await Promise.all([
         page.waitForResponse((r) => r.url().includes("/registrations/confirm-email")),
@@ -982,12 +1015,12 @@ test.describe("browser workflows", () => {
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
-    await fillRegistrationStep4(page);
+    await fillRegistrationStep4(page, "resend-tester@example.test");
 
     const confirmEmail = await waitForEmail("resend-tester@example.test", "confirm");
     const confirmationUrl = extractUrlFromEmail(confirmEmail, "/register/confirm");
     await page.goto(confirmationUrl);
-    await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+    await page.getByRole("button", { name: /Confirm my registration/i }).click();
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
     // Navigate to the manage page WITHOUT a token — the resend form must appear
@@ -1033,12 +1066,12 @@ test.describe("browser workflows", () => {
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
-    await fillRegistrationStep4(page);
+    await fillRegistrationStep4(page, "nominator@example.test");
 
     const nominatorConfirmEmail = await waitForEmail("nominator@example.test", "confirm");
     const nominatorConfirmUrl = extractUrlFromEmail(nominatorConfirmEmail, "/register/confirm");
     await page.goto(nominatorConfirmUrl);
-    await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+    await page.getByRole("button", { name: /Confirm my registration/i }).click();
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
     const nominatorConfirmedEmail = await waitForEmail("nominator@example.test", "confirmed");

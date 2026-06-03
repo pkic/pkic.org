@@ -103,6 +103,33 @@
   &.is-active::before {
     background: var(--page-accent, var(--bs-primary));
   }
+
+  &.is-clickable {
+    cursor: pointer;
+
+    .event-flow-stepper-label {
+      text-decoration: underline;
+      text-decoration-color: transparent;
+      text-underline-offset: 0.18em;
+      transition: color 0.15s ease, text-decoration-color 0.15s ease;
+    }
+
+    &:hover,
+    &:focus-visible {
+      .event-flow-stepper-label {
+        color: var(--bs-body-color);
+        text-decoration-color: currentColor;
+      }
+
+      .event-flow-stepper-bubble {
+        box-shadow: 0 0 0 4px color-mix(in srgb, var(--page-accent, var(--bs-primary)) 16%, transparent);
+      }
+    }
+
+    &:focus-visible {
+      outline: 0;
+    }
+  }
 }
 
 // The numbered circle
@@ -306,6 +333,343 @@
   align-items: flex-start;
   gap: 0.75rem;
   padding-top: 0.5rem;
+}
+
+// ── Registration final review ───────────────────────────────────────────────
+// The email address is the critical detail because the registration stays
+// pending until the attendee can receive and use the confirmation link.
+
+.event-flow-review {
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius-lg);
+  overflow: hidden;
+  margin-bottom: 1rem;
+  background: var(--bs-body-bg);
+  box-shadow: 0 0.35rem 1rem rgba(15, 23, 42, 0.04);
+}
+
+.event-flow-review-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(18rem, 0.7fr);
+  gap: 1.25rem;
+  align-items: center;
+  padding: 1.1rem 1.25rem;
+  background: var(--bs-warning-bg-subtle);
+  border-bottom: 1px solid var(--bs-warning-border-subtle);
+}
+
+.event-flow-review-eyebrow,
+.event-flow-review-section-title,
+.event-flow-submission-review-label {
+  margin-bottom: 0.25rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--bs-secondary-color);
+}
+
+.event-flow-review-title {
+  margin: 0 0 0.2rem;
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.event-flow-review-email,
+.event-flow-review-email-inline,
+.event-flow-submission-review-value,
+.event-flow-address {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.event-flow-review-email {
+  margin: 0;
+  font-size: clamp(1.1rem, 1.6vw, 1.35rem);
+  font-weight: 750;
+  color: var(--bs-body-color);
+}
+
+.event-flow-review-email,
+.event-flow-review-email-inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  letter-spacing: 0.01em;
+}
+
+.event-flow-review-critical {
+  display: grid;
+  gap: 0.45rem;
+  justify-items: end;
+  text-align: right;
+}
+
+.event-flow-review-status {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 0.16rem 0.45rem;
+  border: 1px solid var(--bs-warning-border-subtle);
+  border-radius: 999px;
+  background: var(--bs-body-bg);
+  color: var(--bs-warning-text-emphasis);
+  font-size: 0.76rem;
+  font-weight: 700;
+  text-align: left;
+}
+
+.event-flow-review-help {
+  margin: 0;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  color: var(--bs-warning-text-emphasis);
+}
+
+.event-flow-review-warning {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.7rem;
+  align-items: flex-start;
+  padding: 0.72rem 0.8rem;
+  border: 1px solid var(--bs-warning-border-subtle);
+  border-radius: var(--bs-border-radius);
+  background: color-mix(in srgb, var(--bs-warning-bg-subtle) 70%, var(--bs-body-bg));
+  text-align: left;
+
+  .event-flow-review-help {
+    font-size: 0.98rem;
+    line-height: 1.5;
+  }
+}
+
+.event-flow-review-warning-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  margin-top: 0.1rem;
+  border-radius: 50%;
+  background: var(--bs-warning);
+  color: var(--bs-body-color);
+  font-size: 1rem;
+  font-weight: 850;
+  line-height: 1;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--bs-warning) 20%, transparent);
+}
+
+.event-flow-review-section {
+  border-top: 1px solid var(--bs-border-color);
+
+  &:first-of-type {
+    border-top: 0;
+  }
+
+  &:hover {
+    .event-flow-review-edit {
+      color: var(--bs-primary);
+      border-color: var(--bs-primary);
+      background: color-mix(in srgb, var(--bs-primary) 8%, var(--bs-body-bg));
+    }
+  }
+}
+
+.event-flow-review-section-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1.25rem 0.65rem;
+  background: var(--bs-tertiary-bg);
+}
+
+.event-flow-review-section-title {
+  margin: 0;
+}
+
+.event-flow-review-edit {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2rem;
+  padding: 0.25rem 0.65rem;
+  border: 1px solid color-mix(in srgb, var(--bs-primary) 35%, var(--bs-border-color));
+  border-radius: var(--bs-border-radius);
+  background: var(--bs-body-bg);
+  color: var(--bs-primary);
+  font-size: 0.82rem;
+  font-weight: 650;
+  line-height: 1;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    color 0.15s ease,
+    box-shadow 0.15s ease;
+
+  &:hover,
+  &:focus-visible {
+    color: var(--bs-primary);
+    border-color: var(--bs-primary);
+    background: color-mix(in srgb, var(--bs-primary) 10%, var(--bs-body-bg));
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--bs-primary);
+    outline-offset: 2px;
+  }
+}
+
+.event-flow-review-list {
+  margin: 0;
+}
+
+.event-flow-review-row {
+  display: grid;
+  grid-template-columns: minmax(10rem, 0.42fr) minmax(0, 1fr);
+  gap: 0.9rem;
+  padding: 0.72rem 1.25rem;
+  border-top: 1px solid var(--bs-border-color-translucent);
+  transition: background 0.14s ease;
+
+  &:first-child {
+    border-top: 0;
+  }
+
+  &:hover {
+    background: color-mix(in srgb, var(--bs-primary) 4%, var(--bs-body-bg));
+  }
+
+  dt {
+    font-size: 0.82rem;
+    font-weight: 650;
+    color: var(--bs-secondary-color);
+  }
+
+  dd {
+    margin: 0;
+    font-weight: 600;
+    color: var(--bs-body-color);
+    overflow-wrap: anywhere;
+  }
+}
+
+.event-flow-email-consents {
+  margin-bottom: 0.625rem;
+}
+
+.event-flow-email-review-card {
+  font-weight: 500;
+}
+
+.event-flow-terms-heading {
+  margin: 1.35rem 0 0.65rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--bs-border-color);
+}
+
+.event-flow-terms-title {
+  margin: 0 0 0.2rem;
+  font-size: 1rem;
+  font-weight: 750;
+}
+
+.event-flow-terms-help {
+  margin: 0;
+  color: var(--bs-secondary-color);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.event-flow-pending-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 0.8rem;
+  align-items: flex-start;
+  margin-bottom: 1rem;
+  padding: 1rem 1.05rem;
+  border: 1px solid var(--bs-warning-border-subtle);
+  border-radius: var(--bs-border-radius-lg);
+  background: var(--bs-warning-bg-subtle);
+  color: var(--bs-warning-text-emphasis);
+  font-size: 1rem;
+  line-height: 1.55;
+}
+
+.event-flow-pending-alert-title {
+  margin: 0 0 0.55rem;
+  font-size: 1.12rem;
+  font-weight: 800;
+  color: var(--bs-body-color);
+}
+
+.event-flow-pending-steps {
+  display: grid;
+  gap: 0.25rem;
+  margin: 0;
+  padding-left: 1.2rem;
+}
+
+.event-flow-submission-review {
+  padding: 0.95rem 1rem;
+  margin-bottom: 1rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: var(--bs-border-radius);
+  background: var(--bs-tertiary-bg);
+}
+
+.event-flow-submission-review-value {
+  margin-bottom: 0.75rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 1.08rem;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.event-flow-submission-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
+  align-items: center;
+  justify-content: space-between;
+
+  .btn {
+    font-weight: 700;
+  }
+}
+
+@media (max-width: 575.98px) {
+  .event-flow-review-header,
+  .event-flow-review-row {
+    grid-template-columns: 1fr;
+  }
+
+  .event-flow-review-header,
+  .event-flow-review-section-heading,
+  .event-flow-review-row {
+    padding-right: 0.9rem;
+    padding-left: 0.9rem;
+  }
+
+  .event-flow-review-section-heading {
+    align-items: flex-start;
+  }
+
+  .event-flow-review-row {
+    gap: 0.2rem;
+  }
+
+  .event-flow-pending-alert {
+    grid-template-columns: 1fr;
+  }
+
+  .event-flow-submission-action {
+    align-items: stretch;
+
+    .btn {
+      width: 100%;
+    }
+  }
 }
 
 // ── Consent items ────────────────────────────────────────────────────────────

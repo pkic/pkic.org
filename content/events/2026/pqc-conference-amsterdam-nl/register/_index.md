@@ -14,6 +14,9 @@ params:
 
 ## Secure your spot
 
-You'll receive a confirmation email, calendar invite, and a personal link to update your registration at any time.
+**Your spot is not fully secured until you click the confirmation link in the email we’ll send you right after you submit this form.** Once confirmed, you’ll receive a final confirmation, a calendar invite, and a personal link to update your details at any time.
+
+> **In-person registration is currently full.** Please proceed with registering for in-person attendance to join our waitlist. We anticipate some openings as schedules change and will invite waitlisted guests to claim a spot on a first-come, first-served basis. Either way, you won't miss out, all waitlisted attendees get automatic access to attend the event virtually! - _Virtual attendance is still widely available._
+{.callout-warning}
 
 {{< event-registration slug="pqc-conference-amsterdam-nl" >}}

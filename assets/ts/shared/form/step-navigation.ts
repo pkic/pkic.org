@@ -49,10 +49,20 @@ export function installStepNavigation(
       const n = Number(item.dataset.stepItem);
       item.classList.toggle("is-active", n === current);
       item.classList.toggle("is-done", n < current);
+      item.classList.toggle("is-clickable", n < current);
       if (n === current) {
         item.setAttribute("aria-current", "step");
       } else {
         item.removeAttribute("aria-current");
+      }
+      if (n < current) {
+        item.setAttribute("role", "button");
+        item.setAttribute("tabindex", "0");
+        item.setAttribute("aria-label", `Return to step ${n}`);
+      } else {
+        item.removeAttribute("role");
+        item.removeAttribute("tabindex");
+        item.removeAttribute("aria-label");
       }
     });
 
@@ -136,8 +146,31 @@ export function installStepNavigation(
     }
   }
 
+  function goToCompletedStep(step: number): void {
+    if (step >= current || step < 1 || step > total) return;
+    clearStatus(statusEl);
+    current = step;
+    applyState();
+    root.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
   nextBtn?.addEventListener("click", goNext);
   backBtn?.addEventListener("click", goBack);
+  root.addEventListener("click", (event) => {
+    const trigger = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-step-jump]") : null;
+    if (!trigger) return;
+    goToCompletedStep(Number(trigger.dataset.stepJump));
+  });
+  stepItems.forEach((item) => {
+    item.addEventListener("click", () => {
+      goToCompletedStep(Number(item.dataset.stepItem));
+    });
+    item.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      goToCompletedStep(Number(item.dataset.stepItem));
+    });
+  });
 
   // Allow pressing Enter in step 1 inputs to advance (feels natural).
   stepEls[0]?.addEventListener("keydown", (e) => {
