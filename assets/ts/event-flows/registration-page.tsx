@@ -510,11 +510,6 @@ async function main(): Promise<void> {
     if (event.target instanceof HTMLInputElement && event.target.name === "email") {
       resetEmailReviewConfirmation(form);
     }
-    updateRegistrationReview(boot.root, form, customFieldDefs);
-  });
-
-  form.addEventListener("change", () => {
-    updateRegistrationReview(boot.root, form, customFieldDefs);
   });
 
   const referralInput = form.elements.namedItem("referralCode");
