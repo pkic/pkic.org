@@ -24,8 +24,11 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const secret = requireInternalSecret(c.env);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+  if (!body.bodyContent && !body.templateKey) {
+    throw new AppError(400, "CAMPAIGN_NO_CONTENT", "Provide a message body or select a template before sending.");
+  }
   const templateKey = body.bodyContent ? body.templateKey || "__direct__" : (body.templateKey as string);
-  const template = !body.bodyContent ? await resolveTemplate(requestDb(c), templateKey) : null;
+  const template = !body.bodyContent && templateKey ? await resolveTemplate(requestDb(c), templateKey) : null;
   const messageType = body.messageType ?? template?.messageType ?? "promotional";
 
   const recipients = await listCampaignRecipients(requestDb(c), event, appBaseUrl, {
@@ -86,10 +89,6 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   if (uniqueRecipients.length === 0) {
     throw new AppError(400, "CAMPAIGN_NO_RECIPIENTS", "No recipients matched the selected filters.");
-  }
-
-  if (!body.bodyContent && !body.templateKey) {
-    throw new AppError(400, "CAMPAIGN_NO_CONTENT", "Provide a message body or select a template before sending.");
   }
 
   if (body.sendMode === "bcc_batch") {

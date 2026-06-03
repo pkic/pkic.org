@@ -6,12 +6,9 @@ import type { RegistrationRecord } from "./types";
 
 export async function getRegistrationByManageToken(db: DatabaseLike, manageToken: string): Promise<RegistrationRecord> {
   const hash = await sha256Hex(manageToken);
-  const directToken = /^[a-f0-9]{64}$/i.test(manageToken) ? manageToken.toLowerCase() : null;
-  const registration = await first<RegistrationRecord>(
-    db,
-    "SELECT * FROM registrations WHERE manage_token_hash = ? OR manage_token_hash = ?",
-    [hash, directToken],
-  );
+  const registration = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE manage_token_hash = ?", [
+    hash,
+  ]);
   if (!registration) {
     throw new AppError(404, "REGISTRATION_NOT_FOUND", "Invalid registration token");
   }

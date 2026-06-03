@@ -4,7 +4,6 @@ import { getActiveFormByPurpose } from "./forms";
 import { buildCustomAnswerRows, buildCustomAnswerVariables } from "../utils/registration-email";
 import { hmacSha256Hex, sha256Hex } from "../utils/crypto";
 import { parseJsonSafe } from "../utils/json";
-import { registrationManagePageUrl } from "./frontend-links";
 import { ATTENDANCE_TYPE_LABELS, STATUS_LABELS } from "../utils/attendance";
 import type { EventRecord } from "./events";
 import type { DatabaseLike } from "../types";
@@ -56,7 +55,7 @@ function safeEqual(a: string, b: string): boolean {
 export async function listCampaignRecipients(
   db: DatabaseLike,
   event: Pick<EventRecord, "id" | "slug" | "base_path" | "starts_at" | "settings_json">,
-  appBaseUrl: string,
+  _appBaseUrl: string,
   filter: CampaignAudienceFilter,
 ): Promise<CampaignRecipient[]> {
   if (filter.audience === "attendees") {
@@ -100,11 +99,7 @@ export async function listCampaignRecipients(
         email: row.email.trim().toLowerCase(),
         firstName: (row.first_name ?? "").trim(),
         lastName: (row.last_name ?? "").trim(),
-        templateData: buildAttendeeTemplateData(
-          row,
-          form?.fields,
-          row.manage_token_hash ? registrationManagePageUrl(appBaseUrl, event, row.manage_token_hash) : undefined,
-        ),
+        templateData: buildAttendeeTemplateData(row, form?.fields),
       }));
     }
 
@@ -136,11 +131,7 @@ export async function listCampaignRecipients(
       email: row.email.trim().toLowerCase(),
       firstName: (row.first_name ?? "").trim(),
       lastName: (row.last_name ?? "").trim(),
-      templateData: buildAttendeeTemplateData(
-        row,
-        form?.fields,
-        row.manage_token_hash ? registrationManagePageUrl(appBaseUrl, event, row.manage_token_hash) : undefined,
-      ),
+      templateData: buildAttendeeTemplateData(row, form?.fields),
     }));
   }
 

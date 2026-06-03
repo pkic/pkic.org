@@ -51,7 +51,7 @@ describe("manage read endpoints", () => {
     expect(payload.registration.id).toBe(registrationId);
   });
 
-  it("returns registration state when the manage token path uses the stored token hash", async () => {
+  it("rejects the stored token hash when it is used as a manage token", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     const userId = crypto.randomUUID();
@@ -81,9 +81,9 @@ describe("manage read endpoints", () => {
       }),
     );
 
-    expect(response.status).toBe(200);
-    const payload = (await response.json()) as { registration: { id: string } };
-    expect(payload.registration.id).toBe(registrationId);
+    expect(response.status).toBe(404);
+    const payload = (await response.json()) as { error: { code: string } };
+    expect(payload.error.code).toBe("REGISTRATION_NOT_FOUND");
   });
 
   it("does not confirm a pending registration when the manage link is opened", async () => {

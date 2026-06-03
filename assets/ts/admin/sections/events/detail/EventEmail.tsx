@@ -224,6 +224,7 @@ export function EventEmail({
   const bodyPreRef = useRef<HTMLPreElement>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const templateRequestIdRef = useRef(0);
   const availableHelperLabels = availableHelperLabelsForAudience(audience);
   const availablePartials = availablePartialsForAudience(audience);
 
@@ -253,11 +254,19 @@ export function EventEmail({
 
   async function handleTemplateChange(key: string) {
     setTemplateKey(key);
-    if (!key) return;
+    if (!key) {
+      templateRequestIdRef.current += 1;
+      return;
+    }
+    const requestId = templateRequestIdRef.current + 1;
+    templateRequestIdRef.current = requestId;
     try {
       const data = await api<{ versions: EmailTemplateVersion[] }>(
         `/api/v1/admin/email-templates/${encodeURIComponent(key)}/versions`,
       );
+      if (templateRequestIdRef.current !== requestId) {
+        return;
+      }
       const active = data.versions.find((version) => version.status === "active");
       const version = active ?? data.versions[0];
       if (!version) return;
