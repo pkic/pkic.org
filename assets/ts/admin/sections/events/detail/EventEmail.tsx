@@ -223,7 +223,6 @@ export function EventEmail({
   // backdrop refs for textarea highlight
   const bodyPreRef = useRef<HTMLPreElement>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
   const templateRequestIdRef = useRef(0);
   const availableHelperLabels = availableHelperLabelsForAudience(audience);
   const availablePartials = availablePartialsForAudience(audience);
@@ -321,7 +320,6 @@ export function EventEmail({
         body: JSON.stringify(buildPayload()),
       });
       setPreview(res);
-      if (iframeRef.current) iframeRef.current.srcdoc = res.html;
       setStatus(
         `Preview ready — ${res.recipientCount != null ? `${res.recipientCount} recipients` : "confirm to send"}.`,
       );
@@ -609,7 +607,7 @@ export function EventEmail({
               onChange={(key) => setPreviewTab(key as "html" | "text")}
               className="mb-2"
             />
-            {previewTab === "html" && <iframe ref={iframeRef} sandbox="" class="adm-email-preview-frame" />}
+            {previewTab === "html" && <iframe srcdoc={preview.html} sandbox="" class="adm-email-preview-frame" />}
             {previewTab === "text" && <pre class="json-out adm-email-preview-text">{preview.text}</pre>}
             <div class="form-check mt-2">
               <input

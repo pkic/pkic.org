@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { compileSimpleTemplate, renderSubject } from "../functions/_lib/email/render";
+import { compileSimpleTemplate, renderEmail, renderSubject } from "../functions/_lib/email/render";
 
 describe("email template engine (compileSimpleTemplate)", () => {
   describe("variable substitution", () => {
@@ -488,5 +488,34 @@ Line 2
       });
       expect(subject).toBe("Custom subject variant");
     });
+  });
+});
+
+describe("email renderer", () => {
+  const layout = "<!doctype html><html><body>{{{body_html}}}</body></html>";
+
+  it("renders markdown links with resolved URLs in the text fallback", async () => {
+    const rendered = await renderEmail(
+      "Please [check your registration]({{manageUrl}}).",
+      {
+        manageUrl: "https://app.test/events/pqc/register/manage/?token=abc",
+      },
+      layout,
+    );
+
+    expect(rendered.html).toContain('href="https://app.test/events/pqc/register/manage/?token=abc"');
+    expect(rendered.text).toBe(
+      "Please check your registration <https://app.test/events/pqc/register/manage/?token=abc>.",
+    );
+  });
+
+  it("strips raw HTML tags without corrupting the text fallback", async () => {
+    const rendered = await renderEmail(
+      '<div class="notice notice-info"><strong>Note:</strong> Dietary details are shared with the venue.</div>',
+      {},
+      layout,
+    );
+
+    expect(rendered.text).toBe("Note: Dietary details are shared with the venue.");
   });
 });

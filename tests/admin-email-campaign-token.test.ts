@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   computeCampaignDigest,
+  findBroadcastOnlyTemplateRefs,
   signCampaignPreviewToken,
   verifyCampaignPreviewToken,
 } from "../functions/_lib/services/admin-email-campaign";
@@ -74,5 +75,16 @@ describe("admin campaign preview token", () => {
     });
 
     expect(result).toEqual({ ok: false, reason: "mismatch" });
+  });
+});
+
+describe("admin campaign broadcast template safety", () => {
+  it("rejects recipient-specific manage links in broadcast content", () => {
+    const refs = findBroadcastOnlyTemplateRefs(
+      [{ email: "a@example.com", firstName: "A", lastName: "B", templateData: {} }],
+      ["Please [manage]({{manageUrl}})."],
+    );
+
+    expect(refs).toContain("manageUrl");
   });
 });

@@ -7,7 +7,14 @@ import { queueEmail, processOutboxByIdBackground } from "../../../../../../../_l
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import { resolveTemplate } from "../../../../../../../_lib/email/templates";
-import { proposalPageUrl, registrationPageUrl } from "../../../../../../../_lib/services/frontend-links";
+import {
+  proposalPageUrl,
+  registrationManagePageUrl,
+  registrationPageUrl,
+} from "../../../../../../../_lib/services/frontend-links";
+import { run } from "../../../../../../../_lib/db/queries";
+import { randomToken, sha256Hex } from "../../../../../../../_lib/utils/crypto";
+import { nowIso } from "../../../../../../../_lib/utils/time";
 import {
   chunkRecipients,
   computeCampaignDigest,
@@ -117,10 +124,23 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   if (body.sendMode === "personal") {
     for (const recipient of uniqueRecipients) {
+      let recipientManageUrl: string | undefined;
+      if (body.filter.audience === "attendees" && recipient.registrationId) {
+        const manageToken = randomToken(24);
+        const manageTokenHash = await sha256Hex(manageToken);
+        await run(requestDb(c), "UPDATE registrations SET manage_token_hash = ?, updated_at = ? WHERE id = ?", [
+          manageTokenHash,
+          nowIso(),
+          recipient.registrationId,
+        ]);
+        recipientManageUrl = registrationManagePageUrl(appBaseUrl, event, manageToken);
+      }
+
       const outboxId = await queueEmail(requestDb(c), {
         eventId: event.id,
         templateKey,
         recipientEmail: recipient.email,
+        recipientUserId: recipient.userId ?? null,
         messageType,
         subject: body.subjectOverride ?? `Update: ${event.name}`,
         data: {
@@ -129,6 +149,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
           lastName: recipient.lastName,
           ...routeVars,
           ...recipient.templateData,
+          ...(recipientManageUrl ? { manageUrl: recipientManageUrl } : {}),
           __adminCampaignCustomText: body.customText ?? null,
           __adminCampaignBodyContent: body.bodyContent ?? null,
           __campaignAudience: body.filter.audience,

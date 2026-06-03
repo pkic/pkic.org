@@ -9,7 +9,11 @@ import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { requireInternalSecret } from "../../../../../../../_lib/request";
 import { applyCampaignCustomText } from "../../../../../../../_lib/email/campaign-custom";
 import { loadEmailLayout, loadEmailPartials } from "../../../../../../../_lib/email/partials";
-import { proposalPageUrl, registrationPageUrl } from "../../../../../../../_lib/services/frontend-links";
+import {
+  proposalPageUrl,
+  registrationManagePageUrl,
+  registrationPageUrl,
+} from "../../../../../../../_lib/services/frontend-links";
 import {
   chunkRecipients,
   computeCampaignDigest,
@@ -113,7 +117,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     body.filter.audience === "attendees"
       ? { registrationUrl: registrationPageUrl(appBaseUrl, event, { source: "admin_email" }) }
       : { proposalUrl: proposalPageUrl(appBaseUrl, event, { source: "admin_email" }) };
-  const sampleData = {
+  const sampleData: Record<string, unknown> = {
     ...buildEventEmailVariables(event, appBaseUrl),
     firstName: sample?.firstName || "Member",
     lastName: sample?.lastName || "",
@@ -122,6 +126,9 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     ...routeVars,
     ...(sample?.templateData ?? {}),
   };
+  if (body.filter.audience === "attendees") {
+    sampleData.manageUrl = registrationManagePageUrl(appBaseUrl, event, "preview-token");
+  }
 
   if (body.bodyContent) {
     // Full body provided — render directly without template resolution

@@ -357,7 +357,15 @@ function wrapHtml(
 }
 
 function stripHtmlToText(input: string): string {
+  const links: string[] = [];
   return input
+    .replace(/<a\b[^>]*\bhref=(["'])(.*?)\1[^>]*>([\s\S]*?)<\/a>/gi, (_match, _quote, href, label) => {
+      const text = stripHtmlToText(label);
+      if (!href) return text;
+      const placeholder = `__PKIC_EMAIL_LINK_${links.length}__`;
+      links.push(`${text} <${href}>`);
+      return placeholder;
+    })
     .replace(/<br\s*\/?>/gi, "\n")
     .replace(/<\/(p|div|li|h[1-6]|blockquote|section|article|table|tr)>/gi, "\n")
     .replace(/<li[^>]*>/gi, "- ")
@@ -369,6 +377,7 @@ function stripHtmlToText(input: string): string {
     .replace(/[ \t]+\n/g, "\n")
     .replace(/\n{3,}/g, "\n\n")
     .replace(/[ \t]{2,}/g, " ")
+    .replace(/__PKIC_EMAIL_LINK_(\d+)__/g, (_match, index) => links[Number(index)] ?? "")
     .trim();
 }
 
@@ -404,7 +413,7 @@ export async function renderEmail(
   });
   const html = wrapHtml(htmlBody, layoutHtml, dataWithBase, baseUrl);
 
-  const text = stripHtmlToText(rendered.replace(/\[(.*?)\]\((.*?)\)/g, "$1 <$2>").replace(/[#*_`>]/g, ""));
+  const text = stripHtmlToText(htmlBody);
 
   return { html, text };
 }

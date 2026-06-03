@@ -10,6 +10,8 @@ import type { DatabaseLike } from "../types";
 import type { FormFieldDefinition } from "./forms/read";
 
 export interface CampaignRecipient {
+  registrationId?: string;
+  userId?: string;
   email: string;
   firstName: string;
   lastName: string;
@@ -63,6 +65,8 @@ export async function listCampaignRecipients(
     const attendeeStatus = filter.attendeeStatus ?? "registered";
     if (filter.dayDate) {
       const rows = await all<{
+        registration_id: string;
+        user_id: string;
         email: string;
         first_name: string | null;
         last_name: string | null;
@@ -74,7 +78,8 @@ export async function listCampaignRecipients(
         manage_token_hash: string | null;
       }>(
         db,
-        `SELECT DISTINCT u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
+        `SELECT DISTINCT r.id AS registration_id, u.id AS user_id,
+                u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
                 r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash
          FROM registrations r
          JOIN users u ON u.id = r.user_id
@@ -96,6 +101,8 @@ export async function listCampaignRecipients(
         ],
       );
       return rows.map((row) => ({
+        registrationId: row.registration_id,
+        userId: row.user_id,
         email: row.email.trim().toLowerCase(),
         firstName: (row.first_name ?? "").trim(),
         lastName: (row.last_name ?? "").trim(),
@@ -104,6 +111,8 @@ export async function listCampaignRecipients(
     }
 
     const rows = await all<{
+      registration_id: string;
+      user_id: string;
       email: string;
       first_name: string | null;
       last_name: string | null;
@@ -115,7 +124,8 @@ export async function listCampaignRecipients(
       manage_token_hash: string | null;
     }>(
       db,
-      `SELECT DISTINCT u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
+      `SELECT DISTINCT r.id AS registration_id, u.id AS user_id,
+            u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
             r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash
        FROM registrations r
        JOIN users u ON u.id = r.user_id
@@ -128,6 +138,8 @@ export async function listCampaignRecipients(
     );
 
     return rows.map((row) => ({
+      registrationId: row.registration_id,
+      userId: row.user_id,
       email: row.email.trim().toLowerCase(),
       firstName: (row.first_name ?? "").trim(),
       lastName: (row.last_name ?? "").trim(),
@@ -213,6 +225,7 @@ export function findBroadcastOnlyTemplateRefs(
     "proposalType",
     "customAnswerRows",
     "reg_details",
+    "manageUrl",
   ]);
 
   for (const recipient of recipients) {
