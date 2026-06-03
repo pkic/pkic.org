@@ -185,7 +185,11 @@ If what we do is valuable to you or your organization, please consider a volunta
     subjectTemplate: "Please confirm your registration for {{eventName}}",
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
-Thank you for registering for **{{eventName}}**! Please confirm your email address to activate your registration.
+Thank you for starting your registration for **{{eventName}}**.
+
+<div class="notice notice-warning"><strong>You are not registered yet.</strong> Please confirm this email address to continue your registration. After you confirm, you will receive a final confirmation email. That final email may still show that you are on the waitlist for one or more days.</div>
+
+This registration was submitted with the email address **{{email}}**.
 
 <div class="cta"><a href="{{confirmationUrl}}">Confirm my registration &rarr;</a></div>
 
@@ -195,7 +199,7 @@ Thank you for registering for **{{eventName}}**! Please confirm your email addre
 
 {{> reg_details}}
 
-Use your [registration management link]({{manageUrl}}) to review, update, or cancel this registration at any time.
+Use your [registration management link]({{manageUrl}}) to review, update your email address, or cancel this registration at any time.
 
 Know someone who should attend? Share your personal referral link: [{{shareUrl}}]({{shareUrl}})
 

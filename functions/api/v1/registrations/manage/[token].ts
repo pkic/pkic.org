@@ -23,6 +23,7 @@ import { buildAttendanceEmailData, STATUS_LABELS } from "../../../../_lib/utils/
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
 import { buildEventEmailVariables } from "../../../../_lib/services/events";
 import { writeAuditLog } from "../../../../_lib/services/audit";
+import { parseJsonSafe } from "../../../../_lib/utils/json";
 import { registrationManageSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPatch(c: any): Promise<Response> {
@@ -53,6 +54,10 @@ export async function onRequestPatch(c: any): Promise<Response> {
             eventId: event.id,
             purpose: "event_registration",
             customAnswers: body.customAnswers,
+            context: {
+              attendanceType: body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined,
+              dayAttendance: body.dayAttendance,
+            },
           })
         : {};
 
@@ -89,10 +94,13 @@ export async function onRequestPatch(c: any): Promise<Response> {
       "registration",
       updated.id,
       {
-        action: body.action,
-        from: current.status,
-        to: updated.status,
-        attendanceType: updated.attendance_type,
+        action: { from: null, to: body.action },
+        status: { from: current.status, to: updated.status },
+        attendanceType: { from: current.attendance_type, to: updated.attendance_type },
+        customAnswers: {
+          from: parseJsonSafe<Record<string, unknown> | null>(current.custom_answers_json, null),
+          to: parseJsonSafe<Record<string, unknown> | null>(updated.custom_answers_json, null),
+        },
       },
     );
 

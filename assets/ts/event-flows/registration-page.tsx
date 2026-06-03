@@ -28,6 +28,12 @@ interface RegistrationSubmitResponse {
   manageToken?: string;
 }
 
+const EMAIL_REVIEW_FIELD = "emailReviewConfirmed";
+
+function formatSubmittedEmail(email: string): ComponentChildren {
+  return <span class="event-flow-address">{email || "the email address you entered"}</span>;
+}
+
 function showSuccessPanel(
   root: HTMLElement,
   form: HTMLFormElement,
@@ -49,15 +55,32 @@ function showSuccessPanel(
 
   if (result.status === "pending_email_confirmation") {
     icon = "✉️";
-    title = `Almost there${firstName ? `, ${firstName}` : ""}!`;
+    title = `Check your email to finish registration${firstName ? `, ${firstName}` : ""}`;
     body = (
       <>
-        <p class="event-flow-success-body">
-          We've sent a confirmation link to your email address. Click it to complete your registration — it takes just
-          one click.
-        </p>
+        <div class="alert alert-warning text-start" role="alert">
+          <p class="fw-semibold mb-2">You are not registered yet.</p>
+          <p class="mb-0">
+            We sent a confirmation email to {formatSubmittedEmail(email)}. Open that email, click the confirmation link,
+            and confirm on the next page. Your registration is complete only after you receive the final confirmation
+            email. That final email may still say you are on the waitlist for one or more days.
+          </p>
+        </div>
+        <div class="event-flow-submission-review text-start">
+          <p class="event-flow-submission-review-label">Email address submitted</p>
+          <p class="event-flow-submission-review-value">{email}</p>
+          {result.manageUrl && (
+            <p class="small mb-0">
+              Wrong email address?{" "}
+              <a href={result.manageUrl} class="fw-semibold">
+                Manage this registration and update the email address
+              </a>
+              .
+            </p>
+          )}
+        </div>
         <p class="text-muted small mb-0">
-          Can't find it? Check your spam folder, or contact us if it doesn't arrive within a few minutes.
+          Can't find the email? Check your spam folder and make sure the address above is correct.
         </p>
       </>
     );
@@ -127,6 +150,49 @@ function showSuccessPanel(
 
 // installStepNavigation is now in shared/step-navigation.ts
 
+function readAttendanceReview(form: HTMLFormElement): string {
+  const selected = Array.from(form.querySelectorAll<HTMLInputElement>("input[name^='dayAttendance.']:checked"));
+  if (selected.length === 0) {
+    return "Virtual / online attendance";
+  }
+
+  return selected
+    .map((field) => {
+      const day = field.closest<HTMLElement>(".event-flow-day");
+      const dayLabel = day?.querySelector<HTMLElement>(".event-flow-day-label")?.textContent?.trim();
+      const optionLabel = field.nextElementSibling
+        ?.querySelector<HTMLElement>(".event-flow-attendance-title")
+        ?.textContent?.trim();
+      return [dayLabel, optionLabel].filter(Boolean).join(": ");
+    })
+    .filter(Boolean)
+    .join(" | ");
+}
+
+function updateRegistrationReview(root: HTMLElement, form: HTMLFormElement): void {
+  const firstName = readField(form, "firstName");
+  const lastName = readField(form, "lastName");
+  const fullName = [firstName, lastName].filter(Boolean).join(" ");
+  const email = readField(form, "email");
+
+  const nameEl = root.querySelector<HTMLElement>("[data-registration-review-name]");
+  const emailEl = root.querySelector<HTMLElement>("[data-registration-review-email]");
+  const inlineEmailEl = root.querySelector<HTMLElement>("[data-registration-review-email-inline]");
+  const attendanceEl = root.querySelector<HTMLElement>("[data-registration-review-attendance]");
+
+  if (nameEl) nameEl.textContent = fullName || "Not provided yet";
+  if (emailEl) emailEl.textContent = email || "Not provided yet";
+  if (inlineEmailEl) inlineEmailEl.textContent = email || "the email address above";
+  if (attendanceEl) attendanceEl.textContent = readAttendanceReview(form);
+}
+
+function resetEmailReviewConfirmation(form: HTMLFormElement): void {
+  const confirmation = form.elements.namedItem(EMAIL_REVIEW_FIELD);
+  if (confirmation instanceof HTMLInputElement) {
+    confirmation.checked = false;
+  }
+}
+
 async function applyGeoHint(controller: CustomFieldsController, apiBase: string): Promise<void> {
   try {
     const geo = await getJson<{ country: string | null }>(`${apiBase}/geo`);
@@ -145,7 +211,11 @@ async function main(): Promise<void> {
   const { form, statusEl, eventSlug, eventPagePath, apiBase, query } = boot;
   const eventPathHeaders = eventPagePath ? { "x-event-base-path": eventPagePath } : undefined;
   installLiveValidation(form, statusEl);
-  installStepNavigation(boot.root, form, statusEl);
+  installStepNavigation(boot.root, form, statusEl, (currentStep) => {
+    if (currentStep === 3) {
+      updateRegistrationReview(boot.root, form);
+    }
+  });
   const consentsContainer = boot.root.querySelector<HTMLElement>("[data-consents]");
   const customFieldsContainer = boot.root.querySelector<HTMLElement>("[data-custom-fields]");
   const dayAttendanceContainer = boot.root.querySelector<HTMLElement>("[data-day-attendance]");
@@ -200,6 +270,17 @@ async function main(): Promise<void> {
     });
   });
 
+  form.addEventListener("input", (event) => {
+    if (event.target instanceof HTMLInputElement && event.target.name === "email") {
+      resetEmailReviewConfirmation(form);
+    }
+    updateRegistrationReview(boot.root, form);
+  });
+
+  form.addEventListener("change", () => {
+    updateRegistrationReview(boot.root, form);
+  });
+
   const referralInput = form.elements.namedItem("referralCode");
   if (query.referralCode && referralInput instanceof HTMLInputElement) {
     referralInput.value = query.referralCode;
@@ -207,6 +288,7 @@ async function main(): Promise<void> {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    updateRegistrationReview(boot.root, form);
     form.classList.add("was-validated");
     syncConsentValidation(form);
     if (!validateBeforeSubmit(form, statusEl)) {

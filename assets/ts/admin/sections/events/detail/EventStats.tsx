@@ -59,9 +59,6 @@ export function EventStats({ slug }: { slug: string }) {
   const consentNotGranted = s.registrations?.sponsorConsent?.notGranted ?? 0;
   const consentTotal = consentGranted + consentNotGranted;
   const consentPct = consentTotal > 0 ? Math.round((consentGranted / consentTotal) * 100) : 0;
-  const dietaryTotalWithRequirements = s.registrations?.dietary?.totalWithRequirements ?? 0;
-  const dietaryByOption = s.registrations?.dietary?.byOption ?? {};
-  const dietaryRows = Object.entries(dietaryByOption).sort((a, b) => b[1] - a[1]);
   const attendeePending = s.invites?.attendee?.byStatus?.sent ?? 0;
   const attendeeAccepted = s.invites?.attendee?.byStatus?.accepted ?? 0;
   const speakerPending = s.invites?.speaker?.byStatus?.sent ?? 0;
@@ -217,9 +214,9 @@ export function EventStats({ slug }: { slug: string }) {
         </div>
       </div>
 
-      {/* Consent & dietary */}
+      {/* Consent */}
       <div class="row g-3 mb-3">
-        <div class="col-md-4">
+        <div class="col-md-12">
           <div class="card border-0 shadow-sm h-100">
             <div class="card-body">
               <h6 class="text-uppercase small fw-bold text-muted mb-2">Sponsor Data-Sharing Consent</h6>
@@ -227,38 +224,6 @@ export function EventStats({ slug }: { slug: string }) {
               <div class="small text-muted mt-1">
                 {consentPct}% granted ({consentNotGranted} not granted)
               </div>
-            </div>
-          </div>
-        </div>
-        <div class="col-md-8">
-          <div class="card border-0 shadow-sm h-100">
-            <div class="card-body">
-              <h6 class="text-uppercase small fw-bold text-muted mb-2">Dietary Requirements (Catering)</h6>
-              <div class="small text-muted mb-2">
-                Attendees with at least one requirement: {dietaryTotalWithRequirements}
-              </div>
-              {dietaryRows.length > 0 ? (
-                <div class="tbl-wrap">
-                  <table class="table table-sm mb-0">
-                    <thead>
-                      <tr>
-                        <th class="small">Requirement</th>
-                        <th class="text-end small">Count</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dietaryRows.map(([label, count]) => (
-                        <tr key={label}>
-                          <td class="small">{label}</td>
-                          <td class="mono text-end">{count}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              ) : (
-                <p class="text-muted fst-italic small mb-0">No dietary requirements submitted.</p>
-              )}
             </div>
           </div>
         </div>

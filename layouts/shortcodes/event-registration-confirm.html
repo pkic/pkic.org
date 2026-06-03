@@ -3,7 +3,7 @@
 
 {{/* Text overrides — use {firstName} and {eventName} as placeholder tokens. */}}
 {{- $successTitle   := .Get "successTitle"   | default "{firstName}, you're registered{forEvent}!" -}}
-{{- $successBody    := .Get "successBody"    | default "Your calendar invite is on its way. Use the link in your confirmation email to manage your registration." -}}
+{{- $successBody    := .Get "successBody"    | default "Your email is confirmed and your registration is now complete. Your final confirmation email and calendar details are on their way. Use the manage link below if you need to update anything." -}}
 {{- $waitlistTitle  := .Get "waitlistTitle"  | default "{firstName}, you're on the waitlist{forEvent}!" -}}
 {{- $waitlistBody   := .Get "waitlistBody"   | default "We have your email confirmed. We'll notify you as soon as an in-person spot becomes available. Check the email we sent you for your manage link." -}}
 {{- $partialWaitlistTitle := .Get "partialWaitlistTitle" | default "{firstName}, your registration is in place{forEvent}!" -}}
@@ -38,16 +38,15 @@
   <div data-confirm-content class="d-none">
     <p class="lead mb-4">
       Hi <span data-placeholder="firstName">there</span>, you&rsquo;re one click away!
-      Click the button below to verify your email address and lock in your spot at
+      Click the button below to verify your email address and continue your registration for
       the <strong><span data-placeholder="eventName">event</span></strong>.
     </p>
     <form class="row g-3 needs-validation" novalidate>
       <div class="col-12">
-        <button type="submit" class="btn btn-success px-4">Please click here to confirm your registration &rarr;</button>
+        <button type="submit" class="btn btn-success px-4">Confirm my email address &rarr;</button>
       </div>
     </form>
   </div>
 
   <p data-flow-status class="alert visually-hidden mt-3 mb-0" role="status" aria-live="polite"></p>
 </div>
-

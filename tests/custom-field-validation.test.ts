@@ -4,6 +4,18 @@ import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
+import { onRequestPatch as manageRegistration } from "../functions/api/v1/registrations/manage/[token]";
+
+const TEST_DAY = "2026-12-01";
+
+async function seedEventDay(eventId: string): Promise<void> {
+  await env.DB.prepare(
+    `
+      INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+      VALUES ('${crypto.randomUUID()}', '${eventId}', '${TEST_DAY}', 'Day 1', 100, 10, datetime('now'), datetime('now'))
+    `,
+  ).run();
+}
 
 async function seedRegistrationForm(_db: DatabaseLike, eventId: string): Promise<void> {
   await env.DB.batch([
@@ -72,6 +84,18 @@ async function seedRegistrationForm(_db: DatabaseLike, eventId: string): Promise
           '{"format":"integer","min":0,"max":10}',
           40,
           datetime('now')
+        ),
+        (
+          '${crypto.randomUUID()}',
+          (SELECT id FROM forms WHERE key = 'test-registration-form'),
+          'dietary_restrictions',
+          'Dietary restrictions',
+          'multi_select',
+          0,
+          '["Vegetarian","Vegan","Halal"]',
+          '{"allowCustom":false,"showWhen":{"dayAttendanceIn":["in_person"]}}',
+          50,
+          datetime('now')
         )
     `),
   ]);
@@ -126,6 +150,7 @@ describe("custom field validation", () => {
 
   it("accepts valid registration custom answers", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
+    await seedEventDay(eventId);
     await seedRegistrationForm(env.DB, eventId);
 
     const response = await createRegistration(
@@ -138,7 +163,7 @@ describe("custom field validation", () => {
             firstName: "Jamie",
             lastName: "Valid",
             email: "jamie@pkic.org",
-            attendanceType: "virtual",
+            dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],
             consents: [
               { termKey: "privacy-policy", version: "v1" },
               { termKey: "code-of-conduct", version: "v1" },
@@ -148,6 +173,7 @@ describe("custom field validation", () => {
               interests: ["PKI", "PQC"],
               availability: { start: "2026-12-01", end: "2026-12-03" },
               nps: 9,
+              dietary_restrictions: ["Vegetarian", "Halal"],
             },
           }),
         }),
@@ -170,5 +196,92 @@ describe("custom field validation", () => {
     expect(parsed.professional_profile).toBe("https://www.linkedin.com/in/jamie-valid");
     expect(parsed.interests).toEqual(["PKI", "PQC"]);
     expect(parsed.nps).toBe(9);
+    expect(parsed.dietary_restrictions).toEqual(["Vegetarian", "Halal"]);
+  });
+
+  it("persists dietary restrictions through self-service manage updates and records useful audit deltas", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await seedEventDay(eventId);
+    await seedRegistrationForm(env.DB, eventId);
+
+    const createResponse = await createRegistration(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Morgan",
+            lastName: "Updater",
+            email: "morgan@pkic.org",
+            dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
+            customAnswers: {
+              professional_profile: "https://www.linkedin.com/in/morgan-updater",
+              dietary_restrictions: ["Vegetarian"],
+            },
+          }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+
+    expect(createResponse.status).toBe(200);
+    const created = (await createResponse.json()) as { registrationId: string; manageToken: string };
+
+    const updateResponse = await manageRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${created.manageToken}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],
+            customAnswers: {
+              professional_profile: "https://www.linkedin.com/in/morgan-updater",
+              dietary_restrictions: ["Halal"],
+            },
+          }),
+        }),
+        { token: created.manageToken },
+      ),
+    );
+
+    expect(updateResponse.status).toBe(200);
+
+    const updatedRow = (
+      await queryAll<{ custom_answers_json: string | null }>(
+        env.DB,
+        "SELECT custom_answers_json FROM registrations WHERE id = ?",
+        [created.registrationId],
+      )
+    )[0];
+    const updatedAnswers = JSON.parse(String(updatedRow.custom_answers_json)) as Record<string, unknown>;
+    expect(updatedAnswers.dietary_restrictions).toEqual(["Halal"]);
+
+    const auditRow = (
+      await queryAll<{ details_json: string }>(
+        env.DB,
+        "SELECT details_json FROM audit_log WHERE action = 'self_service_update' AND entity_id = ? ORDER BY created_at DESC LIMIT 1",
+        [created.registrationId],
+      )
+    )[0];
+    const details = JSON.parse(auditRow.details_json) as Record<string, { from: unknown; to: unknown }>;
+    expect(details.status).toEqual({ from: "pending_email_confirmation", to: "registered" });
+    expect(details.attendanceType).toEqual({ from: "in_person", to: "in_person" });
+    expect(details.customAnswers).toEqual({
+      from: {
+        professional_profile: "https://www.linkedin.com/in/morgan-updater",
+        dietary_restrictions: ["Vegetarian"],
+      },
+      to: {
+        professional_profile: "https://www.linkedin.com/in/morgan-updater",
+        dietary_restrictions: ["Halal"],
+      },
+    });
   });
 });

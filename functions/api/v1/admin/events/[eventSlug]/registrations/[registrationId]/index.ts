@@ -20,7 +20,7 @@ import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_l
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
 import { updateRegistrationById, changeRegistrationEmail } from "../../../../../../../_lib/services/registrations";
 import { getActiveFormByPurpose, validateCustomAnswersByPurpose } from "../../../../../../../_lib/services/forms";
-import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
+import { deriveEventAttendanceType, getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
 import { nowIso } from "../../../../../../../_lib/utils/time";
 import { parseJsonSafe } from "../../../../../../../_lib/utils/json";
@@ -179,6 +179,10 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
         eventId: event.id,
         purpose: "event_registration",
         customAnswers: body.customAnswers,
+        context: {
+          attendanceType: body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined,
+          dayAttendance: body.dayAttendance,
+        },
       })
     : {};
 

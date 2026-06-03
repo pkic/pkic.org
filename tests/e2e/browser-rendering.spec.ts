@@ -250,10 +250,13 @@ async function fillRegistrationStep2(page: Page): Promise<void> {
   await page.getByRole("button", { name: /Continue/i }).click();
 }
 
-async function fillRegistrationStep3(page: Page): Promise<void> {
+async function fillRegistrationStep3(page: Page, options?: { dietaryRestriction?: string }): Promise<void> {
   await page.getByLabel("Organization").fill("Test Org");
   await page.getByLabel("Job title").fill("Engineer");
   await page.getByLabel("Country").selectOption("US");
+  if (options?.dietaryRestriction) {
+    await setNativeChecked(page, `input[name='custom.dietary_restrictions[]'][value='${options.dietaryRestriction}']`);
+  }
   await page.getByRole("button", { name: /Continue/i }).click();
 }
 
@@ -541,7 +544,7 @@ test.describe("browser workflows", () => {
       email: "alice@example.test",
     });
     await fillRegistrationStep2(page);
-    await fillRegistrationStep3(page);
+    await fillRegistrationStep3(page, { dietaryRestriction: "Vegetarian" });
     await fillRegistrationStep4(page);
 
     await expect(page.getByRole("heading", { name: /Almost there, Alice!/i })).toBeVisible();
@@ -565,6 +568,7 @@ test.describe("browser workflows", () => {
     const registrationManageRoute = `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(manageUrl).searchParams.get("token") ?? "")}`;
     await page.goto(registrationManageRoute);
     await expect(page.getByText(/Hi Alice, we're looking forward to seeing you/i)).toBeVisible();
+    await expect(page.locator("input[name='custom.dietary_restrictions[]'][value='Vegetarian']")).toBeChecked();
     const onDemandRadio = page.getByRole("radio", { name: /On-demand/i }).first();
     await onDemandRadio.scrollIntoViewIfNeeded();
     await onDemandRadio.evaluate((el) => (el as HTMLInputElement).click());

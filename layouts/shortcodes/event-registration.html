@@ -34,7 +34,7 @@
           <span class="event-flow-stepper-num" aria-hidden="true">4</span>
           <svg class="event-flow-stepper-check" xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true"><path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0"/></svg>
         </span>
-        <span class="event-flow-stepper-label">Confirm</span>
+        <span class="event-flow-stepper-label">Review</span>
       </li>
     </ol>
   </nav>
@@ -86,7 +86,28 @@
 
     {{/* ── Step 4: Confirm ──────────────────────────────────────────────── */}}
     <div data-step="4" class="event-flow-step" hidden>
-      <p class="event-flow-step-intro">Almost there — a couple of quick agreements and you're in.</p>
+      <p class="event-flow-step-intro">Review your email address carefully. We cannot complete your registration until you confirm through the email sent to this address.</p>
+      <div class="event-flow-review" data-registration-review>
+        <div class="event-flow-review-item">
+          <span class="event-flow-review-label">Name</span>
+          <strong class="event-flow-review-value" data-registration-review-name>Not provided yet</strong>
+        </div>
+        <div class="event-flow-review-item event-flow-review-item--email">
+          <span class="event-flow-review-label">Confirmation email will be sent to</span>
+          <strong class="event-flow-review-value" data-registration-review-email>Not provided yet</strong>
+        </div>
+        <div class="event-flow-review-item">
+          <span class="event-flow-review-label">Attendance</span>
+          <strong class="event-flow-review-value" data-registration-review-attendance>Not selected yet</strong>
+        </div>
+      </div>
+      <div class="form-check event-flow-email-check">
+        <input id="registration-email-review-confirmed" name="emailReviewConfirmed" type="checkbox" class="form-check-input" required>
+        <label for="registration-email-review-confirmed" class="form-check-label">
+          I checked that <strong data-registration-review-email-inline>the email address above</strong> is correct and understand I am not registered until I confirm through that email.
+        </label>
+        <div data-field-error="emailReviewConfirmed" class="invalid-feedback d-block"></div>
+      </div>
       <div data-consents>
         <p class="form-text">Loading…</p>
       </div>
@@ -103,7 +124,7 @@
           Continue &rarr;
         </button>
         <button type="submit" class="btn btn-success btn-lg" hidden>
-          Secure my spot &rarr;
+          Send confirmation email &rarr;
         </button>
       </div>
     </div>
@@ -112,4 +133,3 @@
 
   </form>
 </div>
-
