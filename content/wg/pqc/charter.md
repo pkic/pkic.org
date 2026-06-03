@@ -20,7 +20,7 @@ This Working Group Charter has been created according to the [â€œWorking Groupsâ
 | **Abbreviation** | PQC |
 | **Mission** | |
 | **Chair(s)** | Paul van Brouwershaven (Digitorus) |
-| **Vice Chair** | Ralph Poore (Independent) |
+| **Vice Chair** | Sven Rajala (Keyfactor) |
 | **Communication** | Private mailing list, Virtual meetings, [Community discussions](https://github.com/pkic/community/discussions/categories/pki-maturity-model-pkimm), [GitHub](https://github.com/pkic/pkimm) |
 | **Meeting schedule** | Virtual meetings: approximately 1 per month |
 | **Membership eligibility** | All Member types of the PKIC that express the interest in this Working Group |

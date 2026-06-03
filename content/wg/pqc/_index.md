@@ -60,7 +60,7 @@ intro: >
 
 chair:
   name: Paul van Brouwershaven
-  viceChair: Ralph Poore
+  viceChair: Sven Rajala
 
 focus:
   - title: Algorithm Migration
