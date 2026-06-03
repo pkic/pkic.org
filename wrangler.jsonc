@@ -3,8 +3,6 @@
   "name": "pkic-org-base",
   "compatibility_date": "2026-03-17",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "worker_loaders": [{ "binding": "LOADER" }],
-  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
   "main": "functions/router.ts",
   "observability": {
     "enabled": true,
