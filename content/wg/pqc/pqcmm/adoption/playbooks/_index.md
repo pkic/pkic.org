@@ -35,8 +35,8 @@ Use these as examples, then adapt them to your risk appetite and regulatory cont
 
 | Product or service | Typical starting requirement |
 |-----|--------|
-| Low-risk business software with short-lived data | [Level 1](/wg/pqc/pqcmm/levels/1-initial/) or roadmap to [Level 2](/wg/pqc/pqcmm/levels/2-basic/) |
-| Standard production service using cryptography | [Level 2](/wg/pqc/pqcmm/levels/2-basic/) with evidence |
+| Low-risk business software with short-lived data | [Level 1](/wg/pqc/pqcmm/levels/1-initial/) or roadmap to [Level 2](/wg/pqc/pqcmm/levels/2-foundational/) |
+| Standard production service using cryptography | [Level 2](/wg/pqc/pqcmm/levels/2-foundational/) with evidence |
 | Identity, certificate, signing, key-management, or security infrastructure | [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) or higher; independent assessment preferred |
 | Hardware security module, trust-service infrastructure, code signing, firmware signing, or critical data protection | [Level 4](/wg/pqc/pqcmm/levels/4-managed/) or higher; independent assessment expected |
 | Government high assurance, public trust, or strategic critical infrastructure | Certification or highest-assurance route where required |

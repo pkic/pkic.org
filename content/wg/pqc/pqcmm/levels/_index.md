@@ -23,10 +23,10 @@ levels:
     summary: "Available for testing & evaluation"
     url: "/wg/pqc/pqcmm/levels/1-initial/"
   - number: 2
-    label: Basic
+    label: Foundational
     color: green
     summary: "Production-ready, standards-compliant"
-    url: "/wg/pqc/pqcmm/levels/2-basic/"
+    url: "/wg/pqc/pqcmm/levels/2-foundational/"
   - number: 3
     label: Advanced
     color: blue
@@ -48,7 +48,7 @@ levels:
 |---|---|---|
 | [0 — None](/wg/pqc/pqcmm/levels/0-none/) | No PQC implemented | PQC might be in the preparation phase, but no quantum-safe algorithms have matured into the product. |
 | [1 — Initial](/wg/pqc/pqcmm/levels/1-initial/) | Available for testing | PQC algorithms are available but for testing and evaluation only; not production-ready. |
-| [2 — Basic](/wg/pqc/pqcmm/levels/2-basic/) | Production-ready | At least one quantum-safe algorithm is available in production and meets relevant standards. |
+| [2 — Foundational](/wg/pqc/pqcmm/levels/2-foundational/) | Production-ready | At least one quantum-safe algorithm is available in production and meets relevant standards. |
 | [3 — Advanced](/wg/pqc/pqcmm/levels/3-advanced/) | Inventory & Agility | Cryptographic inventory (SBOM/CBOM) is in place, and the product supports crypto agility. |
 | [4 — Managed](/wg/pqc/pqcmm/levels/4-managed/) | Zero-Legacy | Legacy algorithms are eliminated or isolated; hybrid support is available. |
 | [5 — Optimized](/wg/pqc/pqcmm/levels/5-optimized/) | PQC-by-default | Quantum-safe is the default; performance is benchmarked and the implementation independently verified. |
@@ -72,7 +72,7 @@ flowchart LR
 No PQC implemented"]:::l0
     L1["1 — Initial
 Testing available"]:::l1
-    L2["2 — Basic
+    L2["2 — Foundational
 Production-ready"]:::l2
     L3["3 — Advanced
 SBOM + Agility"]:::l3

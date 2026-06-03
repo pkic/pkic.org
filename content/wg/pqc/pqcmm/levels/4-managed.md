@@ -29,7 +29,7 @@ A product meets Level 4 when all Level 3 criteria are met, plus:
 
 ## Assessment Questions
 
-At Level 4, assessors must request and validate the CBOM directly — not just accept that one exists. The assessment must document how the CBOM was generated, how it was validated, and whether the assessor independently cross-checked it. Claims made solely on the basis of vendor documentation without any independent check must be flagged. **A complete Level 4 assessment must also work through all [Level 1](/wg/pqc/pqcmm/levels/1-initial/#assessment-questions), [Level 2](/wg/pqc/pqcmm/levels/2-basic/#assessment-questions), and [Level 3](/wg/pqc/pqcmm/levels/3-advanced/#assessment-questions) questions.**
+At Level 4, assessors must request and validate the CBOM directly — not just accept that one exists. The assessment must document how the CBOM was generated, how it was validated, and whether the assessor independently cross-checked it. Claims made solely on the basis of vendor documentation without any independent check must be flagged. **A complete Level 4 assessment must also work through all [Level 1](/wg/pqc/pqcmm/levels/1-initial/#assessment-questions), [Level 2](/wg/pqc/pqcmm/levels/2-foundational/#assessment-questions), and [Level 3](/wg/pqc/pqcmm/levels/3-advanced/#assessment-questions) questions.**
 
 ### Assessment methodology record
 
@@ -78,7 +78,7 @@ The assessment report must record:
 
 ## Evidence Checklist
 
-The items below are a level-specific summary of the artefacts a vendor should be able to produce. They can serve as a concise request list for an assessor, or as a self-assessment reference for a vendor preparing evidence before a formal assessment. The detailed requirements and acceptance criteria for each item are in the assessment questions above. All artefacts from [Level 1](/wg/pqc/pqcmm/levels/1-initial/#evidence-checklist), [Level 2](/wg/pqc/pqcmm/levels/2-basic/#evidence-checklist), and [Level 3](/wg/pqc/pqcmm/levels/3-advanced/#evidence-checklist) remain required.
+The items below are a level-specific summary of the artefacts a vendor should be able to produce. They can serve as a concise request list for an assessor, or as a self-assessment reference for a vendor preparing evidence before a formal assessment. The detailed requirements and acceptance criteria for each item are in the assessment questions above. All artefacts from [Level 1](/wg/pqc/pqcmm/levels/1-initial/#evidence-checklist), [Level 2](/wg/pqc/pqcmm/levels/2-foundational/#evidence-checklist), and [Level 3](/wg/pqc/pqcmm/levels/3-advanced/#evidence-checklist) remain required.
 
 - CBOM in CycloneDX format (with cryptography extension) or equivalent structured format.
 - Configuration guide for enabling zero-legacy mode, including a list of any caveats.

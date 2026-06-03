@@ -32,7 +32,7 @@ Quantum-safe algorithms/features:
 * Are **available for testing and evaluation**.  
 * Can be configured, typically **manually or via beta options**.
 
-### Level 2: Basic
+### Level 2: Foundational
 
 Quantum-safe algorithms/features:
 

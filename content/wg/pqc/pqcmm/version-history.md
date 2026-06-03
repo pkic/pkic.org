@@ -23,6 +23,7 @@ Key introductions in this version:
 
 ### Revision Log
 
+- **Release 1.0.1** (June 2026): Renamed Level 2 from "Basic" to "Foundational" to align with the updated PKI Maturity Model terminology.
 - **Release 1.0.0** (May 2026): Official version 1.0.0 release of the model.
 - **Draft 1** (October 2025): Initial working group draft published for community review.
 

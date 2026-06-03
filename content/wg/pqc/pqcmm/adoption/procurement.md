@@ -50,8 +50,8 @@ Minimum PQCMM levels should be risk-based. A single organization may use differe
 
 | Use case | Minimum acceptable | Recommended target | Assurance expectation |
 |-----|--|--|------|
-| Low sensitivity, short-lived data, easily replaceable product | [Level 1](/wg/pqc/pqcmm/levels/1-initial/) with roadmap to [Level 2](/wg/pqc/pqcmm/levels/2-basic/) | [Level 2](/wg/pqc/pqcmm/levels/2-basic/) | Self-assessment may be acceptable |
-| Standard production system using cryptography | [Level 2](/wg/pqc/pqcmm/levels/2-basic/) | [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) | Self-assessment with evidence; third-party assessment preferred for material suppliers |
+| Low sensitivity, short-lived data, easily replaceable product | [Level 1](/wg/pqc/pqcmm/levels/1-initial/) with roadmap to [Level 2](/wg/pqc/pqcmm/levels/2-foundational/) | [Level 2](/wg/pqc/pqcmm/levels/2-foundational/) | Self-assessment may be acceptable |
+| Standard production system using cryptography | [Level 2](/wg/pqc/pqcmm/levels/2-foundational/) | [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) | Self-assessment with evidence; third-party assessment preferred for material suppliers |
 | Regulated data, multi-year confidentiality need, identity infrastructure, or high supplier dependency | [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) | [Level 4](/wg/pqc/pqcmm/levels/4-managed/) | Third-party assessment recommended |
 | Public trust, root or issuing infrastructure, firmware signing, payment, healthcare, critical infrastructure, or long-lived sensitive data | [Level 4](/wg/pqc/pqcmm/levels/4-managed/) | [Level 5](/wg/pqc/pqcmm/levels/5-optimized/) | Third-party assessment expected; certification preferred |
 | National security, high-assurance government, critical public infrastructure, or strategic trust services | [Level 5](/wg/pqc/pqcmm/levels/5-optimized/) or explicit [Level 4](/wg/pqc/pqcmm/levels/4-managed/)+ migration plan | [Level 5](/wg/pqc/pqcmm/levels/5-optimized/) with active maintenance | PKI Consortium certification or equivalent highest-assurance route should be required where available |

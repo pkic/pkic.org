@@ -36,7 +36,7 @@ Use these questions in supplier questionnaires, requests for proposal, tenders, 
 | # | Question | Required answer |
 |-----|---|-----|
 | 1 | What product or service is in scope? | Product/service name, version, edition, deployment model, and assessed configuration |
-| 2 | What PQCMM level is claimed for this product or service? | [Level 0](/wg/pqc/pqcmm/levels/0-none/), [Level 1](/wg/pqc/pqcmm/levels/1-initial/), [Level 2](/wg/pqc/pqcmm/levels/2-basic/), [Level 3](/wg/pqc/pqcmm/levels/3-advanced/), [Level 4](/wg/pqc/pqcmm/levels/4-managed/), or [Level 5](/wg/pqc/pqcmm/levels/5-optimized/) |
+| 2 | What PQCMM level is claimed for this product or service? | [Level 0](/wg/pqc/pqcmm/levels/0-none/), [Level 1](/wg/pqc/pqcmm/levels/1-initial/), [Level 2](/wg/pqc/pqcmm/levels/2-foundational/), [Level 3](/wg/pqc/pqcmm/levels/3-advanced/), [Level 4](/wg/pqc/pqcmm/levels/4-managed/), or [Level 5](/wg/pqc/pqcmm/levels/5-optimized/) |
 | 3 | What assurance method supports the claim? | Self-assessed, third-party assessed, or PKI Consortium certified |
 | 4 | Provide the PQCMM assessment or certification report. | Report title, date, report version, assessor or certifier, certificate identifier if applicable |
 | 5 | Does the report cover the exact product, version, deployment model, and configuration offered or actively deployed in this organization? | Yes/No, with explanation for any mismatch |
