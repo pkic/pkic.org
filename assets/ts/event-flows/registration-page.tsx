@@ -10,7 +10,7 @@ import {
 import { readDayAttendance, renderDayAttendance } from "../shared/widgets/day-attendance";
 import { renderSharePanel } from "../shared/widgets/share-panel";
 import { renderDonationCta } from "../shared/donation/cta";
-import type { EventFormsResponse } from "../shared/types";
+import type { EventFormsResponse, FormField } from "../shared/types";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { installStepNavigation } from "../shared/form/step-navigation";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
@@ -19,6 +19,7 @@ import { clearReferralSession } from "../shared/query-context";
 import { registrationCreateSchema } from "../../shared/schemas/api";
 import { readField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
+import { optionsFor } from "../shared/form/custom-field-rules";
 
 interface RegistrationSubmitResponse {
   success: boolean;
@@ -29,6 +30,8 @@ interface RegistrationSubmitResponse {
 }
 
 const EMAIL_REVIEW_FIELD = "emailReviewConfirmed";
+
+type CustomAnswerValue = string | number | boolean | string[] | { start: string; end: string };
 
 function formatSubmittedEmail(email: string): ComponentChildren {
   return <span class="event-flow-address">{email || "the email address you entered"}</span>;
@@ -47,6 +50,11 @@ function showSuccessPanel(
   days?: number,
 ): void {
   form.classList.add("d-none");
+  const stepper = root.querySelector<HTMLElement>(".event-flow-stepper");
+  if (stepper) {
+    stepper.hidden = true;
+    stepper.setAttribute("aria-hidden", "true");
+  }
 
   let icon: string;
   let title: string;
@@ -58,29 +66,40 @@ function showSuccessPanel(
     title = `Check your email to finish registration${firstName ? `, ${firstName}` : ""}`;
     body = (
       <>
-        <div class="alert alert-warning text-start" role="alert">
-          <p class="fw-semibold mb-2">You are not registered yet.</p>
-          <p class="mb-0">
-            We sent a confirmation email to {formatSubmittedEmail(email)}. Open that email, click the confirmation link,
-            and confirm on the next page. Your registration is complete only after you receive the final confirmation
-            email. That final email may still say you are on the waitlist for one or more days.
-          </p>
+        <div class="event-flow-pending-alert text-start" role="alert">
+          <span class="event-flow-review-warning-marker" aria-hidden="true">
+            !
+          </span>
+          <div>
+            <p class="event-flow-pending-alert-title">
+              IMPORTANT: Click the link in the email to confirm your registration
+            </p>
+            <ul class="event-flow-pending-steps">
+              <li>We sent the confirmation link to {formatSubmittedEmail(email)}.</li>
+              <li>Keep this page open until the email arrives.</li>
+              <li>Open the email, click the confirmation link, and confirm on the next page.</li>
+              <li>
+                Your spot is not secured and you will not be admitted until you receive the final confirmation email.
+              </li>
+              <li>That final email may still say you are on the waitlist for one or more days.</li>
+            </ul>
+          </div>
         </div>
         <div class="event-flow-submission-review text-start">
-          <p class="event-flow-submission-review-label">Email address submitted</p>
+          <p class="event-flow-submission-review-label">Confirmation email sent to</p>
           <p class="event-flow-submission-review-value">{email}</p>
           {result.manageUrl && (
-            <p class="small mb-0">
-              Wrong email address?{" "}
-              <a href={result.manageUrl} class="fw-semibold">
-                Manage this registration and update the email address
+            <div class="event-flow-submission-action">
+              <p class="small mb-0">Wrong email address?</p>
+              <a href={result.manageUrl} class="btn btn-outline-success">
+                Edit email address
               </a>
-              .
-            </p>
+            </div>
           )}
         </div>
         <p class="text-muted small mb-0">
-          Can't find the email? Check your spam folder and make sure the address above is correct.
+          If the email does not arrive after a few minutes, check your spam folder and confirm that the address above is
+          correct.
         </p>
       </>
     );
@@ -146,14 +165,15 @@ function showSuccessPanel(
   }
 
   root.appendChild(container);
+  requestAnimationFrame(() => {
+    container.scrollIntoView({ behavior: "smooth", block: "start" });
+  });
 }
 
-// installStepNavigation is now in shared/step-navigation.ts
-
-function readAttendanceReview(form: HTMLFormElement): string {
+function readAttendanceReview(form: HTMLFormElement): Array<{ label: string; value: string }> {
   const selected = Array.from(form.querySelectorAll<HTMLInputElement>("input[name^='dayAttendance.']:checked"));
   if (selected.length === 0) {
-    return "Virtual / online attendance";
+    return [{ label: "Event attendance", value: "Virtual / online attendance" }];
   }
 
   return selected
@@ -163,34 +183,247 @@ function readAttendanceReview(form: HTMLFormElement): string {
       const optionLabel = field.nextElementSibling
         ?.querySelector<HTMLElement>(".event-flow-attendance-title")
         ?.textContent?.trim();
-      return [dayLabel, optionLabel].filter(Boolean).join(": ");
+      return { label: dayLabel || field.name.replace(/^dayAttendance\./, ""), value: optionLabel || field.value };
     })
-    .filter(Boolean)
-    .join(" | ");
+    .filter((entry) => entry.label || entry.value);
 }
 
-function updateRegistrationReview(root: HTMLElement, form: HTMLFormElement): void {
+function resolveCustomFieldValue(
+  form: HTMLFormElement,
+  field: FormField,
+  answers: Record<string, CustomAnswerValue>,
+): { value: string; empty: boolean } {
+  const raw = answers[field.key];
+  const options = optionsFor(field);
+  const optionLabel = (value: string): string => options.find((option) => option.value === value)?.label ?? value;
+
+  if (Array.isArray(raw)) {
+    return raw.length > 0
+      ? { value: raw.map(optionLabel).join(", "), empty: false }
+      : { value: "None provided", empty: true };
+  }
+
+  if (typeof raw === "object" && raw !== null) {
+    const start = raw.start?.trim();
+    const end = raw.end?.trim();
+    return start && end ? { value: `${start} to ${end}`, empty: false } : { value: "None provided", empty: true };
+  }
+
+  if (typeof raw === "boolean") {
+    return { value: raw ? "Yes" : "No", empty: false };
+  }
+
+  if (typeof raw === "number") {
+    return { value: String(raw), empty: false };
+  }
+
+  if (typeof raw === "string" && raw.trim()) {
+    const select = form.querySelector<HTMLSelectElement>(`select[name='custom.${field.key}']`);
+    const selectedLabel = select?.selectedOptions[0]?.textContent?.trim();
+    return { value: selectedLabel || optionLabel(raw.trim()), empty: false };
+  }
+
+  return { value: "None provided", empty: true };
+}
+
+function visibleCustomFields(root: HTMLElement, fields: FormField[]): FormField[] {
+  const visibleKeys = new Set(
+    Array.from(root.querySelectorAll<HTMLElement>("[data-custom-field-key]"))
+      .filter((row) => row.getAttribute("aria-hidden") !== "true")
+      .map((row) => row.dataset.customFieldKey)
+      .filter((key): key is string => Boolean(key)),
+  );
+
+  return fields.filter((field) => visibleKeys.has(field.key)).sort((a, b) => a.sortOrder - b.sortOrder);
+}
+
+function ReviewEditButton({ step, label }: { step: number; label: string }) {
+  return (
+    <button type="button" class="event-flow-review-edit" data-step-jump={step} aria-label={`Edit ${label}`}>
+      Edit
+    </button>
+  );
+}
+
+function ReviewSection({ title, step, children }: { title: string; step: number; children: ComponentChildren }) {
+  return (
+    <section class="event-flow-review-section" aria-labelledby={`registration-review-${step}`}>
+      <div class="event-flow-review-section-heading">
+        <div>
+          <p class="event-flow-review-section-title" id={`registration-review-${step}`}>
+            {title}
+          </p>
+        </div>
+        <ReviewEditButton step={step} label={title.toLowerCase()} />
+      </div>
+      <dl class="event-flow-review-list">{children}</dl>
+    </section>
+  );
+}
+
+function ReviewRow({
+  label,
+  value,
+  empty = false,
+  valueClass,
+}: {
+  label: string;
+  value: string;
+  empty?: boolean;
+  valueClass?: string;
+}) {
+  const className = [empty ? "text-muted" : "", valueClass ?? ""].filter(Boolean).join(" ") || undefined;
+
+  return (
+    <div class="event-flow-review-row">
+      <dt>{label}</dt>
+      <dd class={className}>{value}</dd>
+    </div>
+  );
+}
+
+function RegistrationReview({
+  fullName,
+  email,
+  attendance,
+  customFields,
+  customAnswers,
+  form,
+}: {
+  fullName: string;
+  email: string;
+  attendance: Array<{ label: string; value: string }>;
+  customFields: FormField[];
+  customAnswers: Record<string, CustomAnswerValue>;
+  form: HTMLFormElement;
+}) {
+  return (
+    <section class="event-flow-review" aria-label="Registration review">
+      <div class="event-flow-review-header">
+        <div>
+          <p class="event-flow-review-eyebrow">Check this first</p>
+          <h3 class="event-flow-review-title">Confirmation email</h3>
+          <p class="event-flow-review-email" data-registration-review-email>
+            {email || "Not provided yet"}
+          </p>
+        </div>
+        <div class="event-flow-review-critical">
+          <span class="event-flow-review-status">Registration pending email confirmation</span>
+          <div class="event-flow-review-warning" role="note">
+            <span class="event-flow-review-warning-marker" aria-hidden="true">
+              !
+            </span>
+            <p class="event-flow-review-help">
+              <strong>Check your email address.</strong> We will send the confirmation link to this address. Your spot
+              is not secured and your registration is not final until you confirm through that email.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <ReviewSection title="Contact" step={1}>
+        <ReviewRow label="Name" value={fullName || "Not provided yet"} empty={!fullName} />
+        <ReviewRow
+          label="Email"
+          value={email || "Not provided yet"}
+          empty={!email}
+          valueClass="event-flow-review-email-inline"
+        />
+      </ReviewSection>
+
+      <ReviewSection title="Attendance" step={2}>
+        {attendance.map((entry) => (
+          <ReviewRow key={`${entry.label}-${entry.value}`} label={entry.label} value={entry.value} />
+        ))}
+      </ReviewSection>
+
+      {customFields.length > 0 && (
+        <ReviewSection title="Profile details" step={3}>
+          {customFields.map((field) => {
+            const resolved = resolveCustomFieldValue(form, field, customAnswers);
+            return <ReviewRow key={field.key} label={field.label} value={resolved.value} empty={resolved.empty} />;
+          })}
+        </ReviewSection>
+      )}
+    </section>
+  );
+}
+
+function updateRegistrationReview(root: HTMLElement, form: HTMLFormElement, customFieldDefs: FormField[]): void {
   const firstName = readField(form, "firstName");
   const lastName = readField(form, "lastName");
   const fullName = [firstName, lastName].filter(Boolean).join(" ");
   const email = readField(form, "email");
 
-  const nameEl = root.querySelector<HTMLElement>("[data-registration-review-name]");
-  const emailEl = root.querySelector<HTMLElement>("[data-registration-review-email]");
+  const reviewEl = root.querySelector<HTMLElement>("[data-registration-review]");
   const inlineEmailEl = root.querySelector<HTMLElement>("[data-registration-review-email-inline]");
-  const attendanceEl = root.querySelector<HTMLElement>("[data-registration-review-attendance]");
 
-  if (nameEl) nameEl.textContent = fullName || "Not provided yet";
-  if (emailEl) emailEl.textContent = email || "Not provided yet";
+  if (reviewEl) {
+    if (reviewEl.dataset.registrationReviewMounted !== "true") {
+      reviewEl.textContent = "";
+      reviewEl.dataset.registrationReviewMounted = "true";
+    }
+    render(
+      <RegistrationReview
+        fullName={fullName}
+        email={email}
+        attendance={readAttendanceReview(form)}
+        customFields={visibleCustomFields(root, customFieldDefs)}
+        customAnswers={readCustomFieldValues(form) as Record<string, CustomAnswerValue>}
+        form={form}
+      />,
+      reviewEl,
+    );
+  }
+
   if (inlineEmailEl) inlineEmailEl.textContent = email || "the email address above";
-  if (attendanceEl) attendanceEl.textContent = readAttendanceReview(form);
 }
 
 function resetEmailReviewConfirmation(form: HTMLFormElement): void {
   const confirmation = form.elements.namedItem(EMAIL_REVIEW_FIELD);
   if (confirmation instanceof HTMLInputElement) {
     confirmation.checked = false;
+    syncEmailReviewCard(form);
   }
+}
+
+function syncEmailReviewCard(form: HTMLFormElement): void {
+  const confirmation = form.elements.namedItem(EMAIL_REVIEW_FIELD);
+  if (!(confirmation instanceof HTMLInputElement)) return;
+
+  const card = confirmation.closest<HTMLElement>("[data-email-review-card]");
+  if (!card) return;
+
+  card.classList.toggle("is-checked", confirmation.checked);
+  card.classList.toggle("is-invalid", form.classList.contains("was-validated") && !confirmation.checked);
+  card.setAttribute("aria-checked", String(confirmation.checked));
+}
+
+function installEmailReviewCard(form: HTMLFormElement): void {
+  const confirmation = form.elements.namedItem(EMAIL_REVIEW_FIELD);
+  if (!(confirmation instanceof HTMLInputElement)) return;
+
+  const card = confirmation.closest<HTMLElement>("[data-email-review-card]");
+  if (!card) return;
+
+  const toggle = (): void => {
+    confirmation.checked = !confirmation.checked;
+    confirmation.dispatchEvent(new Event("change", { bubbles: true }));
+    syncEmailReviewCard(form);
+  };
+
+  card.addEventListener("click", (event) => {
+    const target = event.target instanceof HTMLElement ? event.target : null;
+    if (target?.closest("label, input")) return;
+    toggle();
+  });
+  card.addEventListener("keydown", (event) => {
+    if (event.key !== " " && event.key !== "Enter") return;
+    event.preventDefault();
+    toggle();
+  });
+  confirmation.addEventListener("change", () => syncEmailReviewCard(form));
+  syncEmailReviewCard(form);
 }
 
 async function applyGeoHint(controller: CustomFieldsController, apiBase: string): Promise<void> {
@@ -210,10 +443,12 @@ async function main(): Promise<void> {
 
   const { form, statusEl, eventSlug, eventPagePath, apiBase, query } = boot;
   const eventPathHeaders = eventPagePath ? { "x-event-base-path": eventPagePath } : undefined;
+  let customFieldDefs: FormField[] = [];
   installLiveValidation(form, statusEl);
+  installEmailReviewCard(form);
   installStepNavigation(boot.root, form, statusEl, (currentStep) => {
     if (currentStep === 3) {
-      updateRegistrationReview(boot.root, form);
+      updateRegistrationReview(boot.root, form, customFieldDefs);
     }
   });
   const consentsContainer = boot.root.querySelector<HTMLElement>("[data-consents]");
@@ -232,6 +467,7 @@ async function main(): Promise<void> {
       renderConsentInputs(consentsContainer, forms.requiredTerms);
     }
     if (customFieldsContainer && forms.form) {
+      customFieldDefs = forms.form.fields;
       customFields = renderCustomFields(customFieldsContainer, forms.form.fields);
     }
     if (dayAttendanceContainer) {
@@ -274,11 +510,11 @@ async function main(): Promise<void> {
     if (event.target instanceof HTMLInputElement && event.target.name === "email") {
       resetEmailReviewConfirmation(form);
     }
-    updateRegistrationReview(boot.root, form);
+    updateRegistrationReview(boot.root, form, customFieldDefs);
   });
 
   form.addEventListener("change", () => {
-    updateRegistrationReview(boot.root, form);
+    updateRegistrationReview(boot.root, form, customFieldDefs);
   });
 
   const referralInput = form.elements.namedItem("referralCode");
@@ -288,7 +524,7 @@ async function main(): Promise<void> {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    updateRegistrationReview(boot.root, form);
+    updateRegistrationReview(boot.root, form, customFieldDefs);
     form.classList.add("was-validated");
     syncConsentValidation(form);
     if (!validateBeforeSubmit(form, statusEl)) {

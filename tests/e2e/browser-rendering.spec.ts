@@ -260,11 +260,19 @@ async function fillRegistrationStep3(page: Page, options?: { dietaryRestriction?
   await page.getByRole("button", { name: /Continue/i }).click();
 }
 
-async function fillRegistrationStep4(page: Page): Promise<void> {
+async function fillRegistrationStep4(page: Page, expectedEmail?: string): Promise<void> {
+  await expect(page.locator("[data-registration-review]")).toBeVisible();
+  if (expectedEmail) {
+    await expect(page.locator("[data-registration-review-email]")).toHaveText(expectedEmail);
+    await expect(page.locator("label[for='registration-email-review-confirmed']")).toContainText(expectedEmail);
+  }
+  await expect(page.locator("[data-registration-review]")).toContainText("Contact");
+  await expect(page.locator("[data-registration-review]")).toContainText("Profile details");
+  await page.locator("#registration-email-review-confirmed").check();
   await clickConsentCard(page, "privacy policy");
   await clickConsentCard(page, "code of conduct");
   await clickConsentCard(page, "photos and videos");
-  await page.getByRole("button", { name: /Secure my spot/i }).click();
+  await page.getByRole("button", { name: /Submit registration/i }).click();
 }
 
 async function fillInviteRegistration(
@@ -280,10 +288,15 @@ async function fillInviteRegistration(
   await page.getByLabel("Job title").fill("Engineer");
   await page.getByLabel("Country").selectOption("US");
   await page.getByRole("button", { name: /Continue/i }).click();
+  await expect(page.locator("[data-registration-review-email]")).toHaveText(values.email);
+  await expect(page.locator("[data-registration-review]")).toContainText("State / Province");
+  await expect(page.locator("[data-registration-review]")).toContainText("Interests (topics)");
+  await expect(page.locator("[data-registration-review]")).toContainText("None provided");
+  await page.locator("#registration-email-review-confirmed").check();
   await clickConsentCard(page, "privacy policy");
   await clickConsentCard(page, "code of conduct");
   await clickConsentCard(page, "photos and videos");
-  await page.getByRole("button", { name: /Secure my spot/i }).click();
+  await page.getByRole("button", { name: /Submit registration/i }).click();
 }
 
 async function fillProposal(
@@ -477,12 +490,12 @@ test.describe("browser workflows", () => {
       });
       await fillRegistrationStep2(page);
       await fillRegistrationStep3(page);
-      await fillRegistrationStep4(page);
+      await fillRegistrationStep4(page, "capacity-one@example.test");
 
       const firstConfirmEmail = await waitForEmail("capacity-one@example.test", "confirm");
       const firstConfirmationUrl = extractUrlFromEmail(firstConfirmEmail, "/register/confirm");
       await page.goto(firstConfirmationUrl);
-      await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+      await page.getByRole("button", { name: /Confirm my registration/i }).click();
       await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
       await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
@@ -493,12 +506,12 @@ test.describe("browser workflows", () => {
       });
       await fillRegistrationStep2(page);
       await fillRegistrationStep3(page);
-      await fillRegistrationStep4(page);
+      await fillRegistrationStep4(page, "capacity-two@example.test");
 
       const secondConfirmEmail = await waitForEmail("capacity-two@example.test", "confirm");
       const secondConfirmationUrl = extractUrlFromEmail(secondConfirmEmail, "/register/confirm");
       await page.goto(secondConfirmationUrl);
-      await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+      await page.getByRole("button", { name: /Confirm my registration/i }).click();
       await expect(page.getByRole("heading", { name: /registration is in place/i })).toBeVisible({ timeout: 15_000 });
       await expect(
         page.getByText(
@@ -545,9 +558,21 @@ test.describe("browser workflows", () => {
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page, { dietaryRestriction: "Vegetarian" });
-    await fillRegistrationStep4(page);
+    await expect(page.getByRole("button", { name: "Return to step 3" })).toBeVisible();
+    await page.getByRole("button", { name: "Return to step 3" }).click();
+    await expect(page.getByLabel("Organization")).toBeVisible();
+    await page.getByRole("button", { name: /Continue/i }).click();
+    await expect(page.locator("[data-registration-review]")).toContainText("Vegetarian");
+    await page.getByRole("button", { name: /Edit profile details/i }).click();
+    await expect(page.getByLabel("Organization")).toBeVisible();
+    await page.getByRole("button", { name: /Continue/i }).click();
+    await fillRegistrationStep4(page, "alice@example.test");
 
-    await expect(page.getByRole("heading", { name: /Almost there, Alice!/i })).toBeVisible();
+    await expect(page.getByRole("heading", { name: /Check your email to finish registration, Alice/i })).toBeVisible();
+    await expect(page.getByText(/IMPORTANT: Click the link in the email/i)).toBeVisible();
+    await expect(page.locator(".event-flow-stepper")).toBeHidden();
+    await expect(page.locator(".event-flow-submission-review-value")).toHaveText("alice@example.test");
+    await expect(page.getByRole("link", { name: /Edit email address/i })).toBeVisible();
     await screenshot("01-registration-pending-email-confirmation");
 
     // Wait for the confirmation email to arrive at the intercept server
@@ -556,7 +581,7 @@ test.describe("browser workflows", () => {
 
     await page.goto(confirmationUrl);
     await expect(page.getByText(/one click away/i)).toBeVisible();
-    await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+    await page.getByRole("button", { name: /Confirm my registration/i }).click();
     // The confirmed-state heading appears once the API call completes
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
     await screenshot("02-registration-confirmed");
@@ -813,7 +838,7 @@ test.describe("browser workflows", () => {
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
-    await fillRegistrationStep4(page);
+    await fillRegistrationStep4(page, "sec@example.test");
 
     const confirmEmail = await waitForEmail("sec@example.test", "confirm");
     const confirmationUrl = extractUrlFromEmail(confirmEmail, "/register/confirm");
@@ -827,7 +852,7 @@ test.describe("browser workflows", () => {
     // ── 2. Confirm the registration ──────────────────────────────────────
     const [confirmResponse] = await Promise.all([
       page.waitForResponse((r) => r.url().includes("/registrations/confirm-email")),
-      page.getByRole("button", { name: /Please click here to confirm your registration/i }).click(),
+      page.getByRole("button", { name: /Confirm my registration/i }).click(),
     ]);
     expect(confirmResponse.status()).toBe(200);
     expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__xss_fired)).toBeUndefined();
@@ -839,7 +864,7 @@ test.describe("browser workflows", () => {
 
     // ── 3. Confirmation token is single-use ────────────────────────────────
     await page.goto(confirmationUrl);
-    const retryBtn = page.getByRole("button", { name: /Please click here to confirm/i });
+    const retryBtn = page.getByRole("button", { name: /Confirm my registration/i });
     if (await retryBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
       const [retryResponse] = await Promise.all([
         page.waitForResponse((r) => r.url().includes("/registrations/confirm-email")),
@@ -986,12 +1011,12 @@ test.describe("browser workflows", () => {
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
-    await fillRegistrationStep4(page);
+    await fillRegistrationStep4(page, "resend-tester@example.test");
 
     const confirmEmail = await waitForEmail("resend-tester@example.test", "confirm");
     const confirmationUrl = extractUrlFromEmail(confirmEmail, "/register/confirm");
     await page.goto(confirmationUrl);
-    await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+    await page.getByRole("button", { name: /Confirm my registration/i }).click();
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
     // Navigate to the manage page WITHOUT a token — the resend form must appear
@@ -1037,12 +1062,12 @@ test.describe("browser workflows", () => {
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
-    await fillRegistrationStep4(page);
+    await fillRegistrationStep4(page, "nominator@example.test");
 
     const nominatorConfirmEmail = await waitForEmail("nominator@example.test", "confirm");
     const nominatorConfirmUrl = extractUrlFromEmail(nominatorConfirmEmail, "/register/confirm");
     await page.goto(nominatorConfirmUrl);
-    await page.getByRole("button", { name: /Please click here to confirm your registration/i }).click();
+    await page.getByRole("button", { name: /Confirm my registration/i }).click();
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
     const nominatorConfirmedEmail = await waitForEmail("nominator@example.test", "confirmed");
