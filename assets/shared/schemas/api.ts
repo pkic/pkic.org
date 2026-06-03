@@ -568,6 +568,7 @@ export const adminEmailTemplateVersionSchema = z.object({
   content: z.string().min(1).max(500_000),
   subjectTemplate: z.string().trim().min(1).max(512).optional(),
   contentType: z.enum(["markdown", "html", "text"]).optional(),
+  messageType: z.enum(["transactional", "promotional"]).optional(),
 });
 
 export const adminEmailTemplateActivateSchema = z.object({
@@ -929,6 +930,7 @@ const campaignBaseSchema = z.object({
   subjectOverride: z.string().trim().min(1).max(500).optional(),
   customText: z.string().trim().max(100_000).optional(),
   bodyContent: z.string().trim().max(100_000).optional(),
+  messageType: z.enum(["transactional", "promotional"]).optional(),
   sendMode: z.enum(["personal", "bcc_batch"]),
   batchSize: z.number().int().min(1).max(500).default(50),
   filter: campaignFilterSchema,

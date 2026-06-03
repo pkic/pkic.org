@@ -1,8 +1,37 @@
 import { useState, useEffect, useRef } from "preact/hooks";
 import { Tabs } from "../../../../components/Tabs";
 import { api } from "../../../api";
+import {
+  TEMPLATE_HELPERS,
+  TEMPLATE_PARTIALS,
+  type TemplateHelperCategory,
+  type TemplateHelperItem,
+} from "../../../email-template-helpers";
 import { toast } from "../../../ui";
 import type { EmailTemplateVersion } from "../../../types";
+
+const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
+const PERSONAL_ONLY_HELPERS = new Set([
+  "firstName",
+  "lastName",
+  "email",
+  "organizationName",
+  "jobTitle",
+  "status",
+  "statusLabel",
+  "attendanceType",
+  "attendanceLabel",
+  "manageUrl",
+  "proposalTitle",
+  "proposalAbstract",
+  "speakerStatus",
+  "acceptedTermsText",
+  "if firstName",
+  "if eq status",
+  "if acceptedTermsText",
+  "each customAnswerRows",
+  "each dayAttendance",
+]);
 
 // ─── Highlight helpers ────────────────────────────────────────────────────────
 
@@ -47,22 +76,34 @@ function SnippetBtn({
 interface TemplateOption {
   key: string;
   label: string;
-  subject: string;
-  body: string;
+}
+
+interface CampaignPayload {
+  templateKey?: string;
+  subjectOverride: string;
+  bodyContent: string;
+  messageType?: "transactional" | "promotional";
+  sendMode: "personal" | "bcc_batch";
+  batchSize: number;
+  filter: {
+    audience: "attendees" | "speakers";
+    attendeeStatus?: "all" | "registered" | "pending_email_confirmation" | "waitlisted" | "cancelled";
+    attendanceType?: "all" | "in_person" | "virtual" | "on_demand";
+    dayDate?: string;
+    speakerStatus?: "all" | "confirmed" | "invited" | "pending";
+  };
+  previewToken?: string;
 }
 
 function useTemplates(): { templates: TemplateOption[]; loading: boolean } {
   const [templates, setTemplates] = useState<TemplateOption[]>([]);
   const [loading, setLoading] = useState(true);
   useEffect(() => {
-    api<{ templates: Array<{ key: string; versions: EmailTemplateVersion[] }> }>("/api/v1/admin/email-templates")
+    api<{ templates: Array<{ template_key: string }> }>("/api/v1/admin/email-templates")
       .then((d) => {
         const opts: TemplateOption[] = (d.templates ?? [])
-          .filter((t) => t.key.startsWith("msg_"))
-          .map((t) => {
-            const v = t.versions[0];
-            return { key: t.key, label: t.key, subject: v?.subject_template ?? "", body: v?.body ?? "" };
-          });
+          .filter((t) => t.template_key.startsWith("msg_"))
+          .map((t) => ({ key: t.template_key, label: t.template_key }));
         setTemplates(opts);
       })
       .catch(() => {})
@@ -85,6 +126,59 @@ function useDays(slug: string) {
   return days;
 }
 
+function availableHelperLabelsForAudience(audience: "attendees" | "speakers"): Set<string> {
+  if (audience === "attendees") {
+    return new Set([
+      "eventName",
+      "eventUrl",
+      "eventTimezone",
+      "firstName",
+      "lastName",
+      "email",
+      "organizationName",
+      "jobTitle",
+      "status",
+      "statusLabel",
+      "attendanceType",
+      "attendanceLabel",
+      "manageUrl",
+      "registrationUrl",
+      "if firstName",
+      "if eq status",
+      "else block",
+      "unless",
+      "each customAnswerRows",
+      "CTA button",
+    ]);
+  }
+
+  return new Set([
+    "eventName",
+    "eventUrl",
+    "eventTimezone",
+    "firstName",
+    "lastName",
+    "email",
+    "organizationName",
+    "jobTitle",
+    "proposalTitle",
+    "proposalAbstract",
+    "speakerStatus",
+    "proposalUrl",
+    "if firstName",
+    "else block",
+    "unless",
+    "each customAnswerRows",
+    "CTA button",
+  ]);
+}
+
+function availablePartialsForAudience(audience: "attendees" | "speakers"): Set<string> {
+  return audience === "attendees"
+    ? new Set(["reg_details", "sponsors_block", "about_pkic", "donation_request"])
+    : new Set(["sponsors_block", "about_pkic", "donation_request"]);
+}
+
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function EventEmail({
@@ -99,6 +193,7 @@ export function EventEmail({
 
   const [templateKey, setTemplateKey] = useState("");
   const [mode, setMode] = useState<"personal" | "bcc_batch">("personal");
+  const [messageType, setMessageType] = useState<"transactional" | "promotional">("promotional");
   const [batchSize, setBatchSize] = useState(500);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
@@ -118,7 +213,7 @@ export function EventEmail({
     html: string;
     text: string;
     recipientCount?: number;
-    token?: string;
+    previewToken?: string;
   } | null>(null);
   const [previewTab, setPreviewTab] = useState<"html" | "text">("html");
   const [previewConfirmed, setPreviewConfirmed] = useState(false);
@@ -129,6 +224,8 @@ export function EventEmail({
   const bodyPreRef = useRef<HTMLPreElement>(null);
   const bodyTextareaRef = useRef<HTMLTextAreaElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const availableHelperLabels = availableHelperLabelsForAudience(audience);
+  const availablePartials = availablePartialsForAudience(audience);
 
   // Sync highlight backdrop
   useEffect(() => {
@@ -154,26 +251,43 @@ export function EventEmail({
     });
   }
 
-  function handleTemplateChange(key: string) {
+  async function handleTemplateChange(key: string) {
     setTemplateKey(key);
     if (!key) return;
-    const tpl = templates.find((t) => t.key === key);
-    if (tpl) {
-      setSubject(tpl.subject);
-      setBody(tpl.body);
+    try {
+      const data = await api<{ versions: EmailTemplateVersion[] }>(
+        `/api/v1/admin/email-templates/${encodeURIComponent(key)}/versions`,
+      );
+      const active = data.versions.find((version) => version.status === "active");
+      const version = active ?? data.versions[0];
+      if (!version) return;
+      setSubject(version.subject_template ?? "");
+      setBody(version.body ?? "");
+      setMessageType(version.message_type ?? "promotional");
+    } catch (e) {
+      toast((e as Error).message, "error");
     }
   }
 
-  function buildPayload(withToken?: string) {
-    const base: Record<string, unknown> = { subject, body, deliveryMode: mode };
-    if (mode === "bcc_batch") base.bccBatchSize = batchSize;
+  function buildPayload(withToken?: string): CampaignPayload {
+    const base: CampaignPayload = {
+      subjectOverride: subject,
+      bodyContent: body,
+      messageType,
+      sendMode: mode,
+      batchSize,
+      filter: {
+        audience,
+      },
+    };
+    if (templateKey) base.templateKey = templateKey;
     if (withToken) base.previewToken = withToken;
     if (audience === "attendees") {
-      base.audience = "attendees";
-      base.filters = { status: attendeeStatus, attendanceType, ...(dayFilter ? { dayDate: dayFilter } : {}) };
+      base.filter.attendeeStatus = attendeeStatus as CampaignPayload["filter"]["attendeeStatus"];
+      base.filter.attendanceType = attendanceType as CampaignPayload["filter"]["attendanceType"];
+      if (dayFilter) base.filter.dayDate = dayFilter;
     } else {
-      base.audience = "speakers";
-      base.filters = { status: speakerStatus };
+      base.filter.speakerStatus = speakerStatus as CampaignPayload["filter"]["speakerStatus"];
     }
     return base;
   }
@@ -187,10 +301,16 @@ export function EventEmail({
     setPreview(null);
     setPreviewConfirmed(false);
     try {
-      const res = await api<{ subject: string; html: string; text: string; recipientCount?: number; token?: string }>(
-        `/api/v1/admin/events/${slug}/email/preview`,
-        { method: "POST", body: JSON.stringify(buildPayload()) },
-      );
+      const res = await api<{
+        subject: string;
+        html: string;
+        text: string;
+        recipientCount?: number;
+        previewToken?: string;
+      }>(`/api/v1/admin/events/${slug}/emails/campaign/preview`, {
+        method: "POST",
+        body: JSON.stringify(buildPayload()),
+      });
       setPreview(res);
       if (iframeRef.current) iframeRef.current.srcdoc = res.html;
       setStatus(
@@ -212,11 +332,14 @@ export function EventEmail({
     setSending(true);
     setStatus("Sending…");
     try {
-      const res = await api<{ sent?: number; queued?: number }>(`/api/v1/admin/events/${slug}/email/send`, {
-        method: "POST",
-        body: JSON.stringify(buildPayload(preview.token)),
-      });
-      const count = res.sent ?? res.queued ?? 0;
+      const res = await api<{ queuedRecipients?: number; queuedBatches?: number }>(
+        `/api/v1/admin/events/${slug}/emails/campaign/send`,
+        {
+          method: "POST",
+          body: JSON.stringify(buildPayload(preview.previewToken)),
+        },
+      );
+      const count = res.queuedRecipients ?? 0;
       toast(`Email queued for ${count} recipient${count !== 1 ? "s" : ""}`, "success");
       setStatus(`✓ Sent to ${count} recipients.`);
       setPreview(null);
@@ -224,6 +347,7 @@ export function EventEmail({
       setSubject("");
       setBody("");
       setTemplateKey("");
+      setMessageType("promotional");
     } catch (e) {
       const msg = (e as Error).message;
       setStatus(msg);
@@ -235,6 +359,14 @@ export function EventEmail({
 
   const personal = mode === "personal";
 
+  function isHelperVisible(item: TemplateHelperItem): boolean {
+    return availableHelperLabels.has(item.label);
+  }
+
+  function isHelperPersonalOnly(item: TemplateHelperItem): boolean {
+    return PERSONAL_ONLY_HELPERS.has(item.label);
+  }
+
   return (
     <div>
       {/* Template + mode */}
@@ -244,7 +376,7 @@ export function EventEmail({
           <select
             class="form-select form-select-sm"
             value={templateKey}
-            onChange={(e) => handleTemplateChange((e.target as HTMLSelectElement).value)}
+            onChange={(e) => void handleTemplateChange((e.target as HTMLSelectElement).value)}
             disabled={templatesLoading}
           >
             <option value="">— write from scratch —</option>
@@ -266,8 +398,19 @@ export function EventEmail({
             <option value="bcc_batch">Broadcast BCC</option>
           </select>
         </div>
+        <div class="col-md-3">
+          <label class="form-label small mb-1">Message type</label>
+          <select
+            class="form-select form-select-sm"
+            value={messageType}
+            onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as "transactional" | "promotional")}
+          >
+            <option value="transactional">Transactional</option>
+            <option value="promotional">Promotional</option>
+          </select>
+        </div>
         {!personal && (
-          <div class="col-md-3">
+          <div class="col-md-12 col-lg-3">
             <label class="form-label small mb-1">BCC batch size</label>
             <input
               class="form-control form-control-sm"
@@ -314,55 +457,39 @@ export function EventEmail({
         </div>
         <div class="col-md-4">
           <div class="card border-0 bg-light h-100 p-2">
-            <div class="small fw-semibold mb-1">Variables</div>
-            <div class="d-flex gap-1 flex-wrap mb-3">
-              <SnippetBtn
-                snippet="{{firstName}}"
-                label="firstName"
-                personal={personal}
-                personalOnly
-                onInsert={insertSnippet}
-              />
-              <SnippetBtn
-                snippet="{{lastName}}"
-                label="lastName"
-                personal={personal}
-                personalOnly
-                onInsert={insertSnippet}
-              />
-              <SnippetBtn snippet="{{eventName}}" label="eventName" personal={personal} onInsert={insertSnippet} />
-              <SnippetBtn snippet="{{eventUrl}}" label="eventUrl" personal={personal} onInsert={insertSnippet} />
-              <SnippetBtn
-                snippet="{{proposalTitle}}"
-                label="proposalTitle"
-                personal={personal}
-                personalOnly
-                onInsert={insertSnippet}
-              />
-              <SnippetBtn
-                snippet="{{registrationUrl}}"
-                label="registrationUrl"
-                personal={personal}
-                onInsert={insertSnippet}
-              />
-              <SnippetBtn snippet="{{proposalUrl}}" label="proposalUrl" personal={personal} onInsert={insertSnippet} />
-            </div>
+            {HELPER_CATEGORIES.map((category) => {
+              const items = TEMPLATE_HELPERS.filter((item) => item.category === category && isHelperVisible(item));
+              if (items.length === 0) return null;
+              return (
+                <div key={category} class="mb-3">
+                  <div class="small fw-semibold mb-1">{category}</div>
+                  <div class="d-flex gap-1 flex-wrap">
+                    {items.map((item) => (
+                      <SnippetBtn
+                        key={item.label}
+                        snippet={item.snippet}
+                        label={item.label}
+                        personal={personal}
+                        personalOnly={isHelperPersonalOnly(item)}
+                        onInsert={insertSnippet}
+                      />
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
             <div class="small fw-semibold mb-1">Partials</div>
             <div class="d-flex gap-1 flex-wrap mb-2">
-              <SnippetBtn
-                snippet="{{> reg_details}}"
-                label="reg_details"
-                personal={personal}
-                personalOnly
-                onInsert={insertSnippet}
-              />
-              <SnippetBtn
-                snippet="{{> sponsors_block}}"
-                label="sponsors_block"
-                personal={personal}
-                onInsert={insertSnippet}
-              />
-              <SnippetBtn snippet="{{> about_pkic}}" label="about_pkic" personal={personal} onInsert={insertSnippet} />
+              {TEMPLATE_PARTIALS.filter((partial) => availablePartials.has(partial.name)).map((partial) => (
+                <SnippetBtn
+                  key={partial.name}
+                  snippet={`{{> ${partial.name}}}`}
+                  label={partial.name}
+                  personal={personal}
+                  personalOnly={partial.name === "reg_details"}
+                  onInsert={insertSnippet}
+                />
+              ))}
             </div>
             {!personal && (
               <div class="small text-muted mt-1">Recipient-specific tags are disabled in Broadcast BCC mode.</div>
