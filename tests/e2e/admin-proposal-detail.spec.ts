@@ -219,6 +219,9 @@ test("renders the admin proposal detail workflow with submission answers and ope
   await expect(page.getByText("Ada Reviewer")).toBeVisible();
 
   await page.getByRole("button", { name: "Open Proposer Manage Page ↗" }).click();
+  await expect
+    .poll(async () => page.evaluate(() => (window as Window & { __openedUrls?: string[] }).__openedUrls ?? []))
+    .toContain("https://app.test/propose-manage/?event=pqc-2026&token=proposal-token");
   openedUrls.push(...(await page.evaluate(() => (window as Window & { __openedUrls?: string[] }).__openedUrls ?? [])));
 
   expect(openedUrls).toContain("https://app.test/propose-manage/?event=pqc-2026&token=proposal-token");

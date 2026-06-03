@@ -1,9 +1,13 @@
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
 
-const SENDGRID_SERVER = process.env.E2E_SENDGRID_API_BASE ?? "http://127.0.0.1:48765";
+const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
+
+function sendgridServer(): string {
+  return process.env.E2E_SENDGRID_API_BASE ?? readFileSync(SENDGRID_URL_FILE, "utf8").trim();
+}
 
 async function setNativeChecked(page: Page, selector: string): Promise<void> {
   const el = page.locator(selector);
@@ -92,7 +96,7 @@ function createScreenshotter(page: Page): (label: string) => Promise<void> {
 // ── Email helpers (talk to the SendGrid intercept server) ─────────────────────
 
 async function clearOutbox(): Promise<void> {
-  await fetch(`${SENDGRID_SERVER}/clear`, { method: "POST" });
+  await fetch(`${sendgridServer()}/clear`, { method: "POST" });
 }
 
 /**
@@ -103,7 +107,7 @@ async function waitForEmail(to: string, subjectFragment: string, timeoutMs = 15_
   const deadline = Date.now() + timeoutMs;
   let lastEmails: CapturedEmail[] = [];
   while (Date.now() < deadline) {
-    const resp = await fetch(`${SENDGRID_SERVER}/outbox`);
+    const resp = await fetch(`${sendgridServer()}/outbox`);
     lastEmails = (await resp.json()) as CapturedEmail[];
     // Search from newest first so we pick up the latest matching email
     for (let i = lastEmails.length - 1; i >= 0; i--) {
@@ -268,7 +272,7 @@ async function fillRegistrationStep4(page: Page, expectedEmail?: string): Promis
   }
   await expect(page.locator("[data-registration-review]")).toContainText("Contact");
   await expect(page.locator("[data-registration-review]")).toContainText("Profile details");
-  await page.locator("#registration-email-review-confirmed").check();
+  await setNativeChecked(page, "#registration-email-review-confirmed");
   await clickConsentCard(page, "privacy policy");
   await clickConsentCard(page, "code of conduct");
   await clickConsentCard(page, "photos and videos");
@@ -292,7 +296,7 @@ async function fillInviteRegistration(
   await expect(page.locator("[data-registration-review]")).toContainText("State / Province");
   await expect(page.locator("[data-registration-review]")).toContainText("Interests (topics)");
   await expect(page.locator("[data-registration-review]")).toContainText("None provided");
-  await page.locator("#registration-email-review-confirmed").check();
+  await setNativeChecked(page, "#registration-email-review-confirmed");
   await clickConsentCard(page, "privacy policy");
   await clickConsentCard(page, "code of conduct");
   await clickConsentCard(page, "photos and videos");
