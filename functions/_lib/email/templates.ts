@@ -14,6 +14,7 @@ interface CachedTemplateResolution {
     content: string;
     contentType: string;
     subjectTemplate: string | null;
+    messageType: "transactional" | "promotional";
   } | null;
 }
 
@@ -37,6 +38,8 @@ export interface TemplateVersionRow {
   body: string | null;
   /** Format of the body: 'markdown' | 'html' | 'text'. Defaults to 'markdown'. */
   content_type: "markdown" | "html" | "text";
+  /** Delivery classification used as the default when this template is selected in send forms. */
+  message_type: "transactional" | "promotional";
   /** Deprecated: legacy R2 key (kept for backward compatibility, no longer used). */
   r2_object_key: string | null;
   checksum_sha256: string;
@@ -78,6 +81,7 @@ export async function createTemplateVersion(
     content: string;
     contentType?: "markdown" | "html" | "text";
     subjectTemplate?: string | null;
+    messageType?: "transactional" | "promotional" | null;
     createdByUserId: string;
   },
 ): Promise<TemplateVersionRow> {
@@ -91,6 +95,7 @@ export async function createTemplateVersion(
     subject_template: payload.subjectTemplate ?? null,
     body: payload.content,
     content_type: payload.contentType ?? "markdown",
+    message_type: payload.messageType ?? "transactional",
     r2_object_key: null,
     checksum_sha256: checksum,
     status: "draft",
@@ -101,9 +106,9 @@ export async function createTemplateVersion(
   await run(
     db,
     `INSERT INTO email_template_versions (
-      id, template_key, version, subject_template, body, content_type, r2_object_key,
+      id, template_key, version, subject_template, body, content_type, message_type, r2_object_key,
       checksum_sha256, status, created_by_user_id, created_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       row.id,
       row.template_key,
@@ -111,6 +116,7 @@ export async function createTemplateVersion(
       row.subject_template,
       row.body,
       row.content_type,
+      row.message_type,
       row.r2_object_key,
       row.checksum_sha256,
       row.status,
@@ -151,7 +157,13 @@ export async function activateTemplateVersion(
 export async function resolveTemplate(
   db: DatabaseLike,
   templateKey: string,
-): Promise<{ version: number; content: string; contentType: string; subjectTemplate: string | null }> {
+): Promise<{
+  version: number;
+  content: string;
+  contentType: string;
+  subjectTemplate: string | null;
+  messageType: "transactional" | "promotional";
+}> {
   const cached = activeTemplateCache.get(templateKey);
   if (cached && cached.expiresAt > Date.now()) {
     if (cached.value) {
@@ -186,6 +198,7 @@ export async function resolveTemplate(
     content: active.body,
     contentType: active.content_type ?? "markdown",
     subjectTemplate: active.subject_template,
+    messageType: active.message_type ?? "transactional",
   };
 
   activeTemplateCache.set(templateKey, {

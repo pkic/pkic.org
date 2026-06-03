@@ -14,6 +14,7 @@ import {
 
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
+type EmailMessageType = "transactional" | "promotional";
 
 // ────────────────────────────────────────────────────────
 // Syntax highlight
@@ -83,6 +84,7 @@ function TemplateEditor({
   const [contentType, setContentType] = useState<"markdown" | "html" | "text">(
     (current?.content_type as "markdown" | "html" | "text") ?? "markdown",
   );
+  const [messageType, setMessageType] = useState<EmailMessageType>(current?.message_type ?? "transactional");
   const [subject, setSubject] = useState(current?.subject_template ?? "");
   const [body, setBody] = useState(current?.body ?? "");
   const [previewData, setPreviewData] = useState(JSON.stringify(PREVIEW_DEFAULTS, null, 2));
@@ -158,6 +160,7 @@ function TemplateEditor({
     setSubject(version.subject_template ?? "");
     setBody(newBody);
     setContentType((version.content_type as "markdown" | "html" | "text") ?? "markdown");
+    setMessageType(version.message_type ?? "transactional");
     if (bodyTextareaRef.current) {
       bodyTextareaRef.current.value = newBody;
     }
@@ -231,6 +234,7 @@ function TemplateEditor({
             content: body,
             subjectTemplate: subject || undefined,
             contentType: effectiveContentType,
+            messageType: isLayout ? undefined : messageType,
           }),
         },
       );
@@ -278,19 +282,32 @@ function TemplateEditor({
                 </div>
               )}
               {!isLayout && (
-                <div class="mb-2">
-                  <label class="form-label small fw-semibold mb-1">Content type</label>
-                  <select
-                    class="form-select form-select-sm"
-                    value={contentType}
-                    onChange={(e) =>
-                      setContentType((e.target as HTMLSelectElement).value as "markdown" | "html" | "text")
-                    }
-                  >
-                    <option value="markdown">Markdown</option>
-                    <option value="html">HTML</option>
-                    <option value="text">Plain text</option>
-                  </select>
+                <div class="row g-2 mb-2">
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold mb-1">Content type</label>
+                    <select
+                      class="form-select form-select-sm"
+                      value={contentType}
+                      onChange={(e) =>
+                        setContentType((e.target as HTMLSelectElement).value as "markdown" | "html" | "text")
+                      }
+                    >
+                      <option value="markdown">Markdown</option>
+                      <option value="html">HTML</option>
+                      <option value="text">Plain text</option>
+                    </select>
+                  </div>
+                  <div class="col-md-6">
+                    <label class="form-label small fw-semibold mb-1">Default message type</label>
+                    <select
+                      class="form-select form-select-sm"
+                      value={messageType}
+                      onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
+                    >
+                      <option value="transactional">Transactional</option>
+                      <option value="promotional">Promotional</option>
+                    </select>
+                  </div>
                 </div>
               )}
 
@@ -478,6 +495,10 @@ function TemplateEditor({
               { header: "Version", cell: (v) => `v${v.version}`, className: "mono" },
               { header: "Status", cell: (v) => <Badge status={v.status} /> },
               {
+                header: "Type",
+                cell: (v) => (v.message_type ? <Badge status={v.message_type} /> : "—"),
+              },
+              {
                 header: "Checksum",
                 cell: (v) => <>{v.checksum_sha256.substring(0, 12)}…</>,
                 className: "mono adm-template-checksum",
@@ -524,6 +545,7 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
   const [key, setKey] = useState("");
   const [subject, setSubject] = useState("");
   const [contentType, setContentType] = useState<"markdown" | "html" | "text">("markdown");
+  const [messageType, setMessageType] = useState<EmailMessageType>("transactional");
   const [body, setBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [keyCheckStatus, setKeyCheckStatus] = useState<"idle" | "checking" | "exists" | "available">("idle");
@@ -566,7 +588,15 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
     try {
       await api<{ success: boolean; version: number }>(
         `/api/v1/admin/email-templates/${encodeURIComponent(key)}/versions`,
-        { method: "POST", body: JSON.stringify({ content: body, subjectTemplate: subject || undefined, contentType }) },
+        {
+          method: "POST",
+          body: JSON.stringify({
+            content: body,
+            subjectTemplate: subject || undefined,
+            contentType,
+            messageType,
+          }),
+        },
       );
       toast(`Template "${key}" created as draft v1`, "success");
       onCreated(key);
@@ -603,17 +633,30 @@ function CreateTemplate({ onCreated, onCancel }: { onCreated: (key: string) => v
               : "A unique identifier for this template. Cannot be changed later."}
           </div>
         </div>
-        <div class="mb-3">
-          <label class="form-label small fw-semibold mb-1">Content type</label>
-          <select
-            class="form-select form-select-sm"
-            value={contentType}
-            onChange={(e) => setContentType((e.target as HTMLSelectElement).value as "markdown" | "html" | "text")}
-          >
-            <option value="markdown">Markdown</option>
-            <option value="html">HTML</option>
-            <option value="text">Plain text</option>
-          </select>
+        <div class="row g-2 mb-3">
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">Content type</label>
+            <select
+              class="form-select form-select-sm"
+              value={contentType}
+              onChange={(e) => setContentType((e.target as HTMLSelectElement).value as "markdown" | "html" | "text")}
+            >
+              <option value="markdown">Markdown</option>
+              <option value="html">HTML</option>
+              <option value="text">Plain text</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label small fw-semibold mb-1">Default message type</label>
+            <select
+              class="form-select form-select-sm"
+              value={messageType}
+              onChange={(e) => setMessageType((e.target as HTMLSelectElement).value as EmailMessageType)}
+            >
+              <option value="transactional">Transactional</option>
+              <option value="promotional">Promotional</option>
+            </select>
+          </div>
         </div>
         <div class="mb-3">
           <label class="form-label small fw-semibold mb-1">Subject template</label>

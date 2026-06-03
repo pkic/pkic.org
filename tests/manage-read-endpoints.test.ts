@@ -51,6 +51,41 @@ describe("manage read endpoints", () => {
     expect(payload.registration.id).toBe(registrationId);
   });
 
+  it("rejects the stored token hash when it is used as a manage token", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    const userId = crypto.randomUUID();
+    const registrationId = crypto.randomUUID();
+    const token = "hashed-registration-token";
+    const tokenHash = await sha256Hex(token);
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES ('${userId}', 'hashed@example.test', 'hashed@example.test', 'Hash', 'Token', datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO registrations (
+          id, event_id, user_id, status, attendance_type, source_type,
+          manage_token_hash, created_at, updated_at
+        ) VALUES (
+          '${registrationId}', '${eventId}', '${userId}', 'registered', 'in_person', 'direct',
+          '${tokenHash}', datetime('now'), datetime('now')
+        )
+      `),
+    ]);
+
+    const response = await getRegistration(
+      createContext(env, new Request(`https://app.test/api/v1/registrations/manage/${tokenHash}`), {
+        token: tokenHash,
+      }),
+    );
+
+    expect(response.status).toBe(404);
+    const payload = (await response.json()) as { error: { code: string } };
+    expect(payload.error.code).toBe("REGISTRATION_NOT_FOUND");
+  });
+
   it("does not confirm a pending registration when the manage link is opened", async () => {
     await seedEventAndAdmin(env.DB);
 

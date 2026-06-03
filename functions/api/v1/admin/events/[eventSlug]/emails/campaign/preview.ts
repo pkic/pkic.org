@@ -28,8 +28,10 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const secret = requireInternalSecret(c.env);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+  const template = !body.bodyContent && body.templateKey ? await resolveTemplate(requestDb(c), body.templateKey) : null;
+  const messageType = body.messageType ?? template?.messageType ?? "promotional";
 
-  const recipients = await listCampaignRecipients(requestDb(c), event.id, {
+  const recipients = await listCampaignRecipients(requestDb(c), event, appBaseUrl, {
     audience: body.filter.audience,
     attendeeStatus: body.filter.attendeeStatus,
     attendanceType: body.filter.attendanceType,
@@ -46,6 +48,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     subjectOverride: body.subjectOverride ?? null,
     customText: body.customText ?? null,
     bodyContent: body.bodyContent ?? null,
+    messageType,
     sendMode: body.sendMode,
     batchSize: body.batchSize,
     filter: {
@@ -85,8 +88,6 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   }
 
   if (body.sendMode === "bcc_batch") {
-    const template =
-      !body.bodyContent && body.templateKey ? await resolveTemplate(requestDb(c), body.templateKey) : null;
     const unsafeRefs = findBroadcastOnlyTemplateRefs(uniqueRecipients, [
       body.subjectOverride,
       body.bodyContent,
@@ -129,7 +130,9 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     subject = renderSubject(body.subjectOverride ?? null, `Update: ${event.name}`, dataWithPartials);
     rendered = await renderEmail(body.bodyContent, dataWithPartials, layoutHtml, "markdown", appBaseUrl);
   } else {
-    const template = await resolveTemplate(requestDb(c), body.templateKey as string);
+    if (!template) {
+      throw new AppError(400, "CAMPAIGN_TEMPLATE_REQUIRED", "Select a template or provide a message body.");
+    }
     const data = {
       ...sampleData,
       customText: body.customText ?? "",

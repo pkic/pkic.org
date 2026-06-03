@@ -423,6 +423,7 @@ export interface EmailTemplateVersion {
   subject_template: string | null;
   body: string | null;
   content_type: string;
+  message_type: "transactional" | "promotional";
   r2_object_key: string | null;
   checksum_sha256: string;
   status: "draft" | "active";

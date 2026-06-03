@@ -24,8 +24,14 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
   const secret = requireInternalSecret(c.env);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+  if (!body.bodyContent && !body.templateKey) {
+    throw new AppError(400, "CAMPAIGN_NO_CONTENT", "Provide a message body or select a template before sending.");
+  }
+  const templateKey = body.bodyContent ? body.templateKey || "__direct__" : (body.templateKey as string);
+  const template = !body.bodyContent && templateKey ? await resolveTemplate(requestDb(c), templateKey) : null;
+  const messageType = body.messageType ?? template?.messageType ?? "promotional";
 
-  const recipients = await listCampaignRecipients(requestDb(c), event.id, {
+  const recipients = await listCampaignRecipients(requestDb(c), event, appBaseUrl, {
     audience: body.filter.audience,
     attendeeStatus: body.filter.attendeeStatus,
     attendanceType: body.filter.attendanceType,
@@ -42,6 +48,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     subjectOverride: body.subjectOverride ?? null,
     customText: body.customText ?? null,
     bodyContent: body.bodyContent ?? null,
+    messageType,
     sendMode: body.sendMode,
     batchSize: body.batchSize,
     filter: {
@@ -84,14 +91,6 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     throw new AppError(400, "CAMPAIGN_NO_RECIPIENTS", "No recipients matched the selected filters.");
   }
 
-  if (!body.bodyContent && !body.templateKey) {
-    throw new AppError(400, "CAMPAIGN_NO_CONTENT", "Provide a message body or select a template before sending.");
-  }
-
-  // Validate template exists only when not using a direct body override
-  const templateKey = body.bodyContent ? body.templateKey || "__direct__" : (body.templateKey as string);
-  const template = !body.bodyContent ? await resolveTemplate(requestDb(c), templateKey) : null;
-
   if (body.sendMode === "bcc_batch") {
     const unsafeRefs = findBroadcastOnlyTemplateRefs(uniqueRecipients, [
       body.subjectOverride,
@@ -122,7 +121,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
         eventId: event.id,
         templateKey,
         recipientEmail: recipient.email,
-        messageType: "promotional",
+        messageType,
         subject: body.subjectOverride ?? `Update: ${event.name}`,
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),
@@ -149,7 +148,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
         eventId: event.id,
         templateKey,
         recipientEmail: to.email,
-        messageType: "promotional",
+        messageType,
         subject: body.subjectOverride ?? `Update: ${event.name}`,
         data: {
           ...buildEventEmailVariables(event, appBaseUrl),

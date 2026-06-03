@@ -4,6 +4,8 @@ import { getActiveFormByPurpose } from "./forms";
 import { buildCustomAnswerRows, buildCustomAnswerVariables } from "../utils/registration-email";
 import { hmacSha256Hex, sha256Hex } from "../utils/crypto";
 import { parseJsonSafe } from "../utils/json";
+import { ATTENDANCE_TYPE_LABELS, STATUS_LABELS } from "../utils/attendance";
+import type { EventRecord } from "./events";
 import type { DatabaseLike } from "../types";
 import type { FormFieldDefinition } from "./forms/read";
 
@@ -52,23 +54,28 @@ function safeEqual(a: string, b: string): boolean {
 
 export async function listCampaignRecipients(
   db: DatabaseLike,
-  eventId: string,
+  event: Pick<EventRecord, "id" | "slug" | "base_path" | "starts_at" | "settings_json">,
+  _appBaseUrl: string,
   filter: CampaignAudienceFilter,
 ): Promise<CampaignRecipient[]> {
   if (filter.audience === "attendees") {
-    const form = await getActiveFormByPurpose(db, eventId, "event_registration");
+    const form = await getActiveFormByPurpose(db, event.id, "event_registration");
     const attendeeStatus = filter.attendeeStatus ?? "registered";
     if (filter.dayDate) {
       const rows = await all<{
         email: string;
         first_name: string | null;
         last_name: string | null;
+        organization_name: string | null;
+        job_title: string | null;
         status: string;
         attendance_type: string | null;
         custom_answers_json: string | null;
+        manage_token_hash: string | null;
       }>(
         db,
-        `SELECT DISTINCT u.email, u.first_name, u.last_name, r.status, r.attendance_type, r.custom_answers_json
+        `SELECT DISTINCT u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
+                r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash
          FROM registrations r
          JOIN users u ON u.id = r.user_id
          JOIN registration_day_attendance rda ON rda.registration_id = r.id
@@ -80,7 +87,7 @@ export async function listCampaignRecipients(
            AND u.email IS NOT NULL
          ORDER BY lower(u.email) ASC`,
         [
-          eventId,
+          event.id,
           attendeeStatus,
           attendeeStatus,
           filter.dayDate,
@@ -100,12 +107,16 @@ export async function listCampaignRecipients(
       email: string;
       first_name: string | null;
       last_name: string | null;
+      organization_name: string | null;
+      job_title: string | null;
       status: string;
       attendance_type: string | null;
       custom_answers_json: string | null;
+      manage_token_hash: string | null;
     }>(
       db,
-      `SELECT DISTINCT u.email, u.first_name, u.last_name, r.status, r.attendance_type, r.custom_answers_json
+      `SELECT DISTINCT u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
+            r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash
        FROM registrations r
        JOIN users u ON u.id = r.user_id
        WHERE r.event_id = ?
@@ -113,7 +124,7 @@ export async function listCampaignRecipients(
          AND (? = 'all' OR r.attendance_type = ?)
          AND u.email IS NOT NULL
        ORDER BY lower(u.email) ASC`,
-      [eventId, attendeeStatus, attendeeStatus, filter.attendanceType ?? "all", filter.attendanceType ?? "all"],
+      [event.id, attendeeStatus, attendeeStatus, filter.attendanceType ?? "all", filter.attendanceType ?? "all"],
     );
 
     return rows.map((row) => ({
@@ -128,12 +139,14 @@ export async function listCampaignRecipients(
     throw new AppError(400, "CAMPAIGN_DAY_FILTER_UNSUPPORTED", "Day filter is only supported for attendee audience.");
   }
 
-  const form = await getActiveFormByPurpose(db, eventId, "proposal_submission");
+  const form = await getActiveFormByPurpose(db, event.id, "proposal_submission");
   const speakerStatus = filter.speakerStatus ?? "confirmed";
   const rows = await all<{
     email: string;
     first_name: string | null;
     last_name: string | null;
+    organization_name: string | null;
+    job_title: string | null;
     speaker_status: string;
     proposal_title: string;
     proposal_abstract: string | null;
@@ -143,7 +156,7 @@ export async function listCampaignRecipients(
     speaker_confirmed_at: string | null;
   }>(
     db,
-    `SELECT u.email, u.first_name, u.last_name,
+    `SELECT u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
             ps.status AS speaker_status,
             sp.title AS proposal_title,
             sp.abstract AS proposal_abstract,
@@ -161,7 +174,7 @@ export async function listCampaignRecipients(
      ORDER BY lower(u.email) ASC,
               CASE ps.status WHEN 'confirmed' THEN 0 WHEN 'invited' THEN 1 WHEN 'pending' THEN 2 ELSE 3 END ASC,
               COALESCE(ps.confirmed_at, sp.updated_at) DESC`,
-    [eventId, speakerStatus, speakerStatus],
+    [event.id, speakerStatus, speakerStatus],
   );
 
   const recipients: CampaignRecipient[] = [];
@@ -237,14 +250,24 @@ function buildAttendeeTemplateData(
     status: string;
     attendance_type: string | null;
     custom_answers_json: string | null;
+    organization_name?: string | null;
+    job_title?: string | null;
   },
   formFields: FormFieldDefinition[] | undefined,
+  manageUrl?: string,
 ): Record<string, unknown> {
   const customAnswers = parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null);
+  const attendanceType = row.attendance_type ?? "";
   return {
     email: row.email.trim().toLowerCase(),
+    organizationName: row.organization_name ?? "",
+    jobTitle: row.job_title ?? "",
+    status: row.status,
+    statusLabel: STATUS_LABELS[row.status] ?? row.status,
     registrationStatus: row.status,
-    attendanceType: row.attendance_type ?? "",
+    attendanceType,
+    attendanceLabel: ATTENDANCE_TYPE_LABELS[attendanceType] ?? attendanceType,
+    manageUrl,
     customAnswerRows: buildCustomAnswerRows(customAnswers, formFields),
     ...buildCustomAnswerVariables(customAnswers, formFields),
   };
@@ -253,6 +276,8 @@ function buildAttendeeTemplateData(
 function buildSpeakerTemplateData(
   row: {
     email: string;
+    organization_name?: string | null;
+    job_title?: string | null;
     speaker_status: string;
     proposal_title: string;
     proposal_abstract: string | null;
@@ -264,6 +289,8 @@ function buildSpeakerTemplateData(
   const customAnswers = parseJsonSafe<Record<string, unknown> | null>(row.details_json, null);
   return {
     email: row.email.trim().toLowerCase(),
+    organizationName: row.organization_name ?? "",
+    jobTitle: row.job_title ?? "",
     speakerStatus: row.speaker_status,
     proposalTitle: row.proposal_title,
     proposalAbstract: row.proposal_abstract ?? "",
@@ -278,6 +305,7 @@ export async function computeCampaignDigest(payload: {
   subjectOverride?: string | null;
   customText?: string | null;
   bodyContent?: string | null;
+  messageType?: "transactional" | "promotional" | null;
   sendMode: "personal" | "bcc_batch";
   batchSize: number;
   filter: CampaignAudienceFilter;
@@ -288,6 +316,7 @@ export async function computeCampaignDigest(payload: {
     subjectOverride: (payload.subjectOverride ?? "").trim(),
     customText: (payload.customText ?? "").trim(),
     bodyContent: (payload.bodyContent ?? "").trim(),
+    messageType: payload.messageType ?? null,
     sendMode: payload.sendMode,
     batchSize: payload.batchSize,
     filter: payload.filter,

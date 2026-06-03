@@ -30,6 +30,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     content: body.content,
     subjectTemplate: body.subjectTemplate,
     contentType: body.contentType,
+    messageType: body.messageType,
     createdByUserId: admin.id,
   });
 
