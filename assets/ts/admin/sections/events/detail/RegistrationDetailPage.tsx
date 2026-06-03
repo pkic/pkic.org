@@ -36,6 +36,7 @@ const DAY_OPTIONS: { value: DayOption; label: string }[] = [
 
 function DayAttendancePanel({
   dayAttendance,
+  dayWaitlist,
   eventDays,
   registrationStatus,
   slug,
@@ -43,6 +44,7 @@ function DayAttendancePanel({
   onReload,
 }: {
   dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
+  dayWaitlist: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
   eventDays: AdminEventDay[];
   registrationStatus: string;
   slug: string;
@@ -51,15 +53,27 @@ function DayAttendancePanel({
 }) {
   const [pending, setPending] = useState<Record<string, DayOption>>({});
   const [saving, setSaving] = useState<Record<string, boolean>>({});
+  const [admitDayDates, setAdmitDayDates] = useState<string[]>([]);
+  const [admitting, setAdmitting] = useState(false);
 
   if (!eventDays.length) return <p class="small text-muted fst-italic mb-0">No event days configured.</p>;
 
   const attendanceByDate = new Map(dayAttendance.map((d) => [d.dayDate, d.attendanceType as DayOption]));
+  const waitlistByDate = new Map(dayWaitlist.map((w) => [w.dayDate, w]));
   const rows = eventDays.map((d) => ({
     dayDate: d.date,
     label: d.label,
     current: attendanceByDate.get(d.date) ?? ("none" as DayOption),
+    waitlist: waitlistByDate.get(d.date) ?? null,
   }));
+  const activeWaitlistCount = dayWaitlist.filter((w) => w.status === "waiting" || w.status === "offered").length;
+  const statusColour: Record<string, string> = {
+    waiting: "warning",
+    offered: "info",
+    accepted: "success",
+    expired: "secondary",
+    removed: "secondary",
+  };
 
   async function applyChange(dayDate: string, action: DayOption) {
     setSaving((s) => ({ ...s, [dayDate]: true }));
@@ -93,12 +107,47 @@ function DayAttendancePanel({
     }
   }
 
+  function setAdmitChecked(dayDate: string, checked: boolean) {
+    setAdmitDayDates((current) => {
+      const next = new Set(current);
+      if (checked) {
+        next.add(dayDate);
+      } else {
+        next.delete(dayDate);
+      }
+      return Array.from(next);
+    });
+  }
+
+  async function admitSelectedDays() {
+    if (admitDayDates.length === 0) return;
+    setAdmitting(true);
+    try {
+      await api(`/api/v1/admin/events/${slug}/registrations/${regId}/admit`, {
+        method: "POST",
+        body: JSON.stringify({
+          mode: "capacity_exempt",
+          reason: "Admin approved in-person admission",
+          dayDates: admitDayDates,
+        }),
+      });
+      toast(`${admitDayDates.length === 1 ? "Day" : "Days"} admitted; registration update email queued`, "success");
+      setAdmitDayDates([]);
+      onReload();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setAdmitting(false);
+    }
+  }
+
   return (
     <>
-      {registrationStatus === "waitlisted" && (
+      {(registrationStatus === "waitlisted" || activeWaitlistCount > 0) && (
         <div class="alert alert-info small py-2 mb-3">
-          This registration is <strong>waitlisted</strong>. Setting a day to in-person will promote them to registered
-          (capacity-exempt) and send a confirmation email.
+          Select <strong>Admin override</strong> for one or more waitlisted in-person days to admit the attendee beyond
+          capacity. This removes those day waitlist entries, updates the registration as needed, and sends an update
+          email confirming their in-person acceptance.
         </div>
       )}
       <DataTable
@@ -120,6 +169,9 @@ function DayAttendancePanel({
                     onChange={(e) => {
                       const v = (e.target as HTMLSelectElement).value as DayOption;
                       setPending((p) => ({ ...p, [d.dayDate]: v }));
+                      if (v !== "in_person") {
+                        setAdmitChecked(d.dayDate, false);
+                      }
                     }}
                   >
                     {DAY_OPTIONS.map((o) => (
@@ -141,48 +193,68 @@ function DayAttendancePanel({
               );
             },
           },
+          {
+            header: "Waitlist",
+            cell: (d) =>
+              d.waitlist ? (
+                <div class="small">
+                  <span class={`badge text-bg-${statusColour[d.waitlist.status] ?? "secondary"} me-2`}>
+                    {d.waitlist.status}
+                  </span>
+                  <span class="text-muted">{d.waitlist.priorityLane}</span>
+                  {d.waitlist.offerExpiresAt && (
+                    <div class="text-muted mono mt-1">Offer expires {fmt(d.waitlist.offerExpiresAt)}</div>
+                  )}
+                </div>
+              ) : (
+                <span class="small text-muted">—</span>
+              ),
+          },
+          {
+            header: "Admin override",
+            cell: (d) => {
+              const selected = pending[d.dayDate] ?? d.current;
+              const activeWaitlist = d.waitlist?.status === "waiting" || d.waitlist?.status === "offered";
+              const canAdmit = activeWaitlist && selected === "in_person";
+              const inputId = `admin-admit-${d.dayDate}`;
+              return (
+                <div class="form-check mb-0">
+                  <input
+                    id={inputId}
+                    type="checkbox"
+                    class="form-check-input"
+                    checked={admitDayDates.includes(d.dayDate)}
+                    disabled={!canAdmit || admitting}
+                    onChange={(e) => setAdmitChecked(d.dayDate, (e.target as HTMLInputElement).checked)}
+                  />
+                  <label class={`form-check-label small ${canAdmit ? "" : "text-muted"}`} for={inputId}>
+                    Admit day
+                  </label>
+                </div>
+              );
+            },
+            className: "text-nowrap",
+          },
         ]}
         data={rows}
         className="align-middle"
         rowKey={(d) => d.dayDate}
       />
+      <div class="d-flex align-items-center gap-2 mt-3 flex-wrap">
+        <button
+          class="btn btn-sm btn-warning"
+          disabled={admitDayDates.length === 0 || admitting}
+          onClick={() => void admitSelectedDays()}
+        >
+          {admitting ? "Admitting…" : "Admit selected days"}
+        </button>
+        <span class="small text-muted">
+          {admitDayDates.length > 0
+            ? `${admitDayDates.length} ${admitDayDates.length === 1 ? "day" : "days"} selected`
+            : "Select waitlisted in-person days to enable admission."}
+        </span>
+      </div>
     </>
-  );
-}
-
-// ─── Day waitlist table ───────────────────────────────────────────────────────
-
-function DayWaitlistTable({
-  dayWaitlist,
-}: {
-  dayWaitlist: Array<{ dayDate: string; status: string; priorityLane: string; offerExpiresAt: string | null }>;
-}) {
-  if (!dayWaitlist.length) return <p class="small text-muted fst-italic mb-0">No waitlist entries.</p>;
-  const statusColour: Record<string, string> = {
-    waiting: "warning",
-    offered: "info",
-    accepted: "success",
-    expired: "secondary",
-  };
-  return (
-    <DataTable
-      columns={[
-        { header: "Date", cell: (w) => w.dayDate, className: "mono small" },
-        {
-          header: "Status",
-          cell: (w) => <span class={`badge text-bg-${statusColour[w.status] ?? "secondary"}`}>{w.status}</span>,
-        },
-        { header: "Priority", cell: (w) => w.priorityLane, className: "small" },
-        {
-          header: "Offer expires",
-          cell: (w) => (w.offerExpiresAt ? fmt(w.offerExpiresAt) : "—"),
-          className: "mono small",
-        },
-      ]}
-      data={dayWaitlist}
-      className="align-middle"
-      rowKey={(w) => w.dayDate}
-    />
   );
 }
 
@@ -622,11 +694,12 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
       {/* Day attendance */}
       <div class="card mb-3">
         <div class="card-header">
-          <h6 class="mb-0">Day Attendance</h6>
+          <h6 class="mb-0">Day Attendance and Waitlist</h6>
         </div>
         <div class="card-body">
           <DayAttendancePanel
             dayAttendance={dayAttendance}
+            dayWaitlist={dayWaitlist}
             eventDays={eventDays}
             registrationStatus={reg.status}
             slug={slug}
@@ -647,18 +720,6 @@ export function RegistrationDetailPage({ slug, regId }: { slug: string; regId: s
           </div>
           <div class="card-body p-0">
             <FormAnswerTable answers={reg.customAnswers} fields={form?.fields} />
-          </div>
-        </div>
-      )}
-
-      {/* Day waitlist (only if entries exist) */}
-      {dayWaitlist.length > 0 && (
-        <div class="card mb-3">
-          <div class="card-header">
-            <h6 class="mb-0">Day Waitlist</h6>
-          </div>
-          <div class="card-body">
-            <DayWaitlistTable dayWaitlist={dayWaitlist} />
           </div>
         </div>
       )}

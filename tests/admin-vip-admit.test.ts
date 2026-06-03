@@ -134,5 +134,21 @@ describe("admin VIP admit", () => {
       )
     )[0];
     expect(Number(audit.total)).toBe(1);
+
+    const outbox = (
+      await queryAll<{ template_key: string; payload_json: string }>(
+        env.DB,
+        "SELECT template_key, payload_json FROM email_outbox WHERE recipient_email = 'vip@example.test' ORDER BY created_at DESC LIMIT 1",
+      )
+    )[0];
+    const payload = JSON.parse(outbox.payload_json) as {
+      adminAdmitNotice?: boolean;
+      dayWaitlist?: unknown[];
+      dayAttendance?: Array<{ statusLabel: string }>;
+    };
+    expect(outbox.template_key).toBe("registration_updated");
+    expect(payload.adminAdmitNotice).toBe(true);
+    expect(payload.dayWaitlist).toEqual([]);
+    expect(payload.dayAttendance?.[0]?.statusLabel).toBe("Confirmed in-person attendance");
   });
 });

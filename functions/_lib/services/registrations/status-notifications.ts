@@ -40,7 +40,7 @@ export async function queueRegistrationStatusEmail(
     appBaseUrl: string;
     templateKey: string;
     subject: string;
-    noticeKind?: "status_update" | "waitlist_offer";
+    noticeKind?: "status_update" | "waitlist_offer" | "admin_admit";
   },
 ): Promise<{ outboxId: string; manageToken: string; manageUrl: string }> {
   const registration = await first<RegistrationRecord>(
@@ -104,6 +104,7 @@ export async function queueRegistrationStatusEmail(
       manageUrl,
       shareUrl: null,
       waitlistOfferNotice: params.noticeKind === "waitlist_offer",
+      adminAdmitNotice: params.noticeKind === "admin_admit",
     },
   });
 

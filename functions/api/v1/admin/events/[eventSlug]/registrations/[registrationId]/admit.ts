@@ -144,7 +144,8 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     registrationId: registration.id,
     appBaseUrl,
     templateKey: "registration_updated",
-    subject: `Registration updated for ${event.name}`,
+    subject: `In-person registration accepted — ${event.name}`,
+    noticeKind: "admin_admit",
   });
   c.executionCtx.waitUntil(processOutboxByIdBackground(requestDb(c), c.env, outbox.outboxId));
 
