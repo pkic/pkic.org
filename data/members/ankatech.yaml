@@ -1,12 +1,12 @@
 id: ankatech
-name: AnkaTech
+name: ANKATech Solutions
 slogan:
 website: https://www.ankatech.co
 # Business domains for email
 organizationDomains:
   - ankasecure.co
 # Short description, longer content can be placed in `content/members/`
-description: Next-gen cybersecurity solutions with NIST-certified post-quantum encryption for ultimate data protection.
+description: ANKATech Solutions Inc. is a deeptech cybersecurity company specializing in post-quantum cryptography, building enterprise-grade software that prepares organizations for the cryptographic challenges of the quantum era.
 
 # membership
 memberSince: 2025-03-31
@@ -54,4 +54,16 @@ representatives:
     social:
       x:
       linkedin: https://www.linkedin.com/in/javier-galindo-34890318/
-    description: Javier is the CEO at AnkaTech and represents the organization at the PKI Consortium.
+    description: Javier Galindo is the CEO and co-founder of ANKATech Solutions Inc. With over two decades of experience in enterprise technology and security architecture, Javier has led complex systems integration and digital transformation initiatives across financial services, government, and critical infrastructure sectors in Latin America and the United States. Javier leads technical strategy and product development, with a focus on post-quantum cryptography and enterprise cryptographic governance. He represents ANKATech at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
+  ANKATech Solutions Inc. is a Delaware-based deeptech company founded in 2025 by a team with over two decades of experience in enterprise technology, systems integration, and information security across Latin America and the United States.
+
+  The company's expertise centers on post-quantum cryptography, crypto agility, and enterprise cryptographic governance. ANKATech's work is grounded in a deep understanding of the structural challenges organizations face when cryptographic standards evolve — and the operational, regulatory, and architectural complexity that comes with managing that transition at enterprise scale.
+
+  ANKATech developed CAPA — the Crypto Agile Posture Architecture — a conceptual framework that defines the path from embedded, hardcoded cryptography to a governed, policy-driven cryptographic infrastructure capable of continuous evolution.
+
+  Building on this foundation, ANKATech created ANKASecure©, a Crypto Agility Orchestration Platform that enables enterprises to govern, migrate, and enforce cryptographic standards through a centralized Control Plane — without disrupting existing systems or exposing sensitive data during transition. ANKASecure© supports 125+ algorithms aligned with 14+ international standards, including NIST FIPS 203/204/205, NSA CNSA 2.0, ETSI, BSI, ANSSI, ENISA, CRYPTREC, and KISA.
+
+  ANKATech serves enterprises in financial services, healthcare, government, defense, and critical infrastructure — sectors where long-lived sensitive data demands forward-looking cryptographic protection against emerging quantum threats.
