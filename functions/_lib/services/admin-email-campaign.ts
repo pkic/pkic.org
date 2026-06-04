@@ -4,7 +4,11 @@ import { getActiveFormByPurpose } from "./forms";
 import { buildCustomAnswerRows, buildCustomAnswerVariables } from "../utils/registration-email";
 import { hmacSha256Hex, sha256Hex } from "../utils/crypto";
 import { parseJsonSafe } from "../utils/json";
-import { ATTENDANCE_TYPE_LABELS, buildRegistrationEmailStatusData } from "../utils/attendance";
+import {
+  ATTENDANCE_TYPE_LABELS,
+  buildAttendanceEmailData,
+  buildRegistrationEmailStatusData,
+} from "../utils/attendance";
 import type { EventRecord } from "./events";
 import type { DatabaseLike } from "../types";
 import type { FormFieldDefinition } from "./forms/read";
@@ -34,6 +38,33 @@ interface CampaignPreviewClaims {
   adminId: string;
   digest: string;
   exp: number;
+}
+
+interface AttendeeCampaignRow {
+  registration_id: string;
+  user_id: string;
+  email: string;
+  first_name: string | null;
+  last_name: string | null;
+  organization_name: string | null;
+  job_title: string | null;
+  status: string;
+  attendance_type: string | null;
+  custom_answers_json: string | null;
+  manage_token_hash: string | null;
+}
+
+interface AttendeeDayAttendanceRow {
+  registration_id: string;
+  dayDate: string;
+  attendanceType: string;
+  label: string | null;
+}
+
+interface AttendeeDayWaitlistRow {
+  registration_id: string;
+  dayDate: string;
+  status: string;
 }
 
 function b64urlEncode(input: string): string {
@@ -93,31 +124,11 @@ export async function listCampaignRecipients(
     const attendeeStatus = filter.attendeeStatus ?? "registered";
     const dayWaitlistStatus = filter.dayWaitlistStatus ?? "all";
     if (filter.dayDate) {
-      const rows = await all<{
-        registration_id: string;
-        user_id: string;
-        email: string;
-        first_name: string | null;
-        last_name: string | null;
-        organization_name: string | null;
-        job_title: string | null;
-        status: string;
-        attendance_type: string | null;
-        custom_answers_json: string | null;
-        manage_token_hash: string | null;
-        day_waitlist_count: number;
-        active_day_waitlist_count: number;
-      }>(
+      const rows = await all<AttendeeCampaignRow>(
         db,
         `SELECT DISTINCT r.id AS registration_id, u.id AS user_id,
                 u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-                r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash,
-                (SELECT COUNT(*) FROM event_day_waitlist_entries w
-                 WHERE w.registration_id = r.id
-                   AND w.status IN ('waiting', 'offered', 'accepted')) AS day_waitlist_count,
-                (SELECT COUNT(*) FROM event_day_waitlist_entries w
-                 WHERE w.registration_id = r.id
-                   AND w.status IN ('waiting', 'offered')) AS active_day_waitlist_count
+                r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash
          FROM registrations r
          JOIN users u ON u.id = r.user_id
          JOIN registration_day_attendance rda ON rda.registration_id = r.id
@@ -139,41 +150,14 @@ export async function listCampaignRecipients(
           ...dayWaitlistFilterParams(dayWaitlistStatus),
         ],
       );
-      return rows.map((row) => ({
-        registrationId: row.registration_id,
-        userId: row.user_id,
-        email: row.email.trim().toLowerCase(),
-        firstName: (row.first_name ?? "").trim(),
-        lastName: (row.last_name ?? "").trim(),
-        templateData: buildAttendeeTemplateData(row, form?.fields),
-      }));
+      return buildAttendeeCampaignRecipients(db, rows, form?.fields);
     }
 
-    const rows = await all<{
-      registration_id: string;
-      user_id: string;
-      email: string;
-      first_name: string | null;
-      last_name: string | null;
-      organization_name: string | null;
-      job_title: string | null;
-      status: string;
-      attendance_type: string | null;
-      custom_answers_json: string | null;
-      manage_token_hash: string | null;
-      day_waitlist_count: number;
-      active_day_waitlist_count: number;
-    }>(
+    const rows = await all<AttendeeCampaignRow>(
       db,
       `SELECT DISTINCT r.id AS registration_id, u.id AS user_id,
             u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-            r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash,
-            (SELECT COUNT(*) FROM event_day_waitlist_entries w
-             WHERE w.registration_id = r.id
-               AND w.status IN ('waiting', 'offered', 'accepted')) AS day_waitlist_count,
-            (SELECT COUNT(*) FROM event_day_waitlist_entries w
-             WHERE w.registration_id = r.id
-               AND w.status IN ('waiting', 'offered')) AS active_day_waitlist_count
+            r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash
        FROM registrations r
        JOIN users u ON u.id = r.user_id
        WHERE r.event_id = ?
@@ -192,14 +176,7 @@ export async function listCampaignRecipients(
       ],
     );
 
-    return rows.map((row) => ({
-      registrationId: row.registration_id,
-      userId: row.user_id,
-      email: row.email.trim().toLowerCase(),
-      firstName: (row.first_name ?? "").trim(),
-      lastName: (row.last_name ?? "").trim(),
-      templateData: buildAttendeeTemplateData(row, form?.fields),
-    }));
+    return buildAttendeeCampaignRecipients(db, rows, form?.fields);
   }
 
   if (filter.dayDate) {
@@ -264,6 +241,110 @@ function escapeRegex(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+function chunkIds(ids: string[], size = 400): string[][] {
+  const chunks: string[][] = [];
+  for (let i = 0; i < ids.length; i += size) {
+    chunks.push(ids.slice(i, i + size));
+  }
+  return chunks;
+}
+
+async function listAttendeeDayAttendanceByRegistration(
+  db: DatabaseLike,
+  registrationIds: string[],
+): Promise<Map<string, Array<{ dayDate: string; attendanceType: string; label: string | null }>>> {
+  const byRegistration = new Map<string, Array<{ dayDate: string; attendanceType: string; label: string | null }>>();
+  if (registrationIds.length === 0) return byRegistration;
+
+  for (const chunk of chunkIds(registrationIds)) {
+    const placeholders = chunk.map(() => "?").join(", ");
+    const rows = await all<AttendeeDayAttendanceRow>(
+      db,
+      `SELECT rda.registration_id,
+              ed.day_date AS dayDate,
+              rda.attendance_type AS attendanceType,
+              ed.label AS label
+       FROM registration_day_attendance rda
+       JOIN event_days ed ON ed.id = rda.event_day_id
+       WHERE rda.registration_id IN (${placeholders})
+       ORDER BY rda.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`,
+      chunk,
+    );
+    for (const row of rows) {
+      const entries = byRegistration.get(row.registration_id) ?? [];
+      entries.push({
+        dayDate: row.dayDate,
+        attendanceType: row.attendanceType,
+        label: row.label,
+      });
+      byRegistration.set(row.registration_id, entries);
+    }
+  }
+
+  return byRegistration;
+}
+
+async function listAttendeeDayWaitlistByRegistration(
+  db: DatabaseLike,
+  registrationIds: string[],
+): Promise<Map<string, Array<{ dayDate: string; status: string }>>> {
+  const byRegistration = new Map<string, Array<{ dayDate: string; status: string }>>();
+  if (registrationIds.length === 0) return byRegistration;
+
+  for (const chunk of chunkIds(registrationIds)) {
+    const placeholders = chunk.map(() => "?").join(", ");
+    const rows = await all<AttendeeDayWaitlistRow>(
+      db,
+      `SELECT w.registration_id,
+              ed.day_date AS dayDate,
+              w.status AS status
+       FROM event_day_waitlist_entries w
+       JOIN event_days ed ON ed.id = w.event_day_id
+       WHERE w.registration_id IN (${placeholders})
+         AND w.status IN ('waiting', 'offered', 'accepted')
+       ORDER BY w.registration_id ASC, ed.sort_order ASC, ed.day_date ASC`,
+      chunk,
+    );
+    for (const row of rows) {
+      const entries = byRegistration.get(row.registration_id) ?? [];
+      entries.push({
+        dayDate: row.dayDate,
+        status: row.status,
+      });
+      byRegistration.set(row.registration_id, entries);
+    }
+  }
+
+  return byRegistration;
+}
+
+async function buildAttendeeCampaignRecipients(
+  db: DatabaseLike,
+  rows: AttendeeCampaignRow[],
+  formFields: FormFieldDefinition[] | undefined,
+): Promise<CampaignRecipient[]> {
+  const registrationIds = Array.from(new Set(rows.map((row) => row.registration_id)));
+  const [dayAttendanceByRegistration, dayWaitlistByRegistration] = await Promise.all([
+    listAttendeeDayAttendanceByRegistration(db, registrationIds),
+    listAttendeeDayWaitlistByRegistration(db, registrationIds),
+  ]);
+
+  return rows.map((row) => ({
+    registrationId: row.registration_id,
+    userId: row.user_id,
+    email: row.email.trim().toLowerCase(),
+    firstName: (row.first_name ?? "").trim(),
+    lastName: (row.last_name ?? "").trim(),
+    templateData: buildAttendeeTemplateData(
+      row,
+      formFields,
+      undefined,
+      dayAttendanceByRegistration.get(row.registration_id) ?? [],
+      dayWaitlistByRegistration.get(row.registration_id) ?? [],
+    ),
+  }));
+}
+
 export function findBroadcastOnlyTemplateRefs(
   recipients: CampaignRecipient[],
   parts: Array<string | null | undefined>,
@@ -313,37 +394,24 @@ export function findBroadcastOnlyTemplateRefs(
 }
 
 function buildAttendeeTemplateData(
-  row: {
-    email: string;
-    status: string;
-    attendance_type: string | null;
-    custom_answers_json: string | null;
-    organization_name?: string | null;
-    job_title?: string | null;
-    day_waitlist_count?: number;
-    active_day_waitlist_count?: number;
-  },
+  row: AttendeeCampaignRow,
   formFields: FormFieldDefinition[] | undefined,
   manageUrl?: string,
+  dayAttendanceRaw: Array<{ dayDate: string; attendanceType: string; label: string | null }> = [],
+  dayWaitlist: Array<{ dayDate: string; status: string }> = [],
 ): Record<string, unknown> {
   const customAnswers = parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null);
   const attendanceType = row.attendance_type ?? "";
-  const dayWaitlistCount = Number(row.day_waitlist_count ?? 0);
-  const activeDayWaitlistCount = Number(row.active_day_waitlist_count ?? 0);
-  const dayWaitlist = [
-    ...Array.from({ length: activeDayWaitlistCount }, () => ({ dayDate: "", status: "waiting" })),
-    ...Array.from({ length: Math.max(0, dayWaitlistCount - activeDayWaitlistCount) }, () => ({
-      dayDate: "",
-      status: "accepted",
-    })),
-  ];
+  const attendanceData = buildAttendanceEmailData(attendanceType, dayAttendanceRaw, dayWaitlist);
   return {
     email: row.email.trim().toLowerCase(),
     organizationName: row.organization_name ?? "",
     jobTitle: row.job_title ?? "",
     ...buildRegistrationEmailStatusData(row.status, dayWaitlist),
     attendanceType,
-    attendanceLabel: ATTENDANCE_TYPE_LABELS[attendanceType] ?? attendanceType,
+    attendanceLabel: attendanceData.attendanceLabel || (ATTENDANCE_TYPE_LABELS[attendanceType] ?? attendanceType),
+    dayAttendance: attendanceData.dayAttendance,
+    dayWaitlist,
     manageUrl,
     customAnswerRows: buildCustomAnswerRows(customAnswers, formFields),
     ...buildCustomAnswerVariables(customAnswers, formFields),

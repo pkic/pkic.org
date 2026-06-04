@@ -386,5 +386,15 @@ describe("registration workflows", () => {
     expect(recipients[0].templateData.status).toBe("registered");
     expect(recipients[0].templateData.registrationStatus).toBe("registered");
     expect(recipients[0].templateData.isWaitlisted).toBe(true);
+    expect(recipients[0].templateData.dayAttendance).toEqual([
+      {
+        dayLabel: "Day 1",
+        attendanceLabel: "In person",
+        statusLabel: "Waitlisted for in-person attendance",
+        waitlistStatus: "waiting",
+        isWaitlisted: true,
+        isWaitlistOffer: false,
+      },
+    ]);
   });
 });
