@@ -100,6 +100,10 @@ async function buildHugoSite(isDev: boolean, rebuildFrontend = true): Promise<vo
   }
 
   const hugoArgs = ["--destination", "public"];
+  const appBaseUrl = process.env.APP_BASE_URL;
+  if (appBaseUrl) {
+    hugoArgs.push("--baseURL", appBaseUrl);
+  }
 
   // Only clean the destination dir for production builds — in dev the wipe
   // races with Vite's static-file serving causing broken styles until Hugo
@@ -234,6 +238,7 @@ export default defineConfig(() => {
   if (ciBranch && ciBranch.toLowerCase() !== "main") {
     const sanitized = ciBranch.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     const previewUrl = `https://${sanitized}-pkic-org.pkic.workers.dev`;
+    process.env.APP_BASE_URL = previewUrl;
     const configFile = resolve(projectRoot, "wrangler.jsonc");
     const content = readFileSync(configFile, "utf8");
     const patched = content.replace(

@@ -17,7 +17,8 @@
     {{/* Page path for the OG card worker endpoint */}}
     {{- $pagePath := .RelPermalink | strings.TrimPrefix "/" | strings.TrimSuffix "/" -}}
     {{- if not $pagePath -}}{{- $pagePath = "index" -}}{{- end -}}
-    {{- $ogImageUrl := printf "%sog/%s/og.jpg?v=%s" .Site.BaseURL $pagePath $hash -}}
+    {{- $ogBaseUrl := .Site.BaseURL | strings.TrimSuffix "/" -}}
+    {{- $ogImageUrl := printf "%s/og/%s/og.jpg?v=%s" $ogBaseUrl $pagePath $hash -}}
 
     <meta name="twitter:card" content="summary_large_image"/>
     <meta name="twitter:title" content="{{ .Title }}"/>
