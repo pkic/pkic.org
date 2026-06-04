@@ -1,4 +1,4 @@
-import { all } from "../../db/queries";
+import { all, run } from "../../db/queries";
 import { writeAuditLog } from "../audit";
 import { listEventDays } from "../event-days";
 import { queueRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "./status-notifications";
@@ -106,6 +106,15 @@ export async function runWaitlistPromotionCycle(
   db: DatabaseLike,
   payload: { appBaseUrl: string; claimWindowHours: number; limit: number },
 ): Promise<WaitlistPromotionCycleResult> {
+  await run(
+    db,
+    `UPDATE event_day_waitlist_entries
+     SET status = 'expired', updated_at = datetime('now')
+     WHERE status = 'offered'
+       AND offer_expires_at IS NOT NULL
+       AND datetime(offer_expires_at) <= datetime('now')`,
+  );
+
   const events = await all<WaitlistPromotionEvent>(
     db,
     `SELECT DISTINCT
@@ -122,7 +131,7 @@ export async function runWaitlistPromotionCycle(
      WHERE (e.ends_at IS NULL OR datetime(e.ends_at) >= datetime('now'))
        AND EXISTS (
          SELECT 1 FROM event_day_waitlist_entries w
-         WHERE w.event_id = e.id AND w.status IN ('waiting', 'offered')
+         WHERE w.event_id = e.id AND w.status = 'waiting'
        )
      ORDER BY datetime(COALESCE(e.starts_at, '9999-12-31')) ASC, e.name ASC
      LIMIT 50`,

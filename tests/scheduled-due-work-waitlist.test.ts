@@ -8,6 +8,7 @@ import {
   confirmRegistrationByToken,
   updateRegistrationByManageToken,
 } from "../functions/_lib/services/registrations";
+import { runWaitlistPromotionCycle } from "../functions/_lib/services/registrations/waitlist-promotions";
 import { runScheduledDueWork } from "../functions/_lib/services/scheduled-due-work";
 import type { Env } from "../functions/_lib/types";
 
@@ -98,5 +99,59 @@ describe("scheduled due work waitlist promotions", () => {
     );
     expect(offerOutbox[0].template_key).toBe("registration_waitlist_offer");
     expect(offerOutbox[0].recipient_email).toBe("waiting@example.test");
+  });
+
+  it("expires stale offers before selecting events with waiting candidates", async () => {
+    const { eventId } = await seedEventAndAdmin(baseEnv.DB);
+
+    await baseEnv.DB.batch([
+      baseEnv.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES ('day-expired', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now'))
+      `),
+      baseEnv.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES ('user-expired-offer', 'expired-offer@example.test', 'expired-offer@example.test', 'Expired', 'Offer', datetime('now'), datetime('now'))
+      `),
+    ]);
+
+    const event = await getEventBySlug(baseEnv.DB, "pqc-2026");
+    const registration = await createRegistration(baseEnv.DB, {
+      event,
+      userId: "user-expired-offer",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+
+    await baseEnv.DB.prepare(
+      `
+      INSERT INTO event_day_waitlist_entries (
+        id, event_id, event_day_id, registration_id, user_id, priority_lane, status, position,
+        offer_expires_at, reason_code, reason_note, created_at, updated_at
+      ) VALUES (
+        'expired-offer-row', '${eventId}', 'day-expired', ?, 'user-expired-offer', 'general', 'offered', 1,
+        datetime('now', '-1 hour'), NULL, NULL, datetime('now'), datetime('now')
+      )
+    `,
+    )
+      .bind(registration.registration.id)
+      .run();
+
+    const result = await runWaitlistPromotionCycle(baseEnv.DB, {
+      appBaseUrl: "https://app.test",
+      claimWindowHours: 24,
+      limit: 10,
+    });
+
+    expect(result.eventsScanned).toBe(0);
+    expect(result.dayRegistrationOffers).toBe(0);
+
+    const rows = await queryAll<{ status: string }>(
+      baseEnv.DB,
+      "SELECT status FROM event_day_waitlist_entries WHERE id = 'expired-offer-row'",
+    );
+    expect(rows[0].status).toBe("expired");
   });
 });
