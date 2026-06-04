@@ -20,29 +20,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
+  url:
   feed: https://caps.in/feed/
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: http://twitter.com/ecapscomputers
+  x: https://twitter.com/ecapscomputers
   facebook: https://facebook.com/ecapscomputers
   instagram: https://www.instagram.com/ecapscomputers/
-  linkedin: 
-  youtube: 
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
