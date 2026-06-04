@@ -1,0 +1,64 @@
+id: csticonsulting
+name: CSTI Consulting
+slogan:
+website: https://www.csticonsulting.com.br
+# Business domains for email
+organizationDomains:
+  - csticonsulting.com.br
+# Short description, longer content can be placed in `content/members/`
+description: CSTI Consulting is a Brazilian boutique technology consultancy specializing in Microsoft Identity and Security infrastructure.
+
+# membership
+memberSince: 2026-05-27
+memberType: H2
+workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Carlos Siqueira
+    role: CTO
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/cadusiqueira/
+    description: Carlos is the CTO at CSTI Consulting and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
+  CSTI Consulting operates in the Brazilian enterprise market, serving organizations that rely on Microsoft Identity infrastructure as a critical foundation for their security posture. The firm occupies a niche that is underserved in the Brazilian landscape: deeply technical, PKI-native consulting that goes beyond licensing and surface-level deployment, addressing architecture, governance, lifecycle management, and security hardening at an expert level.
