@@ -1,0 +1,62 @@
+id: jisasoftech
+name: JISA Softech Private Limited
+slogan:
+website: https://jisasoftech.com/
+# Business domains for email
+organizationDomains:
+  - jisasoftech.com
+# Short description, longer content can be placed in `content/members/`
+description: At JISA, we offer Aadhaar Data Vault Solution, HSM Security Solution, Data Security Solution, Encryption Key Management Solution, and many more.
+
+# membership
+memberSince: 2026-05-27
+memberType: F
+workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://jisasoftech.com/blogs/
+  feed: https://jisasoftech.com/feed/
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url: https://career.jisasoftech.com/
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x: https://twitter.com/JisaSoftech
+  facebook: https://www.facebook.com/JISACryptoBind/
+  instagram: https://www.instagram.com/jisasoftech/
+  linkedin: https://www.linkedin.com/company/jisa-softech/
+  youtube: https://www.youtube.com/channel/UCaMnPHFiqwlVDlYXhQYZxpQ/
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Rumit Shah
+    role: Founder
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/rumit-s-8760b27/
+    description: Rumit is the Founder at JISA Softech Private Limited and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
