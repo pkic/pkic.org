@@ -6,7 +6,7 @@ website: https://jisasoftech.com/
 organizationDomains:
   - jisasoftech.com
 # Short description, longer content can be placed in `content/members/`
-description: At JISA, we offer Aadhar Data Vault Solution, HSM Security Solution, Data Security Solution, encryption key management solution and many more
+description: At JISA, we offer Aadhaar Data Vault Solution, HSM Security Solution, Data Security Solution, Encryption Key Management Solution, and many more.
 
 # membership
 memberSince: 2026-05-27
@@ -22,20 +22,20 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
+  url: https://jisasoftech.com/blogs/
   feed: https://jisasoftech.com/feed/
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
   url: https://career.jisasoftech.com/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
