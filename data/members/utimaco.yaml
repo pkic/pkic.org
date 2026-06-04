@@ -16,7 +16,9 @@ workingGroups:
   - CM
 
 # sponsor
+# Started Platinum on 2026-06-04
 sponsor:
+  level: Platinum
   sponsoring:
     "Post-Quantum Cryptography Conference Austin 2025":
       level: Ambassador
