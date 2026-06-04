@@ -51,7 +51,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
      FROM registrations r
      LEFT JOIN users u ON u.id = r.user_id
      WHERE r.event_id = ?
-       AND r.status IN ('registered', 'waitlisted', 'pending_email_confirmation')
+       AND r.status IN ('registered', 'pending_email_confirmation')
      ORDER BY r.status ASC, r.created_at ASC`,
     [event.id],
   );

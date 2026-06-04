@@ -59,20 +59,6 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     reason,
   });
 
-  if (registration.status === "waitlisted") {
-    await run(requestDb(c), "UPDATE registrations SET status = 'registered', updated_at = ? WHERE id = ?", [
-      nowIso(),
-      registration.id,
-    ]);
-    await run(
-      requestDb(c),
-      `UPDATE waitlist_entries
-       SET status = 'removed', updated_at = ?
-       WHERE event_id = ? AND registration_id = ? AND status IN ('waiting', 'offered')`,
-      [nowIso(), event.id, registration.id],
-    );
-  }
-
   const eventDays = await listEventDays(requestDb(c), event.id);
   let admittedDayDates: string[] = [];
 

@@ -2,13 +2,8 @@ import { AppError } from "../../errors";
 import { first, run } from "../../db/queries";
 import { randomToken, sha256Hex } from "../../utils/crypto";
 import { nowIso } from "../../utils/time";
-import { addToWaitlist } from "./waitlist";
 import { recordEngagement } from "../engagement";
-import {
-  listInPersonEventDayIdsForRegistration,
-  promoteDayWaitlistForEventDays,
-  resolveCapacityExemptReason,
-} from "./day-waitlist";
+import { resolveCapacityExemptReason } from "./day-waitlist";
 import { upsertAttendeeParticipant } from "./participant-registration";
 import { writeAuditLog } from "../audit";
 import { finalizeEmailChange } from "./change-email";
@@ -92,37 +87,12 @@ export async function confirmRegistrationByToken(
         )
       : null;
 
-  const dayEventIds = await listInPersonEventDayIdsForRegistration(db, registration.id);
   const capacityExemptReason = await resolveCapacityExemptReason(db, {
     registrationId: registration.id,
     eventId: registration.event_id,
     userId: registration.user_id,
   });
-  const hasPerDayAttendance = dayEventIds.length > 0;
-  let newStatus = "registered";
-  if (registration.attendance_type === "in_person" && !hasPerDayAttendance && !capacityExemptReason) {
-    const event = await first<{ capacity_in_person: number | null }>(
-      db,
-      "SELECT capacity_in_person FROM events WHERE id = ?",
-      [registration.event_id],
-    );
-    const capacity = Number(event?.capacity_in_person ?? 0);
-    if (capacity > 0) {
-      const row = await first<{ total: number }>(
-        db,
-        `SELECT COUNT(*) AS total
-         FROM registrations
-         WHERE event_id = ?
-           AND status = 'registered'
-           AND attendance_type = 'in_person'
-           AND capacity_exempt_in_person = 0`,
-        [registration.event_id],
-      );
-      if (Number(row?.total ?? 0) >= capacity) {
-        newStatus = "waitlisted";
-      }
-    }
-  }
+  const newStatus = "registered";
 
   const updateStatements = [
     db
@@ -184,9 +154,6 @@ export async function confirmRegistrationByToken(
       ...(emailMergeNote && { emailMerge: emailMergeNote }),
     },
   );
-  if (newStatus === "waitlisted") {
-    await addToWaitlist(db, registration.event_id, registration.id);
-  }
   const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
   if (!updated) {
     throw new AppError(500, "REGISTRATION_CONFIRM_FAILED", "Registration update failed");
@@ -215,13 +182,6 @@ export async function confirmRegistrationByToken(
       sourceType: "registration",
       sourceRef: registration.id,
     });
-    if (hasPerDayAttendance) {
-      await promoteDayWaitlistForEventDays(db, {
-        eventId: updated.event_id,
-        eventDayIds: dayEventIds,
-        claimWindowHours: payload.waitlistClaimWindowHours,
-      });
-    }
   }
 
   // Rotate the manage token so the confirmed email always contains a valid, active link.

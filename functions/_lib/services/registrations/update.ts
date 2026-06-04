@@ -1,7 +1,6 @@
 import { AppError } from "../../errors";
 import { first, run } from "../../db/queries";
 import { nowIso } from "../../utils/time";
-import { claimWaitlistOffer } from "./waitlist";
 import {
   deriveEventAttendanceType,
   replaceRegistrationDayAttendance,
@@ -9,8 +8,8 @@ import {
 } from "../event-days";
 import {
   claimOfferedDayWaitlist,
+  listConfirmedInPersonEventDayIdsForRegistration,
   listInPersonEventDayIdsForRegistration,
-  promoteDayWaitlistForEventDays,
   removeAllDayWaitlistForRegistration,
   resolveCapacityExemptReason,
   syncRegistrationDayWaitlist,
@@ -36,6 +35,7 @@ async function applyRegistrationUpdate(
   changedBy = "self",
 ): Promise<RegistrationRecord> {
   const previousInPersonDayIds = await listInPersonEventDayIdsForRegistration(db, registration.id);
+  const previousConfirmedInPersonDayIds = await listConfirmedInPersonEventDayIdsForRegistration(db, registration.id);
 
   const isCancelled = registration.status === "cancelled" || registration.status === "cancelled_unauthorized";
 
@@ -59,13 +59,6 @@ async function applyRegistrationUpdate(
       ...registration,
       status: "cancelled",
     });
-    if (previousInPersonDayIds.length > 0) {
-      await promoteDayWaitlistForEventDays(db, {
-        eventId: registration.event_id,
-        eventDayIds: previousInPersonDayIds,
-        claimWindowHours: payload.waitlistClaimWindowHours,
-      });
-    }
     const cancelled = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [
       registration.id,
     ]);
@@ -97,13 +90,6 @@ async function applyRegistrationUpdate(
       ...registration,
       status: "cancelled_unauthorized",
     });
-    if (previousInPersonDayIds.length > 0) {
-      await promoteDayWaitlistForEventDays(db, {
-        eventId: registration.event_id,
-        eventDayIds: previousInPersonDayIds,
-        claimWindowHours: payload.waitlistClaimWindowHours,
-      });
-    }
     const updated = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [registration.id]);
     if (!updated) {
       throw new AppError(500, "REGISTRATION_CANCEL_FAILED", "Unable to process unauthorized report");
@@ -124,19 +110,12 @@ async function applyRegistrationUpdate(
   });
   const hasPerDayAttendanceInput = Boolean(payload.dayAttendance && payload.dayAttendance.length > 0);
   const hasPerDayAttendanceContext = hasPerDayAttendanceInput || previousInPersonDayIds.length > 0;
-  // When reinstating a cancelled registration the status starts as "registered";
-  // capacity/waitlist logic below may still downgrade it to "waitlisted" as needed.
   let newStatus = isCancelled ? "registered" : registration.status;
   if (hasPerDayAttendanceContext || capacityExemptReason) {
     newStatus = "registered";
   } else if (effectiveAttendanceType !== registration.attendance_type) {
     if (effectiveAttendanceType === "in_person") {
-      if (registration.status === "waitlisted") {
-        await claimWaitlistOffer(db, registration.id, registration.event_id);
-        newStatus = "registered";
-      } else {
-        newStatus = "registered";
-      }
+      newStatus = "registered";
     }
     if (registration.attendance_type === "in_person" && effectiveAttendanceType !== "in_person") {
       newStatus = "registered";
@@ -168,27 +147,19 @@ async function applyRegistrationUpdate(
       selections: payload.dayAttendance,
       changedBy,
     });
+    await claimOfferedDayWaitlist(db, {
+      registrationId: registration.id,
+      eventId: registration.event_id,
+      selections: payload.dayAttendance,
+    });
     await syncRegistrationDayWaitlist(db, {
       registrationId: registration.id,
       eventId: registration.event_id,
       userId: registration.user_id,
       selections: payload.dayAttendance,
       capacityExemptReason,
+      preserveConfirmedEventDayIds: isCancelled ? [] : previousConfirmedInPersonDayIds,
     });
-    await claimOfferedDayWaitlist(db, {
-      registrationId: registration.id,
-      eventId: registration.event_id,
-      selections: payload.dayAttendance,
-    });
-    const nextInPersonDayIds = await listInPersonEventDayIdsForRegistration(db, registration.id);
-    const releasedDayIds = previousInPersonDayIds.filter((dayId) => !nextInPersonDayIds.includes(dayId));
-    if (releasedDayIds.length > 0) {
-      await promoteDayWaitlistForEventDays(db, {
-        eventId: registration.event_id,
-        eventDayIds: releasedDayIds,
-        claimWindowHours: payload.waitlistClaimWindowHours,
-      });
-    }
   }
   await upsertAttendeeParticipant(db, {
     ...registration,

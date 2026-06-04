@@ -12,12 +12,9 @@ export interface ParticipantRegistrationLike {
   source_ref: string | null;
 }
 
-export function participantStatusForRegistration(status: string): "active" | "inactive" | "invited" | "waitlisted" {
+export function participantStatusForRegistration(status: string): "active" | "inactive" | "invited" {
   if (status === "cancelled") {
     return "inactive";
-  }
-  if (status === "waitlisted") {
-    return "waitlisted";
   }
   if (status === "pending_email_confirmation") {
     return "invited";

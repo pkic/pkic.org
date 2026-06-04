@@ -97,6 +97,13 @@ export async function seedWorkflowEmailTemplates(db: DatabaseLike, adminId: stri
     "Registration updated for {{eventName}}. Manage: {{{manageUrl}}}.",
     "Registration updated",
   );
+  await seedTemplate(
+    db,
+    adminId,
+    "registration_waitlist_offer",
+    "A spot is available for {{eventName}}. Manage: {{{manageUrl}}}.",
+    "In-person spot available",
+  );
 }
 
 export interface CapturedSendgridRequest {

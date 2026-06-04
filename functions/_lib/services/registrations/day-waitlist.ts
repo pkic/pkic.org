@@ -12,7 +12,7 @@ interface EventDayRow {
   in_person_capacity: number | null;
 }
 
-interface DayWaitlistRow {
+export interface DayWaitlistRow {
   id: string;
   event_id: string;
   event_day_id: string;
@@ -90,6 +90,39 @@ async function countConfirmedInPersonForDay(
     [eventDayId, excludeRegistrationId ?? null, excludeRegistrationId ?? null],
   );
   return Number(row?.total ?? 0);
+}
+
+async function countActiveOffersForDay(
+  db: DatabaseLike,
+  eventDayId: string,
+  excludeRegistrationId?: string,
+): Promise<number> {
+  const row = await first<{ total: number }>(
+    db,
+    `SELECT COUNT(*) AS total
+     FROM event_day_waitlist_entries w
+     JOIN registrations r ON r.id = w.registration_id
+     WHERE w.event_day_id = ?
+       AND w.status = 'offered'
+       AND (w.offer_expires_at IS NULL OR w.offer_expires_at > ?)
+       AND r.status IN ('pending_email_confirmation', 'registered')
+       AND r.capacity_exempt_in_person = 0
+       AND (? IS NULL OR r.id <> ?)`,
+    [eventDayId, nowIso(), excludeRegistrationId ?? null, excludeRegistrationId ?? null],
+  );
+  return Number(row?.total ?? 0);
+}
+
+async function countReservedInPersonForDay(
+  db: DatabaseLike,
+  eventDayId: string,
+  excludeRegistrationId?: string,
+): Promise<number> {
+  const [confirmed, activeOffers] = await Promise.all([
+    countConfirmedInPersonForDay(db, eventDayId, excludeRegistrationId),
+    countActiveOffersForDay(db, eventDayId, excludeRegistrationId),
+  ]);
+  return confirmed + activeOffers;
 }
 
 async function computePriorityLane(
@@ -238,10 +271,14 @@ export async function syncRegistrationDayWaitlist(
     userId: string;
     selections?: DayAttendanceSelection[];
     capacityExemptReason: string | null;
+    preserveConfirmedEventDayIds?: string[];
   },
 ): Promise<void> {
+  await expireDayWaitlistOffers(db, payload.eventId);
+
   const selections = normalizeSelections(payload.selections);
   const selectionsByDate = new Map(selections.map((entry) => [entry.dayDate, entry.attendanceType]));
+  const preserveConfirmedEventDayIds = new Set(payload.preserveConfirmedEventDayIds ?? []);
   const eventDays = await listEventDays(db, payload.eventId);
 
   if (eventDays.length === 0) {
@@ -284,34 +321,36 @@ export async function syncRegistrationDayWaitlist(
       continue;
     }
 
-    const confirmed = await countConfirmedInPersonForDay(db, day.id, payload.registrationId);
-    if (confirmed < day.in_person_capacity) {
-      if (
-        existing &&
-        (existing.status === "waiting" ||
-          existing.status === "offered" ||
-          existing.status === "expired" ||
-          existing.status === "removed")
-      ) {
+    if (existing?.status === "offered") {
+      continue;
+    }
+
+    if (existing?.status === "waiting" || existing?.status === "expired") {
+      const lane = await computePriorityLane(db, {
+        registrationId: payload.registrationId,
+        eventId: payload.eventId,
+        excludeEventDayId: day.id,
+      });
+
+      await run(
+        db,
+        `UPDATE event_day_waitlist_entries
+         SET status = 'waiting', priority_lane = ?, offer_expires_at = NULL, updated_at = ?
+         WHERE id = ?`,
+        [lane, nowIso(), existing.id],
+      );
+      continue;
+    }
+
+    const reserved = await countReservedInPersonForDay(db, day.id, payload.registrationId);
+    if (reserved < day.in_person_capacity) {
+      if (existing?.status === "removed") {
         await setWaitlistStatus(db, existing.id, "accepted");
       }
       continue;
     }
 
-    if (existing && (existing.status === "offered" || existing.status === "waiting")) {
-      if (existing.status === "waiting") {
-        const lane = await computePriorityLane(db, {
-          registrationId: payload.registrationId,
-          eventId: payload.eventId,
-          excludeEventDayId: day.id,
-        });
-
-        await run(db, "UPDATE event_day_waitlist_entries SET priority_lane = ?, updated_at = ? WHERE id = ?", [
-          lane,
-          nowIso(),
-          existing.id,
-        ]);
-      }
+    if (preserveConfirmedEventDayIds.has(day.id)) {
       continue;
     }
 
@@ -407,7 +446,8 @@ export async function promoteDayWaitlistIfCapacity(
   }
 
   const confirmed = await countConfirmedInPersonForDay(db, payload.eventDayId);
-  if (confirmed >= day.in_person_capacity) {
+  const reserved = confirmed + (await countActiveOffersForDay(db, payload.eventDayId));
+  if (reserved >= day.in_person_capacity) {
     return null;
   }
 
@@ -430,14 +470,44 @@ export async function promoteDayWaitlistIfCapacity(
       continue;
     }
 
-    const offerExpiresAt = addHours(nowIso(), payload.claimWindowHours);
-    await run(
+    const now = nowIso();
+    const offerExpiresAt = addHours(now, payload.claimWindowHours);
+    const updated = await run(
       db,
       `UPDATE event_day_waitlist_entries
        SET status = 'offered', offer_expires_at = ?, updated_at = ?
-       WHERE id = ?`,
-      [offerExpiresAt, nowIso(), candidate.id],
+       WHERE id = ?
+         AND status = 'waiting'
+         AND (
+           (
+             SELECT COUNT(*)
+             FROM registration_day_attendance rda
+             JOIN registrations r ON r.id = rda.registration_id
+             LEFT JOIN event_day_waitlist_entries w
+               ON w.event_day_id = rda.event_day_id
+              AND w.registration_id = rda.registration_id
+              AND w.status IN ('waiting', 'offered')
+             WHERE rda.event_day_id = ?
+               AND rda.attendance_type = 'in_person'
+               AND r.status IN ('pending_email_confirmation', 'registered')
+               AND r.capacity_exempt_in_person = 0
+               AND w.id IS NULL
+           ) + (
+             SELECT COUNT(*)
+             FROM event_day_waitlist_entries w
+             JOIN registrations r ON r.id = w.registration_id
+             WHERE w.event_day_id = ?
+               AND w.status = 'offered'
+               AND (w.offer_expires_at IS NULL OR w.offer_expires_at > ?)
+               AND r.status IN ('pending_email_confirmation', 'registered')
+               AND r.capacity_exempt_in_person = 0
+           )
+         ) < ?`,
+      [offerExpiresAt, now, candidate.id, payload.eventDayId, payload.eventDayId, now, day.in_person_capacity],
     );
+    if (updated.changes === 0) {
+      continue;
+    }
 
     return {
       ...candidate,
@@ -447,20 +517,6 @@ export async function promoteDayWaitlistIfCapacity(
   }
 
   return null;
-}
-
-export async function promoteDayWaitlistForEventDays(
-  db: DatabaseLike,
-  payload: { eventId: string; eventDayIds: string[]; claimWindowHours: number },
-): Promise<void> {
-  const uniqueDayIds = Array.from(new Set(payload.eventDayIds));
-  for (const eventDayId of uniqueDayIds) {
-    await promoteDayWaitlistIfCapacity(db, {
-      eventId: payload.eventId,
-      eventDayId,
-      claimWindowHours: payload.claimWindowHours,
-    });
-  }
 }
 
 export async function listInPersonEventDayIdsForRegistration(
@@ -473,6 +529,26 @@ export async function listInPersonEventDayIdsForRegistration(
      FROM registration_day_attendance
      WHERE registration_id = ?
        AND attendance_type = 'in_person'`,
+    [registrationId],
+  );
+  return rows.map((row) => row.event_day_id);
+}
+
+export async function listConfirmedInPersonEventDayIdsForRegistration(
+  db: DatabaseLike,
+  registrationId: string,
+): Promise<string[]> {
+  const rows = await all<{ event_day_id: string }>(
+    db,
+    `SELECT rda.event_day_id
+     FROM registration_day_attendance rda
+     LEFT JOIN event_day_waitlist_entries w
+       ON w.event_day_id = rda.event_day_id
+      AND w.registration_id = rda.registration_id
+      AND w.status IN ('waiting', 'offered')
+     WHERE rda.registration_id = ?
+       AND rda.attendance_type = 'in_person'
+       AND w.id IS NULL`,
     [registrationId],
   );
   return rows.map((row) => row.event_day_id);

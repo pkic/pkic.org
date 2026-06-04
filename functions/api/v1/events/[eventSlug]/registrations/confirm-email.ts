@@ -46,7 +46,7 @@ async function confirmRegistration(c: any, token: string, registrationId?: strin
 
   const user = await first<UserRecord>(c.env.DB, "SELECT * FROM users WHERE id = ?", [registration.user_id]);
   if (user) {
-    if (registration.status === "registered" || registration.status === "waitlisted") {
+    if (registration.status === "registered") {
       const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendanceRaw, dayWaitlist);
       const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
       const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, registration.custom_answers_json);

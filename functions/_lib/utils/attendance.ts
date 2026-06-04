@@ -12,7 +12,6 @@ export const ATTENDANCE_TYPE_LABELS: Record<string, string> = {
  */
 export const STATUS_LABELS: Record<string, string> = {
   registered: "Confirmed",
-  waitlisted: "Waitlisted",
   cancelled: "Cancelled",
   cancelled_unauthorized: "Cancelled (unauthorized)",
   pending_email_confirmation: "Pending confirmation",
@@ -38,7 +37,7 @@ export function buildRegistrationEmailStatusData(
   waitlistedDayCount: number;
 } {
   const activeDayWaitlist = dayWaitlist.filter((entry) => entry.status === "waiting" || entry.status === "offered");
-  const isWaitlisted = registrationStatus === "waitlisted" || activeDayWaitlist.length > 0;
+  const isWaitlisted = activeDayWaitlist.length > 0;
 
   return {
     status: registrationStatus,

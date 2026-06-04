@@ -367,7 +367,7 @@ describe("full workflow", () => {
           { eventSlug: "pqc-2026" },
         ),
       );
-      const registrationTwoPayload = (await registrationTwoResponse.json()) as CreateRegistrationPayload;
+      await registrationTwoResponse.json();
 
       const secondConfirmationPayload = (
         await queryAll<{ payload_json: string }>(
@@ -393,7 +393,7 @@ describe("full workflow", () => {
         ),
       );
       const secondConfirmPayload = (await secondConfirmResponse.json()) as { status: string };
-      expect(secondConfirmPayload.status).toBe("waitlisted");
+      expect(secondConfirmPayload.status).toBe("registered");
 
       const cancelRegistrationResponse = await manageRegistration(
         createContext(
@@ -407,13 +407,6 @@ describe("full workflow", () => {
         ),
       );
       expect(cancelRegistrationResponse.status).toBe(200);
-
-      const waitlistStatus = (
-        await queryAll<{ status: string }>(env.DB, "SELECT status FROM waitlist_entries WHERE registration_id = ?", [
-          registrationTwoPayload.registrationId,
-        ])
-      )[0];
-      expect(waitlistStatus.status).toBe("waiting");
 
       const referralCode = registrationOnePayload.shareUrl.split("/").pop() as string;
       const referralResponse = await referralRedirect(

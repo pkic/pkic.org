@@ -307,6 +307,42 @@ If the details above don't look right, use your [registration management link]({
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // 3b. Waitlist offer
+  // Variables: eventName, firstName, manageUrl, dayAttendance, dayWaitlist,
+  //            waitlistedDayCount
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "registration_waitlist_offer",
+    subjectTemplate: "In-person spot available — {{eventName}}",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+
+An in-person spot is now available for **{{eventName}}**.
+
+<div class="notice notice-info"><strong>Please review your registration within 24 hours.</strong> Open your management link, keep the offered day selected as in-person, and save your registration to claim the available spot.</div>
+
+<div class="cta"><a href="{{manageUrl}}">Review and claim my spot &rarr;</a></div>
+
+If you no longer want to attend in person, you can update that day to virtual attendance or cancel your registration from the same page. This helps us offer the spot to the next person on the waitlist.
+
+---
+
+## Current registration details
+
+> {{#if firstName}}**Name:** {{firstName}} {{lastName}}  
+> {{/if}}{{#if email}}**Email:** {{email}}  
+> {{/if}}{{#if organizationName}}**Organization:** {{organizationName}}  
+> {{/if}}{{#if jobTitle}}**Title / Role:** {{jobTitle}}  
+> {{/if}}{{#each dayAttendance}}**{{dayLabel}}:** {{attendanceLabel}} — {{statusLabel}}  
+> {{/each}}{{#if attendanceLabel}}**Attendance:** {{attendanceLabel}}  
+> {{/if}}
+
+{{#if waitlistedDayCount}}
+Some selected in-person days may still be waitlisted. The management page shows the latest status for each day.
+{{/if}}
+`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
   // 9. Registration — unauthorized report confirmation
   // Sent when a registrant reports they did not request the registration.
   // Variables: eventName, firstName

@@ -534,7 +534,7 @@ test.describe("browser workflows", () => {
 
       await expect(page.locator("[data-manage-status-badge]")).toHaveText(/Confirmed/i, { timeout: 15_000 });
       await expect(page.locator("[data-manage-status-banner]")).toContainText(
-        "Some day-specific entries are still pending, so those days are marked waitlisted below.",
+        "Some day-specific entries still need attention.",
       );
       await expect(page.locator("[data-day-waitlist-section]")).toContainText(
         "Tuesday 1 December 2026: Waiting for in-person seat",

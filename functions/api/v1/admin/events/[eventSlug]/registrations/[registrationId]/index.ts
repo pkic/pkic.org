@@ -116,7 +116,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 // Extend the shared manage schema with an admin-only "force_status" action.
 const adminRegistrationUpdateSchema = registrationManageSchema.omit({ action: true }).extend({
   action: z.enum(["update", "cancel", "report_unauthorized", "force_status"]),
-  status: z.enum(["pending_email_confirmation", "registered", "waitlisted", "cancelled"]).optional(),
+  status: z.enum(["pending_email_confirmation", "registered", "cancelled"]).optional(),
 });
 
 export async function onRequestPatch(c: AdminContext): Promise<Response> {

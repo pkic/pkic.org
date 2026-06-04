@@ -2,7 +2,7 @@
  * PATCH /api/v1/admin/events/:eventSlug/registrations/:registrationId/day-attendance
  *
  * Set or remove per-day attendance for a registration without running the full
- * admission / capacity-exempt flow.  For admitting a waitlisted registrant with
+ * admission / capacity-exempt flow.  For admitting a registrant with
  * capacity exemption, use the /admit endpoint instead.
  */
 import { parseJsonBody } from "../../../../../../../_lib/validation";

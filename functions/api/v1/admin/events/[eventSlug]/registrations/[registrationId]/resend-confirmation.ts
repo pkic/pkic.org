@@ -3,7 +3,7 @@
  *
  * Resends the registration email to the registrant.
  *  - pending_email_confirmation → rotates confirmation token, sends confirm-email
- *  - registered / waitlisted    → rotates manage token, resends registration-confirmed email
+ *  - registered                 → rotates manage token, resends registration-confirmed email
  */
 import { json } from "../../../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../../../_lib/auth/admin";

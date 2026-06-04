@@ -70,7 +70,7 @@
 
 - [x] Prevent unauthenticated profile overwrite: `findOrCreateUser` now ignores submitted profile fields when the email already exists (`allowProfileUpdate` defaults to `false`). Only new users are created; existing users are returned as-is.
 - [x] Confirmation endpoint returns `shareUrl` by looking up the registration's referral code, enabling the confirm page to present the share panel without needing the manage token.
-- [x] Post-registration success state: form is replaced by a contextual success panel (pending/registered/waitlisted), each with appropriate messaging and — where applicable — the referral/share panel (Peak-End Rule).
+- [x] Post-registration success state: form is replaced by a contextual success panel (pending/registered/day-waitlist), each with appropriate messaging and — where applicable — the referral/share panel (Peak-End Rule).
 - [x] Post-confirmation success state: "You're in!" panel with share link presented as the completion reward (Goal-Gradient + Reciprocity).
 - [x] Shareable referral link panel: copy-to-clipboard + pre-filled LinkedIn and X/Twitter share buttons (Mimetic Desire, Social Proof, zero-friction sharing).
 - [x] Registration shortcode UX copy: "Free to attend" badge (Zero-Price Effect), work email field, autocomplete attributes, "Register now →" CTA.
