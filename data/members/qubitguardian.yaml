@@ -5,7 +5,6 @@ website: https://qubitguardian.com
 # Business domains for email
 organizationDomains:
   - qubitguardian.com
-  - gmail.com
 # Short description, longer content can be placed in `content/members/`
 description: Qubit Guard delivers post quantum cryptography to defend against future quantum attacks. Strengthen enterprise security with quantum cybersecurity.
 
@@ -23,28 +22,28 @@ sponsor:
 # Blog posts
 blog:
   url: https://qubitguardian.com/blog/
-  feed: https://qubitguardian.com//feed/
+  feed: https://qubitguardian.com/feed/
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: https://www.facebook.com/Qubit%20Guardofficial/
-  instagram: https://www.instagram.com/Qubit%20Guardoffical/
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/qubiitguard/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
