@@ -19,6 +19,13 @@ const PERSONAL_ONLY_HELPERS = new Set([
   "jobTitle",
   "status",
   "statusLabel",
+  "registrationStatus",
+  "registrationStatusLabel",
+  "isWaitlisted",
+  "hasActiveDayWaitlist",
+  "waitlistedDayCount",
+  "if isWaitlisted",
+  "if hasActiveDayWaitlist",
   "attendanceType",
   "attendanceLabel",
   "manageUrl",
@@ -90,6 +97,7 @@ interface CampaignPayload {
     attendeeStatus?: "all" | "registered" | "pending_email_confirmation" | "waitlisted" | "cancelled";
     attendanceType?: "all" | "in_person" | "virtual" | "on_demand";
     dayDate?: string;
+    dayWaitlistStatus?: "all" | "active" | "waiting" | "offered" | "accepted" | "none";
     speakerStatus?: "all" | "confirmed" | "invited" | "pending";
   };
   previewToken?: string;
@@ -139,12 +147,19 @@ function availableHelperLabelsForAudience(audience: "attendees" | "speakers"): S
       "jobTitle",
       "status",
       "statusLabel",
+      "registrationStatus",
+      "registrationStatusLabel",
+      "isWaitlisted",
+      "hasActiveDayWaitlist",
+      "waitlistedDayCount",
       "attendanceType",
       "attendanceLabel",
       "manageUrl",
       "registrationUrl",
       "if firstName",
       "if eq status",
+      "if isWaitlisted",
+      "if hasActiveDayWaitlist",
       "else block",
       "unless",
       "each customAnswerRows",
@@ -203,6 +218,7 @@ export function EventEmail({
   const [attendeeStatus, setAttendeeStatus] = useState("registered");
   const [attendanceType, setAttendanceType] = useState("all");
   const [dayFilter, setDayFilter] = useState("");
+  const [dayWaitlistStatus, setDayWaitlistStatus] = useState("all");
 
   // speaker filters
   const [speakerStatus, setSpeakerStatus] = useState("confirmed");
@@ -294,6 +310,7 @@ export function EventEmail({
       base.filter.attendeeStatus = attendeeStatus as CampaignPayload["filter"]["attendeeStatus"];
       base.filter.attendanceType = attendanceType as CampaignPayload["filter"]["attendanceType"];
       if (dayFilter) base.filter.dayDate = dayFilter;
+      base.filter.dayWaitlistStatus = dayWaitlistStatus as CampaignPayload["filter"]["dayWaitlistStatus"];
     } else {
       base.filter.speakerStatus = speakerStatus as CampaignPayload["filter"]["speakerStatus"];
     }
@@ -508,7 +525,7 @@ export function EventEmail({
       {/* Filters */}
       {audience === "attendees" ? (
         <div class="row g-2 mb-2">
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label small mb-1">Registration status</label>
             <select
               class="form-select form-select-sm"
@@ -522,7 +539,7 @@ export function EventEmail({
               <option value="cancelled">Cancelled</option>
             </select>
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label small mb-1">Attendance type</label>
             <select
               class="form-select form-select-sm"
@@ -535,7 +552,7 @@ export function EventEmail({
               <option value="on_demand">On-demand</option>
             </select>
           </div>
-          <div class="col-md-4">
+          <div class="col-md-3">
             <label class="form-label small mb-1">Specific day</label>
             <select
               class="form-select form-select-sm"
@@ -551,6 +568,21 @@ export function EventEmail({
                   </option>
                 );
               })}
+            </select>
+          </div>
+          <div class="col-md-3">
+            <label class="form-label small mb-1">Day waitlist</label>
+            <select
+              class="form-select form-select-sm"
+              value={dayWaitlistStatus}
+              onChange={(e) => setDayWaitlistStatus((e.target as HTMLSelectElement).value)}
+            >
+              <option value="all">Any state</option>
+              <option value="active">Active waitlist</option>
+              <option value="waiting">Waiting</option>
+              <option value="offered">Offer sent</option>
+              <option value="accepted">Accepted offer</option>
+              <option value="none">Not waitlisted</option>
             </select>
           </div>
         </div>

@@ -18,6 +18,40 @@ export const STATUS_LABELS: Record<string, string> = {
   pending_email_confirmation: "Pending confirmation",
 };
 
+type DayWaitlistEmailEntry = { dayDate: string; status: string };
+
+export function hasActiveDayWaitlist(dayWaitlist: DayWaitlistEmailEntry[] = []): boolean {
+  return dayWaitlist.some((entry) => entry.status === "waiting" || entry.status === "offered");
+}
+
+export function buildRegistrationEmailStatusData(
+  registrationStatus: string,
+  dayWaitlist: DayWaitlistEmailEntry[] = [],
+): {
+  status: string;
+  statusLabel: string;
+  registrationStatus: string;
+  registrationStatusLabel: string;
+  isWaitlisted: boolean;
+  hasDayWaitlist: boolean;
+  hasActiveDayWaitlist: boolean;
+  waitlistedDayCount: number;
+} {
+  const activeDayWaitlist = dayWaitlist.filter((entry) => entry.status === "waiting" || entry.status === "offered");
+  const isWaitlisted = registrationStatus === "waitlisted" || activeDayWaitlist.length > 0;
+
+  return {
+    status: registrationStatus,
+    statusLabel: STATUS_LABELS[registrationStatus] ?? registrationStatus,
+    registrationStatus,
+    registrationStatusLabel: STATUS_LABELS[registrationStatus] ?? registrationStatus,
+    isWaitlisted,
+    hasDayWaitlist: dayWaitlist.length > 0,
+    hasActiveDayWaitlist: activeDayWaitlist.length > 0,
+    waitlistedDayCount: activeDayWaitlist.length,
+  };
+}
+
 /**
  * Build structured attendance data for email templates.
  *
@@ -33,21 +67,34 @@ export const STATUS_LABELS: Record<string, string> = {
 export function buildAttendanceEmailData(
   attendanceType: string,
   dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>,
-  dayWaitlist: Array<{ dayDate: string; status: string }> = [],
+  dayWaitlist: DayWaitlistEmailEntry[] = [],
 ): {
   attendanceLabel: string;
-  dayAttendance: Array<{ dayLabel: string; attendanceLabel: string; statusLabel: string }>;
+  dayAttendance: Array<{
+    dayLabel: string;
+    attendanceLabel: string;
+    statusLabel: string;
+    waitlistStatus: string;
+    isWaitlisted: boolean;
+    isWaitlistOffer: boolean;
+  }>;
 } {
   const waitlistByDay = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry.status]));
 
   if (dayAttendance.length > 0) {
     return {
       attendanceLabel: "",
-      dayAttendance: dayAttendance.map((d) => ({
-        dayLabel: d.label ?? d.dayDate,
-        attendanceLabel: ATTENDANCE_TYPE_LABELS[d.attendanceType] ?? d.attendanceType,
-        statusLabel: buildDayAttendanceStatusLabel(d.attendanceType, waitlistByDay.get(d.dayDate)),
-      })),
+      dayAttendance: dayAttendance.map((d) => {
+        const waitlistStatus = waitlistByDay.get(d.dayDate) ?? "";
+        return {
+          dayLabel: d.label ?? d.dayDate,
+          attendanceLabel: ATTENDANCE_TYPE_LABELS[d.attendanceType] ?? d.attendanceType,
+          statusLabel: buildDayAttendanceStatusLabel(d.attendanceType, waitlistStatus),
+          waitlistStatus,
+          isWaitlisted: waitlistStatus === "waiting",
+          isWaitlistOffer: waitlistStatus === "offered",
+        };
+      }),
     };
   }
 

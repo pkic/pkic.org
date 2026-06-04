@@ -43,6 +43,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     attendeeStatus: body.filter.attendeeStatus,
     attendanceType: body.filter.attendanceType,
     dayDate: body.filter.dayDate,
+    dayWaitlistStatus: body.filter.dayWaitlistStatus,
     speakerStatus: body.filter.speakerStatus,
   });
 
@@ -63,6 +64,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       attendeeStatus: body.filter.attendeeStatus,
       attendanceType: body.filter.attendanceType,
       dayDate: body.filter.dayDate,
+      dayWaitlistStatus: body.filter.dayWaitlistStatus,
       speakerStatus: body.filter.speakerStatus,
     },
     recipients: uniqueRecipients,

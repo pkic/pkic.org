@@ -922,6 +922,7 @@ const campaignFilterSchema = z.object({
   attendeeStatus: z.enum(["all", "registered", "pending_email_confirmation", "waitlisted", "cancelled"]).optional(),
   attendanceType: z.enum(["all", "in_person", "virtual", "on_demand"]).optional(),
   dayDate: z.string().trim().max(20).optional(),
+  dayWaitlistStatus: z.enum(["all", "active", "waiting", "offered", "accepted", "none"]).optional(),
   speakerStatus: z.enum(["all", "confirmed", "invited", "pending"]).optional(),
 });
 

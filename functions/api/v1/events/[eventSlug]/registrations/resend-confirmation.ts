@@ -21,7 +21,7 @@ import { nowIso } from "../../../../../_lib/utils/time";
 import { processOutboxByIdBackground, queueEmail } from "../../../../../_lib/email/outbox";
 import { getRegistrationDayAttendance } from "../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../_lib/services/registrations/day-waitlist";
-import { buildAttendanceEmailData } from "../../../../../_lib/utils/attendance";
+import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../../../../_lib/utils/attendance";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../_lib/utils/registration-email";
 import { registrationConfirmPageUrl } from "../../../../../_lib/services/frontend-links";
 import type { UserRecord } from "../../../../../_lib/services/users";
@@ -122,11 +122,8 @@ export async function onRequestPost(c: any): Promise<Response> {
   const confirmationUrl = registrationConfirmPageUrl(appBaseUrl, event, newToken, registration.id);
   const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, registration.id);
   const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
-  const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
-    registration.attendance_type,
-    dayAttendanceRaw,
-    dayWaitlist,
-  );
+  const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendanceRaw, dayWaitlist);
+  const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, registration.custom_answers_json);
   const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, registration.id);
 
@@ -147,12 +144,12 @@ export async function onRequestPost(c: any): Promise<Response> {
       organizationName: user.organization_name ?? "",
       jobTitle: user.job_title ?? "",
       // Registration
-      attendanceLabel,
-      dayAttendance,
+      attendanceLabel: attendanceData.attendanceLabel,
+      dayAttendance: attendanceData.dayAttendance,
       customAnswerRows,
       acceptedTermsText: acceptedTermsText || undefined,
       dayWaitlist,
-      status: registration.status,
+      ...statusData,
       registrationId: registration.id,
       // URLs
       confirmationUrl,

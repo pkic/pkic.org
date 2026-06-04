@@ -12,6 +12,7 @@ import {
   createRegistration as createRegistrationService,
   confirmRegistrationByToken,
 } from "../functions/_lib/services/registrations";
+import { listCampaignRecipients } from "../functions/_lib/services/admin-email-campaign";
 
 function extractConfirmationToken(payloadJson: string): string {
   const payload = JSON.parse(payloadJson) as { confirmationUrl: string };
@@ -358,5 +359,32 @@ describe("registration workflows", () => {
       },
     ]);
     expect(payload.manageUrl).toContain("/register/manage/");
+
+    const outboxRows = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirmed' AND recipient_email = 'day-two@example.test' ORDER BY created_at DESC LIMIT 1",
+    );
+    const emailPayload = JSON.parse(outboxRows[0].payload_json) as {
+      status: string;
+      registrationStatus: string;
+      isWaitlisted: boolean;
+      hasActiveDayWaitlist: boolean;
+      waitlistedDayCount: number;
+    };
+    expect(emailPayload.status).toBe("registered");
+    expect(emailPayload.registrationStatus).toBe("registered");
+    expect(emailPayload.isWaitlisted).toBe(true);
+    expect(emailPayload.hasActiveDayWaitlist).toBe(true);
+    expect(emailPayload.waitlistedDayCount).toBe(1);
+
+    const recipients = await listCampaignRecipients(env.DB, event, "https://app.test", {
+      audience: "attendees",
+      attendeeStatus: "registered",
+      dayWaitlistStatus: "active",
+    });
+    expect(recipients.map((recipient) => recipient.email)).toEqual(["day-two@example.test"]);
+    expect(recipients[0].templateData.status).toBe("registered");
+    expect(recipients[0].templateData.registrationStatus).toBe("registered");
+    expect(recipients[0].templateData.isWaitlisted).toBe(true);
   });
 });

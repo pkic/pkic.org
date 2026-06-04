@@ -4,7 +4,7 @@ import { getActiveFormByPurpose } from "./forms";
 import { buildCustomAnswerRows, buildCustomAnswerVariables } from "../utils/registration-email";
 import { hmacSha256Hex, sha256Hex } from "../utils/crypto";
 import { parseJsonSafe } from "../utils/json";
-import { ATTENDANCE_TYPE_LABELS, STATUS_LABELS } from "../utils/attendance";
+import { ATTENDANCE_TYPE_LABELS, buildRegistrationEmailStatusData } from "../utils/attendance";
 import type { EventRecord } from "./events";
 import type { DatabaseLike } from "../types";
 import type { FormFieldDefinition } from "./forms/read";
@@ -23,6 +23,7 @@ export interface CampaignAudienceFilter {
   attendeeStatus?: "all" | "registered" | "pending_email_confirmation" | "waitlisted" | "cancelled";
   attendanceType?: "all" | "in_person" | "virtual" | "on_demand";
   dayDate?: string;
+  dayWaitlistStatus?: "all" | "active" | "waiting" | "offered" | "accepted" | "none";
   speakerStatus?: "all" | "confirmed" | "invited" | "pending";
 }
 
@@ -54,6 +55,33 @@ function safeEqual(a: string, b: string): boolean {
   return diff === 0;
 }
 
+function dayWaitlistFilterSql(scope: "registration" | "day"): string {
+  const dayClause = scope === "day" ? " AND w.event_day_id = ed.id" : "";
+  return `AND (
+           ? = 'all'
+           OR (? = 'none' AND NOT EXISTS (
+             SELECT 1 FROM event_day_waitlist_entries w
+             WHERE w.registration_id = r.id
+               AND w.status IN ('waiting', 'offered', 'accepted')${dayClause}
+           ))
+           OR (? = 'active' AND EXISTS (
+             SELECT 1 FROM event_day_waitlist_entries w
+             WHERE w.registration_id = r.id
+               AND w.status IN ('waiting', 'offered')${dayClause}
+           ))
+           OR (? IN ('waiting', 'offered', 'accepted') AND EXISTS (
+             SELECT 1 FROM event_day_waitlist_entries w
+             WHERE w.registration_id = r.id
+               AND w.status = ?${dayClause}
+           ))
+         )`;
+}
+
+function dayWaitlistFilterParams(status: CampaignAudienceFilter["dayWaitlistStatus"]): string[] {
+  const normalized = status ?? "all";
+  return [normalized, normalized, normalized, normalized, normalized];
+}
+
 export async function listCampaignRecipients(
   db: DatabaseLike,
   event: Pick<EventRecord, "id" | "slug" | "base_path" | "starts_at" | "settings_json">,
@@ -63,6 +91,7 @@ export async function listCampaignRecipients(
   if (filter.audience === "attendees") {
     const form = await getActiveFormByPurpose(db, event.id, "event_registration");
     const attendeeStatus = filter.attendeeStatus ?? "registered";
+    const dayWaitlistStatus = filter.dayWaitlistStatus ?? "all";
     if (filter.dayDate) {
       const rows = await all<{
         registration_id: string;
@@ -76,11 +105,19 @@ export async function listCampaignRecipients(
         attendance_type: string | null;
         custom_answers_json: string | null;
         manage_token_hash: string | null;
+        day_waitlist_count: number;
+        active_day_waitlist_count: number;
       }>(
         db,
         `SELECT DISTINCT r.id AS registration_id, u.id AS user_id,
                 u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-                r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash
+                r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash,
+                (SELECT COUNT(*) FROM event_day_waitlist_entries w
+                 WHERE w.registration_id = r.id
+                   AND w.status IN ('waiting', 'offered', 'accepted')) AS day_waitlist_count,
+                (SELECT COUNT(*) FROM event_day_waitlist_entries w
+                 WHERE w.registration_id = r.id
+                   AND w.status IN ('waiting', 'offered')) AS active_day_waitlist_count
          FROM registrations r
          JOIN users u ON u.id = r.user_id
          JOIN registration_day_attendance rda ON rda.registration_id = r.id
@@ -90,6 +127,7 @@ export async function listCampaignRecipients(
            AND ed.day_date = ?
            AND (? = 'all' OR rda.attendance_type = ?)
            AND u.email IS NOT NULL
+           ${dayWaitlistFilterSql("day")}
          ORDER BY lower(u.email) ASC`,
         [
           event.id,
@@ -98,6 +136,7 @@ export async function listCampaignRecipients(
           filter.dayDate,
           filter.attendanceType ?? "all",
           filter.attendanceType ?? "all",
+          ...dayWaitlistFilterParams(dayWaitlistStatus),
         ],
       );
       return rows.map((row) => ({
@@ -122,19 +161,35 @@ export async function listCampaignRecipients(
       attendance_type: string | null;
       custom_answers_json: string | null;
       manage_token_hash: string | null;
+      day_waitlist_count: number;
+      active_day_waitlist_count: number;
     }>(
       db,
       `SELECT DISTINCT r.id AS registration_id, u.id AS user_id,
             u.email, u.first_name, u.last_name, u.organization_name, u.job_title,
-            r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash
+            r.status, r.attendance_type, r.custom_answers_json, r.manage_token_hash,
+            (SELECT COUNT(*) FROM event_day_waitlist_entries w
+             WHERE w.registration_id = r.id
+               AND w.status IN ('waiting', 'offered', 'accepted')) AS day_waitlist_count,
+            (SELECT COUNT(*) FROM event_day_waitlist_entries w
+             WHERE w.registration_id = r.id
+               AND w.status IN ('waiting', 'offered')) AS active_day_waitlist_count
        FROM registrations r
        JOIN users u ON u.id = r.user_id
        WHERE r.event_id = ?
          AND (? = 'all' OR r.status = ?)
          AND (? = 'all' OR r.attendance_type = ?)
          AND u.email IS NOT NULL
+         ${dayWaitlistFilterSql("registration")}
        ORDER BY lower(u.email) ASC`,
-      [event.id, attendeeStatus, attendeeStatus, filter.attendanceType ?? "all", filter.attendanceType ?? "all"],
+      [
+        event.id,
+        attendeeStatus,
+        attendeeStatus,
+        filter.attendanceType ?? "all",
+        filter.attendanceType ?? "all",
+        ...dayWaitlistFilterParams(dayWaitlistStatus),
+      ],
     );
 
     return rows.map((row) => ({
@@ -265,19 +320,28 @@ function buildAttendeeTemplateData(
     custom_answers_json: string | null;
     organization_name?: string | null;
     job_title?: string | null;
+    day_waitlist_count?: number;
+    active_day_waitlist_count?: number;
   },
   formFields: FormFieldDefinition[] | undefined,
   manageUrl?: string,
 ): Record<string, unknown> {
   const customAnswers = parseJsonSafe<Record<string, unknown> | null>(row.custom_answers_json, null);
   const attendanceType = row.attendance_type ?? "";
+  const dayWaitlistCount = Number(row.day_waitlist_count ?? 0);
+  const activeDayWaitlistCount = Number(row.active_day_waitlist_count ?? 0);
+  const dayWaitlist = [
+    ...Array.from({ length: activeDayWaitlistCount }, () => ({ dayDate: "", status: "waiting" })),
+    ...Array.from({ length: Math.max(0, dayWaitlistCount - activeDayWaitlistCount) }, () => ({
+      dayDate: "",
+      status: "accepted",
+    })),
+  ];
   return {
     email: row.email.trim().toLowerCase(),
     organizationName: row.organization_name ?? "",
     jobTitle: row.job_title ?? "",
-    status: row.status,
-    statusLabel: STATUS_LABELS[row.status] ?? row.status,
-    registrationStatus: row.status,
+    ...buildRegistrationEmailStatusData(row.status, dayWaitlist),
     attendanceType,
     attendanceLabel: ATTENDANCE_TYPE_LABELS[attendanceType] ?? attendanceType,
     manageUrl,

@@ -29,7 +29,7 @@ import { registrationManageSchema } from "../../../../../../../../assets/shared/
 import { z } from "zod";
 import { queueRegistrationStatusEmail } from "../../../../../../../_lib/services/registrations/status-notifications";
 import { registrationConfirmPageUrl } from "../../../../../../../_lib/services/frontend-links";
-import { buildAttendanceEmailData } from "../../../../../../../_lib/utils/attendance";
+import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../../../../../../_lib/utils/attendance";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
 import {
   getAcceptedTermsTextForRegistration,
@@ -296,11 +296,8 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
       if (userRecord) {
         const dayAttendanceRaw = await getRegistrationDayAttendance(requestDb(c), updated.id);
         const dayWaitlist = await listDayWaitlistForRegistration(requestDb(c), updated.id);
-        const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
-          updated.attendance_type,
-          dayAttendanceRaw,
-          dayWaitlist,
-        );
+        const attendanceData = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
+        const statusData = buildRegistrationEmailStatusData("pending_email_confirmation", dayWaitlist);
         const customAnswerRows = await getCustomAnswerRows(requestDb(c), event.id, updated.custom_answers_json);
         const acceptedTermsText = await getAcceptedTermsTextForRegistration(requestDb(c), updated.id);
         const outboxId = await queueEmail(requestDb(c), {
@@ -317,12 +314,12 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
             email: emailResult.pendingEmail,
             organizationName: userRecord.organization_name ?? "",
             jobTitle: userRecord.job_title ?? "",
-            attendanceLabel,
-            dayAttendance,
+            attendanceLabel: attendanceData.attendanceLabel,
+            dayAttendance: attendanceData.dayAttendance,
             customAnswerRows,
             dayWaitlist,
             acceptedTermsText: acceptedTermsText || undefined,
-            status: "pending_email_confirmation",
+            ...statusData,
             registrationId: updated.id,
             confirmationUrl,
             manageUrl: `${appBaseUrl}/events/${event.slug}/manage`,

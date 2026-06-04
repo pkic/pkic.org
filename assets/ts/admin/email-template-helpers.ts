@@ -37,6 +37,12 @@ export const PREVIEW_DEFAULTS: Record<string, unknown> = {
   // Registration
   status: "registered",
   statusLabel: "Registered",
+  registrationStatus: "registered",
+  registrationStatusLabel: "Registered",
+  isWaitlisted: true,
+  hasDayWaitlist: true,
+  hasActiveDayWaitlist: true,
+  waitlistedDayCount: 1,
   attendanceType: "in_person",
   attendanceLabel: "In-person",
   manageUrl: "https://pkic.org/events/2026/conference/manage/?token=sample",
@@ -79,6 +85,11 @@ export const TEMPLATE_HELPERS: TemplateHelperItem[] = [
   // Registration
   { category: "Variables", label: "status", snippet: "{{status}}" },
   { category: "Variables", label: "statusLabel", snippet: "{{statusLabel}}" },
+  { category: "Variables", label: "registrationStatus", snippet: "{{registrationStatus}}" },
+  { category: "Variables", label: "registrationStatusLabel", snippet: "{{registrationStatusLabel}}" },
+  { category: "Variables", label: "isWaitlisted", snippet: "{{isWaitlisted}}" },
+  { category: "Variables", label: "hasActiveDayWaitlist", snippet: "{{hasActiveDayWaitlist}}" },
+  { category: "Variables", label: "waitlistedDayCount", snippet: "{{waitlistedDayCount}}" },
   { category: "Variables", label: "attendanceType", snippet: "{{attendanceType}}" },
   { category: "Variables", label: "attendanceLabel", snippet: "{{attendanceLabel}}" },
   { category: "Variables", label: "manageUrl", snippet: "{{manageUrl}}" },
@@ -102,6 +113,18 @@ export const TEMPLATE_HELPERS: TemplateHelperItem[] = [
     target: "body",
   },
   { category: "Conditions", label: "if eq status", snippet: '{{#if eq status "accepted"}}\n\n{{/if}}', target: "body" },
+  {
+    category: "Conditions",
+    label: "if isWaitlisted",
+    snippet: "{{#if isWaitlisted}}\n\n{{/if}}",
+    target: "body",
+  },
+  {
+    category: "Conditions",
+    label: "if hasActiveDayWaitlist",
+    snippet: "{{#if hasActiveDayWaitlist}}\n\n{{/if}}",
+    target: "body",
+  },
   {
     category: "Conditions",
     label: "if waitlistOfferNotice",

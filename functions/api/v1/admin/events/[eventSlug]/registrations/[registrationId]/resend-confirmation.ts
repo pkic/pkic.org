@@ -16,7 +16,7 @@ import { buildBadgeAttachment } from "../../../../../../../_lib/email/attachment
 import { processOutboxByIdBackground, queueEmail } from "../../../../../../../_lib/email/outbox";
 import { getRegistrationDayAttendance } from "../../../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../../../_lib/services/registrations/day-waitlist";
-import { buildAttendanceEmailData } from "../../../../../../../_lib/utils/attendance";
+import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../../../../../../_lib/utils/attendance";
 import {
   getAcceptedTermsTextForRegistration,
   getCustomAnswerRows,
@@ -61,11 +61,8 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const dayAttendanceRaw = await getRegistrationDayAttendance(requestDb(c), registration.id);
   const dayWaitlist = await listDayWaitlistForRegistration(requestDb(c), registration.id);
-  const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
-    registration.attendance_type,
-    dayAttendanceRaw,
-    dayWaitlist,
-  );
+  const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendanceRaw, dayWaitlist);
+  const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
   const customAnswerRows = await getCustomAnswerRows(requestDb(c), event.id, registration.custom_answers_json);
   const acceptedTermsText = await getAcceptedTermsTextForRegistration(requestDb(c), registration.id);
 
@@ -110,12 +107,12 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
         email: user.email,
         organizationName: user.organization_name ?? "",
         jobTitle: user.job_title ?? "",
-        attendanceLabel,
-        dayAttendance,
+        attendanceLabel: attendanceData.attendanceLabel,
+        dayAttendance: attendanceData.dayAttendance,
         customAnswerRows,
         dayWaitlist,
         acceptedTermsText: acceptedTermsText || undefined,
-        status: registration.status,
+        ...statusData,
         registrationId: registration.id,
         confirmationUrl,
         manageUrl: "",
@@ -174,12 +171,12 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
         organizationName: user.organization_name ?? "",
         jobTitle: user.job_title ?? "",
         attendanceType: registration.attendance_type,
-        attendanceLabel,
-        dayAttendance,
+        attendanceLabel: attendanceData.attendanceLabel,
+        dayAttendance: attendanceData.dayAttendance,
         customAnswerRows,
         dayWaitlist,
         acceptedTermsText: acceptedTermsText || undefined,
-        status: registration.status,
+        ...statusData,
         registrationId: registration.id,
         manageUrl,
         shareUrl,

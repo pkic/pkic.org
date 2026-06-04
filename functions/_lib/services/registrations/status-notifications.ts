@@ -4,7 +4,7 @@ import { queueEmail } from "../../email/outbox";
 import { buildEventEmailVariables } from "../events";
 import { registrationManagePageUrl } from "../frontend-links";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../utils/registration-email";
-import { buildAttendanceEmailData, STATUS_LABELS } from "../../utils/attendance";
+import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../utils/attendance";
 import { randomToken, sha256Hex } from "../../utils/crypto";
 import { nowIso } from "../../utils/time";
 import { getRegistrationDayAttendance } from "../event-days";
@@ -66,6 +66,7 @@ export async function queueRegistrationStatusEmail(
     listDayWaitlistForRegistration(db, registration.id),
   ]);
   const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendance, currentDayWaitlist);
+  const statusData = buildRegistrationEmailStatusData(registration.status, currentDayWaitlist);
   const customAnswerRows = await getCustomAnswerRows(db, params.event.id, registration.custom_answers_json);
   const acceptedTermsText = await getAcceptedTermsTextForRegistration(db, registration.id);
 
@@ -99,8 +100,7 @@ export async function queueRegistrationStatusEmail(
       dayWaitlist: currentDayWaitlist,
       customAnswerRows,
       acceptedTermsText: acceptedTermsText || undefined,
-      status: registration.status,
-      statusLabel: STATUS_LABELS[registration.status] ?? registration.status,
+      ...statusData,
       manageUrl,
       shareUrl: null,
       waitlistOfferNotice: params.noticeKind === "waitlist_offer",

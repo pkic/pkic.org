@@ -23,7 +23,7 @@ import { getClientIp, getUserAgent, requireInternalSecret } from "../../../../_l
 import { writeAuditLog } from "../../../../_lib/services/audit";
 import { deriveEventAttendanceType, getRegistrationDayAttendance } from "../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../_lib/services/registrations/day-waitlist";
-import { buildAttendanceEmailData } from "../../../../_lib/utils/attendance";
+import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../../../_lib/utils/attendance";
 import { buildAcceptedTermsText, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
 import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../_lib/services/frontend-links";
 import { checkEmailDomainMx } from "../../../../_lib/email/mx-check";
@@ -157,11 +157,8 @@ export async function onRequestPost(c: any): Promise<Response> {
 
   const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, created.registration.id);
   const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, created.registration.id);
-  const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
-    created.registration.attendance_type,
-    dayAttendanceRaw,
-    dayWaitlist,
-  );
+  const attendanceData = buildAttendanceEmailData(created.registration.attendance_type, dayAttendanceRaw, dayWaitlist);
+  const statusData = buildRegistrationEmailStatusData(created.registration.status, dayWaitlist);
   const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, created.registration.custom_answers_json);
   const acceptedTermsText = buildAcceptedTermsText(body.consents, requiredTerms);
 
@@ -189,12 +186,12 @@ export async function onRequestPost(c: any): Promise<Response> {
         organizationName: user.organization_name ?? "",
         jobTitle: user.job_title ?? "",
         // Registration
-        attendanceLabel,
-        dayAttendance,
+        attendanceLabel: attendanceData.attendanceLabel,
+        dayAttendance: attendanceData.dayAttendance,
         dayWaitlist,
         customAnswerRows,
         acceptedTermsText: acceptedTermsText || undefined,
-        status: created.registration.status,
+        ...statusData,
         registrationId: created.registration.id,
         // URLs
         confirmationUrl,
@@ -252,12 +249,12 @@ export async function onRequestPost(c: any): Promise<Response> {
         jobTitle: user.job_title ?? "",
         // Registration
         attendanceType: created.registration.attendance_type,
-        attendanceLabel,
-        dayAttendance,
+        attendanceLabel: attendanceData.attendanceLabel,
+        dayAttendance: attendanceData.dayAttendance,
         dayWaitlist,
         customAnswerRows,
         acceptedTermsText: acceptedTermsText || undefined,
-        status: created.registration.status,
+        ...statusData,
         registrationId: created.registration.id,
         // URLs
         manageUrl,

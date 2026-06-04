@@ -19,7 +19,7 @@ import {
 import { listDayWaitlistForRegistration } from "../../../../_lib/services/registrations/day-waitlist";
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
 import { registrationConfirmPageUrl, registrationManagePageUrl } from "../../../../_lib/services/frontend-links";
-import { buildAttendanceEmailData, STATUS_LABELS } from "../../../../_lib/utils/attendance";
+import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../../../_lib/utils/attendance";
 import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../_lib/utils/registration-email";
 import { buildEventEmailVariables } from "../../../../_lib/services/events";
 import { writeAuditLog } from "../../../../_lib/services/audit";
@@ -206,11 +206,8 @@ export async function onRequestPatch(c: any): Promise<Response> {
         if (userRecord) {
           const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
           const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, updated.id);
-          const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
-            updated.attendance_type,
-            dayAttendanceRaw,
-            dayWaitlist,
-          );
+          const attendanceData = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
+          const statusData = buildRegistrationEmailStatusData("pending_email_confirmation", dayWaitlist);
           const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, updated.custom_answers_json);
           const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, updated.id);
           const outboxId = await queueEmail(c.env.DB, {
@@ -227,12 +224,12 @@ export async function onRequestPatch(c: any): Promise<Response> {
               email: emailResult.pendingEmail,
               organizationName: userRecord.organization_name ?? "",
               jobTitle: userRecord.job_title ?? "",
-              attendanceLabel,
-              dayAttendance,
+              attendanceLabel: attendanceData.attendanceLabel,
+              dayAttendance: attendanceData.dayAttendance,
               customAnswerRows,
               dayWaitlist,
               acceptedTermsText: acceptedTermsText || undefined,
-              status: "pending_email_confirmation",
+              ...statusData,
               registrationId: updated.id,
               confirmationUrl,
               manageUrl: `${appBaseUrl}/events/${event.slug}/manage`,
@@ -263,11 +260,8 @@ export async function onRequestPatch(c: any): Promise<Response> {
           body.action === "report_unauthorized" ? "registration_unauthorized" : "registration_updated";
         const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, updated.id);
         const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, updated.id);
-        const { attendanceLabel, dayAttendance } = buildAttendanceEmailData(
-          updated.attendance_type,
-          dayAttendanceRaw,
-          dayWaitlist,
-        );
+        const attendanceData = buildAttendanceEmailData(updated.attendance_type, dayAttendanceRaw, dayWaitlist);
+        const statusData = buildRegistrationEmailStatusData(updated.status, dayWaitlist);
         const customAnswerRows =
           body.action !== "report_unauthorized"
             ? await getCustomAnswerRows(c.env.DB, event.id, updated.custom_answers_json)
@@ -292,13 +286,12 @@ export async function onRequestPatch(c: any): Promise<Response> {
             organizationName: user.organization_name ?? "",
             jobTitle: user.job_title ?? "",
             attendanceType: updated.attendance_type,
-            attendanceLabel,
-            dayAttendance,
+            attendanceLabel: attendanceData.attendanceLabel,
+            dayAttendance: attendanceData.dayAttendance,
             dayWaitlist,
             customAnswerRows,
             acceptedTermsText: acceptedTermsText || undefined,
-            status: updated.status,
-            statusLabel: STATUS_LABELS[updated.status] ?? updated.status,
+            ...statusData,
             manageUrl,
           },
         });
