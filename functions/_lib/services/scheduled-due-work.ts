@@ -2,11 +2,13 @@ import { getConfig } from "../config";
 import { processPendingOutbox } from "../email/outbox";
 import { runReminderCycle } from "./reminders";
 import { runRsvpEnforcer } from "./rsvp-enforcer";
+import { runWaitlistPromotionCycle } from "./registrations/waitlist-promotions";
 import type { Env } from "../types";
 
 type ReminderCycleResult = Awaited<ReturnType<typeof runReminderCycle>>;
 type OutboxResult = Awaited<ReturnType<typeof processPendingOutbox>>;
 type RsvpEnforcementResult = Awaited<ReturnType<typeof runRsvpEnforcer>>;
+type WaitlistPromotionResult = Awaited<ReturnType<typeof runWaitlistPromotionCycle>>;
 
 const ESTIMATED_OUTBOX_SUBREQUESTS_PER_EMAIL = 7;
 const ESTIMATED_RSVP_SUBREQUESTS_PER_ITEM = 4;
@@ -25,6 +27,7 @@ interface ReminderCycleTotals {
 interface ScheduledDueWorkPass {
   pass: number;
   reminders: ReminderCycleTotals;
+  waitlistPromotions: WaitlistPromotionResult;
   rsvpEnforcement: RsvpEnforcementResult;
   outbox: OutboxResult;
   durationMs: number;
@@ -42,6 +45,7 @@ export interface ScheduledDueWorkResult {
   estimatedSubrequests: number;
   estimatedNextPassSubrequests: number | null;
   reminders: ReminderCycleTotals;
+  waitlistPromotions: WaitlistPromotionResult;
   rsvpEnforcement: RsvpEnforcementResult;
   outbox: OutboxResult;
 }
@@ -83,6 +87,22 @@ function addRsvpEnforcementTotals(total: RsvpEnforcementResult, next: RsvpEnforc
   total.downgradesProcessed += next.downgradesProcessed;
 }
 
+function emptyWaitlistPromotionTotals(): WaitlistPromotionResult {
+  return {
+    eventsScanned: 0,
+    dayRegistrationOffers: 0,
+    affectedRegistrations: 0,
+    outboxIds: [],
+  };
+}
+
+function addWaitlistPromotionTotals(total: WaitlistPromotionResult, next: WaitlistPromotionResult): void {
+  total.eventsScanned += next.eventsScanned;
+  total.dayRegistrationOffers += next.dayRegistrationOffers;
+  total.affectedRegistrations += next.affectedRegistrations;
+  total.outboxIds.push(...next.outboxIds);
+}
+
 function addOutboxTotals(total: OutboxResult, next: OutboxResult): void {
   total.processed += next.processed;
   total.failed += next.failed;
@@ -90,15 +110,17 @@ function addOutboxTotals(total: OutboxResult, next: OutboxResult): void {
 
 function didPassReachWorkLimit(
   reminders: ReminderCycleTotals,
+  waitlistPromotions: WaitlistPromotionResult,
   outbox: OutboxResult,
   rsvp: RsvpEnforcementResult,
   limits: { scheduledReminderLimit: number; scheduledOutboxLimit: number },
 ): boolean {
   const filledReminderBatch = reminders.processed >= limits.scheduledReminderLimit;
   const filledOutboxBatch = outbox.processed >= limits.scheduledOutboxLimit;
+  const promotedWaitlist = waitlistPromotions.dayRegistrationOffers > 0;
   const rsvpQueuedEmails = rsvp.warningsSent + rsvp.downgradesProcessed;
   const rsvpProcessedWork = rsvp.bouncesProcessed + rsvpQueuedEmails;
-  return filledReminderBatch || filledOutboxBatch || rsvpProcessedWork > 0;
+  return filledReminderBatch || filledOutboxBatch || promotedWaitlist || rsvpProcessedWork > 0;
 }
 
 function estimateNextPassMs(passDurations: number[]): number | null {
@@ -118,12 +140,17 @@ function estimateQueuedReminderEmails(reminders: ReminderCycleTotals): number {
   );
 }
 
+function estimateQueuedWaitlistEmails(waitlistPromotions: WaitlistPromotionResult): number {
+  return waitlistPromotions.outboxIds.length;
+}
+
 function estimatePassSubrequests(
   reminders: ReminderCycleTotals,
+  waitlistPromotions: WaitlistPromotionResult,
   rsvp: RsvpEnforcementResult,
   outbox: OutboxResult,
 ): number {
-  const reminderEmails = estimateQueuedReminderEmails(reminders);
+  const reminderEmails = estimateQueuedReminderEmails(reminders) + estimateQueuedWaitlistEmails(waitlistPromotions);
   const reminderSchedulingSubrequests =
     reminderEmails > 0
       ? ESTIMATED_REMINDER_SCHEDULING_BASE_SUBREQUESTS +
@@ -172,6 +199,7 @@ export async function runScheduledDueWork(env: Env): Promise<ScheduledDueWorkRes
   const startedAt = Date.now();
   const deadline = startedAt + config.scheduledDueWorkMaxMs;
   const reminders = emptyReminderCycleTotals();
+  const waitlistPromotions = emptyWaitlistPromotionTotals();
   const rsvpEnforcement: RsvpEnforcementResult = { bouncesProcessed: 0, warningsSent: 0, downgradesProcessed: 0 };
   const outbox: OutboxResult = { processed: 0, failed: 0 };
   const passes: ScheduledDueWorkPass[] = [];
@@ -208,22 +236,29 @@ export async function runScheduledDueWork(env: Env): Promise<ScheduledDueWorkRes
       limit: config.scheduledReminderLimit,
     });
     const cycleTotals = summarizeReminderCycle(cycle);
+    const waitlistPass = await runWaitlistPromotionCycle(env.DB, {
+      appBaseUrl: config.appBaseUrl,
+      claimWindowHours: config.waitlistClaimWindowHours,
+      limit: config.scheduledWaitlistPromotionLimit,
+    });
     const rsvpPass = await runRsvpEnforcer(env.DB, env);
     const outboxPass = await processPendingOutbox(env.DB, env, config.scheduledOutboxLimit);
     const durationMs = Date.now() - passStartedAt;
     const elapsedMs = Date.now() - startedAt;
-    const estimatedPassSubrequests = estimatePassSubrequests(cycleTotals, rsvpPass, outboxPass);
+    const estimatedPassSubrequests = estimatePassSubrequests(cycleTotals, waitlistPass, rsvpPass, outboxPass);
 
     passDurations.push(durationMs);
     passSubrequests.push(estimatedPassSubrequests);
     estimatedSubrequests += estimatedPassSubrequests;
     addReminderCycleTotals(reminders, cycleTotals);
+    addWaitlistPromotionTotals(waitlistPromotions, waitlistPass);
     addRsvpEnforcementTotals(rsvpEnforcement, rsvpPass);
     addOutboxTotals(outbox, outboxPass);
 
     passes.push({
       pass,
       reminders: cycleTotals,
+      waitlistPromotions: waitlistPass,
       rsvpEnforcement: rsvpPass,
       outbox: outboxPass,
       durationMs,
@@ -234,7 +269,7 @@ export async function runScheduledDueWork(env: Env): Promise<ScheduledDueWorkRes
     });
 
     if (
-      !didPassReachWorkLimit(cycleTotals, outboxPass, rsvpPass, {
+      !didPassReachWorkLimit(cycleTotals, waitlistPass, outboxPass, rsvpPass, {
         scheduledReminderLimit: config.scheduledReminderLimit,
         scheduledOutboxLimit: config.scheduledOutboxLimit,
       })
@@ -256,6 +291,7 @@ export async function runScheduledDueWork(env: Env): Promise<ScheduledDueWorkRes
     estimatedSubrequests,
     estimatedNextPassSubrequests: estimateNextPassSubrequests(passSubrequests),
     reminders,
+    waitlistPromotions,
     rsvpEnforcement,
     outbox,
   };

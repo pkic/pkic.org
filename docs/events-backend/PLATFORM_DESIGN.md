@@ -23,7 +23,7 @@
 
 3. Events
 - `events`, `event_terms`.
-- `registrations`, `registration_attendance_history`, `waitlist_entries`.
+- `registrations`, `registration_attendance_history`, `event_day_waitlist_entries`.
 - `session_proposals`, `proposal_speakers`, `proposal_reviews`, `proposal_decisions`, `proposal_feedback_external`.
 - `event_participants`: user roles per event (`attendee`, `speaker`, `moderator`, `panelist`, ...).
 - `sponsors` + `sponsor_events`: sponsor identity with community-level `sponsorship_level`, plus event sponsorship per event with level/subject.

@@ -3,7 +3,6 @@ import { first, run } from "../../db/queries";
 import { randomToken, sha256Hex } from "../../utils/crypto";
 import { uuid } from "../../utils/ids";
 import { nowIso, addHours } from "../../utils/time";
-import { addToWaitlist } from "./waitlist";
 import { recordReferralConversion } from "../referrals";
 import { recordEngagement } from "../engagement";
 import {
@@ -19,45 +18,12 @@ import type { RegistrationRecord } from "./types";
 const DEFAULT_PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
 async function initialRegistrationStatus(
-  db: DatabaseLike,
-  eventId: string,
-  attendanceType: "in_person" | "virtual" | "on_demand",
   inviteId: string | null,
-  hasPerDayAttendance: boolean,
-  capacityExempt: boolean,
-): Promise<"pending_email_confirmation" | "registered" | "waitlisted"> {
+): Promise<"pending_email_confirmation" | "registered"> {
   if (!inviteId) {
     return "pending_email_confirmation";
   }
-  if (hasPerDayAttendance || capacityExempt) {
-    return "registered";
-  }
-  if (attendanceType !== "in_person") {
-    return "registered";
-  }
-
-  const event = await first<{ capacity_in_person: number | null }>(
-    db,
-    "SELECT capacity_in_person FROM events WHERE id = ?",
-    [eventId],
-  );
-  const capacity = Number(event?.capacity_in_person ?? 0);
-  if (capacity <= 0) {
-    return "registered";
-  }
-
-  const row = await first<{ total: number }>(
-    db,
-    `SELECT COUNT(*) AS total
-     FROM registrations
-     WHERE event_id = ?
-       AND status = 'registered'
-       AND attendance_type = 'in_person'
-       AND capacity_exempt_in_person = 0`,
-    [eventId],
-  );
-
-  return Number(row?.total ?? 0) >= capacity ? "waitlisted" : "registered";
+  return "registered";
 }
 
 export async function createRegistration(
@@ -94,19 +60,11 @@ export async function createRegistration(
   const now = nowIso();
   const manageToken = randomToken(24);
   const manageHash = await sha256Hex(manageToken);
-  const hasPerDayAttendance = Boolean(payload.dayAttendance && payload.dayAttendance.length > 0);
   const attendanceType = deriveEventAttendanceType(payload.dayAttendance) ?? payload.attendanceType;
   const roleExemptReason = await roleBasedCapacityExemptReason(db, payload.event.id, payload.userId);
   const capacityExemptReason = roleExemptReason;
   const capacityExempt = Boolean(capacityExemptReason);
-  const status = await initialRegistrationStatus(
-    db,
-    payload.event.id,
-    attendanceType,
-    payload.inviteId ?? null,
-    hasPerDayAttendance,
-    capacityExempt,
-  );
+  const status = await initialRegistrationStatus(payload.inviteId ?? null);
   let confirmationToken: string | null = null;
   let confirmationHash: string | null = null;
   const confirmationExpiresAt: string | null = null;
@@ -231,9 +189,6 @@ export async function createRegistration(
     sourceRef: registration.id,
     data: { status: registration.status, attendanceType: registration.attendance_type },
   });
-  if (status === "waitlisted") {
-    await addToWaitlist(db, payload.event.id, registration.id);
-  }
   if (payload.referredByCode) {
     await recordReferralConversion(db, payload.referredByCode);
   }

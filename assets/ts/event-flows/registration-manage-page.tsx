@@ -46,13 +46,19 @@ function RegistrationStatusBanner({
   dayWaitlist: Array<{ dayDate: string; status: string }>;
 }) {
   const activeDayWaitlist = dayWaitlist.filter((entry) => isPendingDayWaitlistStatus(entry.status));
+  const offeredDayWaitlist = activeDayWaitlist.filter((entry) => entry.status === "offered");
   const waitlistByDay = new Map(activeDayWaitlist.map((entry) => [entry.dayDate, entry.status] as const));
   const isRegistrationWaitlisted = registrationStatus === "waitlisted";
 
   return (
     <>
       <strong>Registration status:</strong>{" "}
-      {isRegistrationWaitlisted ? (
+      {offeredDayWaitlist.length > 0 ? (
+        <>
+          <span class="badge text-bg-info">Spot available</span> An in-person spot is available for one or more
+          waitlisted days. Keep those days selected as in-person and save your registration to claim the offer.
+        </>
+      ) : isRegistrationWaitlisted ? (
         <>
           <span class="badge text-bg-warning">Waitlisted</span> Your registration is active, but one or more seats are
           still pending confirmation.
@@ -71,9 +77,17 @@ function RegistrationStatusBanner({
               const attLabel = attendanceTypeLabel(day.attendanceType);
               const waitlistStatus = waitlistByDay.get(day.dayDate);
               const confirmationLabel =
-                waitlistStatus === "waiting" || waitlistStatus === "offered" ? "Waitlisted" : "Confirmed";
+                waitlistStatus === "offered"
+                  ? "Spot available"
+                  : waitlistStatus === "waiting"
+                    ? "Waitlisted"
+                    : "Confirmed";
               const statusClass =
-                waitlistStatus === "waiting" || waitlistStatus === "offered" ? "text-bg-warning" : "text-bg-success";
+                waitlistStatus === "offered"
+                  ? "text-bg-info"
+                  : waitlistStatus === "waiting"
+                    ? "text-bg-warning"
+                    : "text-bg-success";
               return (
                 <li key={day.dayDate} class="d-flex flex-wrap align-items-center gap-2 mb-1">
                   <span>
@@ -88,8 +102,8 @@ function RegistrationStatusBanner({
       )}
       {!isRegistrationWaitlisted && dayWaitlist.length > 0 && (
         <div class="mt-2 small">
-          Some day-specific entries are still pending, so those days are marked <strong>waitlisted</strong> below. If
-          that no longer works for you, update the selections below or cancel the registration.
+          Some day-specific entries still need attention. If that no longer works for you, update the selections below
+          or cancel the registration.
         </div>
       )}
     </>
@@ -242,25 +256,33 @@ async function main(): Promise<void> {
     const activeDayWaitlist = (dayWaitlist ?? []).filter((entry) => isPendingDayWaitlistStatus(entry.status));
     const labelByDayDate = new Map(eventDays.map((day) => [day.dayDate, day.label ?? day.dayDate] as const));
     if (activeDayWaitlist.length > 0) {
+      const hasOffer = activeDayWaitlist.some((entry) => entry.status === "offered");
       render(
-        <div class="event-flow-day-waitlist d-flex flex-wrap gap-2">
-          {activeDayWaitlist.map((entry) => {
-            const expiry = entry.offerExpiresAt
-              ? `, offer expires ${new Date(entry.offerExpiresAt).toLocaleString()}`
-              : "";
-            const dayLabel = labelByDayDate.get(entry.dayDate) ?? entry.dayDate;
-            const statusText = entry.status === "offered" ? "In-person spot available" : "Waiting for in-person seat";
-            return (
-              <span
-                key={entry.dayDate}
-                class={`badge text-bg-${entry.status === "offered" ? "warning" : entry.status === "accepted" ? "success" : "secondary"}`}
-              >
-                {dayLabel}: {statusText} ({entry.priorityLane}
-                {expiry})
-              </span>
-            );
-          })}
-        </div>,
+        <>
+          {hasOffer && (
+            <div class="event-flow-day-waitlist-offer mb-2">
+              Save this form while the offer is active to claim the available in-person spot.
+            </div>
+          )}
+          <div class="event-flow-day-waitlist d-flex flex-wrap gap-2">
+            {activeDayWaitlist.map((entry) => {
+              const expiry = entry.offerExpiresAt
+                ? `, offer expires ${new Date(entry.offerExpiresAt).toLocaleString()}`
+                : "";
+              const dayLabel = labelByDayDate.get(entry.dayDate) ?? entry.dayDate;
+              const statusText = entry.status === "offered" ? "In-person spot available" : "Waiting for in-person seat";
+              return (
+                <span
+                  key={entry.dayDate}
+                  class={`badge text-bg-${entry.status === "offered" ? "info" : entry.status === "accepted" ? "success" : "secondary"}`}
+                >
+                  {dayLabel}: {statusText} ({entry.priorityLane}
+                  {expiry})
+                </span>
+              );
+            })}
+          </div>
+        </>,
         dayWaitlistContainer,
       );
       dayWaitlistSection.classList.remove("d-none");

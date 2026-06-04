@@ -46,7 +46,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const search = (url.searchParams.get("q") ?? "").trim();
   const statusFilter = url.searchParams.get("status") ?? "";
 
-  const validStatuses = new Set(["registered", "pending_email_confirmation", "waitlisted", "cancelled"]);
+  const validStatuses = new Set(["registered", "pending_email_confirmation", "cancelled"]);
   const bouncedFilter = url.searchParams.get("bounced") ?? "";
   const consentFilter = url.searchParams.get("consent") ?? "";
 
@@ -192,7 +192,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       requestDb(c),
       `SELECT r.custom_answers_json
        FROM registrations r
-       WHERE r.event_id = ? AND r.status IN ('registered', 'waitlisted')
+       WHERE r.event_id = ? AND r.status IN ('registered')
          AND r.custom_answers_json IS NOT NULL`,
       [event.id],
     ),

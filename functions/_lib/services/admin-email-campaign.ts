@@ -24,7 +24,7 @@ export interface CampaignRecipient {
 
 export interface CampaignAudienceFilter {
   audience: "attendees" | "speakers";
-  attendeeStatus?: "all" | "registered" | "pending_email_confirmation" | "waitlisted" | "cancelled";
+  attendeeStatus?: "all" | "registered" | "pending_email_confirmation" | "cancelled";
   attendanceType?: "all" | "in_person" | "virtual" | "on_demand";
   dayDate?: string;
   dayWaitlistStatus?: "all" | "active" | "waiting" | "offered" | "accepted" | "none";

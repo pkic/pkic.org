@@ -75,7 +75,7 @@ export async function runRsvpEnforcer(
          AND rsvp.warning_sent_at IS NULL 
          AND rsvp.action_executed_at IS NULL 
          AND r.attendance_type = 'in_person'
-         AND r.status IN ('registered', 'waitlisted')
+         AND r.status = 'registered'
          AND rsvp.received_at < datetime('now', '-1 hour')`,
       )
       .all<{
@@ -152,7 +152,7 @@ export async function runRsvpEnforcer(
          AND rsvp.warning_sent_at IS NOT NULL 
          AND rsvp.action_executed_at IS NULL
          AND r.attendance_type = 'in_person'
-         AND r.status IN ('registered', 'waitlisted')`,
+        AND r.status = 'registered'`,
       )
       .all<PendingRsvpEvent>();
 

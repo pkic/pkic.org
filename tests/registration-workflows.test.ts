@@ -3,6 +3,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
 import { onRequestPost as confirmEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
+import { onRequestPatch as manageRegistration } from "../functions/api/v1/registrations/manage/[token]";
 import { onRequestPost as createInvites } from "../functions/api/v1/events/[eventSlug]/invites";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
@@ -11,7 +12,9 @@ import { createInvite } from "../functions/_lib/services/invites";
 import {
   createRegistration as createRegistrationService,
   confirmRegistrationByToken,
+  updateRegistrationById,
 } from "../functions/_lib/services/registrations";
+import { promoteEventWaitlistWithNotifications } from "../functions/_lib/services/registrations/waitlist-promotions";
 import { listCampaignRecipients } from "../functions/_lib/services/admin-email-campaign";
 
 function extractConfirmationToken(payloadJson: string): string {
@@ -396,5 +399,270 @@ describe("registration workflows", () => {
         isWaitlistOffer: false,
       },
     ]);
+  });
+
+  it("includes full per-day waitlist details when all selected in-person days are full", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES
+          ('day-1', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now')),
+          ('day-2', '${eventId}', '2026-12-02', 'Day 2', 1, 20, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES
+          ('holder-1', 'holder1@example.test', 'holder1@example.test', 'Holder', 'One', datetime('now'), datetime('now')),
+          ('holder-2', 'holder2@example.test', 'holder2@example.test', 'Holder', 'Two', datetime('now'), datetime('now')),
+          ('wait-all', 'wait-all@example.test', 'wait-all@example.test', 'Wait', 'All', datetime('now'), datetime('now'))
+      `),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+
+    const holder1 = await createRegistrationService(env.DB, {
+      event,
+      userId: "holder-1",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: holder1.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+    });
+
+    const holder2 = await createRegistrationService(env.DB, {
+      event,
+      userId: "holder-2",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: holder2.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+    });
+
+    const waiting = await createRegistrationService(env.DB, {
+      event,
+      userId: "wait-all",
+      attendanceType: "in_person",
+      dayAttendance: [
+        { dayDate: "2026-12-01", attendanceType: "in_person" },
+        { dayDate: "2026-12-02", attendanceType: "in_person" },
+      ],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+
+    const confirmResponse = await confirmEmail(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations/confirm-email", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token: waiting.confirmationToken }),
+        }),
+        { eventSlug: "pqc-2026" },
+      ),
+    );
+
+    expect(confirmResponse.status).toBe(200);
+    const payload = (await confirmResponse.json()) as {
+      status: string;
+      dayWaitlist: Array<{ dayDate: string; status: string }>;
+    };
+
+    expect(payload.status).toBe("registered");
+    expect(payload.dayWaitlist).toHaveLength(2);
+    expect(payload.dayWaitlist.map((entry) => entry.status)).toEqual(["waiting", "waiting"]);
+
+    const outboxRows = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_confirmed' AND recipient_email = 'wait-all@example.test' ORDER BY created_at DESC LIMIT 1",
+    );
+    const emailPayload = JSON.parse(outboxRows[0].payload_json) as {
+      isWaitlisted: boolean;
+      hasActiveDayWaitlist: boolean;
+      waitlistedDayCount: number;
+      dayAttendance: Array<{ waitlistStatus: string }>;
+    };
+
+    expect(emailPayload.isWaitlisted).toBe(true);
+    expect(emailPayload.hasActiveDayWaitlist).toBe(true);
+    expect(emailPayload.waitlistedDayCount).toBe(2);
+    expect(emailPayload.dayAttendance.map((entry) => entry.waitlistStatus)).toEqual(["waiting", "waiting"]);
+  });
+
+  it("sends offer and update emails with correct day-waitlist content for accept and expired-accept paths", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+
+    await env.DB.batch([
+      env.DB.prepare(`
+        INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+        VALUES ('day-1', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now'))
+      `),
+      env.DB.prepare(`
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES
+          ('holder', 'holder@example.test', 'holder@example.test', 'Holder', 'One', datetime('now'), datetime('now')),
+          ('accept-user', 'accept-user@example.test', 'accept-user@example.test', 'Accept', 'User', datetime('now'), datetime('now')),
+          ('expired-user', 'expired-user@example.test', 'expired-user@example.test', 'Expired', 'User', datetime('now'), datetime('now'))
+      `),
+    ]);
+
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+
+    const holder = await createRegistrationService(env.DB, {
+      event,
+      userId: "holder",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: holder.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+    });
+
+    const acceptCandidate = await createRegistrationService(env.DB, {
+      event,
+      userId: "accept-user",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+    await confirmRegistrationByToken(env.DB, {
+      token: acceptCandidate.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+    });
+
+    const expiredCandidate = await createRegistrationService(env.DB, {
+      event,
+      userId: "expired-user",
+      attendanceType: "in_person",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+    });
+    const expiredConfirmed = await confirmRegistrationByToken(env.DB, {
+      token: expiredCandidate.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+    });
+
+    await updateRegistrationById(
+      env.DB,
+      {
+        registrationId: holder.registration.id,
+        action: "cancel",
+        waitlistClaimWindowHours: 24,
+      },
+      "test",
+    );
+
+    await promoteEventWaitlistWithNotifications(env.DB, {
+      event,
+      appBaseUrl: "https://app.test",
+      claimWindowHours: 24,
+      source: {
+        actorType: "system",
+        actorId: null,
+        auditAction: "system_waitlist_promoted",
+        source: "test",
+      },
+    });
+
+    const offerPayloadRows = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_waitlist_offer' AND recipient_email = 'accept-user@example.test' ORDER BY created_at DESC LIMIT 1",
+    );
+    const offerPayload = JSON.parse(offerPayloadRows[0].payload_json) as {
+      waitlistOfferNotice: boolean;
+      manageUrl: string;
+      dayAttendance: Array<{ statusLabel: string; waitlistStatus: string; isWaitlistOffer: boolean }>;
+    };
+    const offeredManageToken = new URL(offerPayload.manageUrl).searchParams.get("token") as string;
+    expect(offerPayload.waitlistOfferNotice).toBe(true);
+    expect(offerPayload.dayAttendance[0].statusLabel).toBe("Waitlist offer sent");
+    expect(offerPayload.dayAttendance[0].waitlistStatus).toBe("offered");
+    expect(offerPayload.dayAttendance[0].isWaitlistOffer).toBe(true);
+
+    const acceptResponse = await manageRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${offeredManageToken}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            attendanceType: "in_person",
+            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+          }),
+        }),
+        { token: offeredManageToken },
+      ),
+    );
+    expect(acceptResponse.status).toBe(200);
+
+    const acceptUpdateRows = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_updated' AND recipient_email = 'accept-user@example.test' ORDER BY created_at DESC LIMIT 1",
+    );
+    const acceptUpdatePayload = JSON.parse(acceptUpdateRows[0].payload_json) as {
+      hasActiveDayWaitlist: boolean;
+      waitlistedDayCount: number;
+      dayAttendance: Array<{ statusLabel: string; waitlistStatus: string }>;
+    };
+    expect(acceptUpdatePayload.hasActiveDayWaitlist).toBe(false);
+    expect(acceptUpdatePayload.waitlistedDayCount).toBe(0);
+    expect(acceptUpdatePayload.dayAttendance[0].statusLabel).toBe("Confirmed in-person attendance");
+    expect(acceptUpdatePayload.dayAttendance[0].waitlistStatus).toBe("accepted");
+
+    await env.DB.prepare(
+      `UPDATE event_day_waitlist_entries
+       SET status = 'offered', offer_expires_at = datetime('now', '-1 hour'), updated_at = datetime('now')
+       WHERE registration_id = ? AND event_day_id = 'day-1'`,
+    )
+      .bind(expiredConfirmed.registration.id)
+      .run();
+
+    const expiredResponse = await manageRegistration(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/registrations/manage/${expiredConfirmed.manageToken}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            action: "update",
+            attendanceType: "in_person",
+            dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+          }),
+        }),
+        { token: expiredConfirmed.manageToken },
+      ),
+    );
+    expect(expiredResponse.status).toBe(200);
+
+    const expiredUpdateRows = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'registration_updated' AND recipient_email = 'expired-user@example.test' ORDER BY created_at DESC LIMIT 1",
+    );
+    const expiredUpdatePayload = JSON.parse(expiredUpdateRows[0].payload_json) as {
+      hasActiveDayWaitlist: boolean;
+      waitlistedDayCount: number;
+      dayAttendance: Array<{ statusLabel: string; waitlistStatus: string; isWaitlistOffer: boolean }>;
+    };
+    expect(expiredUpdatePayload.hasActiveDayWaitlist).toBe(true);
+    expect(expiredUpdatePayload.waitlistedDayCount).toBe(1);
+    expect(expiredUpdatePayload.dayAttendance[0].statusLabel).toBe("Waitlisted for in-person attendance");
+    expect(expiredUpdatePayload.dayAttendance[0].waitlistStatus).toBe("waiting");
+    expect(expiredUpdatePayload.dayAttendance[0].isWaitlistOffer).toBe(false);
   });
 });
