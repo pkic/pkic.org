@@ -1,0 +1,62 @@
+id: fnc
+name: Frazer-Nash Consultancy
+slogan:
+website: https://www.fnc.co.uk/
+# Business domains for email
+organizationDomains:
+  - fnc.co.uk
+# Short description, longer content can be placed in `content/members/`
+description: At Frazer-Nash, we help organisations deliver innovative engineering, systems and technology solutions to make lives safe, secure, sustainable, and affordable.
+
+# membership
+memberSince: 2026-05-27
+memberType: H2
+workingGroups:
+  - CM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://www.fnc.co.uk/discover-frazer-nash/news/
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: https://careers.fnc.co.uk/uk/en
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/frazer-nash-consultancy/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Lucy Potter
+    role: Security Architect
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/lucy-potter-ceng-miet/
+    description: Lucy is the Security Architect at Frazer-Nash Consultancy and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
