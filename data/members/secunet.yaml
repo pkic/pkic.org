@@ -20,29 +20,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
   url: https://www.secunet.com/en/about-us/press
-  feed: 
+  feed:
   language: en_US
 
 # Careers
 careers:
   url: https://www.secunet.com/en/about-us/career
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: https://www.linkedin.com/company/secunet-security-networks-ag/mycompany/?viewAsMember=true
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/secunet-security-networks-ag/
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,7 +53,7 @@ representatives:
     role: Senior Consultant for IT security
     social:
       x:
-      linkedin: 
+      linkedin:
     description: Nils O. is the Senior Consultant for IT security at secunet Security Networks AG and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
