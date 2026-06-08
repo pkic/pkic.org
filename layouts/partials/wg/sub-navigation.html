@@ -135,8 +135,11 @@
       {{- end -}}
     {{- end -}}
 
-    {{/* Fallback: if no deliverable URL matched, show the submodule root */}}
-    {{- if not $hasDelivLink -}}
+    {{/* Fallback: if no deliverable URL matched, show the submodule root.
+         Skip when $subRoot is the WG root itself — that is already covered
+         by the "About" link and showing it again produces a spurious dropdown
+         (e.g. on charter pages of WGs that have no deliverable URLs yet). */}}
+    {{- if and (not $hasDelivLink) (ne $subRoot $wg) -}}
     {{- $rootActive := strings.HasPrefix $.Page.RelPermalink $subRoot.RelPermalink -}}
     {{- $subRootHasChildren := or $subRoot.Sections $subRoot.RegularPages -}}
     {{- $subSlug := partial "wg/path-slug.html" (dict "path" $subRoot.RelPermalink) -}}
@@ -171,7 +174,7 @@
     <a class="wg-nav-link{{ if strings.HasPrefix $.Page.RelPermalink $confPage.RelPermalink }} is-active{{ end }}" href="{{ $confPage.RelPermalink }}">Conferences</a>
     {{ end }}
 
-    <a class="wg-nav-link" href="/blog/?wg={{ $wg.Params.wgID | lower }}">Blog</a>
+    <a class="wg-nav-link{{ if strings.HasPrefix $.Page.RelPermalink (printf "%sblog/" $base) }} is-active{{ end }}" href="{{ $base }}blog/">Blog</a>
   </div>
 </nav>
 {{/* Tree panels — one per deliverable section with child pages */}}

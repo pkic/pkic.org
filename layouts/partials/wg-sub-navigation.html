@@ -126,7 +126,7 @@
     <a class="wg-nav-link" href="{{ $confPage.RelPermalink }}">Conferences</a>
     {{ end }}
 
-    <a class="wg-nav-link" href="/blog/?wg={{ $wg.Params.wgID | lower }}">Blog</a>
+    <a class="wg-nav-link{{ if strings.HasPrefix $.Page.RelPermalink (printf "%sblog/" $base) }} is-active{{ end }}" href="{{ $base }}blog/">Blog</a>
   </div>
 </nav>
 {{/* Tree panels — one per deliverable section with child pages */}}
