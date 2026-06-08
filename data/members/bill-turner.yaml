@@ -1,0 +1,60 @@
+id: bill-turner
+name: William (Bill) Turner
+slogan:
+website:
+# Business domains for email
+organizationDomains:
+# Short description, longer content can be placed in `content/members/`
+description: Bill Turner is an independent cryptography and critical infrastructure architect with 25 years of experience securing financial and government systems. He serves as Vice Chair of the CBOM Profiles Working Group and is an active member of the PQC Working Group at the PKI Consortium.
+
+# membership
+memberSince: 2026-06-08
+memberType: H6
+workingGroups:
+  - CBOM
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: William (Bill) Turner
+    role: Independent
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/william-bill-turner-7969691b/
+    description: |
+      Bill Turner is an independent cryptography and critical infrastructure architect with 25 years of experience. His work has focused on securing critical infrastructure — including major Canadian financial institutions — and he has applied that experience to post-quantum cryptography migration and the governance of agentic AI systems.
+
+      He is the originator of the CBOM Profiles Working Group concept and serves as its Vice Chair. He is also an active member of the PQC Working Group at the PKI Consortium, and participates in NIST working groups, the Cloud Security Alliance, and the Canadian Cyber Forum.

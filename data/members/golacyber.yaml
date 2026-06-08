@@ -12,6 +12,7 @@ description: GolaCyber is a startup vendor providing PKI and PQC technology and 
 memberSince: 2025-11-25
 memberType: H2
 workingGroups:
+  - CBOM
   - PQC
 
 # sponsor

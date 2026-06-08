@@ -1,0 +1,46 @@
+id: cyberquanta
+name: Cyber Quanta
+slogan:
+website:
+# Business domains for email
+organizationDomains:
+# Short description, longer content can be placed in `content/members/`
+description: Cyber Quanta is a member of the PKI Consortium participating in the CBOM Profiles Working Group.
+
+# membership
+memberSince: 2026-06-08
+memberType: H2
+workingGroups:
+  - CBOM
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
+
+representatives:

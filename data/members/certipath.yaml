@@ -12,6 +12,7 @@ description: CertiPath focuses on the use of digital identity in the modern conn
 memberSince: 2024-08-30
 memberType: H2
 workingGroups:
+  - CBOM
   - PKIMM
   - PQC
 
