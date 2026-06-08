@@ -29,6 +29,7 @@ cascade:
 
 chair:
   name: Michael Osborne
+  affiliation: IBM
   viceChair: William (Bill) Turner
 
 card:
