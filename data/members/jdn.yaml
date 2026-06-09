@@ -1,0 +1,62 @@
+id: jdn
+name: National Digital Department
+slogan:
+website: https://www.jdn.gov.my
+# Business domains for email
+organizationDomains:
+  - jdn.gov.my
+# Short description, longer content can be placed in `content/members/`
+description: Laman Web Rasmi Jabatan Digital Negara
+
+# membership
+memberSince: 2026-06-09
+memberType: H1
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: 
+  feed: https://www.jdn.gov.my/feed/
+  language: en_US
+
+# Press Releases
+press:
+  url: https://www.jdn.gov.my/#
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: https://x.com/JDigitalNegara
+  facebook: https://www.facebook.com/JabatanDigitalNegara/
+  instagram: https://www.instagram.com/jabatandigitalnegara/
+  linkedin: https://www.linkedin.com/company/jabatandigitalnegara%20
+  youtube: https://www.youtube.com/@JABATANDIGITALNEGARA
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Mohd Nawawi Mustafa
+    role: Deputy Director
+    social:
+      x:
+      linkedin: 
+    description: Mohd Nawawi is the Deputy Director at National Digital Department and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
