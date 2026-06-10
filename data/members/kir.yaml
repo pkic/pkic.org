@@ -12,6 +12,7 @@ description: KIR is a key entity of the Polish payment system infrastructure. Ba
 memberSince: 2023-01-09
 memberType: A
 workingGroups:
+  - CBOM
   - CA
 
 # sponsor

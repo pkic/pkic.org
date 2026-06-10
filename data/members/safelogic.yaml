@@ -12,6 +12,7 @@ description: SafeLogic provides validated & interoperable cryptography software 
 memberSince: 2025-03-31
 memberType: F
 workingGroups:
+  - CBOM
   - PQC
   - CM
 

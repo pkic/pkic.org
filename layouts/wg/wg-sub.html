@@ -123,7 +123,7 @@
     <a class="wg-nav-link{{ if eq $sec "conferences" }} is-active{{ end }}" href="{{ $confPage.RelPermalink }}">Conferences</a>
     {{ end }}
 
-    <a class="wg-nav-link{{ if eq $sec "blog" }} is-active{{ end }}" href="/blog/?wg={{ $wgID | lower }}">Blog</a>
+    <a class="wg-nav-link{{ if eq $sec "blog" }} is-active{{ end }}" href="{{ $base }}blog/">Blog</a>
   </div>
 </nav>
 {{- end -}}
@@ -309,6 +309,37 @@
   </div>
 </section>
 {{ end }}
+{{ end }}
+
+{{/* ── Section: Blog ───────────────────────────────────────────────── */}}
+{{ if eq $sec "blog" }}
+{{- $wgTag  := $wg.Params.wgID | upper -}}
+{{- $posts  := where site.RegularPages "Section" "blog" -}}
+{{- $posts   = where $posts "Params.tags" "intersect" (slice $wgTag) -}}
+{{- $posts   = $posts.ByDate.Reverse -}}
+{{- $posts   = first 6 $posts -}}
+<section class="py-5" id="wg-blog">
+  <div class="container">
+    <h2 class="fw-bold mb-1">Blog</h2>
+    <p class="text-muted mb-4">Recent posts related to the {{ $wg.Title }}</p>
+    {{ if $posts }}
+    <div class="row g-4">
+      {{ range $posts }}
+      <div class="col-sm-6 col-lg-4">
+        {{ partial "blog/card.html" . }}
+      </div>
+      {{ end }}
+    </div>
+    <div class="text-center mt-5">
+      <a href="/blog/?wg={{ $wgID | lower }}" class="btn btn-outline-secondary rounded-pill px-4">
+        Read more at our blog →
+      </a>
+    </div>
+    {{ else }}
+    <p class="text-muted">No blog posts yet for this working group. <a href="/blog/">Visit our blog</a> for the latest news.</p>
+    {{ end }}
+  </div>
+</section>
 {{ end }}
 
 {{/* ── Join CTA ─────────────────────────────────────────────────────── */}}

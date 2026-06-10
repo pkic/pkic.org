@@ -147,7 +147,7 @@
     {{ if $confPage }}
     <a class="wg-nav-link" href="{{ $confPage.RelPermalink }}">Conferences</a>
     {{ end }}
-    <a class="wg-nav-link" href="/blog/?wg={{ .Params.wgID | lower }}">Blog</a>
+    <a class="wg-nav-link{{ if strings.HasPrefix $.Page.RelPermalink (printf "%sblog/" .RelPermalink) }} is-active{{ end }}" href="{{ .RelPermalink }}blog/">Blog</a>
   </div>
 </nav>
 {{- end -}}

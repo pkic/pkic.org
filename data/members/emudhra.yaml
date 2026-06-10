@@ -12,6 +12,7 @@ description: eMudhra, a Digital Trust Service Provider (TSP), specializes in del
 memberSince: 2024-04-16
 memberType: A
 workingGroups:
+  - CBOM
   - PQC
   - TCWG
   - CM

@@ -12,6 +12,7 @@ description: AppViewX develops products for machine identity management, PKI, an
 memberSince: 2024-06-18
 memberType: F
 workingGroups:
+  - CBOM
   - PKIMM
   - PQC
   - TCWG

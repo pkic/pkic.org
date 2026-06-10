@@ -16,6 +16,7 @@ description: For more than a century, IBM has been a global technology innovator
 memberSince: 2024-01-09
 memberType: H2
 workingGroups:
+  - CBOM
 
 # sponsor since 2025-02-26
 sponsor:
@@ -52,6 +53,12 @@ social:
 # Those wo no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
+  - name: Michael Osborne
+    role: CTO IBM Quantum Safe, IBM Research
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/michael-osborne-qsafe/
+    description: Michael Osborne is an IBM Distinguished Engineer and the global CTO for IBM Quantum Safe. He leads the cryptographic research activities at the IBM Research Center in Rüschlikon, Switzerland, and chairs the CBOM Profiles Working Group at the PKI Consortium.
   - name: Saqib Mahmood
     role: Quantum Safe Consulting Lead EMEA
     social:

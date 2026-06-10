@@ -68,7 +68,7 @@
           <div class="blog-author-social">{{ partial "social.html" . }}</div>
           {{- end }}
         </div>
-        {{- with $rep.role }}<div class="blog-author-role">{{ . }} at {{ $member.name }}</div>{{- end }}
+        {{- with $rep.role }}<div class="blog-author-role">{{ . }}{{- if ne $member.name $rep.name }} at {{ $member.name }}{{- end }}</div>{{- end }}
 
         {{/* Org logo - always show if available; fallback text only when no role (role already names the org) */}}
         {{- if $orgImg -}}
