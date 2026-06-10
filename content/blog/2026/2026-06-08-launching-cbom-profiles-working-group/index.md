@@ -11,7 +11,7 @@ keywords: [CBOM, Cryptographic Bill of Materials, BOM, SPDX, CycloneDX, PKI, PQC
 tags: [CBOM, PKI, PQC, Working Group]
 ---
 
-The PKI Consortium is pleased to announce the launch of the **CBOM Profiles Working Group** — a new initiative to bring neutral, open guidance to one of the most pressing gaps in the cryptographic asset management landscape.
+The PKI Consortium is pleased to announce the launch of the [CBOM Profiles Working Group](/wg/cbom/) — a new initiative to bring neutral, open guidance to one of the most pressing gaps in the cryptographic asset management landscape.
 
 ## The Problem
 
