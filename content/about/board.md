@@ -16,6 +16,7 @@ The PKIC Board of Directors provides strategic leadership and governance for the
 {{< person-card name="Dimitris Zacharopoulos" role="Board Member" affiliation="harica" from="2022-06-01" >}}
 {{< person-card name="Leo Grove" role="Board Member" from="2022-06-01" >}}
 {{< person-card name="Tim Callan" role="Board Member" affiliation="sectigo" from="2022-06-01" >}}
+{{< person-card name="John Buselli" role="Board Member" affiliation="ibm" from="2026-07-01" >}}
 {{< /leadership-grid >}}
 
 ## Past Board Positions

@@ -22,10 +22,15 @@ The Executive Council acts as a representative body of the PKI Consortium, ensur
 {{< person-card name="Clemens Wanko" role="EC Member" affiliation="tuv-trust-it" from="2022-06-01" >}}
 {{< person-card name="Mads Henriksveen" role="EC Member" affiliation="buypass" from="2022-06-01" >}}
 {{< person-card name="Dimitris Zacharopoulos" role="EC Member" affiliation="harica" from="2022-06-01" >}}
-{{< person-card name="Leo Grove" role="EC Member" from="2022-06-01" >}}
+{{< person-card name="Leo Grove" role="EC Member" affiliation="sslcom" from="2022-06-01" >}}
 {{< person-card name="Tim Callan" role="EC Member" affiliation="sectigo" from="2022-06-01" >}}
 {{< person-card name="Tomas Gustavsson" role="EC Member" affiliation="keyfactor" from="2022-06-01" >}}
 {{< person-card name="Sudha Iyer" role="EC Member" affiliation="citi" from="2024-07-01" >}}
+{{< person-card name="Sven Rajala" role="EC Member" affiliation="keyfactor" from="2026-07-01" >}}
+{{< person-card name="Aaron Poulsen" role="EC Member" affiliation="sslcom" from="2026-07-01" >}}
+{{< person-card name="Ganesh Mallaya" role="EC Member" affiliation="appviewx" from="2026-07-01" >}}
+{{< person-card name="Mark Cooper" role="EC Member" affiliation="pkisolutions" from="2026-07-01" >}}
+
 {{< /leadership-grid >}}
 
 ## Past Positions
