@@ -18,7 +18,7 @@ The long-term goal is for your entire supply chain to reach **[Level 5 (Optimize
 
 - **Send the survey to everyone**: Make the assessment report a mandatory request for all new purchases and renewals.
 - **Chase the critical few**: Identify the 10–25 suppliers that matter most and actively chase their assessment reports. Prioritize: identity providers, cloud infrastructure, virtual private networks (VPN), hardware security modules (HSM), certificate authorities, signing services, backup providers, email, payment gateways, and your most critical software-as-a-service (SaaS) providers.
-- **Set a procurement floor**: Require [Level 2](/wg/pqc/pqcmm/levels/2-basic/) or a credible Level 2 roadmap for new production systems that use cryptography.
+- **Set a procurement floor**: Require [Level 2](/wg/pqc/pqcmm/levels/2-foundational/) or a credible Level 2 roadmap for new production systems that use cryptography.
 - **Mitigate HNDL risk**: Escalate [Level 0](/wg/pqc/pqcmm/levels/0-none/) suppliers immediately if they protect long-lived, regulated, or business-critical data. These systems expose you to **Harvest Now, Decrypt Later (HNDL)** attacks, where adversaries intercept and store encrypted data today to decrypt it when quantum computers become available.
 - **Record and track**: Document the current level, assurance method, report date, evidence status, and next review date in your supplier inventory.
 

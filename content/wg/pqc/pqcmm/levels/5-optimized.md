@@ -31,7 +31,7 @@ A product meets Level 5 when all Level 4 criteria are met, plus:
 
 ## Assessment Questions
 
-At Level 5, claims must be verified directly — not accepted on the vendor's word. Every significant claim requires either an independent public database check (CMVP, CAVP) or an assessor-performed test with a recorded outcome. **A complete Level 5 assessment must also work through all [Level 1](/wg/pqc/pqcmm/levels/1-initial/#assessment-questions), [Level 2](/wg/pqc/pqcmm/levels/2-basic/#assessment-questions), [Level 3](/wg/pqc/pqcmm/levels/3-advanced/#assessment-questions), and [Level 4](/wg/pqc/pqcmm/levels/4-managed/#assessment-questions) questions.**
+At Level 5, claims must be verified directly — not accepted on the vendor's word. Every significant claim requires either an independent public database check (CMVP, CAVP) or an assessor-performed test with a recorded outcome. **A complete Level 5 assessment must also work through all [Level 1](/wg/pqc/pqcmm/levels/1-initial/#assessment-questions), [Level 2](/wg/pqc/pqcmm/levels/2-foundational/#assessment-questions), [Level 3](/wg/pqc/pqcmm/levels/3-advanced/#assessment-questions), and [Level 4](/wg/pqc/pqcmm/levels/4-managed/#assessment-questions) questions.**
 
 ### Assessment methodology record
 
@@ -81,7 +81,7 @@ The assessment report must record:
 
 ## Evidence Checklist
 
-The items below are a level-specific summary of the artefacts a vendor should be able to produce. They can serve as a concise request list for an assessor, or as a self-assessment reference for a vendor preparing evidence before a formal assessment. The detailed requirements and acceptance criteria for each item are in the assessment questions above. All artefacts from [Level 1](/wg/pqc/pqcmm/levels/1-initial/#evidence-checklist), [Level 2](/wg/pqc/pqcmm/levels/2-basic/#evidence-checklist), [Level 3](/wg/pqc/pqcmm/levels/3-advanced/#evidence-checklist), and [Level 4](/wg/pqc/pqcmm/levels/4-managed/#evidence-checklist) remain required.
+The items below are a level-specific summary of the artefacts a vendor should be able to produce. They can serve as a concise request list for an assessor, or as a self-assessment reference for a vendor preparing evidence before a formal assessment. The detailed requirements and acceptance criteria for each item are in the assessment questions above. All artefacts from [Level 1](/wg/pqc/pqcmm/levels/1-initial/#evidence-checklist), [Level 2](/wg/pqc/pqcmm/levels/2-foundational/#evidence-checklist), [Level 3](/wg/pqc/pqcmm/levels/3-advanced/#evidence-checklist), and [Level 4](/wg/pqc/pqcmm/levels/4-managed/#evidence-checklist) remain required.
 
 - Product documentation confirming quantum-safe defaults with change instructions for legacy opt-in.
 - Published or shareable performance benchmark results for the quantum-safe configuration.

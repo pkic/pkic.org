@@ -19,7 +19,7 @@ sideMenu: true
 cascade:
   params:
     sideMenu: true
-    version: "1.0.0"
+    version: "1.0.1"
 
 ---
 
@@ -129,10 +129,10 @@ levels:
     summary: "Available for testing & evaluation"
     url: "/wg/pqc/pqcmm/levels/1-initial/"
   - number: 2
-    label: Basic
+    label: Foundational
     color: green
     summary: "Production-ready, standards-compliant"
-    url: "/wg/pqc/pqcmm/levels/2-basic/"
+    url: "/wg/pqc/pqcmm/levels/2-foundational/"
   - number: 3
     label: Advanced
     color: blue

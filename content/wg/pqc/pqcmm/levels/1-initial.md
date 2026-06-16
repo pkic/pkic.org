@@ -28,7 +28,7 @@ A product meets Level 1 when **all** of the following are true:
 - The vendor has documented how to enable and use the quantum-safe feature for evaluation purposes.
 {{< /criteria >}}
 
-Level 1 does **not** require the feature to be production-ready, standards-compliant, or enabled by default. Level 1 is intentionally permissive: any post-quantum algorithm available in a released build qualifies. Standards conformance is introduced at [Level 2](/wg/pqc/pqcmm/levels/2-basic/).
+Level 1 does **not** require the feature to be production-ready, standards-compliant, or enabled by default. Level 1 is intentionally permissive: any post-quantum algorithm available in a released build qualifies. Standards conformance is introduced at [Level 2](/wg/pqc/pqcmm/levels/2-foundational/).
 
 ## Assessment Questions
 

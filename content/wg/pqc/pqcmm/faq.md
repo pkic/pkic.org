@@ -19,7 +19,7 @@ groups:
           The PQC Maturity Model measures the post-quantum cryptography maturity of a specific product or service. It asks whether quantum-safe cryptography is absent, available for testing, production-ready, inventory-backed, managed, or enabled by default.
       - question: "Does the PQCMM assess an organization?"
         answer: |
-          No. It is product and service-centric. An organization may have one product at [Level 4](/wg/pqc/pqcmm/levels/4-managed/), another at [Level 2](/wg/pqc/pqcmm/levels/2-basic/), and another at [Level 0](/wg/pqc/pqcmm/levels/0-none/).
+          No. It is product and service-centric. An organization may have one product at [Level 4](/wg/pqc/pqcmm/levels/4-managed/), another at [Level 2](/wg/pqc/pqcmm/levels/2-foundational/), and another at [Level 0](/wg/pqc/pqcmm/levels/0-none/).
       - question: "Does the PQCMM require hybrid cryptography?"
         answer: |
           No. The PQCMM is intentionally neutral on whether vendors should use pure post-quantum algorithms, hybrid (classical + PQ) constructions, or composite signatures. Different regions and regulators take different positions — some require hybrid for the migration window, others discourage it because of the additional complexity. The model defines what hybrid and composite support means at [Level 4](/wg/pqc/pqcmm/levels/4-managed/) and what "PQC by default" means at [Level 5](/wg/pqc/pqcmm/levels/5-optimized/), and lets vendors and buyers choose the approach appropriate to their threat model and applicable guidance.
@@ -33,7 +33,7 @@ groups:
     questions:
       - question: "Are the levels cumulative?"
         answer: |
-          Yes. A product claiming [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) must meet all [Level 1](/wg/pqc/pqcmm/levels/1-initial/), [Level 2](/wg/pqc/pqcmm/levels/2-basic/), and [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) criteria. The assessed level is the highest level where all criteria are met.
+          Yes. A product claiming [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) must meet all [Level 1](/wg/pqc/pqcmm/levels/1-initial/), [Level 2](/wg/pqc/pqcmm/levels/2-foundational/), and [Level 3](/wg/pqc/pqcmm/levels/3-advanced/) criteria. The assessed level is the highest level where all criteria are met.
       - question: "Is Level 0 a failure?"
         answer: |
           [Level 0](/wg/pqc/pqcmm/levels/0-none/) means no post-quantum cryptography has been implemented for the assessed product or service. It may be acceptable for low-risk, short-lived, or easily replaceable products, but it is a serious concern for products protecting long-lived sensitive data or trust infrastructure.

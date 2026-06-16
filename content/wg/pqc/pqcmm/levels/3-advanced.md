@@ -47,7 +47,7 @@ A Level 3 cryptographic inventory must cover, at minimum, the following categori
 
 ## Assessment Questions
 
-At Level 3, the assessor must validate inventory completeness and SBOM accuracy using tooling, not just documentation review. The most significant findings at this level are gaps between what tools report and what the vendor discloses. **A complete Level 3 assessment must also work through all [Level 1](/wg/pqc/pqcmm/levels/1-initial/#assessment-questions) and [Level 2](/wg/pqc/pqcmm/levels/2-basic/#assessment-questions) questions.**
+At Level 3, the assessor must validate inventory completeness and SBOM accuracy using tooling, not just documentation review. The most significant findings at this level are gaps between what tools report and what the vendor discloses. **A complete Level 3 assessment must also work through all [Level 1](/wg/pqc/pqcmm/levels/1-initial/#assessment-questions) and [Level 2](/wg/pqc/pqcmm/levels/2-foundational/#assessment-questions) questions.**
 
 ### Assessment methodology record
 
@@ -118,7 +118,7 @@ The assessment report must record:
 
 ## Evidence Checklist
 
-The items below are a level-specific summary of the artefacts a vendor should be able to produce. They can serve as a concise request list for an assessor, or as a self-assessment reference for a vendor preparing evidence before a formal assessment. The detailed requirements and acceptance criteria for each item are in the assessment questions above. All artefacts from [Level 1](/wg/pqc/pqcmm/levels/1-initial/#evidence-checklist) and [Level 2](/wg/pqc/pqcmm/levels/2-basic/#evidence-checklist) remain required.
+The items below are a level-specific summary of the artefacts a vendor should be able to produce. They can serve as a concise request list for an assessor, or as a self-assessment reference for a vendor preparing evidence before a formal assessment. The detailed requirements and acceptance criteria for each item are in the assessment questions above. All artefacts from [Level 1](/wg/pqc/pqcmm/levels/1-initial/#evidence-checklist) and [Level 2](/wg/pqc/pqcmm/levels/2-foundational/#evidence-checklist) remain required.
 
 - Cryptographic inventory document or summary (publicly available or under NDA), covering every category in the Cryptographic Inventory Taxonomy.
 - SBOM in SPDX or CycloneDX format for the current release, with Common Platform Enumeration (CPE) and/or Package URL (purl) identifiers recorded for the top-level product (and for third-party components where available).
