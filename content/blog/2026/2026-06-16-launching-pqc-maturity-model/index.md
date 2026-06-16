@@ -4,7 +4,7 @@ summary: |
   The PKI Consortium is introducing the Post-Quantum Cryptography Maturity Model (PQCMM), a standardized framework to define what quantum-readiness means for products and services. Learn how this model simplifies vendor evaluation and helps procurement teams secure their digital supply chain.
 authors:
   - Paul van Brouwershaven
-date: 2026-06-03T15:00:00+02:00
+date: 2026-06-14T12:00:00+02:00
 keywords: [PQC, Post-Quantum Cryptography, PQCMM, Maturity Model, Supply Chain, Procurement, Cryptographic Agility, Digital Trust]
 tags: [PQC, Post-Quantum Cryptography, PQCMM, Supply Chain, PKI]
 
