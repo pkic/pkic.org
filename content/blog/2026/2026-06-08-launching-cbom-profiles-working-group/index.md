@@ -19,7 +19,7 @@ A Cryptographic Bill of Materials (CBOM) describes the cryptographic assets pres
 
 A profile is a constrained, use-case-specific specification of what a CBOM should contain, how its fields should be interpreted, and what validation rules apply. Today, profile definition happens implicitly inside individual standards efforts. This couples profile design decisions to the ontology, governance, and release cadence of whichever standard hosts them. The result is inconsistency across industries, duplicated effort, and profile design decisions entangled in the politics of individual standards bodies.
 
-> "The idea came from watching the same profiling work happen independently across multiple standards efforts, each time reinventing the wheel and arriving at slightly different answers. I wanted to find a home where we could do this once, do it well, and make the result freely available to everyone. The PKI Consortium is exactly the right venue for that."
+> "We observed various global standards bodies independently attempting to map cryptographic metadata, which risked fragmenting digital supply chain trust. The CBOM Profiles Working Group was established to provide an impartial, centralized venue where this critical mapping can be executed once with high precision, and made universally accessible. The PKI Consortium is the ideal forum to anchor this global, vendor-agnostic baseline."
 >
 > — **William (Bill) Turner**, Vice Chair, CBOM Profiles Working Group
 
