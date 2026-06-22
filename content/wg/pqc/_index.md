@@ -132,5 +132,5 @@ resources:
     description: GSMA resources and guidance on preparing for post-quantum cryptography in the mobile industry.
   - title: ECCG Agreed Cryptographic Mechanisms
     url: https://certification.enisa.europa.eu/publications/eucc-guidelines-cryptography_en
-    description: The ECCG subgroup on cryptography, that is responsible for the maintenance of ACM, has developed a new version 3 submitted to public review.
+    description: ECCG guidelines and Agreed Cryptographic Mechanisms (ACM) for European cybersecurity certification.
 ---
