@@ -1,4 +1,4 @@
-import { useRef, useState } from "preact/hooks";
+import { useRef, useState, useEffect } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
@@ -52,12 +52,33 @@ function recommendationSummary(p: ProposalSummary) {
   );
 }
 
+const FILTER_STORAGE_KEY = (slug: string) => `adm_proposal_filters_${slug}`;
+
+function loadSavedFilters(slug: string): { status: string; recommendation: RecommendationFilter } {
+  try {
+    const raw = sessionStorage.getItem(FILTER_STORAGE_KEY(slug));
+    if (!raw) return { status: "", recommendation: "" };
+    return JSON.parse(raw) as { status: string; recommendation: RecommendationFilter };
+  } catch {
+    return { status: "", recommendation: "" };
+  }
+}
+
 function ProposalsList({ slug }: { slug: string }) {
-  const [statusFilter, setStatusFilter] = useState("");
-  const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>("");
+  const saved = loadSavedFilters(slug);
+  const [statusFilter, setStatusFilter] = useState(saved.status);
+  const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>(saved.recommendation);
   const [stats, setStats] = useState<ProposalStats | null>(null);
   const [, navigate] = useHashLocation();
   const tableRef = useRef<ApiTableActions | null>(null);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(FILTER_STORAGE_KEY(slug), JSON.stringify({ status: statusFilter, recommendation: recommendationFilter }));
+    } catch {
+      // sessionStorage unavailable
+    }
+  }, [slug, statusFilter, recommendationFilter]);
 
   const submitted = stats?.byStatus?.submitted ?? 0;
   const underReview = stats?.byStatus?.under_review ?? 0;
@@ -161,6 +182,8 @@ function ProposalsList({ slug }: { slug: string }) {
               <option value="rejected">Rejected</option>
               <option value="needs-work">Needs Work</option>
               <option value="withdrawn">Withdrawn</option>
+              <option value="spam">Spam</option>
+              <option value="duplicate">Duplicate</option>
             </select>
             <select
               class="form-select form-select-sm adm-filter-select"
@@ -248,7 +271,21 @@ function ProposalsList({ slug }: { slug: string }) {
           },
           {
             header: "",
-            cell: () => <span class="btn btn-sm btn-outline-secondary">Review →</span>,
+            cell: (p) => (
+              <div class="d-flex gap-1 align-items-center">
+                <span class="btn btn-sm btn-outline-secondary">Review →</span>
+                <a
+                  class="btn btn-sm btn-outline-secondary"
+                  href={`#/events/${slug}/proposal/${p.id}`}
+                  target="_blank"
+                  rel="noopener"
+                  title="Open in new tab"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  ↗
+                </a>
+              </div>
+            ),
           },
         ]}
         empty="No proposals found"

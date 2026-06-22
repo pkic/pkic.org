@@ -76,11 +76,13 @@ interface DecisionPreviewMessage {
   subject: string;
   html: string;
   text: string;
+  templateMissing?: boolean;
 }
 
 interface DecisionPreviewResponse {
   recipientCount: number;
   emailCount: number;
+  missingTemplateKeys?: string[];
   messages: DecisionPreviewMessage[];
 }
 
@@ -596,7 +598,6 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const [decisionPreviewConfirmed, setDecisionPreviewConfirmed] = useState(false);
   const [decisionPreviewTab, setDecisionPreviewTab] = useState<"html" | "text">("html");
   const [selectedDecisionPreviewId, setSelectedDecisionPreviewId] = useState("");
-  const decisionPreviewFrameRef = useRef<HTMLIFrameElement>(null);
 
   const loadSubData = useCallback(async () => {
     setLoadingSub(true);
@@ -681,11 +682,6 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     );
   }, [decisionPreview]);
 
-  useEffect(() => {
-    if (decisionPreviewTab !== "html" || !selectedDecisionPreview || !decisionPreviewFrameRef.current) return;
-    decisionPreviewFrameRef.current.srcdoc = selectedDecisionPreview.html;
-  }, [decisionPreviewTab, selectedDecisionPreview]);
-
   const tabItems = [
     { key: "submission", label: "Submission" },
     { key: "speakers", label: `Speakers (${loadingSub ? "…" : speakers.length})` },
@@ -693,6 +689,21 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     { key: "audit-log", label: "Audit Log" },
     ...(access.canFinalize ? [{ key: "decision", label: "Decision" }] : []),
   ];
+
+  async function handleFlag(action: "spam" | "duplicate" | "delete") {
+    const label = action === "delete" ? "soft-delete" : `mark as ${action}`;
+    if (!confirm(`Are you sure you want to ${label} this proposal? This action is not easily reversible.`)) return;
+    try {
+      await api(`/api/v1/admin/proposals/${proposalId}/flag`, {
+        method: "POST",
+        body: JSON.stringify({ action }),
+      });
+      toast(`Proposal ${action === "delete" ? "deleted" : `marked as ${action}`}`, "success");
+      void reload();
+    } catch (err) {
+      toast((err as Error).message, "error");
+    }
+  }
 
   async function handleOpenManage() {
     try {
@@ -1171,6 +1182,12 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                                 {decisionPreview.emailCount} email{decisionPreview.emailCount === 1 ? "" : "s"} to{" "}
                                 {decisionPreview.recipientCount} recipient
                                 {decisionPreview.recipientCount === 1 ? "" : "s"}
+                                {(decisionPreview.missingTemplateKeys?.length ?? 0) > 0 && (
+                                  <span class="text-warning ms-2">
+                                    ⚠ Missing template{(decisionPreview.missingTemplateKeys?.length ?? 0) > 1 ? "s" : ""}:{" "}
+                                    {decisionPreview.missingTemplateKeys?.join(", ")}
+                                  </span>
+                                )}
                               </span>
                             )}
                           </div>
@@ -1216,11 +1233,19 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                                       className="mb-2"
                                     />
                                     {decisionPreviewTab === "html" && (
-                                      <iframe
-                                        ref={decisionPreviewFrameRef}
-                                        sandbox=""
-                                        class="adm-email-preview-frame"
-                                      />
+                                      selectedDecisionPreview.templateMissing ? (
+                                        <div class="alert alert-warning small mb-0">
+                                          Email template <code>{selectedDecisionPreview.templateKey}</code> is not
+                                          configured. This notification will not be sent until the template is
+                                          activated.
+                                        </div>
+                                      ) : (
+                                        <iframe
+                                          srcdoc={selectedDecisionPreview.html}
+                                          sandbox=""
+                                          class="adm-email-preview-frame"
+                                        />
+                                      )
                                     )}
                                     {decisionPreviewTab === "text" && (
                                       <pre class="json-out adm-email-preview-text">{selectedDecisionPreview.text}</pre>
@@ -1290,6 +1315,31 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
               >
                 Copy Proposer Email
               </button>
+              {access.canFinalize && !proposal.decision_status && (
+                <>
+                  <hr class="my-1" />
+                  <button
+                    class="btn btn-outline-warning btn-sm"
+                    onClick={() => void handleFlag("spam")}
+                    disabled={proposal.status === "spam"}
+                  >
+                    {proposal.status === "spam" ? "Marked as Spam" : "Mark as Spam"}
+                  </button>
+                  <button
+                    class="btn btn-outline-warning btn-sm"
+                    onClick={() => void handleFlag("duplicate")}
+                    disabled={proposal.status === "duplicate"}
+                  >
+                    {proposal.status === "duplicate" ? "Marked as Duplicate" : "Mark as Duplicate"}
+                  </button>
+                  <button
+                    class="btn btn-outline-danger btn-sm"
+                    onClick={() => void handleFlag("delete")}
+                  >
+                    Delete Proposal
+                  </button>
+                </>
+              )}
             </div>
           </div>
 

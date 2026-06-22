@@ -12,6 +12,7 @@ import {
 } from "../../../../../../assets/shared/schemas/route-contracts";
 import { AdminProposalsProposalIdGet } from "./index";
 import { onRequestPost as AdminProposalsProposalIdOpenManagePost_l } from "./open-manage";
+import { onRequestPost as AdminProposalsProposalIdFlagPost_l } from "./flag";
 import { onRequestPatch as AdminProposalsProposalIdPatch_l } from "./patch";
 import { onRequestPost as AdminProposalsProposalIdFinalizePost_l } from "./finalize";
 import { onRequestPost as AdminProposalsProposalIdFinalizePreviewPost_l } from "./finalize-preview";
@@ -61,6 +62,7 @@ const AdminProposalsProposalIdSpeakersGet = openApiRoute(
 
 openapi.get("/", AdminProposalsProposalIdGet);
 openapi.post("/open-manage", AdminProposalsProposalIdOpenManagePost);
+openapi.post("/flag", AdminProposalsProposalIdFlagPost_l);
 openapi.patch("/", AdminProposalsProposalIdPatch);
 openapi.post("/finalize", AdminProposalsProposalIdFinalizePost);
 openapi.post("/finalize-preview", AdminProposalsProposalIdFinalizePreviewPost);

@@ -53,33 +53,54 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const messages = await Promise.all(
     plan.messages.map(async (message) => {
-      const template = await resolveTemplate(requestDb(c), message.templateKey);
-      const dataWithPartials = { ...message.data, _partials: partials };
-      const subject = renderSubject(template.subjectTemplate, message.fallbackSubject, dataWithPartials);
-      const rendered = await renderEmail(
-        template.content,
-        dataWithPartials,
-        layoutHtml,
-        template.contentType as "markdown" | "html" | "text",
-        appBaseUrl,
-      );
+      try {
+        const template = await resolveTemplate(requestDb(c), message.templateKey);
+        const dataWithPartials = { ...message.data, _partials: partials };
+        const subject = renderSubject(template.subjectTemplate, message.fallbackSubject, dataWithPartials);
+        const rendered = await renderEmail(
+          template.content,
+          dataWithPartials,
+          layoutHtml,
+          template.contentType as "markdown" | "html" | "text",
+          appBaseUrl,
+        );
 
-      return {
-        id: message.id,
-        templateKey: message.templateKey,
-        recipientEmail: message.recipientEmail,
-        recipientLabel: message.recipientLabel,
-        subject,
-        html: rendered.html,
-        text: rendered.text,
-      };
+        return {
+          id: message.id,
+          templateKey: message.templateKey,
+          recipientEmail: message.recipientEmail,
+          recipientLabel: message.recipientLabel,
+          subject,
+          html: rendered.html,
+          text: rendered.text,
+          templateMissing: false as const,
+        };
+      } catch (err: unknown) {
+        const code = (err as { code?: string }).code;
+        if (code === "EMAIL_TEMPLATE_NOT_FOUND" || code === "EMAIL_TEMPLATE_MISSING_BODY") {
+          return {
+            id: message.id,
+            templateKey: message.templateKey,
+            recipientEmail: message.recipientEmail,
+            recipientLabel: message.recipientLabel,
+            subject: message.fallbackSubject,
+            html: "",
+            text: "",
+            templateMissing: true as const,
+          };
+        }
+        throw err;
+      }
     }),
   );
+
+  const missingTemplateKeys = [...new Set(messages.filter((m) => m.templateMissing).map((m) => m.templateKey))];
 
   return json({
     success: true,
     recipientCount: new Set(messages.map((message) => message.recipientEmail)).size,
     emailCount: messages.length,
+    missingTemplateKeys,
     messages,
   });
 }
