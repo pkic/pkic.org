@@ -127,4 +127,10 @@ resources:
   - title: CISA PQC Guidance
     url: https://www.cisa.gov/quantum
     description: US CISA resources and guidance on preparing for post-quantum cryptography.
+  - title: GSMA PQC Programme
+    url: https://www.gsma.com/solutions-and-impact/technologies/security/post-quantum/
+    description: GSMA resources and guidance on preparing for post-quantum cryptography in the mobile industry.
+  - title: ECCG Agreed Cryptographic Mechanisms
+    url: https://certification.enisa.europa.eu/publications/eucc-guidelines-cryptography_en
+    description: The ECCG subgroup on cryptography, that is responsible for the maintenance of ACM, has developed a new version 3 submitted to public review.
 ---
