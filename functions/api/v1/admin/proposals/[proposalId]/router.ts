@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
+import { handleError } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
   adminProposalAuditLogRouteSchema,
@@ -28,6 +29,7 @@ import speakers_Router from "./speakers/router";
 import type { RequestDbContext } from "../../../../../_lib/db/context";
 
 const app = new Hono<RequestDbContext>();
+app.onError((error, _c) => handleError(error));
 export const openapi = fromHono(app);
 
 const AdminProposalsProposalIdOpenManagePost = openApiRoute(
