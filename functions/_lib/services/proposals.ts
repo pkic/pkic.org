@@ -963,19 +963,14 @@ export async function finalizeProposalDecision(
 
 export async function markProposalStatus(
   db: DatabaseLike,
-  payload: {
-    proposalId: string;
-    status: "spam" | "duplicate";
-  },
+  payload: { proposalId: string; status: "spam" | "duplicate" },
 ): Promise<void> {
   const result = await run(
     db,
     "UPDATE session_proposals SET status = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
     [payload.status, nowIso(), payload.proposalId],
   );
-  if (result.changes === 0) {
-    throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found or already deleted");
-  }
+  if (result.changes === 0) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found or already deleted");
 }
 
 export async function softDeleteProposal(db: DatabaseLike, payload: { proposalId: string }): Promise<void> {
@@ -997,31 +992,5 @@ export async function softDeleteProposal(db: DatabaseLike, payload: { proposalId
      SET status = 'inactive', updated_at = ?
      WHERE source_type = 'proposal' AND source_ref = ?`,
     [now, payload.proposalId],
-  );
-}
-
-export async function listProposalsForEvent(db: DatabaseLike, eventId: string): Promise<ProposalListRecord[]> {
-  return all<ProposalListRecord>(
-    db,
-    `SELECT
-       sp.*,
-       u.email      AS proposer_email,
-       u.first_name AS proposer_first_name,
-       u.last_name  AS proposer_last_name,
-       COALESCE(rv.review_count, 0) AS review_count,
-       pd.final_status AS decision_status,
-       pd.decision_note AS decision_note,
-       pd.decided_at AS decision_decided_at
-     FROM session_proposals sp
-     JOIN users u ON u.id = sp.proposer_user_id
-     LEFT JOIN (
-       SELECT proposal_id, COUNT(*) AS review_count
-       FROM proposal_reviews
-       GROUP BY proposal_id
-     ) rv ON rv.proposal_id = sp.id
-     LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
-     WHERE sp.event_id = ? AND sp.deleted_at IS NULL
-     ORDER BY sp.submitted_at DESC`,
-    [eventId],
   );
 }

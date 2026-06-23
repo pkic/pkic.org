@@ -111,7 +111,10 @@ describe("admin event management endpoints", () => {
         venue: "The Hague Conference Center",
         virtualUrl: "https://pkic.org/live/pqc-2026/",
         userRetentionDays: 180,
-        sessionTypes: ["talk", "panel"],
+        sessionTypes: [
+          { label: "talk", requiresPresentation: true },
+          { label: "panel", requiresPresentation: false },
+        ],
         registrationFormKey: "pqc-reg-form",
         proposalFormKey: null,
       }),
@@ -132,9 +135,15 @@ describe("admin event management endpoints", () => {
     expect(patchPayload.event.settings.venue).toBe("The Hague Conference Center");
     expect(patchPayload.event.settings.virtualUrl).toBe("https://pkic.org/live/pqc-2026/");
     expect(patchPayload.event.user_retention_days).toBe(180);
-    expect((patchPayload.event.settings.proposal as { sessionTypes?: string[] } | undefined)?.sessionTypes).toEqual([
-      "talk",
-      "panel",
+    expect(
+      (
+        patchPayload.event.settings.proposal as
+          | { sessionTypes?: { label: string; requiresPresentation: boolean }[] }
+          | undefined
+      )?.sessionTypes,
+    ).toEqual([
+      { label: "talk", requiresPresentation: true },
+      { label: "panel", requiresPresentation: false },
     ]);
     expect(
       patchPayload.event.settings.forms as
