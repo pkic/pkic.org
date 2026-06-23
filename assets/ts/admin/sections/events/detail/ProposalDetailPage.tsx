@@ -446,7 +446,9 @@ function SpeakerCard({
                 title="Send profile completion reminder"
                 onClick={async () => {
                   try {
-                    await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}/remind`, { method: "POST" });
+                    await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}/remind`, {
+                      method: "POST",
+                    });
                     toast("Profile reminder sent", "success");
                   } catch (err) {
                     toast((err as Error).message, "error");
@@ -462,7 +464,9 @@ function SpeakerCard({
                 title="Send presentation upload reminder"
                 onClick={async () => {
                   try {
-                    await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}/remind-presentation`, { method: "POST" });
+                    await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}/remind-presentation`, {
+                      method: "POST",
+                    });
                     toast("Presentation reminder sent", "success");
                   } catch (err) {
                     toast((err as Error).message, "error");
@@ -1020,9 +1024,8 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                     canFinalize={access.canFinalize}
                     decisionStatus={proposal.decision_status}
                     requiresPresentation={
-                      sessionTypes.find(
-                        (t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase(),
-                      )?.requiresPresentation ?? false
+                      sessionTypes.find((t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase())
+                        ?.requiresPresentation ?? false
                     }
                     onSaved={(userId, patch) =>
                       setSpeakers((prev) => prev.map((sp) => (sp.userId === userId ? { ...sp, ...patch } : sp)))
@@ -1235,7 +1238,8 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                                 {decisionPreview.recipientCount === 1 ? "" : "s"}
                                 {(decisionPreview.missingTemplateKeys?.length ?? 0) > 0 && (
                                   <span class="text-warning ms-2">
-                                    ⚠ Missing template{(decisionPreview.missingTemplateKeys?.length ?? 0) > 1 ? "s" : ""}:{" "}
+                                    ⚠ Missing template
+                                    {(decisionPreview.missingTemplateKeys?.length ?? 0) > 1 ? "s" : ""}:{" "}
                                     {decisionPreview.missingTemplateKeys?.join(", ")}
                                   </span>
                                 )}
@@ -1283,8 +1287,8 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                                       onChange={(key) => setDecisionPreviewTab(key as "html" | "text")}
                                       className="mb-2"
                                     />
-                                    {decisionPreviewTab === "html" && (
-                                      selectedDecisionPreview.templateMissing ? (
+                                    {decisionPreviewTab === "html" &&
+                                      (selectedDecisionPreview.templateMissing ? (
                                         <div class="alert alert-warning small mb-0">
                                           Email template <code>{selectedDecisionPreview.templateKey}</code> is not
                                           configured. This notification will not be sent until the template is
@@ -1296,8 +1300,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                                           sandbox=""
                                           class="adm-email-preview-frame"
                                         />
-                                      )
-                                    )}
+                                      ))}
                                     {decisionPreviewTab === "text" && (
                                       <pre class="json-out adm-email-preview-text">{selectedDecisionPreview.text}</pre>
                                     )}
@@ -1383,10 +1386,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                   >
                     {proposal.status === "duplicate" ? "Marked as Duplicate" : "Mark as Duplicate"}
                   </button>
-                  <button
-                    class="btn btn-outline-danger btn-sm"
-                    onClick={() => void handleFlag("delete")}
-                  >
+                  <button class="btn btn-outline-danger btn-sm" onClick={() => void handleFlag("delete")}>
                     Delete Proposal
                   </button>
                 </>

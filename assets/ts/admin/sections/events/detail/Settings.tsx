@@ -48,9 +48,7 @@ function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated: (d: E
   const [virtualUrl, setVirtualUrl] = useState(event.virtual_url ?? "");
   const [heroImageUrl, setHeroImageUrl] = useState(event.hero_image_url ?? "");
   const [location, setLocation] = useState(event.location ?? "");
-  const [sessionTypes, setSessionTypes] = useState(
-    event.session_types ?? [{ label: "", requiresPresentation: true }],
-  );
+  const [sessionTypes, setSessionTypes] = useState(event.session_types ?? [{ label: "", requiresPresentation: true }]);
   const registrationLink = formLinkValue(event.settings, "event_registration");
   const proposalLink = formLinkValue(event.settings, "proposal_submission");
   const [registrationFormKey, setRegistrationFormKey] = useState(

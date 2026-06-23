@@ -53,10 +53,12 @@ async function addReviews(eventId: string, proposalId: string, adminId: string, 
   const extraAdminIds: string[] = [];
   for (let i = 0; i < count; i++) {
     const id = crypto.randomUUID();
-    await env.DB.prepare(`
+    await env.DB.prepare(
+      `
       INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
       VALUES ('${id}', 'reviewer${i}@wf.test', 'reviewer${i}@wf.test', 'admin', 1, datetime('now'), datetime('now'))
-    `).run();
+    `,
+    ).run();
     const token = await createAdminSession(env.DB, id, `reviewer-token-${i}`);
     await upsertReview(
       createContext(
@@ -257,11 +259,9 @@ describe("proposal spam/duplicate/delete", () => {
 
     await markProposalStatus(env.DB, { proposalId, status: "spam" });
 
-    const [row] = await queryAll<{ status: string }>(
-      env.DB,
-      "SELECT status FROM session_proposals WHERE id = ?",
-      [proposalId],
-    );
+    const [row] = await queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [
+      proposalId,
+    ]);
     expect(row.status).toBe("spam");
   });
 
@@ -271,11 +271,9 @@ describe("proposal spam/duplicate/delete", () => {
 
     await markProposalStatus(env.DB, { proposalId, status: "duplicate" });
 
-    const [row] = await queryAll<{ status: string }>(
-      env.DB,
-      "SELECT status FROM session_proposals WHERE id = ?",
-      [proposalId],
-    );
+    const [row] = await queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [
+      proposalId,
+    ]);
     expect(row.status).toBe("duplicate");
   });
 
@@ -336,11 +334,9 @@ describe("proposal spam/duplicate/delete", () => {
 
     expect(response.status).toBe(200);
 
-    const [row] = await queryAll<{ status: string }>(
-      env.DB,
-      "SELECT status FROM session_proposals WHERE id = ?",
-      [proposalId],
-    );
+    const [row] = await queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [
+      proposalId,
+    ]);
     expect(row.status).toBe("spam");
 
     const auditRows = await queryAll<{ action: string }>(

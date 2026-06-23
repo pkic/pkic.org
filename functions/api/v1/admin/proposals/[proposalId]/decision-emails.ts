@@ -85,9 +85,7 @@ export async function buildProposalDecisionEmailPlan(
 
   const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(event?.settings_json ?? "{}", {});
   const sessionTypes = resolveSessionTypes(eventSettings);
-  const sessionTypeConfig = sessionTypes.find(
-    (t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase(),
-  );
+  const sessionTypeConfig = sessionTypes.find((t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase());
   const requiresPresentation = sessionTypeConfig?.requiresPresentation ?? false;
 
   for (const speaker of speakers) {

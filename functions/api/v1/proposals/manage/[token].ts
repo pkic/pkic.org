@@ -46,7 +46,15 @@ export async function onRequestPatch(c: any): Promise<Response> {
       changes.status = { from: "needs-work", to: "resubmitted" };
     }
     if (Object.keys(changes).length > 0) {
-      await writeAuditLog(c.env.DB, "user", existing.proposer_user_id, "proposal_edited", "proposal", existing.id, changes);
+      await writeAuditLog(
+        c.env.DB,
+        "user",
+        existing.proposer_user_id,
+        "proposal_edited",
+        "proposal",
+        existing.id,
+        changes,
+      );
     }
   }
 

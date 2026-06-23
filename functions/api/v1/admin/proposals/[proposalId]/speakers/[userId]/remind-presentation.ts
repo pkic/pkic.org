@@ -25,7 +25,15 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   if (!proposal) return json({ error: { message: "Proposal not found" } }, 404);
 
   if (proposal.decision_status !== "accepted") {
-    return json({ error: { code: "PROPOSAL_NOT_ACCEPTED", message: "Presentation reminders can only be sent for accepted proposals" } }, 409);
+    return json(
+      {
+        error: {
+          code: "PROPOSAL_NOT_ACCEPTED",
+          message: "Presentation reminders can only be sent for accepted proposals",
+        },
+      },
+      409,
+    );
   }
 
   const event = await first<any>(requestDb(c), "SELECT * FROM events WHERE id = ?", [proposal.event_id]);

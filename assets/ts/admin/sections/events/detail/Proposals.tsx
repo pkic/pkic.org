@@ -54,7 +54,19 @@ function recommendationSummary(p: ProposalSummary) {
 
 const FILTER_STORAGE_KEY = (slug: string) => `adm_proposal_filters_${slug}`;
 
-const VALID_STATUSES = new Set(["", "active", "submitted", "resubmitted", "under_review", "accepted", "rejected", "needs-work", "withdrawn", "spam", "duplicate"]);
+const VALID_STATUSES = new Set([
+  "",
+  "active",
+  "submitted",
+  "resubmitted",
+  "under_review",
+  "accepted",
+  "rejected",
+  "needs-work",
+  "withdrawn",
+  "spam",
+  "duplicate",
+]);
 const VALID_RECOMMENDATIONS = new Set<RecommendationFilter>(["", "accept", "needs-work", "reject"]);
 
 function loadSavedFilters(slug: string): { status: string; recommendation: RecommendationFilter } {
@@ -66,9 +78,10 @@ function loadSavedFilters(slug: string): { status: string; recommendation: Recom
     const { status, recommendation } = parsed as Record<string, unknown>;
     return {
       status: typeof status === "string" && VALID_STATUSES.has(status) ? status : "",
-      recommendation: typeof recommendation === "string" && VALID_RECOMMENDATIONS.has(recommendation as RecommendationFilter)
-        ? (recommendation as RecommendationFilter)
-        : "",
+      recommendation:
+        typeof recommendation === "string" && VALID_RECOMMENDATIONS.has(recommendation as RecommendationFilter)
+          ? (recommendation as RecommendationFilter)
+          : "",
     };
   } catch {
     return { status: "", recommendation: "" };
@@ -85,7 +98,10 @@ function ProposalsList({ slug }: { slug: string }) {
 
   useEffect(() => {
     try {
-      sessionStorage.setItem(FILTER_STORAGE_KEY(slug), JSON.stringify({ status: statusFilter, recommendation: recommendationFilter }));
+      sessionStorage.setItem(
+        FILTER_STORAGE_KEY(slug),
+        JSON.stringify({ status: statusFilter, recommendation: recommendationFilter }),
+      );
     } catch {
       // sessionStorage unavailable
     }

@@ -978,10 +978,7 @@ export async function markProposalStatus(
   }
 }
 
-export async function softDeleteProposal(
-  db: DatabaseLike,
-  payload: { proposalId: string },
-): Promise<void> {
+export async function softDeleteProposal(db: DatabaseLike, payload: { proposalId: string }): Promise<void> {
   const now = nowIso();
   const result = await run(
     db,

@@ -52,7 +52,9 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
   const [proposalForm, eventRow] = await Promise.all([
     getActiveFormByPurpose(requestDb(c), proposal.event_id, "proposal_submission"),
-    first<{ settings_json: string }>(requestDb(c), "SELECT settings_json FROM events WHERE id = ?", [proposal.event_id]),
+    first<{ settings_json: string }>(requestDb(c), "SELECT settings_json FROM events WHERE id = ?", [
+      proposal.event_id,
+    ]),
   ]);
   const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(eventRow?.settings_json ?? "{}", {});
   const sessionTypes = resolveSessionTypes(eventSettings);
