@@ -49,8 +49,12 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     },
   );
 
+  let layoutMissing = false;
   const [layoutHtml, partials] = await Promise.all([
-    loadEmailLayout(requestDb(c)).catch(() => ""),
+    loadEmailLayout(requestDb(c)).catch(() => {
+      layoutMissing = true;
+      return "";
+    }),
     loadEmailPartials(requestDb(c)).catch(() => ({}) as Record<string, string>),
   ]);
 
@@ -103,6 +107,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     success: true,
     recipientCount: new Set(messages.map((message) => message.recipientEmail)).size,
     emailCount: messages.length,
+    layoutMissing,
     missingTemplateKeys,
     messages,
   });

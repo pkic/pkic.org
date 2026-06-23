@@ -88,6 +88,7 @@ interface DecisionPreviewMessage {
 interface DecisionPreviewResponse {
   recipientCount: number;
   emailCount: number;
+  layoutMissing?: boolean;
   missingTemplateKeys?: string[];
   messages: DecisionPreviewMessage[];
 }
@@ -1236,12 +1237,9 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                                 {decisionPreview.emailCount} email{decisionPreview.emailCount === 1 ? "" : "s"} to{" "}
                                 {decisionPreview.recipientCount} recipient
                                 {decisionPreview.recipientCount === 1 ? "" : "s"}
-                                {(decisionPreview.missingTemplateKeys?.length ?? 0) > 0 && (
-                                  <span class="text-warning ms-2">
-                                    ⚠ Missing template
-                                    {(decisionPreview.missingTemplateKeys?.length ?? 0) > 1 ? "s" : ""}:{" "}
-                                    {decisionPreview.missingTemplateKeys?.join(", ")}
-                                  </span>
+                                {(decisionPreview.layoutMissing ||
+                                  (decisionPreview.missingTemplateKeys?.length ?? 0) > 0) && (
+                                  <span class="text-warning ms-2">⚠ Configuration issues — see preview</span>
                                 )}
                               </span>
                             )}
@@ -1252,6 +1250,22 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                             <div class="card border">
                               <div class="card-header bg-light small fw-semibold">Email Preview</div>
                               <div class="card-body">
+                                {decisionPreview.layoutMissing && (
+                                  <div class="alert alert-warning small py-2 mb-3">
+                                    <strong>Email layout template not configured.</strong> Emails will render without
+                                    your branded layout. Configure the <code>email_layout</code> template to fix this.
+                                  </div>
+                                )}
+                                {(decisionPreview.missingTemplateKeys?.length ?? 0) > 0 && (
+                                  <div class="alert alert-warning small py-2 mb-3">
+                                    <strong>
+                                      Missing email template
+                                      {(decisionPreview.missingTemplateKeys?.length ?? 0) > 1 ? "s" : ""}:
+                                    </strong>{" "}
+                                    <code>{decisionPreview.missingTemplateKeys?.join(", ")}</code>. These notifications
+                                    will not be sent until the templates are configured.
+                                  </div>
+                                )}
                                 <div class="row g-3">
                                   <div class="col-lg-4">
                                     <div class="small text-muted mb-2">Outgoing emails</div>
