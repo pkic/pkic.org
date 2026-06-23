@@ -7,6 +7,7 @@ import {
   serializeAdminSessionCookie,
   signAdminSessionToken,
 } from "../../../_lib/auth/admin";
+import { handleError } from "../../../_lib/http";
 import { requireAuthScope } from "../../../_lib/auth/scopes";
 import { REQUEST_DB_CONTEXT_KEY, type RequestDbContext } from "../../../_lib/db/context";
 import { primaryFirstDb, readReplicaDb } from "../../../_lib/db/session";
@@ -29,6 +30,7 @@ import proposals_Router from "./proposals/router";
 import users_Router from "./users/router";
 
 const app = new Hono<RequestDbContext>();
+app.onError((error, _c) => handleError(error));
 export const openapi = fromHono(app);
 const ADMIN_TOKEN_HEADER = "x-admin-token";
 
@@ -74,12 +76,17 @@ async function rotateAdminToken(c: Context<RequestDbContext>, sessionDb: Databas
     state,
   });
 
+  // Build a fresh mutable Headers object from the existing response so we can
+  // append without hitting the immutable-headers guard in the Workers runtime.
+  const headers = new Headers(c.res.headers);
+
   if (transport === "cookie") {
-    c.res.headers.append("Set-Cookie", serializeAdminSessionCookie(token, c.req.raw));
-    return;
+    headers.append("Set-Cookie", serializeAdminSessionCookie(token, c.req.raw));
+  } else {
+    headers.set(ADMIN_TOKEN_HEADER, token);
   }
 
-  c.header(ADMIN_TOKEN_HEADER, token);
+  c.res = new Response(c.res.body, { status: c.res.status, headers });
 }
 
 async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Next): Promise<void> {
@@ -94,7 +101,9 @@ async function useRequestScopedD1Session(c: Context<RequestDbContext>, next: Nex
       enforceAdminScopes(c);
     }
     await next();
-    await rotateAdminToken(c, sessionDb);
+    await rotateAdminToken(c, sessionDb).catch((err) => {
+      console.error("[rotateAdminToken] Failed to rotate token:", err);
+    });
     return;
   }
 
