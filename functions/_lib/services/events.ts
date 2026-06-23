@@ -79,7 +79,7 @@ const DEFAULT_SESSION_TYPES: SessionTypeConfig[] = [
 
 /** Normalise stored session types — handles legacy `string[]` as well as current `SessionTypeConfig[]`. */
 export function resolveSessionTypes(
-  settings: Pick<EventSettings, "proposal">,
+  settings: { proposal?: { sessionTypes?: unknown[] } },
 ): SessionTypeConfig[] {
   const raw = settings.proposal?.sessionTypes;
   if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_SESSION_TYPES;
