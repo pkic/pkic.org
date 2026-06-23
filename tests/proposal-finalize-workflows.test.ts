@@ -15,6 +15,7 @@ import {
   softDeleteProposal,
 } from "../functions/_lib/services/proposals";
 import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
+import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 
 async function seedProposalWithSpeaker(
   eventId: string,
@@ -492,6 +493,34 @@ describe("proposal HTTP error responses (full router stack)", () => {
     expect(body.success).toBe(true);
     expect(Array.isArray(body.missingTemplateKeys)).toBe(true);
     expect((body.missingTemplateKeys ?? []).length).toBeGreaterThan(0);
+  });
+
+  it("finalize-preview: returns 200 JSON with rendered emails when all templates are configured (production scenario)", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "preview-full-templates-token");
+    await seedWorkflowEmailTemplates(env.DB, adminUserId);
+
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize-preview`, adminToken, {
+      finalStatus: "accepted",
+    });
+
+    if (response.status !== 200) {
+      const body = await response.text();
+      throw new Error(`Expected 200, got ${response.status}: ${body}`);
+    }
+
+    const body = (await response.json()) as {
+      success?: boolean;
+      layoutMissing?: boolean;
+      missingTemplateKeys?: string[];
+      messages?: { templateMissing?: boolean; html?: string }[];
+    };
+    expect(body.success).toBe(true);
+    expect(body.layoutMissing).toBe(false);
+    expect(body.missingTemplateKeys).toEqual([]);
+    expect(body.messages?.every((m) => !m.templateMissing)).toBe(true);
+    expect(body.messages?.every((m) => (m.html?.length ?? 0) > 0)).toBe(true);
   });
 
   it("finalize-preview: returns 200 JSON when email template exists but email_layout is missing", async () => {

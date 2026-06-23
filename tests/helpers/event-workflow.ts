@@ -72,6 +72,13 @@ export async function seedWorkflowEmailTemplates(db: DatabaseLike, adminId: stri
   await seedTemplate(
     db,
     adminId,
+    "presentation_upload_request",
+    "Please upload your presentation for **{{proposalTitle}}**. Upload: {{{uploadUrl}}}. Deadline: {{deadline}}.",
+    "Upload your presentation",
+  );
+  await seedTemplate(
+    db,
+    adminId,
     "registration_confirm_email",
     "Confirm registration: {{{confirmationUrl}}}. Manage: {{{manageUrl}}}. Share: {{{shareUrl}}}.",
     "Confirm registration",
