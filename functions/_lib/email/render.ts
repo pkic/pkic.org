@@ -347,6 +347,8 @@ function wrapHtml(
   data: Record<string, unknown> = {},
   baseUrl = "https://pkic.org",
 ): string {
+  if (!layoutHtml) return bodyHtml;
+
   const layout = compileSimpleTemplate(layoutHtml, { baseUrl, ...data });
 
   if (!layout.includes("{{{body_html}}}")) {

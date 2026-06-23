@@ -14,6 +14,7 @@ import {
   markProposalStatus,
   softDeleteProposal,
 } from "../functions/_lib/services/proposals";
+import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
 
 async function seedProposalWithSpeaker(
   eventId: string,
@@ -470,5 +471,58 @@ describe("proposal HTTP error responses (full router stack)", () => {
     expect(response.status).toBe(404);
     const body = (await response.json()) as { error?: { code?: string } };
     expect(body.error?.code).toBe("PROPOSAL_NOT_FOUND");
+  });
+
+  it("finalize-preview: returns 200 JSON with missingTemplateKeys when no templates are configured", async () => {
+    // Replicates the production crash: admin clicks Preview before any email
+    // templates are set up. No templates seeded — handler must not throw.
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "preview-no-templates-token");
+
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize-preview`, adminToken, {
+      finalStatus: "accepted",
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      success?: boolean;
+      missingTemplateKeys?: string[];
+      messages?: unknown[];
+    };
+    expect(body.success).toBe(true);
+    expect(Array.isArray(body.missingTemplateKeys)).toBe(true);
+    expect((body.missingTemplateKeys ?? []).length).toBeGreaterThan(0);
+  });
+
+  it("finalize-preview: returns 200 JSON when email template exists but email_layout is missing", async () => {
+    // Replicates the exact production crash: proposal_decision template is
+    // configured but email_layout is not. renderEmail calls wrapHtml("") which
+    // throws a plain Error (no .code). The per-message catch must handle it
+    // gracefully rather than re-throwing and crashing the worker.
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "preview-no-layout-token");
+
+    // Seed the email template but deliberately omit email_layout
+    const v = await createTemplateVersion(env.DB, {
+      templateKey: "proposal_decision",
+      content: "Dear {{firstName}}, your proposal **{{proposalTitle}}** is {{finalStatus}}.",
+      subjectTemplate: "Proposal update: {{proposalTitle}}",
+      createdByUserId: adminUserId,
+    });
+    await activateTemplateVersion(env.DB, { templateKey: "proposal_decision", version: v.version });
+
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize-preview`, adminToken, {
+      finalStatus: "rejected",
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      success?: boolean;
+      missingTemplateKeys?: string[];
+      messages?: { templateMissing?: boolean }[];
+    };
+    expect(body.success).toBe(true);
+    // proposal_decision rendered (or marked missing due to layout), no crash
+    expect(Array.isArray(body.messages)).toBe(true);
   });
 });
