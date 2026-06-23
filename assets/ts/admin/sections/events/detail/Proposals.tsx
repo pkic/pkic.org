@@ -54,11 +54,22 @@ function recommendationSummary(p: ProposalSummary) {
 
 const FILTER_STORAGE_KEY = (slug: string) => `adm_proposal_filters_${slug}`;
 
+const VALID_STATUSES = new Set(["", "active", "submitted", "resubmitted", "under_review", "accepted", "rejected", "needs-work", "withdrawn", "spam", "duplicate"]);
+const VALID_RECOMMENDATIONS = new Set<RecommendationFilter>(["", "accept", "needs-work", "reject"]);
+
 function loadSavedFilters(slug: string): { status: string; recommendation: RecommendationFilter } {
   try {
     const raw = sessionStorage.getItem(FILTER_STORAGE_KEY(slug));
-    if (!raw) return { status: "", recommendation: "" };
-    return JSON.parse(raw) as { status: string; recommendation: RecommendationFilter };
+    if (!raw) return { status: "active", recommendation: "" };
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null) return { status: "", recommendation: "" };
+    const { status, recommendation } = parsed as Record<string, unknown>;
+    return {
+      status: typeof status === "string" && VALID_STATUSES.has(status) ? status : "",
+      recommendation: typeof recommendation === "string" && VALID_RECOMMENDATIONS.has(recommendation as RecommendationFilter)
+        ? (recommendation as RecommendationFilter)
+        : "",
+    };
   } catch {
     return { status: "", recommendation: "" };
   }
@@ -66,7 +77,7 @@ function loadSavedFilters(slug: string): { status: string; recommendation: Recom
 
 function ProposalsList({ slug }: { slug: string }) {
   const saved = loadSavedFilters(slug);
-  const [statusFilter, setStatusFilter] = useState(saved.status);
+  const [statusFilter, setStatusFilter] = useState(saved.status || "active");
   const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>(saved.recommendation);
   const [stats, setStats] = useState<ProposalStats | null>(null);
   const [, navigate] = useHashLocation();
@@ -176,7 +187,9 @@ function ProposalsList({ slug }: { slug: string }) {
               }}
             >
               <option value="">All statuses</option>
+              <option value="active">Active (excludes withdrawn/rejected/spam)</option>
               <option value="submitted">Submitted</option>
+              <option value="resubmitted">Resubmitted</option>
               <option value="under_review">Under Review</option>
               <option value="accepted">Accepted</option>
               <option value="rejected">Rejected</option>

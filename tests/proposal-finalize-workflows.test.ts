@@ -109,7 +109,7 @@ describe("proposal finalize workflows", () => {
 
   it("reject: sets proposal status to rejected and deactivates participants", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const { proposalId, proposerUserId, speakerUserId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
 
     await finalizeProposalDecision(env.DB, {
       proposalId,
@@ -253,7 +253,7 @@ describe("proposal spam/duplicate/delete", () => {
 
   it("marks a proposal as spam", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const { proposalId } = await seedProposalWithSpeaker(eventId);
 
     await markProposalStatus(env.DB, { proposalId, status: "spam" });
 
@@ -267,7 +267,7 @@ describe("proposal spam/duplicate/delete", () => {
 
   it("marks a proposal as duplicate", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const { proposalId } = await seedProposalWithSpeaker(eventId);
 
     await markProposalStatus(env.DB, { proposalId, status: "duplicate" });
 
@@ -281,7 +281,7 @@ describe("proposal spam/duplicate/delete", () => {
 
   it("soft-delete: sets deleted_at and deactivates participants", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const { proposalId, proposerUserId, speakerUserId } = await seedProposalWithSpeaker(eventId);
+    const { proposalId } = await seedProposalWithSpeaker(eventId);
 
     await softDeleteProposal(env.DB, { proposalId });
 

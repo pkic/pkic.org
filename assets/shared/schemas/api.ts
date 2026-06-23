@@ -699,7 +699,16 @@ export const adminEventSettingsSchema = z.object({
   heroImageUrl: trimmedString(2, 500).nullable().optional(),
   location: trimmedString(2, 200).nullable().optional(),
   // ── Proposal / session settings ────────────────────────────────────────────
-  sessionTypes: z.array(z.string().trim().min(1).max(80)).max(20).nullable().optional(),
+  sessionTypes: z
+    .array(
+      z.object({
+        label: z.string().trim().min(1).max(80),
+        requiresPresentation: z.boolean(),
+      }),
+    )
+    .max(20)
+    .nullable()
+    .optional(),
   registrationFormKey: z
     .string()
     .trim()

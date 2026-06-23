@@ -19,7 +19,7 @@ export interface EventDetail extends EventSummary {
   virtual_url: string | null;
   hero_image_url: string | null;
   location: string | null;
-  session_types: string[] | null;
+  session_types: Array<{ label: string; requiresPresentation: boolean }> | null;
   settings: Record<string, unknown>;
 }
 

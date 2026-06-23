@@ -38,6 +38,14 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to flag proposals" } }, 403);
   }
 
+  const FINALIZED_STATUSES = ["accepted", "rejected", "needs-work"];
+  if (FINALIZED_STATUSES.includes(proposal.status)) {
+    return json(
+      { error: { code: "PROPOSAL_ALREADY_FINALIZED", message: "Cannot flag or delete a finalized proposal" } },
+      409,
+    );
+  }
+
   const body = await parseJsonBody(c.req, flagSchema);
 
   if (body.action === "delete") {

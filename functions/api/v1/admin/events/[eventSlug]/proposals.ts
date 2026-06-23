@@ -25,7 +25,11 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const conditions: string[] = ["sp.event_id = ?", showDeleted ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL"];
   const params: unknown[] = [event.id];
 
-  if (status) {
+  const INACTIVE_STATUSES = ["withdrawn", "rejected", "spam", "duplicate", "deleted"];
+  if (status === "active") {
+    conditions.push(`sp.status NOT IN (${INACTIVE_STATUSES.map(() => "?").join(", ")})`);
+    params.push(...INACTIVE_STATUSES);
+  } else if (status) {
     conditions.push("sp.status = ?");
     params.push(status);
   }

@@ -13,6 +13,7 @@ import { getConfig } from "../../../../../_lib/config";
 import { getActiveFormByPurpose } from "../../../../../_lib/services/forms";
 import { parseJsonSafe } from "../../../../../_lib/utils/json";
 import type { ProposalListRecord } from "../../../../../_lib/services/proposals";
+import { resolveSessionTypes } from "../../../../../_lib/services/events";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { proposalIdParamsSchema } from "../../../../../../assets/shared/schemas/api";
 
@@ -49,7 +50,12 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   const access = await getProposalAccessForEvent(requestDb(c), proposal.event_id, admin);
   const config = getConfig(c.env, c.req.raw);
-  const proposalForm = await getActiveFormByPurpose(requestDb(c), proposal.event_id, "proposal_submission");
+  const [proposalForm, eventRow] = await Promise.all([
+    getActiveFormByPurpose(requestDb(c), proposal.event_id, "proposal_submission"),
+    first<{ settings_json: string }>(requestDb(c), "SELECT settings_json FROM events WHERE id = ?", [proposal.event_id]),
+  ]);
+  const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(eventRow?.settings_json ?? "{}", {});
+  const sessionTypes = resolveSessionTypes(eventSettings);
 
   return json({
     proposal: {
@@ -67,6 +73,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
             fields: proposalForm.fields,
           },
     minReviewsRequired: config.minProposalReviews,
+    sessionTypes,
   });
 }
 

@@ -412,7 +412,7 @@ export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: str
        u.headshot_r2_key  AS u_headshot_r2_key,
        u.headshot_updated_at AS u_headshot_updated_at
      FROM proposal_speakers ps
-     JOIN session_proposals sp ON sp.id = ps.proposal_id
+     JOIN session_proposals sp ON sp.id = ps.proposal_id AND sp.deleted_at IS NULL
      JOIN users u              ON u.id  = ps.user_id
      WHERE ps.manage_token_hash = ? OR ps.manage_token_hash = ?`,
     [hashedToken, directToken ?? hashedToken],
@@ -637,7 +637,7 @@ export async function getProposalByManageToken(db: DatabaseLike, manageToken: st
   const directToken = /^[a-f0-9]{64}$/i.test(manageToken) ? manageToken.toLowerCase() : null;
   const proposal = await first<ProposalRecord>(
     db,
-    "SELECT * FROM session_proposals WHERE manage_token_hash = ? OR manage_token_hash = ?",
+    "SELECT * FROM session_proposals WHERE (manage_token_hash = ? OR manage_token_hash = ?) AND deleted_at IS NULL",
     [hashedToken, directToken ?? hashedToken],
   );
 
@@ -687,7 +687,7 @@ export async function updateProposalByManageToken(
            title = COALESCE(?, title),
            abstract = COALESCE(?, abstract),
            details_json = COALESCE(?, details_json),
-           status = CASE WHEN status = 'needs-work' THEN 'submitted' ELSE status END,
+           status = CASE WHEN status = 'needs-work' THEN 'resubmitted' ELSE status END,
            updated_at = ?
        WHERE id = ?`,
       [

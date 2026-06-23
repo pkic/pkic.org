@@ -5,6 +5,7 @@ import { getProposalByManageToken, updateProposalByManageToken } from "../../../
 import { validateCustomAnswersByPurpose } from "../../../../_lib/services/forms";
 import { proposalManageSchema } from "../../../../../assets/shared/schemas/api";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
+import { writeAuditLog } from "../../../../_lib/services/audit";
 
 export async function onRequestPatch(c: any): Promise<Response> {
   const body = await parseJsonBody(c.req, proposalManageSchema);
@@ -25,6 +26,29 @@ export async function onRequestPatch(c: any): Promise<Response> {
     abstract: body.abstract,
     detailsJson: Object.keys(proposalDetails).length > 0 ? JSON.stringify(proposalDetails) : null,
   });
+
+  if (body.action === "withdraw") {
+    await writeAuditLog(c.env.DB, "user", existing.proposer_user_id, "proposal_withdrawn", "proposal", existing.id, {
+      status: { from: existing.status, to: "withdrawn" },
+    });
+  } else {
+    const changes: Record<string, { from: unknown; to: unknown }> = {};
+    if (body.title != null && body.title !== existing.title) {
+      changes.title = { from: existing.title, to: body.title };
+    }
+    if (body.abstract != null && body.abstract !== existing.abstract) {
+      changes.abstract = { from: existing.abstract, to: body.abstract };
+    }
+    if (body.proposalType != null && body.proposalType !== existing.proposal_type) {
+      changes.proposalType = { from: existing.proposal_type, to: body.proposalType };
+    }
+    if (existing.status === "needs-work" && proposal.status === "resubmitted") {
+      changes.status = { from: "needs-work", to: "resubmitted" };
+    }
+    if (Object.keys(changes).length > 0) {
+      await writeAuditLog(c.env.DB, "user", existing.proposer_user_id, "proposal_edited", "proposal", existing.id, changes);
+    }
+  }
 
   return json({ success: true, proposal });
 }

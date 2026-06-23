@@ -35,11 +35,17 @@ interface ProposalFormSummary {
   fields: AdminFormDetailField[];
 }
 
+interface SessionTypeConfig {
+  label: string;
+  requiresPresentation: boolean;
+}
+
 interface ProposalResponse {
   proposal: ProposalDetailRecord;
   access: ProposalAccess;
   form: ProposalFormSummary | null;
   minReviewsRequired: number;
+  sessionTypes: SessionTypeConfig[];
 }
 
 type DetailTab = "submission" | "speakers" | "reviews" | "audit-log" | "decision";
@@ -246,11 +252,17 @@ function SpeakerCard({
   speaker,
   proposalId,
   canEdit,
+  canFinalize,
+  decisionStatus,
+  requiresPresentation,
   onSaved,
 }: {
   speaker: ProposalSpeaker;
   proposalId: string;
   canEdit: boolean;
+  canFinalize?: boolean;
+  decisionStatus?: string | null;
+  requiresPresentation?: boolean;
   onSaved: (userId: string, patch: Partial<ProposalSpeaker>) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -426,6 +438,38 @@ function SpeakerCard({
             {canEdit && (
               <button class="btn btn-sm btn-outline-secondary" onClick={() => setEditing((v) => !v)}>
                 {editing ? "Cancel" : "Edit profile"}
+              </button>
+            )}
+            {canFinalize && (
+              <button
+                class="btn btn-sm btn-outline-secondary"
+                title="Send profile completion reminder"
+                onClick={async () => {
+                  try {
+                    await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}/remind`, { method: "POST" });
+                    toast("Profile reminder sent", "success");
+                  } catch (err) {
+                    toast((err as Error).message, "error");
+                  }
+                }}
+              >
+                ✉ Profile reminder
+              </button>
+            )}
+            {canFinalize && requiresPresentation && decisionStatus === "accepted" && (
+              <button
+                class="btn btn-sm btn-outline-secondary"
+                title="Send presentation upload reminder"
+                onClick={async () => {
+                  try {
+                    await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}/remind-presentation`, { method: "POST" });
+                    toast("Presentation reminder sent", "success");
+                  } catch (err) {
+                    toast((err as Error).message, "error");
+                  }
+                }}
+              >
+                ✉ Presentation reminder
               </button>
             )}
           </div>
@@ -642,7 +686,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   if (error) return <ErrorAlert error={error} />;
   if (!data) return null;
 
-  const { proposal, access, form, minReviewsRequired } = data;
+  const { proposal, access, form, minReviewsRequired, sessionTypes } = data;
   const proposer =
     [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ") || proposal.proposer_email;
   const quorumMet = reviews.length >= minReviewsRequired;
@@ -973,6 +1017,13 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                     speaker={s}
                     proposalId={proposalId}
                     canEdit={access.canReview}
+                    canFinalize={access.canFinalize}
+                    decisionStatus={proposal.decision_status}
+                    requiresPresentation={
+                      sessionTypes.find(
+                        (t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase(),
+                      )?.requiresPresentation ?? false
+                    }
                     onSaved={(userId, patch) =>
                       setSpeakers((prev) => prev.map((sp) => (sp.userId === userId ? { ...sp, ...patch } : sp)))
                     }

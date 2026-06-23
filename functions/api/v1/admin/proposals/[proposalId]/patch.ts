@@ -19,9 +19,9 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
-  const proposal = await first<{ id: string; event_id: string; title: string; abstract: string }>(
+  const proposal = await first<{ id: string; event_id: string; title: string; abstract: string; requires_presentation: number | null }>(
     requestDb(c),
-    "SELECT id, event_id, title, abstract FROM session_proposals WHERE id = ?",
+    "SELECT id, event_id, title, abstract, requires_presentation FROM session_proposals WHERE id = ?",
     [proposalId],
   );
   if (!proposal) {
@@ -35,23 +35,26 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
 
   const body = await parseJsonBody(c.req, adminProposalPatchSchema);
 
+  const requiresPresentation = body.requiresPresentation != null ? (body.requiresPresentation ? 1 : 0) : null;
+
   await run(
     requestDb(c),
     `UPDATE session_proposals
-     SET title    = COALESCE(?, title),
-         abstract = COALESCE(?, abstract),
-         updated_at = datetime('now')
+     SET title                  = COALESCE(?, title),
+         abstract               = COALESCE(?, abstract),
+         requires_presentation  = COALESCE(?, requires_presentation),
+         updated_at             = datetime('now')
      WHERE id = ?`,
-    [body.title ?? null, body.abstract ?? null, proposalId],
+    [body.title ?? null, body.abstract ?? null, requiresPresentation, proposalId],
   );
 
-  const updated = await first<{ id: string; title: string; abstract: string; updated_at: string }>(
+  const updated = await first<{ id: string; title: string; abstract: string; updated_at: string; requires_presentation: number | null }>(
     requestDb(c),
-    "SELECT id, title, abstract, updated_at FROM session_proposals WHERE id = ?",
+    "SELECT id, title, abstract, updated_at, requires_presentation FROM session_proposals WHERE id = ?",
     [proposalId],
   );
 
-  const changes: Record<string, { from: string; to: string }> = {};
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
 
   if (updated) {
     if (body.title != null && proposal.title !== updated.title) {
@@ -59,6 +62,9 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
     }
     if (body.abstract != null && proposal.abstract !== updated.abstract) {
       changes.abstract = { from: proposal.abstract, to: updated.abstract };
+    }
+    if (body.requiresPresentation != null && proposal.requires_presentation !== updated.requires_presentation) {
+      changes.requiresPresentation = { from: Boolean(proposal.requires_presentation), to: body.requiresPresentation };
     }
   }
 
