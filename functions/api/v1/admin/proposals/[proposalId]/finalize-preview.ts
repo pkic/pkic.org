@@ -49,7 +49,10 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     },
   );
 
-  const [layoutHtml, partials] = await Promise.all([loadEmailLayout(requestDb(c)), loadEmailPartials(requestDb(c))]);
+  const [layoutHtml, partials] = await Promise.all([
+    loadEmailLayout(requestDb(c)).catch(() => ""),
+    loadEmailPartials(requestDb(c)).catch(() => ({}) as Record<string, string>),
+  ]);
 
   const messages = await Promise.all(
     plan.messages.map(async (message) => {
