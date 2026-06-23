@@ -52,6 +52,7 @@ export function handleError(error: unknown): Response {
     );
   }
 
+  console.error("[handleError] Unhandled error:", error);
   return json(
     {
       error: {
