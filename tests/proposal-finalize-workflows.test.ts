@@ -3,6 +3,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
+import app from "../functions/router";
 import { onRequestPost as finalizeProposal } from "../functions/api/v1/admin/proposals/[proposalId]/finalize";
 import { onRequestPost as upsertReview } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
 import { onRequestPost as flagProposal } from "../functions/api/v1/admin/proposals/[proposalId]/flag";
@@ -379,5 +380,95 @@ describe("proposal spam/duplicate/delete", () => {
       [proposalId],
     );
     expect(auditRows[0]?.action).toBe("proposal_deleted");
+  });
+});
+
+// ─── HTTP error path tests (via full app router) ──────────────────────────────
+// These tests exercise the complete request stack including sub-router onError
+// handlers. Direct handler calls bypass error handling — these don't.
+
+async function callApp(path: string, adminToken: string, body: unknown): Promise<Response> {
+  return app.fetch(
+    new Request(`https://app.test${path}`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${adminToken}` },
+      body: JSON.stringify(body),
+    }),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+describe("proposal HTTP error responses (full router stack)", () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  it("finalize: double-finalize returns JSON 409 with PROPOSAL_ALREADY_FINALIZED", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "double-finalize-token");
+    await addReviews(eventId, proposalId, adminUserId);
+
+    // First finalize — must succeed
+    const first = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+      finalStatus: "rejected",
+    });
+    expect(first.status).toBe(200);
+
+    // Second finalize — must return JSON 409, not a 500 or a crash
+    const second = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+      finalStatus: "accepted",
+    });
+    expect(second.status).toBe(409);
+    const body = (await second.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("PROPOSAL_ALREADY_FINALIZED");
+  });
+
+  it("finalize: review threshold not met returns JSON 409", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "threshold-token");
+
+    // Default config requires 2 reviews; seed none so threshold is not met
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/finalize`, adminToken, {
+      finalStatus: "accepted",
+    });
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("PROPOSAL_REVIEW_THRESHOLD_NOT_MET");
+  });
+
+  it("flag: flagging a finalized proposal returns JSON 409 with PROPOSAL_ALREADY_FINALIZED", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "flag-finalized-token");
+
+    // Finalize the proposal first
+    await finalizeProposalDecision(env.DB, {
+      proposalId,
+      decidedByUserId: adminUserId,
+      finalStatus: "accepted",
+      minReviewsRequired: 0,
+    });
+
+    // Flag on a finalized proposal — must return JSON 409
+    const response = await callApp(`/api/v1/admin/proposals/${proposalId}/flag`, adminToken, { action: "spam" });
+    expect(response.status).toBe(409);
+    const body = (await response.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("PROPOSAL_ALREADY_FINALIZED");
+  });
+
+  it("finalize: unknown proposal returns JSON 404", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { adminUserId } = await seedProposalWithSpeaker(eventId);
+    const adminToken = await createAdminSession(env.DB, adminUserId, "unknown-proposal-token");
+
+    const response = await callApp(`/api/v1/admin/proposals/does-not-exist/finalize`, adminToken, {
+      finalStatus: "rejected",
+    });
+    expect(response.status).toBe(404);
+    const body = (await response.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("PROPOSAL_NOT_FOUND");
   });
 });
