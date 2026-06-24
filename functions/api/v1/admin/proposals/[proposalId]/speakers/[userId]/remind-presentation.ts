@@ -53,7 +53,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const freshToken = await refreshSpeakerManageToken(requestDb(c), proposalId, userId);
-  const speakerManageUrl = speakerPresentationPageUrl(appBaseUrl, event, freshToken);
+  const uploadUrl = speakerPresentationPageUrl(appBaseUrl, event, freshToken);
 
   await queueEmail(requestDb(c), {
     eventId: event.id,
@@ -66,7 +66,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       ...buildEventEmailVariables(event, appBaseUrl),
       firstName: speaker.first_name ?? "",
       proposalTitle: proposal.title,
-      profileUrl: speakerManageUrl,
+      uploadUrl,
       hasPresentation: speaker.presentation_r2_key ? "true" : "",
     },
   });
