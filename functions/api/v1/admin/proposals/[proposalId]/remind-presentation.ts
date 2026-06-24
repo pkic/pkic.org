@@ -31,7 +31,12 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   if (proposal.decision_status !== "accepted") {
     return json(
-      { error: { code: "PROPOSAL_NOT_ACCEPTED", message: "Presentation reminders can only be sent for accepted proposals" } },
+      {
+        error: {
+          code: "PROPOSAL_NOT_ACCEPTED",
+          message: "Presentation reminders can only be sent for accepted proposals",
+        },
+      },
       409,
     );
   }

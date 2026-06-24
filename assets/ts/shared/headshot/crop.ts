@@ -30,11 +30,7 @@ export function cropHeadshot(file: File): Promise<Blob | null> {
   });
 }
 
-function showCropModal(
-  img: HTMLImageElement,
-  done: (blob: Blob | null) => void,
-  fail: (error: Error) => void,
-): void {
+function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void, fail: (error: Error) => void): void {
   // ── Get or create modal from template ──────────────────────────────────────
   const modal = mountModalTemplate("crop-headshot-template", "crop-headshot-modal", "Crop headshot");
   if (!modal) {
@@ -182,14 +178,18 @@ function showCropModal(
 
       ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, CROP_OUTPUT_SIZE, CROP_OUTPUT_SIZE);
 
-      canvas.toBlob((blob) => {
-        if (!blob) {
-          modal.remove();
-          fail(new Error("Failed to encode cropped image. Please try a different file."));
-          return;
-        }
-        dismiss(blob);
-      }, "image/jpeg", 0.92);
+      canvas.toBlob(
+        (blob) => {
+          if (!blob) {
+            modal.remove();
+            fail(new Error("Failed to encode cropped image. Please try a different file."));
+            return;
+          }
+          dismiss(blob);
+        },
+        "image/jpeg",
+        0.92,
+      );
     },
     { once: true },
   );

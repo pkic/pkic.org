@@ -147,7 +147,9 @@ async function main(): Promise<void> {
   // Presentation terms — use API terms or fall back to defaults
   const disclaimerTexts =
     data.presentationTerms && data.presentationTerms.length > 0
-      ? data.presentationTerms.map((t) => t.display_text ?? t.term_key).filter((t): t is string => typeof t === "string")
+      ? data.presentationTerms
+          .map((t) => t.display_text ?? t.term_key)
+          .filter((t): t is string => typeof t === "string")
       : DEFAULT_PRESENTATION_TERMS;
 
   // File upload with disclaimer

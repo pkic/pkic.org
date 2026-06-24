@@ -199,7 +199,8 @@ export function resolveEventFrontendRoutes(
       normalizeFrontendPath(routes.registrationManage, basePath) ?? defaults.registrationManagePath,
     proposalManagePath: normalizeFrontendPath(routes.proposalManage, basePath) ?? defaults.proposalManagePath,
     speakerManagePath: normalizeFrontendPath(routes.speakerManage, basePath) ?? defaults.speakerManagePath,
-    speakerPresentationPath: normalizeFrontendPath(routes.speakerPresentation, basePath) ?? defaults.speakerPresentationPath,
+    speakerPresentationPath:
+      normalizeFrontendPath(routes.speakerPresentation, basePath) ?? defaults.speakerPresentationPath,
     inviteDeclinePath: normalizeFrontendPath(routes.inviteDecline, basePath) ?? defaults.inviteDeclinePath,
   };
 

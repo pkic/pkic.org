@@ -86,9 +86,7 @@ export async function onRequestGet(c: any): Promise<Response> {
 
     const [coSpeakers, presentationUploader, presentationTerms] = await Promise.all([
       getProposalCoSpeakers(c.env.DB, proposal.id, speaker.user_id),
-      proposal.presentation_uploaded_at
-        ? getPresentationUploader(c.env.DB, proposal.id)
-        : Promise.resolve(null),
+      proposal.presentation_uploaded_at ? getPresentationUploader(c.env.DB, proposal.id) : Promise.resolve(null),
       getRequiredTerms(c.env.DB, proposal.event_id, "presentation"),
     ]);
 

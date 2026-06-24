@@ -481,7 +481,7 @@ Line 2
       // caused it to fall through to the wrong branch, setting pos = nextClose + len where
       // nextClose was -1 (no more {{/if}} remaining), resulting in pos = 6 (backward jump) → infinite loop.
       const TEMPLATE =
-        "{{#if isReminder}}{{#if lte daysUntilDeadline \"1\"}}Final call{{else}}{{#if lte daysUntilDeadline \"3\"}}Urgent{{else}}Reminder{{/if}}{{/if}}{{else}}Please upload{{/if}}";
+        '{{#if isReminder}}{{#if lte daysUntilDeadline "1"}}Final call{{else}}{{#if lte daysUntilDeadline "3"}}Urgent{{else}}Reminder{{/if}}{{/if}}{{else}}Please upload{{/if}}';
       expect(renderSubject(TEMPLATE, "Fallback", { isReminder: false })).toBe("Please upload");
       expect(renderSubject(TEMPLATE, "Fallback", { isReminder: true, daysUntilDeadline: "1" })).toBe("Final call");
       expect(renderSubject(TEMPLATE, "Fallback", { isReminder: true, daysUntilDeadline: "2" })).toBe("Urgent");

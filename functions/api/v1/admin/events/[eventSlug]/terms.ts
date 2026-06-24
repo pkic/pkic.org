@@ -63,7 +63,8 @@ export async function onRequestPut(c: AdminContext): Promise<Response> {
 
   // Replace attendee terms preserving help_text (not in the base replaceEventTerms service)
   for (const audienceType of ["attendee", "speaker", "presentation"] as const) {
-    const termList = audienceType === "attendee" ? body.attendee : audienceType === "speaker" ? body.speaker : body.presentation;
+    const termList =
+      audienceType === "attendee" ? body.attendee : audienceType === "speaker" ? body.speaker : body.presentation;
 
     await run(requestDb(c), "UPDATE event_terms SET active = 0 WHERE event_id = ? AND audience_type = ?", [
       event.id,

@@ -827,9 +827,9 @@ function TermsTab({ slug }: { slug: string }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ terms: { attendee: AdminEventTerm[]; speaker: AdminEventTerm[]; presentation: AdminEventTerm[] } }>(
-        `/api/v1/admin/events/${slug}/terms`,
-      );
+      const data = await api<{
+        terms: { attendee: AdminEventTerm[]; speaker: AdminEventTerm[]; presentation: AdminEventTerm[] };
+      }>(`/api/v1/admin/events/${slug}/terms`);
       setAttendee((data.terms?.attendee ?? []).map(termFromRow));
       setSpeaker((data.terms?.speaker ?? []).map(termFromRow));
       setPresentation((data.terms?.presentation ?? []).map(termFromRow));
@@ -861,7 +861,11 @@ function TermsTab({ slug }: { slug: string }) {
           }));
       await api(`/api/v1/admin/events/${slug}/terms`, {
         method: "PUT",
-        body: JSON.stringify({ attendee: toPayload(attendee), speaker: toPayload(speaker), presentation: toPayload(presentation) }),
+        body: JSON.stringify({
+          attendee: toPayload(attendee),
+          speaker: toPayload(speaker),
+          presentation: toPayload(presentation),
+        }),
       });
       setSaveStatus("✓ Saved");
       toast("Terms updated", "success");

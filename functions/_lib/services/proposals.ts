@@ -492,9 +492,7 @@ export async function getProposalCoSpeakers(
      WHERE ps.proposal_id = ? AND ps.user_id != ?
      ORDER BY ps.created_at ASC`,
     [proposalId, excludeUserId],
-  ).then((rows) =>
-    rows.map((r) => ({ firstName: r.first_name, lastName: r.last_name, status: r.status })),
-  );
+  ).then((rows) => rows.map((r) => ({ firstName: r.first_name, lastName: r.last_name, status: r.status })));
 }
 
 /**
