@@ -126,13 +126,18 @@ export async function updateSpeakerProfile(
   await run(db, `UPDATE users SET ${assignments.join(", ")} WHERE id = ?`, [...values, userId]);
 }
 
-export async function recordPresentationUpload(db: DatabaseLike, proposalId: string, r2Key: string): Promise<void> {
+export async function recordPresentationUpload(
+  db: DatabaseLike,
+  proposalId: string,
+  r2Key: string,
+  uploadedByUserId: string,
+): Promise<void> {
   const now = nowIso();
   await run(
     db,
     `UPDATE session_proposals
-     SET presentation_r2_key = ?, presentation_uploaded_at = ?, updated_at = ?
+     SET presentation_r2_key = ?, presentation_uploaded_at = ?, presentation_uploaded_by_user_id = ?, updated_at = ?
      WHERE id = ?`,
-    [r2Key, now, now, proposalId],
+    [r2Key, now, uploadedByUserId, now, proposalId],
   );
 }

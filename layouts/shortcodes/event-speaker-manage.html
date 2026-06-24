@@ -137,6 +137,8 @@
     <div class="mb-4 d-none" data-presentation-section>
       <h4 class="h6 fw-bold mb-2">Presentation upload</h4>
       <p class="small text-muted mb-2" data-presentation-status-msg></p>
+      {{/* Co-speaker upload notice — shown when another speaker already uploaded */}}
+      <div class="alert alert-info small py-2 d-none" data-cospeaker-upload-notice></div>
       <div class="d-flex gap-2 align-items-center flex-wrap" data-presentation-upload-controls>
         <label class="btn btn-sm btn-outline-secondary mb-0" for="speaker-presentation-file">Upload presentation</label>
         <input type="file" id="speaker-presentation-file"

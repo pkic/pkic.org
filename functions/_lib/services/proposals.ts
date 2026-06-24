@@ -450,6 +450,9 @@ export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: str
       submitted_at: row.sp_submitted_at,
       updated_at: row.sp_updated_at,
       withdrawn_at: row.sp_withdrawn_at,
+      presentation_r2_key: row.sp_presentation_r2_key,
+      presentation_deadline: row.sp_presentation_deadline,
+      presentation_uploaded_at: row.sp_presentation_uploaded_at,
     },
     user: {
       id: row.u_id,
@@ -463,6 +466,62 @@ export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: str
       headshot_r2_key: row.u_headshot_r2_key,
       headshot_updated_at: row.u_headshot_updated_at,
     },
+  };
+}
+
+/**
+ * Returns co-speakers for a proposal, excluding a given user, along with
+ * the name of whoever uploaded the presentation (if any).
+ */
+export async function getProposalCoSpeakers(
+  db: DatabaseLike,
+  proposalId: string,
+  excludeUserId: string,
+): Promise<
+  {
+    firstName: string | null;
+    lastName: string | null;
+    status: string;
+  }[]
+> {
+  return all<{ first_name: string | null; last_name: string | null; status: string }>(
+    db,
+    `SELECT u.first_name, u.last_name, ps.status
+     FROM proposal_speakers ps
+     JOIN users u ON u.id = ps.user_id
+     WHERE ps.proposal_id = ? AND ps.user_id != ?
+     ORDER BY ps.created_at ASC`,
+    [proposalId, excludeUserId],
+  ).then((rows) =>
+    rows.map((r) => ({ firstName: r.first_name, lastName: r.last_name, status: r.status })),
+  );
+}
+
+/**
+ * Returns display info for whoever uploaded the presentation for a proposal,
+ * or null if no presentation has been uploaded yet.
+ */
+export async function getPresentationUploader(
+  db: DatabaseLike,
+  proposalId: string,
+): Promise<{ firstName: string | null; lastName: string | null; uploadedAt: string } | null> {
+  const row = await first<{
+    first_name: string | null;
+    last_name: string | null;
+    presentation_uploaded_at: string;
+  }>(
+    db,
+    `SELECT u.first_name, u.last_name, sp.presentation_uploaded_at
+     FROM session_proposals sp
+     JOIN users u ON u.id = sp.presentation_uploaded_by_user_id
+     WHERE sp.id = ? AND sp.presentation_uploaded_at IS NOT NULL`,
+    [proposalId],
+  );
+  if (!row) return null;
+  return {
+    firstName: row.first_name,
+    lastName: row.last_name,
+    uploadedAt: row.presentation_uploaded_at,
   };
 }
 

@@ -16,7 +16,11 @@
  *   PUT /api/v1/proposals/speaker/[token]/presentation
  */
 import { handleError, json } from "../../../../_lib/http";
-import { getSpeakerByManageToken } from "../../../../_lib/services/proposals";
+import {
+  getSpeakerByManageToken,
+  getProposalCoSpeakers,
+  getPresentationUploader,
+} from "../../../../_lib/services/proposals";
 import {
   confirmSpeakerParticipation,
   declineSpeakerParticipation,
@@ -80,6 +84,13 @@ export async function onRequestGet(c: any): Promise<Response> {
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
     const { speaker, proposal, user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
 
+    const [coSpeakers, presentationUploader] = await Promise.all([
+      getProposalCoSpeakers(c.env.DB, proposal.id, speaker.user_id),
+      proposal.presentation_uploaded_at
+        ? getPresentationUploader(c.env.DB, proposal.id)
+        : Promise.resolve(null),
+    ]);
+
     return json({
       speaker: {
         role: speaker.role,
@@ -95,6 +106,9 @@ export async function onRequestGet(c: any): Promise<Response> {
         status: proposal.status,
         presentationDeadline: proposal.presentation_deadline ?? null,
         presentationUploaded: Boolean(proposal.presentation_uploaded_at),
+        presentationUploadedAt: proposal.presentation_uploaded_at ?? null,
+        presentationUploader: presentationUploader,
+        coSpeakers,
       },
       profile: {
         firstName: user.first_name,

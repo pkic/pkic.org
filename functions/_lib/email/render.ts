@@ -108,9 +108,12 @@ function findElseAtDepth0(content: string, openPrefix: string, closeTag: string)
       depth++;
       const innerClose = content.indexOf("}}", nextOpen + openPrefix.length);
       pos = innerClose !== -1 ? innerClose + 2 : nextOpen + openPrefix.length;
-    } else {
+    } else if (closeAt === earliest) {
       depth--;
       pos = nextClose + closeTag.length;
+    } else {
+      // elseAt === earliest, depth > 0: nested {{else}} inside an inner block — skip over it.
+      pos = nextElse + 8;
     }
   }
   return -1;

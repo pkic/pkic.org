@@ -14,6 +14,7 @@
 import { json } from "../../../../../_lib/http";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
 import { recordPresentationUpload } from "../../../../../_lib/services/proposals-speaker-profile";
+import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
 import { first } from "../../../../../_lib/db/queries";
 
@@ -108,7 +109,14 @@ export async function onRequestPut(c: any): Promise<Response> {
     httpMetadata: { contentType: blobType },
   });
 
-  await recordPresentationUpload(c.env.DB, proposal.id, r2Key);
+  await recordPresentationUpload(c.env.DB, proposal.id, r2Key, speaker.user_id);
+
+  await writeAuditLog(c.env.DB, "user", speaker.user_id, "presentation_uploaded", "session_proposal", proposal.id, {
+    r2Key,
+    fileName: blob.name ?? null,
+    fileSize: blob.size,
+    mimeType: blobType,
+  });
 
   return json({ success: true, r2Key });
 }
