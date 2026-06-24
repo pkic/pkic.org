@@ -24,6 +24,8 @@ import {
 } from "./comments";
 import { AdminProposalsProposalIdReviewsGet, AdminProposalsProposalIdReviewsPost } from "./reviews";
 import { onRequestGet as AdminProposalsProposalIdSpeakersGet_l } from "./speakers";
+import { onRequestPost as AdminProposalsProposalIdRemindSpeakersPost_l } from "./remind-speakers";
+import { onRequestPost as AdminProposalsProposalIdRemindPresentationPost_l } from "./remind-presentation";
 import reviews_Router from "./reviews/router";
 import speakers_Router from "./speakers/router";
 import type { RequestDbContext } from "../../../../../_lib/db/context";
@@ -74,6 +76,8 @@ openapi.post("/comments", AdminProposalsProposalIdCommentsPost);
 openapi.get("/reviews", AdminProposalsProposalIdReviewsGet);
 openapi.post("/reviews", AdminProposalsProposalIdReviewsPost);
 openapi.get("/speakers", AdminProposalsProposalIdSpeakersGet);
+openapi.post("/remind-speakers", AdminProposalsProposalIdRemindSpeakersPost_l);
+openapi.post("/remind-presentation", AdminProposalsProposalIdRemindPresentationPost_l);
 openapi.route("/reviews", reviews_Router);
 openapi.route("/speakers", speakers_Router);
 

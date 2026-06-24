@@ -694,6 +694,9 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const { proposal, access, form, minReviewsRequired, sessionTypes } = data;
   const proposer =
     [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ") || proposal.proposer_email;
+  const proposalRequiresPresentation =
+    sessionTypes.find((t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase())?.requiresPresentation ??
+    false;
   const quorumMet = reviews.length >= minReviewsRequired;
   const needsWorkRequiresNote = isNeedsWorkDecision(decisionStatus) && !decisionNote.trim();
   const selectedDecisionPreview =
@@ -1383,6 +1386,45 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
               >
                 Copy Proposer Email
               </button>
+              {access.canFinalize && (
+                <>
+                  <hr class="my-1" />
+                  <button
+                    class="btn btn-outline-secondary btn-sm"
+                    onClick={async () => {
+                      try {
+                        const res = await api<{ queued: number }>(
+                          `/api/v1/admin/proposals/${proposalId}/remind-speakers`,
+                          { method: "POST" },
+                        );
+                        toast(`Profile reminder sent to ${res.queued} speaker(s)`, "success");
+                      } catch (err) {
+                        toast((err as Error).message, "error");
+                      }
+                    }}
+                  >
+                    ✉ Remind all: complete profile
+                  </button>
+                  {proposal.decision_status === "accepted" && proposalRequiresPresentation && (
+                    <button
+                      class="btn btn-outline-secondary btn-sm"
+                      onClick={async () => {
+                        try {
+                          const res = await api<{ queued: number }>(
+                            `/api/v1/admin/proposals/${proposalId}/remind-presentation`,
+                            { method: "POST" },
+                          );
+                          toast(`Presentation reminder sent to ${res.queued} speaker(s)`, "success");
+                        } catch (err) {
+                          toast((err as Error).message, "error");
+                        }
+                      }}
+                    >
+                      ✉ Remind all: upload presentation
+                    </button>
+                  )}
+                </>
+              )}
               {access.canFinalize && !proposal.decision_status && (
                 <>
                   <hr class="my-1" />

@@ -4,7 +4,7 @@ import { refreshSpeakerManageToken } from "../../../../../../../_lib/services/pr
 import { resolveAppBaseUrl } from "../../../../../../../_lib/config";
 import { queueEmail } from "../../../../../../../_lib/email/outbox";
 import { writeAuditLog } from "../../../../../../../_lib/services/audit";
-import { speakerManagePageUrl } from "../../../../../../../_lib/services/frontend-links";
+import { speakerPresentationPageUrl } from "../../../../../../../_lib/services/frontend-links";
 import { buildEventEmailVariables } from "../../../../../../../_lib/services/events";
 import { first } from "../../../../../../../_lib/db/queries";
 import { requestDb, type AdminContext } from "../../../../../../../_lib/db/context";
@@ -53,7 +53,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const freshToken = await refreshSpeakerManageToken(requestDb(c), proposalId, userId);
-  const speakerManageUrl = speakerManagePageUrl(appBaseUrl, event, freshToken);
+  const speakerManageUrl = speakerPresentationPageUrl(appBaseUrl, event, freshToken);
 
   await queueEmail(requestDb(c), {
     eventId: event.id,
