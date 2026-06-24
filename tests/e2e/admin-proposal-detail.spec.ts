@@ -193,6 +193,10 @@ test("renders the admin proposal detail workflow with submission answers and ope
           ],
         },
         minReviewsRequired: 2,
+        sessionTypes: [
+          { label: "Panel", requiresPresentation: false },
+          { label: "Talk", requiresPresentation: true },
+        ],
       }),
     });
   });
