@@ -482,11 +482,14 @@ export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: str
 export async function refreshSpeakerManageToken(db: DatabaseLike, proposalId: string, userId: string): Promise<string> {
   const token = randomToken(24);
   const hash = await sha256Hex(token);
-  await run(db, `UPDATE proposal_speakers SET manage_token_hash = ? WHERE proposal_id = ? AND user_id = ?`, [
-    hash,
-    proposalId,
-    userId,
-  ]);
+  const result = await run(
+    db,
+    `UPDATE proposal_speakers SET manage_token_hash = ? WHERE proposal_id = ? AND user_id = ?`,
+    [hash, proposalId, userId],
+  );
+  if (result.changes === 0) {
+    throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
+  }
   return token;
 }
 

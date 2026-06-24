@@ -15,6 +15,7 @@ import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { onRequestPost as inviteSpeakersBulk } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/bulk";
+import { onRequestPost as adminRemindSpeaker } from "../functions/api/v1/admin/proposals/[proposalId]/speakers/[userId]/remind";
 import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
 import { addProposalSpeaker } from "../functions/_lib/services/proposals";
 import { onRequestGet as speakerGet } from "../functions/api/v1/proposals/speaker/[token]";
@@ -490,6 +491,42 @@ describe("speaker self-management endpoints", () => {
     expect(outboxRows[0].template_key).toBe("speaker_profile_request");
     expect(outboxRows[0].subject).toContain("review or update your speaker profile");
     expect(outboxRows[0].payload_json).toContain("profileUrl");
+  });
+
+  it("admin remind speaker issues a valid token that the speaker can use", async () => {
+    await setupWorkflow();
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+
+    const remindResponse = await adminRemindSpeaker(
+      createContext(
+        env,
+        new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers/${coSpeakerUserId}/remind`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${adminSessionToken}` },
+        }),
+        { proposalId, userId: coSpeakerUserId },
+      ),
+    );
+    expect(remindResponse.status).toBe(200);
+
+    // Extract the token from the queued email's profileUrl
+    const outboxRows = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox ORDER BY created_at DESC LIMIT 1",
+    );
+    const payload = JSON.parse(outboxRows[0].payload_json) as { profileUrl?: string };
+    expect(payload.profileUrl).toBeDefined();
+    const profileUrl = new URL(payload.profileUrl!);
+    const token = profileUrl.searchParams.get("token");
+    expect(token).toBeTruthy();
+
+    // The token from the email must be usable to access the speaker endpoint
+    const speakerResponse = await speakerGet(
+      createContext(env, new Request(`https://app.test/api/v1/proposals/speaker/${token}`, { method: "GET" }), {
+        token: token!,
+      }),
+    );
+    expect(speakerResponse.status).toBe(200);
   });
 });
 
