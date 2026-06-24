@@ -25,6 +25,8 @@ import {
   getPresentationUploader,
 } from "../../../../_lib/services/proposals-speaker-profile";
 import { getRequiredTerms } from "../../../../_lib/services/events";
+import { speakerPresentationPageUrl } from "../../../../_lib/services/frontend-links";
+import { first } from "../../../../_lib/db/queries";
 import { persistConsents, validateRequiredConsents } from "../../../../_lib/services/consent";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { requireInternalSecret } from "../../../../_lib/request";
@@ -82,11 +84,18 @@ export async function onRequestGet(c: any): Promise<Response> {
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
     const { speaker, proposal, user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
 
-    const [coSpeakers, presentationUploader, presentationTerms] = await Promise.all([
+    const [coSpeakers, presentationUploader, presentationTerms, event] = await Promise.all([
       getProposalCoSpeakers(c.env.DB, proposal.id, speaker.user_id),
       proposal.presentation_uploaded_at ? getPresentationUploader(c.env.DB, proposal.id) : Promise.resolve(null),
       getRequiredTerms(c.env.DB, proposal.event_id, "presentation"),
+      first<{ slug: string; base_path: string | null; starts_at: string; settings_json: string }>(
+        c.env.DB,
+        "SELECT slug, base_path, starts_at, settings_json FROM events WHERE id = ?",
+        [proposal.event_id],
+      ),
     ]);
+
+    const presentationUrl = event ? speakerPresentationPageUrl(appBaseUrl, event, c.req.param("token")) : null;
 
     return json({
       speaker: {
@@ -106,6 +115,7 @@ export async function onRequestGet(c: any): Promise<Response> {
         presentationUploadedAt: proposal.presentation_uploaded_at ?? null,
         presentationUploader: presentationUploader,
         coSpeakers,
+        presentationUrl,
       },
       presentationTerms,
       profile: {

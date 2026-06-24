@@ -28,6 +28,7 @@ interface SpeakerManageResponse {
     presentationUploadedAt: string | null;
     presentationUploader: { firstName: string | null; lastName: string | null; uploadedAt: string } | null;
     coSpeakers: Array<{ firstName: string | null; lastName: string | null; status: string }>;
+    presentationUrl: string | null;
   };
   profile: {
     firstName: string | null;
@@ -159,7 +160,7 @@ async function main(): Promise<void> {
     toggleEditableSections(true);
     if (data.proposal.status === "accepted") {
       const anchor = presentationLink?.querySelector<HTMLAnchorElement>("a");
-      if (anchor) anchor.href = `presentation/?token=${encodeURIComponent(token)}`;
+      if (anchor && data.proposal.presentationUrl) anchor.href = data.proposal.presentationUrl;
       presentationLink?.classList.remove("d-none");
     }
   } else if (data.speaker.status === "declined") {
