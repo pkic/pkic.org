@@ -30,7 +30,10 @@ interface TermRow {
   active: number;
 }
 
-async function listTerms(db: DatabaseLike, eventId: string): Promise<{ attendee: TermRow[]; speaker: TermRow[] }> {
+async function listTerms(
+  db: DatabaseLike,
+  eventId: string,
+): Promise<{ attendee: TermRow[]; speaker: TermRow[]; presentation: TermRow[] }> {
   const rows = await all<TermRow>(
     db,
     `SELECT id, audience_type, term_key, version, required, content_ref, display_text, help_text, active
@@ -42,6 +45,7 @@ async function listTerms(db: DatabaseLike, eventId: string): Promise<{ attendee:
   return {
     attendee: rows.filter((r) => r.audience_type === "attendee"),
     speaker: rows.filter((r) => r.audience_type === "speaker"),
+    presentation: rows.filter((r) => r.audience_type === "presentation"),
   };
 }
 
@@ -58,8 +62,8 @@ export async function onRequestPut(c: AdminContext): Promise<Response> {
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
 
   // Replace attendee terms preserving help_text (not in the base replaceEventTerms service)
-  for (const audienceType of ["attendee", "speaker"] as const) {
-    const termList = audienceType === "attendee" ? body.attendee : body.speaker;
+  for (const audienceType of ["attendee", "speaker", "presentation"] as const) {
+    const termList = audienceType === "attendee" ? body.attendee : audienceType === "speaker" ? body.speaker : body.presentation;
 
     await run(requestDb(c), "UPDATE event_terms SET active = 0 WHERE event_id = ? AND audience_type = ?", [
       event.id,
@@ -99,6 +103,7 @@ export async function onRequestPut(c: AdminContext): Promise<Response> {
   await writeAuditLog(requestDb(c), "admin", admin.id, "event_terms_replaced", "event", event.id, {
     attendeeCount: body.attendee.length,
     speakerCount: body.speaker.length,
+    presentationCount: body.presentation.length,
   });
 
   const updatedTerms = await listTerms(requestDb(c), event.id);

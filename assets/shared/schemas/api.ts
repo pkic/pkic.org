@@ -746,6 +746,7 @@ export const adminEventTermInputSchema = z.object({
 export const adminEventTermsReplaceSchema = z.object({
   attendee: z.array(adminEventTermInputSchema).max(40).default([]),
   speaker: z.array(adminEventTermInputSchema).max(40).default([]),
+  presentation: z.array(adminEventTermInputSchema).max(40).default([]),
 });
 
 // ── Admin: event days management ──────────────────────────────────────────────

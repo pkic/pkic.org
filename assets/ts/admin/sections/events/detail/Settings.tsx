@@ -819,6 +819,7 @@ function TermsTab({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null);
   const [attendee, setAttendee] = useState<TermState[]>([]);
   const [speaker, setSpeaker] = useState<TermState[]>([]);
+  const [presentation, setPresentation] = useState<TermState[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
 
@@ -826,11 +827,12 @@ function TermsTab({ slug }: { slug: string }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ terms: { attendee: AdminEventTerm[]; speaker: AdminEventTerm[] } }>(
+      const data = await api<{ terms: { attendee: AdminEventTerm[]; speaker: AdminEventTerm[]; presentation: AdminEventTerm[] } }>(
         `/api/v1/admin/events/${slug}/terms`,
       );
       setAttendee((data.terms?.attendee ?? []).map(termFromRow));
       setSpeaker((data.terms?.speaker ?? []).map(termFromRow));
+      setPresentation((data.terms?.presentation ?? []).map(termFromRow));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -859,7 +861,7 @@ function TermsTab({ slug }: { slug: string }) {
           }));
       await api(`/api/v1/admin/events/${slug}/terms`, {
         method: "PUT",
-        body: JSON.stringify({ attendee: toPayload(attendee), speaker: toPayload(speaker) }),
+        body: JSON.stringify({ attendee: toPayload(attendee), speaker: toPayload(speaker), presentation: toPayload(presentation) }),
       });
       setSaveStatus("✓ Saved");
       toast("Terms updated", "success");
@@ -919,10 +921,30 @@ function TermsTab({ slug }: { slug: string }) {
       ))}
       <button
         type="button"
-        class="btn btn-sm btn-outline-secondary mb-3"
+        class="btn btn-sm btn-outline-secondary mb-4"
         onClick={() => setSpeaker((prev) => [...prev, emptyTerm()])}
       >
         + Add speaker term
+      </button>
+
+      <h6 class="small fw-bold text-uppercase text-muted mb-2">Presentation Upload Terms</h6>
+      <p class="small text-muted mb-2">
+        Shown as a disclaimer before speakers upload their presentation. Leave empty to use the built-in defaults.
+      </p>
+      {presentation.map((t, i) => (
+        <TermRow
+          key={i}
+          term={t}
+          onChange={(u) => setPresentation((prev) => prev.map((x, j) => (j === i ? u : x)))}
+          onRemove={() => setPresentation((prev) => prev.filter((_, j) => j !== i))}
+        />
+      ))}
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-secondary mb-3"
+        onClick={() => setPresentation((prev) => [...prev, emptyTerm()])}
+      >
+        + Add presentation term
       </button>
     </div>
   );
