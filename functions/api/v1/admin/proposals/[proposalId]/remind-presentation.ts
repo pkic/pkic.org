@@ -46,7 +46,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
      FROM proposal_speakers ps
      JOIN users u ON u.id = ps.user_id
      JOIN session_proposals sp ON sp.id = ps.proposal_id
-     WHERE ps.proposal_id = ? AND ps.status = 'confirmed'`,
+     WHERE ps.proposal_id = ? AND ps.status != 'declined'`,
     [proposalId],
   );
 
