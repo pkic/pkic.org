@@ -1,9 +1,45 @@
-import { run } from "../db/queries";
+import { all, first, run } from "../db/queries";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
 import { writeAuditLog } from "./audit";
 import { getSpeakerByManageToken } from "./proposals";
 import type { DatabaseLike } from "../types";
+
+export async function getProposalCoSpeakers(
+  db: DatabaseLike,
+  proposalId: string,
+  excludeUserId: string,
+): Promise<{ firstName: string | null; lastName: string | null; status: string }[]> {
+  return all<{ first_name: string | null; last_name: string | null; status: string }>(
+    db,
+    `SELECT u.first_name, u.last_name, ps.status
+     FROM proposal_speakers ps
+     JOIN users u ON u.id = ps.user_id
+     WHERE ps.proposal_id = ? AND ps.user_id != ?
+     ORDER BY ps.created_at ASC`,
+    [proposalId, excludeUserId],
+  ).then((rows) => rows.map((r) => ({ firstName: r.first_name, lastName: r.last_name, status: r.status })));
+}
+
+export async function getPresentationUploader(
+  db: DatabaseLike,
+  proposalId: string,
+): Promise<{ firstName: string | null; lastName: string | null; uploadedAt: string } | null> {
+  const row = await first<{
+    first_name: string | null;
+    last_name: string | null;
+    presentation_uploaded_at: string;
+  }>(
+    db,
+    `SELECT u.first_name, u.last_name, sp.presentation_uploaded_at
+     FROM session_proposals sp
+     JOIN users u ON u.id = sp.presentation_uploaded_by_user_id
+     WHERE sp.id = ? AND sp.presentation_uploaded_at IS NOT NULL`,
+    [proposalId],
+  );
+  if (!row) return null;
+  return { firstName: row.first_name, lastName: row.last_name, uploadedAt: row.presentation_uploaded_at };
+}
 
 export async function confirmSpeakerParticipation(
   db: DatabaseLike,

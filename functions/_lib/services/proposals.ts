@@ -473,56 +473,6 @@ export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: str
  * Returns co-speakers for a proposal, excluding a given user, along with
  * the name of whoever uploaded the presentation (if any).
  */
-export async function getProposalCoSpeakers(
-  db: DatabaseLike,
-  proposalId: string,
-  excludeUserId: string,
-): Promise<
-  {
-    firstName: string | null;
-    lastName: string | null;
-    status: string;
-  }[]
-> {
-  return all<{ first_name: string | null; last_name: string | null; status: string }>(
-    db,
-    `SELECT u.first_name, u.last_name, ps.status
-     FROM proposal_speakers ps
-     JOIN users u ON u.id = ps.user_id
-     WHERE ps.proposal_id = ? AND ps.user_id != ?
-     ORDER BY ps.created_at ASC`,
-    [proposalId, excludeUserId],
-  ).then((rows) => rows.map((r) => ({ firstName: r.first_name, lastName: r.last_name, status: r.status })));
-}
-
-/**
- * Returns display info for whoever uploaded the presentation for a proposal,
- * or null if no presentation has been uploaded yet.
- */
-export async function getPresentationUploader(
-  db: DatabaseLike,
-  proposalId: string,
-): Promise<{ firstName: string | null; lastName: string | null; uploadedAt: string } | null> {
-  const row = await first<{
-    first_name: string | null;
-    last_name: string | null;
-    presentation_uploaded_at: string;
-  }>(
-    db,
-    `SELECT u.first_name, u.last_name, sp.presentation_uploaded_at
-     FROM session_proposals sp
-     JOIN users u ON u.id = sp.presentation_uploaded_by_user_id
-     WHERE sp.id = ? AND sp.presentation_uploaded_at IS NOT NULL`,
-    [proposalId],
-  );
-  if (!row) return null;
-  return {
-    firstName: row.first_name,
-    lastName: row.last_name,
-    uploadedAt: row.presentation_uploaded_at,
-  };
-}
-
 /**
  * Generates a fresh manage token for a specific speaker on a proposal.
  * Useful when sending follow-up emails (e.g., profile request, presentation
@@ -1018,36 +968,4 @@ export async function finalizeProposalDecision(
   return { reviewCount };
 }
 
-export async function markProposalStatus(
-  db: DatabaseLike,
-  payload: { proposalId: string; status: "spam" | "duplicate" },
-): Promise<void> {
-  const result = await run(
-    db,
-    "UPDATE session_proposals SET status = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
-    [payload.status, nowIso(), payload.proposalId],
-  );
-  if (result.changes === 0) throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found or already deleted");
-}
-
-export async function softDeleteProposal(db: DatabaseLike, payload: { proposalId: string }): Promise<void> {
-  const now = nowIso();
-  const result = await run(
-    db,
-    `UPDATE session_proposals
-     SET status = 'deleted', deleted_at = ?, updated_at = ?
-     WHERE id = ? AND deleted_at IS NULL`,
-    [now, now, payload.proposalId],
-  );
-  if (result.changes === 0) {
-    throw new AppError(404, "PROPOSAL_NOT_FOUND", "Proposal not found or already deleted");
-  }
-
-  await run(
-    db,
-    `UPDATE event_participants
-     SET status = 'inactive', updated_at = ?
-     WHERE source_type = 'proposal' AND source_ref = ?`,
-    [now, payload.proposalId],
-  );
-}
+export { markProposalStatus, softDeleteProposal } from "./proposals-admin";

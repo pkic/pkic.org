@@ -16,15 +16,13 @@
  *   PUT /api/v1/proposals/speaker/[token]/presentation
  */
 import { handleError, json } from "../../../../_lib/http";
-import {
-  getSpeakerByManageToken,
-  getProposalCoSpeakers,
-  getPresentationUploader,
-} from "../../../../_lib/services/proposals";
+import { getSpeakerByManageToken } from "../../../../_lib/services/proposals";
 import {
   confirmSpeakerParticipation,
   declineSpeakerParticipation,
   updateSpeakerProfile,
+  getProposalCoSpeakers,
+  getPresentationUploader,
 } from "../../../../_lib/services/proposals-speaker-profile";
 import { getRequiredTerms } from "../../../../_lib/services/events";
 import { persistConsents, validateRequiredConsents } from "../../../../_lib/services/consent";
