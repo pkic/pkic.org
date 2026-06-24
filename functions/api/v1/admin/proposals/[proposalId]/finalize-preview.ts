@@ -13,12 +13,16 @@ import { buildProposalDecisionEmailPlan } from "./decision-emails";
 import type { AdminContext } from "../../../../../_lib/db/context";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
+  const _t0 = Date.now();
+  const _log = (msg: string) => console.log(`[finalize-preview] ${msg} (+${Date.now() - _t0}ms)`);
+  _log("START");
   // Use the raw DB binding for this read-only endpoint. The session-wrapped
   // requestDb(c) uses primaryFirstDb which creates a D1 session that does not
   // support the parallel queries this handler fires (layout + partials +
   // templates all in concurrent Promise.all calls), causing a hang in dev mode.
   const db = c.env.DB;
   const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
+  _log("admin authenticated");
   const proposalId = c.req.param("proposalId");
 
   const accessCheckProposal = await first<{ event_id: string }>(
@@ -34,8 +38,10 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   if (!access.canFinalize) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to finalize proposals" } }, 403);
   }
+  _log("access checked");
 
   const body = await parseJsonBody(c.req, finalizeProposalSchema);
+  _log(`building plan for finalStatus=${body.finalStatus}`);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const plan = await buildProposalDecisionEmailPlan(
     db,
@@ -53,6 +59,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
         proposalManagePageUrl(appBaseUrl, event, proposalManageToken),
     },
   );
+  _log(`plan built: ${plan.messages.length} messages`);
 
   let layoutMissing = false;
   const [layoutHtml, partials] = await Promise.all([
@@ -62,11 +69,14 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     }),
     loadEmailPartials(db).catch(() => ({}) as Record<string, string>),
   ]);
+  _log("layout+partials loaded");
 
   const messages = await Promise.all(
     plan.messages.map(async (message) => {
+      _log(`rendering ${message.templateKey} for ${message.recipientEmail}`);
       try {
         const template = await resolveTemplate(db, message.templateKey);
+        _log(`template resolved: ${message.templateKey}`);
         const dataWithPartials = { ...message.data, _partials: partials };
         const subject = renderSubject(template.subjectTemplate, message.fallbackSubject, dataWithPartials);
         const rendered = await renderEmail(
@@ -76,6 +86,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
           template.contentType as "markdown" | "html" | "text",
           appBaseUrl,
         );
+        _log(`rendered: ${message.templateKey}`);
 
         return {
           id: message.id,
@@ -101,10 +112,12 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
             templateMissing: true as const,
           };
         }
+        _log(`ERROR in ${message.templateKey}: ${(err as Error).message}`);
         throw err;
       }
     }),
   );
+  _log("all messages rendered");
 
   const missingTemplateKeys = [...new Set(messages.filter((m) => m.templateMissing).map((m) => m.templateKey))];
 
