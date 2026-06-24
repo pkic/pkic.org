@@ -84,11 +84,12 @@ export async function onRequestGet(c: any): Promise<Response> {
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
     const { speaker, proposal, user } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
 
-    const [coSpeakers, presentationUploader] = await Promise.all([
+    const [coSpeakers, presentationUploader, presentationTerms] = await Promise.all([
       getProposalCoSpeakers(c.env.DB, proposal.id, speaker.user_id),
       proposal.presentation_uploaded_at
         ? getPresentationUploader(c.env.DB, proposal.id)
         : Promise.resolve(null),
+      getRequiredTerms(c.env.DB, proposal.event_id, "presentation"),
     ]);
 
     return json({
@@ -110,6 +111,7 @@ export async function onRequestGet(c: any): Promise<Response> {
         presentationUploader: presentationUploader,
         coSpeakers,
       },
+      presentationTerms,
       profile: {
         firstName: user.first_name,
         lastName: user.last_name,

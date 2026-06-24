@@ -17,22 +17,28 @@ const CROP_OUTPUT_SIZE = 1024; // px — square output
  * Resolves with a JPEG Blob on confirm, or null on cancel.
  */
 export function cropHeadshot(file: File): Promise<Blob | null> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => {
       const img = new Image();
-      img.onload = () => showCropModal(img, resolve);
+      img.onload = () => showCropModal(img, resolve, reject);
+      img.onerror = () => reject(new Error("Failed to decode image. Please try a different file."));
       img.src = reader.result as string;
     };
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read image file."));
     reader.readAsDataURL(file);
   });
 }
 
-function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void): void {
+function showCropModal(
+  img: HTMLImageElement,
+  done: (blob: Blob | null) => void,
+  fail: (error: Error) => void,
+): void {
   // ── Get or create modal from template ──────────────────────────────────────
   const modal = mountModalTemplate("crop-headshot-template", "crop-headshot-modal", "Crop headshot");
   if (!modal) {
-    done(null);
+    fail(new Error("Crop modal template not found. Please reload the page and try again."));
     return;
   }
 
@@ -44,9 +50,9 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void)
   const confirmBtn = modal.querySelector(".crop-headshot-confirm") as HTMLButtonElement | null;
 
   if (!overlay || !viewport || !imgEl || !slider || !cancelBtn || !confirmBtn) {
-    console.error("Crop headshot template is incomplete");
+    console.error("Crop headshot template is incomplete", { overlay, viewport, imgEl, slider, cancelBtn, confirmBtn });
     modal.remove();
-    done(null);
+    fail(new Error("Crop modal is missing required elements. Please reload the page and try again."));
     return;
   }
 
@@ -176,7 +182,14 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void)
 
       ctx.drawImage(img, srcX, srcY, srcSize, srcSize, 0, 0, CROP_OUTPUT_SIZE, CROP_OUTPUT_SIZE);
 
-      canvas.toBlob((blob) => dismiss(blob), "image/jpeg", 0.92);
+      canvas.toBlob((blob) => {
+        if (!blob) {
+          modal.remove();
+          fail(new Error("Failed to encode cropped image. Please try a different file."));
+          return;
+        }
+        dismiss(blob);
+      }, "image/jpeg", 0.92);
     },
     { once: true },
   );

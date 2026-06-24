@@ -41,6 +41,7 @@ interface EventSettingsRoutes {
   registrationManage?: string;
   proposalManage?: string;
   speakerManage?: string;
+  speakerPresentation?: string;
   inviteDecline?: string;
 }
 
@@ -94,6 +95,7 @@ export interface EventFrontendRoutes {
   registrationManagePath: string;
   proposalManagePath: string;
   speakerManagePath: string;
+  speakerPresentationPath: string;
   inviteDeclinePath: string;
   usedFallback: boolean;
   fallbackKeys: string[];
@@ -145,6 +147,7 @@ function defaultFrontendPaths(
     registrationManagePath: `${base}register/manage/`,
     proposalManagePath: `${base}propose/manage/`,
     speakerManagePath: `${base}propose/speaker/`,
+    speakerPresentationPath: `${base}propose/presentation/`,
     inviteDeclinePath: `${base}invite/decline/`,
   };
 }
@@ -196,6 +199,7 @@ export function resolveEventFrontendRoutes(
       normalizeFrontendPath(routes.registrationManage, basePath) ?? defaults.registrationManagePath,
     proposalManagePath: normalizeFrontendPath(routes.proposalManage, basePath) ?? defaults.proposalManagePath,
     speakerManagePath: normalizeFrontendPath(routes.speakerManage, basePath) ?? defaults.speakerManagePath,
+    speakerPresentationPath: normalizeFrontendPath(routes.speakerPresentation, basePath) ?? defaults.speakerPresentationPath,
     inviteDeclinePath: normalizeFrontendPath(routes.inviteDecline, basePath) ?? defaults.inviteDeclinePath,
   };
 
@@ -206,6 +210,7 @@ export function resolveEventFrontendRoutes(
   if (!normalizeFrontendPath(routes.registrationManage, basePath)) fallbackKeys.push("registrationManage");
   if (!normalizeFrontendPath(routes.proposalManage, basePath)) fallbackKeys.push("proposalManage");
   if (!normalizeFrontendPath(routes.speakerManage, basePath)) fallbackKeys.push("speakerManage");
+  if (!normalizeFrontendPath(routes.speakerPresentation, basePath)) fallbackKeys.push("speakerPresentation");
   if (!normalizeFrontendPath(routes.inviteDecline, basePath)) fallbackKeys.push("inviteDecline");
 
   return {
@@ -368,7 +373,7 @@ export async function getEventBySlug(db: DatabaseLike, slug: string): Promise<Ev
 export async function getRequiredTerms(
   db: DatabaseLike,
   eventId: string,
-  audienceType: "attendee" | "speaker",
+  audienceType: "attendee" | "speaker" | "presentation",
 ): Promise<EventTermRecord[]> {
   return all<EventTermRecord>(
     db,

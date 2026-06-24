@@ -133,19 +133,9 @@
       </div>
     </div>
 
-    {{/* ── Presentation upload (shown only after proposal is accepted) ── */}}
-    <div class="mb-4 d-none" data-presentation-section>
-      <h4 class="h6 fw-bold mb-2">Presentation upload</h4>
-      <p class="small text-muted mb-2" data-presentation-status-msg></p>
-      {{/* Co-speaker upload notice — shown when another speaker already uploaded */}}
-      <div class="alert alert-info small py-2 d-none" data-cospeaker-upload-notice></div>
-      <div class="d-flex gap-2 align-items-center flex-wrap" data-presentation-upload-controls>
-        <label class="btn btn-sm btn-outline-secondary mb-0" for="speaker-presentation-file">Upload presentation</label>
-        <input type="file" id="speaker-presentation-file"
-          accept="application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.oasis.opendocument.presentation"
-          class="visually-hidden" data-presentation-file>
-      </div>
-      <p data-presentation-upload-status class="form-text mt-1"></p>
+    {{/* ── Upload presentation link (shown only after proposal is accepted) ── */}}
+    <div class="mb-4 d-none" data-presentation-link>
+      <a href="presentation/" class="btn btn-sm btn-outline-primary">Upload your presentation &rarr;</a>
     </div>
 
     {{/* ── Status message ─────────────────────────────────────────────── */}}

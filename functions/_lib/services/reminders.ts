@@ -5,6 +5,7 @@ import {
   proposalPageUrl,
   registrationPageUrl,
   speakerManagePageUrl,
+  speakerPresentationPageUrl,
   registrationConfirmPageUrl,
 } from "./frontend-links";
 import { formatInviterList, type InviteInviterInfo } from "./invites";
@@ -648,7 +649,7 @@ export async function runReminderCycle(
       const daysToDeadline = daysUntil(row.presentation_deadline);
       const reminderNumber = Number(row.reminder_count ?? 0) + 1;
       const subject = presentationReminderSubject(event.name, reminderNumber, daysToDeadline);
-      const uploadUrl = speakerManagePageUrl(
+      const uploadUrl = speakerPresentationPageUrl(
         payload.appBaseUrl,
         event,
         presTokenByKey.get(presTokenKey(row.proposal_id, row.user_id))!,
