@@ -15,7 +15,9 @@ function buildUrl(appBaseUrl: string, path: string, query: Record<string, string
 
 function routesForEvent(event: EventRouteSource): ReturnType<typeof resolveEventFrontendRoutes> {
   const routes = resolveEventFrontendRoutes(event);
-  const noisyFallbackKeys = routes.fallbackKeys.filter((key) => key !== "speakerManage" && key !== "inviteDecline");
+  const noisyFallbackKeys = routes.fallbackKeys.filter(
+    (key) => key !== "speakerManage" && key !== "speakerPresentation" && key !== "inviteDecline",
+  );
   if (noisyFallbackKeys.length > 0) {
     logInfo("EVENT_FRONTEND_ROUTES_FALLBACK", {
       eventSlug: event.slug,
@@ -110,6 +112,14 @@ export function proposalManagePageUrl(appBaseUrl: string, event: EventRouteSourc
 export function speakerManagePageUrl(appBaseUrl: string, event: EventRouteSource, token: string): string {
   const routes = routesForEvent(event);
   return buildUrl(appBaseUrl, routes.speakerManagePath, {
+    event: event.slug,
+    token,
+  });
+}
+
+export function speakerPresentationPageUrl(appBaseUrl: string, event: EventRouteSource, token: string): string {
+  const routes = routesForEvent(event);
+  return buildUrl(appBaseUrl, routes.speakerPresentationPath, {
     event: event.slug,
     token,
   });

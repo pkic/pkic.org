@@ -37,7 +37,7 @@ export interface AdminSessionTokenClaims {
 
 const ADMIN_SESSION_TOKEN_TYPE = "admin-session";
 export const ADMIN_SESSION_COOKIE_NAME = "pkic_admin_session";
-export const ADMIN_SESSION_COOKIE_PATH = "/api/v1/admin";
+export const ADMIN_SESSION_COOKIE_PATH = "/api/v1";
 
 const adminByRequest = new WeakMap<Request, AuthAdmin>();
 const adminAuthTransportByRequest = new WeakMap<Request, AdminAuthTransport>();

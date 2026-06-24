@@ -86,6 +86,7 @@ describe("event frontend routes and hydration contracts", () => {
             registrationManage: "register/manage/",
             proposalManage: "propose/manage/",
             speakerManage: "speaker-manage/",
+            speakerPresentation: "propose/presentation/",
             inviteDecline: "invite/decline/",
           },
         },

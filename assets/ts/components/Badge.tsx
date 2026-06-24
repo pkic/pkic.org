@@ -17,6 +17,7 @@ const STATUS_COLOR: Record<string, string> = {
   draft: "secondary",
   // proposal statuses
   submitted: "primary",
+  resubmitted: "warning",
   under_review: "info",
   needs_work: "warning",
   "needs-work": "warning",

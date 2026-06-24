@@ -48,7 +48,7 @@ function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated: (d: E
   const [virtualUrl, setVirtualUrl] = useState(event.virtual_url ?? "");
   const [heroImageUrl, setHeroImageUrl] = useState(event.hero_image_url ?? "");
   const [location, setLocation] = useState(event.location ?? "");
-  const [sessionTypes, setSessionTypes] = useState((event.session_types ?? []).join(", "));
+  const [sessionTypes, setSessionTypes] = useState(event.session_types ?? [{ label: "", requiresPresentation: true }]);
   const registrationLink = formLinkValue(event.settings, "event_registration");
   const proposalLink = formLinkValue(event.settings, "proposal_submission");
   const [registrationFormKey, setRegistrationFormKey] = useState(
@@ -89,10 +89,7 @@ function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated: (d: E
           virtualUrl: virtualUrl.trim() || null,
           heroImageUrl: heroImageUrl.trim() || null,
           location: location.trim() || null,
-          sessionTypes: sessionTypes
-            .split(",")
-            .map((s) => s.trim())
-            .filter(Boolean),
+          sessionTypes: sessionTypes.filter((t) => t.label.trim()),
           registrationFormKey: registrationFormMode === "none" ? null : registrationFormKey.trim() || null,
           proposalFormKey: proposalFormMode === "none" ? null : proposalFormKey.trim() || null,
           inviteLimitAttendee: inviteLimit,
@@ -142,7 +139,7 @@ function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated: (d: E
     setVirtualUrl(event.virtual_url ?? "");
     setHeroImageUrl(event.hero_image_url ?? "");
     setLocation(event.location ?? "");
-    setSessionTypes((event.session_types ?? []).join(", "));
+    setSessionTypes(event.session_types ?? [{ label: "", requiresPresentation: true }]);
     const nextRegistrationLink = formLinkValue(event.settings, "event_registration");
     const nextProposalLink = formLinkValue(event.settings, "proposal_submission");
     setRegistrationFormKey(typeof nextRegistrationLink === "string" ? nextRegistrationLink : "");
@@ -299,14 +296,52 @@ function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated: (d: E
       </div>
       <div class="mb-3">
         <label class="form-label small fw-semibold">Session types</label>
-        <input
-          class="form-control form-control-sm"
-          type="text"
-          value={sessionTypes}
-          onInput={(e) => setSessionTypes((e.target as HTMLInputElement).value)}
-          placeholder="talk, keynote, panel, tutorial"
-        />
-        <div class="form-text">Comma-separated</div>
+        {sessionTypes.map((t, i) => (
+          <div key={i} class="d-flex gap-2 align-items-center mb-1">
+            <input
+              class="form-control form-control-sm"
+              type="text"
+              value={t.label}
+              placeholder="e.g. talk, keynote, panel"
+              onInput={(e) => {
+                const updated = [...sessionTypes];
+                updated[i] = { ...updated[i], label: (e.target as HTMLInputElement).value };
+                setSessionTypes(updated);
+              }}
+            />
+            <div class="form-check form-check-inline mb-0 text-nowrap">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id={`rp-${i}`}
+                checked={t.requiresPresentation}
+                onChange={(e) => {
+                  const updated = [...sessionTypes];
+                  updated[i] = { ...updated[i], requiresPresentation: (e.target as HTMLInputElement).checked };
+                  setSessionTypes(updated);
+                }}
+              />
+              <label class="form-check-label small" for={`rp-${i}`}>
+                Requires presentation
+              </label>
+            </div>
+            <button
+              type="button"
+              class="btn btn-sm btn-outline-danger"
+              onClick={() => setSessionTypes(sessionTypes.filter((_, j) => j !== i))}
+              title="Remove"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          class="btn btn-sm btn-outline-secondary mt-1"
+          onClick={() => setSessionTypes([...sessionTypes, { label: "", requiresPresentation: true }])}
+        >
+          + Add session type
+        </button>
       </div>
       <div class="row g-2 mb-3">
         <div class="col-md-6">
@@ -784,6 +819,7 @@ function TermsTab({ slug }: { slug: string }) {
   const [error, setError] = useState<string | null>(null);
   const [attendee, setAttendee] = useState<TermState[]>([]);
   const [speaker, setSpeaker] = useState<TermState[]>([]);
+  const [presentation, setPresentation] = useState<TermState[]>([]);
   const [saving, setSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState("");
 
@@ -791,11 +827,12 @@ function TermsTab({ slug }: { slug: string }) {
     setLoading(true);
     setError(null);
     try {
-      const data = await api<{ terms: { attendee: AdminEventTerm[]; speaker: AdminEventTerm[] } }>(
-        `/api/v1/admin/events/${slug}/terms`,
-      );
+      const data = await api<{
+        terms: { attendee: AdminEventTerm[]; speaker: AdminEventTerm[]; presentation: AdminEventTerm[] };
+      }>(`/api/v1/admin/events/${slug}/terms`);
       setAttendee((data.terms?.attendee ?? []).map(termFromRow));
       setSpeaker((data.terms?.speaker ?? []).map(termFromRow));
+      setPresentation((data.terms?.presentation ?? []).map(termFromRow));
     } catch (e) {
       setError((e as Error).message);
     } finally {
@@ -824,7 +861,11 @@ function TermsTab({ slug }: { slug: string }) {
           }));
       await api(`/api/v1/admin/events/${slug}/terms`, {
         method: "PUT",
-        body: JSON.stringify({ attendee: toPayload(attendee), speaker: toPayload(speaker) }),
+        body: JSON.stringify({
+          attendee: toPayload(attendee),
+          speaker: toPayload(speaker),
+          presentation: toPayload(presentation),
+        }),
       });
       setSaveStatus("✓ Saved");
       toast("Terms updated", "success");
@@ -884,10 +925,30 @@ function TermsTab({ slug }: { slug: string }) {
       ))}
       <button
         type="button"
-        class="btn btn-sm btn-outline-secondary mb-3"
+        class="btn btn-sm btn-outline-secondary mb-4"
         onClick={() => setSpeaker((prev) => [...prev, emptyTerm()])}
       >
         + Add speaker term
+      </button>
+
+      <h6 class="small fw-bold text-uppercase text-muted mb-2">Presentation Upload Terms</h6>
+      <p class="small text-muted mb-2">
+        Shown as a disclaimer before speakers upload their presentation. Leave empty to use the built-in defaults.
+      </p>
+      {presentation.map((t, i) => (
+        <TermRow
+          key={i}
+          term={t}
+          onChange={(u) => setPresentation((prev) => prev.map((x, j) => (j === i ? u : x)))}
+          onRemove={() => setPresentation((prev) => prev.filter((_, j) => j !== i))}
+        />
+      ))}
+      <button
+        type="button"
+        class="btn btn-sm btn-outline-secondary mb-3"
+        onClick={() => setPresentation((prev) => [...prev, emptyTerm()])}
+      >
+        + Add presentation term
       </button>
     </div>
   );

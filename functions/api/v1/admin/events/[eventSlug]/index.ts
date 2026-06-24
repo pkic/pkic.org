@@ -6,7 +6,7 @@
  */
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { getEventBySlug } from "../../../../../_lib/services/events";
+import { getEventBySlug, resolveSessionTypes } from "../../../../../_lib/services/events";
 import { first } from "../../../../../_lib/db/queries";
 import { parseJsonSafe } from "../../../../../_lib/utils/json";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
@@ -43,7 +43,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       virtual_url: (settings.virtualUrl as string | null) ?? null,
       hero_image_url: (settings.heroImageUrl as string | null) ?? null,
       location: (settings.location as string | null) ?? null,
-      session_types: (settings.proposal as { sessionTypes?: string[] } | undefined)?.sessionTypes ?? null,
+      session_types: resolveSessionTypes(settings as { proposal?: { sessionTypes?: unknown[] } }),
       settings,
     },
   });

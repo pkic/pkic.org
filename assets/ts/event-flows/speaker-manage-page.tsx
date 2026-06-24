@@ -25,6 +25,10 @@ interface SpeakerManageResponse {
     status: string;
     presentationDeadline: string | null;
     presentationUploaded: boolean;
+    presentationUploadedAt: string | null;
+    presentationUploader: { firstName: string | null; lastName: string | null; uploadedAt: string } | null;
+    coSpeakers: Array<{ firstName: string | null; lastName: string | null; status: string }>;
+    presentationUrl: string | null;
   };
   profile: {
     firstName: string | null;
@@ -136,12 +140,11 @@ async function main(): Promise<void> {
   const declinedMsg = boot.root.querySelector<HTMLElement>("[data-declined-msg]");
   const headshotSection = boot.root.querySelector<HTMLElement>("[data-headshot-section]");
   const profileSection = boot.root.querySelector<HTMLElement>("[data-profile-section]");
-  const presentationSection = boot.root.querySelector<HTMLElement>("[data-presentation-section]");
+  const presentationLink = boot.root.querySelector<HTMLElement>("[data-presentation-link]");
 
   function toggleEditableSections(isEnabled: boolean): void {
     headshotSection?.classList.toggle("d-none", !isEnabled);
     profileSection?.classList.toggle("d-none", !isEnabled);
-    presentationSection?.classList.toggle("d-none", !isEnabled);
   }
 
   if (speakerStatusBadge) {
@@ -155,6 +158,11 @@ async function main(): Promise<void> {
   } else if (data.speaker.status === "confirmed") {
     confirmedMsg?.classList.remove("d-none");
     toggleEditableSections(true);
+    if (data.proposal.status === "accepted") {
+      const anchor = presentationLink?.querySelector<HTMLAnchorElement>("a");
+      if (anchor && data.proposal.presentationUrl) anchor.href = data.proposal.presentationUrl;
+      presentationLink?.classList.remove("d-none");
+    }
   } else if (data.speaker.status === "declined") {
     declinedMsg?.classList.remove("d-none");
     toggleEditableSections(false);
@@ -306,43 +314,6 @@ async function main(): Promise<void> {
       confirmDeleteMessage: "Remove your headshot?",
     });
   }
-
-  // Presentation upload
-  const presentationMsg = boot.root.querySelector<HTMLElement>("[data-presentation-status-msg]");
-  const presentationInput = boot.root.querySelector<HTMLInputElement>("[data-presentation-file]");
-  const presentationUploadStatus = boot.root.querySelector<HTMLElement>("[data-presentation-upload-status]");
-
-  if (data.proposal.status === "accepted" && data.speaker.status !== "declined") {
-    presentationSection?.classList.remove("d-none");
-    if (presentationMsg) {
-      presentationMsg.textContent = data.proposal.presentationUploaded
-        ? "Presentation uploaded. You can replace it with a newer version if needed."
-        : "Please upload your final presentation file.";
-    }
-  }
-
-  presentationInput?.addEventListener("change", () => {
-    const file = presentationInput.files?.[0];
-    if (!file) return;
-    presentationInput.value = "";
-    void (async () => {
-      if (presentationUploadStatus) presentationUploadStatus.textContent = "Uploading…";
-      const formData = new FormData();
-      formData.append("file", file);
-      try {
-        const response = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/presentation`, {
-          method: "PUT",
-          body: formData,
-        });
-        const json = (await response.json()) as { success?: boolean; error?: { message?: string } };
-        if (!response.ok) throw new Error(json.error?.message ?? `HTTP ${response.status}`);
-        if (presentationUploadStatus) presentationUploadStatus.textContent = "Presentation uploaded.";
-      } catch (error) {
-        if (presentationUploadStatus)
-          presentationUploadStatus.textContent = `Upload failed: ${(error as Error).message}`;
-      }
-    })();
-  });
 
   if (loadingEl) loadingEl.classList.add("d-none");
   if (contentEl) contentEl.classList.remove("d-none");

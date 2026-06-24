@@ -41,6 +41,7 @@ interface EventSettingsRoutes {
   registrationManage?: string;
   proposalManage?: string;
   speakerManage?: string;
+  speakerPresentation?: string;
   inviteDecline?: string;
 }
 
@@ -59,11 +60,32 @@ interface EventSettings {
   proposal?: {
     /**
      * The session types offered for this event's call for speakers.
-     * Each value must be a valid proposalType (e.g. "talk", "panel", "keynote").
-     * Falls back to ["talk", "keynote", "panel"] when not configured.
+     * Falls back to built-in defaults when not configured.
+     * Stored as objects; legacy string entries are normalised on read.
      */
-    sessionTypes?: string[];
+    sessionTypes?: Array<{ label: string; requiresPresentation: boolean }>;
   };
+}
+
+export interface SessionTypeConfig {
+  label: string;
+  requiresPresentation: boolean;
+}
+
+const DEFAULT_SESSION_TYPES: SessionTypeConfig[] = [
+  { label: "talk", requiresPresentation: true },
+  { label: "keynote", requiresPresentation: true },
+  { label: "panel", requiresPresentation: true },
+];
+
+/** Normalise stored session types — handles legacy `string[]` as well as current `SessionTypeConfig[]`. */
+export function resolveSessionTypes(settings: { proposal?: { sessionTypes?: unknown[] } }): SessionTypeConfig[] {
+  const raw = settings.proposal?.sessionTypes;
+  if (!Array.isArray(raw) || raw.length === 0) return DEFAULT_SESSION_TYPES;
+  return raw.map((entry) => {
+    if (typeof entry === "string") return { label: entry, requiresPresentation: true };
+    return entry as SessionTypeConfig;
+  });
 }
 
 export interface EventFrontendRoutes {
@@ -73,6 +95,7 @@ export interface EventFrontendRoutes {
   registrationManagePath: string;
   proposalManagePath: string;
   speakerManagePath: string;
+  speakerPresentationPath: string;
   inviteDeclinePath: string;
   usedFallback: boolean;
   fallbackKeys: string[];
@@ -124,6 +147,7 @@ function defaultFrontendPaths(
     registrationManagePath: `${base}register/manage/`,
     proposalManagePath: `${base}propose/manage/`,
     speakerManagePath: `${base}propose/speaker/`,
+    speakerPresentationPath: `${base}propose/presentation/`,
     inviteDeclinePath: `${base}invite/decline/`,
   };
 }
@@ -175,6 +199,8 @@ export function resolveEventFrontendRoutes(
       normalizeFrontendPath(routes.registrationManage, basePath) ?? defaults.registrationManagePath,
     proposalManagePath: normalizeFrontendPath(routes.proposalManage, basePath) ?? defaults.proposalManagePath,
     speakerManagePath: normalizeFrontendPath(routes.speakerManage, basePath) ?? defaults.speakerManagePath,
+    speakerPresentationPath:
+      normalizeFrontendPath(routes.speakerPresentation, basePath) ?? defaults.speakerPresentationPath,
     inviteDeclinePath: normalizeFrontendPath(routes.inviteDecline, basePath) ?? defaults.inviteDeclinePath,
   };
 
@@ -185,6 +211,7 @@ export function resolveEventFrontendRoutes(
   if (!normalizeFrontendPath(routes.registrationManage, basePath)) fallbackKeys.push("registrationManage");
   if (!normalizeFrontendPath(routes.proposalManage, basePath)) fallbackKeys.push("proposalManage");
   if (!normalizeFrontendPath(routes.speakerManage, basePath)) fallbackKeys.push("speakerManage");
+  if (!normalizeFrontendPath(routes.speakerPresentation, basePath)) fallbackKeys.push("speakerPresentation");
   if (!normalizeFrontendPath(routes.inviteDecline, basePath)) fallbackKeys.push("inviteDecline");
 
   return {
@@ -347,7 +374,7 @@ export async function getEventBySlug(db: DatabaseLike, slug: string): Promise<Ev
 export async function getRequiredTerms(
   db: DatabaseLike,
   eventId: string,
-  audienceType: "attendee" | "speaker",
+  audienceType: "attendee" | "speaker" | "presentation",
 ): Promise<EventTermRecord[]> {
   return all<EventTermRecord>(
     db,

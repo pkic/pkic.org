@@ -1,0 +1,59 @@
+{{- $eventSlug := partial "events/flow/slug.html" . -}}
+{{- $eventPagePath := partial "events/flow/page-path.html" . -}}
+<div class="event-flow" data-event-speaker-presentation data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1" data-module="event-flows/speaker-presentation-page">
+
+  {{/* ── Resend manage link fallback (missing/invalid token) ─────────── */}}
+  <div data-resend-speaker-manage-section class="d-none">
+    <p class="form-text mb-3">Enter the email address used for your speaker invitation and we&rsquo;ll send a fresh speaker management link.</p>
+    <div class="row g-2 align-items-end mb-2">
+      <div class="col-12 col-sm-6">
+        <label class="form-label" for="resend-speaker-manage-email">Your email address</label>
+        <input id="resend-speaker-manage-email" type="email" class="form-control" autocomplete="email" placeholder="you@example.com" data-resend-speaker-manage-email>
+      </div>
+    </div>
+    <button type="button" class="btn btn-primary" data-resend-speaker-manage-btn>Send my speaker link</button>
+    <p data-resend-speaker-manage-status class="mt-2 small"></p>
+  </div>
+
+  {{/* ── Loading ───────────────────────────────────────────────────────── */}}
+  <p data-speaker-loading class="form-text">Loading your presentation details…</p>
+
+  {{/* ── Not accepted / declined state ───────────────────────────────── */}}
+  <div data-not-accepted-section class="d-none">
+    <p class="form-text">Presentation upload is only available once your proposal has been accepted and you have confirmed your participation.</p>
+  </div>
+
+  {{/* ── Main content (shown after data loads) ────────────────────────── */}}
+  <div data-speaker-content class="d-none">
+
+    {{/* ── Proposal summary ──────────────────────────────────────────── */}}
+    <div class="mb-4" data-proposal-summary>
+      <h3 class="h5 mb-1" data-proposal-title></h3>
+      <p class="small text-muted" data-presentation-deadline-row></p>
+    </div>
+
+    {{/* ── Presentation upload ───────────────────────────────────────── */}}
+    <div class="mb-4">
+      <h4 class="h6 fw-bold mb-2">Presentation upload</h4>
+      <p class="small text-muted mb-2" data-presentation-status-msg></p>
+      {{/* Co-speaker upload notice — shown when another speaker already uploaded */}}
+      <div class="alert alert-info small py-2 d-none" data-cospeaker-upload-notice></div>
+      <div class="d-flex gap-2 align-items-center flex-wrap" data-presentation-upload-controls>
+        <button type="button" class="btn btn-sm btn-outline-secondary mb-0" data-presentation-upload-label>Upload presentation</button>
+        <input type="file" id="speaker-presentation-file"
+          accept="application/pdf,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation,application/vnd.oasis.opendocument.presentation"
+          class="visually-hidden" data-presentation-file>
+      </div>
+      <p data-presentation-upload-status class="form-text mt-1"></p>
+    </div>
+
+  </div>
+
+  {{/* ── Status message (always present for bootstrap()) ──────────────── */}}
+  <p data-flow-status class="alert visually-hidden mt-3 mb-0" role="status" aria-live="polite"></p>
+
+  {{/* Hidden form required by boot.ts bootstrap() */}}
+  <form class="d-none" aria-hidden="true"></form>
+
+</div>
+{{ partial "headshot-modals.html" . }}

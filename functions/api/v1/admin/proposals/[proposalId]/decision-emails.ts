@@ -1,7 +1,8 @@
 import { AppError } from "../../../../../_lib/errors";
 import { first } from "../../../../../_lib/db/queries";
-import { buildEventEmailVariables } from "../../../../../_lib/services/events";
+import { buildEventEmailVariables, resolveSessionTypes } from "../../../../../_lib/services/events";
 import { listProposalSpeakersWithStatus, type ProposalSpeakerWithUser } from "../../../../../_lib/services/proposals";
+import { parseJsonSafe } from "../../../../../_lib/utils/json";
 import type { DatabaseLike } from "../../../../../_lib/types";
 
 interface EventEmailSource {
@@ -20,6 +21,7 @@ interface ProposalEmailSource {
   proposer_user_id: string;
   manage_token_hash: string;
   presentation_deadline: string | null;
+  proposal_type: string;
 }
 
 export interface ProposalDecisionEmailMessage {
@@ -60,7 +62,7 @@ export async function buildProposalDecisionEmailPlan(
 ): Promise<ProposalDecisionEmailPlan> {
   const proposal = await first<ProposalEmailSource>(
     db,
-    `SELECT id, title, event_id, proposer_user_id, manage_token_hash, presentation_deadline
+    `SELECT id, title, event_id, proposer_user_id, manage_token_hash, presentation_deadline, proposal_type
      FROM session_proposals
      WHERE id = ?`,
     [payload.proposalId],
@@ -80,6 +82,11 @@ export async function buildProposalDecisionEmailPlan(
   const messages: ProposalDecisionEmailMessage[] = [];
   const presentationReminderUserIds = new Set<string>();
   const proposalManageUrl = event ? await options.resolveProposalManageUrl(event, proposal.manage_token_hash) : "";
+
+  const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(event?.settings_json ?? "{}", {});
+  const sessionTypes = resolveSessionTypes(eventSettings);
+  const sessionTypeConfig = sessionTypes.find((t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase());
+  const requiresPresentation = sessionTypeConfig?.requiresPresentation ?? false;
 
   for (const speaker of speakers) {
     if (speaker.user_id === proposal.proposer_user_id) {
@@ -124,23 +131,24 @@ export async function buildProposalDecisionEmailPlan(
         },
       });
 
-      messages.push({
-        id: `presentation-upload:${speaker.user_id}`,
-        templateKey: "presentation_upload_request",
-        recipientEmail: speaker.email,
-        recipientUserId: speaker.user_id,
-        recipientLabel: recipientLabel(speaker),
-        fallbackSubject: `Please upload your presentation — ${event.name}`,
-        data: {
-          ...eventVars,
-          firstName: speaker.first_name ?? "",
-          proposalTitle: proposal.title,
-          uploadUrl: manageUrl,
-          deadline: proposal.presentation_deadline ?? payload.presentationDeadline ?? "",
-        },
-      });
-
-      presentationReminderUserIds.add(speaker.user_id);
+      if (requiresPresentation) {
+        messages.push({
+          id: `presentation-upload:${speaker.user_id}`,
+          templateKey: "presentation_upload_request",
+          recipientEmail: speaker.email,
+          recipientUserId: speaker.user_id,
+          recipientLabel: recipientLabel(speaker),
+          fallbackSubject: `Please upload your presentation — ${event.name}`,
+          data: {
+            ...eventVars,
+            firstName: speaker.first_name ?? "",
+            proposalTitle: proposal.title,
+            uploadUrl: manageUrl,
+            deadline: proposal.presentation_deadline ?? payload.presentationDeadline ?? "",
+          },
+        });
+        presentationReminderUserIds.add(speaker.user_id);
+      }
     }
   }
 

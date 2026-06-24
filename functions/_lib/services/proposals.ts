@@ -412,7 +412,7 @@ export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: str
        u.headshot_r2_key  AS u_headshot_r2_key,
        u.headshot_updated_at AS u_headshot_updated_at
      FROM proposal_speakers ps
-     JOIN session_proposals sp ON sp.id = ps.proposal_id
+     JOIN session_proposals sp ON sp.id = ps.proposal_id AND sp.deleted_at IS NULL
      JOIN users u              ON u.id  = ps.user_id
      WHERE ps.manage_token_hash = ? OR ps.manage_token_hash = ?`,
     [hashedToken, directToken ?? hashedToken],
@@ -450,6 +450,9 @@ export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: str
       submitted_at: row.sp_submitted_at,
       updated_at: row.sp_updated_at,
       withdrawn_at: row.sp_withdrawn_at,
+      presentation_r2_key: row.sp_presentation_r2_key,
+      presentation_deadline: row.sp_presentation_deadline,
+      presentation_uploaded_at: row.sp_presentation_uploaded_at,
     },
     user: {
       id: row.u_id,
@@ -467,6 +470,10 @@ export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: str
 }
 
 /**
+ * Returns co-speakers for a proposal, excluding a given user, along with
+ * the name of whoever uploaded the presentation (if any).
+ */
+/**
  * Generates a fresh manage token for a specific speaker on a proposal.
  * Useful when sending follow-up emails (e.g., profile request, presentation
  * reminder) where the original raw token is no longer available.
@@ -475,11 +482,14 @@ export async function getSpeakerByManageToken(db: DatabaseLike, manageToken: str
 export async function refreshSpeakerManageToken(db: DatabaseLike, proposalId: string, userId: string): Promise<string> {
   const token = randomToken(24);
   const hash = await sha256Hex(token);
-  await run(db, `UPDATE proposal_speakers SET manage_token_hash = ? WHERE proposal_id = ? AND user_id = ?`, [
-    hash,
-    proposalId,
-    userId,
-  ]);
+  const result = await run(
+    db,
+    `UPDATE proposal_speakers SET manage_token_hash = ? WHERE proposal_id = ? AND user_id = ?`,
+    [hash, proposalId, userId],
+  );
+  if (result.changes === 0) {
+    throw new AppError(404, "SPEAKER_NOT_FOUND", "Speaker not found on this proposal");
+  }
   return token;
 }
 
@@ -637,7 +647,7 @@ export async function getProposalByManageToken(db: DatabaseLike, manageToken: st
   const directToken = /^[a-f0-9]{64}$/i.test(manageToken) ? manageToken.toLowerCase() : null;
   const proposal = await first<ProposalRecord>(
     db,
-    "SELECT * FROM session_proposals WHERE manage_token_hash = ? OR manage_token_hash = ?",
+    "SELECT * FROM session_proposals WHERE (manage_token_hash = ? OR manage_token_hash = ?) AND deleted_at IS NULL",
     [hashedToken, directToken ?? hashedToken],
   );
 
@@ -687,7 +697,7 @@ export async function updateProposalByManageToken(
            title = COALESCE(?, title),
            abstract = COALESCE(?, abstract),
            details_json = COALESCE(?, details_json),
-           status = CASE WHEN status = 'needs-work' THEN 'submitted' ELSE status END,
+           status = CASE WHEN status = 'needs-work' THEN 'resubmitted' ELSE status END,
            updated_at = ?
        WHERE id = ?`,
       [
@@ -961,28 +971,4 @@ export async function finalizeProposalDecision(
   return { reviewCount };
 }
 
-export async function listProposalsForEvent(db: DatabaseLike, eventId: string): Promise<ProposalListRecord[]> {
-  return all<ProposalListRecord>(
-    db,
-    `SELECT
-       sp.*,
-       u.email      AS proposer_email,
-       u.first_name AS proposer_first_name,
-       u.last_name  AS proposer_last_name,
-       COALESCE(rv.review_count, 0) AS review_count,
-       pd.final_status AS decision_status,
-       pd.decision_note AS decision_note,
-       pd.decided_at AS decision_decided_at
-     FROM session_proposals sp
-     JOIN users u ON u.id = sp.proposer_user_id
-     LEFT JOIN (
-       SELECT proposal_id, COUNT(*) AS review_count
-       FROM proposal_reviews
-       GROUP BY proposal_id
-     ) rv ON rv.proposal_id = sp.id
-     LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
-     WHERE sp.event_id = ?
-     ORDER BY sp.submitted_at DESC`,
-    [eventId],
-  );
-}
+export { markProposalStatus, softDeleteProposal } from "./proposals-admin";

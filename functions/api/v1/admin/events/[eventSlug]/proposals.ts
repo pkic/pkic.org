@@ -21,10 +21,15 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get("limit") ?? "50", 10) || 50));
   const offset = Math.max(0, parseInt(url.searchParams.get("offset") ?? "0", 10) || 0);
 
-  const conditions: string[] = ["sp.event_id = ?"];
+  const showDeleted = url.searchParams.get("deleted") === "1";
+  const conditions: string[] = ["sp.event_id = ?", showDeleted ? "sp.deleted_at IS NOT NULL" : "sp.deleted_at IS NULL"];
   const params: unknown[] = [event.id];
 
-  if (status) {
+  const INACTIVE_STATUSES = ["withdrawn", "rejected", "spam", "duplicate", "deleted"];
+  if (status === "active") {
+    conditions.push(`sp.status NOT IN (${INACTIVE_STATUSES.map(() => "?").join(", ")})`);
+    params.push(...INACTIVE_STATUSES);
+  } else if (status) {
     conditions.push("sp.status = ?");
     params.push(status);
   }

@@ -35,11 +35,17 @@ interface ProposalFormSummary {
   fields: AdminFormDetailField[];
 }
 
+interface SessionTypeConfig {
+  label: string;
+  requiresPresentation: boolean;
+}
+
 interface ProposalResponse {
   proposal: ProposalDetailRecord;
   access: ProposalAccess;
   form: ProposalFormSummary | null;
   minReviewsRequired: number;
+  sessionTypes: SessionTypeConfig[];
 }
 
 type DetailTab = "submission" | "speakers" | "reviews" | "audit-log" | "decision";
@@ -76,11 +82,14 @@ interface DecisionPreviewMessage {
   subject: string;
   html: string;
   text: string;
+  templateMissing?: boolean;
 }
 
 interface DecisionPreviewResponse {
   recipientCount: number;
   emailCount: number;
+  layoutMissing?: boolean;
+  missingTemplateKeys?: string[];
   messages: DecisionPreviewMessage[];
 }
 
@@ -244,11 +253,17 @@ function SpeakerCard({
   speaker,
   proposalId,
   canEdit,
+  canFinalize,
+  decisionStatus,
+  requiresPresentation,
   onSaved,
 }: {
   speaker: ProposalSpeaker;
   proposalId: string;
   canEdit: boolean;
+  canFinalize?: boolean;
+  decisionStatus?: string | null;
+  requiresPresentation?: boolean;
   onSaved: (userId: string, patch: Partial<ProposalSpeaker>) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -426,6 +441,42 @@ function SpeakerCard({
                 {editing ? "Cancel" : "Edit profile"}
               </button>
             )}
+            {canFinalize && (
+              <button
+                class="btn btn-sm btn-outline-secondary"
+                title="Send profile completion reminder"
+                onClick={async () => {
+                  try {
+                    await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}/remind`, {
+                      method: "POST",
+                    });
+                    toast("Profile reminder sent", "success");
+                  } catch (err) {
+                    toast((err as Error).message, "error");
+                  }
+                }}
+              >
+                ✉ Profile reminder
+              </button>
+            )}
+            {canFinalize && requiresPresentation && decisionStatus === "accepted" && (
+              <button
+                class="btn btn-sm btn-outline-secondary"
+                title="Send presentation upload reminder"
+                onClick={async () => {
+                  try {
+                    await api(`/api/v1/admin/proposals/${proposalId}/speakers/${speaker.userId}/remind-presentation`, {
+                      method: "POST",
+                    });
+                    toast("Presentation reminder sent", "success");
+                  } catch (err) {
+                    toast((err as Error).message, "error");
+                  }
+                }}
+              >
+                ✉ Presentation reminder
+              </button>
+            )}
           </div>
         </div>
 
@@ -596,7 +647,6 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const [decisionPreviewConfirmed, setDecisionPreviewConfirmed] = useState(false);
   const [decisionPreviewTab, setDecisionPreviewTab] = useState<"html" | "text">("html");
   const [selectedDecisionPreviewId, setSelectedDecisionPreviewId] = useState("");
-  const decisionPreviewFrameRef = useRef<HTMLIFrameElement>(null);
 
   const loadSubData = useCallback(async () => {
     setLoadingSub(true);
@@ -641,9 +691,12 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   if (error) return <ErrorAlert error={error} />;
   if (!data) return null;
 
-  const { proposal, access, form, minReviewsRequired } = data;
+  const { proposal, access, form, minReviewsRequired, sessionTypes } = data;
   const proposer =
     [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ") || proposal.proposer_email;
+  const proposalRequiresPresentation =
+    sessionTypes.find((t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase())?.requiresPresentation ??
+    false;
   const quorumMet = reviews.length >= minReviewsRequired;
   const needsWorkRequiresNote = isNeedsWorkDecision(decisionStatus) && !decisionNote.trim();
   const selectedDecisionPreview =
@@ -681,11 +734,6 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     );
   }, [decisionPreview]);
 
-  useEffect(() => {
-    if (decisionPreviewTab !== "html" || !selectedDecisionPreview || !decisionPreviewFrameRef.current) return;
-    decisionPreviewFrameRef.current.srcdoc = selectedDecisionPreview.html;
-  }, [decisionPreviewTab, selectedDecisionPreview]);
-
   const tabItems = [
     { key: "submission", label: "Submission" },
     { key: "speakers", label: `Speakers (${loadingSub ? "…" : speakers.length})` },
@@ -693,6 +741,21 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     { key: "audit-log", label: "Audit Log" },
     ...(access.canFinalize ? [{ key: "decision", label: "Decision" }] : []),
   ];
+
+  async function handleFlag(action: "spam" | "duplicate" | "delete") {
+    const label = action === "delete" ? "soft-delete" : `mark as ${action}`;
+    if (!confirm(`Are you sure you want to ${label} this proposal? This action is not easily reversible.`)) return;
+    try {
+      await api(`/api/v1/admin/proposals/${proposalId}/flag`, {
+        method: "POST",
+        body: JSON.stringify({ action }),
+      });
+      toast(`Proposal ${action === "delete" ? "deleted" : `marked as ${action}`}`, "success");
+      void reload();
+    } catch (err) {
+      toast((err as Error).message, "error");
+    }
+  }
 
   async function handleOpenManage() {
     try {
@@ -962,6 +1025,12 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                     speaker={s}
                     proposalId={proposalId}
                     canEdit={access.canReview}
+                    canFinalize={access.canFinalize}
+                    decisionStatus={proposal.decision_status}
+                    requiresPresentation={
+                      sessionTypes.find((t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase())
+                        ?.requiresPresentation ?? false
+                    }
                     onSaved={(userId, patch) =>
                       setSpeakers((prev) => prev.map((sp) => (sp.userId === userId ? { ...sp, ...patch } : sp)))
                     }
@@ -1171,6 +1240,10 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                                 {decisionPreview.emailCount} email{decisionPreview.emailCount === 1 ? "" : "s"} to{" "}
                                 {decisionPreview.recipientCount} recipient
                                 {decisionPreview.recipientCount === 1 ? "" : "s"}
+                                {(decisionPreview.layoutMissing ||
+                                  (decisionPreview.missingTemplateKeys?.length ?? 0) > 0) && (
+                                  <span class="text-warning ms-2">⚠ Configuration issues — see preview</span>
+                                )}
                               </span>
                             )}
                           </div>
@@ -1180,6 +1253,22 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                             <div class="card border">
                               <div class="card-header bg-light small fw-semibold">Email Preview</div>
                               <div class="card-body">
+                                {decisionPreview.layoutMissing && (
+                                  <div class="alert alert-warning small py-2 mb-3">
+                                    <strong>Email layout template not configured.</strong> Emails will render without
+                                    your branded layout. Configure the <code>email_layout</code> template to fix this.
+                                  </div>
+                                )}
+                                {(decisionPreview.missingTemplateKeys?.length ?? 0) > 0 && (
+                                  <div class="alert alert-warning small py-2 mb-3">
+                                    <strong>
+                                      Missing email template
+                                      {(decisionPreview.missingTemplateKeys?.length ?? 0) > 1 ? "s" : ""}:
+                                    </strong>{" "}
+                                    <code>{decisionPreview.missingTemplateKeys?.join(", ")}</code>. These notifications
+                                    will not be sent until the templates are configured.
+                                  </div>
+                                )}
                                 <div class="row g-3">
                                   <div class="col-lg-4">
                                     <div class="small text-muted mb-2">Outgoing emails</div>
@@ -1215,13 +1304,20 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                                       onChange={(key) => setDecisionPreviewTab(key as "html" | "text")}
                                       className="mb-2"
                                     />
-                                    {decisionPreviewTab === "html" && (
-                                      <iframe
-                                        ref={decisionPreviewFrameRef}
-                                        sandbox=""
-                                        class="adm-email-preview-frame"
-                                      />
-                                    )}
+                                    {decisionPreviewTab === "html" &&
+                                      (selectedDecisionPreview.templateMissing ? (
+                                        <div class="alert alert-warning small mb-0">
+                                          Email template <code>{selectedDecisionPreview.templateKey}</code> is not
+                                          configured. This notification will not be sent until the template is
+                                          activated.
+                                        </div>
+                                      ) : (
+                                        <iframe
+                                          srcdoc={selectedDecisionPreview.html}
+                                          sandbox=""
+                                          class="adm-email-preview-frame"
+                                        />
+                                      ))}
                                     {decisionPreviewTab === "text" && (
                                       <pre class="json-out adm-email-preview-text">{selectedDecisionPreview.text}</pre>
                                     )}
@@ -1290,6 +1386,67 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
               >
                 Copy Proposer Email
               </button>
+              {access.canFinalize && (
+                <>
+                  <hr class="my-1" />
+                  <button
+                    class="btn btn-outline-secondary btn-sm"
+                    onClick={async () => {
+                      try {
+                        const res = await api<{ queued: number }>(
+                          `/api/v1/admin/proposals/${proposalId}/remind-speakers`,
+                          { method: "POST" },
+                        );
+                        toast(`Profile reminder sent to ${res.queued} speaker(s)`, "success");
+                      } catch (err) {
+                        toast((err as Error).message, "error");
+                      }
+                    }}
+                  >
+                    ✉ Remind all: complete profile
+                  </button>
+                  {proposal.decision_status === "accepted" && proposalRequiresPresentation && (
+                    <button
+                      class="btn btn-outline-secondary btn-sm"
+                      onClick={async () => {
+                        try {
+                          const res = await api<{ queued: number }>(
+                            `/api/v1/admin/proposals/${proposalId}/remind-presentation`,
+                            { method: "POST" },
+                          );
+                          toast(`Presentation reminder sent to ${res.queued} speaker(s)`, "success");
+                        } catch (err) {
+                          toast((err as Error).message, "error");
+                        }
+                      }}
+                    >
+                      ✉ Remind all: upload presentation
+                    </button>
+                  )}
+                </>
+              )}
+              {access.canFinalize && !proposal.decision_status && (
+                <>
+                  <hr class="my-1" />
+                  <button
+                    class="btn btn-outline-warning btn-sm"
+                    onClick={() => void handleFlag("spam")}
+                    disabled={proposal.status === "spam"}
+                  >
+                    {proposal.status === "spam" ? "Marked as Spam" : "Mark as Spam"}
+                  </button>
+                  <button
+                    class="btn btn-outline-warning btn-sm"
+                    onClick={() => void handleFlag("duplicate")}
+                    disabled={proposal.status === "duplicate"}
+                  >
+                    {proposal.status === "duplicate" ? "Marked as Duplicate" : "Mark as Duplicate"}
+                  </button>
+                  <button class="btn btn-outline-danger btn-sm" onClick={() => void handleFlag("delete")}>
+                    Delete Proposal
+                  </button>
+                </>
+              )}
             </div>
           </div>
 

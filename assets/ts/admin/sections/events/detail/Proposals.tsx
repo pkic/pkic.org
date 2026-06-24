@@ -1,4 +1,4 @@
-import { useRef, useState } from "preact/hooks";
+import { useRef, useState, useEffect } from "preact/hooks";
 import { useHashLocation } from "wouter/use-hash-location";
 import { Badge } from "../../../../components/Badge";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
@@ -52,12 +52,60 @@ function recommendationSummary(p: ProposalSummary) {
   );
 }
 
+const FILTER_STORAGE_KEY = (slug: string) => `adm_proposal_filters_${slug}`;
+
+const VALID_STATUSES = new Set([
+  "",
+  "active",
+  "submitted",
+  "resubmitted",
+  "under_review",
+  "accepted",
+  "rejected",
+  "needs-work",
+  "withdrawn",
+  "spam",
+  "duplicate",
+]);
+const VALID_RECOMMENDATIONS = new Set<RecommendationFilter>(["", "accept", "needs-work", "reject"]);
+
+function loadSavedFilters(slug: string): { status: string; recommendation: RecommendationFilter } {
+  try {
+    const raw = sessionStorage.getItem(FILTER_STORAGE_KEY(slug));
+    if (!raw) return { status: "active", recommendation: "" };
+    const parsed = JSON.parse(raw) as unknown;
+    if (typeof parsed !== "object" || parsed === null) return { status: "", recommendation: "" };
+    const { status, recommendation } = parsed as Record<string, unknown>;
+    return {
+      status: typeof status === "string" && VALID_STATUSES.has(status) ? status : "",
+      recommendation:
+        typeof recommendation === "string" && VALID_RECOMMENDATIONS.has(recommendation as RecommendationFilter)
+          ? (recommendation as RecommendationFilter)
+          : "",
+    };
+  } catch {
+    return { status: "", recommendation: "" };
+  }
+}
+
 function ProposalsList({ slug }: { slug: string }) {
-  const [statusFilter, setStatusFilter] = useState("");
-  const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>("");
+  const saved = loadSavedFilters(slug);
+  const [statusFilter, setStatusFilter] = useState(saved.status || "active");
+  const [recommendationFilter, setRecommendationFilter] = useState<RecommendationFilter>(saved.recommendation);
   const [stats, setStats] = useState<ProposalStats | null>(null);
   const [, navigate] = useHashLocation();
   const tableRef = useRef<ApiTableActions | null>(null);
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem(
+        FILTER_STORAGE_KEY(slug),
+        JSON.stringify({ status: statusFilter, recommendation: recommendationFilter }),
+      );
+    } catch {
+      // sessionStorage unavailable
+    }
+  }, [slug, statusFilter, recommendationFilter]);
 
   const submitted = stats?.byStatus?.submitted ?? 0;
   const underReview = stats?.byStatus?.under_review ?? 0;
@@ -155,12 +203,16 @@ function ProposalsList({ slug }: { slug: string }) {
               }}
             >
               <option value="">All statuses</option>
+              <option value="active">Active (excludes withdrawn/rejected/spam)</option>
               <option value="submitted">Submitted</option>
+              <option value="resubmitted">Resubmitted</option>
               <option value="under_review">Under Review</option>
               <option value="accepted">Accepted</option>
               <option value="rejected">Rejected</option>
               <option value="needs-work">Needs Work</option>
               <option value="withdrawn">Withdrawn</option>
+              <option value="spam">Spam</option>
+              <option value="duplicate">Duplicate</option>
             </select>
             <select
               class="form-select form-select-sm adm-filter-select"
@@ -248,7 +300,21 @@ function ProposalsList({ slug }: { slug: string }) {
           },
           {
             header: "",
-            cell: () => <span class="btn btn-sm btn-outline-secondary">Review →</span>,
+            cell: (p) => (
+              <div class="d-flex gap-1 align-items-center">
+                <span class="btn btn-sm btn-outline-secondary">Review →</span>
+                <a
+                  class="btn btn-sm btn-outline-secondary"
+                  href={`#/events/${slug}/proposal/${p.id}`}
+                  target="_blank"
+                  rel="noopener"
+                  title="Open in new tab"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  ↗
+                </a>
+              </div>
+            ),
           },
         ]}
         empty="No proposals found"

@@ -1,6 +1,6 @@
 import { json } from "../../../../_lib/http";
 import { getActiveFormByPurpose } from "../../../../_lib/services/forms";
-import { getEventBySlug, getRequiredTerms } from "../../../../_lib/services/events";
+import { getEventBySlug, getRequiredTerms, resolveSessionTypes } from "../../../../_lib/services/events";
 import {
   countRegisteredByEventDay,
   listEventDays,
@@ -100,11 +100,8 @@ export async function onRequestGet(c: any): Promise<Response> {
 
   const registeredCounts = await countRegisteredByEventDay(c.env.DB, event.id);
 
-  const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: string[] } }>(event.settings_json, {});
-  const allowedSessionTypes: string[] =
-    Array.isArray(eventSettings.proposal?.sessionTypes) && eventSettings.proposal.sessionTypes.length > 0
-      ? eventSettings.proposal.sessionTypes
-      : ["talk", "keynote", "panel"];
+  const eventSettings = parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(event.settings_json, {});
+  const allowedSessionTypes: string[] = resolveSessionTypes(eventSettings).map((t) => t.label);
 
   return json({
     event: { id: event.id, slug: event.slug, name: event.name },
