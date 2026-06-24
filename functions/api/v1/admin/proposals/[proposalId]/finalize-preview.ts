@@ -10,14 +10,19 @@ import { loadEmailLayout, loadEmailPartials } from "../../../../../_lib/email/pa
 import { proposalManagePageUrl, speakerManagePageUrl } from "../../../../../_lib/services/frontend-links";
 import { finalizeProposalSchema } from "../../../../../../assets/shared/schemas/api";
 import { buildProposalDecisionEmailPlan } from "./decision-emails";
-import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+import type { AdminContext } from "../../../../../_lib/db/context";
 
 export async function onRequestPost(c: AdminContext): Promise<Response> {
-  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  // Use the raw DB binding for this read-only endpoint. The session-wrapped
+  // requestDb(c) uses primaryFirstDb which creates a D1 session that does not
+  // support the parallel queries this handler fires (layout + partials +
+  // templates all in concurrent Promise.all calls), causing a hang in dev mode.
+  const db = c.env.DB;
+  const admin = await requireAdminFromRequest(db, c.req.raw, c.env);
   const proposalId = c.req.param("proposalId");
 
   const accessCheckProposal = await first<{ event_id: string }>(
-    requestDb(c),
+    db,
     "SELECT event_id FROM session_proposals WHERE id = ?",
     [proposalId],
   );
@@ -25,7 +30,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     return json({ error: { code: "PROPOSAL_NOT_FOUND", message: "Proposal not found" } }, 404);
   }
 
-  const access = await getProposalAccessForEvent(requestDb(c), accessCheckProposal.event_id, admin);
+  const access = await getProposalAccessForEvent(db, accessCheckProposal.event_id, admin);
   if (!access.canFinalize) {
     return json({ error: { code: "FORBIDDEN", message: "Missing permission to finalize proposals" } }, 403);
   }
@@ -33,7 +38,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const body = await parseJsonBody(c.req, finalizeProposalSchema);
   const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
   const plan = await buildProposalDecisionEmailPlan(
-    requestDb(c),
+    db,
     {
       proposalId,
       finalStatus: body.finalStatus,
@@ -51,17 +56,17 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   let layoutMissing = false;
   const [layoutHtml, partials] = await Promise.all([
-    loadEmailLayout(requestDb(c)).catch(() => {
+    loadEmailLayout(db).catch(() => {
       layoutMissing = true;
       return "";
     }),
-    loadEmailPartials(requestDb(c)).catch(() => ({}) as Record<string, string>),
+    loadEmailPartials(db).catch(() => ({}) as Record<string, string>),
   ]);
 
   const messages = await Promise.all(
     plan.messages.map(async (message) => {
       try {
-        const template = await resolveTemplate(requestDb(c), message.templateKey);
+        const template = await resolveTemplate(db, message.templateKey);
         const dataWithPartials = { ...message.data, _partials: partials };
         const subject = renderSubject(template.subjectTemplate, message.fallbackSubject, dataWithPartials);
         const rendered = await renderEmail(
