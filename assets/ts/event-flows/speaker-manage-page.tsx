@@ -158,6 +158,8 @@ async function main(): Promise<void> {
     confirmedMsg?.classList.remove("d-none");
     toggleEditableSections(true);
     if (data.proposal.status === "accepted") {
+      const anchor = presentationLink?.querySelector<HTMLAnchorElement>("a");
+      if (anchor) anchor.href = `presentation/?token=${encodeURIComponent(token)}`;
       presentationLink?.classList.remove("d-none");
     }
   } else if (data.speaker.status === "declined") {
