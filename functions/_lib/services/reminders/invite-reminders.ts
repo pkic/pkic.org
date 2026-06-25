@@ -53,7 +53,8 @@ export async function runInviteReminders(
     [maxInviteReminders, now, cutoff, limit],
   );
 
-  const filteredInvites = dueInvites.filter((i) => i.invite_type !== "attendee" || isAttendeeInviteReminderAllowed(i));
+  const nowMs = new Date(now).getTime();
+  const filteredInvites = dueInvites.filter((i) => i.invite_type !== 'attendee' || isAttendeeInviteReminderAllowed(i, nowMs));
 
   const attendeeInvites: ReminderCandidatePreview[] = [];
   const speakerInvites: ReminderCandidatePreview[] = [];
