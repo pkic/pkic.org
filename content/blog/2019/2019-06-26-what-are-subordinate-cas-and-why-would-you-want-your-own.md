@@ -48,7 +48,7 @@ title: What Are Subordinate CAs and Why Would You Want Your Own?
 ---
 Digital certificate and PKI adoption has changed quite a bit in recent years. Gone are the days where certificates were only synonymous with SSL/TLS; compliance drivers like stronger authentication requirements and digital signature regulations (e.g. [eIDAS][1]) have greatly expanded the role of PKI within the enterprise.
 
-As PKI usage has expanded, conversation has moved beyond just the number and type of certificates needed and onto deeper dialogue about custom PKI deployments. A large part of the conversation is around subordinate CAs, sometimes referred to as Issuing or Intermediate CAs, and why an organization might want their own. Let’s discuss.
+As PKI usage has expanded, conversation has moved beyond just the number and type of certificates needed and onto deeper dialog about custom PKI deployments. A large part of the conversation is around subordinate CAs, sometimes referred to as Issuing or Intermediate CAs, and why an organization might want their own. Let’s discuss.
 
 ## What Are CA Hierarchies and Why Do We Need Them?
 

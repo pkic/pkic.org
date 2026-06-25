@@ -30,7 +30,7 @@ title: Secure Your Website with HSTS
 ---
 Is your website secure? One thing to consider is securing your website with [HTTP Strict Transport Security (HSTS)][1].
 
-Implementation of HSTS is an extension of the [Always-On SSL][2] policy. For each website you want to protect with HSTS, you must first deploy an SSL/TLS certificate (if you haven’t already), and configure that website to be accessible only via HTTPS, not via HTTP. Then you convey to HSTS-enabled browsers that your site is only available with HTTPS, by sending the HSTS header value. Supporting browsers will automatically change any HTTP query for your website into an HTTPS query. If there is no HTTPS version available, then the browser will provide a trust dialogue to the user.
+Implementation of HSTS is an extension of the [Always-On SSL][2] policy. For each website you want to protect with HSTS, you must first deploy an SSL/TLS certificate (if you haven’t already), and configure that website to be accessible only via HTTPS, not via HTTP. Then you convey to HSTS-enabled browsers that your site is only available with HTTPS, by sending the HSTS header value. Supporting browsers will automatically change any HTTP query for your website into an HTTPS query. If there is no HTTPS version available, then the browser will provide a trust dialog to the user.
 
 HSTS is defined in the [IETF RFC 6797][3] and is being deployed in most browsers. Browsers which do not support HSTS will just ignore the HSTS header value, so website administrators do not have to wait for full browser support.
 

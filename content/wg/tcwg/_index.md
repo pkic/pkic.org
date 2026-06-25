@@ -34,7 +34,7 @@ card:
   icon: tc
   order: 4
   gradient: ["#1a5a3a", "#0a2d1e"]
-  description: "Developing professional standards, vendor-neutral curricula and certification programmes for PKI practitioners worldwide."
+  description: "Developing professional standards, vendor-neutral curricula and certification programs for PKI practitioners worldwide."
   links:
     - text: "Charter"
       url: "/wg/tcwg/charter/"
