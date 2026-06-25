@@ -4,6 +4,51 @@ import { nowIso } from "../utils/time";
 import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 
+export const ALLOWED_PRESENTATION_MIME_TYPES = new Set([
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
+  "application/vnd.ms-powerpoint", // .ppt
+  "application/vnd.oasis.opendocument.presentation", // .odp
+  "application/vnd.ms-powerpoint.presentation.macroEnabled.12", // .pptm
+]);
+export const MAX_PRESENTATION_BYTES = 200 * 1024 * 1024; // 200 MB
+
+/**
+ * Parse and validate a multipart/form-data "file" field from a Request.
+ * Returns the validated File blob, or a { error, status } tuple to return directly.
+ */
+export async function parsePresentationUpload(
+  request: Request,
+): Promise<File | { error: { code: string; message: string }; status: number }> {
+  const formData = await request.formData().catch(() => null);
+  if (!formData)
+    return { error: { code: "INVALID_CONTENT_TYPE", message: "Request must be multipart/form-data" }, status: 400 };
+
+  const file = formData.get("file");
+  if (!file || typeof file === "string")
+    return { error: { code: "MISSING_FILE", message: 'A "file" field is required.' }, status: 400 };
+
+  const blob = file as File;
+  const blobType = blob.type || "application/octet-stream";
+  if (!ALLOWED_PRESENTATION_MIME_TYPES.has(blobType))
+    return {
+      error: { code: "INVALID_FILE_TYPE", message: "Only PDF and PowerPoint (PPTX/PPT/PPTM/ODP) files are accepted." },
+      status: 415,
+    };
+  if (blob.size > MAX_PRESENTATION_BYTES)
+    return { error: { code: "FILE_TOO_LARGE", message: "Presentation must be under 200 MB." }, status: 413 };
+
+  return blob;
+}
+
+/** Upload a validated File to R2 and return the r2Key. */
+export async function storePresentationFile(bucket: R2Bucket, proposalId: string, blob: File): Promise<string> {
+  const safeName = (blob.name ?? "presentation").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
+  const r2Key = `presentations/${proposalId}/${Date.now()}-${safeName}`;
+  await bucket.put(r2Key, await blob.arrayBuffer(), { httpMetadata: { contentType: blob.type } });
+  return r2Key;
+}
+
 export interface PresentationVersion {
   id: string;
   proposalId: string;

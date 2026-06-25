@@ -14,18 +14,10 @@
 import { json } from "../../../../../_lib/http";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
 import { recordPresentationUpload } from "../../../../../_lib/services/proposals-speaker-profile";
+import { parsePresentationUpload, storePresentationFile } from "../../../../../_lib/services/presentation-versions";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
 import { first } from "../../../../../_lib/db/queries";
-
-const ALLOWED_MIME_TYPES = new Set([
-  "application/pdf",
-  "application/vnd.openxmlformats-officedocument.presentationml.presentation", // .pptx
-  "application/vnd.ms-powerpoint", // .ppt
-  "application/vnd.oasis.opendocument.presentation", // .odp
-  "application/vnd.ms-powerpoint.presentation.macroEnabled.12", // .pptm
-]);
-const MAX_PRESENTATION_BYTES = 200 * 1024 * 1024; // 200 MB
 
 export async function onRequestPut(c: any): Promise<Response> {
   const { speaker, proposal } = await getSpeakerByManageToken(c.env.DB, c.req.param("token"));
@@ -34,7 +26,6 @@ export async function onRequestPut(c: any): Promise<Response> {
     return json({ error: { code: "SPEAKER_DECLINED", message: "You have declined participation." } }, 403);
   }
 
-  // Only allow presentation uploads after the proposal is accepted.
   if (proposal.status !== "accepted") {
     return json(
       {
@@ -47,7 +38,6 @@ export async function onRequestPut(c: any): Promise<Response> {
     );
   }
 
-  // Check deadline.
   const deadlineRow = await first<{ presentation_deadline: string | null }>(
     c.env.DB,
     "SELECT presentation_deadline FROM session_proposals WHERE id = ?",
@@ -66,60 +56,24 @@ export async function onRequestPut(c: any): Promise<Response> {
   }
 
   const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
+  if (!bucket) throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured on this instance.");
 
-  if (!bucket) {
-    throw new AppError(503, "UPLOADS_NOT_CONFIGURED", "File uploads are not configured on this instance.");
-  }
+  const parsed = await parsePresentationUpload(c.req.raw);
+  if ("error" in parsed) return json(parsed.error, parsed.status);
 
-  const contentType = c.req.raw.headers.get("content-type") ?? "";
-  if (!contentType.includes("multipart/form-data")) {
-    return json({ error: { code: "INVALID_CONTENT_TYPE", message: "Request must be multipart/form-data" } }, 400);
-  }
-
-  const formData = await c.req.raw.formData();
-  const file = formData.get("file");
-
-  if (!file || typeof file === "string") {
-    return json({ error: { code: "MISSING_FILE", message: 'A "file" field is required.' } }, 400);
-  }
-
-  const blob = file as File;
-  const blobType = blob.type || "application/octet-stream";
-
-  if (!ALLOWED_MIME_TYPES.has(blobType)) {
-    return json(
-      {
-        error: {
-          code: "INVALID_FILE_TYPE",
-          message: "Only PDF and PowerPoint (PPTX/PPT/PPTM/ODP) files are accepted.",
-        },
-      },
-      415,
-    );
-  }
-
-  if (blob.size > MAX_PRESENTATION_BYTES) {
-    return json({ error: { code: "FILE_TOO_LARGE", message: "Presentation must be under 200 MB." } }, 413);
-  }
-
-  const safeName = (blob.name ?? "presentation").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100);
-  const r2Key = `presentations/${proposal.id}/${Date.now()}-${safeName}`;
-
-  await bucket.put(r2Key, await blob.arrayBuffer(), {
-    httpMetadata: { contentType: blobType },
-  });
+  const r2Key = await storePresentationFile(bucket, proposal.id, parsed);
 
   await recordPresentationUpload(c.env.DB, proposal.id, r2Key, speaker.user_id, {
-    fileName: blob.name ?? null,
-    fileSize: blob.size,
-    mimeType: blobType,
+    fileName: parsed.name ?? null,
+    fileSize: parsed.size,
+    mimeType: parsed.type,
   });
 
   await writeAuditLog(c.env.DB, "user", speaker.user_id, "presentation_uploaded", "session_proposal", proposal.id, {
     r2Key,
-    fileName: blob.name ?? null,
-    fileSize: blob.size,
-    mimeType: blobType,
+    fileName: parsed.name ?? null,
+    fileSize: parsed.size,
+    mimeType: parsed.type,
   });
 
   return json({ success: true, r2Key });
