@@ -790,8 +790,7 @@ export async function runReminderCycle(
         appBaseUrl: payload.appBaseUrl,
         templateKey: "registration_updated",
         subject: `Registration cancelled due to missing email confirmation — ${event.name}`,
-        // row.email is COALESCE(pending_email, email) — send to the address
-        // the user was trying to confirm since the original may be bouncing.
+        // row.email is COALESCE(pending_email, email) — the original bounces.
         recipientEmailOverride: row.email,
       });
     }
@@ -958,15 +957,16 @@ export async function runReminderCycle(
              WHERE id = ?`,
           )
           .bind(now, freshHash, row.id),
-        // Extend pending_email_expires_at to the confirmation deadline so that
-        // subsequent reminder links remain usable beyond the initial TTL window.
+        // Extend (never shorten) pending_email_expires_at to the deadline so reminder
+        // links stay clickable and a shorter-deadline registration can't clobber a longer one.
         db
           .prepare(
             `UPDATE users
              SET pending_email_expires_at = ?
-             WHERE id = ? AND pending_email IS NOT NULL`,
+             WHERE id = ? AND pending_email IS NOT NULL
+               AND (pending_email_expires_at IS NULL OR pending_email_expires_at < ?)`,
           )
-          .bind(deadline, row.user_id),
+          .bind(deadline, row.user_id, deadline),
       ];
     });
 

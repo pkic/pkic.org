@@ -635,6 +635,54 @@ describe("runReminderCycle", () => {
     expect(outbox[0].recipient_email).toBe("new-correct@example.test");
   });
 
+  it("does not shorten pending_email_expires_at when a shorter-deadline registration is processed after a longer-deadline one", async () => {
+    const userId = crypto.randomUUID();
+    const regId1 = crypto.randomUUID();
+    const regId2 = crypto.randomUUID();
+    const longerDeadline = new Date(Date.now() + 20 * 24 * 3_600_000).toISOString();
+    const shorterDeadline = new Date(Date.now() + 5 * 24 * 3_600_000).toISOString();
+    await insertUser(userId, "shared@example.test");
+    await db
+      .prepare("UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?")
+      .bind("pending@example.test", shorterDeadline, userId)
+      .run();
+    // Two registrations for the same user — different events, different deadlines.
+    await insertPendingRegistration({
+      regId: regId1,
+      eventId,
+      userId,
+      deadlineAt: longerDeadline,
+      reminderSentAt: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    });
+    const otherEventId = crypto.randomUUID();
+    await db
+      .prepare(
+        `INSERT INTO events (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+         VALUES (?, 'other-event', 'Other Event', 'UTC', 'open', 5, '{}', datetime('now'), datetime('now'))`,
+      )
+      .bind(otherEventId)
+      .run();
+    await insertPendingRegistration({
+      regId: regId2,
+      eventId: otherEventId,
+      userId,
+      deadlineAt: shorterDeadline,
+      reminderSentAt: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    });
+
+    await runReminderCycle(db, BASE_PAYLOAD);
+
+    const user = await queryAll<{ pending_email_expires_at: string }>(
+      db,
+      "SELECT pending_email_expires_at FROM users WHERE id = ?",
+      userId,
+    );
+    // The longer deadline must win — the shorter one must not clobber it.
+    expect(new Date(user[0].pending_email_expires_at).getTime()).toBeGreaterThanOrEqual(
+      new Date(longerDeadline).getTime(),
+    );
+  });
+
   // ── Dry-run ───────────────────────────────────────────────────────────────────
 
   it("dry-run returns preview candidates without writing to the DB", async () => {
