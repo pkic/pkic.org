@@ -198,7 +198,7 @@ export async function runConfirmationReminders(
       subject: confirmationReminderSubject(
         event.name,
         deadlineAt,
-        Date.now(),
+        new Date(now).getTime(),
         reminderNumber >= maxPendingConfirmationReminders,
       ),
     });
