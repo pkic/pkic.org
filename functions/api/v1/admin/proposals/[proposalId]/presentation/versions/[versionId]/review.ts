@@ -16,15 +16,19 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   requireAuthScope(admin, "presentations:review");
 
+  const proposalId = c.req.param("proposalId");
   const versionId = c.req.param("versionId");
   const body = await parseJsonBody(c.req, reviewSchema);
 
   const version = await getPresentationVersion(requestDb(c), versionId);
+  if (version.proposalId !== proposalId) {
+    return json({ error: { message: "Presentation version not found" } }, 404);
+  }
 
   await addVersionReview(requestDb(c), versionId, {
     reviewedByUserId: admin.id,
     status: body.status,
-    note: body.note ?? null,
+    note: body.note?.trim() || null,
   });
 
   await writeAuditLog(

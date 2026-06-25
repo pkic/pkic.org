@@ -30,9 +30,13 @@ export async function onRequestGet(c: any): Promise<Response> {
   if (!object) return json({ error: { message: "File not found in storage" } }, 404);
 
   const fileName = version.file_name ?? `presentation-v${version.version_number}`;
+  const safeFileName = fileName.replace(/["\r\n]/g, "_");
   const headers = new Headers();
   headers.set("Content-Type", version.mime_type ?? "application/octet-stream");
-  headers.set("Content-Disposition", `attachment; filename="${fileName}"`);
+  headers.set(
+    "Content-Disposition",
+    `attachment; filename="${safeFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+  );
   headers.set("Content-Length", String(object.size));
 
   return new Response(object.body, { headers });
