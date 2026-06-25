@@ -652,6 +652,26 @@ function PresentationVersionsTab({
   const [reviewNote, setReviewNote] = useState("");
   const [savingReview, setSavingReview] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleAdminUpload(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    input.value = "";
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      await api(`/api/v1/admin/proposals/${proposalId}/presentation/versions`, { method: "POST", body: fd });
+      toast("Presentation uploaded", "success");
+      onReload();
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   async function handleReview(versionId: string) {
     setSavingReview(true);
@@ -687,13 +707,32 @@ function PresentationVersionsTab({
     }
   }
 
+  const uploadButton = (
+    <label class={`btn btn-sm btn-outline-primary ${uploading ? "disabled" : ""}`}>
+      {uploading ? "Uploading…" : "↑ Upload on behalf of speaker"}
+      <input
+        type="file"
+        class="d-none"
+        accept=".pdf,.pptx,.ppt,.odp,.pptm"
+        disabled={uploading}
+        onChange={handleAdminUpload}
+      />
+    </label>
+  );
+
   if (loading) return <Spinner />;
   if (versions.length === 0) {
-    return <p class="text-muted fst-italic">No presentation uploaded yet.</p>;
+    return (
+      <div class="d-flex flex-column gap-2">
+        <p class="text-muted fst-italic mb-0">No presentation uploaded yet.</p>
+        {uploadButton}
+      </div>
+    );
   }
 
   return (
     <div>
+      <div class="mb-3">{uploadButton}</div>
       {versions.map((v) => (
         <div key={v.id} class={`card mb-3 ${v.isCurrent ? "border-primary" : ""}`}>
           <div class="card-header d-flex align-items-center gap-2 flex-wrap">
