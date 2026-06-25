@@ -39,7 +39,7 @@ SELECT
   1,
   presentation_r2_key,
   presentation_uploaded_by_user_id,
-  presentation_uploaded_at,
+  COALESCE(presentation_uploaded_at, updated_at, submitted_at),
   1
 FROM session_proposals
 WHERE presentation_r2_key IS NOT NULL

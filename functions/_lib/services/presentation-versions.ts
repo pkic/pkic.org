@@ -121,13 +121,6 @@ export async function createPresentationVersion(
   const now = nowIso();
   const id = uuid();
 
-  const prev = await first<{ max_version: number | null }>(
-    db,
-    "SELECT MAX(version_number) AS max_version FROM presentation_versions WHERE proposal_id = ?",
-    [proposalId],
-  );
-  const versionNumber = (prev?.max_version ?? 0) + 1;
-
   await run(db, "UPDATE presentation_versions SET is_current = 0 WHERE proposal_id = ? AND is_current = 1", [
     proposalId,
   ]);
@@ -137,18 +130,12 @@ export async function createPresentationVersion(
     `INSERT INTO presentation_versions
        (id, proposal_id, version_number, r2_key, file_name, file_size, mime_type,
         uploaded_by_user_id, uploaded_at, is_current)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1)`,
-    [
-      id,
-      proposalId,
-      versionNumber,
-      opts.r2Key,
-      opts.fileName,
-      opts.fileSize,
-      opts.mimeType,
-      opts.uploadedByUserId,
-      now,
-    ],
+     VALUES (
+       ?, ?,
+       (SELECT COALESCE(MAX(version_number), 0) + 1 FROM presentation_versions WHERE proposal_id = ?),
+       ?, ?, ?, ?, ?, ?, 1
+     )`,
+    [id, proposalId, proposalId, opts.r2Key, opts.fileName, opts.fileSize, opts.mimeType, opts.uploadedByUserId, now],
   );
 
   return getPresentationVersion(db, id);
@@ -183,7 +170,7 @@ export async function deletePresentationVersion(db: DatabaseLike, versionId: str
   }
 
   const now = nowIso();
-  await run(db, "UPDATE presentation_versions SET deleted_at = ? WHERE id = ?", [now, versionId]);
+  await run(db, "UPDATE presentation_versions SET deleted_at = ?, is_current = 0 WHERE id = ?", [now, versionId]);
 
   if (version.isCurrent) {
     await run(

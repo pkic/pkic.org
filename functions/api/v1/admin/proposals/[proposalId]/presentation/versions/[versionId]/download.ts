@@ -5,9 +5,13 @@ import { requestDb, type AdminContext } from "../../../../../../../../_lib/db/co
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const proposalId = c.req.param("proposalId");
   const versionId = c.req.param("versionId");
 
   const version = await getPresentationVersion(requestDb(c), versionId);
+  if (version.proposalId !== proposalId) {
+    return json({ error: { message: "Presentation version not found" } }, 404);
+  }
 
   const bucket = c.env.SPEAKER_UPLOADS_BUCKET;
   if (!bucket) return json({ error: { message: "File storage not configured" } }, 503);
@@ -16,9 +20,13 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   if (!object) return json({ error: { message: "File not found in storage" } }, 404);
 
   const fileName = version.fileName ?? `presentation-v${version.versionNumber}`;
+  const safeFileName = fileName.replace(/["\r\n]/g, "_");
   const headers = new Headers();
   headers.set("Content-Type", version.mimeType ?? "application/octet-stream");
-  headers.set("Content-Disposition", `attachment; filename="${fileName}"`);
+  headers.set(
+    "Content-Disposition",
+    `attachment; filename="${safeFileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`,
+  );
   headers.set("Content-Length", String(object.size));
 
   return new Response(object.body, { headers });
