@@ -552,6 +552,81 @@ describe("runReminderCycle", () => {
     expect(outbox[0].template_key).toBe("registration_updated");
   });
 
+  // ── Email-change scenarios ────────────────────────────────────────────────────
+
+  it("sends confirmation reminder to pending_email, not the old bouncing email, when an email change is in progress", async () => {
+    const userId = crypto.randomUUID();
+    const regId = crypto.randomUUID();
+    // User has old (bouncing) email stored on users.email, and a pending new email.
+    await insertUser(userId, "old-bouncing@example.test", "Maria", "S");
+    await db
+      .prepare("UPDATE users SET pending_email = ? WHERE id = ?")
+      .bind("new-correct@example.test", userId)
+      .run();
+    await insertPendingRegistration({
+      regId,
+      eventId,
+      userId,
+      deadlineAt: new Date(Date.now() + 12 * 24 * 3_600_000).toISOString(),
+      reminderSentAt: new Date(Date.now() - 26 * 3_600_000).toISOString(),
+    });
+
+    const result = await runReminderCycle(db, BASE_PAYLOAD);
+
+    expect(result.confirmationRemindersQueued).toBe(1);
+    expect(result.preview.registrationConfirmations[0].recipientEmail).toBe("new-correct@example.test");
+
+    const outbox = await queryAll<{ recipient_email: string }>(
+      db,
+      "SELECT recipient_email FROM email_outbox WHERE template_key = 'registration_confirmation_reminder'",
+    );
+    expect(outbox).toHaveLength(1);
+    expect(outbox[0].recipient_email).toBe("new-correct@example.test");
+  });
+
+  it("sends cancellation email to pending_email, not the old bouncing email, when confirmation deadline expires during an email change", async () => {
+    const userId = crypto.randomUUID();
+    const regId = crypto.randomUUID();
+    await insertUser(userId, "old-bouncing@example.test", "Maria", "S");
+    await db
+      .prepare("UPDATE users SET pending_email = ? WHERE id = ?")
+      .bind("new-correct@example.test", userId)
+      .run();
+    await insertPendingRegistration({
+      regId,
+      eventId,
+      userId,
+      deadlineAt: new Date(Date.now() - 24 * 3_600_000).toISOString(),
+      reminderSentAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    });
+    for (let index = 0; index < BASE_PAYLOAD.maxPendingConfirmationReminders; index += 1) {
+      await insertRegistrationEmailOutbox({
+        eventId,
+        userId,
+        recipientEmail: "new-correct@example.test",
+        templateKey: "registration_confirmation_reminder",
+        createdAt: new Date(Date.now() - (index + 2) * 86_400_000).toISOString(),
+      });
+    }
+
+    const result = await runReminderCycle(db, BASE_PAYLOAD);
+
+    expect(result.confirmationCancellationsProcessed).toBe(1);
+
+    const reg = (
+      await queryAll<{ status: string }>(db, "SELECT status FROM registrations WHERE id = ?", regId)
+    )[0];
+    expect(reg.status).toBe("cancelled");
+
+    // Cancellation notification must go to the new (pending) email, not the old bouncing one.
+    const outbox = await queryAll<{ recipient_email: string; template_key: string }>(
+      db,
+      "SELECT recipient_email, template_key FROM email_outbox ORDER BY created_at DESC LIMIT 1",
+    );
+    expect(outbox[0].template_key).toBe("registration_updated");
+    expect(outbox[0].recipient_email).toBe("new-correct@example.test");
+  });
+
   // ── Dry-run ───────────────────────────────────────────────────────────────────
 
   it("dry-run returns preview candidates without writing to the DB", async () => {

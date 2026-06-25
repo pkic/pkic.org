@@ -54,7 +54,7 @@ export async function queueRegistrationStatusEmail(
 
   const user = await first<UserRow>(
     db,
-    "SELECT id, email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?",
+    "SELECT id, COALESCE(pending_email, email) AS email, first_name, last_name, organization_name, job_title FROM users WHERE id = ?",
     [registration.user_id],
   );
   if (!user) {
