@@ -31,7 +31,7 @@ On the other hand, the app might use other services such as PayPal for billing. 
 
 So, what needs to be done?
 
-  * **Browsers** can to continue to check the validity of the certificates and present their trust dialogs.
+  * **Browsers** can continue to check the validity of the certificates and present their trust dialogs.
   * **Mobile operating system vendors** need to check the quality of their applications and only accept those that authenticate certificates properly.
   * **Application vendors** should take the time to check the validity of the certificates. Also implement [public key pinning][1]. Some of the most popular applications (e.g., X, Facebook and Google) use public key pinning, which rejects connections to site with bogus certificates.
 
