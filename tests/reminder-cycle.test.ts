@@ -635,6 +635,95 @@ describe("runReminderCycle", () => {
     expect(outbox[0].recipient_email).toBe("new-correct@example.test");
   });
 
+  it("clears pending_email on the user when the last pending-confirmation registration is cancelled on timeout", async () => {
+    const userId = crypto.randomUUID();
+    const regId = crypto.randomUUID();
+    await insertUser(userId, "old-bouncing@example.test");
+    await db
+      .prepare("UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?")
+      .bind("new-correct@example.test", new Date(Date.now() + 86_400_000).toISOString(), userId)
+      .run();
+    await insertPendingRegistration({
+      regId,
+      eventId,
+      userId,
+      deadlineAt: new Date(Date.now() - 24 * 3_600_000).toISOString(),
+      reminderSentAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    });
+    for (let index = 0; index < BASE_PAYLOAD.maxPendingConfirmationReminders; index += 1) {
+      await insertRegistrationEmailOutbox({
+        eventId,
+        userId,
+        recipientEmail: "new-correct@example.test",
+        templateKey: "registration_confirmation_reminder",
+        createdAt: new Date(Date.now() - (index + 2) * 86_400_000).toISOString(),
+      });
+    }
+
+    await runReminderCycle(db, BASE_PAYLOAD);
+
+    const user = await queryAll<{ pending_email: string | null }>(
+      db,
+      "SELECT pending_email FROM users WHERE id = ?",
+      userId,
+    );
+    expect(user[0].pending_email).toBeNull();
+  });
+
+  it("does not clear pending_email when another pending-confirmation registration still exists for the same user", async () => {
+    const userId = crypto.randomUUID();
+    const regId1 = crypto.randomUUID();
+    const regId2 = crypto.randomUUID();
+    await insertUser(userId, "shared@example.test");
+    await db.prepare("UPDATE users SET pending_email = ? WHERE id = ?").bind("pending@example.test", userId).run();
+    // reg1 is past its deadline — will be cancelled.
+    await insertPendingRegistration({
+      regId: regId1,
+      eventId,
+      userId,
+      deadlineAt: new Date(Date.now() - 24 * 3_600_000).toISOString(),
+      reminderSentAt: new Date(Date.now() - 2 * 86_400_000).toISOString(),
+    });
+    for (let index = 0; index < BASE_PAYLOAD.maxPendingConfirmationReminders; index += 1) {
+      await insertRegistrationEmailOutbox({
+        eventId,
+        userId,
+        recipientEmail: "pending@example.test",
+        templateKey: "registration_confirmation_reminder",
+        createdAt: new Date(Date.now() - (index + 2) * 86_400_000).toISOString(),
+      });
+    }
+    // reg2 for a second event is still within its deadline — must survive.
+    const otherEventId = crypto.randomUUID();
+    await db
+      .prepare(
+        `INSERT INTO events (id, slug, name, timezone, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+         VALUES (?, 'other-event-2', 'Other Event 2', 'UTC', 'open', 5, '{}', datetime('now'), datetime('now'))`,
+      )
+      .bind(otherEventId)
+      .run();
+    await insertPendingRegistration({
+      regId: regId2,
+      eventId: otherEventId,
+      userId,
+      deadlineAt: new Date(Date.now() + 10 * 24 * 3_600_000).toISOString(),
+      reminderSentAt: null,
+    });
+
+    await runReminderCycle(db, BASE_PAYLOAD);
+
+    const reg1 = (await queryAll<{ status: string }>(db, "SELECT status FROM registrations WHERE id = ?", regId1))[0];
+    expect(reg1.status).toBe("cancelled");
+
+    // pending_email must be preserved because reg2 still needs confirmation.
+    const user = await queryAll<{ pending_email: string | null }>(
+      db,
+      "SELECT pending_email FROM users WHERE id = ?",
+      userId,
+    );
+    expect(user[0].pending_email).toBe("pending@example.test");
+  });
+
   it("does not shorten pending_email_expires_at when a shorter-deadline registration is processed after a longer-deadline one", async () => {
     const userId = crypto.randomUUID();
     const regId1 = crypto.randomUUID();
