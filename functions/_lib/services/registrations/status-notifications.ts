@@ -41,6 +41,10 @@ export async function queueRegistrationStatusEmail(
     templateKey: string;
     subject: string;
     noticeKind?: "status_update" | "waitlist_offer" | "admin_admit";
+    /** Override the recipient email. Only use when the verified email is known
+     * to bounce and an unverified pending address is preferable — e.g. sending
+     * a cancellation notice after a pending-confirmation timeout. */
+    recipientEmailOverride?: string;
   },
 ): Promise<{ outboxId: string; manageToken: string; manageUrl: string }> {
   const registration = await first<RegistrationRecord>(
@@ -79,11 +83,12 @@ export async function queueRegistrationStatusEmail(
   ]);
 
   const manageUrl = registrationManagePageUrl(params.appBaseUrl, params.event, manageToken);
+  const recipientEmail = params.recipientEmailOverride ?? user.email;
   const outboxId = await queueEmail(db, {
     eventId: params.event.id,
     baseUrl: params.appBaseUrl,
     templateKey: params.templateKey,
-    recipientEmail: user.email,
+    recipientEmail,
     recipientUserId: user.id,
     messageType: "transactional",
     subject: params.subject,
@@ -91,7 +96,7 @@ export async function queueRegistrationStatusEmail(
       ...buildEventEmailVariables(params.event, params.appBaseUrl),
       firstName: user.first_name ?? "",
       lastName: user.last_name ?? "",
-      email: user.email,
+      email: recipientEmail,
       organizationName: user.organization_name ?? "",
       jobTitle: user.job_title ?? "",
       attendanceType: registration.attendance_type,
