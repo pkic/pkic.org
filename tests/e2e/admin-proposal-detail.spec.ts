@@ -105,6 +105,14 @@ test("renders the admin proposal detail workflow with submission answers and ope
     });
   });
 
+  await page.route("**/api/v1/admin/proposals/proposal-1/presentation/versions", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ versions: [] }),
+    });
+  });
+
   await page.route("**/api/v1/admin/proposals/proposal-1", async (route) => {
     await route.fulfill({
       status: 200,
