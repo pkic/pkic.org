@@ -601,10 +601,7 @@ describe("runReminderCycle", () => {
     const userId = crypto.randomUUID();
     const regId = crypto.randomUUID();
     await insertUser(userId, "old-bouncing@example.test", "Maria", "S");
-    await db
-      .prepare("UPDATE users SET pending_email = ? WHERE id = ?")
-      .bind("new-correct@example.test", userId)
-      .run();
+    await db.prepare("UPDATE users SET pending_email = ? WHERE id = ?").bind("new-correct@example.test", userId).run();
     await insertPendingRegistration({
       regId,
       eventId,
@@ -626,9 +623,7 @@ describe("runReminderCycle", () => {
 
     expect(result.confirmationCancellationsProcessed).toBe(1);
 
-    const reg = (
-      await queryAll<{ status: string }>(db, "SELECT status FROM registrations WHERE id = ?", regId)
-    )[0];
+    const reg = (await queryAll<{ status: string }>(db, "SELECT status FROM registrations WHERE id = ?", regId))[0];
     expect(reg.status).toBe("cancelled");
 
     // Cancellation notification must go to the new (pending) email, not the old bouncing one.
