@@ -275,9 +275,9 @@ export async function runConfirmationReminders(
         // links stay clickable and a shorter-deadline registration can't clobber a longer one.
         db
           .prepare(
-            `UPDATE users SET pending_email_expires_at = ? WHERE id = ? AND pending_email IS NOT NULL AND (pending_email_expires_at IS NULL OR pending_email_expires_at < ?)`,
+            `UPDATE users SET pending_email_expires_at = ?, updated_at = ? WHERE id = ? AND pending_email IS NOT NULL AND (pending_email_expires_at IS NULL OR pending_email_expires_at < ?)`,
           )
-          .bind(deadline, row.user_id, deadline),
+          .bind(deadline, now, row.user_id, deadline),
       ];
     });
 
