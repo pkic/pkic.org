@@ -76,7 +76,7 @@ Content writers should:
 Ethical journalism means taking responsibility for one’s work and explaining one’s decisions to the public.
 
 Content writers should:
-- Explain ethical choices and processes to audiences. Encourage a civil dialogue with the public about journalistic practices, coverage and news content.
+- Explain ethical choices and processes to audiences. Encourage a civil dialog with the public about journalistic practices, coverage and news content.
 - Respond quickly to questions about accuracy, clarity and fairness.
 - Acknowledge mistakes and correct them promptly and prominently. Explain corrections and clarifications carefully and clearly.
 - Expose unethical conduct in journalism, including within their organizations.

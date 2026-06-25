@@ -310,7 +310,7 @@ In December 2017 we decided to try a social experiment. We built a browser add-o
 
 We considered our software as a security solution with built-in anti-phishing awareness. Most end-users didn’t realize it protected them from known malicious websites — so to them it was a personal firewall that made it easy to make better-informed choices about what and who to trust.
 
-We classified as many crypto related websites and social media accounts as we could with our URL-based threat intelligence system as “Verified as Safe”. Whenever a user opened a URL that was “Verified as Safe”, the shield would turn from grey to green. Simple.
+We classified as many crypto related websites and social media accounts as we could with our URL-based threat intelligence system as “Verified as Safe”. Whenever a user opened a URL that was “Verified as Safe”, the shield would turn from gray to green. Simple.
 
 {{< figure src="/uploads/2019/10/insecure-elephant-9.png" >}} 
 

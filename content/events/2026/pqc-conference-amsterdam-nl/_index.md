@@ -757,7 +757,7 @@ This conference was made possible through the support of the Post-Quantum Crypto
 
 {{< figure src="organizational-support.jpg" >}}
 
-## Programme & Speakers
+## Program & Speakers
 
 We don't select speakers based on marketing budgets. We select based on **depth of implementation experience**. You will hear directly from national cybersecurity agencies, NIST/ETSI members, enterprise architects running hybrid setups, and cloud security teams.
 
@@ -767,7 +767,7 @@ cards:
   - color: bento-teal-pale
     icon: calendar
     title: "The Agenda"
-    text: "Our three-day agenda follows a deliberate arc: framing keynote → parallel workshops → synthesis panel. Session titles and confirmed speakers are updated progressively as the programme is finalised."
+    text: "Our three-day agenda follows a deliberate arc: framing keynote → parallel workshops → synthesis panel. Session titles and confirmed speakers are updated progressively as the program is finalized."
     links:
       - text: "View the full agenda →"
         url: "/events/2026/pqc-conference-amsterdam-nl/agenda/"

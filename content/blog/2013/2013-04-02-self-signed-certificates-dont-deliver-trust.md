@@ -38,7 +38,7 @@ We’ve heard the argument that website operators could just use [self-signed ce
   * Owner is not audited
   * Issuer of certificate may not be authorized by the domain owner
   * Certificates may not be renewed if there are no reminders
-  * Self-signed certificate model does not provide trust and the browser provides a trust dialogue box to indicate such
+  * Self-signed certificate model does not provide trust and the browser provides a trust dialog box to indicate such
 
 {{< figure src="/uploads/2013/04/Certificate-Error-Navigation-Blocked.jpg" >}} 
 

@@ -34,7 +34,7 @@ So what is public key pinning? Public key pinning allows the website owner to ma
   * Signed by a CA with this public key
   * Hierarchal-trust to a CA with this public key
 
-If a certificate for the website owner’s domain is issued by a CA that is not listed (i.e., not pinned), then a browser that supports public key pinning will provide a trust dialogue warning. Please note that website owners can pin multiple keys from multiple CAs if desired, and all will be treated as valid by the browsers.
+If a certificate for the website owner’s domain is issued by a CA that is not listed (i.e., not pinned), then a browser that supports public key pinning will provide a trust dialog warning. Please note that website owners can pin multiple keys from multiple CAs if desired, and all will be treated as valid by the browsers.
 
 The website owner trusts that its chosen, specified CAs will not mistakenly issue a certificate for the owner’s domain. These CAs often restrict who can request the issuance of a certificate for the owner’s specific domains, which provides additional security against mis-issuance of certificates to an unauthorized party.
 
