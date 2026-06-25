@@ -943,17 +943,29 @@ export async function runReminderCycle(
       };
     });
 
-    const registrationUpdateStatements = reminderRows.map(({ row, freshHash }) =>
-      db
-        .prepare(
-          `UPDATE registrations
-           SET confirmation_reminder_sent_at = ?,
-               confirmation_token_hash = ?,
-               confirmation_token_expires_at = NULL
-           WHERE id = ?`,
-        )
-        .bind(now, freshHash, row.id),
-    );
+    const registrationUpdateStatements = reminderRows.flatMap(({ row, freshHash }) => {
+      const deadline = pendingConfirmationDeadline(row);
+      return [
+        db
+          .prepare(
+            `UPDATE registrations
+             SET confirmation_reminder_sent_at = ?,
+                 confirmation_token_hash = ?,
+                 confirmation_token_expires_at = NULL
+             WHERE id = ?`,
+          )
+          .bind(now, freshHash, row.id),
+        // Extend pending_email_expires_at to the confirmation deadline so that
+        // subsequent reminder links remain usable beyond the initial TTL window.
+        db
+          .prepare(
+            `UPDATE users
+             SET pending_email_expires_at = ?
+             WHERE id = ? AND pending_email IS NOT NULL`,
+          )
+          .bind(deadline, row.user_id),
+      ];
+    });
 
     await batchStatements(db, [
       ...prepareBulkQueueInviteEmailStatements(db, emailRows, now),

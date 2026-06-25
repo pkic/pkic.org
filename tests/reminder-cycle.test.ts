@@ -557,17 +557,20 @@ describe("runReminderCycle", () => {
   it("sends confirmation reminder to pending_email, not the old bouncing email, when an email change is in progress", async () => {
     const userId = crypto.randomUUID();
     const regId = crypto.randomUUID();
-    // User has old (bouncing) email stored on users.email, and a pending new email.
+    const deadlineAt = new Date(Date.now() + 12 * 24 * 3_600_000).toISOString();
+    // User has old (bouncing) email stored on users.email, and a pending new email
+    // whose expiry has already passed (initial 48-hour TTL elapsed).
+    const expiredTtl = new Date(Date.now() - 3_600_000).toISOString();
     await insertUser(userId, "old-bouncing@example.test", "Maria", "S");
     await db
-      .prepare("UPDATE users SET pending_email = ? WHERE id = ?")
-      .bind("new-correct@example.test", userId)
+      .prepare("UPDATE users SET pending_email = ?, pending_email_expires_at = ? WHERE id = ?")
+      .bind("new-correct@example.test", expiredTtl, userId)
       .run();
     await insertPendingRegistration({
       regId,
       eventId,
       userId,
-      deadlineAt: new Date(Date.now() + 12 * 24 * 3_600_000).toISOString(),
+      deadlineAt,
       reminderSentAt: new Date(Date.now() - 26 * 3_600_000).toISOString(),
     });
 
@@ -582,6 +585,16 @@ describe("runReminderCycle", () => {
     );
     expect(outbox).toHaveLength(1);
     expect(outbox[0].recipient_email).toBe("new-correct@example.test");
+
+    // pending_email_expires_at must be extended to the confirmation deadline so
+    // subsequent reminder links remain clickable beyond the initial TTL window.
+    const user = await queryAll<{ pending_email_expires_at: string }>(
+      db,
+      "SELECT pending_email_expires_at FROM users WHERE id = ?",
+      userId,
+    );
+    expect(new Date(user[0].pending_email_expires_at).getTime()).toBeGreaterThan(new Date(expiredTtl).getTime());
+    expect(new Date(user[0].pending_email_expires_at).getTime()).toBeGreaterThanOrEqual(new Date(deadlineAt).getTime());
   });
 
   it("sends cancellation email to pending_email, not the old bouncing email, when confirmation deadline expires during an email change", async () => {
