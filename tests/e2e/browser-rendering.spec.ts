@@ -1263,4 +1263,111 @@ test.describe("browser workflows", () => {
 
     errorMonitor.assertClean();
   });
+
+  // ─────────────────────────────────────────────────────────────────────────────
+  test("covers presentation upload by speaker and admin review via Presentation tab", async ({ page }) => {
+    await setupPage(page);
+    const errorMonitor = monitorErrors(page);
+    const screenshot = createScreenshotter(page);
+
+    // ── 1. Submit a talk proposal (talks require a presentation) ──────────────
+    await page.goto("/events/2026/pqc-conference-amsterdam-nl/propose/");
+    await expect(page).toHaveTitle(/Submit a Session Proposal/);
+    await fillProposal(page, { type: "talk" });
+
+    // Capture the proposalId from the submission API response before the page redirects
+    const submitResponsePromise = page.waitForResponse(
+      (res) => res.url().includes("/api/v1/events/pqc-conference-amsterdam-nl/proposals") && res.status() === 200,
+    );
+    await page.getByRole("button", { name: /Submit proposal/i }).click();
+    const submitResponse = await submitResponsePromise;
+    const submitData = (await submitResponse.json()) as { proposalId?: string; manageToken?: string };
+    const proposalId = submitData.proposalId ?? "";
+    expect(proposalId).toBeTruthy();
+
+    await expect(page.getByRole("heading", { name: /Proposal submitted/i })).toBeVisible({ timeout: 15_000 });
+    await screenshot("01-proposal-submitted");
+
+    const submittedEmail = await waitForEmail("proposal-speaker@example.test", "proposal");
+    const proposalManageUrl = extractUrlFromEmail(submittedEmail, "/propose/manage/");
+    void proposalManageUrl; // only used to confirm the email arrived; speaker token comes later
+
+    // ── 2. Admin signs in and accepts the proposal ────────────────────────────
+    await signInAsAdmin(page);
+    await screenshot("02-admin-signed-in");
+
+    // Accept the proposal. The e2e server is configured with DEFAULT_MIN_PROPOSAL_REVIEWS=0.
+    const finalizeResult = await page.evaluate(async (id) => {
+      const res = await fetch(`/api/v1/admin/proposals/${id}/finalize`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ finalStatus: "accepted" }),
+      });
+      const body = await res.json();
+      return { status: res.status, body };
+    }, proposalId as string);
+    expect(finalizeResult.status, `finalize failed: ${JSON.stringify(finalizeResult.body)}`).toBe(200);
+    await screenshot("03-proposal-accepted");
+
+    // ── 3. Wait for the speaker profile request email sent by the finalize step ─
+    // Accepting the proposal automatically queues a "speaker_profile_request" email.
+    // Wait for it to arrive via the SendGrid interceptor.
+    const speakerEmail = await waitForEmail("proposal-speaker@example.test", "complete your speaker profile");
+    const speakerManageUrl = extractUrlFromEmail(speakerEmail, "/propose/speaker/");
+    const speakerToken = new URL(speakerManageUrl).searchParams.get("token") ?? "";
+    expect(speakerToken).toBeTruthy();
+
+    // ── 5. Speaker uploads a presentation ─────────────────────────────────────
+
+    const uploadResult = await page.evaluate(async (token) => {
+      const pdfContent =
+        "%PDF-1.0\n1 0 obj<</Type /Catalog /Pages 2 0 R>>endobj 2 0 obj<</Type /Pages /Kids [3 0 R] /Count 1>>endobj 3 0 obj<</Type /Page /MediaBox [0 0 3 3]>>endobj\nxref\n0 4\ntrailer<</Size 4/Root 1 0 R>>\n%%EOF";
+      const fd = new FormData();
+      fd.append("file", new File([pdfContent], "pqc-migration-talk.pdf", { type: "application/pdf" }));
+      const res = await fetch(`/api/v1/proposals/speaker/${encodeURIComponent(token)}/presentation`, {
+        method: "PUT",
+        body: fd,
+      });
+      return (await res.json()) as { success?: boolean; error?: { code: string } };
+    }, speakerToken);
+    expect(uploadResult.success).toBe(true);
+    await screenshot("05-presentation-uploaded");
+
+    // ── 6. Admin views the Presentation tab and submits a review ──────────────
+    await page.goto(`/admin/#/events/pqc-conference-amsterdam-nl/proposal/${proposalId}`);
+    await expect(page.getByRole("heading", { name: /Operational Trust in a Post-Quantum Transition/i })).toBeVisible({
+      timeout: 15_000,
+    });
+
+    await page.getByRole("tab", { name: /Presentation/i }).click();
+    await expect(page.getByText(/Version 1/i)).toBeVisible({ timeout: 10_000 });
+    await expect(page.getByText(/pqc-migration-talk\.pdf/i)).toBeVisible();
+    await screenshot("06-admin-presentation-tab");
+
+    // Open the review form and submit a "needs_revision" review
+    await page.getByRole("button", { name: /^Review$/i }).click();
+    const statusSelect = page
+      .locator("select")
+      .filter({ hasText: /needs.revision/i })
+      .first();
+    await expect(statusSelect).toBeVisible({ timeout: 5_000 });
+    await statusSelect.selectOption("needs_revision");
+    const noteInput = page.locator("textarea").first();
+    await noteInput.fill("Please add speaker notes to each slide before the final review.");
+    await page.getByRole("button", { name: /Save review/i }).click();
+    await expect(page.getByText(/Needs revision/i)).toBeVisible({ timeout: 10_000 });
+    await screenshot("07-review-submitted");
+
+    // ── 7. Speaker downloads their presentation ───────────────────────────────
+    const downloadStatus = await page.evaluate(async (token) => {
+      const res = await fetch(`/api/v1/proposals/speaker/${encodeURIComponent(token)}/presentation/download`);
+      return { status: res.status, contentType: res.headers.get("content-type") };
+    }, speakerToken);
+    expect(downloadStatus.status).toBe(200);
+    expect(downloadStatus.contentType).toBe("application/pdf");
+    await screenshot("08-speaker-download-ok");
+
+    errorMonitor.assertClean();
+  });
 });
