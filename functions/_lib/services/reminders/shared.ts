@@ -27,8 +27,7 @@ export async function batchQueueEmailsAndUpdateState(
   }
 }
 
-export function isAttendeeInviteReminderAllowed(invite: DueInviteRow): boolean {
-  const nowMs = Date.now();
+export function isAttendeeInviteReminderAllowed(invite: DueInviteRow, nowMs = Date.now()): boolean {
   if (invite.event_starts_at) {
     const startsMs = new Date(invite.event_starts_at).getTime();
     if (Number.isFinite(startsMs) && startsMs <= nowMs) return false;
