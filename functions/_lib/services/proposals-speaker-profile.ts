@@ -28,17 +28,17 @@ export async function getPresentationUploader(
   const row = await first<{
     first_name: string | null;
     last_name: string | null;
-    presentation_uploaded_at: string;
+    uploaded_at: string;
   }>(
     db,
-    `SELECT u.first_name, u.last_name, sp.presentation_uploaded_at
-     FROM session_proposals sp
-     JOIN users u ON u.id = sp.presentation_uploaded_by_user_id
-     WHERE sp.id = ? AND sp.presentation_uploaded_at IS NOT NULL`,
+    `SELECT u.first_name, u.last_name, pv.uploaded_at
+     FROM presentation_versions pv
+     JOIN users u ON u.id = pv.uploaded_by_user_id
+     WHERE pv.proposal_id = ? AND pv.is_current = 1 AND pv.deleted_at IS NULL`,
     [proposalId],
   );
   if (!row) return null;
-  return { firstName: row.first_name, lastName: row.last_name, uploadedAt: row.presentation_uploaded_at };
+  return { firstName: row.first_name, lastName: row.last_name, uploadedAt: row.uploaded_at };
 }
 
 export async function confirmSpeakerParticipation(
@@ -170,13 +170,7 @@ export async function recordPresentationUpload(
   meta?: { fileName?: string | null; fileSize?: number | null; mimeType?: string | null },
 ): Promise<void> {
   const now = nowIso();
-  await run(
-    db,
-    `UPDATE session_proposals
-     SET presentation_r2_key = ?, presentation_uploaded_at = ?, presentation_uploaded_by_user_id = ?, updated_at = ?
-     WHERE id = ?`,
-    [r2Key, now, uploadedByUserId, now, proposalId],
-  );
+  await run(db, "UPDATE session_proposals SET updated_at = ? WHERE id = ?", [now, proposalId]);
   const { createPresentationVersion } = await import("./presentation-versions");
   await createPresentationVersion(db, proposalId, {
     r2Key,

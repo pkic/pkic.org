@@ -8,8 +8,8 @@
  * The file is stored in the SPEAKER_UPLOADS_BUCKET R2 bucket under:
  *   presentations/{proposalId}/{timestamp}-{originalFilename}
  *
- * The proposal's presentation_r2_key and presentation_uploaded_at are updated.
- * Speakers can re-upload to replace their submission until the deadline.
+ * Each upload creates a new version in presentation_versions; the previous version is retained.
+ * Speakers can re-upload until the deadline.
  */
 import { json } from "../../../../../_lib/http";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";

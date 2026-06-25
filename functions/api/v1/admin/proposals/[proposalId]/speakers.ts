@@ -27,13 +27,14 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     status: string;
     event_id: string;
     presentation_deadline: string | null;
-    presentation_r2_key: string | null;
-    presentation_uploaded_at: string | null;
+    pv_uploaded_at: string | null;
   }>(
     requestDb(c),
-    `SELECT id, title, status, event_id,
-            presentation_deadline, presentation_r2_key, presentation_uploaded_at
-     FROM session_proposals WHERE id = ?`,
+    `SELECT sp.id, sp.title, sp.status, sp.event_id, sp.presentation_deadline,
+            pv.uploaded_at AS pv_uploaded_at
+     FROM session_proposals sp
+     LEFT JOIN presentation_versions pv ON pv.proposal_id = sp.id AND pv.is_current = 1 AND pv.deleted_at IS NULL
+     WHERE sp.id = ?`,
     [proposalId],
   );
 
@@ -56,7 +57,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     pending: speakers.filter((s) => s.status === "pending" || s.status === "invited").length,
     declined: speakers.filter((s) => s.status === "declined").length,
     profileComplete: speakers.filter((s) => Boolean(s.biography) && Boolean(s.headshot_r2_key)).length,
-    presentationUploaded: proposal.presentation_r2_key ? 1 : 0,
+    presentationUploaded: proposal.pv_uploaded_at ? 1 : 0,
   };
 
   return json({
@@ -65,8 +66,8 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
       title: proposal.title,
       status: proposal.status,
       presentationDeadline: proposal.presentation_deadline,
-      presentationUploaded: Boolean(proposal.presentation_r2_key),
-      presentationUploadedAt: proposal.presentation_uploaded_at,
+      presentationUploaded: Boolean(proposal.pv_uploaded_at),
+      presentationUploadedAt: proposal.pv_uploaded_at,
     },
     summary,
     speakers: speakers.map((s) => ({

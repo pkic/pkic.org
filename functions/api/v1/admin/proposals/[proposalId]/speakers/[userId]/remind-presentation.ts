@@ -43,9 +43,11 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     requestDb(c),
     `SELECT
        ps.id AS proposal_speaker_id,
-       u.*
+       u.*,
+       pv.id AS pv_id
      FROM proposal_speakers ps
      JOIN users u ON u.id = ps.user_id
+     LEFT JOIN presentation_versions pv ON pv.proposal_id = ps.proposal_id AND pv.is_current = 1 AND pv.deleted_at IS NULL
      WHERE ps.proposal_id = ? AND ps.user_id = ?`,
     [proposalId, userId],
   );
@@ -67,7 +69,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
       firstName: speaker.first_name ?? "",
       proposalTitle: proposal.title,
       uploadUrl,
-      hasPresentation: speaker.presentation_r2_key ? "true" : "",
+      hasPresentation: speaker.pv_id ? "true" : "",
     },
   });
 
