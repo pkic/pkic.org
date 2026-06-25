@@ -790,6 +790,9 @@ export async function runReminderCycle(
         appBaseUrl: payload.appBaseUrl,
         templateKey: "registration_updated",
         subject: `Registration cancelled due to missing email confirmation — ${event.name}`,
+        // row.email is COALESCE(pending_email, email) — send to the address
+        // the user was trying to confirm since the original may be bouncing.
+        recipientEmailOverride: row.email,
       });
     }
   }
