@@ -167,6 +167,7 @@ export async function recordPresentationUpload(
   proposalId: string,
   r2Key: string,
   uploadedByUserId: string,
+  meta?: { fileName?: string | null; fileSize?: number | null; mimeType?: string | null },
 ): Promise<void> {
   const now = nowIso();
   await run(
@@ -176,4 +177,12 @@ export async function recordPresentationUpload(
      WHERE id = ?`,
     [r2Key, now, uploadedByUserId, now, proposalId],
   );
+  const { createPresentationVersion } = await import("./presentation-versions");
+  await createPresentationVersion(db, proposalId, {
+    r2Key,
+    fileName: meta?.fileName ?? null,
+    fileSize: meta?.fileSize ?? null,
+    mimeType: meta?.mimeType ?? null,
+    uploadedByUserId,
+  });
 }

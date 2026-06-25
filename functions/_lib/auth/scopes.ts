@@ -9,6 +9,8 @@ export const AUTH_SCOPES = [
   "proposal-reviews:write",
   "proposal-finalization:write",
   "sponsor-attendees:read",
+  "presentations:review",
+  "presentations:delete",
 ] as const;
 
 export type AuthScope = (typeof AUTH_SCOPES)[number];

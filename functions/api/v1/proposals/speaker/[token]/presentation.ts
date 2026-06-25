@@ -109,7 +109,11 @@ export async function onRequestPut(c: any): Promise<Response> {
     httpMetadata: { contentType: blobType },
   });
 
-  await recordPresentationUpload(c.env.DB, proposal.id, r2Key, speaker.user_id);
+  await recordPresentationUpload(c.env.DB, proposal.id, r2Key, speaker.user_id, {
+    fileName: blob.name ?? null,
+    fileSize: blob.size,
+    mimeType: blobType,
+  });
 
   await writeAuditLog(c.env.DB, "user", speaker.user_id, "presentation_uploaded", "session_proposal", proposal.id, {
     r2Key,
