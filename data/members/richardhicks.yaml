@@ -6,10 +6,10 @@ website: https://www.richardhicks.com/
 organizationDomains:
   - richardhicks.com
 # Short description, longer content can be placed in `content/members/`
-description: Richard M. Hicks Consulting, Inc. Specializing in Microsoft Entra Private Access, Windows Always On VPN, Microsoft DirectAccess, and Public Key Infrastructure (PKI).
+description: Specializing in Microsoft Entra Private Access, Windows Always On VPN, Microsoft DirectAccess, and Public Key Infrastructure (PKI).
 
 # membership
-memberSince: 2026-06-27
+memberSince: 2026-06-16
 memberType: H2
 workingGroups:
   - CM
@@ -23,27 +23,27 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/richardhicks/
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/richard-m--hicks-consulting/
   youtube: https://www.youtube.com/richardmhicks/
 
