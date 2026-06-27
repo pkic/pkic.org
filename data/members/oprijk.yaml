@@ -1,0 +1,60 @@
+id: oprijk
+name: O&P Rijk
+slogan:
+website: https://oprijk.nl
+# Business domains for email
+organizationDomains:
+  - p-direkt.minbzk.nl
+# Short description, longer content can be placed in `content/members/`
+description: Bij Organisatie en Personeel Rijk (O&P Rijk) komen alle uitvoeringsvraagstukken over organisatie en personeel bij elkaar. Samen bieden we hr-oplossingen voor medewerkers, managers, hr-directies en beleidsmakers binnen het Rijk.
+
+# membership
+memberSince: 2026-06-27
+memberType: H1
+workingGroups:
+
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/op-rijk/
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Jan Koelstra
+    role: IT Infrastructure Architect
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/jan-koelstra-2a390a147/
+    description: Jan is the IT Infrastructure Architect at O&P Rijk and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
