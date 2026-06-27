@@ -1,15 +1,15 @@
 id: vidyasagar-palla
 name: Vidyasagar Palla
 slogan:
-website: 
+website:
 # Business domains for email
 organizationDomains:
 
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Vidyasagar is a consultant and represents the organization at the PKI Consortium.
 
 # membership
-memberSince: 2026-06-27
+memberSince: 2026-06-16
 memberType: H6
 workingGroups:
   - CM
@@ -23,29 +23,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: www.linkedin.com/in/pallavidyasagar **Organization**: **Website**:
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/in/pallavidyasagar
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -53,11 +53,11 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Vidyasagar Palla
-    role: 
+    role:
     social:
       x:
-      linkedin: www.linkedin.com/in/pallavidyasagar **Organization**: **Website**:
-    description: Vidyasagar is the  at Vidyasagar Palla and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/pallavidyasagar
+    description: Vidyasagar is a consultant and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
