@@ -1,0 +1,63 @@
+id: richardhicks
+name: Richard M. Hicks Consulting, Inc.
+slogan:
+website: https://www.richardhicks.com/
+# Business domains for email
+organizationDomains:
+  - richardhicks.com
+# Short description, longer content can be placed in `content/members/`
+description: Richard M. Hicks Consulting, Inc. Specializing in Microsoft Entra Private Access, Windows Always On VPN, Microsoft DirectAccess, and Public Key Infrastructure (PKI).
+
+# membership
+memberSince: 2026-06-27
+memberType: H2
+workingGroups:
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: https://x.com/richardhicks/
+  facebook: 
+  instagram: 
+  linkedin: https://www.linkedin.com/company/richard-m--hicks-consulting/
+  youtube: https://www.youtube.com/richardmhicks/
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Richard Hicks
+    role: President
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/richardhicks/
+    description: Richard is the President at Richard M. Hicks Consulting, Inc. and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
