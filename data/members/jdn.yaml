@@ -6,7 +6,7 @@ website: https://www.jdn.gov.my
 organizationDomains:
   - jdn.gov.my
 # Short description, longer content can be placed in `content/members/`
-description: Laman Web Rasmi Jabatan Digital Negara
+description: Providing PKI services for use in digital government delivery system.
 
 # membership
 memberSince: 2026-06-09
@@ -22,20 +22,20 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
+  url:
   feed: https://www.jdn.gov.my/feed/
   language: en_US
 
 # Press Releases
 press:
   url: https://www.jdn.gov.my/#
-  feed: 
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -43,7 +43,7 @@ social:
   x: https://x.com/JDigitalNegara
   facebook: https://www.facebook.com/JabatanDigitalNegara/
   instagram: https://www.instagram.com/jabatandigitalnegara/
-  linkedin: https://www.linkedin.com/company/jabatandigitalnegara%20
+  linkedin: https://www.linkedin.com/company/jabatandigitalnegara
   youtube: https://www.youtube.com/@JABATANDIGITALNEGARA
 
 # Here you can list those who represent or have represented the member.
@@ -55,7 +55,7 @@ representatives:
     role: Deputy Director
     social:
       x:
-      linkedin: 
+      linkedin:
     description: Mohd Nawawi is the Deputy Director at National Digital Department and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
