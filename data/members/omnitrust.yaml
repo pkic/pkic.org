@@ -19,7 +19,8 @@ workingGroups:
 
 # sponsor
 sponsor:
-  level:
+  # Started sponsoring 2026-06-22
+  level: Platinum
 
 # Blog posts
 blog:
