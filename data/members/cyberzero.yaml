@@ -6,7 +6,7 @@ website: https://cyberzero.io
 organizationDomains:
   - cyberzero.io
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: A cybersecurity advisory and product organization focused on helping organizations understand, govern, and reduce technology, vendor, cryptographic, and operational security risk.
 
 # membership
 memberSince: 2026-06-27
@@ -28,23 +28,23 @@ blog:
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
   url: https://cyberzero.io/career/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://x.com/cyberzero_hello
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
