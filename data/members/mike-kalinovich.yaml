@@ -1,12 +1,12 @@
 id: mike-kalinovich
 name: Mike Kalinovich
 slogan:
-website: 
+website:
 # Business domains for email
 organizationDomains:
   - canadalife.com
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Mike is the Director - Cryptography & Logging represents the organization at the PKI Consortium.
 
 # membership
 memberSince: 2026-06-27
@@ -22,29 +22,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: https://www.linkedin.com/in/mike-was-here-4734132/ **Organization**:
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/in/mike-was-here-4734132/
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -55,8 +55,8 @@ representatives:
     role: Director - Cryptography & Logging
     social:
       x:
-      linkedin: https://www.linkedin.com/in/mike-was-here-4734132/ **Organization**:
-    description: Mike is the Director - Cryptography & Logging at Mike Kalinovich and represents the organization at the PKI Consortium.
+      linkedin: https://www.linkedin.com/in/mike-was-here-4734132/
+    description: Mike is the Director - Cryptography & Logging represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
