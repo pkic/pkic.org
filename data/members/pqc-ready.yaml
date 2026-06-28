@@ -6,12 +6,13 @@ website: https://pqc-ready.com
 organizationDomains:
   - pqc-ready.com
 # Short description, longer content can be placed in `content/members/`
-description: Contact Us Page Not Found It looks like nothing was found at this location. Maybe try a search? Best Solutions To HELPS YOUR BUSINESS Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco. We Are Leading
+description: Expertise in developing structured assessment methodologies for organisations in financial services, telecommunications, data centres, and critical national infrastructure, guiding them through the identification and prioritisation of quantum-vulnerable cryptographic assets.
 
 # membership
-memberSince: 2026-06-27
+memberSince: 2026-06-16
 memberType: G
 workingGroups:
+  - CBOM
   - PQC
 
 # sponsor
@@ -20,29 +21,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
+  url:
   feed: https://www.pqc-ready.com/feed/
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
