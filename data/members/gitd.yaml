@@ -1,4 +1,4 @@
-id: www
+id: gitd
 name: GITD
 slogan:
 website: https://www.gov.pl/web/gitd
@@ -6,13 +6,12 @@ website: https://www.gov.pl/web/gitd
 organizationDomains:
   - gitd.gov.pl
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: The Chief Inspectorate of Road Transport, appointed to control compliance with the regulations applicable to the performance of road transport and non-commercial transport of persons and goods, works primarily to reduce negative phenomena in road transport.
 
 # membership
-memberSince: 2026-06-27
+memberSince: 2026-06-18
 memberType: H1
 workingGroups:
-
 
 # sponsor
 sponsor:
@@ -20,20 +19,20 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -41,7 +40,7 @@ social:
   x: https://twitter.com/itd_gov
   facebook: https://www.facebook.com/itd.gov/
   instagram: https://www.instagram.com/itd_gov
-  linkedin: 
+  linkedin:
   youtube: https://www.youtube.com/channel/UCZA3_uY5fSRSc-5GQyxjx9A
 
 # Here you can list those who represent or have represented the member.
