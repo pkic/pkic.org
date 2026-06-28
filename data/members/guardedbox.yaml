@@ -6,10 +6,10 @@ website: https://www.guardedbox.es
 organizationDomains:
   - guardedbox.es
 # Short description, longer content can be placed in `content/members/`
-description: GuardedBox - Home
+description: GuardedBox is a Spanish cybersecurity technology company focused on providing an innovative, advanced, certified and trusted online solution for universal and secure secrets management and sharing based on end to end encryption (E2EE), and Quantum-safe.
 
 # membership
-memberSince: 2026-06-27
+memberSince: 2026-06-18
 memberType: F
 workingGroups:
   - CM
@@ -22,29 +22,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://twitter.com/guardedbox
-  facebook: 
-  instagram: 
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/company/guardedbox/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
