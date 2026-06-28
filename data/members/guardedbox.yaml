@@ -1,0 +1,62 @@
+id: guardedbox
+name: GuardedBox
+slogan:
+website: https://www.guardedbox.es
+# Business domains for email
+organizationDomains:
+  - guardedbox.es
+# Short description, longer content can be placed in `content/members/`
+description: GuardedBox is a Spanish cybersecurity technology company focused on providing an innovative, advanced, certified and trusted online solution for universal and secure secrets management and sharing based on end to end encryption (E2EE), and Quantum-safe.
+
+# membership
+memberSince: 2026-06-18
+memberType: F
+workingGroups:
+  - CM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x: https://twitter.com/guardedbox
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/guardedbox/
+  youtube:
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Raul Siles
+    role: GuardedBox Founder and Cybersecurity Architect
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/raulsiles/
+    description: Raul is the GuardedBox Founder and Cybersecurity Architect at GuardedBox and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
