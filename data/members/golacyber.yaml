@@ -6,7 +6,7 @@ website: https://www.golacyber.ai
 organizationDomains:
   - golacyber.ai
 # Short description, longer content can be placed in `content/members/`
-description: GolaCyber is a startup vendor providing PKI and PQC technology and services in the Australian market.
+description: GolaCyber is a startup vendor providing PKI and PQC technology and services in the Australian market. Our mission is to help Australian Organisations become Quantum Safe
 
 # membership
 memberSince: 2025-11-25
@@ -42,12 +42,12 @@ social:
   x:
   facebook:
   instagram:
-  linkedin:
-  youtube:
+  linkedin: https://www.linkedin.com/company/golacyberai
+  youtube: https://www.youtube.com/@Golacyberai
 
 # Here you can list those who represent or have represented the member.
 #
-# Those wo no longer represent an organization might have written blog posts,
+# Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Stephen Chey
@@ -55,4 +55,10 @@ representatives:
     social:
       x:
       linkedin: https://www.linkedin.com/in/stephen-chey-0230181/
+    description: Stephen is the Security Consultant at Gola Cyber and represents the organization at the PKI Consortium.
+  - name: Narayana Madineni
+    role: Director, Cyber and AI
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/narayanamadineni/
     description: Stephen is the Security Consultant at Gola Cyber and represents the organization at the PKI Consortium.
