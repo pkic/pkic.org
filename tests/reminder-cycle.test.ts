@@ -412,8 +412,11 @@ describe("runReminderCycle", () => {
       speakerStatus: "confirmed",
     });
     await db
-      .prepare("UPDATE session_proposals SET presentation_uploaded_at = datetime('now') WHERE id = ?")
-      .bind(proposalId)
+      .prepare(
+        `INSERT INTO presentation_versions (id, proposal_id, version_number, r2_key, uploaded_by_user_id, uploaded_at, is_current)
+         VALUES (lower(hex(randomblob(16))), ?, 1, 'presentations/test/slide.pdf', ?, datetime('now'), 1)`,
+      )
+      .bind(proposalId, userId)
       .run();
 
     const result = await runReminderCycle(db, BASE_PAYLOAD);

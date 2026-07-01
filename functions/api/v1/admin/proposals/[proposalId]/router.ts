@@ -28,6 +28,7 @@ import { onRequestPost as AdminProposalsProposalIdRemindSpeakersPost_l } from ".
 import { onRequestPost as AdminProposalsProposalIdRemindPresentationPost_l } from "./remind-presentation";
 import reviews_Router from "./reviews/router";
 import speakers_Router from "./speakers/router";
+import presentation_Router from "./presentation/router";
 import type { RequestDbContext } from "../../../../../_lib/db/context";
 
 const app = new Hono<RequestDbContext>();
@@ -80,5 +81,6 @@ openapi.post("/remind-speakers", AdminProposalsProposalIdRemindSpeakersPost_l);
 openapi.post("/remind-presentation", AdminProposalsProposalIdRemindPresentationPost_l);
 openapi.route("/reviews", reviews_Router);
 openapi.route("/speakers", speakers_Router);
+openapi.route("/presentation", presentation_Router);
 
 export default openapi;

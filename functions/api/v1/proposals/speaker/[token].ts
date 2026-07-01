@@ -86,7 +86,7 @@ export async function onRequestGet(c: any): Promise<Response> {
 
     const [coSpeakers, presentationUploader, presentationTerms, event] = await Promise.all([
       getProposalCoSpeakers(c.env.DB, proposal.id, speaker.user_id),
-      proposal.presentation_uploaded_at ? getPresentationUploader(c.env.DB, proposal.id) : Promise.resolve(null),
+      getPresentationUploader(c.env.DB, proposal.id),
       getRequiredTerms(c.env.DB, proposal.event_id, "presentation"),
       first<{ slug: string; base_path: string | null; starts_at: string; settings_json: string }>(
         c.env.DB,
@@ -111,8 +111,8 @@ export async function onRequestGet(c: any): Promise<Response> {
         proposalType: proposal.proposal_type,
         status: proposal.status,
         presentationDeadline: proposal.presentation_deadline ?? null,
-        presentationUploaded: Boolean(proposal.presentation_uploaded_at),
-        presentationUploadedAt: proposal.presentation_uploaded_at ?? null,
+        presentationUploaded: Boolean(presentationUploader),
+        presentationUploadedAt: presentationUploader?.uploadedAt ?? null,
         presentationUploader: presentationUploader,
         coSpeakers,
         presentationUrl,

@@ -48,7 +48,31 @@ interface ProposalResponse {
   sessionTypes: SessionTypeConfig[];
 }
 
-type DetailTab = "submission" | "speakers" | "reviews" | "audit-log" | "decision";
+type DetailTab = "submission" | "speakers" | "reviews" | "presentation" | "audit-log" | "decision";
+
+interface PresentationVersionReview {
+  id: string;
+  versionId: string;
+  reviewedByUserId: string;
+  reviewedAt: string;
+  status: "approved" | "rejected" | "needs_revision";
+  note: string | null;
+}
+
+interface PresentationVersion {
+  id: string;
+  proposalId: string;
+  versionNumber: number;
+  r2Key: string;
+  fileName: string | null;
+  fileSize: number | null;
+  mimeType: string | null;
+  uploadedByUserId: string | null;
+  uploadedAt: string;
+  isCurrent: boolean;
+  deletedAt: string | null;
+  latestReview: PresentationVersionReview | null;
+}
 
 interface ProposalAuditLogEntry {
   id: string;
@@ -595,6 +619,213 @@ function ReviewCard({ review }: { review: ProposalReview }) {
   );
 }
 
+// ─── Presentation versions tab ────────────────────────────────────────────────
+
+function reviewStatusLabel(status: PresentationVersionReview["status"]): string {
+  return { approved: "Approved", rejected: "Rejected", needs_revision: "Needs revision" }[status] ?? status;
+}
+
+function reviewStatusBadgeClass(status: PresentationVersionReview["status"]): string {
+  return { approved: "success", rejected: "danger", needs_revision: "warning" }[status] ?? "secondary";
+}
+
+function formatBytes(bytes: number | null): string {
+  if (bytes == null) return "—";
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function PresentationVersionsTab({
+  proposalId,
+  versions,
+  loading,
+  onReload,
+}: {
+  proposalId: string;
+  versions: PresentationVersion[];
+  loading: boolean;
+  onReload: () => void;
+}) {
+  const [reviewingId, setReviewingId] = useState<string | null>(null);
+  const [reviewStatus, setReviewStatus] = useState<PresentationVersionReview["status"]>("approved");
+  const [reviewNote, setReviewNote] = useState("");
+  const [savingReview, setSavingReview] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  async function handleAdminUpload(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    input.value = "";
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      await api(`/api/v1/admin/proposals/${proposalId}/presentation/versions`, { method: "POST", body: fd });
+      toast("Presentation uploaded", "success");
+      onReload();
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setUploading(false);
+    }
+  }
+
+  async function handleReview(versionId: string) {
+    setSavingReview(true);
+    try {
+      await api(`/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}/review`, {
+        method: "POST",
+        body: JSON.stringify({ status: reviewStatus, note: reviewNote.trim() || null }),
+      });
+      toast("Review saved", "success");
+      setReviewingId(null);
+      setReviewNote("");
+      onReload();
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setSavingReview(false);
+    }
+  }
+
+  async function handleDelete(versionId: string) {
+    if (!confirm("Delete this presentation version? This cannot be undone.")) return;
+    setDeletingId(versionId);
+    try {
+      await api(`/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}`, {
+        method: "DELETE",
+      });
+      toast("Version deleted", "success");
+      onReload();
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setDeletingId(null);
+    }
+  }
+
+  const uploadButton = (
+    <label class={`btn btn-sm btn-outline-primary ${uploading ? "disabled" : ""}`}>
+      {uploading ? "Uploading…" : "↑ Upload on behalf of speaker"}
+      <input
+        type="file"
+        class="d-none"
+        accept=".pdf,.pptx,.ppt,.odp,.pptm"
+        disabled={uploading}
+        onChange={handleAdminUpload}
+      />
+    </label>
+  );
+
+  if (loading) return <Spinner />;
+  if (versions.length === 0) {
+    return (
+      <div class="d-flex flex-column gap-2">
+        <p class="text-muted fst-italic mb-0">No presentation uploaded yet.</p>
+        {uploadButton}
+      </div>
+    );
+  }
+
+  return (
+    <div>
+      <div class="mb-3">{uploadButton}</div>
+      {versions.map((v) => (
+        <div key={v.id} class={`card mb-3 ${v.isCurrent ? "border-primary" : ""}`}>
+          <div class="card-header d-flex align-items-center gap-2 flex-wrap">
+            <span class="fw-semibold">Version {v.versionNumber}</span>
+            {v.isCurrent && <span class="badge text-bg-primary">Current</span>}
+            {v.latestReview && (
+              <span class={`badge text-bg-${reviewStatusBadgeClass(v.latestReview.status)}`}>
+                {reviewStatusLabel(v.latestReview.status)}
+              </span>
+            )}
+            <span class="small text-muted ms-auto">
+              {fmt(v.uploadedAt)} · {formatBytes(v.fileSize)}
+            </span>
+          </div>
+          <div class="card-body py-2 px-3">
+            <div class="small text-muted mb-2">
+              {v.fileName ?? "—"} · {v.mimeType ?? "—"}
+            </div>
+            {v.latestReview?.note && (
+              <blockquote class="blockquote small mb-2">
+                <p class="mb-0">{v.latestReview.note}</p>
+              </blockquote>
+            )}
+            <div class="d-flex gap-2 flex-wrap">
+              <a
+                href={`/api/v1/admin/proposals/${proposalId}/presentation/versions/${v.id}/download`}
+                class="btn btn-sm btn-outline-secondary"
+                download
+              >
+                ↓ Download
+              </a>
+              <button
+                class="btn btn-sm btn-outline-primary"
+                onClick={() => {
+                  setReviewingId(reviewingId === v.id ? null : v.id);
+                  setReviewNote("");
+                  setReviewStatus("approved");
+                }}
+              >
+                Review
+              </button>
+              <button
+                class="btn btn-sm btn-outline-danger"
+                disabled={deletingId === v.id}
+                onClick={() => void handleDelete(v.id)}
+              >
+                {deletingId === v.id ? "Deleting…" : "Delete"}
+              </button>
+            </div>
+
+            {reviewingId === v.id && (
+              <div class="mt-3 border-top pt-3">
+                <div class="mb-2">
+                  <select
+                    class="form-select form-select-sm mb-2"
+                    value={reviewStatus}
+                    onChange={(e) =>
+                      setReviewStatus((e.target as HTMLSelectElement).value as PresentationVersionReview["status"])
+                    }
+                  >
+                    <option value="approved">Approved</option>
+                    <option value="needs_revision">Needs revision</option>
+                    <option value="rejected">Rejected</option>
+                  </select>
+                  <textarea
+                    class="form-control form-control-sm"
+                    rows={3}
+                    placeholder="Optional note for the speaker…"
+                    value={reviewNote}
+                    onInput={(e) => setReviewNote((e.target as HTMLTextAreaElement).value)}
+                  />
+                </div>
+                <div class="d-flex gap-2">
+                  <button
+                    class="btn btn-sm btn-success"
+                    disabled={savingReview}
+                    onClick={() => void handleReview(v.id)}
+                  >
+                    {savingReview ? "Saving…" : "Save review"}
+                  </button>
+                  <button class="btn btn-sm btn-outline-secondary" onClick={() => setReviewingId(null)}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ─── Main page ────────────────────────────────────────────────────────────────
 
 export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposalId: string }) {
@@ -609,6 +840,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const [reviews, setReviews] = useState<ProposalReview[]>([]);
   const [speakers, setSpeakers] = useState<ProposalSpeaker[]>([]);
   const [comments, setComments] = useState<ProposalInternalComment[]>([]);
+  const [versions, setVersions] = useState<PresentationVersion[]>([]);
   const [loadingSub, setLoadingSub] = useState(true);
 
   // Abstract editing
@@ -651,7 +883,7 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
   const loadSubData = useCallback(async () => {
     setLoadingSub(true);
     try {
-      const [r, s, c] = await Promise.all([
+      const [r, s, c, v] = await Promise.all([
         api<{ reviews: ProposalReview[] }>(`/api/v1/admin/proposals/${proposalId}/reviews`).catch(() => ({
           reviews: [],
         })),
@@ -661,10 +893,14 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
         api<{ comments: ProposalInternalComment[] }>(`/api/v1/admin/proposals/${proposalId}/comments`).catch(() => ({
           comments: [],
         })),
+        api<{ versions: PresentationVersion[] }>(`/api/v1/admin/proposals/${proposalId}/presentation/versions`).catch(
+          () => ({ versions: [] }),
+        ),
       ]);
       setReviews(r.reviews ?? []);
       setSpeakers(s.speakers ?? []);
       setComments(c.comments ?? []);
+      setVersions(v.versions ?? []);
     } catch {
       // non-fatal
     } finally {
@@ -738,6 +974,14 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
     { key: "submission", label: "Submission" },
     { key: "speakers", label: `Speakers (${loadingSub ? "…" : speakers.length})` },
     { key: "reviews", label: `Reviews (${loadingSub ? "…" : reviews.length})` },
+    ...(proposalRequiresPresentation
+      ? [
+          {
+            key: "presentation",
+            label: `Presentation${loadingSub ? "" : versions.length > 0 ? ` (${versions.length})` : ""}`,
+          },
+        ]
+      : []),
     { key: "audit-log", label: "Audit Log" },
     ...(access.canFinalize ? [{ key: "decision", label: "Decision" }] : []),
   ];
@@ -1038,6 +1282,16 @@ export function ProposalDetailPage({ slug, proposalId }: { slug: string; proposa
                 ))
               )}
             </div>
+          )}
+
+          {/* ── Presentation tab ── */}
+          {activeTab === "presentation" && (
+            <PresentationVersionsTab
+              proposalId={proposalId}
+              versions={versions}
+              loading={loadingSub}
+              onReload={() => void loadSubData()}
+            />
           )}
 
           {/* ── Reviews tab ── */}
