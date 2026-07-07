@@ -1,0 +1,63 @@
+id: cystel
+name: Cystel
+slogan:
+website: https://www.cystel.org
+# Business domains for email
+organizationDomains:
+  - cystel.org
+# Short description, longer content can be placed in `content/members/`
+description: Ensure comprehensive protection with Cystel’s IT & OT Security Solutions. Safeguard assets and meet compliance standards in the evolving cyber landscape.
+
+# membership
+memberSince: 2026-07-07
+memberType: H3
+workingGroups:
+  - CBOM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: 
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: https://www.cystel.org/newsroom
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: 
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: https://x.com/CystelLimited
+  facebook: https://www.facebook.com/profile.php?id=100065175963401
+  instagram: https://www.instagram.com/Cystel__/
+  linkedin: https://www.linkedin.com/company/cystel/
+  youtube: https://www.youtube.com/@cystel4857
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: MEERA SARMA
+    role: CEO
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/drmeerasarma
+    description: MEERA is the CEO at Cystel and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
