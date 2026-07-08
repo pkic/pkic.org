@@ -108,6 +108,7 @@
 
   // Make fields required, or not, depending on the category
   const categoryInputs = document.querySelectorAll('input[name="Category"]');
+  const postCategoryFields = document.getElementById("postCategoryFields");
   const roleField = document.getElementById("role");
   const organizationField = document.getElementById("organization");
   const aboutOrganizationField = document.getElementById("aboutorganization");
@@ -116,7 +117,7 @@
   const individualCategories = new Set(["category-h5", "category-h6", "category-h7"]);
 
   // Categories that are exclusively for individuals unaffiliated with any organization
-  const blockedOrganizationCategories = new Set(["category-h5", "category-h6"]);
+  const blockedOrganizationCategories = new Set(["category-h5", "category-h6", "category-h7"]);
 
   // Category (h5) is for PhD students, so a public/personal email domain isn't acceptable
   const universityEmailCategories = new Set(["category-h5"]);
@@ -148,6 +149,8 @@
   }
 
   const categoryChanged = (input) => {
+    if (postCategoryFields) postCategoryFields.classList.remove("d-none");
+
     const isIndividual = individualCategories.has(input.id);
     const isOrganizationBlocked = blockedOrganizationCategories.has(input.id);
 
