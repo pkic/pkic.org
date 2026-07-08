@@ -155,6 +155,7 @@
     const isOrganizationBlocked = blockedOrganizationCategories.has(input.id);
 
     if (roleField) roleField.required = !isIndividual;
+    if (websiteField) websiteField.required = !isIndividual;
     if (organizationField) {
       organizationField.required = !isIndividual;
       organizationField.disabled = isOrganizationBlocked;
@@ -210,9 +211,12 @@
 
       if (existingMembers.length === 0) return;
 
-      const isDuplicate = existingMembers.some(
-        (member) => member === orgName || member.includes(orgName) || orgName.includes(member),
-      );
+      const isDuplicate = existingMembers.some((member) => {
+        if (orgName.length < 3) {
+          return member === orgName;
+        }
+        return member === orgName || member.includes(orgName) || orgName.includes(member);
+      });
 
       if (isDuplicate) {
         warningDiv.textContent = WARNING_MESSAGE;
