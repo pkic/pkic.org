@@ -1,4 +1,4 @@
-id: fidelity
+id: fidelityinternational
 name: Fidelity International
 slogan:
 website: https://www.fidelityinternational.com/
@@ -46,3 +46,6 @@ social:
   pinterest:
   linkedin: https://www.linkedin.com/company/fidelity-international/
   youtube: https://www.youtube.com/user/FidelityUK
+
+# Long-form content (markdown)
+content: |
