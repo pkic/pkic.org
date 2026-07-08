@@ -19,8 +19,12 @@
     const normalizeWebsite = () => {
       if (!websiteField) return;
       const value = websiteField.value.trim();
-      if (value && !/^https?:\/\//i.test(value)) {
-        websiteField.value = `https://${value}`;
+      if (value) {
+        if (!/^https?:\/\//i.test(value)) {
+          websiteField.value = `https://${value}`;
+        } else {
+          websiteField.value = value;
+        }
       }
     };
     if (websiteField) {
@@ -92,7 +96,7 @@
       if (!emailField) return;
 
       const value = emailField.value.trim().toLowerCase();
-      const domain = value.includes('@') ? value.split('@')[1] : '';
+      const domain = value.includes('@') ? value.substring(value.lastIndexOf('@') + 1) : '';
 
       if (requireUniversityEmail && domain && PUBLIC_EMAIL_DOMAINS.has(domain)) {
         const message = 'Category (h5) requires your university email address; public email providers (Gmail, Outlook, Hotmail, etc.) are not accepted.';
@@ -100,6 +104,7 @@
         if (emailInvalidFeedback) emailInvalidFeedback.textContent = message;
       } else {
         emailField.setCustomValidity('');
+        if (emailInvalidFeedback) emailInvalidFeedback.textContent = 'Please enter a valid email address.';
       }
     };
 
