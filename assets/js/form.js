@@ -1,12 +1,26 @@
 (function () {
     'use strict'
 
+    // Default the website field to https:// if no protocol was entered
+    const websiteField = document.getElementById("website");
+    const normalizeWebsite = () => {
+      const value = websiteField.value.trim();
+      if (value && !/^https?:\/\//i.test(value)) {
+        websiteField.value = `https://${value}`;
+      }
+    };
+    if (websiteField) {
+      websiteField.addEventListener('blur', normalizeWebsite);
+    }
+
     // Fetch all the forms we want to apply custom Bootstrap validation styles to
     const forms = document.querySelectorAll('.needs-validation')
 
     // Loop over them and prevent submission
     forms.forEach(function (form) {
       form.addEventListener('submit', function (event) {
+        if (websiteField) normalizeWebsite();
+
         if (!form.checkValidity()) {
           event.preventDefault()
           event.stopPropagation()
@@ -50,11 +64,22 @@
     // Individual categories that don't require organization fields
     const individualCategories = new Set(["category-h5", "category-h6", "category-h7"]);
 
+    // Categories that are exclusively for individuals unaffiliated with any organization
+    const blockedOrganizationCategories = new Set(["category-h5", "category-h6"]);
+
     const categoryChanged = (e) => {
       const isIndividual = individualCategories.has(e.target.id);
+      const isOrganizationBlocked = blockedOrganizationCategories.has(e.target.id);
 
       if (roleField) roleField.required = !isIndividual;
-      if (organizationField) organizationField.required = !isIndividual;
+      if (organizationField) {
+        organizationField.required = !isIndividual;
+        organizationField.disabled = isOrganizationBlocked;
+        if (isOrganizationBlocked) {
+          organizationField.value = '';
+          organizationField.dispatchEvent(new Event('input'));
+        }
+      }
       if (aboutOrganizationField) aboutOrganizationField.required = !isIndividual;
     }
 
