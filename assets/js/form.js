@@ -1,9 +1,23 @@
 (function () {
     'use strict'
 
+    // Public/personal email providers that aren't acceptable for category (h5)
+    const PUBLIC_EMAIL_DOMAINS = new Set([
+      'gmail.com', 'googlemail.com',
+      'proton.me', 'protonmail.com', 'protonmail.ch', 'pm.me',
+      'hotmail.com', 'hotmail.co.uk', 'hotmail.fr', 'hotmail.it', 'hotmail.de',
+      'outlook.com', 'live.com', 'msn.com', 'live.co.uk',
+      'yahoo.com', 'yahoo.co.uk', 'yahoo.fr', 'yahoo.de', 'yahoo.it', 'ymail.com',
+      'icloud.com', 'me.com', 'mac.com',
+      'aol.com', 'aim.com', 'mail.com', 'gmx.com', 'gmx.net', 'gmx.de',
+      'yandex.com', 'yandex.ru', 'zoho.com', 'tutanota.com', 'tuta.io',
+      'fastmail.com', 'fastmail.fm',
+    ])
+
     // Default the website field to https:// if no protocol was entered
     const websiteField = document.getElementById("website");
     const normalizeWebsite = () => {
+      if (!websiteField) return;
       const value = websiteField.value.trim();
       if (value && !/^https?:\/\//i.test(value)) {
         websiteField.value = `https://${value}`;
@@ -19,7 +33,7 @@
     // Loop over them and prevent submission
     forms.forEach(function (form) {
       form.addEventListener('submit', function (event) {
-        if (websiteField) normalizeWebsite();
+        normalizeWebsite();
 
         if (!form.checkValidity()) {
           event.preventDefault()
@@ -67,9 +81,36 @@
     // Categories that are exclusively for individuals unaffiliated with any organization
     const blockedOrganizationCategories = new Set(["category-h5", "category-h6"]);
 
-    const categoryChanged = (e) => {
-      const isIndividual = individualCategories.has(e.target.id);
-      const isOrganizationBlocked = blockedOrganizationCategories.has(e.target.id);
+    // Category (h5) is for PhD students, so a public/personal email domain isn't acceptable
+    const universityEmailCategories = new Set(["category-h5"]);
+
+    const emailField = document.getElementById("email");
+    const emailInvalidFeedback = document.getElementById("emailInvalidFeedback");
+    let requireUniversityEmail = false;
+
+    const validateEmail = () => {
+      if (!emailField) return;
+
+      const value = emailField.value.trim().toLowerCase();
+      const domain = value.includes('@') ? value.split('@')[1] : '';
+
+      if (requireUniversityEmail && domain && PUBLIC_EMAIL_DOMAINS.has(domain)) {
+        const message = 'Category (h5) requires your university email address; public email providers (Gmail, Outlook, Hotmail, etc.) are not accepted.';
+        emailField.setCustomValidity(message);
+        if (emailInvalidFeedback) emailInvalidFeedback.textContent = message;
+      } else {
+        emailField.setCustomValidity('');
+      }
+    };
+
+    if (emailField) {
+      emailField.addEventListener('input', validateEmail);
+      emailField.addEventListener('blur', validateEmail);
+    }
+
+    const categoryChanged = (input) => {
+      const isIndividual = individualCategories.has(input.id);
+      const isOrganizationBlocked = blockedOrganizationCategories.has(input.id);
 
       if (roleField) roleField.required = !isIndividual;
       if (organizationField) {
@@ -81,10 +122,16 @@
         }
       }
       if (aboutOrganizationField) aboutOrganizationField.required = !isIndividual;
+
+      requireUniversityEmail = universityEmailCategories.has(input.id);
+      validateEmail();
     }
 
     categoryInputs.forEach(input => {
-      input.addEventListener('change', categoryChanged);
+      input.addEventListener('change', () => categoryChanged(input));
+      if (input.checked) {
+        categoryChanged(input);
+      }
     })
 
     // Organization duplicate detection
