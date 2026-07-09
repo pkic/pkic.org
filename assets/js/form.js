@@ -42,22 +42,26 @@
     "fastmail.fm",
   ]);
 
-  // Default the website field to https:// if no protocol was entered
+  // Default URL fields to https:// if no protocol was entered
   const websiteField = document.getElementById("website");
-  const normalizeWebsite = () => {
-    if (!websiteField) return;
-    let value = websiteField.value.trim();
+  const linkedinField = document.getElementById("linkedin");
+  const normalizeUrlField = (field) => {
+    if (!field) return;
+    let value = field.value.trim();
     if (value) {
       if (/^\/\//.test(value)) {
         value = `https:${value}`;
       } else if (!/^https?:\/\//i.test(value)) {
         value = `https://${value}`;
       }
-      websiteField.value = value;
+      field.value = value;
     }
   };
   if (websiteField) {
-    websiteField.addEventListener("blur", normalizeWebsite);
+    websiteField.addEventListener("blur", () => normalizeUrlField(websiteField));
+  }
+  if (linkedinField) {
+    linkedinField.addEventListener("blur", () => normalizeUrlField(linkedinField));
   }
 
   // Fetch all the forms we want to apply custom Bootstrap validation styles to
@@ -68,7 +72,8 @@
     form.addEventListener(
       "submit",
       function (event) {
-        normalizeWebsite();
+        normalizeUrlField(websiteField);
+        normalizeUrlField(linkedinField);
 
         if (!form.checkValidity()) {
           event.preventDefault();
@@ -184,7 +189,7 @@
   });
 
   // Organization duplicate detection
-  const organizationInput = document.getElementById("organization");
+  const organizationInput = organizationField;
   const organizationHelp = document.getElementById("organizationHelp");
 
   if (organizationInput && organizationHelp) {
