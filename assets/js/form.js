@@ -112,8 +112,12 @@
   }
 
   // Make fields required, or not, depending on the category
-  const categoryInputs = document.querySelectorAll('input[name="Category"]');
   const postCategoryFields = document.getElementById("postCategoryFields");
+  if (postCategoryFields) {
+    postCategoryFields.querySelectorAll("input, textarea, select").forEach((control) => {
+      control.disabled = true;
+    });
+  }
   const roleField = document.getElementById("role");
   const organizationField = document.getElementById("organization");
   const aboutOrganizationField = document.getElementById("aboutorganization");
@@ -154,7 +158,12 @@
   }
 
   const categoryChanged = (input) => {
-    if (postCategoryFields) postCategoryFields.classList.remove("d-none");
+    if (postCategoryFields) {
+      postCategoryFields.classList.remove("d-none");
+      postCategoryFields.querySelectorAll("input, textarea, select").forEach((control) => {
+        control.disabled = false;
+      });
+    }
 
     const isIndividual = individualCategories.has(input.id);
     const isOrganizationBlocked = blockedOrganizationCategories.has(input.id);
@@ -249,7 +258,11 @@
         return response.json();
       })
       .then((data) => {
-        existingMembers = data.map((member) => member.title.toLowerCase().trim());
+        existingMembers = Array.isArray(data)
+          ? data
+              .filter((member) => member && typeof member.title === "string")
+              .map((member) => member.title.toLowerCase().trim())
+          : [];
         // Validate if user already typed something
         if (organizationInput.value) {
           validateOrganization();
