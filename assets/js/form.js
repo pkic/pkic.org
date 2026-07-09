@@ -112,6 +112,7 @@
   }
 
   // Make fields required, or not, depending on the category
+  const categoryInputs = document.querySelectorAll('input[name="Category"]');
   const postCategoryFields = document.getElementById("postCategoryFields");
   if (postCategoryFields) {
     postCategoryFields.querySelectorAll("input, textarea, select").forEach((control) => {
