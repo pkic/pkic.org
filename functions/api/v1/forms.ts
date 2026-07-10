@@ -11,9 +11,11 @@
  * These are plain `<form method="POST">` submissions, not fetch() calls —
  * the browser navigates on submit, so the response here is always a
  * redirect back to the referring page with ?status=success or
- * ?status=error, never a JSON error body. The referer's origin is
- * validated against ALLOWED_ORIGINS before it's ever used as a redirect
- * target, so this can't be abused as an open redirect.
+ * ?status=error, never a JSON error body. The Referer (falling back to
+ * Origin if Referer was stripped) is validated against ALLOWED_ORIGINS
+ * before it's ever used as a redirect target, so this can't be abused as
+ * an open redirect, and requests with neither a recognized Referer nor
+ * Origin are rejected outright.
  */
 import { getClientIp } from "../../_lib/request";
 import { enforceRateLimit } from "../../_lib/rate-limit";
@@ -24,6 +26,9 @@ import { submitMembershipForm, MembershipFormValidationError } from "../../_lib/
 const ALLOWED_ORIGINS = new Set([
   "https://pkic.org",
   "https://www.pkic.org",
+  // Default Cloudflare Pages production domain (apex — preview subdomains
+  // are matched separately below).
+  "https://pkic.pages.dev",
   // Local dev — Hugo serves the form pages on 1313, this worker on 8788.
   "http://localhost:8788",
   "http://localhost:1313",
@@ -49,17 +54,30 @@ export async function onRequestPost(c: any): Promise<Response> {
   const request: Request = c.req.raw;
 
   const refererHeader = request.headers.get("referer");
+  const originHeader = request.headers.get("origin");
 
-  let refererUrl: URL;
-  try {
-    refererUrl = new URL(refererHeader ?? "");
-  } catch {
+  let refererUrl: URL | null = null;
+  if (refererHeader) {
+    try {
+      refererUrl = new URL(refererHeader);
+    } catch {
+      refererUrl = null;
+    }
+  }
+
+  // Referer may be missing — stripped by a privacy-focused browser/extension
+  // or a strict Referrer-Policy — even for a legitimate same-site
+  // submission. Origin isn't affected by any of that (browsers always set it
+  // on POST requests and it can't be suppressed by page content), so it's a
+  // safe fallback for validation. It is never used as the redirect target.
+  const candidateOrigin = refererUrl?.origin ?? originHeader ?? "";
+  if (!candidateOrigin || !isAllowedOrigin(candidateOrigin)) {
     return new Response("Invalid request", { status: 400 });
   }
 
-  if (!isAllowedOrigin(refererUrl.origin)) {
-    return new Response("Invalid request", { status: 400 });
-  }
+  // Referer doubles as the redirect target. If it was missing/unparsable
+  // but Origin validated fine, redirect to that origin's site root instead.
+  const redirectUrl = refererUrl ?? new URL("/", candidateOrigin);
 
   try {
     await enforceRateLimit({
@@ -69,7 +87,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     });
   } catch (error) {
     if (isAppError(error) && error.code === "RATE_LIMITED") {
-      return redirectWithStatus(refererUrl, "error");
+      return redirectWithStatus(redirectUrl, "error");
     }
     // Binding not configured (e.g. local dev) or the rate-limiting service
     // itself is unavailable — don't let that block a legitimate submission.
@@ -82,17 +100,17 @@ export async function onRequestPost(c: any): Promise<Response> {
   const isFormEncoded =
     contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded");
   if (!isFormEncoded) {
-    return redirectWithStatus(refererUrl, "error");
+    return redirectWithStatus(redirectUrl, "error");
   }
 
   try {
     const formData = await request.formData();
     await submitMembershipForm(formData, c.env);
-    return redirectWithStatus(refererUrl, "success");
+    return redirectWithStatus(redirectUrl, "success");
   } catch (error) {
     if (!(error instanceof MembershipFormValidationError)) {
       logError("MEMBERSHIP_FORM_SUBMIT_FAILED", { error: error instanceof Error ? error.message : String(error) });
     }
-    return redirectWithStatus(refererUrl, "error");
+    return redirectWithStatus(redirectUrl, "error");
   }
 }

@@ -94,7 +94,7 @@ export async function submitMembershipForm(formData: FormData, env: Env): Promis
   const lastName = fieldToString(formData.get("Last Name"));
   const email = fieldToString(formData.get("Email"));
 
-  if (!subject || (!firstName && !lastName)) {
+  if (!subject || (!firstName && !lastName) || !email) {
     throw new MembershipFormValidationError("Missing required fields");
   }
 
@@ -172,6 +172,12 @@ async function checkEmailDomainInIssues(emailDomain: string, githubToken: string
       return false;
     }
 
+    // Matches "@<domain>" but not when followed by another domain/label
+    // character, so "example.com" doesn't false-positive inside a body that
+    // only mentions "example.com.au" (or "example.co" inside "example.com").
+    const escapedDomain = emailDomain.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
+    const domainRegex = new RegExp("@" + escapedDomain + "(?![a-zA-Z0-9.-])", "i");
+
     const result = (await response.json()) as { items?: GitHubIssue[] };
     for (const issue of result.items ?? []) {
       const issueLabels = issue.labels?.map((label) => (label.name ?? "").toLowerCase()) ?? [];
@@ -186,7 +192,7 @@ async function checkEmailDomainInIssues(emailDomain: string, githubToken: string
         continue;
       }
 
-      if (bodyLower.includes("@" + emailDomain)) {
+      if (domainRegex.test(bodyLower)) {
         return true;
       }
     }
