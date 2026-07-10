@@ -17,6 +17,7 @@
  */
 import { getClientIp } from "../../_lib/request";
 import { enforceRateLimit } from "../../_lib/rate-limit";
+import { isAppError } from "../../_lib/errors";
 import { logError } from "../../_lib/logging";
 import { submitMembershipForm, MembershipFormValidationError } from "../../_lib/services/membership-form-submission";
 
@@ -66,8 +67,15 @@ export async function onRequestPost(c: any): Promise<Response> {
       namespace: "membership-form:ip",
       key: getClientIp(request),
     });
-  } catch {
-    return redirectWithStatus(refererUrl, "error");
+  } catch (error) {
+    if (isAppError(error) && error.code === "RATE_LIMITED") {
+      return redirectWithStatus(refererUrl, "error");
+    }
+    // Binding not configured (e.g. local dev) or the rate-limiting service
+    // itself is unavailable — don't let that block a legitimate submission.
+    logError("MEMBERSHIP_FORM_RATE_LIMIT_UNAVAILABLE", {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 
   const contentType = request.headers.get("content-type") ?? "";
