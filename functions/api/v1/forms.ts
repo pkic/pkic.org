@@ -38,7 +38,13 @@ function isAllowedOrigin(origin: string): boolean {
   if (ALLOWED_ORIGINS.has(origin)) return true;
   try {
     const { hostname, protocol } = new URL(origin);
-    return protocol === "https:" && /^[a-z0-9-]+\.pkic\.pages\.dev$/.test(hostname);
+    if (protocol !== "https:") return false;
+    // *.pkic.pages.dev — Cloudflare Pages preview deploys.
+    // *.pkic.workers.dev — Cloudflare Workers preview/dev URLs (this project
+    // deploys as a Worker with workers_dev/preview_urls enabled, so every
+    // test-branch deploy gets a URL on this domain, e.g.
+    // 8f547e2a-pkic-org.pkic.workers.dev).
+    return /^[a-z0-9-]+\.pkic\.pages\.dev$/.test(hostname) || /^[a-z0-9-]+\.pkic\.workers\.dev$/.test(hostname);
   } catch {
     return false;
   }
