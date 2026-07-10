@@ -96,7 +96,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     });
   }
 
-  const contentType = request.headers.get("content-type") ?? "";
+  const contentType = (request.headers.get("content-type") ?? "").toLowerCase();
   const isFormEncoded =
     contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded");
   if (!isFormEncoded) {

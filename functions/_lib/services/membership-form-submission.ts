@@ -123,7 +123,7 @@ export async function submitMembershipForm(formData: FormData, env: Env): Promis
       Accept: "application/vnd.github.v3+json",
       "User-Agent": "pkic.org forms",
       "Content-Type": "application/json;charset=UTF-8",
-      Authorization: `token ${githubToken}`,
+      Authorization: "Bearer " + githubToken,
     },
     body: JSON.stringify({
       title: `${subject} from ${requestor}`,
@@ -164,7 +164,7 @@ async function checkEmailDomainInIssues(emailDomain: string, githubToken: string
       headers: {
         Accept: "application/vnd.github.v3+json",
         "User-Agent": "pkic.org forms",
-        Authorization: "token " + githubToken,
+        Authorization: "Bearer " + githubToken,
       },
     });
 
