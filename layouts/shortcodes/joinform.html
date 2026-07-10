@@ -1,281 +1,468 @@
 <form id="inputForm" action="https://pkic.org/forms" method="POST" class="row g-3 my-2 needs-validation" novalidate>
+  <div class="col-lg-12">
+    <label for="category" class="form-label">Choose the most appropriate Eligibility Category</label>
+
+    <div class="form-check">
+      <input
+        class="form-check-input"
+        type="radio"
+        id="category-a"
+        name="Category"
+        value="(a) Certification Authorities / Trust Service Providers included on the list of trust lists maintained by the PKI Consortium"
+        required
+      />
+      <label class="form-check-label" for="category-a">
+        <strong>(a)</strong> Certification Authorities / Trust Service Providers included on the list of trust lists
+        maintained by the PKI Consortium
+      </label>
+    </div>
+    <div class="form-check">
+      <input
+        class="form-check-input"
+        type="radio"
+        id="category-b"
+        name="Category"
+        value="(b) Entities that supervise and maintain a list contained in the list of trust lists maintained by the PKI Consortium"
+        required
+      />
+      <label class="form-check-label" for="category-b">
+        <strong>(b)</strong> Entities that supervise and maintain a list contained in the list of trust lists maintained
+        by the PKI Consortium
+      </label>
+    </div>
+    <div class="form-check">
+      <input
+        class="form-check-input"
+        type="radio"
+        id="category-c"
+        name="Category"
+        value="(c) Industry regulators, supervisory bodies"
+        required
+      />
+      <label class="form-check-label" for="category-c">
+        <strong>(c)</strong> Industry regulators, supervisory bodies
+      </label>
+    </div>
+    <div class="form-check">
+      <input
+        class="form-check-input"
+        type="radio"
+        id="category-d"
+        name="Category"
+        value="(d) Conformity assessment bodies and auditors"
+        required
+      />
+      <label class="form-check-label" for="category-d">
+        <strong>(d)</strong> Conformity assessment bodies and auditors
+      </label>
+    </div>
+    <div class="form-check">
+      <input
+        class="form-check-input"
+        type="radio"
+        id="category-e"
+        name="Category"
+        value="(e) Standards Developing Organizations (SDOs)"
+        required
+      />
+      <label class="form-check-label" for="category-e">
+        <strong>(e)</strong> Standards Developing Organizations (SDOs)
+      </label>
+    </div>
+    <div class="form-check">
+      <input
+        class="form-check-input"
+        type="radio"
+        id="category-f"
+        name="Category"
+        value="(f) Organizations that build PKI or cryptographic software or devices"
+        required
+      />
+      <label class="form-check-label" for="category-f">
+        <strong>(f)</strong> Organizations that build PKI or cryptographic software or devices
+      </label>
+    </div>
+    <div class="form-check">
+      <input
+        class="form-check-input"
+        type="radio"
+        id="category-g"
+        name="Category"
+        value="(g) Organizations that build software used by relying parties"
+        required
+      />
+      <label class="form-check-label" for="category-g">
+        <strong>(g)</strong> Organizations that build software used by relying parties
+      </label>
+    </div>
+
+    <hr />
+    <div class="ms-4 mt-2">
+      <strong>(h)</strong> Interested parties (Members in this category are not eligible to vote or to be elected for
+      the Executive Council or Board of Directors)
+      <div class="ms-4 mt-2">
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="radio"
+            id="category-h1"
+            name="Category"
+            value="(h1) Government entities with a general interest in PKI or cryptography, but who do not fall under category (c)"
+            required
+          />
+          <label class="form-check-label" for="category-h1">
+            <strong>1.</strong> Government entities with a general interest in PKI or cryptography, but who do not fall
+            under category (c)
+          </label>
+        </div>
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="radio"
+            id="category-h2"
+            name="Category"
+            value="(h2) Organizations providing PKI or cryptography consultancy services"
+            required
+          />
+          <label class="form-check-label" for="category-h2">
+            <strong>2.</strong> Organizations providing PKI or cryptography consultancy services
+          </label>
+        </div>
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="radio"
+            id="category-h3"
+            name="Category"
+            value="(h3) Organizations conducting PKI or cryptography-related research"
+            required
+          />
+          <label class="form-check-label" for="category-h3">
+            <strong>3.</strong> Organizations conducting PKI or cryptography-related research
+          </label>
+        </div>
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="radio"
+            id="category-h4"
+            name="Category"
+            value="(h4) Universities offering academic programs in PKI or cryptography"
+            required
+          />
+          <label class="form-check-label" for="category-h4">
+            <strong>4.</strong> Universities offering academic programs in PKI or cryptography
+          </label>
+        </div>
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="radio"
+            id="category-h5"
+            name="Category"
+            value="(h5) PhD students actively researching PKI or cryptography"
+            required
+          />
+          <label class="form-check-label" for="category-h5">
+            <strong>5.</strong> PhD students actively researching PKI or cryptography
+          </label>
+        </div>
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="radio"
+            id="category-h6"
+            name="Category"
+            value="(h6) Independent consultants with PKI or cryptography expertise, evidenced by relevant certifications, publications, or project experience, unaffiliated with any organization"
+            required
+          />
+          <label class="form-check-label" for="category-h6">
+            <strong>6.</strong> Independent consultants with PKI or cryptography expertise, evidenced by relevant
+            certifications, publications, or project experience, unaffiliated with any organization
+          </label>
+        </div>
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="radio"
+            id="category-h7"
+            name="Category"
+            value="(h7) Independent researchers with PKI or cryptography expertise, evidenced by relevant certifications, publications, or project experience, unaffiliated with any organization"
+            required
+          />
+          <label class="form-check-label" for="category-h7">
+            <strong>7.</strong> Independent researchers with PKI or cryptography expertise, evidenced by relevant
+            certifications, publications, or project experience, unaffiliated with any organization
+          </label>
+        </div>
+        <div class="form-check">
+          <input
+            class="form-check-input"
+            type="radio"
+            id="category-h8"
+            name="Category"
+            value="(h8) Organizations that operate a private PKI governed by formal policy and practices"
+            required
+          />
+          <label class="form-check-label" for="category-h8">
+            <strong>8.</strong> Organizations that operate a private PKI governed by formal policy and practices.
+          </label>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="postCategoryFields" class="row g-3 d-none">
     <div class="col-lg-6">
-        <label for="firstName" class="form-label">First Name</label>
-        <input type="text" class="form-control" id="firstName" name="First Name" required>
+      <label for="firstName" class="form-label">First Name</label>
+      <input type="text" class="form-control" id="firstName" name="First Name" required />
     </div>
     <div class="col-lg-6">
-        <label for="lastName" class="form-label">Last Name</label>
-        <input type="text" class="form-control" id="lastName" name="Last Name" required>
+      <label for="lastName" class="form-label">Last Name</label>
+      <input type="text" class="form-control" id="lastName" name="Last Name" required />
     </div>
     <div class="col-12">
-        <label for="role" class="form-label">Job Title</label>
-        <input type="text" class="form-control" id="role" name="Role" aria-describedby="roleHelp" required>
-        <div id="roleHelp" class="form-text">This should reflect your official role or position within the organization.</div>
+      <label for="role" class="form-label">Job Title</label>
+      <input type="text" class="form-control" id="role" name="Role" aria-describedby="roleHelp" required />
+      <div id="roleHelp" class="form-text">
+        This should reflect your official role or position within the organization.
+      </div>
     </div>
     <div class="col-12">
-        <label for="email" class="form-label">Email</label>
-        <input type="email" class="form-control" id="email" name="Email" aria-describedby="emailHelp" required>
-        <div id="emailHelp" class="form-text">Provide your professional email address, which should normally have the same domain as your organization's website. Applications submitted with a personal email addresses like @gmail.com, @hotmail.com, @live.com, etc., are most likely declined.</div>
+      <label for="email" class="form-label">Email</label>
+      <input type="email" class="form-control" id="email" name="Email" aria-describedby="emailHelp" required />
+      <div id="emailInvalidFeedback" class="invalid-feedback">Please enter a valid email address.</div>
+      <div id="emailHelp" class="form-text">
+        Provide your professional email address, which should normally have the same domain as your organization's
+        website. Applications submitted with a personal email addresses like @gmail.com, @hotmail.com, @live.com, etc.,
+        are most likely declined.
+      </div>
     </div>
     <div class="col-12">
-        <label for="linkedin" class="form-label">LinkedIn</label>
-        <input type="link" class="form-control" id="linkedin" name="LinkedIn" placeholder="https://linkedin.com/in/...">
-        <div id="linkedinHelp" class="form-text">Provide your personal LinkedIn profile to help us verify your experience.</div>
+      <label for="linkedin" class="form-label">LinkedIn</label>
+      <input type="url" class="form-control" id="linkedin" name="LinkedIn" placeholder="https://linkedin.com/in/..." />
+      <div id="linkedinHelp" class="form-text">
+        Provide your personal LinkedIn profile to help us verify your experience.
+      </div>
     </div>
     <div class="col-12">
-        <label for="organization" class="form-label">Organization Name</label>
-        <input type="text" class="form-control" id="organization" name="Organization" aria-describedby="organizationHelp" required>
-        <div id="organizationHelp" class="form-text">Please note that <strong>individual applications are rarely accepted</strong> and exclusively under category H (interested parties). To qualify, the individual <strong>must not be affiliated with any organization</strong> and must substantiate their PKI expertise.</div>
+      <label for="organization" class="form-label">Organization Name</label>
+      <input
+        type="text"
+        class="form-control"
+        id="organization"
+        name="Organization"
+        aria-describedby="organizationHelp"
+        required
+      />
+      <div id="organizationHelp" class="form-text">
+        Please note that <strong>individual applications are rarely accepted</strong> and exclusively under category H
+        (interested parties). To qualify, the individual
+        <strong>must not be affiliated with any organization</strong> and must substantiate their PKI expertise.
+      </div>
     </div>
     <div class="col-12">
-        <label for="website" class="form-label">Website</label>
-        <input type="link" class="form-control" id="website" name="Website" placeholder="https://" required>
-    </div>
-
-    <div class="col-lg-12">
-        <label for="category" class="form-label">Choose the most appropriate Eligibility Category</label>
-        
-        <div class="form-check">
-            <input class="form-check-input" type="radio" id="category-a" name="Category" value="(a) Certification Authorities / Trust Service Providers included on the list of trust lists maintained by the PKI Consortium" required>
-            <label class="form-check-label" for="category-a">
-                <strong>(a)</strong> Certification Authorities / Trust Service Providers included on the list of trust lists maintained by the PKI Consortium
-            </label>
-        </div>
-        <div class="form-check">
-            <input class="form-check-input" type="radio" id="category-b" name="Category" value="(b) Entities that supervise and maintain a list contained in the list of trust lists maintained by the PKI Consortium" required>
-            <label class="form-check-label" for="category-b">
-                <strong>(b)</strong> Entities that supervise and maintain a list contained in the list of trust lists maintained by the PKI Consortium
-            </label>
-        </div>
-        <div class="form-check">
-            <input class="form-check-input" type="radio" id="category-c" name="Category" value="(c) Industry regulators, supervisory bodies" required>
-            <label class="form-check-label" for="category-c">
-                <strong>(c)</strong> Industry regulators, supervisory bodies
-            </label>
-        </div>
-        <div class="form-check">
-            <input class="form-check-input" type="radio" id="category-d" name="Category" value="(d) Conformity assessment bodies and auditors" required>
-            <label class="form-check-label" for="category-d">
-                <strong>(d)</strong> Conformity assessment bodies and auditors
-            </label>
-        </div>
-        <div class="form-check">
-            <input class="form-check-input" type="radio" id="category-e" name="Category" value="(e) Standards Developing Organizations (SDOs)" required>
-            <label class="form-check-label" for="category-e">
-                <strong>(e)</strong> Standards Developing Organizations (SDOs)
-            </label>
-        </div>
-        <div class="form-check">
-            <input class="form-check-input" type="radio" id="category-f" name="Category" value="(f) Organizations that build PKI or cryptographic software or devices" required>
-            <label class="form-check-label" for="category-f">
-                <strong>(f)</strong> Organizations that build PKI or cryptographic software or devices
-            </label>
-        </div>
-        <div class="form-check">
-            <input class="form-check-input" type="radio" id="category-g" name="Category" value="(g) Organizations that build software used by relying parties" required>
-            <label class="form-check-label" for="category-g">
-                <strong>(g)</strong> Organizations that build software used by relying parties
-            </label>
-        </div>
-        
-        <hr />
-        <div class="ms-4 mt-2">
-            <strong>(h)</strong> Interested parties (Members in this category are not eligible to vote or to be elected for the Executive Council or Board of Directors)
-            <div class="ms-4 mt-2">
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" id="category-h1" name="Category" value="(h1) Government entities with a general interest in PKI or cryptography, but who do not fall under category (c)" required>
-                    <label class="form-check-label" for="category-h1">
-                        <strong>1.</strong> Government entities with a general interest in PKI or cryptography, but who do not fall under category (c)
-                    </label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" id="category-h2" name="Category" value="(h2) Organizations providing PKI or cryptography consultancy services" required>
-                    <label class="form-check-label" for="category-h2">
-                        <strong>2.</strong> Organizations providing PKI or cryptography consultancy services
-                    </label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" id="category-h3" name="Category" value="(h3) Organizations conducting PKI or cryptography-related research" required>
-                    <label class="form-check-label" for="category-h3">
-                        <strong>3.</strong> Organizations conducting PKI or cryptography-related research
-                    </label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" id="category-h4" name="Category" value="(h4) Universities offering academic programs in PKI or cryptography" required>
-                    <label class="form-check-label" for="category-h4">
-                        <strong>4.</strong> Universities offering academic programs in PKI or cryptography
-                    </label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" id="category-h5" name="Category" value="(h5) PhD students actively researching PKI or cryptography" required>
-                    <label class="form-check-label" for="category-h5">
-                        <strong>5.</strong> PhD students actively researching PKI or cryptography
-                    </label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" id="category-h6" name="Category" value="(h6) Independent consultants with PKI or cryptography expertise, evidenced by relevant certifications, publications, or project experience, unaffiliated with any organization" required>
-                    <label class="form-check-label" for="category-h6">
-                        <strong>6.</strong> Independent consultants with PKI or cryptography expertise, evidenced by relevant certifications, publications, or project experience, unaffiliated with any organization
-                    </label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" id="category-h7" name="Category" value="(h7) Independent researchers with PKI or cryptography expertise, evidenced by relevant certifications, publications, or project experience, unaffiliated with any organization" required>
-                    <label class="form-check-label" for="category-h7">
-                        <strong>7.</strong> Independent researchers with PKI or cryptography expertise, evidenced by relevant certifications, publications, or project experience, unaffiliated with any organization
-                    </label>
-                </div>
-                <div class="form-check">
-                    <input class="form-check-input" type="radio" id="category-h8" name="Category" value="(h8) Organizations that operate a private PKI governed by formal policy and practices" required>
-                    <label class="form-check-label" for="category-h8">
-                        <strong>8.</strong> Organizations that operate a private PKI governed by formal policy and practices.
-                    </label>
-                </div>
-            </div>
-        </div>
+      <label for="website" class="form-label">Website</label>
+      <input type="url" class="form-control" id="website" name="Website" placeholder="https://" required />
     </div>
 
     <div class="col-12">
-        <div class="mb-3">
-            <label for="about" class="form-label">Please describe your background and experience with PKI and cryptography, including the types of projects or environments where you have applied this expertise</label>
-            <textarea class="form-control" id="about" name="About Yourself" rows="3" required></textarea>
-        </div>
+      <div class="mb-3">
+        <label for="about" class="form-label"
+          >Please describe your background and experience with PKI and cryptography, including the types of projects or
+          environments where you have applied this expertise</label
+        >
+        <textarea class="form-control" id="about" name="About Yourself" rows="3" required></textarea>
+      </div>
     </div>
 
     <div class="col-12">
-        <div class="mb-3">
-            <label for="aboutorganization" class="form-label">Please describe your organization and its role in the PKI ecosystem</label>
-            <textarea class="form-control" id="aboutorganization" name="About Organization" rows="3" required></textarea>
-        </div>
+      <div class="mb-3">
+        <label for="aboutorganization" class="form-label"
+          >Please describe your organization and its role in the PKI ecosystem</label
+        >
+        <textarea class="form-control" id="aboutorganization" name="About Organization" rows="3" required></textarea>
+      </div>
     </div>
 
     <div class="col-12">
-        <div class="mb-3">
-            <label for="reason" class="form-label">Why do you want to join the PKI Consortium?</label>
-            <textarea class="form-control" id="reason" name="Reason" rows="3" required></textarea>
-        </div>
+      <div class="mb-3">
+        <label for="reason" class="form-label">Why do you want to join the PKI Consortium?</label>
+        <textarea class="form-control" id="reason" name="Reason" rows="3" required></textarea>
+      </div>
     </div>
 
     <hr />
 
     <div class="col-12">
-        <strong>Members are not required to be present at every meeting or participate in all activities but we appreciate active members</strong>
-        <div class="form-check">
-            <input class="form-check-input" type="radio" id="contribute1" name="Contribution">
-            <label class="form-check-label" for="contribute1">
-                We (or I) will actively contribute the consortium and its mission
-            </label>
-        </div>
-        <div class="form-check">
-            <input class="form-check-input" type="radio" id="contribute2" name="Contribution">
-            <label class="form-check-label" for="contribute2">
-                We (or I) will be an observer and not actively contribute the consortium and its mission
-            </label>
-        </div>
+      <strong
+        >Members are not required to be present at every meeting or participate in all activities but we appreciate
+        active members</strong
+      >
+      <div class="form-check">
+        <input class="form-check-input" type="radio" id="contribute1" name="Contribution" />
+        <label class="form-check-label" for="contribute1">
+          We (or I) will actively contribute the consortium and its mission
+        </label>
+      </div>
+      <div class="form-check">
+        <input class="form-check-input" type="radio" id="contribute2" name="Contribution" />
+        <label class="form-check-label" for="contribute2">
+          We (or I) will be an observer and not actively contribute the consortium and its mission
+        </label>
+      </div>
     </div>
 
     <div class="col-12">
-        <strong>We would like to get to know our new members. Would you want to present yourself and your organization (if applicable) and how or on what topics you will be participating in the consortium?</strong>
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="contribute" name="Want to present itself">
-            <label class="form-check-label" for="contribute">
-                We would like to present ourself and our goals for this membership to the consortium
-            </label>
-        </div>
+      <strong
+        >We would like to get to know our new members. Would you want to present yourself and your organization (if
+        applicable) and how or on what topics you will be participating in the consortium?</strong
+      >
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="contribute" name="Want to present itself" />
+        <label class="form-check-label" for="contribute">
+          We would like to present ourself and our goals for this membership to the consortium
+        </label>
+      </div>
     </div>
 
     <div class="col-12">
-        <strong>We have no membership fees but we hope you want to consider sponsoring the consortium as we rely on sponsors and donations.</strong>
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="sponsoring" name="Sponsoring">
-            <label class="form-check-label" for="sponsoring">
-                We would like to sponsor or make a donation to the consortium 
-            </label>
-        </div>
-    </div>
-
-    <hr />
-
-    <div class="col-12">
-        <strong>Which working groups are you or your colleagues interested in joining?</strong>
-        <div class="form-text mb-3">Please list the email addresses of colleagues interested in joining working groups (same organization domain as the submitter, separated by commas).</div>
-
-        <div class="ms-4">
-            <div class="mb-3">
-                <label for="wg-pkic" class="form-label">Would you like to add any colleagues to the PKI Consortium's general mailing list?</label>
-                <input class="form-control" id="wg-pkic" type="email" name="PKI Consortium" title="Enter the email address of colleagues that would like to join the PKI Consortium's general mailing list (same organization domain as the submitter, separated by commas)" multiple>
-            </div>
-
-            {{ $wg := .Site.GetPage "/wg"}}
-            {{ range $wg.Sections }}
-                {{ $wgID := printf "wg-%s" (.Title | anchorize) }}
-                <label for="{{ $wgID }}" class="form-label">Do you or any of you colleagues want to join the <a href="{{ .RelPermalink }}" target="_blank">{{ .Title }}</a>?</label>
-                <div class="input-group mb-3">
-                    <div class="input-group-text">
-                        <input class="form-check-input mt-0" id="{{ $wgID }}-check" type="checkbox" name="I would like to join the {{ .Title }}" title="I would like to join the {{ .Title }}">
-                    </div>
-                    <input class="form-control" id="{{ $wgID  }}" type="email" name="{{ .Title }} members" title="Enter the email address of colleagues that would like to join the {{ .Title }} (same organization domain as the submitter, separated by commas)" multiple>
-                </div>
-            {{ end }}
-        </div>
+      <strong
+        >We have no membership fees but we hope you want to consider sponsoring the consortium as we rely on sponsors
+        and donations.</strong
+      >
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="sponsoring" name="Sponsoring" />
+        <label class="form-check-label" for="sponsoring">
+          We would like to sponsor or make a donation to the consortium
+        </label>
+      </div>
     </div>
 
     <hr />
 
     <div class="col-12">
-        {{ range (slice "/bylaws" "/code-of-conduct" "/ipr") }}
-            {{ with $.Site.GetPage . }}
-            <div class="card position-relative">
-                <div class="card-header">
-                    <small>Please read the <a href="{{ .RelPermalink }}" target="_blank">{{ .Title }}</a> and agree to the terms (<a href="#agree{{ .Title | urlize }}">at the bottom</a>)</small>
-                </div>
-                <div class="card-body overflow-auto" style="height: 250px;">
-                    <div style="font-size: 80%;">
-                        {{ range .Pages }}
-                            <h2>{{ .Title }}</h2>
-                            {{ .Content }}
-                        {{ end }}
+      <strong>Which working groups are you or your colleagues interested in joining?</strong>
+      <div class="form-text mb-3">
+        Please list the email addresses of colleagues interested in joining working groups (same organization domain as
+        the submitter, separated by commas).
+      </div>
 
-                        {{ .Content }}
-                    </div>  
+      <div class="ms-4">
+        <div class="mb-3">
+          <label for="wg-pkic" class="form-label"
+            >Would you like to add any colleagues to the PKI Consortium's general mailing list?</label
+          >
+          <input
+            class="form-control"
+            id="wg-pkic"
+            type="email"
+            name="PKI Consortium"
+            title="Enter the email address of colleagues that would like to join the PKI Consortium's general mailing list (same organization domain as the submitter, separated by commas)"
+            multiple
+          />
+        </div>
 
-                    <div class="container-fluid bg-light">
-                        <div class="p-3 form-check">
-                            <input class="form-check-input" type="checkbox" id="agree{{ .Title | urlize }}" name="Agreed with the {{ .Title }}" required>
-                            <label class="form-check-label" for="agree{{ .Title | urlize }}">
-                                <strong>I and my organization (if applicable) agree with and will adhere to the {{ .Title }} of the PKI Consortium</strong>
-                            </label>
-                            <div class="invalid-feedback">
-                                <a href="#agree{{ .Title | urlize }}" class="position-absolute top-0 end-0 translate-middle-y" style="margin-right: -10px;">
-                                    <span class="badge bg-danger">You must read and agree to these terms</span>
-                                </a>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <br />
-            {{ end }}
+        {{ $wg := .Site.GetPage "/wg"}} {{ range $wg.Sections }} {{ $wgID := printf "wg-%s" (.Title | anchorize) }}
+        <label for="{{ $wgID }}" class="form-label"
+          >Do you or any of you colleagues want to join the
+          <a href="{{ .RelPermalink }}" target="_blank">{{ .Title }}</a>?</label
+        >
+        <div class="input-group mb-3">
+          <div class="input-group-text">
+            <input
+              class="form-check-input mt-0"
+              id="{{ $wgID }}-check"
+              type="checkbox"
+              name="I would like to join the {{ .Title }}"
+              title="I would like to join the {{ .Title }}"
+            />
+          </div>
+          <input
+            class="form-control"
+            id="{{ $wgID  }}"
+            type="email"
+            name="{{ .Title }} members"
+            title="Enter the email address of colleagues that would like to join the {{ .Title }} (same organization domain as the submitter, separated by commas)"
+            multiple
+          />
+        </div>
         {{ end }}
+      </div>
+    </div>
 
-        <div class="form-check">
-            <input class="form-check-input" type="checkbox" id="warrantAuthority" name="Warranted Authority" required>
-            <label class="form-check-label" for="warrantAuthority">
-                I represent and warrant that I have the necessary authority to submit this membership application and have full right, power and authority to enter this agreement and to be legally bound by these terms and conditions.
-            </label>
+    <hr />
+
+    <div class="col-12">
+      {{ range (slice "/bylaws" "/code-of-conduct" "/ipr") }} {{ with $.Site.GetPage . }}
+      <div class="card position-relative">
+        <div class="card-header">
+          <small
+            >Please read the <a href="{{ .RelPermalink }}" target="_blank">{{ .Title }}</a> and agree to the terms (<a
+              href="#agree{{ .Title | urlize }}"
+              >at the bottom</a
+            >)</small
+          >
         </div>
+        <div class="card-body overflow-auto" style="height: 250px">
+          <div style="font-size: 80%">
+            {{ range .Pages }}
+            <h2>{{ .Title }}</h2>
+            {{ .Content }} {{ end }} {{ .Content }}
+          </div>
+
+          <div class="container-fluid bg-light">
+            <div class="p-3 form-check">
+              <input
+                class="form-check-input"
+                type="checkbox"
+                id="agree{{ .Title | urlize }}"
+                name="Agreed with the {{ .Title }}"
+                required
+              />
+              <label class="form-check-label" for="agree{{ .Title | urlize }}">
+                <strong
+                  >I and my organization (if applicable) agree with and will adhere to the {{ .Title }} of the PKI
+                  Consortium</strong
+                >
+              </label>
+              <div class="invalid-feedback">
+                <a
+                  href="#agree{{ .Title | urlize }}"
+                  class="position-absolute top-0 end-0 translate-middle-y"
+                  style="margin-right: -10px"
+                >
+                  <span class="badge bg-danger">You must read and agree to these terms</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <br />
+      {{ end }} {{ end }}
+
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" id="warrantAuthority" name="Warranted Authority" required />
+        <label class="form-check-label" for="warrantAuthority">
+          I represent and warrant that I have the necessary authority to submit this membership application and have
+          full right, power and authority to enter this agreement and to be legally bound by these terms and conditions.
+        </label>
+      </div>
     </div>
 
     <div class="col-12">
-        <input type="hidden" name="Subject" value="Membership application">
-        <button type="submit" class="btn btn-success">Submit application to join the PKI Consortium</button>
+      <input type="hidden" name="Subject" value="Membership application" />
+      <button type="submit" class="btn btn-success">Submit application to join the PKI Consortium</button>
     </div>
+  </div>
 </form>
 
 <div id="formSuccess" class="alert alert-success visually-hidden" role="alert">
-    Thanks, your membership application has been received.
+  Thanks, your membership application has been received.
 </div>
 <div id="formError" class="alert alert-danger visually-hidden" role="alert">
-    Sorry, something went wrong, please try again or contact feedback (at) pkic.org.
+  Sorry, something went wrong, please try again or contact feedback (at) pkic.org.
 </div>
 
 {{ partial "script.html" (dict "path" "js/form.js" "build" false "defer" false) }}
