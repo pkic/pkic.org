@@ -178,8 +178,8 @@ async function checkEmailDomainInIssues(emailDomain: string, githubToken: string
     const escapedDomain = emailDomain.replace(/[-/\\^$*+?.()|[\]{}]/g, "\\$&");
     const domainRegex = new RegExp("@" + escapedDomain + "(?![a-zA-Z0-9.-])", "i");
 
-    const result = (await response.json()) as { items?: GitHubIssue[] };
-    for (const issue of result.items ?? []) {
+    const result = (await response.json()) as { items?: GitHubIssue[] } | null;
+    for (const issue of result?.items ?? []) {
       const issueLabels = issue.labels?.map((label) => (label.name ?? "").toLowerCase()) ?? [];
       if (issueLabels.some((label) => EXCLUDE_LABELS.has(label))) continue;
       if (issue.state === "closed" && issue.state_reason === "not_planned") continue;
