@@ -1,7 +1,9 @@
 /**
  * POST /api/v1/forms
  *
- * Receives multipart/form-data submissions from the join-membership form
+ * Receives form submissions (application/x-www-form-urlencoded, since
+ * neither template sets enctype="multipart/form-data" — multipart is also
+ * accepted in case that ever changes) from the join-membership form
  * (layouts/shortcodes/joinform.html) and the sponsor-interest form
  * (layouts/shortcodes/sponsorform.html), and files each one as a GitHub
  * issue in pkic/members.
@@ -45,19 +47,13 @@ function redirectWithStatus(refererUrl: URL, status: "success" | "error"): Respo
 export async function onRequestPost(c: any): Promise<Response> {
   const request: Request = c.req.raw;
 
-  const originHeader = request.headers.get("origin");
   const refererHeader = request.headers.get("referer");
-
-  const origin = originHeader || (refererHeader ? new URL(refererHeader).origin : "");
-  if (!origin || !isAllowedOrigin(origin)) {
-    return new Response("Invalid request", { status: 400 });
-  }
 
   let refererUrl: URL;
   try {
-    refererUrl = new URL(refererHeader ?? "https://pkic.org/");
+    refererUrl = new URL(refererHeader ?? "");
   } catch {
-    refererUrl = new URL("https://pkic.org/");
+    return new Response("Invalid request", { status: 400 });
   }
 
   if (!isAllowedOrigin(refererUrl.origin)) {
@@ -75,7 +71,9 @@ export async function onRequestPost(c: any): Promise<Response> {
   }
 
   const contentType = request.headers.get("content-type") ?? "";
-  if (!contentType.includes("multipart/form-data")) {
+  const isFormEncoded =
+    contentType.includes("multipart/form-data") || contentType.includes("application/x-www-form-urlencoded");
+  if (!isFormEncoded) {
     return redirectWithStatus(refererUrl, "error");
   }
 

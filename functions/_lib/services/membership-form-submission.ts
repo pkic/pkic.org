@@ -75,6 +75,12 @@ function fieldToString(value: FormDataEntryValue | null): string {
   return typeof value === "string" ? value.trim() : "";
 }
 
+/** Domain is everything after the last "@" — matches the extraction in assets/js/form.js. */
+function emailDomainOf(email: string): string {
+  const atIndex = email.lastIndexOf("@");
+  return atIndex === -1 ? "" : email.slice(atIndex + 1).toLowerCase();
+}
+
 export async function submitMembershipForm(formData: FormData, env: Env): Promise<void> {
   const githubToken = env.GITHUB_TOKEN;
   if (!githubToken) {
@@ -101,7 +107,7 @@ export async function submitMembershipForm(formData: FormData, env: Env): Promis
 
   const labels = [subject];
   if (subject !== SPONSOR_INTEREST_SUBJECT) {
-    const emailDomain = email.includes("@") ? email.split("@")[1]!.toLowerCase() : "";
+    const emailDomain = emailDomainOf(email);
     if (emailDomain && !PUBLIC_EMAIL_DOMAINS.has(emailDomain)) {
       const domainExists = await checkEmailDomainInIssues(emailDomain, githubToken);
       if (domainExists) {
@@ -132,9 +138,18 @@ export async function submitMembershipForm(formData: FormData, env: Env): Promis
   }
 }
 
+/**
+ * Strips characters that would let a value break out of a quoted GitHub
+ * search-query phrase (e.g. `"` to close the phrase, `\` to escape it) and
+ * inject arbitrary search qualifiers.
+ */
+function sanitizeForSearchQuery(value: string): string {
+  return value.replace(/["\\]/g, "");
+}
+
 /** Checks whether any non-excluded GitHub issue already mentions this email domain. */
 async function checkEmailDomainInIssues(emailDomain: string, githubToken: string): Promise<boolean> {
-  const query = 'repo:pkic/members is:issue "' + emailDomain + '"';
+  const query = 'repo:pkic/members is:issue "' + sanitizeForSearchQuery(emailDomain) + '"';
   const response = await fetch("https://api.github.com/search/issues?q=" + encodeURIComponent(query), {
     method: "GET",
     headers: {
@@ -148,8 +163,8 @@ async function checkEmailDomainInIssues(emailDomain: string, githubToken: string
     return false;
   }
 
-  const result = (await response.json()) as { items: GitHubIssue[] };
-  for (const issue of result.items) {
+  const result = (await response.json()) as { items?: GitHubIssue[] };
+  for (const issue of result.items ?? []) {
     const issueLabels = issue.labels?.map((label) => (label.name ?? "").toLowerCase()) ?? [];
     if (issueLabels.some((label) => EXCLUDE_LABELS.has(label))) continue;
     if (issue.state === "closed" && issue.state_reason === "not_planned") continue;
