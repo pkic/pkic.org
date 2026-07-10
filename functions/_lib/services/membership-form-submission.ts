@@ -134,43 +134,35 @@ export async function submitMembershipForm(formData: FormData, env: Env): Promis
 
 /** Checks whether any non-excluded GitHub issue already mentions this email domain. */
 async function checkEmailDomainInIssues(emailDomain: string, githubToken: string): Promise<boolean> {
-  const perPage = 100;
-  let page = 1;
+  const query = 'repo:pkic/members is:issue "' + emailDomain + '"';
+  const response = await fetch("https://api.github.com/search/issues?q=" + encodeURIComponent(query), {
+    method: "GET",
+    headers: {
+      Accept: "application/vnd.github.v3+json",
+      "User-Agent": "pkic.org forms",
+      Authorization: "token " + githubToken,
+    },
+  });
 
-  for (;;) {
-    const response = await fetch(`${GITHUB_ISSUES_URL}?state=all&per_page=${perPage}&page=${page}`, {
-      method: "GET",
-      headers: {
-        Accept: "application/vnd.github.v3+json",
-        "User-Agent": "pkic.org forms",
-        Authorization: `token ${githubToken}`,
-      },
-    });
-
-    if (!response.ok) {
-      return false;
-    }
-
-    const issues = (await response.json()) as GitHubIssue[];
-
-    for (const issue of issues) {
-      const issueLabels = issue.labels?.map((label) => (label.name ?? "").toLowerCase()) ?? [];
-      if (issueLabels.some((label) => EXCLUDE_LABELS.has(label))) continue;
-      if (issue.state === "closed" && issue.state_reason === "not_planned") continue;
-
-      const bodyLower = issue.body?.toLowerCase() ?? "";
-      if (issue.state === "closed" && (bodyLower.includes("duplicate of") || bodyLower.includes("closed as duplicate"))) {
-        continue;
-      }
-
-      if (bodyLower.includes(emailDomain)) {
-        return true;
-      }
-    }
-
-    if (issues.length < perPage) {
-      return false;
-    }
-    page += 1;
+  if (!response.ok) {
+    return false;
   }
+
+  const result = (await response.json()) as { items: GitHubIssue[] };
+  for (const issue of result.items) {
+    const issueLabels = issue.labels?.map((label) => (label.name ?? "").toLowerCase()) ?? [];
+    if (issueLabels.some((label) => EXCLUDE_LABELS.has(label))) continue;
+    if (issue.state === "closed" && issue.state_reason === "not_planned") continue;
+
+    const bodyLower = issue.body?.toLowerCase() ?? "";
+    if (issue.state === "closed" && (bodyLower.includes("duplicate of") || bodyLower.includes("closed as duplicate"))) {
+      continue;
+    }
+
+    if (bodyLower.includes("@" + emailDomain)) {
+      return true;
+    }
+  }
+
+  return false;
 }

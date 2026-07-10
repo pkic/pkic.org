@@ -45,13 +45,21 @@ function redirectWithStatus(refererUrl: URL, status: "success" | "error"): Respo
 export async function onRequestPost(c: any): Promise<Response> {
   const request: Request = c.req.raw;
 
+  const originHeader = request.headers.get("origin");
   const refererHeader = request.headers.get("referer");
-  let refererUrl: URL;
-  try {
-    refererUrl = new URL(refererHeader ?? "");
-  } catch {
+
+  const origin = originHeader || (refererHeader ? new URL(refererHeader).origin : "");
+  if (!origin || !isAllowedOrigin(origin)) {
     return new Response("Invalid request", { status: 400 });
   }
+
+  let refererUrl: URL;
+  try {
+    refererUrl = new URL(refererHeader ?? "https://pkic.org/");
+  } catch {
+    refererUrl = new URL("https://pkic.org/");
+  }
+
   if (!isAllowedOrigin(refererUrl.origin)) {
     return new Response("Invalid request", { status: 400 });
   }
