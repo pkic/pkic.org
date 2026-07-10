@@ -205,10 +205,10 @@
                                                         <div class="mobile-session-preview">{{ .description | markdownify }}</div>
                                                     {{- end -}}
                                                 </div>
-                                                {{- if $timeSlot.durationMinutes -}}
+                                                {{- if .durationMinutes -}}
                                                     <div class="session-duration">
                                                         <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-clock" viewBox="0 0 16 16"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg>
-                                                        {{ $timeSlot.durationMinutes }} min
+                                                        {{ .durationMinutes }} min
                                                     </div>
                                                 {{- end -}}
                                             </div>
@@ -259,9 +259,10 @@
                         <div class="agenda-grid-container">
                             <div class="agenda-grid" data-locations="{{ len $locations }}">
                                 <!-- Schedule rows -->
-                                {{- range $timeSlot := $items -}}
+                                {{- range $rowIndex, $timeSlot := $items -}}
+                                    {{- $gridRow := add $rowIndex 1 -}}
                                     <!-- Time cell -->
-                                    <div class="agenda-time">
+                                    <div class="agenda-time" style="grid-row: {{ $gridRow }}; grid-column: 1;">
                                         <div class="time-main">{{ $timeSlot.time }}</div>
                                         {{ $dateTime := (time.AsTime (printf "%sT%s:00" $day $timeSlot.time) $data.timezone).UTC }}
                                         <time class="time-local localTime" datetime="{{ $dateTime.Format "2006-01-02T15:04:05Z" }}">
@@ -271,7 +272,7 @@
 
                                     {{- if not $timeSlot.sessions -}}
                                         <!-- Break spanning all locations -->
-                                        <div class="agenda-break">
+                                        <div class="agenda-break" style="grid-row: {{ $gridRow }};">
                                             <div class="break-card">
                                                 {{ if $timeSlot.sponsor }}
                                                     {{ $sponsorData := partial "sponsors/item.html" (dict "id" $timeSlot.sponsor) }}
@@ -302,8 +303,13 @@
                                     {{- else -}}
                                         <!-- Session cells for each location -->
                                         {{- range $locationIndex, $location := $locations -}}
-                                            <div class="agenda-session location-{{ $locationIndex }}" data-location="{{ $locationIndex }}">
-                                                {{- $sessions := where $timeSlot.sessions "locations" "intersect" (slice $location) -}}
+                                            {{- if not (in $timeSlot.coveredLocations $location) -}}
+                                            {{- $sessions := where $timeSlot.sessions "locations" "intersect" (slice $location) -}}
+                                            {{- $rowSpan := 1 -}}
+                                            {{- if $sessions -}}
+                                                {{- $rowSpan = default 1 (index $sessions 0).rowSpan -}}
+                                            {{- end -}}
+                                            <div class="agenda-session location-{{ $locationIndex }}" data-location="{{ $locationIndex }}" style="grid-row: {{ $gridRow }} / span {{ $rowSpan }}; grid-column: {{ add $locationIndex 2 }};">
                                                 {{- if $sessions -}}
                                                     {{- range $sessions -}}
                                                         <div class="session-card location-{{ $locationIndex }}-session" data-bs-toggle="modal" data-bs-target="#sessionModal-{{ $timeSlot.time | replaceRE ":" "" }}-{{ $locationIndex }}-{{ .title | urlize }}">
@@ -344,10 +350,10 @@
                                                                     </div>
                                                                 {{- end -}}
                                                             </div>
-                                                            {{- if $timeSlot.durationMinutes -}}
+                                                            {{- if .durationMinutes -}}
                                                             <div class="session-duration">
                                                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-clock" viewBox="0 0 16 16"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg>
-                                                                {{ $timeSlot.durationMinutes }} min
+                                                                {{ .durationMinutes }} min
                                                             </div>
                                                             {{- end -}}
                                                             {{- if or .youtube .presentation -}}
@@ -380,6 +386,7 @@
                                                     {{- end -}}
                                                 {{- end -}}
                                             </div>
+                                            {{- end -}}
                                         {{- end -}}
                                     {{- end -}}
                                 {{- end -}}
@@ -407,7 +414,8 @@
                                                                         <path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/>
                                                                         <path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/>
                                                                     </svg>
-                                                                    {{ $timeSlot.time }}{{- if $timeSlot.endTime }} – {{ $timeSlot.endTime }}{{- end }}
+                                                                    {{- $displayEnd := default $timeSlot.endTime .endTime -}}
+                                                                    {{ $timeSlot.time }}{{- if $displayEnd }} – {{ $displayEnd }}{{- end }}
                                                                 </span>
                                                                 <span class="location-badge-modal">
                                                                     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-geo-alt" viewBox="0 0 16 16">

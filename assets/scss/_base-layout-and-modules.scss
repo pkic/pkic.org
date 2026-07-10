@@ -399,10 +399,16 @@ blockquote::after {
 }
 
 // Callout warning — functional alert box
+//
+// NOTE: `{.callout-warning}` (Hugo attribute list) applies this class directly
+// to the paragraph element, so this ruleset must not use `display: flex` on
+// the paragraph itself — the paragraph's own inline children (text runs and
+// any <strong>/<em> spans) would each become separate flex items and wrap
+// independently, producing a jagged, broken-looking layout as soon as the
+// text contains more than one bold phrase. The icon is floated instead, so
+// the paragraph's inline content stays in normal text flow around it.
 .callout-warning {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.875rem;
+  display: block;
   // Reset all the dark-card blockquote styles
   background: $red-pale;
   color: $red-deep;
@@ -433,8 +439,8 @@ blockquote::after {
     opacity: 1 !important;
     font-family: inherit;
     background: none;
-    display: block;
-    flex-shrink: 0;
+    float: left;
+    margin-right: 0.875rem;
     line-height: 1;
     pointer-events: none;
     user-select: none;

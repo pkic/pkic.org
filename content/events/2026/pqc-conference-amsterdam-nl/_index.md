@@ -91,6 +91,14 @@ data:
       bio: |
         Albert de Ruiter operates the Policy Authority at Logius, the digital government service organization of the Netherlands. He is also a member of the QvC (Quantum Secure Cryptography) working group of the Dutch government, a board member of HAPKIDO, and the Vice Chair of the PKI Consortium.
 
+    - name: Sven Rajala
+      title: Vice Chair, PQC Working Group, PKI Consortium
+      bio: |
+        Sven is an award-winning cybersecurity consultant with over 18 years of experience in PKI, automation of PKI and signing solutions, and containerized deployments, currently International PKI Man of Mystery at Keyfactor. His career has spanned both the private sector and federal government, helping organizations design, modernize, and secure their digital trust infrastructure. Recognized for his subject matter expertise in PKI and DevSecOps, he serves as Vice Chair of the PKI Consortium's Post-Quantum Cryptography (PQC) Working Group and hosts The Key Master series by Keyfactor on the Keyfactor Developers YouTube channel.
+      social:
+        linkedin: https://www.linkedin.com/in/international-pki-man-of-mystery/
+        github: https://github.com/svenska-primekey
+
     - name: NIST Representative (TBC)
       title: Invited Speaker
       bio: |
@@ -99,19 +107,25 @@ data:
   # Agenda --------------------------------------------------------------------
   # Design rationale:
   # - Psychological rhythm per day: Energize → Focus → Collaborate → Recharge → Apply → Connect → Celebrate.
-  # - Both halls in continuous use EXCEPT Blue hall during Day 1 Opening + Keynote (09:00–10:30),
+  # - Both halls in continuous use EXCEPT Blue hall during Day 1 Opening + Keynote (09:00–10:45),
   #   keeping the full audience together for the conference launch.
-  # - Day 2 & 3 opens: 15 min simultaneously — Paul in Red hall, Albert in Blue hall.
-  # - Day 2 & 3 closes: 15 min simultaneously — Paul in Red hall, Albert in Blue hall.
+  # - Day 2 & 3 opens/closes: simultaneously — Paul in Red hall, Albert in Blue hall.
   # - Day 3 final close: Paul + Albert together in Red hall for the conference finale.
   # - Red hall (strategic / policy / leadership track): keynotes, panels, case studies, debates.
   # - Blue hall (technical / implementation track): deep dives, workshops, tooling, architecture.
-  # - During the breakout hour Rooms A-E run small-group SME-led sessions; Blue hall runs
-  #   a larger featured workshop on the same theme for attendees who prefer a bigger-room format.
-  # - Post-lunch uses high-interactivity formats (fishbowl, workshop) to counter the energy dip.
-  # - 30-min breaks are intentional networking windows; do not shorten them.
-  # - Session blocks: 45 min (30 talk + 10 Q&A + 5 changeover). Panels: 60 min (55 + 5).
-  # - Lunch: 90 min.
+  # - Breakout hour runs TWICE a day (Rooms A-E), in parallel with whatever the two main
+  #   halls are doing at the same time — it doesn't dictate the main halls' slot length.
+  # - 30-min breaks (AM and PM) are intentional networking windows; do not shorten them.
+  # - Base units: sessions = 30 min (25 content + 5 changeover). Panels = 45 min (40 + 5),
+  #   except one 60-min "deep" panel each morning (55 + 5). Lunch = 90 min (800 attendees).
+  # - The day ends on real content (the PM panel), not a break followed by a lone session.
+  # - Day 2 (Wednesday) trials asynchronous hall formats: the AM panel window runs a single
+  #   60-min panel in the red hall while the blue hall runs four 15-min lightning talks in
+  #   the same window instead. A session can set its own `durationMinutes` to span multiple
+  #   of the finer-grained rows this requires (see the red hall entry at 10:45 below); the
+  #   other hall's rows just use their own normal duration. `noTransition: true` on a row
+  #   means it and the next row are back-to-back with no changeover gap (used here for the
+  #   lightning round, and elsewhere for opening/closing pairs).
   agenda:
     2026-12-01:
       - time: "08:00"
@@ -144,7 +158,7 @@ data:
       - time: "10:15"
         title: Break
 
-      - time: "11:00"
+      - time: "10:45"
         sessions:
           - title: "NIST PQC standardization: status update"
             description: |
@@ -161,6 +175,16 @@ data:
             locations:
               - blue_hall
 
+          - title: "Roundtable (topic to be announced)"
+            description: |
+              A smaller, single-room roundtable — capped at ~30 participants,
+              running longer than the standard breakout format to allow for a
+              deeper, off-the-record conversation.
+            track: Roundtable
+            durationMinutes: 105
+            locations:
+              - room_a
+
       - time: "11:45"
         sessions:
           - title: To be announced
@@ -175,24 +199,10 @@ data:
             locations:
               - blue_hall
 
-      - time: "12:45"
+      - time: "12:30"
         title: Lunch
 
-      - time: "13:45"
-        sessions:
-          - title: To be announced
-            description: |
-              Session details will be announced soon.
-            locations:
-              - plenary
-
-          - title: To be announced
-            description: |
-              Session details will be announced soon.
-            locations:
-              - blue_hall
-
-      - time: "14:45"
+      - time: "14:00"
         sessions:
           - title: To be announced
             description: |
@@ -230,10 +240,62 @@ data:
             locations:
               - room_d
 
-      - time: "15:30"
+      - time: "14:30"
+        sessions:
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - blue_hall
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_a
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_b
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_c
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_d
+
+      - time: "15:00"
         title: Break
 
-      - time: "16:00"
+      - time: "15:30"
+        sessions:
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - blue_hall
+
+      - time: "16:15"
         sessions:
           - title: To be announced
             description: |
@@ -280,7 +342,7 @@ data:
             description: |
               A quick look at what is on today and how to get the most out of it.
             speakers:
-              - Paul van Brouwershaven
+              - Albert de Ruiter
             locations:
               - plenary
 
@@ -288,19 +350,15 @@ data:
             description: |
               Parallel welcome and agenda highlights for the blue hall audience.
             speakers:
-              - Albert de Ruiter
+              - Sven Rajala
             locations:
               - blue_hall
 
-      - time: "09:15"
+      - time: "09:30"
         sessions:
-          - title: "Cryptographic module vendors"
+          - title: To be announced
             description: |
-              The famous HSM panel — a panel discussion with leading cryptographic
-              module vendors covering the current state of PQC support in hardware
-              security modules and related products. Moderators and panellists to
-              be confirmed.
-            track: Panel discussion
+              Session details will be announced soon.
             locations:
               - plenary
 
@@ -313,17 +371,64 @@ data:
       - time: "10:15"
         title: Break
 
-      - time: "11:00"
+      - time: "10:45"
+        noTransition: true
         sessions:
-          - title: To be announced
+          - title: "Cryptographic module vendors"
             description: |
-              Session details will be announced soon.
+              The famous HSM panel — a panel discussion with leading cryptographic
+              module vendors covering the current state of PQC support in hardware
+              security modules and related products. Moderators and panellists to
+              be confirmed.
+            track: Panel discussion
+            durationMinutes: 60
             locations:
               - plenary
 
-          - title: To be announced
+          - title: "Lightning talk 1"
             description: |
-              Session details will be announced soon.
+              Speaker and topic to be announced.
+            track: Lightning talk
+            locations:
+              - blue_hall
+
+          - title: "Roundtable (topic to be announced)"
+            description: |
+              A smaller, single-room roundtable — capped at ~30 participants,
+              running longer than the standard breakout format to allow for a
+              deeper, off-the-record conversation.
+            track: Roundtable
+            durationMinutes: 105
+            locations:
+              - room_a
+
+      - time: "11:00"
+        noTransition: true
+        sessions:
+          - title: "Lightning talk 2"
+            description: |
+              Speaker and topic to be announced.
+            track: Lightning talk
+            locations:
+              - blue_hall
+
+      - time: "11:15"
+        noTransition: true
+        sessions:
+          - title: "Lightning talk 3"
+            description: |
+              Speaker and topic to be announced.
+            track: Lightning talk
+            locations:
+              - blue_hall
+
+      - time: "11:30"
+        noTransition: true
+        sessions:
+          - title: "Lightning talk 4"
+            description: |
+              Speaker and topic to be announced.
+            track: Lightning talk
             locations:
               - blue_hall
 
@@ -341,24 +446,10 @@ data:
             locations:
               - blue_hall
 
-      - time: "12:45"
+      - time: "12:30"
         title: Lunch
 
-      - time: "13:45"
-        sessions:
-          - title: To be announced
-            description: |
-              Session details will be announced soon.
-            locations:
-              - plenary
-
-          - title: To be announced
-            description: |
-              Session details will be announced soon.
-            locations:
-              - blue_hall
-
-      - time: "14:45"
+      - time: "14:00"
         sessions:
           - title: To be announced
             description: |
@@ -396,10 +487,62 @@ data:
             locations:
               - room_d
 
-      - time: "15:30"
+      - time: "14:30"
+        sessions:
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - blue_hall
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_a
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_b
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_c
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_d
+
+      - time: "15:00"
         title: Break
 
-      - time: "16:00"
+      - time: "15:30"
+        sessions:
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - blue_hall
+
+      - time: "16:15"
         sessions:
           - title: To be announced
             description: |
@@ -420,7 +563,7 @@ data:
             description: |
               Brief closing remarks and a preview of Day 3.
             speakers:
-              - Paul van Brouwershaven
+              - Sven Rajala
             locations:
               - plenary
 
@@ -428,7 +571,7 @@ data:
             description: |
               Brief closing remarks for the blue hall audience and a preview of Day 3.
             speakers:
-              - Albert de Ruiter
+              - Paul van Brouwershaven
             locations:
               - blue_hall
 
@@ -462,7 +605,24 @@ data:
             locations:
               - blue_hall
 
-      - time: "09:15"
+      - time: "09:30"
+        sessions:
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - blue_hall
+
+      - time: "10:15"
+        title: Break
+
+      - time: "10:45"
         sessions:
           - title: To be announced
             description: |
@@ -479,22 +639,15 @@ data:
             locations:
               - blue_hall
 
-      - time: "10:15"
-        title: Break
-
-      - time: "11:00"
-        sessions:
-          - title: To be announced
+          - title: "Roundtable (topic to be announced)"
             description: |
-              Session details will be announced soon.
+              A smaller, single-room roundtable — capped at ~30 participants,
+              running longer than the standard breakout format to allow for a
+              deeper, off-the-record conversation.
+            track: Roundtable
+            durationMinutes: 105
             locations:
-              - plenary
-
-          - title: To be announced
-            description: |
-              Session details will be announced soon.
-            locations:
-              - blue_hall
+              - room_a
 
       - time: "11:45"
         sessions:
@@ -510,25 +663,14 @@ data:
             locations:
               - blue_hall
 
-      - time: "12:45"
+      - time: "12:30"
         title: Lunch
 
-      - time: "13:45"
+      - time: "14:00"
         sessions:
           - title: To be announced
             description: |
               Session details will be announced soon.
-            locations:
-              - blue_hall
-
-      - time: "14:30"
-        sessions:
-          - title: "Government representatives and regulators"
-            description: |
-              A panel discussion with government representatives and regulators from
-              around the world on PQC policy, mandates, and migration timelines.
-              Panellists to be confirmed.
-            track: Panel discussion
             locations:
               - plenary
 
@@ -568,10 +710,7 @@ data:
             locations:
               - room_e
 
-      - time: "15:30"
-        title: Break
-
-      - time: "16:00"
+      - time: "14:30"
         sessions:
           - title: To be announced
             description: |
@@ -585,7 +724,71 @@ data:
             locations:
               - blue_hall
 
-      - time: "16:45"
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_a
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_b
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_c
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_d
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - room_e
+
+      - time: "15:00"
+        title: Break
+
+      - time: "15:30"
+        sessions:
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - blue_hall
+
+      - time: "16:15"
+        sessions:
+          - title: "Government representatives and regulators"
+            description: |
+              A panel discussion with government representatives and regulators from
+              around the world on PQC policy, mandates, and migration timelines.
+              Panellists to be confirmed.
+            track: Panel discussion
+            locations:
+              - plenary
+
+          - title: To be announced
+            description: |
+              Session details will be announced soon.
+            locations:
+              - blue_hall
+
+      - time: "17:00"
         noTransition: true
         sessions:
           - title: Conference closing
@@ -595,10 +798,11 @@ data:
             speakers:
               - Paul van Brouwershaven
               - Albert de Ruiter
+              - Sven Rajala
             locations:
               - plenary
 
-      - time: "17:00"
+      - time: "17:05"
         title: "End of day three — thank you for joining us!"
 ---
 
