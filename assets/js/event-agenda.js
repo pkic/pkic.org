@@ -14,6 +14,9 @@ document.addEventListener('DOMContentLoaded', function () {
     // Global Expand All button logic
     initializeGlobalExpandAll();
 
+    // Only fade out clamped session text (and only when it's actually clipped)
+    initializeSessionOverflowDetection();
+
     // Initialize overflow navigation
     initializeOverflowNavigation();
 
@@ -351,6 +354,52 @@ function initializeGlobalExpandAll() {
                 btn.classList.toggle('btn-outline-secondary', !expanded);
             });
         });
+    });
+}
+
+// Row heights are computed once at build time (see agenda.html) as a
+// deterministic function of each row's own real duration — a genuine
+// calendar scale, not something laid out here. Only show the bottom
+// fade-out on a session card when its text is actually clipped within that
+// fixed height. .session-content sizes to its own content (shrinking only
+// when the card doesn't have room for it), so whether it's clamped depends
+// on real layout — recheck whenever that layout can change: initial load,
+// fonts/images settling, window resize, and switching to a day tab (hidden
+// tab-panes report clientHeight 0 until shown).
+function updateSessionOverflowState(root) {
+    (root || document).querySelectorAll('.session-content:not(.expanded)').forEach(function (content) {
+        const isClamped = content.scrollHeight > content.clientHeight + 1;
+        content.classList.toggle('is-clamped', isClamped);
+    });
+}
+
+function recalculateAgendaLayout(root) {
+    updateSessionOverflowState(root);
+}
+
+function initializeSessionOverflowDetection() {
+    if (!document.querySelector('.session-content')) return;
+
+    recalculateAgendaLayout();
+    window.addEventListener('load', () => recalculateAgendaLayout());
+
+    let resizeTimer;
+    window.addEventListener('resize', () => {
+        clearTimeout(resizeTimer);
+        resizeTimer = setTimeout(() => recalculateAgendaLayout(), 150);
+    });
+
+    document.querySelectorAll('#agenda-tabs button[data-bs-toggle="tab"]').forEach(tab => {
+        tab.addEventListener('shown.bs.tab', function (e) {
+            const pane = e.target.getAttribute('data-bs-target');
+            recalculateAgendaLayout(pane ? document.querySelector(pane) : document);
+        });
+    });
+
+    // Re-check after Expand All / Collapse All: expanding changes every
+    // card's natural height, which changes what the rows need too.
+    document.querySelectorAll('#expand-all-btn, #expand-all-btn-mobile').forEach(btn => {
+        btn.addEventListener('click', () => setTimeout(() => recalculateAgendaLayout(), 0));
     });
 }
 

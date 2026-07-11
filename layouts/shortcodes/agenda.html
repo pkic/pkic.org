@@ -256,8 +256,84 @@
                         </div>
 
                         <!-- Agenda Grid -->
+                        {{/* Row heights are a deterministic function of each row's own real
+                             elapsed minutes — a genuine calendar, not content-driven sizing.
+                             A 15-min row is always shorter than a 60-min row, regardless of
+                             what's in either one; card content that doesn't fit its row is
+                             truncated with a fade (see .is-clamped), not the other way round.
+                             Break/title-only rows (no .sessions) are compact fixed-height
+                             banners regardless of how long the break actually is. */}}
+                        {{- $pxPerMinute := 8 -}}
+                        {{/* Title, speakers, a couple lines of abstract, and the duration
+                             badge are never truncated (see .session-title / .session-speakers
+                             / .session-content in _agenda.scss), so the row must be at least
+                             tall enough for whichever session in it needs the most room for
+                             those — otherwise the card overflows its fixed height and content
+                             gets clipped instead of gracefully faded. A single flat floor
+                             either clips a long title + multi-speaker panel or wastes space
+                             on every plain "To be announced" card, so it's computed per row
+                             from what's actually in it: title length (~28 chars/line,
+                             capped at 3 lines), speaker count (~50px each), and whether a
+                             description is present (~68px reserved for its min-height). */}}
+                        {{- $breakRowPx := 64 -}}
+                        {{- $rowCount := len $items -}}
+
+                        {{/* Pass 1: a session's content need only lives on the row its YAML
+                             entry is under, but a multi-row session (rowSpan > 1, e.g. a panel
+                             sharing a window with several shorter talks) is only actually
+                             present in that ONE row's .sessions list — its full requirement
+                             (e.g. 3 speakers + a full abstract) would otherwise land entirely
+                             on the first row of its span, leaving the rows after it with none
+                             of that budget and the row before it wildly oversized. Spread each
+                             session's need evenly across every row its rowSpan covers instead. */}}
+                        {{- $rowContentFloor := slice -}}
+                        {{- range $items -}}{{- $rowContentFloor = $rowContentFloor | append 130 -}}{{- end -}}
+
+                        {{- range $rowIndex, $timeSlot := $items -}}
+                            {{- range $timeSlot.sessions -}}
+                                {{- $titleLines := div (add (len (default "" .title)) 27) 28 -}}
+                                {{- if lt $titleLines 1 -}}{{- $titleLines = 1 -}}{{- end -}}
+                                {{- if gt $titleLines 3 -}}{{- $titleLines = 3 -}}{{- end -}}
+                                {{- $titleH := add (mul $titleLines 23) 22 -}}
+                                {{- $speakerCount := len (default (slice) .speakers) -}}
+                                {{- $speakersH := 0 -}}
+                                {{- if gt $speakerCount 0 -}}
+                                    {{- $speakersH = add (mul $speakerCount 50) 12 -}}
+                                {{- end -}}
+                                {{- $descH := 0 -}}
+                                {{- if .description -}}{{- $descH = 68 -}}{{- end -}}
+                                {{- $needed := add (add (add $titleH $speakersH) $descH) 31 -}}
+                                {{- $span := int (default 1 .rowSpan) -}}
+                                {{- if lt $span 1 -}}{{- $span = 1 -}}{{- end -}}
+                                {{- $perRowShare := div $needed $span -}}
+                                {{- $updated := slice -}}
+                                {{- range $i, $v := $rowContentFloor -}}
+                                    {{- if and (ge $i $rowIndex) (lt $i (add $rowIndex $span)) -}}
+                                        {{- $updated = $updated | append (math.Max $v $perRowShare) -}}
+                                    {{- else -}}
+                                        {{- $updated = $updated | append $v -}}
+                                    {{- end -}}
+                                {{- end -}}
+                                {{- $rowContentFloor = $updated -}}
+                            {{- end -}}
+                        {{- end -}}
+
+                        {{/* Pass 2: final row height is whichever is taller — the real-time
+                             calendar scale, or the (now correctly distributed) content floor. */}}
+                        {{- $rowHeightPx := slice -}}
+                        {{- range $rowIndex, $timeSlot := $items -}}
+                            {{- $h := $breakRowPx -}}
+                            {{- if $timeSlot.sessions -}}
+                                {{- $dur := int (default 30 $timeSlot.durationMinutes) -}}
+                                {{- $durationBasedPx := mul $dur $pxPerMinute -}}
+                                {{- $contentFloorPx := index $rowContentFloor $rowIndex -}}
+                                {{- $h = math.Max $contentFloorPx $durationBasedPx -}}
+                            {{- end -}}
+                            {{- $rowHeightPx = $rowHeightPx | append (printf "%dpx" (int $h)) -}}
+                        {{- end -}}
+                        {{- $gridTemplateRows := delimit $rowHeightPx " " -}}
                         <div class="agenda-grid-container">
-                            <div class="agenda-grid" data-locations="{{ len $locations }}">
+                            <div class="agenda-grid" data-locations="{{ len $locations }}" style="grid-template-rows: {{ $gridTemplateRows }};">
                                 <!-- Schedule rows -->
                                 {{- range $rowIndex, $timeSlot := $items -}}
                                     {{- $gridRow := add $rowIndex 1 -}}
@@ -316,40 +392,38 @@
                                                             {{- if .track -}}
                                                                 <span class="session-track-badge">{{ .track }}</span>
                                                             {{- end -}}
-                                                            <div class="session-content">
-                                                                <h6 class="session-title">{{ .title }}</h6>
-                                                                
-                                                                {{- if .speakers -}}
-                                                                    <div class="session-speakers">
-                                                                        {{- range $speaker := .speakers -}}
-                                                                            {{- $speakerName := trim $speaker " *" -}}
-                                                                            {{- range $data.speakers -}}
-                                                                                {{- if eq $speakerName .name -}}
-                                                                                    <div class="speaker-info">
-                                                                                        {{ with .headshot }}
-                                                                                            <img src="{{ .x150 }}" class="speaker-avatar" alt="{{ .name }}">
-                                                                                        {{ else }}
-                                                                                            <div class="speaker-avatar speaker-initial">
-                                                                                                {{ substr .name 0 1 | upper }}
-                                                                                            </div>
-                                                                                        {{ end }}
-                                                                                        <div class="speaker-details">
-                                                                                            <div class="speaker-name">{{ .name }}{{- if hasSuffix $speaker " *" -}} <span class="badge text-bg-warning ms-2">Moderator</span>{{- end -}}</div>
-                                                                                            <div class="speaker-role">{{ .title }}</div>
+                                                            <h6 class="session-title">{{ .title }}</h6>
+                                                            {{- if .speakers -}}
+                                                                <div class="session-speakers">
+                                                                    {{- range $speaker := .speakers -}}
+                                                                        {{- $speakerName := trim $speaker " *" -}}
+                                                                        {{- range $data.speakers -}}
+                                                                            {{- if eq $speakerName .name -}}
+                                                                                <div class="speaker-info">
+                                                                                    {{ with .headshot }}
+                                                                                        <img src="{{ .x150 }}" class="speaker-avatar" alt="{{ .name }}">
+                                                                                    {{ else }}
+                                                                                        <div class="speaker-avatar speaker-initial">
+                                                                                            {{ substr .name 0 1 | upper }}
                                                                                         </div>
+                                                                                    {{ end }}
+                                                                                    <div class="speaker-details">
+                                                                                        <div class="speaker-name">{{ .name }}{{- if hasSuffix $speaker " *" -}} <span class="badge text-bg-warning ms-2">Moderator</span>{{- end -}}</div>
+                                                                                        <div class="speaker-role">{{ .title }}</div>
                                                                                     </div>
-                                                                                {{- end -}}
+                                                                                </div>
                                                                             {{- end -}}
                                                                         {{- end -}}
-                                                                    </div>
-                                                                {{- end -}}
-                                                                
-                                                                {{- if .description -}}
+                                                                    {{- end -}}
+                                                                </div>
+                                                            {{- end -}}
+                                                            {{- if .description -}}
+                                                                <div class="session-content">
                                                                     <div class="session-preview-wrapper">
                                                                         <div class="session-preview-gradient">{{ .description | markdownify }}</div>
                                                                     </div>
-                                                                {{- end -}}
-                                                            </div>
+                                                                </div>
+                                                            {{- end -}}
                                                             {{- if .durationMinutes -}}
                                                             <div class="session-duration">
                                                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" class="bi bi-clock" viewBox="0 0 16 16"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg>
