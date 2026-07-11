@@ -302,7 +302,9 @@
                                 {{- end -}}
                                 {{- $descH := 0 -}}
                                 {{- if .description -}}{{- $descH = 68 -}}{{- end -}}
-                                {{- $needed := add (add (add $titleH $speakersH) $descH) 31 -}}
+                                {{- $footerH := 0 -}}
+                                {{- if or .youtube .presentation -}}{{- $footerH = 54 -}}{{- end -}}
+                                {{- $needed := add (add (add (add $titleH $speakersH) $descH) $footerH) 31 -}}
                                 {{- $span := int (default 1 .rowSpan) -}}
                                 {{- if lt $span 1 -}}{{- $span = 1 -}}{{- end -}}
                                 {{- $perRowShare := div $needed $span -}}
@@ -319,7 +321,11 @@
                         {{- end -}}
 
                         {{/* Pass 2: final row height is whichever is taller — the real-time
-                             calendar scale, or the (now correctly distributed) content floor. */}}
+                             calendar scale, or the (now correctly distributed) content floor.
+                             A sponsored break with a logo renders a taller white card inside
+                             the banner than a plain "Break" label, so it needs more than the
+                             standard compact break row. */}}
+                        {{- $sponsoredBreakRowPx := 114 -}}
                         {{- $rowHeightPx := slice -}}
                         {{- range $rowIndex, $timeSlot := $items -}}
                             {{- $h := $breakRowPx -}}
@@ -328,6 +334,10 @@
                                 {{- $durationBasedPx := mul $dur $pxPerMinute -}}
                                 {{- $contentFloorPx := index $rowContentFloor $rowIndex -}}
                                 {{- $h = math.Max $contentFloorPx $durationBasedPx -}}
+                            {{- else if $timeSlot.sponsor -}}
+                                {{- if partial "sponsors/item.html" (dict "id" $timeSlot.sponsor) -}}
+                                    {{- $h = $sponsoredBreakRowPx -}}
+                                {{- end -}}
                             {{- end -}}
                             {{- $rowHeightPx = $rowHeightPx | append (printf "%dpx" (int $h)) -}}
                         {{- end -}}
