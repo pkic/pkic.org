@@ -75,9 +75,12 @@
              Locations still "inside" an earlier session's span are recorded per row so the
              template can skip rendering a competing empty cell there instead of covering
              it with a "continuation" placeholder. */ -}}
-        {{- $dayLocations := $locationsData.order -}}
-        {{- if index $locationsData $dayStr -}}
-            {{- $dayLocations = (index $locationsData $dayStr).order -}}
+        {{- $dayLocations := slice -}}
+        {{- if $locationsData -}}
+            {{- $dayLocations = $locationsData.order -}}
+            {{- if index $locationsData $dayStr -}}
+                {{- $dayLocations = (index $locationsData $dayStr).order -}}
+            {{- end -}}
         {{- end -}}
 
         {{- $finalSlots := slice -}}
@@ -119,8 +122,10 @@
                             {{- $priorStartMins := partial "events/time-to-minutes.html" $priorSlot.time -}}
                             {{- $priorSessions := default (slice) $priorSlot.sessions -}}
                             {{- range (where $priorSessions "locations" "intersect" (slice $loc)) -}}
-                                {{- if and .durationMinutes (gt (add $priorStartMins .durationMinutes) $slotStartMins) -}}
-                                    {{- $covered = true -}}
+                                {{- if .durationMinutes -}}
+                                    {{- if gt (add $priorStartMins .durationMinutes) $slotStartMins -}}
+                                        {{- $covered = true -}}
+                                    {{- end -}}
                                 {{- end -}}
                             {{- end -}}
                         {{- end -}}
