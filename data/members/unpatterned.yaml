@@ -1,0 +1,62 @@
+id: unpatterned
+name: Unpatterned Labs
+slogan:
+website: https://unpatterned.org/
+# Business domains for email
+organizationDomains:
+  - unpatterned.org
+# Short description, longer content can be placed in `content/members/`
+description: Unpatterned is an independent research, infrastructure, and knowledge network building open systems for how the world is represented in data, identity, and intelligence.
+
+# membership
+memberSince: 2026-07-14
+memberType: H3
+workingGroups:
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://unpatterned.org/blog
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: https://forms.gle/gkeSHyo6t62cwuhz5
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: 
+  instagram: https://instagram.com/theunpatterned
+  linkedin: https://linkedin.com/company/unpatterned-ai
+  youtube: 
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Dennis Irorere
+    role: Co-founder
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/dennisirorere/
+    description: Dennis is the Co-founder at Unpatterned Labs and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
