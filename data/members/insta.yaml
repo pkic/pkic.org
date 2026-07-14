@@ -1,0 +1,60 @@
+id: insta
+name: Insta Advance Oy
+slogan:
+website: https://www.insta.fi/en/
+# Business domains for email
+organizationDomains:
+  - insta.fi
+# Short description, longer content can be placed in `content/members/`
+description: An expert in industrial automation, industrial digitalization, cyber security and defence technologies.
+
+# membership
+memberSince: 2026-07-14
+memberType: F
+workingGroups:
+
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://www.insta.fi/en/news/
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: https://www.insta.fi/en/career/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: 
+  facebook: https://www.facebook.com/policy.php/
+  instagram: https://www.instagram.com/instagroupoy/
+  linkedin: https://www.linkedin.com/company/insta-group-oy
+  youtube: https://www.youtube.com/@instagroupofficial
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Marko Hautakangas
+    role: VP, Cyber Security
+    social:
+      x:
+      linkedin: www.linkedin.com/in/marko-hautakangas-81bab68
+    description: Marko is the VP, Cyber Security at Insta Advance Oy and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
