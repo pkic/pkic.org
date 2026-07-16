@@ -18,6 +18,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     maxInviteReminders: config.maxInviteReminders,
     maxPendingConfirmationReminders: config.maxPendingConfirmationReminders,
     maxPresentationReminders: config.maxPresentationReminders,
+    presentationReminderLeadDays: config.presentationReminderLeadDays,
     limit: body.limit,
     dryRun: body.dryRun,
   });

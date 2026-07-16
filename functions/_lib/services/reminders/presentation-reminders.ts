@@ -18,6 +18,7 @@ export async function runPresentationReminders(
     appBaseUrl: string;
     limit: number;
     maxPresentationReminders: number;
+    windowEnd: string;
     cutoff: string;
     now: string;
     dryRun?: boolean;
@@ -26,7 +27,7 @@ export async function runPresentationReminders(
   presentationRemindersQueued: number;
   presentationUploads: ReminderCandidatePreview[];
 }> {
-  const { appBaseUrl, limit, maxPresentationReminders, cutoff, now, dryRun } = params;
+  const { appBaseUrl, limit, maxPresentationReminders, windowEnd, cutoff, now, dryRun } = params;
 
   const duePresentation =
     limit > 0
@@ -47,18 +48,18 @@ export async function runPresentationReminders(
        WHERE sp.status = 'accepted'
          AND ps.status IN ('invited', 'confirmed')
          AND sp.presentation_uploaded_at IS NULL
-         AND (sp.presentation_deadline IS NULL OR sp.presentation_deadline > ?)
+         AND COALESCE(sp.presentation_deadline, e.starts_at) > ?
+         AND COALESCE(sp.presentation_deadline, e.starts_at) <= ?
          AND ps.presentation_reminder_count < ?
          AND (ps.presentation_reminders_paused_until IS NULL OR ps.presentation_reminders_paused_until <= ?)
          AND COALESCE(ps.presentation_last_communication_at, sp.updated_at, ps.created_at) <= ?
        ORDER BY COALESCE(ps.presentation_last_communication_at, sp.updated_at, ps.created_at) ASC
        LIMIT ?`,
-          [now, maxPresentationReminders, now, cutoff, limit],
+          [now, windowEnd, maxPresentationReminders, now, cutoff, limit],
         )
       : [];
 
-  const presentationUploads: ReminderCandidatePreview[] = [];
-  for (const row of duePresentation) {
+  const preparedRows = duePresentation.map((row) => {
     const event: EventRouteRow = {
       id: row.event_id,
       name: row.event_name,
@@ -67,9 +68,15 @@ export async function runPresentationReminders(
       starts_at: row.event_starts_at,
       settings_json: row.event_settings_json,
     };
-    const daysToDeadline = daysUntil(row.presentation_deadline);
+    const effectiveDeadline = row.presentation_deadline ?? row.event_starts_at;
+    const daysToDeadline = daysUntil(effectiveDeadline);
     const reminderNumber = Number(row.reminder_count ?? 0) + 1;
-    presentationUploads.push({
+    const subject = presentationReminderSubject(event.name, reminderNumber, daysToDeadline);
+    return { row, event, effectiveDeadline, daysToDeadline, reminderNumber, subject };
+  });
+
+  const presentationUploads: ReminderCandidatePreview[] = preparedRows.map(
+    ({ row, event, effectiveDeadline, reminderNumber, subject }) => ({
       category: "presentation_upload_request",
       templateKey: "presentation_upload_request",
       eventName: event.name,
@@ -78,10 +85,10 @@ export async function runPresentationReminders(
       recipientName: [row.first_name, row.last_name].filter(Boolean).join(" ") || null,
       proposalTitle: row.proposal_title,
       reminderNumber,
-      dueAt: row.presentation_deadline,
-      subject: presentationReminderSubject(event.name, reminderNumber, daysToDeadline),
-    });
-  }
+      dueAt: effectiveDeadline,
+      subject,
+    }),
+  );
 
   if (!dryRun && duePresentation.length > 0) {
     const tokenData = await Promise.all(
@@ -103,41 +110,28 @@ export async function runPresentationReminders(
       ),
     );
 
-    const emailRows = duePresentation.map((row) => {
-      const event: EventRouteRow = {
-        id: row.event_id,
-        name: row.event_name,
-        slug: row.event_slug,
-        base_path: row.event_base_path,
-        starts_at: row.event_starts_at,
-        settings_json: row.event_settings_json,
-      };
-      const daysToDeadline = daysUntil(row.presentation_deadline);
-      const reminderNumber = Number(row.reminder_count ?? 0) + 1;
-      const subject = presentationReminderSubject(event.name, reminderNumber, daysToDeadline);
-      return {
-        eventId: row.event_id,
-        recipientEmail: row.email,
-        recipientUserId: row.user_id,
-        templateKey: "presentation_upload_request",
-        subject,
-        data: {
-          ...buildEventEmailVariables(event, appBaseUrl),
-          firstName: row.first_name ?? "",
-          proposalTitle: row.proposal_title,
-          uploadUrl: speakerPresentationPageUrl(
-            appBaseUrl,
-            event,
-            presTokenByKey.get(presTokenKey(row.proposal_id, row.user_id))!,
-          ),
-          deadline: row.presentation_deadline ?? "",
-          isReminder: true,
-          reminderCount: String(reminderNumber),
-          daysUntilDeadline: daysToDeadline !== null ? String(daysToDeadline) : "",
-          __subjectOverride: subject,
-        },
-      };
-    });
+    const emailRows = preparedRows.map(({ row, event, effectiveDeadline, daysToDeadline, reminderNumber, subject }) => ({
+      eventId: row.event_id,
+      recipientEmail: row.email,
+      recipientUserId: row.user_id,
+      templateKey: "presentation_upload_request",
+      subject,
+      data: {
+        ...buildEventEmailVariables(event, appBaseUrl),
+        firstName: row.first_name ?? "",
+        proposalTitle: row.proposal_title,
+        uploadUrl: speakerPresentationPageUrl(
+          appBaseUrl,
+          event,
+          presTokenByKey.get(presTokenKey(row.proposal_id, row.user_id))!,
+        ),
+        deadline: effectiveDeadline ?? "",
+        isReminder: true,
+        reminderCount: String(reminderNumber),
+        daysUntilDeadline: daysToDeadline !== null ? String(daysToDeadline) : "",
+        __subjectOverride: subject,
+      },
+    }));
 
     await batchQueueEmailsAndUpdateState(
       db,

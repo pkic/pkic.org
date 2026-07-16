@@ -813,7 +813,7 @@ data:
             speakers:
               - Alexander Löw
             youtube: dBsymlmASsw
-            presentation: THU_PLENARY_1230_Alexander-Löw_Practical-Insights-from-Following-NIST-SP-1800-38B.pdf
+            presentation: THU_PLENARY_1230_Alexander-Loew_Practical-Insights-from-Following-NIST-SP-1800-38B.pdf
             locations:
               - plenary
 
@@ -895,7 +895,7 @@ data:
             speakers:
               - Jaime Gómez García
             youtube: HywJXpEOvFQ
-            presentation: THU_PLENARY_1500_Jaime-Gómez-García_Perspectives-on-the-transition-to-PQC-in-the-financial-sector.pdf
+            presentation: THU_PLENARY_1500_Jaime-Gomez-Garcia_Perspectives-on-the-transition-to-PQC-in-the-financial-sector.pdf
             locations:
               - plenary
           
