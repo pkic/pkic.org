@@ -28,6 +28,7 @@ const BASE_PAYLOAD = {
   maxInviteReminders: 3,
   maxPendingConfirmationReminders: 3,
   maxPresentationReminders: 3,
+  presentationReminderLeadDays: 3650, // effectively "no lead-time gate" for existing fixtures
   limit: 100,
 };
 

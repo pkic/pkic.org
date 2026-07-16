@@ -15,6 +15,7 @@ export async function runReminderCycle(
     maxInviteReminders: number;
     maxPendingConfirmationReminders: number;
     maxPresentationReminders: number;
+    presentationReminderLeadDays: number;
     limit: number;
     dryRun?: boolean;
   },
@@ -39,6 +40,9 @@ export async function runReminderCycle(
   const pendingConfirmationFallbackDeadlineDays =
     (payload.maxPendingConfirmationReminders + 1) * pendingConfirmationIntervalDays;
   const confirmationCutoff = new Date(Date.now() - pendingConfirmationIntervalDays * 86_400_000).toISOString();
+  const presentationReminderWindowEnd = new Date(
+    Date.now() + payload.presentationReminderLeadDays * 86_400_000,
+  ).toISOString();
 
   const sharedParams = { appBaseUrl: payload.appBaseUrl, now, cutoff, dryRun: payload.dryRun };
 
@@ -60,6 +64,7 @@ export async function runReminderCycle(
     ...sharedParams,
     limit: remaining2,
     maxPresentationReminders: payload.maxPresentationReminders,
+    windowEnd: presentationReminderWindowEnd,
   });
   const remaining3 = Math.max(0, remaining2 - presentations.presentationRemindersQueued);
 
