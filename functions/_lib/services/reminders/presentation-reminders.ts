@@ -48,21 +48,14 @@ export async function runPresentationReminders(
        WHERE sp.status = 'accepted'
          AND ps.status IN ('invited', 'confirmed')
          AND sp.presentation_uploaded_at IS NULL
-         AND (
-           (sp.presentation_deadline IS NOT NULL
-             AND sp.presentation_deadline > ?
-             AND sp.presentation_deadline <= ?)
-           OR (sp.presentation_deadline IS NULL
-             AND e.starts_at IS NOT NULL
-             AND e.starts_at > ?
-             AND e.starts_at <= ?)
-         )
+         AND COALESCE(sp.presentation_deadline, e.starts_at) > ?
+         AND COALESCE(sp.presentation_deadline, e.starts_at) <= ?
          AND ps.presentation_reminder_count < ?
          AND (ps.presentation_reminders_paused_until IS NULL OR ps.presentation_reminders_paused_until <= ?)
          AND COALESCE(ps.presentation_last_communication_at, sp.updated_at, ps.created_at) <= ?
        ORDER BY COALESCE(ps.presentation_last_communication_at, sp.updated_at, ps.created_at) ASC
        LIMIT ?`,
-          [now, windowEnd, now, windowEnd, maxPresentationReminders, now, cutoff, limit],
+          [now, windowEnd, maxPresentationReminders, now, cutoff, limit],
         )
       : [];
 

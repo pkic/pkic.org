@@ -6,6 +6,8 @@ import { runConfirmationReminders } from "./reminders/confirmation-reminders";
 import type { ReminderCandidatePreview } from "./reminders-support";
 import type { DatabaseLike } from "../types";
 
+const ONE_DAY_MS = 86_400_000;
+
 export async function runReminderCycle(
   db: DatabaseLike,
   payload: {
@@ -35,13 +37,13 @@ export async function runReminderCycle(
   };
 }> {
   const now = nowIso();
-  const cutoff = new Date(Date.now() - payload.reminderIntervalDays * 86_400_000).toISOString();
+  const cutoff = new Date(Date.now() - payload.reminderIntervalDays * ONE_DAY_MS).toISOString();
   const pendingConfirmationIntervalDays = Math.max(1, payload.pendingConfirmationReminderIntervalDays);
   const pendingConfirmationFallbackDeadlineDays =
     (payload.maxPendingConfirmationReminders + 1) * pendingConfirmationIntervalDays;
-  const confirmationCutoff = new Date(Date.now() - pendingConfirmationIntervalDays * 86_400_000).toISOString();
+  const confirmationCutoff = new Date(Date.now() - pendingConfirmationIntervalDays * ONE_DAY_MS).toISOString();
   const presentationReminderWindowEnd = new Date(
-    Date.now() + payload.presentationReminderLeadDays * 86_400_000,
+    Date.now() + payload.presentationReminderLeadDays * ONE_DAY_MS,
   ).toISOString();
 
   const sharedParams = { appBaseUrl: payload.appBaseUrl, now, cutoff, dryRun: payload.dryRun };
