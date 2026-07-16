@@ -233,6 +233,7 @@ export async function runScheduledDueWork(env: Env): Promise<ScheduledDueWorkRes
       maxInviteReminders: config.maxInviteReminders,
       maxPendingConfirmationReminders: config.maxPendingConfirmationReminders,
       maxPresentationReminders: config.maxPresentationReminders,
+      presentationReminderLeadDays: config.presentationReminderLeadDays,
       limit: config.scheduledReminderLimit,
     });
     const cycleTotals = summarizeReminderCycle(cycle);
