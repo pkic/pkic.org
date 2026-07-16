@@ -69,7 +69,8 @@ export async function runPresentationReminders(
       starts_at: row.event_starts_at,
       settings_json: row.event_settings_json,
     };
-    const daysToDeadline = daysUntil(row.presentation_deadline);
+    const effectiveDeadline = row.presentation_deadline ?? row.event_starts_at;
+    const daysToDeadline = daysUntil(effectiveDeadline);
     const reminderNumber = Number(row.reminder_count ?? 0) + 1;
     presentationUploads.push({
       category: "presentation_upload_request",
@@ -80,7 +81,7 @@ export async function runPresentationReminders(
       recipientName: [row.first_name, row.last_name].filter(Boolean).join(" ") || null,
       proposalTitle: row.proposal_title,
       reminderNumber,
-      dueAt: row.presentation_deadline,
+      dueAt: effectiveDeadline,
       subject: presentationReminderSubject(event.name, reminderNumber, daysToDeadline),
     });
   }
@@ -114,7 +115,8 @@ export async function runPresentationReminders(
         starts_at: row.event_starts_at,
         settings_json: row.event_settings_json,
       };
-      const daysToDeadline = daysUntil(row.presentation_deadline);
+      const effectiveDeadline = row.presentation_deadline ?? row.event_starts_at;
+      const daysToDeadline = daysUntil(effectiveDeadline);
       const reminderNumber = Number(row.reminder_count ?? 0) + 1;
       const subject = presentationReminderSubject(event.name, reminderNumber, daysToDeadline);
       return {
@@ -132,7 +134,7 @@ export async function runPresentationReminders(
             event,
             presTokenByKey.get(presTokenKey(row.proposal_id, row.user_id))!,
           ),
-          deadline: row.presentation_deadline ?? "",
+          deadline: effectiveDeadline ?? "",
           isReminder: true,
           reminderCount: String(reminderNumber),
           daysUntilDeadline: daysToDeadline !== null ? String(daysToDeadline) : "",
