@@ -399,6 +399,27 @@ describe("runReminderCycle", () => {
     expect(outbox[0].template_key).toBe("presentation_upload_request");
   });
 
+  it("skips presentation reminder when the deadline is beyond the lead days window", async () => {
+    const userId = crypto.randomUUID();
+    const proposalId = crypto.randomUUID();
+    const speakerRowId = crypto.randomUUID();
+    await insertUser(userId, "speaker-far@example.test", "Sam", "Speaker");
+    await insertProposalAndSpeaker({
+      proposalId,
+      speakerId: speakerRowId,
+      userId,
+      eventId,
+      proposalStatus: "accepted",
+      speakerStatus: "confirmed",
+      speakerRole: "proposer",
+      presentationDeadline: new Date(Date.now() + 15 * 86_400_000).toISOString(), // 15 days out
+    });
+
+    const result = await runReminderCycle(db, { ...BASE_PAYLOAD, presentationReminderLeadDays: 10 });
+
+    expect(result.presentationRemindersQueued).toBe(0);
+  });
+
   it("skips presentation reminder when slide has already been uploaded", async () => {
     const userId = crypto.randomUUID();
     const proposalId = crypto.randomUUID();
