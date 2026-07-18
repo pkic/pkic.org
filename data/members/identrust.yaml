@@ -14,6 +14,7 @@ memberType: A
 workingGroups:
   - CA
   - CBOM
+  - PQC
 
 # sponsor
 sponsor:

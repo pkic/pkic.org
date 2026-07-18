@@ -12,6 +12,11 @@ description: Wells Fargo is a financial institution that operates its own privat
 memberSince: 2022-12-08
 memberType: H3
 workingGroups:
+  - CM
+  - CBOM
+  - PKIMM
+  - PQC
+  - TCWG
 
 # sponsor
 sponsor:
