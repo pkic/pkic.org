@@ -14,7 +14,9 @@ memberType: H2
 workingGroups:
 
 # sponsor
+# Started Platinum on 2026-07-17
 sponsor:
+  level: Platinum
   sponsoring:
     "Post-Quantum Cryptography Conference Kuala Lumpur 2025":
       level: Ambassador
