@@ -1,12 +1,12 @@
 id: persomagic
 name: Persomagic
-slogan:
+slogan: Security Beyond Sight
 website: https://www.persomagic.com
 # Business domains for email
 organizationDomains:
   - persomagic.com
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Delivering enterprise-grade smartcard personalization and printing services to government agencies and financial institutions requiring the highest security standards.
 
 # membership
 memberSince: 2026-07-07
@@ -23,29 +23,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
+  url:
   feed: https://persomagic.com/feed/
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -61,3 +61,6 @@ representatives:
 
 # Long-form content (markdown)
 content: |
+  Our mission is to empower global businesses through agile technological innovation and uncompromising integrity. By continuously advancing our expertise, we deliver solutions that drive our customer’s productivity, performance, and success on the world stage.
+
+  At persomagic, absolute precision cannot be an afterthought. We engineer uncompromising reliability directly into the architecture of every secure solution we create. Excellence is not a metric we test for at the end of the line – it is the foundational standard we build from.
