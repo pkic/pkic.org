@@ -6,7 +6,7 @@ website: https://www.tu-sofia.bg/
 organizationDomains:
   - tu-sofia.bg
 # Short description, longer content can be placed in `content/members/`
-description: 
+description: Rumen is the Assistant Professor, Researcher at Rumen Doynov.
 
 # membership
 memberSince: 2026-07-07
@@ -24,27 +24,27 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
+  x:
   facebook: https://www.facebook.com/technicaluniversitysofia/?fref=ts
-  instagram: 
+  instagram:
   linkedin: https://www.linkedin.com/in/rumen-doynov-2041851b3/
   youtube: https://www.youtube.com/channel/UCinqGTOodXErbBBW7v01H_A
 
@@ -58,7 +58,7 @@ representatives:
     social:
       x:
       linkedin: https://www.linkedin.com/in/rumen-doynov-2041851b3/
-    description: Rumen is the Assistant Professor, Researcher at Rumen Doynov and represents the organization at the PKI Consortium.
+    description:  I am a PhD researcher specializing in Cybersecurity and Threat Protection Systems, focusing on the research and development of algorithms to enhance security within industrial communication systems. My work bridges the gap between theoretical cryptographic standards and practical deployment in high-assurance and resource-constrained environments, with an emphasis on Post-Quantum Cryptography (PQC), hybrid trust architectures, and eIDAS 2.0 readiness.
 
 # Long-form content (markdown)
 content: |
