@@ -6,7 +6,7 @@ website: https://www.fidelity.com/
 organizationDomains:
   - fmr.com
 # Short description, longer content can be placed in `content/members/`
-description: 
+description:
 
 # membership
 memberSince: 2026-07-08
@@ -23,41 +23,41 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url: https://www.fidelity.com/news/overview
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url: https://jobs.fidelity.com/
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x: https://www.twitter.com/fidelity
+  facebook: https://www.facebook.com/fidelityinvestments
+  instagram: https://www.instagram.com/fidelityinvestments
+  linkedin: https://www.linkedin.com/company/fidelity-investments
+  youtube: https://www.youtube.com/user/fidelityinvestments
 
 # Here you can list those who represent or have represented the member.
 #
 # Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: VENKATESHAM PEDDI
-    role: DIRECTOR OF ENGINEERING, POST QUANTUM CRYPTOGRAPHY
+  - name: Venkatesham Peddi
+    role: irector of Engineering, Post Quantum Cryptography
     social:
       x:
       linkedin: https://www.linkedin.com/in/vpeddi/
-    description: VENKATESHAM is the DIRECTOR OF ENGINEERING, POST QUANTUM CRYPTOGRAPHY at Fidelity Investments and represents the organization at the PKI Consortium.
+    description: Venkatesham is the Director of Engineering, Post Quantum Cryptography at Fidelity Investments and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
