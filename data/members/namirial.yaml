@@ -1,0 +1,61 @@
+id: namirial
+name: Namirial S.P.A.
+slogan:
+website: https://www.namirial.com/en/
+# Business domains for email
+organizationDomains:
+  - namirial.com
+# Short description, longer content can be placed in `content/members/`
+description: Namirial is a global leader in Qualified Trust Services and Digital Transaction Management (DTM). Its solutions enable businesses, citizens, and public administrations to manage identities, signatures, and digital documents with full legal validity and cross-border compliance.
+
+# membership
+memberSince: 2026-07-14
+memberType: A
+workingGroups:
+  - CBOM
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://www.namirial.com/en/blog/
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url: https://www.namirial.com/en/events-and-news/
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url: https://www.namirial.com/en/people/jobs/
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/namirial/
+  youtube: https://www.youtube.com/@NamirialGroup
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Salvatore Migliaccio
+    role: R&D Engineer
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/salvatore-migliaccio-552194225/
+    description: Salvatore is the R&D Engineer at Namirial S.P.A. and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
