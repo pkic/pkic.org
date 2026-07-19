@@ -23,27 +23,27 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://twitter.com/MofEgypt
   facebook: https://www.facebook.com/MOF.Egypt
-  instagram: https://instagram.com/mofegypt?igshid=k40zpext9mir
+  instagram: https://instagram.com/mofegypt
   linkedin: https://www.linkedin.com/company/mof-egypt
   youtube: https://www.youtube.com/user/MofEgypt
 
