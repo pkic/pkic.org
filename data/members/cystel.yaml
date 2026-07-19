@@ -23,20 +23,20 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
   url: https://www.cystel.org/newsroom
-  feed: 
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
@@ -52,12 +52,12 @@ social:
 # Those who no longer represent an organization might have written blog posts,
 # to keep the attribution a from/till data range can be included.
 representatives:
-  - name: MEERA SARMA
+  - name: Meera Sarma
     role: CEO
     social:
       x:
       linkedin: https://www.linkedin.com/in/drmeerasarma
-    description: MEERA is the CEO at Cystel and represents the organization at the PKI Consortium.
+    description: Meera is the CEO at Cystel and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
