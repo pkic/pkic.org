@@ -5,6 +5,7 @@ website: https://mhaiss.gov.na
 # Business domains for email
 organizationDomains:
   - mha.gov.na
+  - mhaiss.gov.na
 # Short description, longer content can be placed in `content/members/`
 description: Ministry of Home Affairs, Immigration, Safety and Security
 
@@ -22,29 +23,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
   url: https://mhaiss.gov.na/media
-  feed: 
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
   x: https://twitter.com/MHAINamibia
   facebook: https://www.facebook.com/MHAINamibia
-  instagram: 
-  linkedin: 
-  youtube: 
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -52,11 +53,11 @@ social:
 # to keep the attribution a from/till data range can be included.
 representatives:
   - name: Daniel Nelumbu
-    role: Deputy Director: IT
+    role: "Deputy Director: IT"
     social:
       x:
       linkedin: https://www.linkedin.com/in/daniel-n-nelumbu-576354144/
-    description: Daniel is the Deputy Director: IT at Ministry of Home Affairs, Immigration, Safety and Security and represents the organization at the PKI Consortium.
+    description: "Daniel is the Deputy Director: IT at Ministry of Home Affairs, Immigration, Safety and Security and represents the organization at the PKI Consortium."
 
 # Long-form content (markdown)
 content: |
