@@ -1,0 +1,64 @@
+id: rumen-doynov
+name: Rumen Doynov
+slogan:
+website: https://www.tu-sofia.bg/
+# Business domains for email
+organizationDomains:
+  - tu-sofia.bg
+# Short description, longer content can be placed in `content/members/`
+description: Rumen is the Assistant Professor, Researcher at Rumen Doynov.
+
+# membership
+memberSince: 2026-07-07
+memberType: H5
+workingGroups:
+  - CBOM
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url:
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url:
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x:
+  facebook: https://www.facebook.com/technicaluniversitysofia/?fref=ts
+  instagram:
+  linkedin: https://www.linkedin.com/in/rumen-doynov-2041851b3/
+  youtube: https://www.youtube.com/channel/UCinqGTOodXErbBBW7v01H_A
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Rumen Doynov
+    role: Assistant Professor, Researcher
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/rumen-doynov-2041851b3/
+    description:  I am a PhD researcher specializing in Cybersecurity and Threat Protection Systems, focusing on the research and development of algorithms to enhance security within industrial communication systems. My work bridges the gap between theoretical cryptographic standards and practical deployment in high-assurance and resource-constrained environments, with an emphasis on Post-Quantum Cryptography (PQC), hybrid trust architectures, and eIDAS 2.0 readiness.
+
+# Long-form content (markdown)
+content: |
