@@ -12,7 +12,7 @@ description: An expert in industrial automation, industrial digitalization, cybe
 memberSince: 2026-07-14
 memberType: F
 workingGroups:
-
+  - PQC
 
 # sponsor
 sponsor:
@@ -21,24 +21,24 @@ sponsor:
 # Blog posts
 blog:
   url: https://www.insta.fi/en/news/
-  feed: 
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
   url: https://www.insta.fi/en/career/
-  feed: 
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
+  x:
   facebook: https://www.facebook.com/policy.php/
   instagram: https://www.instagram.com/instagroupoy/
   linkedin: https://www.linkedin.com/company/insta-group-oy
@@ -53,7 +53,7 @@ representatives:
     role: VP, Cyber Security
     social:
       x:
-      linkedin: www.linkedin.com/in/marko-hautakangas-81bab68
+      linkedin: https://www.linkedin.com/in/marko-hautakangas-81bab68
     description: Marko is the VP, Cyber Security at Insta Advance Oy and represents the organization at the PKI Consortium.
 
 # Long-form content (markdown)
