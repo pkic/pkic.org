@@ -62,7 +62,10 @@ export function getConfig(env: Env, request?: Request) {
     maxInviteReminders: parseIntOrDefault(env.MAX_INVITE_REMINDERS, 12),
     maxPendingConfirmationReminders: parseIntOrDefault(env.MAX_PENDING_CONFIRMATION_REMINDERS, 12),
     maxPresentationReminders: parseIntOrDefault(env.MAX_PRESENTATION_REMINDERS, 12),
-    presentationReminderLeadDays: Math.min(36500, Math.max(0, parseIntOrDefault(env.PRESENTATION_REMINDER_LEAD_DAYS, 60))),
+    presentationReminderLeadDays: Math.min(
+      36500,
+      Math.max(0, parseIntOrDefault(env.PRESENTATION_REMINDER_LEAD_DAYS, 60)),
+    ),
     scheduledReminderLimit: parseIntOrDefault(env.SCHEDULED_REMINDER_LIMIT, 120),
     scheduledOutboxLimit: parseIntOrDefault(env.SCHEDULED_OUTBOX_LIMIT, 120),
     scheduledWaitlistPromotionLimit: parseIntOrDefault(env.SCHEDULED_WAITLIST_PROMOTION_LIMIT, 120),

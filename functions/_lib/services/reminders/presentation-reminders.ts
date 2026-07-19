@@ -110,28 +110,30 @@ export async function runPresentationReminders(
       ),
     );
 
-    const emailRows = preparedRows.map(({ row, event, effectiveDeadline, daysToDeadline, reminderNumber, subject }) => ({
-      eventId: row.event_id,
-      recipientEmail: row.email,
-      recipientUserId: row.user_id,
-      templateKey: "presentation_upload_request",
-      subject,
-      data: {
-        ...buildEventEmailVariables(event, appBaseUrl),
-        firstName: row.first_name ?? "",
-        proposalTitle: row.proposal_title,
-        uploadUrl: speakerPresentationPageUrl(
-          appBaseUrl,
-          event,
-          presTokenByKey.get(presTokenKey(row.proposal_id, row.user_id))!,
-        ),
-        deadline: effectiveDeadline ?? "",
-        isReminder: true,
-        reminderCount: String(reminderNumber),
-        daysUntilDeadline: daysToDeadline !== null ? String(daysToDeadline) : "",
-        __subjectOverride: subject,
-      },
-    }));
+    const emailRows = preparedRows.map(
+      ({ row, event, effectiveDeadline, daysToDeadline, reminderNumber, subject }) => ({
+        eventId: row.event_id,
+        recipientEmail: row.email,
+        recipientUserId: row.user_id,
+        templateKey: "presentation_upload_request",
+        subject,
+        data: {
+          ...buildEventEmailVariables(event, appBaseUrl),
+          firstName: row.first_name ?? "",
+          proposalTitle: row.proposal_title,
+          uploadUrl: speakerPresentationPageUrl(
+            appBaseUrl,
+            event,
+            presTokenByKey.get(presTokenKey(row.proposal_id, row.user_id))!,
+          ),
+          deadline: effectiveDeadline ?? "",
+          isReminder: true,
+          reminderCount: String(reminderNumber),
+          daysUntilDeadline: daysToDeadline !== null ? String(daysToDeadline) : "",
+          __subjectOverride: subject,
+        },
+      }),
+    );
 
     await batchQueueEmailsAndUpdateState(
       db,
