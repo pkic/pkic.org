@@ -1,12 +1,11 @@
 id: stephanie-shinn
-name: 
+name:
 slogan:
 website: https://stephanie-shinn.com/
 # Business domains for email
 organizationDomains:
-  - outlook.com
 # Short description, longer content can be placed in `content/members/`
-description: Stephanie Shinn - IAM Engineer specializing in identity engineering, PKI, and quantum-safe PKI. IEEE-published researcher in post-quantum cryptography.
+description: IAM Engineer specializing in identity engineering, PKI, and quantum-safe PKI. IEEE-published researcher in post-quantum cryptography.
 
 # membership
 memberSince: 2026-07-07
@@ -20,29 +19,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
+  x:
+  facebook:
+  instagram:
   linkedin: https://www.linkedin.com/in/stephanie-s-shinn/
-  youtube: 
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
@@ -54,7 +53,7 @@ representatives:
     social:
       x:
       linkedin: https://www.linkedin.com/in/stephanie-s-shinn/
-    description: Stephanie is the Identity Access Management Engineer at  and represents the organization at the PKI Consortium.
+    description: Stephanie is the Identity Access Management Engineer and participates at the PKI Consortium.
 
 # Long-form content (markdown)
 content: |
