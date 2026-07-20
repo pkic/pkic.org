@@ -91,8 +91,9 @@ export async function onRequestPost(c: any): Promise<Response> {
   // submission. Origin isn't affected by any of that (browsers always set it
   // on POST requests and it can't be suppressed by page content), so it's a
   // safe fallback for validation. It is never used as the redirect target.
+  const allowLocalDev = isLocalDevRequest(c.env, request);
   const candidateOrigin = refererUrl?.origin ?? originHeader ?? "";
-  if (!candidateOrigin || !isAllowedOrigin(candidateOrigin, isLocalDevRequest(c.env, request))) {
+  if (!candidateOrigin || !isAllowedOrigin(candidateOrigin, allowLocalDev)) {
     return new Response("Invalid request", { status: 400 });
   }
 
@@ -110,11 +111,16 @@ export async function onRequestPost(c: any): Promise<Response> {
     if (isAppError(error) && error.code === "RATE_LIMITED") {
       return redirectWithStatus(redirectUrl, "error");
     }
-    // Binding not configured (e.g. local dev) or the rate-limiting service
-    // itself is unavailable — don't let that block a legitimate submission.
     logError("MEMBERSHIP_FORM_RATE_LIMIT_UNAVAILABLE", {
       error: error instanceof Error ? error.message : String(error),
     });
+    if (!allowLocalDev) {
+      // Binding not configured or the rate-limiting service itself is
+      // unavailable — fail closed outside local dev rather than allow
+      // unbounded GitHub issue creation.
+      return redirectWithStatus(redirectUrl, "error");
+    }
+    // Local dev: the binding usually isn't configured — don't block testing.
   }
 
   const contentType = (request.headers.get("content-type") ?? "").toLowerCase();

@@ -9,6 +9,7 @@ function makeEnv(overrides: Partial<Env> = {}): Env {
   return {
     DB: {} as Env["DB"],
     GITHUB_TOKEN: "test-github-token",
+    IP_RATE_LIMITER: createTestRateLimiter(100),
     ...overrides,
   };
 }
@@ -194,13 +195,24 @@ describe("POST /api/v1/forms", () => {
     expect(globalThis.fetch).not.toHaveBeenCalled();
   });
 
-  it("proceeds with the submission when the rate limiter binding is not configured", async () => {
-    const env = makeEnv(); // IP_RATE_LIMITER left undefined
+  it("fails closed when the rate limiter binding is not configured outside local dev", async () => {
+    const env = makeEnv({ APP_BASE_URL: "https://pkic.org", IP_RATE_LIMITER: undefined });
     const request = makeFormRequest("https://pkic.org/api/v1/forms", VALID_FIELDS, {
       referer: "https://pkic.org/join/",
     });
     const response = await onRequestPost(createContext(env, request, {}));
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe("https://pkic.org/join/?status=success");
+    expect(response.headers.get("location")).toBe("https://pkic.org/join/?status=error");
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+  });
+
+  it("proceeds with the submission when the rate limiter binding is not configured in local dev", async () => {
+    const env = makeEnv({ IP_RATE_LIMITER: undefined }); // no APP_BASE_URL, so the request itself resolves to localhost
+    const request = makeFormRequest("http://localhost:8788/api/v1/forms", VALID_FIELDS, {
+      referer: "http://localhost:1313/join/",
+    });
+    const response = await onRequestPost(createContext(env, request, {}));
+    expect(response.status).toBe(302);
+    expect(response.headers.get("location")).toBe("http://localhost:1313/join/?status=success");
   });
 });

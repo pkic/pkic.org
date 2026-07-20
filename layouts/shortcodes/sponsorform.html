@@ -1,4 +1,4 @@
-<form id="inputForm" action="/api/v1/forms" method="POST" class="row g-3 my-2 needs-validation" novalidate>
+<form id="inputForm" action="{{ partial "utils/api-endpoint.html" (dict "path" "/api/v1/forms") }}" method="POST" class="row g-3 my-2 needs-validation" novalidate>
     <div class="col-lg-6">
         <label for="firstName" class="form-label">First Name</label>
         <input type="text" class="form-control" id="firstName" name="First Name" required>

@@ -1,0 +1,15 @@
+{{/* Resolves a pkic.org Worker API path to a URL usable from Hugo-rendered
+     pages. In production the Worker serves both the static site and the API
+     from the same origin, so the relative path works as-is. Under `hugo
+     serve` (port 1313), the Worker instead runs separately on port 8788
+     (see functions/api/v1/forms.ts), so the path needs an absolute URL
+     pointing at that dev server.
+
+     path (string): the endpoint path, e.g. "/api/v1/forms".
+*/}}
+{{- $path := .path -}}
+{{- if hugo.IsServer -}}
+{{- printf "http://localhost:8788%s" $path -}}
+{{- else -}}
+{{- $path -}}
+{{- end -}}
