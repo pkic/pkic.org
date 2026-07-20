@@ -75,6 +75,7 @@
 {{- $isPkimm := eq ($wg.Params.wgID | upper) "PKIMM" -}}
 {{- $pkimmVersions := slice -}}
 {{- $pkimmCurrentBase := "" -}}
+{{- $pkimmCurrentVersion := "" -}}
 {{- if $isPkimm -}}
   {{- $data := index hugo.Data "pkimm-versions" -}}
   {{- if and $data $data.versions -}}
@@ -82,6 +83,7 @@
     {{- range $pkimmVersions -}}
       {{- if and (not $pkimmCurrentBase) (strings.HasPrefix $.Page.RelPermalink .path) -}}
         {{- $pkimmCurrentBase = .path -}}
+        {{- $pkimmCurrentVersion = .id -}}
       {{- end -}}
     {{- end -}}
   {{- end -}}
@@ -102,6 +104,7 @@
     {{/* Deliverables that live within this WG get individual nav links */}}
     {{- $hasDelivLink := false -}}
     {{- range $wg.Params.deliverables -}}
+      {{- if and .hideForVersions (in .hideForVersions $pkimmCurrentVersion) -}}{{- continue -}}{{- end -}}
       {{- $delURL := .url | default "" -}}
       {{- if and $isPkimm $pkimmCurrentBase $delURL -}}
         {{- range $pkimmVersions -}}
@@ -179,6 +182,7 @@
 </nav>
 {{/* Tree panels — one per deliverable section with child pages */}}
 {{- range $wg.Params.deliverables -}}
+  {{- if and .hideForVersions (in .hideForVersions $pkimmCurrentVersion) -}}{{- continue -}}{{- end -}}
   {{- $delURL := .url | default "" -}}
   {{- if and $isPkimm $pkimmCurrentBase $delURL -}}
     {{- range $pkimmVersions -}}
@@ -196,7 +200,11 @@
 <div class="wg-nav-tree-panel wg-{{ $wg.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
   {{ partial "wg/sidebar-tree.html" $treePage }}
   {{ if $isPkimm }}
+  {{- $delVersioned := false -}}
+  {{- range $pkimmVersions -}}{{- if strings.HasPrefix $delURL .path -}}{{- $delVersioned = true -}}{{- end -}}{{- end -}}
+  {{- if $delVersioned }}
   {{ partial "wg/pkimm-version-switcher.html" $.Page }}
+  {{- end }}
   {{ end }}
 </div>
     {{- end -}}

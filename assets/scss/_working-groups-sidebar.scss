@@ -350,7 +350,7 @@ $toggle-width: 1.4rem;
 // Panel positioned by JS via getBoundingClientRect
 .wg-nav-tree-panel {
   position: fixed;
-  z-index: 500;
+  z-index: 1035; // above embedded widgets (self-assessment sticky header z1000), below the site navbar (z1040)
   min-width: 260px;
   max-width: 320px;
   max-height: 70vh;

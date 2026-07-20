@@ -36,6 +36,9 @@ taxonomies:
 
 ignoreFiles:
   - AGENTS\.md$
+  - wg/pkimm/(extensions|integrations)/pkimm-model/
+  - wg/pkimm/(extensions|integrations)/scripts/
+  - wg/pkimm/(extensions|integrations)/\.github/
 
 build:
   noJSConfigInAssets: true
@@ -74,6 +77,10 @@ params:
       source: https://github.com/pkic/remote-key-attestation/edit/main
     - prefix: wg/pqc/pqccm/
       source: https://github.com/pkic/pqccm/edit/main
+    - prefix: wg/pkimm/extensions/
+      source: https://github.com/pkic/pkimm-extensions/edit/main
+    - prefix: wg/pkimm/integrations/
+      source: https://github.com/pkic/pkimm-integrations/edit/main
 
   social:
     x: https://x.com/PKIConsortium

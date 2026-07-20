@@ -14,7 +14,7 @@
 .wg-section-nav {
   position: sticky;
   top: var(--pkic-navbar-height); // just below the navbar
-  z-index: 200;
+  z-index: 1030; // above embedded widgets (e.g. self-assessment sticky header z1000), below the site navbar (z1040)
   background: #000;
   border-top: 3px solid var(--wg-color, #{$green}); // color bar always visible
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
