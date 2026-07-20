@@ -110,7 +110,7 @@ export async function submitMembershipForm(formData: FormData, env: Env): Promis
   if (subject !== SPONSOR_INTEREST_SUBJECT) {
     const emailDomain = emailDomainOf(email);
     if (emailDomain && !PUBLIC_EMAIL_DOMAINS.has(emailDomain)) {
-      const domainExists = await checkEmailDomainInIssues(emailDomain, githubToken);
+      const domainExists = await checkEmailDomainDuplicate(emailDomain, githubToken);
       if (domainExists) {
         labels.push(DUPLICATE_REVIEW_LABEL);
       }
@@ -149,6 +149,66 @@ function sanitizeForSearchQuery(value: string): string {
 }
 
 /**
+ * Checks whether this email domain already belongs to a member (an
+ * `organizationDomains` entry in a merged pkic/pkic.org profile, e.g.
+ * `data/members/beesight.yaml`) or a pending, non-excluded pkic/members
+ * issue. The YAML check runs first — it's the stronger signal (an approved
+ * member) and is cheap since it's a single code-search call. The issue
+ * search only runs when the YAML check comes back empty, catching
+ * applications for the same organization that are already in flight but
+ * haven't been approved (and so aren't in a merged YAML file) yet.
+ */
+async function checkEmailDomainDuplicate(emailDomain: string, githubToken: string): Promise<boolean> {
+  if (await checkEmailDomainInMemberYaml(emailDomain, githubToken)) {
+    return true;
+  }
+  return checkEmailDomainInIssues(emailDomain, githubToken);
+}
+
+/**
+ * Checks whether any merged member YAML file in pkic/pkic.org lists this
+ * email domain under `organizationDomains`, e.g.:
+ *   organizationDomains:
+ *     - beesight.nl
+ * This is a non-critical enhancement (it only adds a review label) layered
+ * on top of the GitHub Code Search API, which has a much lower rate limit
+ * than the REST API used for issue creation — so any failure here (rate
+ * limited, network error, unexpected response body) is swallowed and
+ * treated as "no match found" rather than blocking the form submission.
+ */
+async function checkEmailDomainInMemberYaml(emailDomain: string, githubToken: string): Promise<boolean> {
+  try {
+    const sanitizedDomain = sanitizeForSearchQuery(emailDomain);
+    if (!sanitizedDomain) {
+      return false;
+    }
+
+    const query = 'repo:pkic/pkic.org language:YAML "- ' + sanitizedDomain + '"';
+    const response = await fetch("https://api.github.com/search/code?q=" + encodeURIComponent(query), {
+      method: "GET",
+      headers: {
+        Accept: "application/vnd.github.v3+json",
+        "User-Agent": "pkic.org forms",
+        Authorization: "Bearer " + githubToken,
+      },
+    });
+
+    if (!response.ok) {
+      return false;
+    }
+
+    const result = (await response.json()) as { items?: unknown[] } | null;
+    return (result?.items?.length ?? 0) > 0;
+  } catch (error) {
+    logError("MEMBERSHIP_FORM_DOMAIN_CHECK_FAILED", {
+      source: "member_yaml",
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return false;
+  }
+}
+
+/**
  * Checks whether any non-excluded GitHub issue already mentions this email
  * domain. This is a non-critical enhancement (it only adds a review label)
  * layered on top of the GitHub Search API, which has a much lower rate
@@ -158,7 +218,12 @@ function sanitizeForSearchQuery(value: string): string {
  */
 async function checkEmailDomainInIssues(emailDomain: string, githubToken: string): Promise<boolean> {
   try {
-    const query = 'repo:pkic/members is:issue "' + sanitizeForSearchQuery(emailDomain) + '"';
+    const sanitizedDomain = sanitizeForSearchQuery(emailDomain);
+    if (!sanitizedDomain) {
+      return false;
+    }
+
+    const query = 'repo:pkic/members is:issue "' + sanitizedDomain + '"';
     const response = await fetch("https://api.github.com/search/issues?q=" + encodeURIComponent(query), {
       method: "GET",
       headers: {
@@ -199,7 +264,10 @@ async function checkEmailDomainInIssues(emailDomain: string, githubToken: string
 
     return false;
   } catch (error) {
-    logError("MEMBERSHIP_FORM_DOMAIN_CHECK_FAILED", { error: error instanceof Error ? error.message : String(error) });
+    logError("MEMBERSHIP_FORM_DOMAIN_CHECK_FAILED", {
+      source: "issues",
+      error: error instanceof Error ? error.message : String(error),
+    });
     return false;
   }
 }

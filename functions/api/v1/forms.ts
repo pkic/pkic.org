@@ -21,7 +21,9 @@ import { getClientIp } from "../../_lib/request";
 import { enforceRateLimit } from "../../_lib/rate-limit";
 import { isAppError } from "../../_lib/errors";
 import { logError } from "../../_lib/logging";
+import { resolveAppBaseUrl } from "../../_lib/config";
 import { submitMembershipForm, MembershipFormValidationError } from "../../_lib/services/membership-form-submission";
+import type { Env } from "../../_lib/types";
 
 const ALLOWED_ORIGINS = new Set([
   "https://pkic.org",
@@ -29,13 +31,26 @@ const ALLOWED_ORIGINS = new Set([
   // Default Cloudflare Pages production domain (apex — preview subdomains
   // are matched separately below).
   "https://pkic.pages.dev",
-  // Local dev — Hugo serves the form pages on 1313, this worker on 8788.
-  "http://localhost:8788",
-  "http://localhost:1313",
 ]);
 
-function isAllowedOrigin(origin: string): boolean {
+// Local dev — Hugo serves the form pages on 1313, this worker on 8788.
+// Only trusted when APP_BASE_URL (or the request itself, absent an
+// APP_BASE_URL override) resolves to localhost, so a forged
+// "http://localhost:8788" Origin/Referer can't bypass this check against the
+// production worker, where APP_BASE_URL is always pinned to a real domain.
+const LOCAL_DEV_ORIGINS = new Set(["http://localhost:8788", "http://localhost:1313"]);
+
+function isLocalDevRequest(env: Pick<Env, "APP_BASE_URL">, request: Request): boolean {
+  try {
+    return new URL(resolveAppBaseUrl(env, request)).hostname === "localhost";
+  } catch {
+    return false;
+  }
+}
+
+function isAllowedOrigin(origin: string, allowLocalDev: boolean): boolean {
   if (ALLOWED_ORIGINS.has(origin)) return true;
+  if (allowLocalDev && LOCAL_DEV_ORIGINS.has(origin)) return true;
   try {
     const { hostname, protocol } = new URL(origin);
     if (protocol !== "https:") return false;
@@ -77,7 +92,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   // on POST requests and it can't be suppressed by page content), so it's a
   // safe fallback for validation. It is never used as the redirect target.
   const candidateOrigin = refererUrl?.origin ?? originHeader ?? "";
-  if (!candidateOrigin || !isAllowedOrigin(candidateOrigin)) {
+  if (!candidateOrigin || !isAllowedOrigin(candidateOrigin, isLocalDevRequest(c.env, request))) {
     return new Response("Invalid request", { status: 400 });
   }
 
