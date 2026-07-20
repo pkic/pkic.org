@@ -13,3 +13,11 @@
 [submodule "content/pkimm-1.0.0"]
 	path = content/wg/pkimm/1.0.0
 	url = ../pkimm
+[submodule "content/wg/pkimm/extensions"]
+	path = content/wg/pkimm/extensions
+	url = ../pkimm-extensions
+	branch = main
+[submodule "content/wg/pkimm/integrations"]
+	path = content/wg/pkimm/integrations
+	url = ../pkimm-integrations
+	branch = main

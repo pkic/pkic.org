@@ -33,13 +33,13 @@ chair:
 keyDeliverables:
   - title: PKI Maturity Model
     description: A complete five-level framework for evaluating and benchmarking PKI implementations across all critical domains — from governance and risk management to cryptographic controls and certificate lifecycle.
-    url: /wg/pkimm/1.0.0/
+    url: /wg/pkimm/model/
     icon: pkimm-model
     cta: Explore the Model
     badge: Active
   - title: Online Quick Assessment
     description: Assess your organization's PKI maturity in minutes. The interactive self-assessment scores your PKI across all domains and provides an instant gap analysis with actionable recommendations — no login required.
-    url: /wg/pkimm/1.0.0/tools/self-assessment/
+    url: /wg/pkimm/assessment/
     icon: pkimm-assessment
     cta: Start Free Assessment
     badge: Free · No login required
@@ -51,10 +51,10 @@ card:
   description: "A globally recognized standard for evaluating, planning and comparing PKI implementations across every sector."
   links:
     - text: "Maturity Model"
-      url: "/wg/pkimm/1.0.0/"
+      url: "/wg/pkimm/model/"
       chip: primary
-    - text: "Assessment Tools"
-      url: "/wg/pkimm/1.0.0/tools/"
+    - text: "Self-Assessment"
+      url: "/wg/pkimm/assessment/"
       chip: secondary
     - text: "Blog Posts"
       url: "/tags/pkimm/"
@@ -95,15 +95,33 @@ deliverables:
   - title: PKI Maturity Model
     menuTitle: Model
     description: The foundational maturity model framework with defined levels, domains, and criteria.
-    url: /wg/pkimm/1.0.0/
+    url: /wg/pkimm/model/
     status: active
   - title: PKIMM Certification Program
     description: A formal assessment and certification program for organizations seeking recognized PKIMM validation.
     status: planned
+  - title: PKIMM Extensions
+    menuTitle: Extensions
+    description: Optional, pluggable extensions that add emphasis or additional criteria for a specific risk profile or industry context.
+    url: /wg/pkimm/extensions/
+    status: active
+    hideForVersions: ["1.0.0"]
+  - title: PKIMM Integrations
+    menuTitle: Integrations
+    description: Documentation and tools for integrating the PKI Maturity Model with third-party platforms.
+    url: /wg/pkimm/integrations/
+    status: active
+    hideForVersions: ["1.0.0"]
+  - title: PKIMM Self-Assessment
+    menuTitle: Assessment
+    description: Web-based self-assessment that scores PKI maturity across all domains with an instant gap analysis.
+    url: /wg/pkimm/assessment/
+    status: active
+    hideForVersions: ["1.0.0"]
 
 resources:
   - title: PKIMM Self-Assessment Tool
-    url: /wg/pkimm/1.0.0/tools/
+    url: /wg/pkimm/assessment/
     description: Use the interactive tool to assess your organization's PKI maturity level.
   - title: NIST Cybersecurity Framework
     url: https://www.nist.gov/cyberframework

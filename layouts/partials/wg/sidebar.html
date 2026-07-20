@@ -20,6 +20,11 @@
     {{- end -}}
   {{- end -}}
   {{- if and $wg (eq ($wg.Params.wgID | upper) "PKIMM") -}}
+  {{- $pv := index hugo.Data "pkimm-versions" -}}
+  {{- $onVersion := false -}}
+  {{- if and $pv $pv.versions -}}{{- range $pv.versions -}}{{- if strings.HasPrefix $.RelPermalink .path -}}{{- $onVersion = true -}}{{- end -}}{{- end -}}{{- end -}}
+  {{- if $onVersion -}}
   {{ partial "wg/pkimm-version-switcher.html" . }}
+  {{- end -}}
   {{- end -}}
 </nav>

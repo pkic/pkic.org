@@ -171,7 +171,11 @@
 <div class="wg-nav-tree-panel wg-{{ $.Page.Params.wgID | lower }}" id="wg-nav-tree-{{ $slug }}" hidden>
   {{ partial "wg/sidebar-tree.html" $delSection }}
   {{ if $isPkimm }}
+  {{- $delVersioned := false -}}
+  {{- range $pkimmVersions -}}{{- if strings.HasPrefix $delURL .path -}}{{- $delVersioned = true -}}{{- end -}}{{- end -}}
+  {{- if $delVersioned }}
   {{ partial "wg/pkimm-version-switcher.html" $.Page }}
+  {{- end }}
   {{ end }}
 </div>
     {{- end -}}
@@ -427,10 +431,15 @@
 </section>
 {{ end }}
 
-{{/* Sub-pages (charter, etc.) — excluding section sub-pages */}}
+{{/* Sub-pages (charter, etc.) — excluding standard sections and any page
+     already surfaced as a deliverable tab or version root, to avoid
+     duplicating those (and dumping their full page content) here. */}}
+{{- $knownURLs := slice -}}
+{{- range .Params.deliverables -}}{{- with .url -}}{{- $knownURLs = $knownURLs | append (strings.TrimSuffix "/" .) -}}{{- end -}}{{- end -}}
+{{- range $pkimmVersions -}}{{- $knownURLs = $knownURLs | append (strings.TrimSuffix "/" .path) -}}{{- end -}}
 {{ $otherSubPages := slice }}
 {{ range .Pages }}
-  {{ if not .Params.wgSection }}
+  {{ if and (not .Params.wgSection) (not (in $knownURLs (strings.TrimSuffix "/" .RelPermalink))) }}
     {{ $otherSubPages = $otherSubPages | append . }}
   {{ end }}
 {{ end }}

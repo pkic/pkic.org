@@ -6,6 +6,7 @@
 /feed/blog/ /feed/blog/index.xml 200
 /news/feed /news/feed/ 301
 /news/feed/ /news/feed/index.xml 200
+/wg/pkimm/model/tools/* /wg/pkimm/1.0.0/tools/:splat 301
 {{ range where .Site.Pages "Params.redirect" "!=" nil -}}
 {{- if hasPrefix (.Param "redirect") "/" | or (hasPrefix (.Param "redirect") "https://") | or (hasPrefix (.Param "redirect") "http://") -}}
 {{- printf "%s %s 301\n" .RelPermalink (.Param "redirect") -}}

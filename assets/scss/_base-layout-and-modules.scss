@@ -798,7 +798,7 @@ self-assessment {
   ); // navbar + wg-section-nav (44px)
 
   .pkimm-tabs {
-    z-index: 150 !important; // below wg-section-nav (200) so its dropdowns render on top
+    z-index: 150 !important; // below wg-section-nav (1030) so its dropdowns render on top
   }
 }
 
