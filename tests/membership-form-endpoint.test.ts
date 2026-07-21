@@ -19,9 +19,11 @@ const VALID_FIELDS = {
   Organization: "Acme Inc",
   "First Name": "Alice",
   "Last Name": "Example",
-  // Public domain so a valid submission never needs the duplicate-domain
-  // search calls — only the issue-creation POST that the fetch mock stubs.
-  Email: "alice@gmail.com",
+  // example.com is reserved for documentation/testing (RFC 2606). The
+  // duplicate-domain search calls this triggers are covered in detail by
+  // membership-form-submission.test.ts — here the fetch mock just resolves
+  // every GitHub call (domain search or issue creation) the same way.
+  Email: "alice@example.com",
 };
 
 function makeFormRequest(url: string, fields: Record<string, string>, headers: Record<string, string> = {}): Request {
@@ -36,7 +38,11 @@ function makeFormRequest(url: string, fields: Record<string, string>, headers: R
 }
 
 beforeEach(() => {
-  globalThis.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 201 }));
+  // Resolves every GitHub call the same way: 2xx with a JSON body, so the
+  // domain-search calls a non-public Email domain triggers see a clean "no
+  // match" (`items: []`) rather than an unparseable empty body, and issue
+  // creation sees a successful response.
+  globalThis.fetch = vi.fn().mockResolvedValue(new Response(JSON.stringify({ items: [] }), { status: 201 }));
 });
 
 afterEach(() => {
@@ -91,14 +97,14 @@ describe("POST /api/v1/forms", () => {
     expect(response.status).toBe(400);
   });
 
-  it("accepts localhost origins when the app itself resolves to localhost (local dev)", async () => {
+  it("accepts the localhost origin when the app itself resolves to localhost (local dev)", async () => {
     const env = makeEnv(); // no APP_BASE_URL configured
     const request = makeFormRequest("http://localhost:8788/api/v1/forms", VALID_FIELDS, {
-      referer: "http://localhost:1313/join/",
+      referer: "http://localhost:8788/join/",
     });
     const response = await onRequestPost(createContext(env, request, {}));
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe("http://localhost:1313/join/?status=success");
+    expect(response.headers.get("location")).toBe("http://localhost:8788/join/?status=success");
   });
 
   it("rejects a spoofed localhost Referer/Origin in production", async () => {
@@ -209,10 +215,10 @@ describe("POST /api/v1/forms", () => {
   it("proceeds with the submission when the rate limiter binding is not configured in local dev", async () => {
     const env = makeEnv({ IP_RATE_LIMITER: undefined }); // no APP_BASE_URL, so the request itself resolves to localhost
     const request = makeFormRequest("http://localhost:8788/api/v1/forms", VALID_FIELDS, {
-      referer: "http://localhost:1313/join/",
+      referer: "http://localhost:8788/join/",
     });
     const response = await onRequestPost(createContext(env, request, {}));
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe("http://localhost:1313/join/?status=success");
+    expect(response.headers.get("location")).toBe("http://localhost:8788/join/?status=success");
   });
 });

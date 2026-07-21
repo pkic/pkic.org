@@ -12,8 +12,9 @@ const VALID_FIELDS = {
   Organization: "Acme Inc",
   "First Name": "Alice",
   "Last Name": "Example",
-  // Non-public domain so the duplicate-domain check runs.
-  Email: "alice@acme.com",
+  // Non-public domain so the duplicate-domain check runs. example.com is
+  // reserved for documentation/testing (RFC 2606), so it's safe to use here.
+  Email: "alice@example.com",
 };
 
 function makeFormData(fields: Record<string, string>): FormData {
@@ -180,12 +181,12 @@ describe("submitMembershipForm", () => {
     const codeSearchCall = calls.find((c) => c.url.startsWith("https://api.github.com/search/code"));
     expect(codeSearchCall).toBeDefined();
     const q = new URL(codeSearchCall!.url).searchParams.get("q");
-    expect(q).toBe('repo:pkic/pkic.org language:YAML "- acme.com"');
+    expect(q).toBe('repo:pkic/pkic.org language:YAML "- example.com"');
   });
 
   it("adds the duplicate-review label and skips the issue search when the YAML search finds a match", async () => {
     const { fn, calls } = makeFetchMock({
-      codeSearch: () => new Response(JSON.stringify({ items: [{ name: "acme.yaml" }] }), { status: 200 }),
+      codeSearch: () => new Response(JSON.stringify({ items: [{ name: "example.yaml" }] }), { status: 200 }),
     });
     globalThis.fetch = fn;
     const env = makeEnv();
@@ -207,7 +208,7 @@ describe("submitMembershipForm", () => {
       codeSearch: () => new Response(JSON.stringify({ items: [] }), { status: 200 }),
       issueSearch: () =>
         new Response(
-          JSON.stringify({ items: [{ number: 1, state: "open", body: "contact: person@acme.com", labels: [] }] }),
+          JSON.stringify({ items: [{ number: 1, state: "open", body: "contact: person@example.com", labels: [] }] }),
           { status: 200 },
         ),
     });
@@ -269,11 +270,11 @@ describe("submitMembershipForm", () => {
     globalThis.fetch = fn;
     const env = makeEnv();
 
-    await submitMembershipForm(makeFormData({ ...VALID_FIELDS, Email: 'alice@a"c\\me.com' }), env);
+    await submitMembershipForm(makeFormData({ ...VALID_FIELDS, Email: 'alice@ex"am\\ple.com' }), env);
 
     const codeSearchCall = calls.find((c) => c.url.startsWith("https://api.github.com/search/code"))!;
     const q = new URL(codeSearchCall.url).searchParams.get("q");
-    expect(q).toBe('repo:pkic/pkic.org language:YAML "- acme.com"');
+    expect(q).toBe('repo:pkic/pkic.org language:YAML "- example.com"');
   });
 
   it("skips both domain searches entirely when sanitization empties the domain", async () => {
@@ -299,7 +300,7 @@ describe("submitMembershipForm", () => {
       issueSearch: () =>
         new Response(
           JSON.stringify({
-            items: [{ number: 1, state: "open", body: "contact: person@acme.com", labels: [{ name: "Rejected" }] }],
+            items: [{ number: 1, state: "open", body: "contact: person@example.com", labels: [{ name: "Rejected" }] }],
           }),
           { status: 200 },
         ),
@@ -319,7 +320,9 @@ describe("submitMembershipForm", () => {
       codeSearch: () => new Response(JSON.stringify({ items: [] }), { status: 200 }),
       issueSearch: () =>
         new Response(
-          JSON.stringify({ items: [{ number: 1, state: "open", body: "contact: person@acme.com.au", labels: [] }] }),
+          JSON.stringify({
+            items: [{ number: 1, state: "open", body: "contact: person@example.com.test", labels: [] }],
+          }),
           { status: 200 },
         ),
     });

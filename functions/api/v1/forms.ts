@@ -33,12 +33,14 @@ const ALLOWED_ORIGINS = new Set([
   "https://pkic.pages.dev",
 ]);
 
-// Local dev — Hugo serves the form pages on 1313, this worker on 8788.
-// Only trusted when APP_BASE_URL (or the request itself, absent an
-// APP_BASE_URL override) resolves to localhost, so a forged
-// "http://localhost:8788" Origin/Referer can't bypass this check against the
-// production worker, where APP_BASE_URL is always pinned to a real domain.
-const LOCAL_DEV_ORIGINS = new Set(["http://localhost:8788", "http://localhost:1313"]);
+// Local dev — `npm run dev` (Vite) builds Hugo into `public/` and serves it
+// alongside the Worker API on the same origin, http://localhost:8788, so
+// this is the only local origin the form pages ever actually run on. Only
+// trusted when APP_BASE_URL (or the request itself, absent an APP_BASE_URL
+// override) resolves to localhost, so a forged "http://localhost:8788"
+// Origin/Referer can't bypass this check against the production worker,
+// where APP_BASE_URL is always pinned to a real domain.
+const LOCAL_DEV_ORIGIN = "http://localhost:8788";
 
 function isLocalDevRequest(env: Pick<Env, "APP_BASE_URL">, request: Request): boolean {
   try {
@@ -50,7 +52,7 @@ function isLocalDevRequest(env: Pick<Env, "APP_BASE_URL">, request: Request): bo
 
 function isAllowedOrigin(origin: string, allowLocalDev: boolean): boolean {
   if (ALLOWED_ORIGINS.has(origin)) return true;
-  if (allowLocalDev && LOCAL_DEV_ORIGINS.has(origin)) return true;
+  if (allowLocalDev && origin === LOCAL_DEV_ORIGIN) return true;
   try {
     const { hostname, protocol } = new URL(origin);
     if (protocol !== "https:") return false;
