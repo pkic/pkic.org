@@ -1,16 +1,25 @@
 id: consultingexperts
+
 name: ConsultingExperts B.V.
-slogan:
+
+slogan: QUANTUM SAFE, PQC AND A CRYPTO-AGILE STRATEGY
+
 website: https://www.consultingexperts.nl
+
 # Business domains for email
 organizationDomains:
   - consultingexperts.nl
-# Short description, longer content can be placed in `content/members/`
-description: 
+
+# Short description
+description: >
+  ConsultingExperts B.V. is a Dutch ICT consultancy and professional services company that has been connecting highly skilled IT professionals with organizations since 2010.
+  The company delivers consultancy, project services, managed expertise, and Quantum Safe security advisory services for enterprises, government organizations, and public sector clients.
+  As an IBM Business Partner, ConsultingExperts helps organizations prepare for the transition to Post-Quantum Cryptography (PQC) through crypto-agility assessments, cryptographic discovery, risk analysis, and Quantum Safe transformation programs.
 
 # membership
 memberSince: 2026-07-14
 memberType: H2
+
 workingGroups:
   - PKIMM
   - PQC
@@ -22,41 +31,69 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
+  url: https://www.consultingexperts.nl
   feed: https://www.consultingexperts.nl/feed/
-  language: en_US
+  language: nl_NL
 
 # Press Releases
 press:
-  url: 
-  feed: 
-  language: en_US
+  url:
+  feed:
+  language: nl_NL
 
 # Careers
 careers:
-  url: 
-  feed: 
-  language: en_US
+  url: https://www.consultingexperts.nl/vacatures/
+  feed:
+  language: nl_NL
 
 # Social media
 social:
-  x: 
-  facebook: 
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram: https://www.instagram.com/consultingexpertsbv/
+  linkedin: https://www.linkedin.com/company/consultingexperts
+  youtube:
 
-# Here you can list those who represent or have represented the member.
-#
-# Those who no longer represent an organization might have written blog posts,
-# to keep the attribution a from/till data range can be included.
+# Representatives
 representatives:
   - name: Frank Egberts
     role: CEO
     social:
       x:
       linkedin: https://www.linkedin.com/in/fegberts/
-    description: Frank is the CEO at ConsultingExperts B.V. and represents the organization at the PKI Consortium.
+    description: >
+      Frank Egberts is the CEO of ConsultingExperts B.V. He is responsible for the company's strategic direction, consultancy services, and Quantum Safe initiatives.
+	  Frank represents ConsultingExperts within the PKI Consortium and actively promotes awareness, readiness, and adoption of Post-Quantum Cryptography and crypto-agility programs.
 
 # Long-form content (markdown)
 content: |
+  ## About ConsultingExperts
+
+  ConsultingExperts B.V. is a Netherlands-based ICT consultancy and professional services firm headquartered at the High Tech Campus in Eindhoven. Since 2010, the company has been helping
+  organizations find and deploy highly qualified IT specialists for complex projects, consultancy assignments, and digital transformation initiatives.
+
+  The company provides expertise across infrastructure, cloud, security, architecture, project management, and specialized consultancy services. Consultants support clients with project
+  planning, implementation, training, workshops, technical problem resolution, and strategic advice.
+
+  ## Quantum Safe & Cryptographic Modernization
+
+  As an IBM Business Partner, ConsultingExperts has developed a strong focus on Quantum Safe security and crypto-agility. The company helps organizations understand and prepare for the
+  risks that quantum computing introduces to current cryptographic systems.
+
+  Services include:
+
+  - Cryptographic discovery and inventory
+  - Quantum risk assessments
+  - Crypto-agility strategy development
+  - Post-Quantum Cryptography (PQC) readiness programs
+  - IBM Quantum Safe consultancy
+  - IBM Guardium consultancy and implementation
+  - Compliance and governance support
+
+  ConsultingExperts works with organizations to build practical roadmaps towards quantum-safe security while maintaining operational continuity and regulatory compliance.
+
+  ## Mission
+
+  ConsultingExperts believes that people are the key to success. The organization focuses on learning, innovation, collaboration, craftsmanship, and continuous improvement. Through a
+  combination of technical expertise, personal engagement, and a pragmatic approach, ConsultingExperts helps clients achieve sustainable business outcomes and technological excellence.
