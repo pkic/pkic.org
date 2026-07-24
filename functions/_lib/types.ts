@@ -124,6 +124,8 @@ export interface Env {
    * Typically: contact@pkic.org
    */
   DONATION_NOTIFICATION_EMAIL?: string;
+  /** GitHub personal access token (repo scope) used to file membership/sponsor form submissions as issues in pkic/members. */
+  GITHUB_TOKEN?: string;
 }
 
 export interface PagesContext<P extends Record<string, string> = Record<string, string>> {
