@@ -1,0 +1,64 @@
+id: axidian
+name: Axidian
+slogan: 
+website: https://axidian.com/
+# Business domains for email
+organizationDomains:
+  - axidian.com
+# Short description, longer content can be placed in `content/members/`
+description: Axidian is a global identity security software vendor providing authentication, access management, privileged access management, certificate lifecycle management, and identity threat detection and response solutions.
+
+# membership
+memberSince: 2022-03-17
+memberType: F
+workingGroups:
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language:
+
+# Press Releases
+press:
+  url:
+  feed:
+  language:
+
+# Careers
+careers:
+  url:
+  feed:
+  language:
+
+# Social media
+social:
+  x: https://x.com/AxidianTech
+  facebook:
+  instagram:
+  linkedin: https://www.linkedin.com/company/axidian/
+  youtube: https://www.youtube.com/channel/UCfHu_7-Y50qt6YIRkjUktTA
+
+# Long-form content
+content: |
+  ## About Axidian
+
+  Axidian is an identity security software vendor with its corporate center in Dubai, UAE, and branches in Lithuania and Singapore.
+
+  ## Product portfolio
+
+  [Axidian Access](https://axidian.com/axidian-access/) provides centralized identity and authentication management, multi-factor authentication, Enterprise Single Sign-On, Web Single Sign-On, and mobile authentication.
+
+  [Axidian Privilege](https://axidian.com/axidian-privilege/) is a privileged access management platform for controlling privileged accounts, managing credentials, monitoring access to corporate resources, and recording privileged user sessions.
+
+  [Axidian CertiFlow](https://axidian.com/axidian-certiflow/) provides centralized management of digital certificates and PKI tokens. It supports certificate lifecycle operations, smart card management, PKI monitoring, user self-service, and automation of certificate issuance, renewal, and revocation.
+
+  [Axidian Shield](https://axidian.com/axidian-shield/) monitors user and service account activity to identify and respond to identity-related attacks.
+
+  ## Industries and presence
+
+  Axidian works with organizations in finance, telecommunications, manufacturing, retail, government, and transportation.
