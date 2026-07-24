@@ -18,3 +18,19 @@ FEEDBACK_IDENTITY_SECRET_V1=replace-with-strong-random-value
 # SENDGRID_API_KEY=replace-with-sendgrid-api-key
 # FROM_EMAIL=noreply@pkic.org
 # FROM_NAME=PKI Consortium
+
+# Optional — only needed to test the join-membership/sponsor-interest forms
+# locally (functions/_lib/services/membership-form-submission.ts). Without
+# it, submitting either form throws immediately ("GITHUB_TOKEN is not
+# configured") since there's no other path for the submission to land
+# anywhere. It authorizes three GitHub API calls per submission:
+#   1. Creates the issue in pkic/members that the application is tracked
+#      and reviewed through.
+#   2. Searches pkic/pkic.org's merged member YAML profiles
+#      (data/members/*.yaml) for the applicant's email domain, to flag
+#      likely-duplicate organizations that are already members.
+#   3. Falls back to searching open pkic/members issues for the same
+#      domain, to catch a pending application that hasn't been merged yet.
+# Needs read/write access to issues in pkic/members and read access to
+# pkic/pkic.org.
+# GITHUB_TOKEN=replace-with-github-token
