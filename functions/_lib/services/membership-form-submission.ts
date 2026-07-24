@@ -169,7 +169,8 @@ async function checkEmailDomainDuplicate(emailDomain: string, githubToken: strin
  * Checks whether any merged member YAML file in pkic/pkic.org lists this
  * email domain under `organizationDomains`, e.g.:
  *   organizationDomains:
- *     - beesight.nl
+ *     - example.com
+ *     - pkic.org
  * This is a non-critical enhancement (it only adds a review label) layered
  * on top of the GitHub Code Search API, which has a much lower rate limit
  * than the REST API used for issue creation — so any failure here (rate

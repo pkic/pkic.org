@@ -69,29 +69,24 @@ describe("POST /api/v1/forms", () => {
     expect(response.status).toBe(400);
   });
 
-  it("accepts a *.pkic.pages.dev preview origin", async () => {
-    const env = makeEnv();
-    const request = makeFormRequest("https://pkic.org/api/v1/forms", VALID_FIELDS, {
-      referer: "https://abc123.pkic.pages.dev/join/",
+  it("accepts a preview origin that exactly matches the deployment's own APP_BASE_URL", async () => {
+    // Branch-preview deploys get their own APP_BASE_URL patched in at build
+    // time (see vite.config.ts) — each instance only trusts its own origin.
+    const env = makeEnv({ APP_BASE_URL: "https://my-branch-pkic-org.pkic.workers.dev" });
+    const request = makeFormRequest("https://my-branch-pkic-org.pkic.workers.dev/api/v1/forms", VALID_FIELDS, {
+      referer: "https://my-branch-pkic-org.pkic.workers.dev/join/",
     });
     const response = await onRequestPost(createContext(env, request, {}));
     expect(response.status).toBe(302);
-    expect(response.headers.get("location")).toBe("https://abc123.pkic.pages.dev/join/?status=success");
+    expect(response.headers.get("location")).toBe("https://my-branch-pkic-org.pkic.workers.dev/join/?status=success");
   });
 
-  it("accepts a *.pkic.workers.dev preview origin", async () => {
-    const env = makeEnv();
-    const request = makeFormRequest("https://pkic.org/api/v1/forms", VALID_FIELDS, {
-      referer: "https://8f547e2a-pkic-org.pkic.workers.dev/join/",
-    });
-    const response = await onRequestPost(createContext(env, request, {}));
-    expect(response.status).toBe(302);
-  });
-
-  it("rejects a preview-domain lookalike served over http", async () => {
-    const env = makeEnv();
-    const request = makeFormRequest("https://pkic.org/api/v1/forms", VALID_FIELDS, {
-      referer: "http://abc123.pkic.pages.dev/join/",
+  it("rejects a different preview origin than the one configured in APP_BASE_URL", async () => {
+    // No wildcard trust across sibling preview deploys — only the exact
+    // configured origin is trusted.
+    const env = makeEnv({ APP_BASE_URL: "https://my-branch-pkic-org.pkic.workers.dev" });
+    const request = makeFormRequest("https://my-branch-pkic-org.pkic.workers.dev/api/v1/forms", VALID_FIELDS, {
+      referer: "https://other-branch-pkic-org.pkic.workers.dev/join/",
     });
     const response = await onRequestPost(createContext(env, request, {}));
     expect(response.status).toBe(400);

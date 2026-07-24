@@ -12,10 +12,13 @@
  * the browser navigates on submit, so the response here is always a
  * redirect back to the referring page with ?status=success or
  * ?status=error, never a JSON error body. The Referer (falling back to
- * Origin if Referer was stripped) is validated against ALLOWED_ORIGINS
- * before it's ever used as a redirect target, so this can't be abused as
- * an open redirect, and requests with neither a recognized Referer nor
- * Origin are rejected outright.
+ * Origin if Referer was stripped) must match APP_BASE_URL — the same value
+ * every other endpoint treats as this deployment's own canonical origin
+ * (production, preview, and branch-preview deploys each get their own
+ * APP_BASE_URL; local dev falls back to the request's own origin, see
+ * resolveAppBaseUrl) — before it's ever used as a redirect target, so this
+ * can't be abused as an open redirect, and requests with neither a
+ * recognized Referer nor Origin are rejected outright.
  */
 import { getClientIp } from "../../_lib/request";
 import { enforceRateLimit } from "../../_lib/rate-limit";
@@ -23,49 +26,6 @@ import { isAppError } from "../../_lib/errors";
 import { logError } from "../../_lib/logging";
 import { resolveAppBaseUrl } from "../../_lib/config";
 import { submitMembershipForm, MembershipFormValidationError } from "../../_lib/services/membership-form-submission";
-import type { Env } from "../../_lib/types";
-
-const ALLOWED_ORIGINS = new Set([
-  "https://pkic.org",
-  "https://www.pkic.org",
-  // Default Cloudflare Pages production domain (apex — preview subdomains
-  // are matched separately below).
-  "https://pkic.pages.dev",
-]);
-
-// Local dev — `npm run dev` (Vite) builds Hugo into `public/` and serves it
-// alongside the Worker API on the same origin, http://localhost:8788, so
-// this is the only local origin the form pages ever actually run on. Only
-// trusted when APP_BASE_URL (or the request itself, absent an APP_BASE_URL
-// override) resolves to localhost, so a forged "http://localhost:8788"
-// Origin/Referer can't bypass this check against the production worker,
-// where APP_BASE_URL is always pinned to a real domain.
-const LOCAL_DEV_ORIGIN = "http://localhost:8788";
-
-function isLocalDevRequest(env: Pick<Env, "APP_BASE_URL">, request: Request): boolean {
-  try {
-    return new URL(resolveAppBaseUrl(env, request)).hostname === "localhost";
-  } catch {
-    return false;
-  }
-}
-
-function isAllowedOrigin(origin: string, allowLocalDev: boolean): boolean {
-  if (ALLOWED_ORIGINS.has(origin)) return true;
-  if (allowLocalDev && origin === LOCAL_DEV_ORIGIN) return true;
-  try {
-    const { hostname, protocol } = new URL(origin);
-    if (protocol !== "https:") return false;
-    // *.pkic.pages.dev — Cloudflare Pages preview deploys.
-    // *.pkic.workers.dev — Cloudflare Workers preview/dev URLs (this project
-    // deploys as a Worker with workers_dev/preview_urls enabled, so every
-    // test-branch deploy gets a URL on this domain, e.g.
-    // 8f547e2a-pkic-org.pkic.workers.dev).
-    return /^[a-z0-9-]+\.pkic\.pages\.dev$/.test(hostname) || /^[a-z0-9-]+\.pkic\.workers\.dev$/.test(hostname);
-  } catch {
-    return false;
-  }
-}
 
 function redirectWithStatus(refererUrl: URL, status: "success" | "error"): Response {
   const target = new URL(refererUrl);
@@ -93,9 +53,17 @@ export async function onRequestPost(c: any): Promise<Response> {
   // submission. Origin isn't affected by any of that (browsers always set it
   // on POST requests and it can't be suppressed by page content), so it's a
   // safe fallback for validation. It is never used as the redirect target.
-  const allowLocalDev = isLocalDevRequest(c.env, request);
+  let trustedOrigin: string;
+  try {
+    trustedOrigin = resolveAppBaseUrl(c.env, request);
+  } catch (error) {
+    logError("MEMBERSHIP_FORM_APP_BASE_URL_MISSING", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+    return new Response("Invalid request", { status: 400 });
+  }
   const candidateOrigin = refererUrl?.origin ?? originHeader ?? "";
-  if (!candidateOrigin || !isAllowedOrigin(candidateOrigin, allowLocalDev)) {
+  if (!candidateOrigin || candidateOrigin !== trustedOrigin) {
     return new Response("Invalid request", { status: 400 });
   }
 
@@ -116,7 +84,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     logError("MEMBERSHIP_FORM_RATE_LIMIT_UNAVAILABLE", {
       error: error instanceof Error ? error.message : String(error),
     });
-    if (!allowLocalDev) {
+    if (new URL(trustedOrigin).hostname !== "localhost") {
       // Binding not configured or the rate-limiting service itself is
       // unavailable — fail closed outside local dev rather than allow
       // unbounded GitHub issue creation.

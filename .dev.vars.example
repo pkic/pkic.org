@@ -1,9 +1,12 @@
 # Copy this file to `.dev.vars` for local `wrangler pages dev`.
 # `.dev.vars` is gitignored.
 
-# Required whenever code runs without an incoming request URL (email outbox,
-# background jobs, local scripts). In local dev this should stay on localhost.
-# APP_BASE_URL=http://localhost:8788
+# Required. This deployment's own canonical origin — used whenever code runs
+# without an incoming request URL (email outbox, background jobs, local
+# scripts), and to validate the Referer/Origin on form submissions
+# (functions/api/v1/forms.ts) instead of inferring "local dev" from a
+# fallback. Keep this on localhost for local dev.
+APP_BASE_URL=http://localhost:8788
 
 # Required for HMAC signing of internal tokens and hashed identifiers.
 INTERNAL_SIGNING_SECRET=replace-with-strong-random-value
