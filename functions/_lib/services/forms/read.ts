@@ -31,7 +31,7 @@ interface FormFieldRow {
   sort_order: number;
 }
 
-export type FormPurpose = "event_registration" | "proposal_submission";
+export type FormPurpose = "event_registration" | "proposal_submission" | "application";
 
 export interface FormFieldDefinition {
   id: string;
@@ -111,6 +111,49 @@ export async function getActiveFormByPurpose(
   if (!form) {
     return null;
   }
+
+  const fields = await all<FormFieldRow>(
+    db,
+    `SELECT id, key, label, field_type, required, options_json, validation_json, sort_order
+     FROM form_fields
+     WHERE form_id = ?
+     ORDER BY sort_order ASC, key ASC`,
+    [form.id],
+  );
+
+  return {
+    id: form.id,
+    key: form.key,
+    scopeType: form.scope_type,
+    scopeRef: form.scope_ref,
+    purpose: form.purpose,
+    title: form.title,
+    description: form.description,
+    fields: fields.map((entry) => ({
+      id: entry.id,
+      key: entry.key,
+      label: entry.label,
+      fieldType: entry.field_type,
+      required: entry.required === 1,
+      options: parseJsonSafe<JsonValue | null>(entry.options_json, null),
+      validation: parseJsonSafe<JsonValue | null>(entry.validation_json, null),
+      sortOrder: entry.sort_order,
+    })),
+  };
+}
+
+/**
+ * Resolves the active global (non-event-scoped) form for a given `forms.key`
+ * — used by forms like the membership application (§1.4) that aren't tied
+ * to an event, so the `findActiveForm` event-scoping logic above doesn't apply.
+ */
+export async function getGlobalFormByKey(db: DatabaseLike, key: string): Promise<ActiveFormDefinition | null> {
+  const form = await first<FormRow>(
+    db,
+    `SELECT * FROM forms WHERE status = 'active' AND scope_type = 'global' AND key = ? LIMIT 1`,
+    [key],
+  );
+  if (!form) return null;
 
   const fields = await all<FormFieldRow>(
     db,

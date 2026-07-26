@@ -126,6 +126,13 @@ export interface Env {
   DONATION_NOTIFICATION_EMAIL?: string;
   /** GitHub personal access token (repo scope) used to file membership/sponsor form submissions as issues in pkic/members. */
   GITHUB_TOKEN?: string;
+  /**
+   * Recipient for the sponsorship-new-inquiry staff notification email.
+   * Defaults to sponsorships@pkic.org when unset.
+   */
+  SPONSORSHIP_NOTIFICATION_EMAIL?: string;
+  /** Configurable brochure PDF link attached to the sponsorship-brochure email (PRD §1.3). */
+  SPONSORSHIP_BROCHURE_URL?: string;
 }
 
 export interface PagesContext<P extends Record<string, string> = Record<string, string>> {

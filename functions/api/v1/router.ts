@@ -11,10 +11,13 @@ import events_Router from "./events/router";
 import headshots_Router from "./headshots/router";
 import internal_Router from "./internal/router";
 import invites_Router from "./invites/router";
+import members_Router from "./members/router";
 import og_Router from "./og/router";
 import proposals_Router from "./proposals/router";
 import registrations_Router from "./registrations/router";
+import sponsorship_Router from "./sponsorship/router";
 import webhooks_Router from "./webhooks/router";
+import workingGroups_Router from "./working-groups/router";
 
 const app = new Hono();
 export const openapi = fromHono(app);
@@ -36,9 +39,12 @@ openapi.route("/events", events_Router);
 openapi.route("/headshots", headshots_Router);
 openapi.route("/internal", internal_Router);
 openapi.route("/invites", invites_Router);
+openapi.route("/members", members_Router);
 openapi.route("/og", og_Router);
 openapi.route("/proposals", proposals_Router);
 openapi.route("/registrations", registrations_Router);
+openapi.route("/sponsorship", sponsorship_Router);
 openapi.route("/webhooks", webhooks_Router);
+openapi.route("/working-groups", workingGroups_Router);
 
 export default openapi;
