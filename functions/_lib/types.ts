@@ -163,11 +163,29 @@ export interface JsonObject {
 
 export type JsonArray = JsonValue[];
 
+/**
+ * A single contextual permission (PRD §2.1) — e.g. "events:manage" scoped to
+ * one event's UUID, or "working-groups:write" scoped to one WG's UUID.
+ * `contextType`/`contextId` are both null for a global (unscoped) grant.
+ */
+export interface PermissionGrant {
+  permission: string;
+  contextType: string | null;
+  contextId: string | null;
+}
+
 export interface AuthAdmin {
   id: string;
   email: string;
   role: string;
   scopes?: string[];
+  /**
+   * Phase 2 (PRD §2.1) contextual permissions, resolved from `user_roles` +
+   * `permission_grants` on every authenticated request (see
+   * functions/_lib/auth/permissions.ts). Populated only for requests that
+   * went through requireAdminFromRequest's session/API-key path.
+   */
+  grants?: PermissionGrant[];
   sessionId?: string;
   expiresAt?: string;
   state?: string | null;

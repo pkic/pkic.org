@@ -20,6 +20,7 @@ import { onRequestGet as AdminEventsGet_l } from "./events";
 import { onRequestPost as AdminEventsPost_l } from "./events";
 import { onRequestGet as AdminStatsGet_l } from "./stats";
 import { onRequestGet as AdminUsersGet_l } from "./users";
+import access_grants_Router from "./access-grants/router";
 import auth_Router from "./auth/router";
 import donations_Router from "./donations/router";
 import email_Router from "./email/router";
@@ -27,6 +28,7 @@ import email_templates_Router from "./email-templates/router";
 import events_Router from "./events/router";
 import forms_Router from "./forms/router";
 import proposals_Router from "./proposals/router";
+import roles_Router from "./roles/router";
 import users_Router from "./users/router";
 
 const app = new Hono<RequestDbContext>();
@@ -50,13 +52,42 @@ function isAdminAuthPath(path: string): boolean {
   return normalizedAdminPath(path).startsWith("/api/v1/admin/auth/");
 }
 
+/**
+ * `/admin/events/**` and `/admin/proposals/**` are gated by the Phase 2
+ * (PRD §2) context-aware permission system instead of this legacy global
+ * scope system — see requireEventManagementAccess
+ * (events/[eventSlug]/router.ts), getProposalAccessForEvent
+ * (_lib/auth/proposal-access.ts), and the per-handler requirePermission
+ * calls (e.g. events/[eventSlug]/permissions.ts). Applying the legacy
+ * `events:read` inference here as well would 403 every Phase 2 non-admin
+ * role (event_organizer, program_committee) before they ever reach that
+ * check, since only role='admin' actors carry a non-empty legacy `scopes`
+ * array under the Phase 2 model (see functions/_lib/auth/admin.ts). This is
+ * a no-op for role='admin' actors either way — their full legacy scopes
+ * array always satisfied this check trivially.
+ */
+function isPhase2PermissionGatedAdminPath(path: string): boolean {
+  return (
+    path.startsWith("/api/v1/admin/events") ||
+    path.startsWith("/api/v1/admin/proposals") ||
+    path.startsWith("/api/v1/admin/access-grants") ||
+    path.startsWith("/api/v1/admin/roles") ||
+    /^\/api\/v1\/admin\/users\/[^/]+\/roles/.test(path)
+  );
+}
+
 function enforceAdminScopes(c: Context<RequestDbContext>): void {
   const admin = getCachedAdminForRequest(c.req.raw);
   if (!admin) {
     return;
   }
 
-  for (const scope of inferredScopesForOperation(normalizedAdminPath(c.req.path), c.req.method.toLowerCase())) {
+  const path = normalizedAdminPath(c.req.path);
+  if (isPhase2PermissionGatedAdminPath(path)) {
+    return;
+  }
+
+  for (const scope of inferredScopesForOperation(path, c.req.method.toLowerCase())) {
     requireAuthScope(admin, scope);
   }
 }
@@ -128,6 +159,7 @@ app.get("/events", AdminEventsGet_l);
 app.post("/events", AdminEventsPost_l);
 app.get("/stats", AdminStatsGet_l);
 app.get("/users", AdminUsersGet_l);
+openapi.route("/access-grants", access_grants_Router);
 openapi.route("/auth", auth_Router);
 openapi.route("/donations", donations_Router);
 openapi.route("/email", email_Router);
@@ -135,6 +167,7 @@ openapi.route("/email-templates", email_templates_Router);
 openapi.route("/events", events_Router);
 openapi.route("/forms", forms_Router);
 openapi.route("/proposals", proposals_Router);
+openapi.route("/roles", roles_Router);
 openapi.route("/users", users_Router);
 
 export default openapi;

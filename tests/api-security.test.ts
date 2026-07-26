@@ -119,6 +119,9 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
   const inviteId = crypto.randomUUID();
   const permId = crypto.randomUUID();
   const proposalId = crypto.randomUUID();
+  const grantId = crypto.randomUUID();
+  const roleId = crypto.randomUUID();
+  const userRoleId = crypto.randomUUID();
   const formKey = "test-form";
   const templateKey = "transactional";
   const reviewId = crypto.randomUUID();
@@ -343,6 +346,28 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     [
       "GET /api/v1/admin/proposals/:proposalId/speakers",
       () => callApp(anonGet(`https://app.test/api/v1/admin/proposals/${proposalId}/speakers`)),
+    ],
+    // ── Phase 2 (PRD §2) access control endpoints ────────────────────────────
+    ["GET /api/v1/admin/access-grants", () => callApp(anonGet("https://app.test/api/v1/admin/access-grants"))],
+    ["POST /api/v1/admin/access-grants", () => callApp(anonPost("https://app.test/api/v1/admin/access-grants"))],
+    [
+      "DELETE /api/v1/admin/access-grants/:id",
+      () => callApp(anonDelete(`https://app.test/api/v1/admin/access-grants/${grantId}`)),
+    ],
+    ["GET /api/v1/admin/roles", () => callApp(anonGet("https://app.test/api/v1/admin/roles"))],
+    ["POST /api/v1/admin/roles", () => callApp(anonPost("https://app.test/api/v1/admin/roles"))],
+    ["DELETE /api/v1/admin/roles/:id", () => callApp(anonDelete(`https://app.test/api/v1/admin/roles/${roleId}`))],
+    [
+      "GET /api/v1/admin/users/:userId/roles",
+      () => callApp(anonGet(`https://app.test/api/v1/admin/users/${userId}/roles`)),
+    ],
+    [
+      "POST /api/v1/admin/users/:userId/roles",
+      () => callApp(anonPost(`https://app.test/api/v1/admin/users/${userId}/roles`)),
+    ],
+    [
+      "DELETE /api/v1/admin/users/:userId/roles/:userRoleId",
+      () => callApp(anonDelete(`https://app.test/api/v1/admin/users/${userId}/roles/${userRoleId}`)),
     ],
   ];
 
