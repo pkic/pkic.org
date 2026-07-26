@@ -99,6 +99,13 @@ export const NAV_ITEMS: NavItem[] = [
   { path: "/duework", sec: "duework", label: "Due Work", icon: "duework" },
   { path: "/stats", sec: "stats", label: "Stats", icon: "stats" },
   { path: "/donations", sec: "donations", label: "Donations", icon: "donations" },
+  {
+    path: "/membership",
+    sec: "membership",
+    label: "Membership",
+    icon: "users",
+    children: [{ path: "/membership/members", sec: "membership-members", label: "Members", icon: "users" }],
+  },
   { path: "/users", sec: "users", label: "Users", icon: "users" },
   { path: "/auditlog", sec: "auditlog", label: "Audit Log", icon: "auditlog" },
 ];
@@ -176,14 +183,17 @@ function NavLink({ item, activeSec }: { item: NavItem; activeSec: string }) {
   );
 }
 
+function activeSectionFor(location: string): string {
+  if (location === "/" || location === "") return "dashboard";
+  const top = location.replace(/^\//, "").split("/")[0];
+  if (top === "email" && location.includes("/templates")) return "templates";
+  if (top === "membership" && location.includes("/members")) return "membership-members";
+  return top;
+}
+
 export function Sidebar() {
   const [location] = useHashLocation();
-  const activeSec =
-    location === "/" || location === ""
-      ? "dashboard"
-      : location.replace(/^\//, "").split("/")[0] === "email" && location.includes("/templates")
-        ? "templates"
-        : location.replace(/^\//, "").split("/")[0];
+  const activeSec = activeSectionFor(location);
 
   return (
     <aside id="admin-sidebar" class="p-2">
