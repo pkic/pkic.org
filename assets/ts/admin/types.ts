@@ -575,3 +575,17 @@ export interface EventStatsResponse {
     actionsTaken: Record<string, number>;
   };
 }
+
+// PRD §6 Interim Admin Tool — GET/POST /api/v1/admin/members
+export interface AdminMemberSummary {
+  id: string;
+  userId: string;
+  organizationId: string | null;
+  organizationName: string | null;
+  name: string;
+  email: string;
+  membershipCategory: string;
+  status: string;
+  showOnOrgProfile: boolean;
+  createdAt: string;
+}

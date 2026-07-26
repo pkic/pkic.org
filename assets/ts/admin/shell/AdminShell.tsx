@@ -12,6 +12,7 @@ import { Email } from "../sections/Email";
 import { DueWork } from "../sections/DueWork";
 import { Templates } from "../sections/Templates";
 import { Users } from "../sections/Users";
+import { Members } from "../sections/Members";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
@@ -193,6 +194,22 @@ export function AdminShell() {
               component={() => (
                 <SectionWrapper title="Users">
                   <Users />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/membership"
+              component={() => (
+                <SectionWrapper title="Membership">
+                  <Members />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/membership/members"
+              component={() => (
+                <SectionWrapper title="Membership — Members">
+                  <Members />
                 </SectionWrapper>
               )}
             />
