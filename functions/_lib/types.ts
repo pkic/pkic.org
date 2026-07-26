@@ -126,6 +126,19 @@ export interface Env {
   DONATION_NOTIFICATION_EMAIL?: string;
   /** GitHub personal access token (repo scope) used to file membership/sponsor form submissions as issues in pkic/members. */
   GITHUB_TOKEN?: string;
+  /**
+   * Recipient for the sponsorship-new-inquiry staff notification email.
+   * Defaults to sponsorships@pkic.org when unset.
+   */
+  SPONSORSHIP_NOTIFICATION_EMAIL?: string;
+  /** Configurable brochure PDF link attached to the sponsorship-brochure email (PRD §1.3). */
+  SPONSORSHIP_BROCHURE_URL?: string;
+  /** WebAuthn Relying Party ID (bare domain, e.g. "pkic.org") — PRD §3. */
+  WEBAUTHN_RP_ID?: string;
+  /** WebAuthn Relying Party display name shown in browser passkey prompts — PRD §3. */
+  WEBAUTHN_RP_NAME?: string;
+  /** WebAuthn expected origin (scheme + host, e.g. "https://pkic.org") — PRD §3. */
+  WEBAUTHN_ORIGIN?: string;
 }
 
 export interface PagesContext<P extends Record<string, string> = Record<string, string>> {
@@ -156,11 +169,29 @@ export interface JsonObject {
 
 export type JsonArray = JsonValue[];
 
+/**
+ * A single contextual permission (PRD §2.1) — e.g. "events:manage" scoped to
+ * one event's UUID, or "working-groups:write" scoped to one WG's UUID.
+ * `contextType`/`contextId` are both null for a global (unscoped) grant.
+ */
+export interface PermissionGrant {
+  permission: string;
+  contextType: string | null;
+  contextId: string | null;
+}
+
 export interface AuthAdmin {
   id: string;
   email: string;
   role: string;
   scopes?: string[];
+  /**
+   * Phase 2 (PRD §2.1) contextual permissions, resolved from `user_roles` +
+   * `permission_grants` on every authenticated request (see
+   * functions/_lib/auth/permissions.ts). Populated only for requests that
+   * went through requireAdminFromRequest's session/API-key path.
+   */
+  grants?: PermissionGrant[];
   sessionId?: string;
   expiresAt?: string;
   state?: string | null;

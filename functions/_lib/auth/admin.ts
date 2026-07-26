@@ -6,7 +6,37 @@ import { randomToken, sha256Hex } from "../utils/crypto";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
 import { uuid } from "../utils/ids";
 import { AUTH_SCOPES } from "./scopes";
+import { computeGrantsForUser } from "./permissions";
 import type { AuthAdmin, DatabaseLike, Env } from "../types";
+
+/**
+ * Who may sign in through the admin auth flow (magic link / session).
+ *
+ * Historically this was `role = 'admin'` only — the legacy flat admin flag.
+ * Phase 2 (PRD §2) introduces non-admin staff roles (membership_processor,
+ * wg_chair, event_organizer, program_committee) that must also be able to
+ * log in, scoped to whatever `user_roles`/`permission_grants` they hold.
+ * `role='admin'` remains a valid path (§0.4 — the column is retained,
+ * non-authoritative, backfilled into `user_roles` at migration time), OR'd
+ * with "has at least one active (non-expired, non-revoked) grant" so a
+ * membership processor with zero admin-only-route access can still obtain a
+ * session and be authorized per-permission on Phase 2 endpoints.
+ */
+const STAFF_ACCESS_CONDITION = `(
+  u.role = 'admin'
+  OR EXISTS (
+    SELECT 1 FROM user_roles ur
+    WHERE (ur.user_id = u.id OR (ur.user_id IS NULL AND ur.user_email = u.normalized_email))
+      AND ur.revoked_at IS NULL
+      AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )
+  OR EXISTS (
+    SELECT 1 FROM permission_grants pg
+    WHERE pg.user_id = u.id
+      AND pg.revoked_at IS NULL
+      AND (pg.expires_at IS NULL OR pg.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  )
+)`;
 
 interface AdminUserRow {
   id: string;
@@ -247,13 +277,63 @@ export async function revokeAdminSession(db: DatabaseLike, sessionId: string): P
   await run(db, "UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?", [nowIso(), sessionId]);
 }
 
+/**
+ * True if `userId` is currently eligible to hold a session at all — the same
+ * STAFF_ACCESS_CONDITION gate `requestAdminMagicLink`/`verifyAdminMagicLink`
+ * apply. Used by the Phase 3 (PRD §3) passkey authentication flow to
+ * re-check eligibility at login time rather than trusting that it still
+ * holds just because a passkey was registered in the past (registration
+ * itself requires an already-authenticated, already-eligible actor — see
+ * register/begin's use of requireAdminFromRequest).
+ */
+export async function findEligibleStaffUserById(db: DatabaseLike, userId: string): Promise<AdminUserRow | null> {
+  return first<AdminUserRow>(
+    db,
+    `SELECT id, email, role, active FROM users u WHERE u.id = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
+    [userId],
+  );
+}
+
+/**
+ * Creates a `sessions` row for an already-verified user and returns the same
+ * shape `verifyAdminMagicLink` does, so any login entry point (magic link,
+ * passkey) can share one session-issuance path.
+ */
+export async function issueAdminSession(
+  db: DatabaseLike,
+  user: Pick<AdminUserRow, "id" | "email" | "role">,
+  sessionTtlHours: number,
+): Promise<{ admin: AuthAdmin; sessionId: string; expiresAt: string }> {
+  const sessionId = uuid();
+  const sessionHash = await sha256Hex(randomToken(24));
+  const expiresAt = addHours(nowIso(), sessionTtlHours);
+
+  await run(
+    db,
+    `INSERT INTO sessions (id, user_id, token_hash, expires_at, revoked_at, created_at)
+     VALUES (?, ?, ?, ?, NULL, ?)`,
+    [sessionId, user.id, sessionHash, expiresAt, nowIso()],
+  );
+
+  return {
+    admin: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      scopes: user.role === "admin" ? [...AUTH_SCOPES] : [],
+    },
+    sessionId,
+    expiresAt,
+  };
+}
+
 export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSessionTokenClaims): Promise<AuthAdmin> {
   const row = await first<AdminSessionRow>(
     db,
     `SELECT s.id, s.user_id, s.expires_at, s.revoked_at, u.email, u.role
      FROM sessions s
      JOIN users u ON u.id = s.user_id
-     WHERE s.id = ? AND s.user_id = ? AND u.active = 1 AND u.role = 'admin'`,
+     WHERE s.id = ? AND s.user_id = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
     [claims.sid, claims.sub],
   );
 
@@ -269,11 +349,14 @@ export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSes
     throw new AppError(401, "AUTH_EXPIRED", "Admin session expired");
   }
 
+  const grants = await computeGrantsForUser(db, row.user_id, row.email);
+
   return {
     id: row.user_id,
     email: row.email,
     role: row.role,
     scopes: claims.scopes,
+    grants,
     sessionId: row.id,
     expiresAt: row.expires_at,
     state: claims.state ?? null,
@@ -292,7 +375,7 @@ export async function requestAdminMagicLink(
   const email = normalizeEmail(payload.email);
   const admin = await first<AdminUserRow>(
     db,
-    "SELECT id, email, role, active FROM users WHERE normalized_email = ? AND active = 1 AND role = 'admin'",
+    `SELECT id, email, role, active FROM users u WHERE normalized_email = ? AND active = 1 AND ${STAFF_ACCESS_CONDITION}`,
     [email],
   );
 
@@ -349,7 +432,7 @@ export async function verifyAdminMagicLink(
     `SELECT m.id, m.user_id, m.expires_at, m.used_at, m.request_ip_hash, m.user_agent_hash, u.email, u.role
      FROM auth_magic_links m
      JOIN users u ON u.id = m.user_id
-     WHERE m.token_hash = ? AND u.active = 1 AND u.role = 'admin'`,
+     WHERE m.token_hash = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
     [tokenHash],
   );
 
@@ -383,25 +466,11 @@ export async function verifyAdminMagicLink(
     throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
   }
 
-  const sessionId = uuid();
-  const sessionHash = await sha256Hex(randomToken(24));
-  const expiresAt = addHours(nowIso(), payload.sessionTtlHours);
-
-  await run(
-    db,
-    `INSERT INTO sessions (id, user_id, token_hash, expires_at, revoked_at, created_at)
-     VALUES (?, ?, ?, ?, NULL, ?)`,
-    [sessionId, row.user_id, sessionHash, expiresAt, nowIso()],
-  );
-
-  return {
-    admin: {
-      id: row.user_id,
-      email: row.email,
-      role: row.role,
-      scopes: [...AUTH_SCOPES],
-    },
-    sessionId,
-    expiresAt,
-  };
+  // Legacy AUTH_SCOPES only apply to role='admin' — a Phase 2 staff role
+  // (membership_processor, wg_chair, event_organizer, program_committee)
+  // authorizes purely through `grants`, computed fresh from
+  // user_roles/permission_grants on every request (see
+  // getAdminBySessionClaims), not baked into this token. issueAdminSession
+  // applies that same rule.
+  return issueAdminSession(db, { id: row.user_id, email: row.email, role: row.role }, payload.sessionTtlHours);
 }

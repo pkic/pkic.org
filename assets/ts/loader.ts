@@ -30,6 +30,9 @@ const modules: Record<string, () => Promise<unknown>> = {
   "event-flows/speaker-manage-page": () => import("./event-flows/speaker-manage-page"),
   "event-flows/speaker-presentation-page": () => import("./event-flows/speaker-presentation-page"),
   "modules/photo-grid": () => import("./modules/photo-grid"),
+  "member-flows/join-form": () => import("./member-flows/join-form"),
+  "member-flows/application-status-page": () => import("./member-flows/application-status-page"),
+  "member-flows/sponsor-form": () => import("./member-flows/sponsor-form"),
   "shared/donation-form": () => import("./shared/donation/form"),
   "shared/donation-thank-you": () => import("./shared/donation/thank-you"),
 };

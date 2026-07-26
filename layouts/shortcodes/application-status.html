@@ -1,0 +1,24 @@
+<div data-application-status data-module="member-flows/application-status-page" data-api-base="/api/v1">
+  <div data-flow-status class="alert visually-hidden" role="alert" aria-live="polite"></div>
+
+  <div data-lookup-form>
+    <p class="form-text">
+      Enter the application ID and token from your confirmation email to check your application's status.
+    </p>
+    <div class="row g-2 align-items-end mb-2">
+      <div class="col-12 col-sm-6">
+        <label class="form-label" for="lookup-application-id">Application ID</label>
+        <input id="lookup-application-id" type="text" class="form-control" data-lookup-id />
+      </div>
+      <div class="col-12 col-sm-6">
+        <label class="form-label" for="lookup-token">Token</label>
+        <input id="lookup-token" type="text" class="form-control" data-lookup-token />
+      </div>
+    </div>
+    <button type="button" class="btn btn-primary" data-lookup-submit>Check status</button>
+  </div>
+
+  <div data-status-result class="d-none">
+    <p class="form-text">Loading your application…</p>
+  </div>
+</div>

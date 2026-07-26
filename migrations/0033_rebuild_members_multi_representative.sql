@@ -42,9 +42,20 @@ CREATE TABLE members_new (
 -- Existing single-row-per-org data migrates cleanly: the one existing
 -- members row per organization becomes that organization's primary
 -- contact row.
+--
+-- Legacy organization-type rows have user_id IS NULL by the old table's
+-- own CHECK constraint (member_type='organization' required user_id NULL)
+-- -- there is no representative to carry forward, and nothing elsewhere
+-- in the schema (users.organization_name, the YAML representatives
+-- lists) reliably links back to a specific users.id, so there is no safe
+-- way to backfill one. Such rows are excluded rather than migrated with
+-- a guessed or synthetic user_id. As of this migration, production has
+-- no members rows at all (member records aren't created by any code path
+-- yet), so this exclusion is a safety net, not an active data loss.
 INSERT INTO members_new (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at)
 SELECT id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at
-FROM members;
+FROM members
+WHERE user_id IS NOT NULL;
 
 DROP TABLE members;
 

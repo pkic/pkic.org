@@ -1,0 +1,261 @@
+/**
+ * permission-grants.test.ts
+ *
+ * PRD §2.3 `permission_grants` — Phase 2 (§2, §10.4's tests/permission-grants.test.ts).
+ */
+import { describe, expect, it, beforeEach } from "vitest";
+import { env } from "cloudflare:workers";
+import app from "../functions/router";
+import { resetDb } from "./helpers/reset-db";
+import { createAdminSession } from "./helpers/auth";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { hasPermission } from "../functions/_lib/auth/permissions";
+import type { AuthAdmin } from "../functions/_lib/types";
+
+function request(token: string, path: string, init: RequestInit = {}): Request {
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${token}`);
+  if (init.body && !headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
+  return new Request(`https://app.test${path}`, { ...init, headers });
+}
+
+async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
+  return app.fetch(
+    request(token, path, init),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function insertUser(email: string): Promise<string> {
+  const id = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+  )
+    .bind(id, email, email)
+    .run();
+  return id;
+}
+
+async function insertEvent(slug: string): Promise<string> {
+  const id = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO events (id, slug, name, timezone, source_path, capacity_in_person, registration_mode, invite_limit_attendee, settings_json, created_at, updated_at)
+     VALUES (?, ?, ?, 'UTC', NULL, 1, 'invite_or_open', 5, '{}', datetime('now'), datetime('now'))`,
+  )
+    .bind(id, slug, slug)
+    .run();
+  return id;
+}
+
+describe("permission_grants (Phase 2 access grants)", () => {
+  let adminToken: string;
+  let adminId: string;
+  let eventAId: string;
+  let eventASlug: string;
+  let staffUserId: string;
+
+  beforeEach(async () => {
+    await resetDb();
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    eventAId = eventId;
+    eventASlug = "pqc-2026";
+    const adminRow = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
+    adminId = adminRow.id;
+    adminToken = await createAdminSession(env.DB, adminId, "admin-grants-token");
+    staffUserId = await insertUser("staff@example.test");
+  });
+
+  it("POST /api/v1/admin/access-grants creates a grant with context and expiry", async () => {
+    const expiresAt = new Date(Date.now() + 3600_000).toISOString();
+    const response = await call(adminToken, "/api/v1/admin/access-grants", {
+      method: "POST",
+      body: JSON.stringify({
+        userId: staffUserId,
+        permission: "events:write",
+        contextType: "event",
+        contextId: eventAId,
+        expiresAt,
+      }),
+    });
+
+    expect(response.status).toBe(201);
+    const payload = (await response.json()) as { grant: { id: string; permission: string; contextId: string } };
+    expect(payload.grant.permission).toBe("events:write");
+    expect(payload.grant.contextId).toBe(eventAId);
+
+    const rows = await queryAll<{ id: string; expires_at: string }>(
+      env.DB,
+      "SELECT id, expires_at FROM permission_grants WHERE id = ?",
+      payload.grant.id,
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].expires_at).toBe(expiresAt);
+  });
+
+  it("expired grants are not honored", async () => {
+    const staffToken = await createAdminSession(env.DB, staffUserId, "staff-expired-token");
+    // Baseline unrelated grant keeps the user eligible for a session even
+    // once the grant under test has expired — see STAFF_ACCESS_CONDITION.
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'donations:read', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffUserId, adminId)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, context_type, context_id, granted_by_user_id, expires_at, created_at)
+       VALUES (?, ?, 'events:read', 'event', ?, ?, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffUserId, eventAId, adminId, new Date(Date.now() - 60_000).toISOString())
+      .run();
+
+    const response = await call(staffToken, `/api/v1/admin/events/${eventASlug}`);
+    expect(response.status).toBe(403);
+  });
+
+  it("revoked grants are not honored", async () => {
+    const staffToken = await createAdminSession(env.DB, staffUserId, "staff-revoked-token");
+    // A separate, still-active grant keeps the user eligible to obtain a
+    // session at all (see STAFF_ACCESS_CONDITION in _lib/auth/admin.ts) —
+    // isolates the assertion to "this specific revoked grant doesn't
+    // authorize", not "a user with zero active grants can't log in".
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'donations:read', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffUserId, adminId)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, context_type, context_id, granted_by_user_id, revoked_at, created_at)
+       VALUES (?, ?, 'events:read', 'event', ?, ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffUserId, eventAId, adminId)
+      .run();
+
+    const response = await call(staffToken, `/api/v1/admin/events/${eventASlug}`);
+    expect(response.status).toBe(403);
+  });
+
+  it("a context-scoped grant does not authorize access to a different event", async () => {
+    const eventBId = await insertEvent("cbom-2027");
+    const staffToken = await createAdminSession(env.DB, staffUserId, "staff-context-token");
+
+    const grantResponse = await call(adminToken, "/api/v1/admin/access-grants", {
+      method: "POST",
+      body: JSON.stringify({
+        userId: staffUserId,
+        permission: "events:read",
+        contextType: "event",
+        contextId: eventAId,
+      }),
+    });
+    expect(grantResponse.status).toBe(201);
+
+    const okResponse = await call(staffToken, `/api/v1/admin/events/${eventASlug}`);
+    expect(okResponse.status).toBe(200);
+
+    const deniedResponse = await call(staffToken, `/api/v1/admin/events/cbom-2027`);
+    expect(deniedResponse.status).toBe(403);
+    void eventBId;
+  });
+
+  it("a WG chair grant scoped to one working group does not grant write access to another", () => {
+    // No working-group-scoped admin endpoint exists yet (working group
+    // self-service/management is Phase 4A, not yet built), so this
+    // exercises the same hasPermission() function real endpoints call,
+    // directly — see functions/_lib/auth/permissions.ts.
+    const actor: AuthAdmin = {
+      id: "wg-chair-user",
+      email: "chair@example.test",
+      role: "user",
+      grants: [{ permission: "working-groups:write", contextType: "working_group", contextId: "wg-pqc" }],
+    };
+
+    expect(hasPermission(actor, "working-groups:write", { type: "working_group", id: "wg-pqc" })).toBe(true);
+    expect(hasPermission(actor, "working-groups:write", { type: "working_group", id: "wg-cbom" })).toBe(false);
+  });
+
+  it("DELETE /api/v1/admin/access-grants/:id sets revoked_at and writes to audit_log", async () => {
+    const createResponse = await call(adminToken, "/api/v1/admin/access-grants", {
+      method: "POST",
+      body: JSON.stringify({ userId: staffUserId, permission: "donations:read" }),
+    });
+    const created = (await createResponse.json()) as { grant: { id: string } };
+
+    const deleteResponse = await call(adminToken, `/api/v1/admin/access-grants/${created.grant.id}`, {
+      method: "DELETE",
+    });
+    expect(deleteResponse.status).toBe(200);
+
+    const rows = await queryAll<{ revoked_at: string | null }>(
+      env.DB,
+      "SELECT revoked_at FROM permission_grants WHERE id = ?",
+      created.grant.id,
+    );
+    expect(rows[0].revoked_at).not.toBeNull();
+
+    const auditRows = await queryAll<{ action: string }>(
+      env.DB,
+      "SELECT action FROM audit_log WHERE action = 'access_grant_revoked' AND entity_id = ?",
+      created.grant.id,
+    );
+    expect(auditRows).toHaveLength(1);
+  });
+
+  it("only a user with access:grant can create a grant, and only access:revoke can revoke one", async () => {
+    const staffToken = await createAdminSession(env.DB, staffUserId, "staff-perm-token");
+    // Baseline unrelated grant keeps the user eligible for a session even
+    // before they hold any access:* permission — see STAFF_ACCESS_CONDITION.
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'audit:read', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffUserId, adminId)
+      .run();
+
+    const deniedCreate = await call(staffToken, "/api/v1/admin/access-grants", {
+      method: "POST",
+      body: JSON.stringify({ userId: staffUserId, permission: "donations:read" }),
+    });
+    expect(deniedCreate.status).toBe(403);
+
+    // Give staff only access:grant — create should now succeed.
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'access:grant', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffUserId, adminId)
+      .run();
+
+    const createResponse = await call(staffToken, "/api/v1/admin/access-grants", {
+      method: "POST",
+      body: JSON.stringify({ userId: staffUserId, permission: "donations:read" }),
+    });
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()) as { grant: { id: string } };
+
+    // access:grant alone must not authorize revocation.
+    const deniedRevoke = await call(staffToken, `/api/v1/admin/access-grants/${created.grant.id}`, {
+      method: "DELETE",
+    });
+    expect(deniedRevoke.status).toBe(403);
+
+    await env.DB.prepare(
+      `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+       VALUES (?, ?, 'access:revoke', ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffUserId, adminId)
+      .run();
+
+    const allowedRevoke = await call(staffToken, `/api/v1/admin/access-grants/${created.grant.id}`, {
+      method: "DELETE",
+    });
+    expect(allowedRevoke.status).toBe(200);
+  });
+});

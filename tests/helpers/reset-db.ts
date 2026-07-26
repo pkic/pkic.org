@@ -4,7 +4,14 @@ interface TableNameRow {
   name: string;
 }
 
-const EXCLUDED_TABLES = new Set(["d1_migrations"]);
+// `roles` / `role_permissions` are Phase 2 (PRD §2) system reference data —
+// built-in roles "ship with the portal" and are seeded once by migration
+// 0035, not per-test business data (unlike e.g. `working_groups`, which
+// tests already re-seed themselves when they need it). Wiping them on every
+// resetDb() would break the FK from `user_roles.role_id` for any test that
+// grants a built-in role (e.g. via POST .../events/:slug/permissions)
+// without every such test re-inserting all nine built-in roles itself.
+const EXCLUDED_TABLES = new Set(["d1_migrations", "roles", "role_permissions"]);
 
 async function listResettableTables(): Promise<string[]> {
   const { results } = await env.DB.prepare(

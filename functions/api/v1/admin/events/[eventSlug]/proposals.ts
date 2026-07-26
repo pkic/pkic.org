@@ -1,6 +1,7 @@
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
 import { getProposalAccessForEvent } from "../../../../../_lib/auth/proposal-access";
+import { requirePermission } from "../../../../../_lib/auth/permissions";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { getEventBySlug } from "../../../../../_lib/services/events";
 import { all, first } from "../../../../../_lib/db/queries";
@@ -11,6 +12,11 @@ import { adminEventProposalsQuerySchema, eventSlugParamsSchema } from "../../../
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  // Phase 2 (PRD §2): viewing the proposal list requires proposals:read,
+  // globally or scoped to this event — see functions/_lib/auth/permissions.ts.
+  // This is what actually denies a program_committee/event_organizer grant
+  // scoped to a *different* event (§10.4's tests/roles.test.ts).
+  requirePermission(admin, "proposals:read", { type: "event", id: event.id });
   const access = await getProposalAccessForEvent(requestDb(c), event.id, admin);
 
   const url = new URL(c.req.raw.url);
