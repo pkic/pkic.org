@@ -82,6 +82,7 @@ interface DirectoryRow {
   job_title: string | null;
   biography: string | null;
   links_json: string | null;
+  headshot_r2_key: string | null;
   member_type: string;
   tier: string | null;
   created_at: string;
@@ -94,6 +95,14 @@ function toSummary(row: DirectoryRow): PublicMemberSummary {
     ? (row.org_name ?? "Unknown organization")
     : [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown member";
 
+  const logoUrl = row.organization_id
+    ? row.org_logo_r2_key
+      ? `/api/v1/members/${row.organization_id}/logo`
+      : (orgData.logoUrl ?? null)
+    : row.headshot_r2_key
+      ? `/api/v1/members/${row.member_id}/logo`
+      : null;
+
   return {
     id: row.organization_id ?? row.member_id,
     name,
@@ -102,7 +111,7 @@ function toSummary(row: DirectoryRow): PublicMemberSummary {
     website: row.org_website ?? orgData.website ?? null,
     description: row.org_description ?? orgData.description ?? (isIndividual ? row.biography : null) ?? null,
     slogan: row.org_slogan ?? orgData.slogan ?? null,
-    logoUrl: row.org_logo_r2_key ? `/api/v1/members/${row.organization_id}/logo` : (orgData.logoUrl ?? null),
+    logoUrl,
     memberSince: row.created_at,
   };
 }
@@ -111,7 +120,7 @@ const DIRECTORY_SELECT = `
   SELECT m.id AS member_id, m.organization_id, o.name AS org_name, o.data_json AS org_data_json,
          o.description AS org_description, o.website AS org_website, o.slogan AS org_slogan,
          o.logo_r2_key AS org_logo_r2_key,
-         u.first_name, u.last_name, u.job_title, u.biography, u.links_json,
+         u.first_name, u.last_name, u.job_title, u.biography, u.links_json, u.headshot_r2_key,
          m.member_type, m.tier, m.created_at
   FROM members m
   LEFT JOIN organizations o ON o.id = m.organization_id
@@ -245,11 +254,28 @@ export async function getPublicMemberById(db: DatabaseLike, id: string): Promise
   };
 }
 
-export async function getMemberLogoR2Key(db: DatabaseLike, organizationId: string): Promise<string | null> {
-  const row = await first<{ logo_r2_key: string | null }>(db, `SELECT logo_r2_key FROM organizations WHERE id = ?`, [
-    organizationId,
+/**
+ * `id` matches the directory `id` field: an organization id for org-tied
+ * members, or the `members.id` row itself for org-less individuals
+ * (H5/H6/H7) — see `toSummary`. Individuals have no `organizations` row to
+ * key a logo off of, so their photo lives on their own `users.headshot_r2_key`
+ * instead (the same column self-service headshot uploads use).
+ */
+export async function getMemberLogoR2Key(db: DatabaseLike, id: string): Promise<string | null> {
+  const orgRow = await first<{ logo_r2_key: string | null }>(db, `SELECT logo_r2_key FROM organizations WHERE id = ?`, [
+    id,
   ]);
-  return row?.logo_r2_key ?? null;
+  if (orgRow) return orgRow.logo_r2_key ?? null;
+
+  const memberRow = await first<{ headshot_r2_key: string | null }>(
+    db,
+    `SELECT u.headshot_r2_key AS headshot_r2_key
+     FROM members m
+     JOIN users u ON u.id = m.user_id
+     WHERE m.id = ? AND m.organization_id IS NULL`,
+    [id],
+  );
+  return memberRow?.headshot_r2_key ?? null;
 }
 
 // ── Working groups ──────────────────────────────────────────────────────────

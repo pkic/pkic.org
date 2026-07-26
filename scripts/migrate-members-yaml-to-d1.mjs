@@ -23,8 +23,11 @@
  *     section; these are finished one at a time via the Interim Admin Tool
  *     (`POST /api/v1/admin/members`)
  *   - touch `sponsor.level` / `sponsor.sponsoring.*` (Step 3e, separate)
- *   - upload logos to R2 unless `--upload-logos` is passed (slow, and
- *     orthogonal to the core org/user/member import)
+ *   - upload logos/photos to R2 unless `--upload-logos` is passed (slow, and
+ *     orthogonal to the core org/user/member import) — covers both org
+ *     logos (`organizations.logo_r2_key`) and org-less individual (H5/H6/H7)
+ *     photos (`users.headshot_r2_key`), both sourced from the same
+ *     `assets/images/members/<slug>/` directory the old Hugo templates read
  *
  * Usage:
  *   node scripts/migrate-members-yaml-to-d1.mjs --local
@@ -244,6 +247,18 @@ function activeRepresentatives(doc) {
   return reps.filter((r) => r && typeof r.name === "string" && r.name.trim().length > 0 && !r.till);
 }
 
+/** Full detail (not just a name) for a representative dropped from the
+ * import — used in the report so staff completing them via the Interim
+ * Admin Tool don't have to re-derive LinkedIn/role/bio from the YAML. */
+function repSummary(r) {
+  return {
+    name: r.name,
+    role: r.role ?? null,
+    linkedin: r.social?.linkedin || null,
+    bio: r.description ?? null,
+  };
+}
+
 function findLogoFile(slug) {
   const dir = path.join(LOGO_DIR, slug);
   if (!fs.existsSync(dir)) return null;
@@ -358,17 +373,18 @@ ON CONFLICT(normalized_name) DO UPDATE SET
     return normalizedName;
   }
 
-  function upsertUser({ email, firstName, lastName, jobTitle, biography, linksJson }) {
+  function upsertUser({ email, firstName, lastName, jobTitle, biography, linksJson, headshotR2Key }) {
     const normalized = normalizeEmail(email);
     createdUserEmails.add(normalized);
     statements.push(`
 INSERT INTO users (
   id, email, normalized_email, first_name, last_name, job_title, biography, links_json,
-  role, active, created_at, updated_at
+  headshot_r2_key, role, active, created_at, updated_at
 ) VALUES (
   ${sqlString(randomUUID())}, ${sqlString(email)}, ${sqlString(normalized)},
   ${toSqlNullableText(firstName)}, ${toSqlNullableText(lastName)}, ${toSqlNullableText(jobTitle)},
   ${toSqlNullableText(biography)}, ${linksJson ? sqlString(linksJson) : "NULL"},
+  ${toSqlNullableText(headshotR2Key)},
   'user', 1, datetime('now'), datetime('now')
 )
 ON CONFLICT(normalized_email) DO UPDATE SET
@@ -377,6 +393,7 @@ ON CONFLICT(normalized_email) DO UPDATE SET
   job_title = COALESCE(users.job_title, excluded.job_title),
   biography = COALESCE(users.biography, excluded.biography),
   links_json = COALESCE(users.links_json, excluded.links_json),
+  headshot_r2_key = COALESCE(users.headshot_r2_key, excluded.headshot_r2_key),
   updated_at = datetime('now');
 `);
     return normalized;
@@ -425,11 +442,25 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
           file: filename,
           name,
           memberType,
-          representatives: reps.map((r) => r.name),
+          representatives: reps.map(repSummary),
           reason: domains.length ? "no roster subscriber at this domain" : "no domain to match against",
           workingGroupsHint: doc.workingGroups ?? [],
         });
         continue;
+      }
+
+      // Individuals use the same per-slug image directory as org logos
+      // (`/images/members/<slug>/<slug>.*`, per the old Hugo member-card/
+      // single-page partials) — there's no separate `organizations` row to
+      // hold a key for it, so it's stored on the user's own `headshot_r2_key`
+      // (the same column self-service headshot uploads use).
+      let headshotR2Key = null;
+      if (uploadLogos) {
+        const photoFile = findLogoFile(slug);
+        if (photoFile) {
+          headshotR2Key = `member-photos/${slug}/${path.basename(photoFile)}`;
+          logoUploads.push({ slug, filePath: photoFile, r2Key: headshotR2Key });
+        }
       }
 
       const rep = reps[0] ?? { name, role: null, social: {}, description: null };
@@ -443,6 +474,7 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
         jobTitle: rep.role ?? null,
         biography: rep.description ?? null,
         linksJson: Object.values(links).some(Boolean) ? JSON.stringify(links) : null,
+        headshotR2Key,
       });
       claimedEmails.add(normalizedEmail);
       insertMemberIfAbsent({ normalizedEmail, normalizedOrgName: null, memberType, showOnOrgProfile: true });
@@ -467,7 +499,7 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
         file: filename,
         name,
         memberType,
-        representatives: reps.map((r) => r.name),
+        representatives: reps.map(repSummary),
         reason: domains.length ? "no roster subscriber at this domain" : "no domain to match against",
         workingGroupsHint: doc.workingGroups ?? [],
       });
@@ -487,7 +519,10 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
         file: filename,
         name,
         note: "more named representatives than matched emails — some representatives got no portal account",
-        unpaired: reps.slice(candidates.length).map((r) => r.name),
+        // Full detail (not just names), so staff finishing these via the
+        // Interim Admin Tool have LinkedIn/role/bio in hand without going
+        // back to the YAML — this data was previously dropped silently.
+        unpaired: reps.slice(candidates.length).map(repSummary),
       });
     }
 
@@ -586,6 +621,13 @@ WHERE (SELECT id FROM users WHERE normalized_email = ${sqlString(email)}) IS NOT
 
 // ── Report rendering ─────────────────────────────────────────────────────
 
+function formatRep(rep) {
+  const bits = [];
+  if (rep.role) bits.push(rep.role);
+  if (rep.linkedin) bits.push(rep.linkedin);
+  return bits.length ? `${rep.name} (${bits.join(", ")})` : rep.name;
+}
+
 function renderMarkdownReport(report) {
   const lines = [];
   lines.push(`# Member migration report (${report.generatedAt})`);
@@ -606,7 +648,7 @@ function renderMarkdownReport(report) {
   lines.push("## Unmatched — finish via `POST /api/v1/admin/members` (Interim Admin Tool)");
   for (const item of report.totals.unmatched) {
     lines.push(
-      `- **${item.name}** (\`${item.file}\`, category ${item.memberType || "unknown"}) — ${item.reason}. Representatives: ${item.representatives.join(", ") || "(none listed)"}${item.workingGroupsHint?.length ? `. WG hint: ${item.workingGroupsHint.join(", ")}` : ""}`,
+      `- **${item.name}** (\`${item.file}\`, category ${item.memberType || "unknown"}) — ${item.reason}. Representatives: ${item.representatives.map(formatRep).join("; ") || "(none listed)"}${item.workingGroupsHint?.length ? `. WG hint: ${item.workingGroupsHint.join(", ")}` : ""}`,
     );
   }
   lines.push("");
@@ -618,7 +660,7 @@ function renderMarkdownReport(report) {
   lines.push("## Ambiguous pairing — confirm representative ↔ email assignment");
   for (const item of report.totals.ambiguousPairing) {
     if (item.note) {
-      lines.push(`- **${item.name}** (\`${item.file}\`) — ${item.note}: ${item.unpaired.join(", ")}`);
+      lines.push(`- **${item.name}** (\`${item.file}\`) — ${item.note}: ${item.unpaired.map(formatRep).join("; ")}`);
     } else {
       lines.push(
         `- **${item.name}** (\`${item.file}\`) — representatives [${item.representatives.join(", ")}] paired best-effort (listed order) against emails [${item.candidateEmails.join(", ")}]`,

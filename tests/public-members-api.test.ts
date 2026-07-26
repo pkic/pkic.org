@@ -358,6 +358,37 @@ describe("GET /api/v1/members/:id/logo", () => {
     const buf = new Uint8Array(await response.arrayBuffer());
     expect(Array.from(buf)).toEqual([1, 2, 3, 4]);
   });
+
+  it("serves an org-less individual's photo from their own headshot_r2_key", async () => {
+    const userId = crypto.randomUUID();
+    await seedIndividualMember({ userId, status: "active" });
+    const r2Key = `member-photos/solo-member/photo.jpg`;
+    await env.DB.prepare(`UPDATE users SET headshot_r2_key = ? WHERE id = ?`).bind(r2Key, userId).run();
+    const bytes = new Uint8Array([5, 6, 7, 8]);
+    await env.ASSETS_BUCKET!.put(r2Key, bytes);
+
+    const memberRow = await env.DB.prepare(`SELECT id FROM members WHERE user_id = ?`).bind(userId).first<{
+      id: string;
+    }>();
+
+    const listResponse = await callEndpoint(
+      listMembers,
+      createContext(env, getRequest("https://pkic.org/api/v1/members"), {}),
+    );
+    const listBody = (await listResponse.json()) as { members: Array<{ id: string; logoUrl: string | null }> };
+    expect(listBody.members[0].logoUrl).toBe(`/api/v1/members/${memberRow!.id}/logo`);
+
+    const response = await callEndpoint(
+      getMemberLogo,
+      createContext(env, getRequest(`https://pkic.org/api/v1/members/${memberRow!.id}/logo`), {
+        id: memberRow!.id,
+      }),
+    );
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/jpeg");
+    const buf = new Uint8Array(await response.arrayBuffer());
+    expect(Array.from(buf)).toEqual([5, 6, 7, 8]);
+  });
 });
 
 async function seedWorkingGroup(params: { id: string; name: string; slug: string; active?: number }) {
