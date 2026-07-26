@@ -122,6 +122,7 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
   const grantId = crypto.randomUUID();
   const roleId = crypto.randomUUID();
   const userRoleId = crypto.randomUUID();
+  const passkeyId = crypto.randomUUID();
   const formKey = "test-form";
   const templateKey = "transactional";
   const reviewId = crypto.randomUUID();
@@ -368,6 +369,23 @@ describe("protected endpoint — rejects unauthenticated requests", () => {
     [
       "DELETE /api/v1/admin/users/:userId/roles/:userRoleId",
       () => callApp(anonDelete(`https://app.test/api/v1/admin/users/${userId}/roles/${userRoleId}`)),
+    ],
+    // ── Phase 3 (PRD §3) passkey endpoints ───────────────────────────────────
+    // authenticate/begin and authenticate/complete are deliberately excluded
+    // here — they're the no-auth-required discovery/login flow, covered
+    // instead under "public endpoints — accessible without credentials".
+    [
+      "POST /api/v1/auth/passkeys/register/begin",
+      () => callApp(anonPost("https://app.test/api/v1/auth/passkeys/register/begin")),
+    ],
+    [
+      "POST /api/v1/auth/passkeys/register/complete",
+      () => callApp(anonPost("https://app.test/api/v1/auth/passkeys/register/complete")),
+    ],
+    ["GET /api/v1/auth/passkeys", () => callApp(anonGet("https://app.test/api/v1/auth/passkeys"))],
+    [
+      "DELETE /api/v1/auth/passkeys/:id",
+      () => callApp(anonDelete(`https://app.test/api/v1/auth/passkeys/${passkeyId}`)),
     ],
   ];
 
@@ -623,5 +641,19 @@ describe("public endpoints — accessible without credentials", () => {
       createContext(appEnv, new Request("https://app.test/api/v1/events/pqc-2026/forms"), { eventSlug: "pqc-2026" }),
     );
     expect(response.status).toBe(200);
+  });
+
+  // ── Phase 3 (PRD §3) passkey discovery/login flow ──────────────────────────
+  it("GET /api/v1/auth/passkeys/authenticate/begin returns 200 without Authorization header", async () => {
+    const response = await callApp(anonGet("https://app.test/api/v1/auth/passkeys/authenticate/begin"));
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { challengeToken: string };
+    expect(body.challengeToken).toBeTruthy();
+  });
+
+  it("POST /api/v1/auth/passkeys/authenticate/complete does not require an Authorization header", async () => {
+    const response = await callApp(anonPost("https://app.test/api/v1/auth/passkeys/authenticate/complete"));
+    // Missing challengeToken/response fails validation (400), not AUTH_REQUIRED (401).
+    expect(response.status).not.toBe(401);
   });
 });

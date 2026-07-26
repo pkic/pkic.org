@@ -277,6 +277,56 @@ export async function revokeAdminSession(db: DatabaseLike, sessionId: string): P
   await run(db, "UPDATE sessions SET revoked_at = COALESCE(revoked_at, ?) WHERE id = ?", [nowIso(), sessionId]);
 }
 
+/**
+ * True if `userId` is currently eligible to hold a session at all — the same
+ * STAFF_ACCESS_CONDITION gate `requestAdminMagicLink`/`verifyAdminMagicLink`
+ * apply. Used by the Phase 3 (PRD §3) passkey authentication flow to
+ * re-check eligibility at login time rather than trusting that it still
+ * holds just because a passkey was registered in the past (registration
+ * itself requires an already-authenticated, already-eligible actor — see
+ * register/begin's use of requireAdminFromRequest).
+ */
+export async function findEligibleStaffUserById(db: DatabaseLike, userId: string): Promise<AdminUserRow | null> {
+  return first<AdminUserRow>(
+    db,
+    `SELECT id, email, role, active FROM users u WHERE u.id = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
+    [userId],
+  );
+}
+
+/**
+ * Creates a `sessions` row for an already-verified user and returns the same
+ * shape `verifyAdminMagicLink` does, so any login entry point (magic link,
+ * passkey) can share one session-issuance path.
+ */
+export async function issueAdminSession(
+  db: DatabaseLike,
+  user: Pick<AdminUserRow, "id" | "email" | "role">,
+  sessionTtlHours: number,
+): Promise<{ admin: AuthAdmin; sessionId: string; expiresAt: string }> {
+  const sessionId = uuid();
+  const sessionHash = await sha256Hex(randomToken(24));
+  const expiresAt = addHours(nowIso(), sessionTtlHours);
+
+  await run(
+    db,
+    `INSERT INTO sessions (id, user_id, token_hash, expires_at, revoked_at, created_at)
+     VALUES (?, ?, ?, ?, NULL, ?)`,
+    [sessionId, user.id, sessionHash, expiresAt, nowIso()],
+  );
+
+  return {
+    admin: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+      scopes: user.role === "admin" ? [...AUTH_SCOPES] : [],
+    },
+    sessionId,
+    expiresAt,
+  };
+}
+
 export async function getAdminBySessionClaims(db: DatabaseLike, claims: AdminSessionTokenClaims): Promise<AuthAdmin> {
   const row = await first<AdminSessionRow>(
     db,
@@ -416,30 +466,11 @@ export async function verifyAdminMagicLink(
     throw new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
   }
 
-  const sessionId = uuid();
-  const sessionHash = await sha256Hex(randomToken(24));
-  const expiresAt = addHours(nowIso(), payload.sessionTtlHours);
-
-  await run(
-    db,
-    `INSERT INTO sessions (id, user_id, token_hash, expires_at, revoked_at, created_at)
-     VALUES (?, ?, ?, ?, NULL, ?)`,
-    [sessionId, row.user_id, sessionHash, expiresAt, nowIso()],
-  );
-
-  return {
-    admin: {
-      id: row.user_id,
-      email: row.email,
-      role: row.role,
-      // Legacy AUTH_SCOPES only apply to role='admin' — a Phase 2 staff
-      // role (membership_processor, wg_chair, event_organizer,
-      // program_committee) authorizes purely through `grants`, computed
-      // fresh from user_roles/permission_grants on every request (see
-      // getAdminBySessionClaims), not baked into this token.
-      scopes: row.role === "admin" ? [...AUTH_SCOPES] : [],
-    },
-    sessionId,
-    expiresAt,
-  };
+  // Legacy AUTH_SCOPES only apply to role='admin' — a Phase 2 staff role
+  // (membership_processor, wg_chair, event_organizer, program_committee)
+  // authorizes purely through `grants`, computed fresh from
+  // user_roles/permission_grants on every request (see
+  // getAdminBySessionClaims), not baked into this token. issueAdminSession
+  // applies that same rule.
+  return issueAdminSession(db, { id: row.user_id, email: row.email, role: row.role }, payload.sessionTtlHours);
 }

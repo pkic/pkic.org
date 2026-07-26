@@ -133,6 +133,12 @@ export interface Env {
   SPONSORSHIP_NOTIFICATION_EMAIL?: string;
   /** Configurable brochure PDF link attached to the sponsorship-brochure email (PRD §1.3). */
   SPONSORSHIP_BROCHURE_URL?: string;
+  /** WebAuthn Relying Party ID (bare domain, e.g. "pkic.org") — PRD §3. */
+  WEBAUTHN_RP_ID?: string;
+  /** WebAuthn Relying Party display name shown in browser passkey prompts — PRD §3. */
+  WEBAUTHN_RP_NAME?: string;
+  /** WebAuthn expected origin (scheme + host, e.g. "https://pkic.org") — PRD §3. */
+  WEBAUTHN_ORIGIN?: string;
 }
 
 export interface PagesContext<P extends Record<string, string> = Record<string, string>> {
