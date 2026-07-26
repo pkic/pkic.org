@@ -9,13 +9,17 @@ export const publicMemberSummarySchema = z.object({
   tier: z.string().nullable(),
   website: z.string().nullable(),
   description: z.string().nullable(),
+  slogan: z.string().nullable(),
   logoUrl: z.string().nullable(),
   memberSince: z.string(),
 });
 
+/** group: "organization" = org-tied categories (A-G, H1-H4, H8); "independent" = org-less H5/H6/H7 */
 export const membersListQuerySchema = z.object({
-  limit: z.coerce.number().int().min(1).max(100).optional(),
+  limit: z.coerce.number().int().min(1).max(500).optional(),
   offset: z.coerce.number().int().min(0).optional(),
+  q: z.string().trim().min(1).max(200).optional(),
+  group: z.enum(["all", "organization", "independent"]).optional(),
 });
 
 export const membersListResponseSchema = z.object({
@@ -38,6 +42,47 @@ export const membersListRouteSchema = {
   },
 };
 
+export const publicMemberRepresentativeSchema = z.object({
+  name: z.string(),
+  jobTitle: z.string().nullable(),
+  bio: z.string().nullable(),
+  linkedin: z.string().nullable(),
+});
+
+export const publicMemberSocialSchema = z.object({
+  x: z.string().nullable(),
+  linkedin: z.string().nullable(),
+  facebook: z.string().nullable(),
+  instagram: z.string().nullable(),
+  youtube: z.string().nullable(),
+});
+
+export const publicMemberDetailSchema = publicMemberSummarySchema.extend({
+  content: z.string().nullable(),
+  blogUrl: z.string().nullable(),
+  blogFeedUrl: z.string().nullable(),
+  pressUrl: z.string().nullable(),
+  pressFeedUrl: z.string().nullable(),
+  careersUrl: z.string().nullable(),
+  social: publicMemberSocialSchema,
+  // Populated for org-tied members from show_on_org_profile=1 representatives.
+  // Empty for org-less individual members — their own bio/jobTitle live on the summary/detail fields directly.
+  representatives: z.array(publicMemberRepresentativeSchema),
+  jobTitle: z.string().nullable(),
+  linkedin: z.string().nullable(),
+});
+
+export const memberLogoRouteSchema = {
+  tags: ["Members"],
+  summary: "Public organization logo",
+  request: { params: z.object({ id: z.string() }) },
+  responses: {
+    "200": { description: "Logo image bytes." },
+    "404": { description: "No logo on file." },
+    "503": { description: "Asset storage is not configured." },
+  },
+};
+
 export const memberDetailRouteSchema = {
   tags: ["Members"],
   summary: "Public member profile",
@@ -45,7 +90,7 @@ export const memberDetailRouteSchema = {
   responses: {
     "200": {
       description: "Public member profile.",
-      content: { "application/json": { schema: publicMemberSummarySchema } },
+      content: { "application/json": { schema: publicMemberDetailSchema } },
     },
     "404": { description: "Member not found." },
   },

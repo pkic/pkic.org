@@ -18,11 +18,15 @@ export async function onRequestGet(c: any): Promise<Response> {
   const parsed = membersListQuerySchema.safeParse({
     limit: url.searchParams.get("limit") ?? undefined,
     offset: url.searchParams.get("offset") ?? undefined,
+    q: url.searchParams.get("q") ?? undefined,
+    group: url.searchParams.get("group") ?? undefined,
   });
   const limit = parsed.success ? (parsed.data.limit ?? 20) : 20;
   const offset = parsed.success ? (parsed.data.offset ?? 0) : 0;
+  const q = parsed.success ? parsed.data.q : undefined;
+  const group = parsed.success ? (parsed.data.group ?? "all") : "all";
 
-  const { members, total } = await listPublicMembers(c.env.DB, { limit, offset });
+  const { members, total } = await listPublicMembers(c.env.DB, { limit, offset, q, group });
 
   const response = json({ members, total, limit, offset });
   response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);

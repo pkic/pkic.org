@@ -689,6 +689,39 @@ $wg-colors: (
   }
 }
 
+// Standalone initials avatar — same palette as .member-card-initials above, but
+// usable outside a .member-card wrapper (member profile hero/representative
+// avatars, which aren't grid cards). Size is set inline by the caller.
+.standalone-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  user-select: none;
+
+  &.initial-color-0 {
+    background: linear-gradient(135deg, #2a7a4f, #1a5c3a);
+  }
+  &.initial-color-1 {
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  }
+  &.initial-color-2 {
+    background: linear-gradient(135deg, #d97706, #b45309);
+  }
+  &.initial-color-3 {
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  }
+  &.initial-color-4 {
+    background: linear-gradient(135deg, #dc2626, #991b1b);
+  }
+  &.initial-color-5 {
+    background: linear-gradient(135deg, #0891b2, #0e7490);
+  }
+}
+
 // --- Color highlight sections ---
 
 .pkic-highlight {
