@@ -21,6 +21,7 @@ import {
   createMemberApplication,
   emailDomain,
   hasActiveApplicationForDomain,
+  hasConflictingOrganizationDomain,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
 } from "../../../../_lib/services/member-applications";
 import {
@@ -57,7 +58,7 @@ export async function onRequestPost(c: any): Promise<Response> {
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(body.membershipCategory);
   if (!isIndividual) {
     const domain = emailDomain(body.applicantEmail);
-    if (await hasActiveApplicationForDomain(db, domain)) {
+    if ((await hasActiveApplicationForDomain(db, domain)) || (await hasConflictingOrganizationDomain(db, domain))) {
       throw new AppError(409, "DUPLICATE_APPLICATION", "An active application already exists for this organization");
     }
   }

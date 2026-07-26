@@ -589,3 +589,87 @@ export interface AdminMemberSummary {
   showOnOrgProfile: boolean;
   createdAt: string;
 }
+
+// PRD §4.2 — GET /api/v1/admin/applications
+export interface AdminApplicationSummary {
+  id: string;
+  applicantEmail: string;
+  applicantName: string;
+  organizationName: string | null;
+  membershipCategory: string;
+  status: string;
+  stage: string;
+  onHoldSubtype: string | null;
+  assignedToUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminApplicationEvent {
+  fromStage: string | null;
+  toStage: string;
+  actorUserId: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface AdminApplicationCommunication {
+  id: string;
+  application_id: string;
+  kind: "communication" | "note";
+  actor_user_id: string;
+  subject: string | null;
+  body: string;
+  template_key: string | null;
+  email_outbox_id: string | null;
+  created_at: string;
+}
+
+export interface AdminApplicationConcern {
+  id: string;
+  application_id: string;
+  submitted_by_user_id: string;
+  concern_text: string;
+  created_at: string;
+}
+
+export interface AdminApplicationEcDecision {
+  id: string;
+  application_id: string;
+  ec_member_user_id: string;
+  decision: "approve" | "decline";
+  reason: string | null;
+  created_at: string;
+}
+
+export interface AdminApplicationDocument {
+  id: string;
+  filename: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  uploadedAt: string;
+  uploadedByEmail: string;
+}
+
+export interface AdminApplicationDetail extends AdminApplicationSummary {
+  stageEnteredAt: string;
+  answers: Record<string, unknown>;
+  events: AdminApplicationEvent[];
+  communications: AdminApplicationCommunication[];
+  concerns: AdminApplicationConcern[];
+  ecDecisions: AdminApplicationEcDecision[];
+  documents: AdminApplicationDocument[];
+}
+
+// PRD §4.3 — GET/PATCH /api/v1/admin/membership-settings
+export interface AdminMembershipSettings {
+  consultationWindowDays: number;
+  ecReviewWindowDays: number;
+  onHoldResponseDeadlineDays: number;
+  consultationEmailRecipients: string;
+  ecEmailRecipients: string;
+  ccApplicantEmails: string;
+  autoReminderOnHolds: boolean;
+  forumVoteMinEndorsers: number;
+  updatedAt: string;
+}

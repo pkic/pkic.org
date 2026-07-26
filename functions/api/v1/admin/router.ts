@@ -28,6 +28,8 @@ import email_templates_Router from "./email-templates/router";
 import events_Router from "./events/router";
 import forms_Router from "./forms/router";
 import members_Router from "./members/router";
+import membership_settings_Router from "./membership-settings/router";
+import applications_Router from "./applications/router";
 import proposals_Router from "./proposals/router";
 import roles_Router from "./roles/router";
 import users_Router from "./users/router";
@@ -74,6 +76,8 @@ function isPhase2PermissionGatedAdminPath(path: string): boolean {
     path.startsWith("/api/v1/admin/access-grants") ||
     path.startsWith("/api/v1/admin/roles") ||
     path.startsWith("/api/v1/admin/members") ||
+    path.startsWith("/api/v1/admin/applications") ||
+    path.startsWith("/api/v1/admin/membership-settings") ||
     /^\/api\/v1\/admin\/users\/[^/]+\/roles/.test(path)
   );
 }
@@ -169,6 +173,8 @@ openapi.route("/email-templates", email_templates_Router);
 openapi.route("/events", events_Router);
 openapi.route("/forms", forms_Router);
 openapi.route("/members", members_Router);
+openapi.route("/membership-settings", membership_settings_Router);
+openapi.route("/applications", applications_Router);
 openapi.route("/proposals", proposals_Router);
 openapi.route("/roles", roles_Router);
 openapi.route("/users", users_Router);

@@ -169,6 +169,35 @@ export const applicationDocumentListResponseSchema = z.object({
   documents: z.array(applicationDocumentResponseSchema),
 });
 
+export const applicationConcernCreateSchema = z.object({
+  concernText: z.string().trim().min(1).max(5000),
+});
+
+export const applicationConcernResponseSchema = z.object({
+  id: z.string(),
+  createdAt: z.string(),
+});
+
+export const applicationConcernCreateRouteSchema = {
+  tags: ["Members"],
+  summary: "Submit a consultation concern (A-G members only)",
+  description:
+    "PRD §4.5 — visible only to staff/processors, never to the applicant. Member-session gated; only A-G category members may submit.",
+  request: {
+    params: z.object({ id: z.string() }),
+    body: { content: { "application/json": { schema: applicationConcernCreateSchema } }, required: true },
+  },
+  responses: {
+    "201": {
+      description: "Concern recorded.",
+      content: { "application/json": { schema: applicationConcernResponseSchema } },
+    },
+    "403": { description: "Only A-G category members may submit a concern." },
+    "404": { description: "Application not found." },
+    "409": { description: "Application is not currently in consultation." },
+  },
+};
+
 export const applicationDocumentListRouteSchema = {
   tags: ["Members"],
   summary: "List a membership applicant's own uploaded documents",

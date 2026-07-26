@@ -3,6 +3,11 @@ import { fromHono, getReDocUI, getSwaggerUI } from "chanfana";
 import { logError, logInfo } from "./_lib/logging";
 import { runRetentionJob } from "./_lib/services/retention";
 import { runScheduledDueWork } from "./_lib/services/scheduled-due-work";
+import {
+  runConsultationBatch,
+  runEcReviewBatch,
+  runMembershipDueWork,
+} from "./_lib/services/membership-scheduled-jobs";
 import api_Router from "./api/router";
 import donate_Router from "./donate/router";
 import r_Router from "./r/router";
@@ -61,6 +66,9 @@ function mcpOpenApiSpecResponse(): Response {
 
 const REMINDER_CRON = "*/15 * * * *";
 const RETENTION_CRON = "0 3 * * *";
+// PRD §4.3 defaults: consultation batch Mon/Wed 07:15 UTC, EC review batch Mon/Wed 08:15 UTC.
+const CONSULTATION_BATCH_CRON = "15 7 * * 1,3";
+const EC_REVIEW_BATCH_CRON = "15 8 * * 1,3";
 
 app.get("/og/*", OgCardGet);
 app.get(OPENAPI_JSON_PATH, openApiSpecResponse);
@@ -80,10 +88,16 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
   try {
     if (controller.cron === REMINDER_CRON) {
       const dueWork = await runScheduledDueWork(env);
+      // Membership due-work (PRD §4.6/§4.7/§4.9 on-hold reminders/auto-close,
+      // EC-window auto-approve, Google Groups sync) runs as a sibling call on
+      // the same 15-minute trigger — see membership-scheduled-jobs.ts's own
+      // note on why this isn't woven into runScheduledDueWork's pass loop.
+      const membershipDueWork = await runMembershipDueWork(env.DB, env);
 
       logInfo("SCHEDULED_REMINDERS_COMPLETED", {
         cron: controller.cron,
         dueWork,
+        membershipDueWork,
       });
       return;
     }
@@ -94,6 +108,18 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
         cron: controller.cron,
         retention,
       });
+      return;
+    }
+
+    if (controller.cron === CONSULTATION_BATCH_CRON) {
+      const consultationBatch = await runConsultationBatch(env.DB, env);
+      logInfo("SCHEDULED_CONSULTATION_BATCH_COMPLETED", { cron: controller.cron, consultationBatch });
+      return;
+    }
+
+    if (controller.cron === EC_REVIEW_BATCH_CRON) {
+      const ecReviewBatch = await runEcReviewBatch(env.DB, env);
+      logInfo("SCHEDULED_EC_REVIEW_BATCH_COMPLETED", { cron: controller.cron, ecReviewBatch });
       return;
     }
 

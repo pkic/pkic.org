@@ -13,6 +13,8 @@ import { DueWork } from "../sections/DueWork";
 import { Templates } from "../sections/Templates";
 import { Users } from "../sections/Users";
 import { Members } from "../sections/Members";
+import { Applications } from "../sections/Applications";
+import { MembershipSettings } from "../sections/MembershipSettings";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
@@ -210,6 +212,22 @@ export function AdminShell() {
               component={() => (
                 <SectionWrapper title="Membership — Members">
                   <Members />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/membership/applications"
+              component={() => (
+                <SectionWrapper title="Membership — Applications">
+                  <Applications />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/membership/settings"
+              component={() => (
+                <SectionWrapper title="Membership — Settings">
+                  <MembershipSettings />
                 </SectionWrapper>
               )}
             />

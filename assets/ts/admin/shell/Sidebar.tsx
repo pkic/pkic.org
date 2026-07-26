@@ -104,7 +104,11 @@ export const NAV_ITEMS: NavItem[] = [
     sec: "membership",
     label: "Membership",
     icon: "users",
-    children: [{ path: "/membership/members", sec: "membership-members", label: "Members", icon: "users" }],
+    children: [
+      { path: "/membership/applications", sec: "membership-applications", label: "Applications", icon: "forms" },
+      { path: "/membership/members", sec: "membership-members", label: "Members", icon: "users" },
+      { path: "/membership/settings", sec: "membership-settings", label: "Settings", icon: "duework" },
+    ],
   },
   { path: "/users", sec: "users", label: "Users", icon: "users" },
   { path: "/auditlog", sec: "auditlog", label: "Audit Log", icon: "auditlog" },
@@ -187,7 +191,9 @@ function activeSectionFor(location: string): string {
   if (location === "/" || location === "") return "dashboard";
   const top = location.replace(/^\//, "").split("/")[0];
   if (top === "email" && location.includes("/templates")) return "templates";
+  if (top === "membership" && location.includes("/applications")) return "membership-applications";
   if (top === "membership" && location.includes("/members")) return "membership-members";
+  if (top === "membership" && location.includes("/settings")) return "membership-settings";
   return top;
 }
 
