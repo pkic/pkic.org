@@ -34,7 +34,8 @@ export const memberApplicationCreateSchema = z
     answers: z.record(z.string(), z.unknown()).optional(),
   })
   .superRefine((value, ctx) => {
-    const isIndividual = value.membershipCategory === "H5" || value.membershipCategory === "H6" || value.membershipCategory === "H7";
+    const isIndividual =
+      value.membershipCategory === "H5" || value.membershipCategory === "H6" || value.membershipCategory === "H7";
     if (!isIndividual && !value.organizationName) {
       ctx.addIssue({
         code: "custom",

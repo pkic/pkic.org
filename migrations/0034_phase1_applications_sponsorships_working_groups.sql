@@ -229,7 +229,9 @@ VALUES
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
    'reason', 'Why do you want to join PKI Consortium?', 'textarea', 1, NULL, NULL, 60, datetime('now')),
   (lower(hex(randomblob(16))), (SELECT id FROM forms WHERE key = 'membership-application'),
-   'working_groups', 'Working Groups of Interest', 'multi_select', 0, '["pqc","cm","pkimm","tcwg","ca","cbom"]', NULL, 70, datetime('now'));
+   'working_groups', 'Working Groups of Interest', 'multi_select', 0,
+   '[{"value":"pqc","label":"Post-Quantum Cryptography Working Group"},{"value":"cm","label":"Cryptographic Module Working Group"},{"value":"pkimm","label":"PKI Maturity Model Working Group"},{"value":"tcwg","label":"Training and Certification Working Group"},{"value":"ca","label":"CA Working Group"},{"value":"cbom","label":"CBOM Profiles Working Group"}]',
+   '{"uiWidget":"checkboxes"}', 70, datetime('now'));
 
 -- ── Email templates (§1.2, §1.3, §4.4) ──────────────────────────────────────
 

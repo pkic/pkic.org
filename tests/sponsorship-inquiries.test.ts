@@ -41,6 +41,7 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
           contactEmail: "dana@sponsor-corp.test",
           organizationName: "Sponsor Corp",
           desiredTier: "Gold",
+          comments: "Interested in learning more.",
         }),
         {},
       ),
@@ -50,14 +51,15 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
     const body = (await response.json()) as { sponsorshipId: string; pipelineStage: string };
     expect(body.pipelineStage).toBe("new_inquiry");
 
-    const rows = await queryAll<{ pipeline_stage: string; sponsor_type: string; tier: string }>(
+    const rows = await queryAll<{ pipeline_stage: string; sponsor_type: string; tier: string; notes: string | null }>(
       testEnv.DB,
-      "SELECT pipeline_stage, sponsor_type, tier FROM sponsorships WHERE id = ?",
+      "SELECT pipeline_stage, sponsor_type, tier, notes FROM sponsorships WHERE id = ?",
       [body.sponsorshipId],
     );
     expect(rows).toHaveLength(1);
     expect(rows[0].pipeline_stage).toBe("new_inquiry");
     expect(rows[0].tier).toBe("Gold");
+    expect(rows[0].notes).toBe("Interested in learning more.");
   });
 
   it("infers sponsor_type=event when an eventId is provided", async () => {
@@ -106,9 +108,11 @@ describe("POST /api/v1/sponsorship/inquiries", () => {
     );
 
     const body = (await response.json()) as { sponsorshipId: string };
-    const rows = await queryAll<{ sponsor_type: string }>(testEnv.DB, "SELECT sponsor_type FROM sponsorships WHERE id = ?", [
-      body.sponsorshipId,
-    ]);
+    const rows = await queryAll<{ sponsor_type: string }>(
+      testEnv.DB,
+      "SELECT sponsor_type FROM sponsorships WHERE id = ?",
+      [body.sponsorshipId],
+    );
     expect(rows[0].sponsor_type).toBe("consortium");
   });
 

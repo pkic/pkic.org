@@ -36,7 +36,12 @@ async function seedOrgMember(params: {
     env.DB.prepare(
       `INSERT INTO organizations (id, name, normalized_name, data_json, created_at, updated_at)
        VALUES (?, ?, ?, ?, datetime('now'), datetime('now'))`,
-    ).bind(params.organizationId, params.organizationName, params.organizationName.toLowerCase(), params.dataJson ?? null),
+    ).bind(
+      params.organizationId,
+      params.organizationName,
+      params.organizationName.toLowerCase(),
+      params.dataJson ?? null,
+    ),
     env.DB.prepare(
       `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, created_at, updated_at)
        VALUES (?, 'organization', ?, ?, ?, ?, datetime('now'), datetime('now'))`,

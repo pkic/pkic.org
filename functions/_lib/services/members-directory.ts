@@ -92,10 +92,7 @@ export async function listPublicMembers(
       `${DIRECTORY_SELECT} ORDER BY COALESCE(o.name, u.last_name, u.first_name) ASC LIMIT ? OFFSET ?`,
       [params.limit, params.offset],
     ),
-    first<{ total: number }>(
-      db,
-      `SELECT COUNT(*) AS total FROM (${DIRECTORY_SELECT})`,
-    ),
+    first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM (${DIRECTORY_SELECT})`),
   ]);
 
   return { members: rows.map(toSummary), total: totalRow?.total ?? 0 };
@@ -144,10 +141,19 @@ export async function listWorkingGroups(db: DatabaseLike): Promise<WorkingGroupS
     db,
     `SELECT id, name, slug, description, mailing_list_email, active FROM working_groups WHERE active = 1 ORDER BY name ASC`,
   );
-  return rows.map((r) => ({ id: r.id, name: r.name, slug: r.slug, description: r.description, active: r.active === 1 }));
+  return rows.map((r) => ({
+    id: r.id,
+    name: r.name,
+    slug: r.slug,
+    description: r.description,
+    active: r.active === 1,
+  }));
 }
 
-export async function getWorkingGroupByIdOrSlug(db: DatabaseLike, idOrSlug: string): Promise<WorkingGroupDetail | null> {
+export async function getWorkingGroupByIdOrSlug(
+  db: DatabaseLike,
+  idOrSlug: string,
+): Promise<WorkingGroupDetail | null> {
   const wg = await first<WorkingGroupRow>(
     db,
     `SELECT id, name, slug, description, mailing_list_email, active FROM working_groups WHERE id = ? OR slug = ? LIMIT 1`,

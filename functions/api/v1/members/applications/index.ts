@@ -70,7 +70,7 @@ export async function onRequestPost(c: any): Promise<Response> {
     answers: body.answers,
   });
 
-  const statusUrl = `${config.appBaseUrl}/api/v1/members/applications/${created.id}/status?token=${created.manageToken}`;
+  const statusUrl = `${config.appBaseUrl}/application-status/?id=${created.id}&token=${created.manageToken}`;
   const outboxId = await queueEmail(db, {
     templateKey: "application-received",
     recipientEmail: body.applicantEmail,

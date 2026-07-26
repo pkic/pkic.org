@@ -29,7 +29,10 @@ export const sponsorshipInquiryRouteSchema = {
     body: { content: { "application/json": { schema: sponsorshipInquirySchema } }, required: true },
   },
   responses: {
-    "201": { description: "Inquiry recorded.", content: { "application/json": { schema: sponsorshipInquiryResponseSchema } } },
+    "201": {
+      description: "Inquiry recorded.",
+      content: { "application/json": { schema: sponsorshipInquiryResponseSchema } },
+    },
     "422": { description: "Missing or invalid required fields." },
   },
 };
@@ -71,7 +74,10 @@ export const sponsorshipCheckoutRouteSchema = {
     body: { content: { "application/json": { schema: sponsorshipCheckoutSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Checkout session created.", content: { "application/json": { schema: sponsorshipCheckoutResponseSchema } } },
+    "200": {
+      description: "Checkout session created.",
+      content: { "application/json": { schema: sponsorshipCheckoutResponseSchema } },
+    },
     "422": { description: "Unknown tier or invalid fields." },
     "503": { description: "Stripe is not configured." },
   },
@@ -80,7 +86,8 @@ export const sponsorshipCheckoutRouteSchema = {
 export const sponsorshipCheckoutWebhookRouteSchema = {
   tags: ["Sponsorship"],
   summary: "Stripe webhook for sponsorship checkout",
-  description: "Verifies signature and, on checkout.session.completed, creates the sponsorships record at pipeline_stage=payment_pending.",
+  description:
+    "Verifies signature and, on checkout.session.completed, creates the sponsorships record at pipeline_stage=payment_pending.",
   responses: {
     "200": { description: "Event processed or acknowledged." },
     "400": { description: "Invalid signature or payload." },

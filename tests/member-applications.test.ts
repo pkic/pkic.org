@@ -108,7 +108,10 @@ describe("POST /api/v1/members/applications", () => {
       createApplication,
       createContext(
         testEnv,
-        postRequest("https://pkic.org/api/v1/members/applications", { ...payload, applicantEmail: "solo2@example-corp.test" }),
+        postRequest("https://pkic.org/api/v1/members/applications", {
+          ...payload,
+          applicantEmail: "solo2@example-corp.test",
+        }),
         {},
       ),
     );
@@ -204,7 +207,9 @@ describe("GET /api/v1/members/applications/:id/status", () => {
       getApplicationStatus,
       createContext(
         testEnv,
-        new Request(`https://pkic.org/api/v1/members/applications/${created.applicationId}/status?token=wrong-token-value`),
+        new Request(
+          `https://pkic.org/api/v1/members/applications/${created.applicationId}/status?token=wrong-token-value`,
+        ),
         { id: created.applicationId },
       ),
     );
@@ -218,9 +223,13 @@ describe("GET /api/v1/members/applications/:id/status", () => {
 
     const response = await callEndpoint(
       getApplicationStatus,
-      createContext(testEnv, new Request(`https://pkic.org/api/v1/members/applications/${created.applicationId}/status`), {
-        id: created.applicationId,
-      }),
+      createContext(
+        testEnv,
+        new Request(`https://pkic.org/api/v1/members/applications/${created.applicationId}/status`),
+        {
+          id: created.applicationId,
+        },
+      ),
     );
 
     expect(response.status).toBe(401);

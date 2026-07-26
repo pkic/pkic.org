@@ -15,7 +15,10 @@ import { json } from "../../../../_lib/http";
 import { parseJsonBody } from "../../../../_lib/validation";
 import { getEventBySlug } from "../../../../_lib/services/events";
 import { EVENT_SPONSOR_TIER_PRICES_USD_CENTS } from "../../../../_lib/services/sponsorship";
-import { sponsorshipCheckoutRouteSchema, sponsorshipCheckoutSchema } from "../../../../../assets/shared/schemas/sponsorship";
+import {
+  sponsorshipCheckoutRouteSchema,
+  sponsorshipCheckoutSchema,
+} from "../../../../../assets/shared/schemas/sponsorship";
 
 const STRIPE_API = "https://api.stripe.com/v1/checkout/sessions";
 

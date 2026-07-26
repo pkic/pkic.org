@@ -160,7 +160,10 @@ export interface ApplicationDocumentRow {
   uploaded_at: string;
 }
 
-export async function listApplicationDocuments(db: DatabaseLike, applicationId: string): Promise<ApplicationDocumentRow[]> {
+export async function listApplicationDocuments(
+  db: DatabaseLike,
+  applicationId: string,
+): Promise<ApplicationDocumentRow[]> {
   return all<ApplicationDocumentRow>(
     db,
     `SELECT * FROM application_documents WHERE application_id = ? ORDER BY uploaded_at ASC`,
@@ -186,7 +189,16 @@ export async function recordApplicationDocument(
     `INSERT INTO application_documents
        (id, application_id, uploaded_by_email, r2_key, filename, mime_type, file_size_bytes, uploaded_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [id, params.applicationId, params.uploadedByEmail, params.r2Key, params.filename, params.mimeType, params.fileSizeBytes, uploadedAt],
+    [
+      id,
+      params.applicationId,
+      params.uploadedByEmail,
+      params.r2Key,
+      params.filename,
+      params.mimeType,
+      params.fileSizeBytes,
+      uploadedAt,
+    ],
   );
   return {
     id,

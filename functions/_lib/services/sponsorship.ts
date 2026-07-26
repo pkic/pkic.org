@@ -54,8 +54,8 @@ export async function createSponsorshipInquiry(
       .prepare(
         `INSERT INTO sponsorships
            (id, sponsor_type, organization_id, non_member_name, non_member_website,
-            contact_name, contact_email, event_id, tier, pipeline_stage, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'new_inquiry', ?, ?)`,
+            contact_name, contact_email, event_id, tier, notes, pipeline_stage, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'new_inquiry', ?, ?)`,
       )
       .bind(
         id,
@@ -67,6 +67,7 @@ export async function createSponsorshipInquiry(
         input.contactEmail,
         input.eventId,
         input.tier,
+        input.notes,
         now,
         now,
       ),
@@ -94,7 +95,10 @@ export interface SponsorshipRow {
   checkout_session_id: string | null;
 }
 
-export async function getSponsorshipByCheckoutSessionId(db: DatabaseLike, sessionId: string): Promise<SponsorshipRow | null> {
+export async function getSponsorshipByCheckoutSessionId(
+  db: DatabaseLike,
+  sessionId: string,
+): Promise<SponsorshipRow | null> {
   return first<SponsorshipRow>(db, `SELECT * FROM sponsorships WHERE checkout_session_id = ?`, [sessionId]);
 }
 

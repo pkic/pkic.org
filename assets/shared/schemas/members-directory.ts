@@ -31,7 +31,10 @@ export const membersListRouteSchema = {
   description: "Paginated, publicly readable member directory. D1 is the source of truth (PRD §1.6).",
   request: { query: membersListQuerySchema },
   responses: {
-    "200": { description: "Paginated member list.", content: { "application/json": { schema: membersListResponseSchema } } },
+    "200": {
+      description: "Paginated member list.",
+      content: { "application/json": { schema: membersListResponseSchema } },
+    },
   },
 };
 
@@ -40,7 +43,10 @@ export const memberDetailRouteSchema = {
   summary: "Public member profile",
   request: { params: z.object({ id: z.string() }) },
   responses: {
-    "200": { description: "Public member profile.", content: { "application/json": { schema: publicMemberSummarySchema } } },
+    "200": {
+      description: "Public member profile.",
+      content: { "application/json": { schema: publicMemberSummarySchema } },
+    },
     "404": { description: "Member not found." },
   },
 };
@@ -79,7 +85,10 @@ export const workingGroupDetailRouteSchema = {
   description: "Detail plus a public subset of the member list. :id accepts either the working group UUID or its slug.",
   request: { params: z.object({ id: z.string() }) },
   responses: {
-    "200": { description: "Working group detail.", content: { "application/json": { schema: workingGroupDetailSchema } } },
+    "200": {
+      description: "Working group detail.",
+      content: { "application/json": { schema: workingGroupDetailSchema } },
+    },
     "404": { description: "Working group not found." },
   },
 };
