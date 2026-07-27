@@ -11,10 +11,7 @@ organizationDomains:
   - consultingexperts.nl
 
 # Short description
-description: >
-  ConsultingExperts B.V. is a Dutch ICT consultancy and professional services company that has been connecting highly skilled IT professionals with organizations since 2010.
-  The company delivers consultancy, project services, managed expertise, and Quantum Safe security advisory services for enterprises, government organizations, and public sector clients.
-  As an IBM Business Partner, ConsultingExperts helps organizations prepare for the transition to Post-Quantum Cryptography (PQC) through crypto-agility assessments, cryptographic discovery, risk analysis, and Quantum Safe transformation programs.
+description: ConsultingExperts B.V. is a Dutch ICT consultancy that connects highly skilled IT professionals with public and private organizations and provides consultancy, managed expertise, and Quantum Safe advisory services.
 
 # membership
 memberSince: 2026-07-14
