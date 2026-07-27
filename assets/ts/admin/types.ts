@@ -200,6 +200,34 @@ export interface WorkingGroupDetail extends WorkingGroupSummary {
   members: Array<{ name: string; organizationName: string | null }>;
 }
 
+// ── Admin working-group CRUD (unfiltered by active, full roster w/ user ids) ──
+
+export interface AdminWorkingGroupSummary {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  mailingListEmail: string | null;
+  minEndorsersForBallot: number;
+  active: boolean;
+  chairUserId: string | null;
+  memberCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminWorkingGroupMember {
+  userId: string;
+  name: string;
+  email: string;
+  organizationName: string | null;
+  joinedAt: string;
+}
+
+export interface AdminWorkingGroupDetail extends AdminWorkingGroupSummary {
+  members: AdminWorkingGroupMember[];
+}
+
 // ── Passkeys (PRD §3.5) ────────────────────────────────────────────────────────
 
 export interface Passkey {

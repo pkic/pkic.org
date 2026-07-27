@@ -1,0 +1,199 @@
+/**
+ * working-groups.test.ts
+ *
+ * Admin working-groups CRUD + membership management — the admin-only
+ * complement to the public GET /api/v1/working-groups[/:id] and the member
+ * self-service POST/DELETE /api/v1/me/working-groups/:wgId. Covers
+ * create/list/update/deactivate, add/remove member (including the
+ * CA-category constraint), and permission denial.
+ */
+import { describe, expect, it, beforeEach } from "vitest";
+import { env } from "cloudflare:workers";
+import app from "../functions/router";
+import { resetDb } from "./helpers/reset-db";
+import { createAdminSession } from "./helpers/auth";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
+
+function request(token: string, path: string, init: RequestInit = {}): Request {
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${token}`);
+  if (init.body && !headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
+  return new Request(`https://app.test${path}`, { ...init, headers });
+}
+
+async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
+  return app.fetch(
+    request(token, path, init),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function insertUser(email: string): Promise<string> {
+  const id = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+  )
+    .bind(id, email, email)
+    .run();
+  return id;
+}
+
+async function insertMember(userId: string, membershipCategory: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
+     VALUES (?, ?, ?, NULL, 'active', datetime('now'), datetime('now'))`,
+  )
+    .bind(crypto.randomUUID(), membershipCategory, userId)
+    .run();
+}
+
+async function insertWorkingGroup(name: string, slug: string): Promise<string> {
+  const id = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO working_groups (id, name, slug, description, mailing_list_email, active, created_at, updated_at)
+     VALUES (?, ?, ?, NULL, NULL, 1, datetime('now'), datetime('now'))`,
+  )
+    .bind(id, name, slug)
+    .run();
+  return id;
+}
+
+async function assignRole(userId: string, roleId: string, grantedBy: string): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO user_roles (id, user_id, role_id, granted_by_user_id, created_at)
+     VALUES (?, ?, ?, ?, datetime('now'))`,
+  )
+    .bind(crypto.randomUUID(), userId, roleId, grantedBy)
+    .run();
+}
+
+describe("admin working groups", () => {
+  let adminToken: string;
+  let adminId: string;
+
+  beforeEach(async () => {
+    await resetDb();
+    await seedEventAndAdmin(env.DB);
+    const adminRow = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
+    adminId = adminRow.id;
+    adminToken = await createAdminSession(env.DB, adminId, "admin-wg-token");
+  });
+
+  it("creates a working group and lists it (including inactive groups, unlike the public endpoint)", async () => {
+    const createResponse = await call(adminToken, "/api/v1/admin/working-groups", {
+      method: "POST",
+      body: JSON.stringify({ name: "Test Working Group", description: "for tests" }),
+    });
+    expect(createResponse.status).toBe(201);
+    const created = (await createResponse.json()) as { workingGroup: { id: string; slug: string; active: boolean } };
+    expect(created.workingGroup.slug).toBe("test-working-group");
+    expect(created.workingGroup.active).toBe(true);
+
+    const listResponse = await call(adminToken, "/api/v1/admin/working-groups");
+    expect(listResponse.status).toBe(200);
+    const list = (await listResponse.json()) as { workingGroups: Array<{ id: string }> };
+    expect(list.workingGroups.some((g) => g.id === created.workingGroup.id)).toBe(true);
+  });
+
+  it("creating a working group with a duplicate name returns 409", async () => {
+    await call(adminToken, "/api/v1/admin/working-groups", {
+      method: "POST",
+      body: JSON.stringify({ name: "Duplicate WG" }),
+    });
+    const second = await call(adminToken, "/api/v1/admin/working-groups", {
+      method: "POST",
+      body: JSON.stringify({ name: "Duplicate WG" }),
+    });
+    expect(second.status).toBe(409);
+  });
+
+  it("updates a working group's fields and can deactivate/reactivate it", async () => {
+    const createResponse = await call(adminToken, "/api/v1/admin/working-groups", {
+      method: "POST",
+      body: JSON.stringify({ name: "Editable WG" }),
+    });
+    const created = (await createResponse.json()) as { workingGroup: { id: string } };
+
+    const patchResponse = await call(adminToken, `/api/v1/admin/working-groups/${created.workingGroup.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ description: "updated", active: false }),
+    });
+    expect(patchResponse.status).toBe(200);
+    const patched = (await patchResponse.json()) as { workingGroup: { description: string; active: boolean } };
+    expect(patched.workingGroup.description).toBe("updated");
+    expect(patched.workingGroup.active).toBe(false);
+
+    const reactivate = await call(adminToken, `/api/v1/admin/working-groups/${created.workingGroup.id}`, {
+      method: "PATCH",
+      body: JSON.stringify({ active: true }),
+    });
+    expect(((await reactivate.json()) as { workingGroup: { active: boolean } }).workingGroup.active).toBe(true);
+  });
+
+  it("adds and removes a member from a working group", async () => {
+    const wgId = await insertWorkingGroup("Test PQC", "test-pqc");
+    const userId = await insertUser("wg-member@example.test");
+
+    const addResponse = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+    expect(addResponse.status).toBe(201);
+
+    const detailResponse = await call(adminToken, `/api/v1/admin/working-groups/${wgId}`);
+    const detail = (await detailResponse.json()) as { workingGroup: { members: Array<{ userId: string }> } };
+    expect(detail.workingGroup.members.some((m) => m.userId === userId)).toBe(true);
+
+    const removeResponse = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members/${userId}`, {
+      method: "DELETE",
+    });
+    expect(removeResponse.status).toBe(200);
+
+    const afterRemove = (await (await call(adminToken, `/api/v1/admin/working-groups/${wgId}`)).json()) as {
+      workingGroup: { members: Array<{ userId: string }> };
+    };
+    expect(afterRemove.workingGroup.members.some((m) => m.userId === userId)).toBe(false);
+  });
+
+  it("rejects adding a non-category-A member to the CA working group", async () => {
+    const wgId = await insertWorkingGroup("CA Working Group", "ca");
+    const userId = await insertUser("non-ca-member@example.test");
+    await insertMember(userId, "F");
+
+    const response = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("allows adding a category-A member to the CA working group", async () => {
+    const wgId = await insertWorkingGroup("CA Working Group", "ca");
+    const userId = await insertUser("ca-member@example.test");
+    await insertMember(userId, "A");
+
+    const response = await call(adminToken, `/api/v1/admin/working-groups/${wgId}/members`, {
+      method: "POST",
+      body: JSON.stringify({ userId }),
+    });
+    expect(response.status).toBe(201);
+  });
+
+  it("a staff user without working-groups:write cannot create or modify working groups", async () => {
+    const staffId = await insertUser("staff-no-wg-perm@example.test");
+    await assignRole(staffId, "role-membership_processor", adminId);
+    const staffToken = await createAdminSession(env.DB, staffId, "staff-no-wg-perm-token");
+
+    const response = await call(staffToken, "/api/v1/admin/working-groups", {
+      method: "POST",
+      body: JSON.stringify({ name: "Should Not Be Created" }),
+    });
+    expect(response.status).toBe(403);
+  });
+});

@@ -34,6 +34,7 @@ import organizations_Router from "./organizations/router";
 import proposals_Router from "./proposals/router";
 import roles_Router from "./roles/router";
 import users_Router from "./users/router";
+import working_groups_Router from "./working-groups/router";
 
 const app = new Hono<RequestDbContext>();
 app.onError((error, _c) => handleError(error));
@@ -80,7 +81,8 @@ function isPhase2PermissionGatedAdminPath(path: string): boolean {
     path.startsWith("/api/v1/admin/organizations") ||
     path.startsWith("/api/v1/admin/applications") ||
     path.startsWith("/api/v1/admin/membership-settings") ||
-    /^\/api\/v1\/admin\/users\/[^/]+\/(roles|membership)/.test(path)
+    path.startsWith("/api/v1/admin/working-groups") ||
+    /^\/api\/v1\/admin\/users\/[^/]+\/(roles|membership|emails|merge)/.test(path)
   );
 }
 
@@ -181,5 +183,6 @@ openapi.route("/organizations", organizations_Router);
 openapi.route("/proposals", proposals_Router);
 openapi.route("/roles", roles_Router);
 openapi.route("/users", users_Router);
+openapi.route("/working-groups", working_groups_Router);
 
 export default openapi;

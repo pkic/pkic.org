@@ -1,0 +1,88 @@
+/**
+ * Shared working-group membership helpers. Used by both the member
+ * self-service flows (`member-self-service.ts`'s `joinMyWorkingGroup`/
+ * `leaveMyWorkingGroup`, keyed to the caller's own identity) and the admin
+ * working-groups CRUD endpoints (keyed to an arbitrary target user) — the
+ * underlying `working_group_members` upsert-by-`left_at IS NULL` logic and
+ * Google Groups sync enqueue is identical either way, only the caller's
+ * authorization differs.
+ */
+import { first, run } from "../db/queries";
+import { nowIso } from "../utils/time";
+import { uuid } from "../utils/ids";
+import { AppError } from "../errors";
+import { enqueueGoogleGroupsSync } from "./google-groups";
+import type { DatabaseLike } from "../types";
+
+export const CA_WORKING_GROUP_SLUG = "ca";
+export const CA_ONLY_CATEGORY = "A";
+
+export interface WorkingGroupRow {
+  id: string;
+  slug: string;
+  name: string;
+  mailing_list_email: string | null;
+}
+
+export async function getWorkingGroupBySlugOrId(db: DatabaseLike, wgIdOrSlug: string): Promise<WorkingGroupRow | null> {
+  return first<WorkingGroupRow>(
+    db,
+    `SELECT id, slug, name, mailing_list_email FROM working_groups WHERE id = ? OR slug = ?`,
+    [wgIdOrSlug, wgIdOrSlug],
+  );
+}
+
+/** Only category-A members may belong to the CA working group. */
+export function assertCaConstraint(wg: WorkingGroupRow, membershipCategory: string | null): void {
+  if (wg.slug === CA_WORKING_GROUP_SLUG && membershipCategory !== CA_ONLY_CATEGORY) {
+    throw new AppError(403, "CA_CATEGORY_REQUIRED", "Only category A members may join the CA working group");
+  }
+}
+
+export async function addWorkingGroupMember(
+  db: DatabaseLike,
+  wg: WorkingGroupRow,
+  targetUserId: string,
+): Promise<void> {
+  const existing = await first<{ id: string }>(
+    db,
+    `SELECT id FROM working_group_members WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL`,
+    [wg.id, targetUserId],
+  );
+  if (existing) return;
+
+  await run(
+    db,
+    `INSERT INTO working_group_members (id, working_group_id, user_id, joined_at, left_at) VALUES (?, ?, ?, ?, NULL)`,
+    [uuid(), wg.id, targetUserId, nowIso()],
+  );
+
+  if (wg.mailing_list_email) {
+    await enqueueGoogleGroupsSync(db, {
+      userId: targetUserId,
+      googleGroupEmail: wg.mailing_list_email,
+      action: "add_to_list",
+    });
+  }
+}
+
+export async function removeWorkingGroupMember(
+  db: DatabaseLike,
+  wg: WorkingGroupRow,
+  targetUserId: string,
+): Promise<void> {
+  const result = await run(
+    db,
+    `UPDATE working_group_members SET left_at = ? WHERE working_group_id = ? AND user_id = ? AND left_at IS NULL`,
+    [nowIso(), wg.id, targetUserId],
+  );
+  if (result.changes === 0) return;
+
+  if (wg.mailing_list_email) {
+    await enqueueGoogleGroupsSync(db, {
+      userId: targetUserId,
+      googleGroupEmail: wg.mailing_list_email,
+      action: "remove_from_list",
+    });
+  }
+}
