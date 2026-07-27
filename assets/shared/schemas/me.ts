@@ -221,7 +221,10 @@ export const myOrganizationProfileGetRouteSchema = {
   tags: ["Me"],
   summary: "View my organization's current live profile (PRD §4.11)",
   responses: {
-    "200": { description: "My organization's profile.", content: { "application/json": { schema: myOrganizationProfileSchema } } },
+    "200": {
+      description: "My organization's profile.",
+      content: { "application/json": { schema: myOrganizationProfileSchema } },
+    },
     "403": { description: "Caller has no organization." },
   },
 };
@@ -323,7 +326,9 @@ export const mySecondaryContactNominateRouteSchema = {
   responses: {
     "200": { description: "Nomination recorded." },
     "403": { description: "Only the primary contact may nominate a secondary contact." },
-    "422": { description: "Nominee is not an active member of the same organization, or is already the primary contact." },
+    "422": {
+      description: "Nominee is not an active member of the same organization, or is already the primary contact.",
+    },
   },
 };
 
@@ -335,5 +340,23 @@ export const myHeadshotUploadRouteSchema = {
     "200": { description: "Uploaded." },
     "413": { description: "File too large." },
     "415": { description: "Unsupported file type." },
+  },
+};
+
+// ── Organization sponsorship view (PRD §4.13, Phase 4E) ────────────────────
+
+export const myOrganizationSponsorshipSchema = z.object({
+  tier: z.string().nullable(),
+  startDate: z.string().nullable(),
+});
+
+export const myOrganizationSponsorshipGetRouteSchema = {
+  tags: ["Me"],
+  summary: "View my organization's active consortium sponsorship tier + start date",
+  responses: {
+    "200": {
+      description: "Current sponsorship, or nulls if the organization is not currently a sponsor.",
+      content: { "application/json": { schema: myOrganizationSponsorshipSchema } },
+    },
   },
 };

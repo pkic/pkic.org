@@ -1,0 +1,43 @@
+/**
+ * GET /api/v1/admin/events/:eventSlug/sponsor-tiers
+ *   Returns which sponsor tiers get attendee-data-access for this event.
+ *
+ * PUT /api/v1/admin/events/:eventSlug/sponsor-tiers
+ *   Replaces the full tier config (PRD §4.13). Defaults to no tiers having
+ *   access — an empty PUT clears all configured tiers.
+ */
+import { json } from "../../../../../_lib/http";
+import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
+import { getEventBySlug } from "../../../../../_lib/services/events";
+import { listEventSponsorTiers, replaceEventSponsorTiers } from "../../../../../_lib/services/sponsorship";
+import { writeAuditLog } from "../../../../../_lib/services/audit";
+import { parseJsonBody } from "../../../../../_lib/validation";
+import { eventSponsorTiersReplaceSchema } from "../../../../../../assets/shared/schemas/admin-sponsorships";
+import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
+
+export async function onRequestGet(c: AdminContext): Promise<Response> {
+  await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+  const tiers = await listEventSponsorTiers(requestDb(c), event.id);
+  return json({ tiers });
+}
+
+export async function onRequestPut(c: AdminContext): Promise<Response> {
+  const admin = await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
+  const body = await parseJsonBody(c.req, eventSponsorTiersReplaceSchema);
+  const event = await getEventBySlug(requestDb(c), c.req.param("eventSlug"));
+
+  await replaceEventSponsorTiers(requestDb(c), event.id, body.tiers);
+  await writeAuditLog(requestDb(c), "admin", admin.id, "event_sponsor_tiers_updated", "event", event.id, {
+    tierCount: body.tiers.length,
+  });
+
+  const tiers = await listEventSponsorTiers(requestDb(c), event.id);
+  return json({ tiers });
+}
+
+export async function onRequest(c: AdminContext): Promise<Response> {
+  if (c.req.raw.method === "GET") return onRequestGet(c);
+  if (c.req.raw.method === "PUT") return onRequestPut(c);
+  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
+}

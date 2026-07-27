@@ -783,6 +783,50 @@ export interface MailingList {
   updatedAt: string;
 }
 
+// PRD §4.13 (Phase 4E) — sponsorship sales pipeline
+export const SPONSORSHIP_PIPELINE_STAGES = [
+  "new_inquiry",
+  "contacted",
+  "proposal_sent",
+  "negotiating",
+  "payment_pending",
+  "active",
+  "lapsed",
+] as const;
+export type SponsorshipPipelineStage = (typeof SPONSORSHIP_PIPELINE_STAGES)[number];
+
+export interface Sponsorship {
+  id: string;
+  sponsorType: "consortium" | "event";
+  organizationId: string | null;
+  organizationName: string | null;
+  nonMemberName: string | null;
+  nonMemberWebsite: string | null;
+  contactName: string | null;
+  contactEmail: string | null;
+  eventId: string | null;
+  eventName: string | null;
+  tier: string | null;
+  pipelineStage: SponsorshipPipelineStage;
+  startDate: string | null;
+  renewalDate: string | null;
+  assignedToUserId: string | null;
+  assignedToName: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SponsorshipEvent {
+  id: string;
+  fromStage: string | null;
+  toStage: string;
+  actorUserId: string | null;
+  actorName: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
 // PRD §6 Interim Admin Tool — GET/POST /api/v1/admin/members
 export interface AdminMemberSummary {
   id: string;

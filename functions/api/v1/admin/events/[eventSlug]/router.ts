@@ -17,6 +17,8 @@ import { onRequestGet as AdminEventsEventSlugPresentationsDownloadGet_l } from "
 import { AdminEventsEventSlugProposalsGet } from "./proposals";
 import { onRequestGet as AdminEventsEventSlugRegistrationsGet_l } from "./registrations";
 import { onRequestPatch as AdminEventsEventSlugSettingsPatch_l } from "./settings";
+import { onRequestGet as AdminEventsEventSlugSponsorTiersGet_l } from "./sponsor-tiers";
+import { onRequestPut as AdminEventsEventSlugSponsorTiersPut_l } from "./sponsor-tiers";
 import { onRequestGet as AdminEventsEventSlugStatsGet_l } from "./stats";
 import { onRequestGet as AdminEventsEventSlugTermsGet_l } from "./terms";
 import { onRequestPut as AdminEventsEventSlugTermsPut_l } from "./terms";
@@ -88,6 +90,8 @@ app.get("/presentations/download", AdminEventsEventSlugPresentationsDownloadGet_
 openapi.get("/proposals", AdminEventsEventSlugProposalsGet);
 app.get("/registrations", AdminEventsEventSlugRegistrationsGet_l);
 app.patch("/settings", AdminEventsEventSlugSettingsPatch_l);
+app.get("/sponsor-tiers", AdminEventsEventSlugSponsorTiersGet_l);
+app.put("/sponsor-tiers", AdminEventsEventSlugSponsorTiersPut_l);
 app.get("/stats", AdminEventsEventSlugStatsGet_l);
 app.get("/terms", AdminEventsEventSlugTermsGet_l);
 app.put("/terms", AdminEventsEventSlugTermsPut_l);
