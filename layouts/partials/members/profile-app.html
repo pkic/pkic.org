@@ -1,0 +1,10 @@
+{{/*
+  members/profile-app.html — mount point for the client-fetched member
+  profile detail page (PRD §1.6 Part B). Params (dict): directoryHref.
+*/}}
+<div
+  data-member-detail
+  data-module="member-flows/member-detail-page"
+  data-api-base="/api/v1"
+  data-directory-href="{{ .directoryHref | default "/members/" }}"
+></div>

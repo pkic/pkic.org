@@ -845,6 +845,8 @@ export const adminCreateEventSchema = z.object({
 export const adminEventPermissionSchema = z.object({
   userEmail: normalizedEmailSchema,
   permission: z.enum(["organizer", "program_committee", "moderator", "volunteer"]),
+  // PRD §2.4 — "grant time-bounded event reviewer access from the event detail screen".
+  expiresAt: z.iso.datetime().nullable().optional(),
 });
 
 export const adminUserRoleSchema = z.object({

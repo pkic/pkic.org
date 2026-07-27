@@ -1,0 +1,13 @@
+{{/*
+  members/directory-app.html — mount point for the client-fetched member
+  directory (PRD §1.6 Part B). Params (dict): group, prefix, label, detailBase.
+*/}}
+<div
+  data-member-directory
+  data-module="member-flows/member-directory-page"
+  data-api-base="/api/v1"
+  data-group="{{ .group | default "organization" }}"
+  data-prefix="{{ .prefix | default "m" }}"
+  data-label="{{ .label | default "members" }}"
+  data-detail-base="{{ .detailBase | default "/members/profile/" }}"
+></div>

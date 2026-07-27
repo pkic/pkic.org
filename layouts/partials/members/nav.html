@@ -2,30 +2,23 @@
   members/nav.html — sticky section nav for /members/ and /members/independent/
   Mirrors the WG section nav pattern (dark bar, underline active).
   Params: none (reads from page context)
+
+  No longer shows per-tab counts: the member directory (PRD §1.6 Part B) is
+  fetched client-side from D1 now, and this partial renders at Hugo build
+  time — it has no way to know the live count without duplicating the API
+  call, so showing a build-time hugo.Data.members count here would drift
+  from what the page's own fetch displays a moment later.
 */}}
 {{- $currentPath := .RelPermalink -}}
 {{- $isIndep     := hasPrefix $currentPath "/members/independent" -}}
 
-{{/* Count members for badge labels */}}
-{{- $memberCount := 0 -}}
-{{- $indepCount  := 0 -}}
-{{- range hugo.Data.members -}}
-  {{- if or (eq .memberType "H5") (eq .memberType "H6") (eq .memberType "H7") -}}
-    {{- $indepCount = add $indepCount 1 -}}
-  {{- else -}}
-    {{- $memberCount = add $memberCount 1 -}}
-  {{- end -}}
-{{- end -}}
-
 <div class="members-section-nav">
   <div class="container">
     <a class="members-nav-link{{ if not $isIndep }} is-active{{ end }}" href="/members/">
-      Members <span class="badge ms-1 rounded-pill">{{ $memberCount }}</span>
+      Members
     </a>
-    {{ if gt $indepCount 0 }}
     <a class="members-nav-link{{ if $isIndep }} is-active{{ end }}" href="/members/independent/">
-      Independent Members <span class="badge ms-1 rounded-pill">{{ $indepCount }}</span>
+      Independent Members
     </a>
-    {{ end }}
   </div>
 </div>

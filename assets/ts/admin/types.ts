@@ -1,4 +1,5 @@
 export interface EventSummary {
+  id: string;
   slug: string;
   name: string;
   timezone: string;
@@ -149,8 +150,64 @@ export interface EventPermission {
   user_id: string | null;
   permission: string;
   granted_by_id: string;
+  expires_at: string | null;
   created_at: string;
   granter_email: string | null;
+}
+
+// ── Access control (PRD §2.4) ─────────────────────────────────────────────────
+
+export interface Role {
+  id: string;
+  name: string;
+  description: string | null;
+  isSystemRole: boolean;
+  permissions: string[];
+  createdAt: string;
+}
+
+export interface AccessGrant {
+  id: string;
+  userId: string;
+  permission: string;
+  contextType: string | null;
+  contextId: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface UserRoleAssignment {
+  id: string;
+  userId: string;
+  roleId: string;
+  roleName: string;
+  contextType: string | null;
+  contextId: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface WorkingGroupSummary {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  active: boolean;
+}
+
+export interface WorkingGroupDetail extends WorkingGroupSummary {
+  mailingListEmail: string | null;
+  members: Array<{ name: string; organizationName: string | null }>;
+}
+
+// ── Passkeys (PRD §3.5) ────────────────────────────────────────────────────────
+
+export interface Passkey {
+  id: string;
+  deviceName: string | null;
+  aaguid: string | null;
+  lastUsedAt: string | null;
+  createdAt: string;
 }
 
 export interface ProposalSummary {
@@ -414,6 +471,14 @@ export interface AdminDueWorkRow {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
+export interface AdminUserMembership {
+  memberId: string;
+  membershipCategory: string;
+  status: string;
+  organizationId: string | null;
+  organizationName: string | null;
+}
+
 export interface AdminUser {
   id: string;
   email: string;
@@ -423,6 +488,7 @@ export interface AdminUser {
   role: string;
   active: number;
   created_at: string;
+  membership: AdminUserMembership | null;
 }
 
 // ── Email templates ───────────────────────────────────────────────────────────
@@ -576,6 +642,52 @@ export interface EventStatsResponse {
   };
 }
 
+// Admin Organizations — GET /api/v1/admin/organizations[/:id]
+export interface AdminOrganizationSummary {
+  id: string;
+  name: string;
+  website: string | null;
+  description: string | null;
+  slogan: string | null;
+  logoUrl: string | null;
+  memberCount: number;
+  primaryContactName: string | null;
+  primaryContactEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminOrganizationRepresentative {
+  memberId: string;
+  userId: string;
+  name: string;
+  email: string;
+  jobTitle: string | null;
+  membershipCategory: string;
+  status: string;
+  showOnOrgProfile: boolean;
+  isPrimaryContact: boolean;
+  isSecondaryContact: boolean;
+  createdAt: string;
+}
+
+export interface AdminOrganizationDetail extends AdminOrganizationSummary {
+  contentMarkdown: string | null;
+  blogUrl: string | null;
+  blogFeedUrl: string | null;
+  pressUrl: string | null;
+  pressFeedUrl: string | null;
+  careersUrl: string | null;
+  socialX: string | null;
+  socialLinkedin: string | null;
+  socialFacebook: string | null;
+  socialInstagram: string | null;
+  socialYoutube: string | null;
+  primaryContactUserId: string | null;
+  secondaryContactUserId: string | null;
+  representatives: AdminOrganizationRepresentative[];
+}
+
 // PRD §6 Interim Admin Tool — GET/POST /api/v1/admin/members
 export interface AdminMemberSummary {
   id: string;
@@ -588,4 +700,88 @@ export interface AdminMemberSummary {
   status: string;
   showOnOrgProfile: boolean;
   createdAt: string;
+}
+
+// PRD §4.2 — GET /api/v1/admin/applications
+export interface AdminApplicationSummary {
+  id: string;
+  applicantEmail: string;
+  applicantName: string;
+  organizationName: string | null;
+  membershipCategory: string;
+  status: string;
+  stage: string;
+  onHoldSubtype: string | null;
+  assignedToUserId: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminApplicationEvent {
+  fromStage: string | null;
+  toStage: string;
+  actorUserId: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface AdminApplicationCommunication {
+  id: string;
+  application_id: string;
+  kind: "communication" | "note";
+  actor_user_id: string;
+  subject: string | null;
+  body: string;
+  template_key: string | null;
+  email_outbox_id: string | null;
+  created_at: string;
+}
+
+export interface AdminApplicationConcern {
+  id: string;
+  application_id: string;
+  submitted_by_user_id: string;
+  concern_text: string;
+  created_at: string;
+}
+
+export interface AdminApplicationEcDecision {
+  id: string;
+  application_id: string;
+  ec_member_user_id: string;
+  decision: "approve" | "decline";
+  reason: string | null;
+  created_at: string;
+}
+
+export interface AdminApplicationDocument {
+  id: string;
+  filename: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  uploadedAt: string;
+  uploadedByEmail: string;
+}
+
+export interface AdminApplicationDetail extends AdminApplicationSummary {
+  stageEnteredAt: string;
+  answers: Record<string, unknown>;
+  events: AdminApplicationEvent[];
+  communications: AdminApplicationCommunication[];
+  concerns: AdminApplicationConcern[];
+  ecDecisions: AdminApplicationEcDecision[];
+  documents: AdminApplicationDocument[];
+}
+
+// PRD §4.3 — GET/PATCH /api/v1/admin/membership-settings
+export interface AdminMembershipSettings {
+  consultationWindowDays: number;
+  ecReviewWindowDays: number;
+  onHoldResponseDeadlineDays: number;
+  consultationEmailRecipients: string;
+  ecEmailRecipients: string;
+  ccApplicantEmails: string;
+  autoReminderOnHolds: boolean;
+  forumVoteMinEndorsers: number;
+  updatedAt: string;
 }

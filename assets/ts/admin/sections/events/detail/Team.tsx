@@ -1,7 +1,7 @@
 import { useState, useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/Table";
 import { api } from "../../../api";
-import { toast } from "../../../ui";
+import { fmt, toast } from "../../../ui";
 import type { EventPermission } from "../../../types";
 
 const PERM_LABELS: Record<string, string> = {
@@ -15,6 +15,7 @@ export function Team({ slug }: { slug: string }) {
   const tableRef = useRef<ApiTableActions | null>(null);
   const [newEmail, setNewEmail] = useState("");
   const [newPerm, setNewPerm] = useState("organizer");
+  const [newExpiresAt, setNewExpiresAt] = useState("");
   const [adding, setAdding] = useState(false);
   const [addStatus, setAddStatus] = useState("");
 
@@ -37,10 +38,15 @@ export function Team({ slug }: { slug: string }) {
     try {
       await api(`/api/v1/admin/events/${slug}/permissions`, {
         method: "POST",
-        body: JSON.stringify({ userEmail: newEmail.trim(), permission: newPerm }),
+        body: JSON.stringify({
+          userEmail: newEmail.trim(),
+          permission: newPerm,
+          expiresAt: newExpiresAt ? new Date(newExpiresAt).toISOString() : undefined,
+        }),
       });
       toast("Permission added", "success");
       setNewEmail("");
+      setNewExpiresAt("");
       setAddStatus("");
       tableRef.current?.reload();
     } catch (e) {
@@ -83,6 +89,15 @@ export function Team({ slug }: { slug: string }) {
                 ))}
               </select>
             </div>
+            <div>
+              <label class="form-label small fw-semibold">Expires (optional)</label>
+              <input
+                class="form-control form-control-sm"
+                type="datetime-local"
+                value={newExpiresAt}
+                onInput={(e) => setNewExpiresAt((e.target as HTMLInputElement).value)}
+              />
+            </div>
             <button type="submit" class="btn btn-sm btn-success" disabled={adding}>
               Add
             </button>
@@ -107,6 +122,18 @@ export function Team({ slug }: { slug: string }) {
             header: "Added",
             cell: (p) => (p.created_at ? p.created_at.substring(0, 10) : "—"),
             className: "mono small",
+          },
+          {
+            header: "Expires",
+            cell: (p) =>
+              p.expires_at ? (
+                <span class={new Date(p.expires_at).getTime() < Date.now() ? "text-danger" : ""}>
+                  {fmt(p.expires_at)}
+                </span>
+              ) : (
+                <span class="text-muted">Never</span>
+              ),
+            className: "small",
           },
           {
             header: "",

@@ -12,7 +12,11 @@ import { Email } from "../sections/Email";
 import { DueWork } from "../sections/DueWork";
 import { Templates } from "../sections/Templates";
 import { Users } from "../sections/Users";
-import { Members } from "../sections/Members";
+import { AccessControl } from "../sections/access-control";
+import { AccountSettings } from "../sections/AccountSettings";
+import { Organizations } from "../sections/Organizations";
+import { Applications } from "../sections/Applications";
+import { MembershipSettings } from "../sections/MembershipSettings";
 import { EventList } from "../sections/events/EventList";
 import { EventDetailView } from "../sections/events/detail/EventDetail";
 import { FormDetailPage, Forms } from "../sections/events/detail/Forms";
@@ -198,18 +202,42 @@ export function AdminShell() {
               )}
             />
             <Route
-              path="/membership"
+              path="/organizations"
               component={() => (
-                <SectionWrapper title="Membership">
-                  <Members />
+                <SectionWrapper title="Organizations">
+                  <Organizations />
                 </SectionWrapper>
               )}
             />
             <Route
-              path="/membership/members"
+              path="/membership"
               component={() => (
-                <SectionWrapper title="Membership — Members">
-                  <Members />
+                <SectionWrapper title="Membership — Applications">
+                  <Applications />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/membership/applications"
+              component={() => (
+                <SectionWrapper title="Membership — Applications">
+                  <Applications />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/membership/settings"
+              component={() => (
+                <SectionWrapper title="Membership — Settings">
+                  <MembershipSettings />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/access-control"
+              component={() => (
+                <SectionWrapper title="Access Control">
+                  <AccessControl />
                 </SectionWrapper>
               )}
             />
@@ -218,6 +246,14 @@ export function AdminShell() {
               component={() => (
                 <SectionWrapper title="Audit Log">
                   <AuditLog />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/account"
+              component={() => (
+                <SectionWrapper title="Account Settings">
+                  <AccountSettings />
                 </SectionWrapper>
               )}
             />

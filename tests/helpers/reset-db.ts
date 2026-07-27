@@ -11,7 +11,14 @@ interface TableNameRow {
 // resetDb() would break the FK from `user_roles.role_id` for any test that
 // grants a built-in role (e.g. via POST .../events/:slug/permissions)
 // without every such test re-inserting all nine built-in roles itself.
-const EXCLUDED_TABLES = new Set(["d1_migrations", "roles", "role_permissions"]);
+// `membership_settings` (PRD §4.3, migration 0038) is a singleton
+// configuration row seeded once by the migration — the same class of
+// system reference data as roles/role_permissions above, not per-test
+// business data. Every membership-workflow code path (stage transitions,
+// scheduled jobs, the admin settings endpoint) expects this row to always
+// exist; wiping it on every resetDb() would require every such test to
+// re-seed it itself.
+const EXCLUDED_TABLES = new Set(["d1_migrations", "roles", "role_permissions", "membership_settings"]);
 
 async function listResettableTables(): Promise<string[]> {
   const { results } = await env.DB.prepare(
@@ -53,11 +60,23 @@ async function clearTablesWithRetry(tableNames: string[]): Promise<void> {
 }
 
 /**
+ * `membership_settings` is excluded from wiping (see above) but its
+ * `updated_by_user_id` FK can point at a `users` row from a previous test,
+ * which would otherwise block that table's DELETE below. Cleared first,
+ * before the generic table-clearing pass, so the singleton row itself
+ * survives but never holds a dangling actor reference.
+ */
+async function clearMembershipSettingsActorReference(): Promise<void> {
+  await env.DB.prepare(`UPDATE membership_settings SET updated_by_user_id = NULL WHERE id = 'default'`).run();
+}
+
+/**
  * Clears all domain data from the test database while preserving the schema
  * and the D1 migration tracking table.  Call inside `beforeEach` in test files
  * that create multiple independent DB scenarios.
  */
 export async function resetDb(): Promise<void> {
+  await clearMembershipSettingsActorReference();
   const tableNames = await listResettableTables();
   await clearTablesWithRetry(tableNames);
 }

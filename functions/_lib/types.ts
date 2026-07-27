@@ -139,6 +139,14 @@ export interface Env {
   WEBAUTHN_RP_NAME?: string;
   /** WebAuthn expected origin (scheme + host, e.g. "https://pkic.org") — PRD §3. */
   WEBAUTHN_ORIGIN?: string;
+  /** Member (non-admin) magic-link session TTL, hours — PRD §4.9/§4.10. Defaults to 720 (30 days). */
+  MEMBER_SESSION_TTL_HOURS?: string;
+  /** Google Workspace service account email used to sign Directory API JWTs — PRD §4.7/§4.9. */
+  GOOGLE_SERVICE_ACCOUNT_EMAIL?: string;
+  /** Google Workspace service account PEM private key — PRD §4.7/§4.9. */
+  GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY?: string;
+  /** Google Workspace admin user to impersonate via domain-wide delegation (Directory API requires this) — PRD §4.7/§4.9. */
+  GOOGLE_WORKSPACE_ADMIN_EMAIL?: string;
 }
 
 export interface PagesContext<P extends Record<string, string> = Record<string, string>> {
@@ -178,6 +186,25 @@ export interface PermissionGrant {
   permission: string;
   contextType: string | null;
   contextId: string | null;
+}
+
+/**
+ * Resolved identity for the Phase 4A (PRD §4.9/§4.10) member-facing session
+ * — a parallel, non-staff auth path to AuthAdmin. Self-service `/api/v1/me/*`
+ * endpoints are identity-gated (a valid session backed by an active
+ * `members` row), not `resource:action` permission-gated — the `member`/
+ * `interested_parties` roles carry no `role_permissions` rows (see
+ * functions/_lib/auth/member.ts).
+ */
+export interface AuthMember {
+  userId: string;
+  email: string;
+  memberId: string;
+  organizationId: string | null;
+  membershipCategory: string;
+  isEcMember: boolean;
+  sessionId?: string;
+  expiresAt?: string;
 }
 
 export interface AuthAdmin {
