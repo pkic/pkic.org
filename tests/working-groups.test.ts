@@ -185,6 +185,93 @@ describe("admin working groups", () => {
     expect(response.status).toBe(201);
   });
 
+  // ── Fix 2: chair / vice chair via user_roles (migration 0040) ────────────
+
+  async function findRoleId(name: string): Promise<string> {
+    const rows = await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = ?", name);
+    return rows[0].id;
+  }
+
+  it("GET working group detail/list surfaces the current chair and vice chair resolved from user_roles", async () => {
+    const wgId = await insertWorkingGroup("Chaired WG", "chaired-wg");
+    const chairUserId = await insertUser("chair@example.test");
+    const viceChairUserId = await insertUser("vice-chair@example.test");
+    const chairRoleId = await findRoleId("wg_chair");
+    const viceChairRoleId = await findRoleId("wg_vice_chair");
+
+    await call(adminToken, `/api/v1/admin/users/${chairUserId}/roles`, {
+      method: "POST",
+      body: JSON.stringify({ roleId: chairRoleId, contextType: "working_group", contextId: wgId }),
+    });
+    await call(adminToken, `/api/v1/admin/users/${viceChairUserId}/roles`, {
+      method: "POST",
+      body: JSON.stringify({ roleId: viceChairRoleId, contextType: "working_group", contextId: wgId }),
+    });
+
+    const detailResponse = await call(adminToken, `/api/v1/admin/working-groups/${wgId}`);
+    expect(detailResponse.status).toBe(200);
+    const detail = (await detailResponse.json()) as {
+      workingGroup: {
+        chair: { userId: string; userRoleId: string } | null;
+        viceChair: { userId: string; userRoleId: string } | null;
+      };
+    };
+    expect(detail.workingGroup.chair?.userId).toBe(chairUserId);
+    expect(detail.workingGroup.viceChair?.userId).toBe(viceChairUserId);
+
+    const listResponse = await call(adminToken, "/api/v1/admin/working-groups");
+    const list = (await listResponse.json()) as {
+      workingGroups: Array<{ id: string; chair: { userId: string } | null; viceChair: { userId: string } | null }>;
+    };
+    const listed = list.workingGroups.find((g) => g.id === wgId);
+    expect(listed?.chair?.userId).toBe(chairUserId);
+    expect(listed?.viceChair?.userId).toBe(viceChairUserId);
+  });
+
+  it("removing a chair (DELETE user_roles/:userRoleId) clears it from the working group detail", async () => {
+    const wgId = await insertWorkingGroup("Removable Chair WG", "removable-chair-wg");
+    const chairUserId = await insertUser("removable-chair@example.test");
+    const chairRoleId = await findRoleId("wg_chair");
+
+    const assignResponse = await call(adminToken, `/api/v1/admin/users/${chairUserId}/roles`, {
+      method: "POST",
+      body: JSON.stringify({ roleId: chairRoleId, contextType: "working_group", contextId: wgId }),
+    });
+    const assigned = (await assignResponse.json()) as { role: { id: string } };
+
+    const beforeRemove = (await (await call(adminToken, `/api/v1/admin/working-groups/${wgId}`)).json()) as {
+      workingGroup: { chair: { userId: string } | null };
+    };
+    expect(beforeRemove.workingGroup.chair?.userId).toBe(chairUserId);
+
+    const removeResponse = await call(adminToken, `/api/v1/admin/users/${chairUserId}/roles/${assigned.role.id}`, {
+      method: "DELETE",
+    });
+    expect(removeResponse.status).toBe(200);
+
+    const afterRemove = (await (await call(adminToken, `/api/v1/admin/working-groups/${wgId}`)).json()) as {
+      workingGroup: { chair: { userId: string } | null };
+    };
+    expect(afterRemove.workingGroup.chair).toBeNull();
+  });
+
+  it("chair and vice chair are independent — assigning one doesn't affect the other", async () => {
+    const wgId = await insertWorkingGroup("Independent Roles WG", "independent-roles-wg");
+    const chairUserId = await insertUser("independent-chair@example.test");
+    const chairRoleId = await findRoleId("wg_chair");
+
+    await call(adminToken, `/api/v1/admin/users/${chairUserId}/roles`, {
+      method: "POST",
+      body: JSON.stringify({ roleId: chairRoleId, contextType: "working_group", contextId: wgId }),
+    });
+
+    const detail = (await (await call(adminToken, `/api/v1/admin/working-groups/${wgId}`)).json()) as {
+      workingGroup: { chair: { userId: string } | null; viceChair: { userId: string } | null };
+    };
+    expect(detail.workingGroup.chair?.userId).toBe(chairUserId);
+    expect(detail.workingGroup.viceChair).toBeNull();
+  });
+
   it("a staff user without working-groups:write cannot create or modify working groups", async () => {
     const staffId = await insertUser("staff-no-wg-perm@example.test");
     await assignRole(staffId, "role-membership_processor", adminId);

@@ -49,13 +49,18 @@ export const adminOrganizationSummarySchema = z.object({
   updatedAt: z.string(),
 });
 
+// membershipCategory is deliberately absent here — category is now an
+// organization-level fact (organizations.membership_category), surfaced
+// once at the top of adminOrganizationDetailSchema rather than repeated
+// per representative. members.member_type still mirrors it in the DB for
+// org-tied representatives, but that's a denormalized implementation
+// detail, not something this API exposes per-row anymore.
 export const adminOrganizationRepresentativeSchema = z.object({
   memberId: z.uuid(),
   userId: z.uuid(),
   name: z.string(),
   email: z.string(),
   jobTitle: z.string().nullable(),
-  membershipCategory: z.string(),
   status: z.string(),
   showOnOrgProfile: z.boolean(),
   isPrimaryContact: z.boolean(),
@@ -64,6 +69,7 @@ export const adminOrganizationRepresentativeSchema = z.object({
 });
 
 export const adminOrganizationDetailSchema = adminOrganizationSummarySchema.extend({
+  membershipCategory: z.string().nullable(),
   contentMarkdown: z.string().nullable(),
   blogUrl: z.string().nullable(),
   blogFeedUrl: z.string().nullable(),
@@ -123,6 +129,12 @@ export const organizationGetRouteSchema = {
 
 export const organizationUpdateSchema = z.object({
   name: trimmedString(1, 200).optional(),
+  // Category is now an organization-level property (migration 0040). Setting
+  // it here cascades to every existing org-tied representative's
+  // members.member_type (see updateAdminOrganization) so the two stay in
+  // sync — member_type is a mirror for org-tied members, not an
+  // independent value.
+  membershipCategory: orgTiedMembershipCategorySchema.optional(),
   description: trimmedString(0, 2000).nullable().optional(),
   website: z.url().nullable().optional(),
   contentMarkdown: trimmedString(0, 20000).nullable().optional(),
@@ -163,19 +175,23 @@ export const organizationUpdateRouteSchema = {
 
 // ── Add representative to an existing organization ─────────────────────────
 
+// membershipCategory is deliberately not accepted here — an added
+// representative always inherits organizations.membership_category (set
+// once per org via PATCH /api/v1/admin/organizations/:id). If the
+// organization has no category set yet, the request is rejected (422) and
+// staff must set the org's category first.
 export const organizationRepresentativeAddSchema = z.object({
   name: trimmedString(1, 200),
   email: normalizedEmailSchema,
   jobTitle: trimmedString(0, 200).optional(),
   linkedin: z.url().optional(),
-  membershipCategory: orgTiedMembershipCategorySchema,
 });
 
 export const organizationAddRepresentativeRouteSchema = {
   tags: ["Organizations"],
   summary: "Add a representative to an organization",
   description:
-    "Finds-or-creates the user by email and adds an active members row linking them to this organization. If the organization has no primary (or secondary) contact yet, the new representative is assigned to the open slot.",
+    "Finds-or-creates the user by email and adds an active members row linking them to this organization, inheriting the organization's membership category. If the organization has no primary (or secondary) contact yet, the new representative is assigned to the open slot.",
   request: {
     params: organizationIdParamsSchema,
     body: { content: { "application/json": { schema: organizationRepresentativeAddSchema } }, required: true },
@@ -192,8 +208,14 @@ export const organizationAddRepresentativeRouteSchema = {
 
 // ── Single-member edit/remove (used from both Organizations and Users UI) ──
 
+// membershipCategory is still accepted here — but only actually honored by
+// updateAdminMember for org-less (organization_id IS NULL) members; for
+// org-tied members it's controlled at the organization level instead (see
+// organizationUpdateSchema) and this endpoint rejects it with a 422. It's
+// restricted to the individual-only category vocabulary since those are
+// the only categories this endpoint can still change.
 export const memberUpdateSchema = z.object({
-  membershipCategory: z.string().trim().min(1).max(10).optional(),
+  membershipCategory: individualMembershipCategorySchema.optional(),
   status: memberStatusSchema.optional(),
   showOnOrgProfile: z.boolean().optional(),
 });

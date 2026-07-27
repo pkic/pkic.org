@@ -22,13 +22,19 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     offset: url.searchParams.get("offset") ?? undefined,
     stage: url.searchParams.get("stage") ?? undefined,
     status: url.searchParams.get("status") ?? undefined,
+    sort: url.searchParams.get("sort") ?? undefined,
   });
   const limit = parsed.success ? (parsed.data.limit ?? 50) : 50;
   const offset = parsed.success ? (parsed.data.offset ?? 0) : 0;
   const stage = parsed.success ? parsed.data.stage : undefined;
   const status = parsed.success ? parsed.data.status : undefined;
+  // An invalid sort value fails schema validation (unknown column), so
+  // `parsed.success` is false and we fall back to undefined here —
+  // listAdminApplications's own allowlist then applies the default
+  // `created_at DESC` ordering, matching today's behavior exactly.
+  const sort = parsed.success ? parsed.data.sort : undefined;
 
-  const { applications, total } = await listAdminApplications(requestDb(c), { limit, offset, stage, status });
+  const { applications, total } = await listAdminApplications(requestDb(c), { limit, offset, stage, status, sort });
   return json({ applications, page: { limit, offset, total, hasMore: offset + applications.length < total } });
 }
 

@@ -141,11 +141,12 @@ describe("admin user deactivation", () => {
 
     expect(response.status).toBe(200);
     const row = (
-      await queryAll<{ first_name: string | null; last_name: string | null; job_title: string | null; biography: string | null }>(
-        env.DB,
-        "SELECT first_name, last_name, job_title, biography FROM users WHERE id = ?",
-        [userId],
-      )
+      await queryAll<{
+        first_name: string | null;
+        last_name: string | null;
+        job_title: string | null;
+        biography: string | null;
+      }>(env.DB, "SELECT first_name, last_name, job_title, biography FROM users WHERE id = ?", [userId])
     )[0];
     expect(row.first_name).toBe("Router");
     expect(row.last_name).toBe("Tested");
@@ -181,6 +182,42 @@ describe("admin user deactivation", () => {
       )
     )[0];
     expect(entry.action).toBe("user_updated");
+  });
+
+  it("sets and clears isEcMember (users.is_ec_member, migration 0038)", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "ec-member@example.test");
+
+    const setResponse = await patchUser(
+      createContext(env, adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", { isEcMember: true }), { userId }),
+    );
+    expect(setResponse.status).toBe(200);
+    const setData = (await setResponse.json()) as { user: { isEcMember: boolean } };
+    expect(setData.user.isEcMember).toBe(true);
+
+    const rowAfterSet = (
+      await queryAll<{ is_ec_member: number }>(env.DB, "SELECT is_ec_member FROM users WHERE id = ?", [userId])
+    )[0];
+    expect(rowAfterSet.is_ec_member).toBe(1);
+
+    const getResponse = await app.fetch(
+      adminRequest(`/api/v1/admin/users/${userId}`, "GET"),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    const getData = (await getResponse.json()) as { user: { isEcMember: boolean } };
+    expect(getData.user.isEcMember).toBe(true);
+
+    const clearResponse = await patchUser(
+      createContext(env, adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", { isEcMember: false }), { userId }),
+    );
+    const clearData = (await clearResponse.json()) as { user: { isEcMember: boolean } };
+    expect(clearData.user.isEcMember).toBe(false);
+
+    const rowAfterClear = (
+      await queryAll<{ is_ec_member: number }>(env.DB, "SELECT is_ec_member FROM users WHERE id = ?", [userId])
+    )[0];
+    expect(rowAfterClear.is_ec_member).toBe(0);
   });
 
   it("rejects an empty patch body (no fields provided)", async () => {

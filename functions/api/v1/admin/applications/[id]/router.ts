@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
-import { ApplicationDetailGet } from "./index";
+import { ApplicationDetailGet, ApplicationDetailPatch } from "./index";
 import { ApplicationStagePatch } from "./stage";
 import { ApplicationCommunicationsPost } from "./communications";
 import { ApplicationNotesPost } from "./notes";
@@ -13,6 +13,7 @@ const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 openapi.get("/", ApplicationDetailGet);
+openapi.patch("/", ApplicationDetailPatch);
 openapi.patch("/stage", ApplicationStagePatch);
 openapi.post("/communications", ApplicationCommunicationsPost);
 openapi.post("/notes", ApplicationNotesPost);

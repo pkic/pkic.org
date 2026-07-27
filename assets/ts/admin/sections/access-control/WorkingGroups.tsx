@@ -109,9 +109,12 @@ export function WorkingGroups() {
   const [detail, setDetail] = useState<AdminWorkingGroupDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [chairRoleId, setChairRoleId] = useState<string | null>(null);
+  const [viceChairRoleId, setViceChairRoleId] = useState<string | null>(null);
   const [chairUser, setChairUser] = useState<PickedUser | null>(null);
+  const [viceChairUser, setViceChairUser] = useState<PickedUser | null>(null);
   const [expiresAt, setExpiresAt] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [viceSubmitting, setViceSubmitting] = useState(false);
   const [addMemberUser, setAddMemberUser] = useState<PickedUser | null>(null);
   const [addingMember, setAddingMember] = useState(false);
   const [togglingActive, setTogglingActive] = useState(false);
@@ -131,7 +134,10 @@ export function WorkingGroups() {
   useEffect(() => {
     void loadGroups(false);
     api<{ roles: Role[] }>("/api/v1/admin/roles")
-      .then((d) => setChairRoleId(d.roles.find((r) => r.name === "wg_chair")?.id ?? null))
+      .then((d) => {
+        setChairRoleId(d.roles.find((r) => r.name === "wg_chair")?.id ?? null);
+        setViceChairRoleId(d.roles.find((r) => r.name === "wg_vice_chair")?.id ?? null);
+      })
       .catch(() => {});
   }, []);
 
@@ -169,10 +175,46 @@ export function WorkingGroups() {
       toast("Chair assigned", "success");
       setChairUser(null);
       setExpiresAt("");
+      await Promise.all([loadDetail(), loadGroups()]);
     } catch (err) {
       toast((err as Error).message, "error");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleAssignViceChair(e: Event) {
+    e.preventDefault();
+    if (!viceChairUser || !viceChairRoleId || !selectedId) return;
+    setViceSubmitting(true);
+    try {
+      await api(`/api/v1/admin/users/${viceChairUser.id}/roles`, {
+        method: "POST",
+        body: JSON.stringify({
+          roleId: viceChairRoleId,
+          contextType: "working_group",
+          contextId: selectedId,
+          expiresAt: expiresAt ? new Date(expiresAt).toISOString() : undefined,
+        }),
+      });
+      toast("Vice chair assigned", "success");
+      setViceChairUser(null);
+      await Promise.all([loadDetail(), loadGroups()]);
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setViceSubmitting(false);
+    }
+  }
+
+  async function handleRemoveChair(label: "Chair" | "Vice chair", userId: string, userRoleId: string) {
+    if (!confirm(`Remove this ${label.toLowerCase()}?`)) return;
+    try {
+      await api(`/api/v1/admin/users/${userId}/roles/${userRoleId}`, { method: "DELETE" });
+      toast(`${label} removed`, "success");
+      await Promise.all([loadDetail(), loadGroups()]);
+    } catch (err) {
+      toast((err as Error).message, "error");
     }
   }
 
@@ -267,7 +309,48 @@ export function WorkingGroups() {
               </button>
             </div>
 
-            <form onSubmit={handleAssignChair} class="row g-2 align-items-end mb-3">
+            <div class="row g-2 mb-3">
+              <div class="col-md-6">
+                <div class="small fw-semibold mb-1">Chair</div>
+                {detail.chair ? (
+                  <div class="d-flex align-items-center gap-2">
+                    <span>
+                      {detail.chair.name} <span class="text-muted small">({detail.chair.email})</span>
+                    </span>
+                    <button
+                      class="btn btn-sm btn-outline-danger"
+                      onClick={() => void handleRemoveChair("Chair", detail.chair!.userId, detail.chair!.userRoleId)}
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <span class="text-muted fst-italic small">Not assigned</span>
+                )}
+              </div>
+              <div class="col-md-6">
+                <div class="small fw-semibold mb-1">Vice chair</div>
+                {detail.viceChair ? (
+                  <div class="d-flex align-items-center gap-2">
+                    <span>
+                      {detail.viceChair.name} <span class="text-muted small">({detail.viceChair.email})</span>
+                    </span>
+                    <button
+                      class="btn btn-sm btn-outline-danger"
+                      onClick={() =>
+                        void handleRemoveChair("Vice chair", detail.viceChair!.userId, detail.viceChair!.userRoleId)
+                      }
+                    >
+                      Remove
+                    </button>
+                  </div>
+                ) : (
+                  <span class="text-muted fst-italic small">Not assigned</span>
+                )}
+              </div>
+            </div>
+
+            <form onSubmit={handleAssignChair} class="row g-2 align-items-end mb-2">
               <div class="col-md-5">
                 <label class="form-label small fw-semibold">Assign chair</label>
                 <UserPicker value={chairUser} onChange={setChairUser} disabled={submitting} />
@@ -294,6 +377,27 @@ export function WorkingGroups() {
               {!chairRoleId && (
                 <div class="col-12">
                   <span class="small text-danger">The built-in "wg_chair" role was not found.</span>
+                </div>
+              )}
+            </form>
+
+            <form onSubmit={handleAssignViceChair} class="row g-2 align-items-end mb-3">
+              <div class="col-md-5">
+                <label class="form-label small fw-semibold">Assign vice chair</label>
+                <UserPicker value={viceChairUser} onChange={setViceChairUser} disabled={viceSubmitting} />
+              </div>
+              <div class="col-md-3">
+                <button
+                  type="submit"
+                  class="btn btn-sm btn-success"
+                  disabled={viceSubmitting || !viceChairUser || !viceChairRoleId}
+                >
+                  {viceSubmitting ? "Assigning…" : "Assign as vice chair"}
+                </button>
+              </div>
+              {!viceChairRoleId && (
+                <div class="col-12">
+                  <span class="small text-danger">The built-in "wg_vice_chair" role was not found.</span>
                 </div>
               )}
             </form>

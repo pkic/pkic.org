@@ -20,7 +20,12 @@ import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
 import { parseJsonSafe } from "../utils/json";
 import { AppError } from "../errors";
-import { getMemberApplicationById, INDIVIDUAL_MEMBERSHIP_CATEGORIES, VOTING_CATEGORIES } from "./member-applications";
+import {
+  getMemberApplicationById,
+  parseApplicationAnswers,
+  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
+  VOTING_CATEGORIES,
+} from "./member-applications";
 import { provisionOrganizationAndMembers } from "./member-provisioning";
 import { enqueueGoogleGroupsSync } from "./google-groups";
 import type { DatabaseLike } from "../types";
@@ -71,11 +76,22 @@ export async function approveApplication(
     (slug) => slug !== CA_WORKING_GROUP_SLUG || application.membership_category === CA_ONLY_CATEGORY,
   );
 
+  // The apply form collects job_title/linkedin as free-form answers (form_fields
+  // seeded in migration 0034) but this call site previously only forwarded
+  // name/email into provisionOrganizationAndMembers — even though that
+  // function (and findOrCreateUser under it) already know how to persist
+  // both. That silently dropped every approved applicant's job title and
+  // LinkedIn URL. Read them back out of answers_json here so they land on
+  // the newly provisioned user.
+  const answers = parseApplicationAnswers(application.answers_json);
+  const jobTitle = typeof answers.job_title === "string" && answers.job_title.trim() ? answers.job_title.trim() : null;
+  const linkedin = typeof answers.linkedin === "string" && answers.linkedin.trim() ? answers.linkedin.trim() : null;
+
   const { organizationId, organizationWasCreated, members } = await provisionOrganizationAndMembers(db, {
     organizationName: isIndividual ? null : application.organization_name,
     organizationDomain: isIndividual ? null : application.organization_domain,
     membershipCategory: application.membership_category,
-    representatives: [{ name: application.applicant_name, email: application.applicant_email }],
+    representatives: [{ name: application.applicant_name, email: application.applicant_email, jobTitle, linkedin }],
     workingGroupSlugs,
   });
   const member = members[0];

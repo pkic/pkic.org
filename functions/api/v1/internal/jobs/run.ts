@@ -5,6 +5,7 @@ import { getConfig, resolveAppBaseUrl } from "../../../../_lib/config";
 import { processPendingOutbox, summarizePendingOutbox } from "../../../../_lib/email/outbox";
 import { runReminderCycle } from "../../../../_lib/services/reminders";
 import { runRetentionJob, summarizeRetentionJob } from "../../../../_lib/services/retention";
+import { runConsultationBatch, runEcReviewBatch } from "../../../../_lib/services/membership-scheduled-jobs";
 import { adminRunJobsSchema } from "../../../../../assets/shared/schemas/api";
 
 export async function onRequestPost(c: any): Promise<Response> {
@@ -64,6 +65,17 @@ export async function onRequestPost(c: any): Promise<Response> {
       ? await processPendingOutbox(c.env.DB, c.env, body.outboxLimit)
       : { processed: 0, failed: 0 };
 
+  // Manual off-cycle triggers for the twice-weekly membership batches
+  // (PRD §4.5/§4.6, normally fired by the cron in functions/router.ts).
+  // No dry-run preview — see adminRunJobsSchema's note on why.
+  const consultationBatch =
+    body.runConsultationBatch && !body.dryRun
+      ? await runConsultationBatch(c.env.DB, c.env)
+      : { applicationsNotified: 0 };
+
+  const ecReviewBatch =
+    body.runEcReviewBatch && !body.dryRun ? await runEcReviewBatch(c.env.DB, c.env) : { transitioned: 0 };
+
   return json({
     success: true,
     dryRun: body.dryRun,
@@ -79,6 +91,8 @@ export async function onRequestPost(c: any): Promise<Response> {
       dueByStatus: outboxPreview.dueByStatus,
       nextSendAfter: outboxPreview.nextSendAfter,
     },
+    consultationBatch,
+    ecReviewBatch,
   });
 }
 

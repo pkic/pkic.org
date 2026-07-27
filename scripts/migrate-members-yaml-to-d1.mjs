@@ -268,10 +268,12 @@ function findLogoFile(slug) {
   const dir = path.join(LOGO_DIR, slug);
   if (!fs.existsSync(dir)) return null;
   const candidates = fs.readdirSync(dir).filter((f) => /\.(svg|png|jpg|jpeg)$/i.test(f));
-  if (candidates.length === 0) return null;
-  // Prefer an exact `<slug>.<ext>` match if present, else the first file.
+  // Require an exact `<slug>.<ext>` match. Falling back to "the first file
+  // in the directory" when no exact match exists previously risked silently
+  // picking an unrelated file (e.g. a representative's headshot living in
+  // the same directory) as the organization logo.
   const exact = candidates.find((f) => path.basename(f, path.extname(f)) === slug);
-  return path.join(dir, exact ?? candidates[0]);
+  return exact ? path.join(dir, exact) : null;
 }
 
 /** Mirrors Hugo's `urlize`: lowercase, strip diacritics, non-alphanumerics -> hyphens. */

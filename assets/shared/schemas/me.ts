@@ -5,6 +5,14 @@
  */
 import { z } from "zod";
 
+export const myOrganizationRepresentativeSchema = z.object({
+  userId: z.uuid(),
+  name: z.string().nullable(),
+  email: z.string(),
+  isPrimaryContact: z.boolean(),
+  isSecondaryContact: z.boolean(),
+});
+
 export const myProfileSchema = z.object({
   userId: z.uuid(),
   email: z.string(),
@@ -20,6 +28,13 @@ export const myProfileSchema = z.object({
   memberSince: z.string(),
   showOnOrgProfile: z.boolean(),
   canEditOrganizationName: z.boolean(),
+  // Member portal (self-service coworker enrollment): true when this member
+  // is their organization's primary or secondary contact. Always false for
+  // org-less (H5/H6/H7) members.
+  isOrgContact: z.boolean(),
+  // Full representative roster for the caller's organization, or null when
+  // the member has no organization.
+  organizationRepresentatives: z.array(myOrganizationRepresentativeSchema).nullable(),
 });
 
 export const myProfileGetRouteSchema = {
@@ -141,6 +156,38 @@ export const myWorkingGroupLeaveRouteSchema = {
   responses: {
     "200": { description: "Left." },
     "404": { description: "Working group not found." },
+  },
+};
+
+export const addCoworkerSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  email: z.string().email(),
+});
+
+export const addCoworkerRouteSchema = {
+  tags: ["Me"],
+  summary: "Enroll a coworker as a representative of my organization (self-service)",
+  description:
+    "Only the organization's primary or secondary contact may call this. The new member's category is inherited from the organization's own membership_category.",
+  request: {
+    body: { content: { "application/json": { schema: addCoworkerSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Coworker enrolled.",
+      content: {
+        "application/json": {
+          schema: z.object({
+            memberId: z.string(),
+            userId: z.string(),
+            name: z.string(),
+            email: z.string(),
+          }),
+        },
+      },
+    },
+    "403": { description: "Caller is not an org contact, or has no organization." },
+    "409": { description: "Email already holds an active membership, or the org has no membership category set." },
   },
 };
 

@@ -254,4 +254,59 @@ describe("roles (Phase 2 built-in and custom roles)", () => {
     const deleteResponse = await call(adminToken, `/api/v1/admin/roles/${created.role.id}`, { method: "DELETE" });
     expect(deleteResponse.status).toBe(409);
   });
+
+  // ── Migration 0040: WG vice chair + forum chair/vice chair roles ─────────
+
+  it("seeds role-wg_vice_chair with the same permission bundle as role-wg_chair", async () => {
+    const response = await call(adminToken, "/api/v1/admin/roles");
+    const body = (await response.json()) as {
+      roles: Array<{ id: string; name: string; isSystemRole: boolean; permissions: string[] }>;
+    };
+    const chair = body.roles.find((r) => r.name === "wg_chair");
+    const viceChair = body.roles.find((r) => r.name === "wg_vice_chair");
+    expect(chair).toBeTruthy();
+    expect(viceChair).toBeTruthy();
+    expect(viceChair?.isSystemRole).toBe(true);
+    expect([...(viceChair?.permissions ?? [])].sort()).toEqual([...(chair?.permissions ?? [])].sort());
+  });
+
+  it("seeds role-forum_chair/role-forum_vice_chair as global, permission-less designation roles", async () => {
+    const response = await call(adminToken, "/api/v1/admin/roles");
+    const body = (await response.json()) as {
+      roles: Array<{ id: string; name: string; isSystemRole: boolean; permissions: string[] }>;
+    };
+    for (const name of ["forum_chair", "forum_vice_chair"]) {
+      const role = body.roles.find((r) => r.name === name);
+      expect(role).toBeTruthy();
+      expect(role?.isSystemRole).toBe(true);
+      expect(role?.permissions ?? []).toHaveLength(0);
+    }
+  });
+
+  it("GET /api/v1/admin/roles/:id/assignments reverse-looks-up who holds a role, across contexts", async () => {
+    const forumChairRole = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM roles WHERE name = 'forum_chair'")
+    )[0];
+
+    const emptyResponse = await call(adminToken, `/api/v1/admin/roles/${forumChairRole.id}/assignments`);
+    expect(emptyResponse.status).toBe(200);
+    expect(((await emptyResponse.json()) as { assignments: unknown[] }).assignments).toHaveLength(0);
+
+    await assignRole(staffUserId, forumChairRole.id, adminId);
+
+    const response = await call(adminToken, `/api/v1/admin/roles/${forumChairRole.id}/assignments`);
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      assignments: Array<{ userId: string; contextType: string | null; contextId: string | null }>;
+    };
+    expect(body.assignments).toHaveLength(1);
+    expect(body.assignments[0].userId).toBe(staffUserId);
+    expect(body.assignments[0].contextType).toBeNull();
+    expect(body.assignments[0].contextId).toBeNull();
+  });
+
+  it("GET /api/v1/admin/roles/:id/assignments returns 404 for an unknown role id", async () => {
+    const response = await call(adminToken, `/api/v1/admin/roles/${crypto.randomUUID()}/assignments`);
+    expect(response.status).toBe(404);
+  });
 });

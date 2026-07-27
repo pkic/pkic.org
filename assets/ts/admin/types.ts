@@ -187,6 +187,18 @@ export interface UserRoleAssignment {
   createdAt: string;
 }
 
+/** GET /api/v1/admin/roles/:id/assignments — reverse lookup: who holds this role. */
+export interface RoleAssignment {
+  userRoleId: string;
+  userId: string;
+  name: string;
+  email: string;
+  contextType: string | null;
+  contextId: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
 export interface WorkingGroupSummary {
   id: string;
   name: string;
@@ -202,6 +214,13 @@ export interface WorkingGroupDetail extends WorkingGroupSummary {
 
 // ── Admin working-group CRUD (unfiltered by active, full roster w/ user ids) ──
 
+export interface ChairInfo {
+  userRoleId: string;
+  userId: string;
+  name: string;
+  email: string;
+}
+
 export interface AdminWorkingGroupSummary {
   id: string;
   name: string;
@@ -210,7 +229,10 @@ export interface AdminWorkingGroupSummary {
   mailingListEmail: string | null;
   minEndorsersForBallot: number;
   active: boolean;
+  /** @deprecated Never written after row creation — see chair/viceChair. */
   chairUserId: string | null;
+  chair: ChairInfo | null;
+  viceChair: ChairInfo | null;
   memberCount: number;
   createdAt: string;
   updatedAt: string;
@@ -463,6 +485,8 @@ export interface AdminJobsRunResponse {
     dueByStatus: Record<string, number>;
     nextSendAfter: string | null;
   };
+  consultationBatch: { applicationsNotified: number };
+  ecReviewBatch: { transitioned: number };
 }
 
 export type AdminReminderPreviewRow = {
@@ -516,6 +540,7 @@ export interface AdminUser {
   role: string;
   active: number;
   created_at: string;
+  links: Array<string | { label?: string | null; url?: string | null }>;
   membership: AdminUserMembership | null;
 }
 
@@ -691,7 +716,6 @@ export interface AdminOrganizationRepresentative {
   name: string;
   email: string;
   jobTitle: string | null;
-  membershipCategory: string;
   status: string;
   showOnOrgProfile: boolean;
   isPrimaryContact: boolean;
@@ -700,6 +724,7 @@ export interface AdminOrganizationRepresentative {
 }
 
 export interface AdminOrganizationDetail extends AdminOrganizationSummary {
+  membershipCategory: string | null;
   contentMarkdown: string | null;
   blogUrl: string | null;
   blogFeedUrl: string | null;

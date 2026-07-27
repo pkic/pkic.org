@@ -109,6 +109,29 @@ describe("Post-approval onboarding (PRD §4.7)", () => {
     expect(appRows[0].stage).toBe("approved");
   });
 
+  it("carries job_title/linkedin from the application's answers_json into the provisioned user (Fix 5b)", async () => {
+    const { id } = await createEcReviewApplication({
+      answers_json: JSON.stringify({
+        working_groups: ["pqc"],
+        job_title: "Chief Cryptography Officer",
+        linkedin: "https://linkedin.com/in/newmember",
+      }),
+    });
+    const response = await call(adminToken, `/api/v1/admin/applications/${id}/approve`, { method: "POST" });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { userId: string };
+
+    const userRows = await queryAll<{ job_title: string | null; links_json: string | null }>(
+      env.DB,
+      "SELECT job_title, links_json FROM users WHERE id = ?",
+      body.userId,
+    );
+    expect(userRows[0].job_title).toBe("Chief Cryptography Officer");
+    expect(userRows[0].links_json).toBeTruthy();
+    const links = JSON.parse(userRows[0].links_json as string) as { linkedin?: string };
+    expect(links.linkedin).toBe("https://linkedin.com/in/newmember");
+  });
+
   it("creates no organization for an individual (H6) application", async () => {
     const { id } = await createEcReviewApplication({
       organization_name: null,

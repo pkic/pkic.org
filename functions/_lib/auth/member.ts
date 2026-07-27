@@ -42,11 +42,20 @@ interface MemberEligibleUserRow {
 // — the INNER JOIN below is the whole eligibility gate. Unlike admin's
 // STAFF_ACCESS_CONDITION there is no role or grant check; self-service is
 // identity-gated (see AuthMember's doc comment in types.ts).
+//
+// membership_category resolution (migration 0040): for org-tied members,
+// organizations.membership_category is the source of truth; members.member_type
+// is only a denormalized mirror for those rows. For org-less individual
+// members (H5/H6/H7, organization_id IS NULL) there is no organization row
+// to join, so COALESCE falls through to members.member_type, which stays
+// the real, independently-editable category for that case.
 const MEMBER_ELIGIBLE_USER_SELECT = `
   SELECT u.id, u.email, u.active, u.is_ec_member,
-         m.id AS member_id, m.organization_id, m.member_type AS membership_category
+         m.id AS member_id, m.organization_id,
+         COALESCE(o.membership_category, m.member_type) AS membership_category
   FROM users u
   JOIN members m ON m.user_id = u.id AND m.status = 'active'
+  LEFT JOIN organizations o ON o.id = m.organization_id
 `;
 
 interface MemberSessionRow {

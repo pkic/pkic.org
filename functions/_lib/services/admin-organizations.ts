@@ -14,7 +14,7 @@ import { uuid } from "../utils/ids";
 import { findOrCreateUser } from "./users";
 import { normalizeOrgName } from "./sponsorship";
 import { AppError } from "../errors";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 
 function splitName(fullName: string): { firstName: string | null; lastName: string | null } {
   const tokens = fullName.trim().split(/\s+/).filter(Boolean);
@@ -92,6 +92,7 @@ export async function listAdminOrganizations(
 // ── Detail ───────────────────────────────────────────────────────────────
 
 interface OrgDetailRow extends OrgSummaryRow {
+  membership_category: string | null;
   content_markdown: string | null;
   blog_url: string | null;
   blog_feed_url: string | null;
@@ -114,7 +115,6 @@ interface RepresentativeRow {
   last_name: string | null;
   email: string;
   job_title: string | null;
-  member_type: string;
   status: string;
   show_on_org_profile: number;
   created_at: string;
@@ -124,6 +124,7 @@ async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<OrgDetai
   return first<OrgDetailRow>(
     db,
     `SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, o.created_at, o.updated_at,
+            o.membership_category,
             o.content_markdown, o.blog_url, o.blog_feed_url, o.press_url, o.press_feed_url, o.careers_url,
             o.social_x, o.social_linkedin, o.social_facebook, o.social_instagram, o.social_youtube,
             o.primary_contact_user_id, o.secondary_contact_user_id,
@@ -141,7 +142,7 @@ async function fetchRepresentatives(db: DatabaseLike, organizationId: string): P
   return all<RepresentativeRow>(
     db,
     `SELECT m.id AS member_id, m.user_id, u.first_name, u.last_name, u.email, u.job_title,
-            m.member_type, m.status, m.show_on_org_profile, m.created_at
+            m.status, m.show_on_org_profile, m.created_at
      FROM members m
      JOIN users u ON u.id = m.user_id
      WHERE m.organization_id = ?
@@ -153,6 +154,7 @@ async function fetchRepresentatives(db: DatabaseLike, organizationId: string): P
 function toOrgDetail(row: OrgDetailRow, representatives: RepresentativeRow[]) {
   return {
     ...toOrgSummary(row),
+    membershipCategory: row.membership_category,
     contentMarkdown: row.content_markdown,
     blogUrl: row.blog_url,
     blogFeedUrl: row.blog_feed_url,
@@ -172,7 +174,6 @@ function toOrgDetail(row: OrgDetailRow, representatives: RepresentativeRow[]) {
       name: [r.first_name, r.last_name].filter(Boolean).join(" ") || r.email,
       email: r.email,
       jobTitle: r.job_title,
-      membershipCategory: r.member_type,
       status: r.status,
       showOnOrgProfile: r.show_on_org_profile === 1,
       isPrimaryContact: r.user_id === row.primary_contact_user_id,
@@ -193,6 +194,7 @@ export async function getAdminOrganization(db: DatabaseLike, id: string) {
 
 const UPDATABLE_COLUMNS: Record<string, string> = {
   name: "name",
+  membershipCategory: "membership_category",
   description: "description",
   website: "website",
   contentMarkdown: "content_markdown",
@@ -211,6 +213,13 @@ const UPDATABLE_COLUMNS: Record<string, string> = {
 
 export interface OrganizationUpdateInput {
   name?: string;
+  /**
+   * Organization-level category (migration 0040). Setting this cascades to
+   * every existing org-tied representative's members.member_type in the
+   * same batch, so the denormalized per-member column never drifts from
+   * the org's actual category.
+   */
+  membershipCategory?: string;
   description?: string | null;
   website?: string | null;
   contentMarkdown?: string | null;
@@ -283,11 +292,25 @@ export async function updateAdminOrganization(db: DatabaseLike, id: string, inpu
     values.push(input.secondaryContactUserId);
   }
 
+  const statements: StatementLike[] = [];
   if (setClauses.length > 0) {
     setClauses.push("updated_at = ?");
     values.push(nowIso());
     values.push(id);
-    await run(db, `UPDATE organizations SET ${setClauses.join(", ")} WHERE id = ?`, values);
+    statements.push(db.prepare(`UPDATE organizations SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values));
+  }
+  if (input.membershipCategory !== undefined) {
+    // Cascade: members.member_type is a mirror of the org's category for
+    // every org-tied representative, not an independently editable value —
+    // keep them in sync in the same batch as the organization row update.
+    statements.push(
+      db
+        .prepare("UPDATE members SET member_type = ?, updated_at = ? WHERE organization_id = ?")
+        .bind(input.membershipCategory, nowIso(), id),
+    );
+  }
+  if (statements.length > 0) {
+    await db.batch(statements);
   }
 
   return getAdminOrganization(db, id);
@@ -304,7 +327,6 @@ export interface AddRepresentativeInput {
   email: string;
   jobTitle?: string;
   linkedin?: string;
-  membershipCategory: string;
 }
 
 export async function addOrganizationRepresentative(
@@ -316,10 +338,24 @@ export async function addOrganizationRepresentative(
     id: string;
     primary_contact_user_id: string | null;
     secondary_contact_user_id: string | null;
-  }>(db, "SELECT id, primary_contact_user_id, secondary_contact_user_id FROM organizations WHERE id = ?", [
-    organizationId,
-  ]);
+    membership_category: string | null;
+  }>(
+    db,
+    "SELECT id, primary_contact_user_id, secondary_contact_user_id, membership_category FROM organizations WHERE id = ?",
+    [organizationId],
+  );
   if (!org) throw new AppError(404, "NOT_FOUND", "Organization not found");
+  // New representatives always inherit the organization's category — it's
+  // no longer set per-representative. If the org has never had one set,
+  // require staff to set it (PATCH .../organizations/:id) before adding
+  // reps, rather than silently accepting an ad-hoc value here.
+  if (!org.membership_category) {
+    throw new AppError(
+      422,
+      "ORG_CATEGORY_NOT_SET",
+      "Set this organization's membership category before adding representatives",
+    );
+  }
 
   const existingUser = await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ?", [
     input.email.trim().toLowerCase(),
@@ -356,7 +392,7 @@ export async function addOrganizationRepresentative(
     db,
     `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile)
      VALUES (?, ?, ?, ?, 'active', NULL, NULL, ?, ?, 1)`,
-    [memberId, input.membershipCategory, user.id, organizationId, now, now],
+    [memberId, org.membership_category, user.id, organizationId, now, now],
   );
 
   if (!org.primary_contact_user_id) {
@@ -379,7 +415,6 @@ export async function addOrganizationRepresentative(
     name: input.name,
     email: user.email,
     jobTitle: input.jobTitle ?? null,
-    membershipCategory: input.membershipCategory,
     status: "active",
     showOnOrgProfile: true,
     isPrimaryContact: !org.primary_contact_user_id,
@@ -412,6 +447,17 @@ export async function updateAdminMember(db: DatabaseLike, memberId: string, inpu
     [memberId],
   );
   if (!member) throw new AppError(404, "NOT_FOUND", "Member not found");
+
+  // Category is only independently editable for org-less individual members
+  // (H5/H6/H7). For org-tied members it's a mirror of
+  // organizations.membership_category — edit it on the organization instead.
+  if (input.membershipCategory !== undefined && member.organization_id) {
+    throw new AppError(
+      422,
+      "MEMBERSHIP_CATEGORY_NOT_EDITABLE",
+      "This representative's category follows their organization — edit it on the organization instead",
+    );
+  }
 
   const setClauses: string[] = [];
   const values: unknown[] = [];
