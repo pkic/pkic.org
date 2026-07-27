@@ -3,12 +3,38 @@
  * transitions, communications/notes, EC decision staff override, approval.
  */
 import { z } from "zod";
+import { normalizedEmailSchema } from "./api";
+import { membershipCategorySchema } from "./member-applications";
+
+/** Allowlisted sort columns for GET /api/v1/admin/applications — see listAdminApplications. */
+export const ADMIN_APPLICATIONS_SORT_COLUMNS = [
+  "applicant_name",
+  "organization_name",
+  "membership_category",
+  "stage",
+  "created_at",
+] as const;
+
+const sortValueSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(41)
+  .refine(
+    (value) => {
+      const field = value.startsWith("-") ? value.slice(1) : value;
+      return (ADMIN_APPLICATIONS_SORT_COLUMNS as readonly string[]).includes(field);
+    },
+    { message: "Unknown sort column" },
+  )
+  .optional();
 
 export const adminApplicationsListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(200).optional(),
   offset: z.coerce.number().int().min(0).optional(),
   stage: z.string().trim().min(1).max(40).optional(),
   status: z.string().trim().min(1).max(40).optional(),
+  sort: sortValueSchema,
 });
 
 export const adminApplicationSummarySchema = z.object({
@@ -157,6 +183,58 @@ export const applicationApproveRouteSchema = {
     "200": { description: "Application approved and member provisioned." },
     "404": { description: "Application not found." },
     "409": { description: "Application must be in ec_review to approve." },
+  },
+};
+
+// ── Edit application fields (correction of applicant-submitted data) ───────
+//
+// Distinct from the stage machine (applicationStageTransitionSchema, above):
+// this lets staff correct typos/mistakes in what the applicant originally
+// submitted (e.g. a mistyped email domain) without moving the application
+// through any stage. Only a fixed subset of top-level columns plus a fixed
+// subset of answers_json keys are editable — see admin-applications.ts's
+// updateAdminApplication for the merge behavior on answers_json.
+
+export const applicationEditableAnswersSchema = z.object({
+  job_title: z.string().trim().max(200).nullable().optional(),
+  linkedin: z.string().trim().max(500).nullable().optional(),
+  organization_website: z.string().trim().max(500).nullable().optional(),
+  about_yourself: z.string().trim().max(5000).nullable().optional(),
+  about_organization: z.string().trim().max(5000).nullable().optional(),
+  reason: z.string().trim().max(5000).nullable().optional(),
+});
+
+export const applicationUpdateSchema = z
+  .object({
+    applicantName: z.string().trim().min(1).max(160).optional(),
+    applicantEmail: normalizedEmailSchema.optional(),
+    organizationName: z.string().trim().min(1).max(200).nullable().optional(),
+    membershipCategory: membershipCategorySchema.optional(),
+    answers: applicationEditableAnswersSchema.optional(),
+  })
+  .refine(
+    (value) =>
+      value.applicantName !== undefined ||
+      value.applicantEmail !== undefined ||
+      value.organizationName !== undefined ||
+      value.membershipCategory !== undefined ||
+      value.answers !== undefined,
+    { message: "At least one field must be provided" },
+  );
+
+export const applicationUpdateRouteSchema = {
+  tags: ["Membership"],
+  summary: "Correct an applicant's submitted fields (staff, does not transition stage)",
+  description:
+    "Edits applicantName/applicantEmail/organizationName/membershipCategory and a fixed subset of answers_json keys. Writes an audit_log entry and a member_application_events row so the correction is visible in the timeline.",
+  request: {
+    params: z.object({ id: z.string() }),
+    body: { content: { "application/json": { schema: applicationUpdateSchema } }, required: true },
+  },
+  responses: {
+    "200": { description: "Application updated." },
+    "404": { description: "Application not found." },
+    "422": { description: "Invalid field values." },
   },
 };
 

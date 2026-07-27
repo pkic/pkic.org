@@ -8,8 +8,13 @@
  */
 import { all, first } from "../db/queries";
 import { AppError } from "../errors";
+import { uuid } from "../utils/ids";
+import { nowIso } from "../utils/time";
+import { stringifyJson } from "../utils/json";
 import {
+  emailDomain,
   getMemberApplicationById,
+  INDIVIDUAL_MEMBERSHIP_CATEGORIES,
   listApplicationCommunications,
   listApplicationConcerns,
   listApplicationDocuments,
@@ -17,6 +22,7 @@ import {
   type MemberApplicationRow,
 } from "./member-applications";
 import { listEcDecisions } from "./ec-review";
+import { ADMIN_APPLICATIONS_SORT_COLUMNS } from "../../../assets/shared/schemas/admin-applications";
 import type { DatabaseLike } from "../types";
 
 export interface AdminApplicationSummary {
@@ -49,9 +55,27 @@ function toSummary(row: MemberApplicationRow): AdminApplicationSummary {
   };
 }
 
+const SORT_COLUMN_SET = new Set<string>(ADMIN_APPLICATIONS_SORT_COLUMNS);
+
+/**
+ * Resolves a `sort` query value (e.g. "created_at" or "-created_at", the
+ * leading "-" meaning descending — see Table.tsx's ColumnSort convention)
+ * into a safe `ORDER BY` clause. Only columns in ADMIN_APPLICATIONS_SORT_COLUMNS
+ * are ever interpolated — anything else (including attempted SQL injection
+ * via the query param) falls back to the default `created_at DESC`, matching
+ * today's behavior exactly when no/invalid `sort` is supplied.
+ */
+function resolveApplicationsOrderBy(sort?: string): string {
+  if (!sort) return "ORDER BY created_at DESC";
+  const desc = sort.startsWith("-");
+  const column = desc ? sort.slice(1) : sort;
+  if (!SORT_COLUMN_SET.has(column)) return "ORDER BY created_at DESC";
+  return `ORDER BY ${column} ${desc ? "DESC" : "ASC"}`;
+}
+
 export async function listAdminApplications(
   db: DatabaseLike,
-  params: { limit: number; offset: number; stage?: string; status?: string },
+  params: { limit: number; offset: number; stage?: string; status?: string; sort?: string },
 ): Promise<{ applications: AdminApplicationSummary[]; total: number }> {
   const conditions: string[] = [];
   const values: unknown[] = [];
@@ -64,13 +88,14 @@ export async function listAdminApplications(
     values.push(params.status);
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const orderBy = resolveApplicationsOrderBy(params.sort);
 
   const [rows, totalRow] = await Promise.all([
-    all<MemberApplicationRow>(
-      db,
-      `SELECT * FROM member_applications ${where} ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-      [...values, params.limit, params.offset],
-    ),
+    all<MemberApplicationRow>(db, `SELECT * FROM member_applications ${where} ${orderBy} LIMIT ? OFFSET ?`, [
+      ...values,
+      params.limit,
+      params.offset,
+    ]),
     first<{ total: number }>(db, `SELECT COUNT(*) AS total FROM member_applications ${where}`, values),
   ]);
 
@@ -138,4 +163,150 @@ export async function getAdminApplicationDetail(
     ecDecisions,
     documents,
   };
+}
+
+// ── Edit application fields ─────────────────────────────────────────────
+//
+// Corrects applicant-submitted data (e.g. a mistyped email domain) without
+// moving the application through the §4.2 stage machine — a distinct
+// operation from transitionApplicationStage. Route layer
+// (functions/api/v1/admin/applications/[id]/index.ts) writes the audit_log
+// entry; this function only touches member_applications and records a
+// member_application_events row so the correction shows up in the
+// application's timeline. Per migration 0038's own note, member_application_events
+// has no "kind" column to tag this as non-transition, so the marker event
+// uses from_stage === to_stage (the application's current stage, unchanged)
+// with a note explaining what changed — the timeline UI already renders
+// `fromStage -> toStage`, so an identical pair reads as "nothing moved" while
+// the note carries the actual detail, keeping it visually distinct from a
+// real transition (which always has fromStage !== toStage).
+const EDITABLE_ANSWER_KEYS = [
+  "job_title",
+  "linkedin",
+  "organization_website",
+  "about_yourself",
+  "about_organization",
+  "reason",
+] as const;
+
+export interface ApplicationEditInput {
+  applicantName?: string;
+  applicantEmail?: string;
+  organizationName?: string | null;
+  membershipCategory?: string;
+  answers?: Partial<Record<(typeof EDITABLE_ANSWER_KEYS)[number], string | null>>;
+}
+
+export async function updateAdminApplication(
+  db: DatabaseLike,
+  applicationId: string,
+  actorUserId: string,
+  input: ApplicationEditInput,
+): Promise<AdminApplicationDetail> {
+  const application = await getMemberApplicationById(db, applicationId);
+  if (!application) {
+    throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
+  }
+
+  const changedFields: string[] = [];
+  const setClauses: string[] = [];
+  const values: unknown[] = [];
+
+  if (input.applicantName !== undefined && input.applicantName !== application.applicant_name) {
+    setClauses.push("applicant_name = ?");
+    values.push(input.applicantName);
+    changedFields.push("applicantName");
+  }
+
+  const nextMembershipCategory = input.membershipCategory ?? application.membership_category;
+  const nextIsIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(nextMembershipCategory);
+  if (input.membershipCategory !== undefined && input.membershipCategory !== application.membership_category) {
+    setClauses.push("membership_category = ?");
+    values.push(input.membershipCategory);
+    changedFields.push("membershipCategory");
+  }
+
+  const nextApplicantEmail = input.applicantEmail ?? application.applicant_email;
+  if (input.applicantEmail !== undefined && input.applicantEmail !== application.applicant_email) {
+    setClauses.push("applicant_email = ?");
+    values.push(input.applicantEmail);
+    changedFields.push("applicantEmail");
+  }
+
+  // organization_domain drives duplicate-application detection
+  // (member-applications.ts's hasActiveApplicationForDomain) — keep it in
+  // lockstep with applicantEmail/membershipCategory the same way
+  // createMemberApplication derives it at submission time, so an edited
+  // email or an individual<->org-tied category change doesn't silently
+  // desync it from what the applicant actually submitted.
+  const nextOrganizationDomain = nextIsIndividual ? null : emailDomain(nextApplicantEmail);
+  if (nextOrganizationDomain !== application.organization_domain) {
+    setClauses.push("organization_domain = ?");
+    values.push(nextOrganizationDomain);
+  }
+
+  if (input.organizationName !== undefined && input.organizationName !== application.organization_name) {
+    setClauses.push("organization_name = ?");
+    values.push(nextIsIndividual ? null : input.organizationName);
+    changedFields.push("organizationName");
+  } else if (
+    nextIsIndividual !== INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(application.membership_category) &&
+    nextIsIndividual &&
+    application.organization_name !== null
+  ) {
+    // Category flipped to an individual (org-less) category and the caller
+    // didn't also clear organizationName — clear it so the record stays
+    // consistent with createMemberApplication's own invariant (individual
+    // categories never carry an organization_name).
+    setClauses.push("organization_name = ?");
+    values.push(null);
+  }
+
+  if (input.answers) {
+    const currentAnswers = parseApplicationAnswers(application.answers_json);
+    const mergedAnswers = { ...currentAnswers };
+    for (const key of EDITABLE_ANSWER_KEYS) {
+      if (input.answers[key] === undefined) continue;
+      if (input.answers[key] !== (currentAnswers[key] ?? null)) {
+        changedFields.push(`answers.${key}`);
+      }
+      mergedAnswers[key] = input.answers[key];
+    }
+    const nextAnswersJson = stringifyJson(mergedAnswers);
+    if (nextAnswersJson !== application.answers_json) {
+      setClauses.push("answers_json = ?");
+      values.push(nextAnswersJson);
+    }
+  }
+
+  if (changedFields.length === 0) {
+    // Nothing actually changed (e.g. caller sent the same values back) — skip
+    // the write and the timeline event entirely.
+    return getAdminApplicationDetail(db, applicationId);
+  }
+
+  const now = nowIso();
+  setClauses.push("updated_at = ?");
+  values.push(now);
+  values.push(applicationId);
+
+  await db.batch([
+    db.prepare(`UPDATE member_applications SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values),
+    db
+      .prepare(
+        `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(
+        uuid(),
+        applicationId,
+        application.stage,
+        application.stage,
+        actorUserId,
+        `Application details edited: ${changedFields.join(", ")}`,
+        now,
+      ),
+  ]);
+
+  return getAdminApplicationDetail(db, applicationId);
 }

@@ -35,6 +35,7 @@ const modules: Record<string, () => Promise<unknown>> = {
   "member-flows/sponsor-form": () => import("./member-flows/sponsor-form"),
   "member-flows/member-directory-page": () => import("./member-flows/member-directory-page"),
   "member-flows/member-detail-page": () => import("./member-flows/member-detail-page"),
+  "member-flows/portal-page": () => import("./member-flows/portal-page"),
   "shared/donation-form": () => import("./shared/donation/form"),
   "shared/donation-thank-you": () => import("./shared/donation/thank-you"),
 };

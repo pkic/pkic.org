@@ -24,6 +24,7 @@ interface UserRow {
   role: string;
   active: number;
   created_at: string;
+  links_json: string | null;
   member_id: string | null;
   member_type: string | null;
   member_status: string | null;
@@ -61,6 +62,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const users = await all<UserRow>(
     requestDb(c),
     `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
+            u.links_json,
             m.id AS member_id, m.member_type, m.status AS member_status,
             m.organization_id AS member_organization_id, o.name AS member_organization_name
      FROM users u
@@ -83,8 +85,9 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const total = Number(totalRow?.total ?? 0);
 
   return json({
-    users: rows.map((row) => ({
+    users: rows.map(({ links_json, ...row }) => ({
       ...row,
+      links: links_json ? JSON.parse(links_json) : [],
       membership: row.member_id
         ? {
             memberId: row.member_id,

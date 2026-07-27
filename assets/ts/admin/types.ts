@@ -187,6 +187,18 @@ export interface UserRoleAssignment {
   createdAt: string;
 }
 
+/** GET /api/v1/admin/roles/:id/assignments — reverse lookup: who holds this role. */
+export interface RoleAssignment {
+  userRoleId: string;
+  userId: string;
+  name: string;
+  email: string;
+  contextType: string | null;
+  contextId: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
 export interface WorkingGroupSummary {
   id: string;
   name: string;
@@ -202,6 +214,13 @@ export interface WorkingGroupDetail extends WorkingGroupSummary {
 
 // ── Admin working-group CRUD (unfiltered by active, full roster w/ user ids) ──
 
+export interface ChairInfo {
+  userRoleId: string;
+  userId: string;
+  name: string;
+  email: string;
+}
+
 export interface AdminWorkingGroupSummary {
   id: string;
   name: string;
@@ -210,7 +229,10 @@ export interface AdminWorkingGroupSummary {
   mailingListEmail: string | null;
   minEndorsersForBallot: number;
   active: boolean;
+  /** @deprecated Never written after row creation — see chair/viceChair. */
   chairUserId: string | null;
+  chair: ChairInfo | null;
+  viceChair: ChairInfo | null;
   memberCount: number;
   createdAt: string;
   updatedAt: string;
@@ -463,6 +485,8 @@ export interface AdminJobsRunResponse {
     dueByStatus: Record<string, number>;
     nextSendAfter: string | null;
   };
+  consultationBatch: { applicationsNotified: number };
+  ecReviewBatch: { transitioned: number };
 }
 
 export type AdminReminderPreviewRow = {
@@ -516,6 +540,7 @@ export interface AdminUser {
   role: string;
   active: number;
   created_at: string;
+  links: Array<string | { label?: string | null; url?: string | null }>;
   membership: AdminUserMembership | null;
 }
 
@@ -691,7 +716,6 @@ export interface AdminOrganizationRepresentative {
   name: string;
   email: string;
   jobTitle: string | null;
-  membershipCategory: string;
   status: string;
   showOnOrgProfile: boolean;
   isPrimaryContact: boolean;
@@ -700,6 +724,7 @@ export interface AdminOrganizationRepresentative {
 }
 
 export interface AdminOrganizationDetail extends AdminOrganizationSummary {
+  membershipCategory: string | null;
   contentMarkdown: string | null;
   blogUrl: string | null;
   blogFeedUrl: string | null;
@@ -714,6 +739,92 @@ export interface AdminOrganizationDetail extends AdminOrganizationSummary {
   primaryContactUserId: string | null;
   secondaryContactUserId: string | null;
   representatives: AdminOrganizationRepresentative[];
+}
+
+// PRD §4.11 (Phase 4C) — organization content moderation queue
+export interface OrganizationContentReviewSummary {
+  id: string;
+  organizationId: string;
+  submittedByUserId: string;
+  proposedChanges: Record<string, unknown>;
+  hasLogoChange: boolean;
+  status: string;
+  reviewerUserId: string | null;
+  reviewerNote: string | null;
+  submittedAt: string;
+  reviewedAt: string | null;
+  organizationName: string;
+  submitterName: string;
+  submitterEmail: string;
+}
+
+export interface OrganizationContentReviewDiffEntry {
+  field: string;
+  current: unknown;
+  proposed: unknown;
+}
+
+export interface OrganizationContentReviewDetail extends OrganizationContentReviewSummary {
+  diff: OrganizationContentReviewDiffEntry[];
+  logoStagingR2Key: string | null;
+  currentLogoR2Key: string | null;
+}
+
+// PRD §4.14 (Phase 4C) — managed mailing list configuration
+export interface MailingList {
+  id: string;
+  email: string;
+  label: string;
+  listType: "all_members" | "consultation" | "ec" | "working_group" | "custom";
+  workingGroupId: string | null;
+  autoSyncCategories: string[] | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// PRD §4.13 (Phase 4E) — sponsorship sales pipeline
+export const SPONSORSHIP_PIPELINE_STAGES = [
+  "new_inquiry",
+  "contacted",
+  "proposal_sent",
+  "negotiating",
+  "payment_pending",
+  "active",
+  "lapsed",
+] as const;
+export type SponsorshipPipelineStage = (typeof SPONSORSHIP_PIPELINE_STAGES)[number];
+
+export interface Sponsorship {
+  id: string;
+  sponsorType: "consortium" | "event";
+  organizationId: string | null;
+  organizationName: string | null;
+  nonMemberName: string | null;
+  nonMemberWebsite: string | null;
+  contactName: string | null;
+  contactEmail: string | null;
+  eventId: string | null;
+  eventName: string | null;
+  tier: string | null;
+  pipelineStage: SponsorshipPipelineStage;
+  startDate: string | null;
+  renewalDate: string | null;
+  assignedToUserId: string | null;
+  assignedToName: string | null;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SponsorshipEvent {
+  id: string;
+  fromStage: string | null;
+  toStage: string;
+  actorUserId: string | null;
+  actorName: string | null;
+  note: string | null;
+  createdAt: string;
 }
 
 // PRD §6 Interim Admin Tool — GET/POST /api/v1/admin/members

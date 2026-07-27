@@ -15,7 +15,6 @@ import { installLiveValidation, validateBeforeSubmit } from "../shared/form/vali
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { setStatus, readField, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
-import { renderDocumentUploader } from "./document-uploader";
 import { memberApplicationCreateSchema } from "../../shared/schemas/member-applications";
 import type { FormDefinition } from "../shared/types";
 
@@ -219,8 +218,6 @@ function showSuccessPanel(
 
   const container = document.createElement("div");
   const statusUrl = `/application-status/?id=${encodeURIComponent(applicationId)}&token=${encodeURIComponent(manageToken)}`;
-  const uploaderHost = document.createElement("div");
-  uploaderHost.className = "mt-4";
 
   render(
     <SuccessPanel icon="🎉" title={`Thanks${applicantName ? `, ${applicantName}` : ""}!`}>
@@ -236,10 +233,8 @@ function showSuccessPanel(
     </SuccessPanel>,
     container,
   );
-  container.appendChild(uploaderHost);
 
   root.appendChild(container);
-  renderDocumentUploader(uploaderHost, { applicationId, token: manageToken });
   requestAnimationFrame(() => container.scrollIntoView({ behavior: "smooth", block: "start" }));
 }
 

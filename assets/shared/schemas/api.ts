@@ -620,6 +620,14 @@ export const adminRunJobsSchema = z.object({
   runRetentionMode: z.enum(["always", "daily_window"]).default("always"),
   retentionHourUtc: z.number().int().min(0).max(23).default(3),
   dryRun: z.boolean().default(false),
+  // Manual off-cycle triggers for the twice-weekly membership batches (PRD
+  // §4.5/§4.6) — normally cron-fired (functions/router.ts), these flags let
+  // staff run them on demand from the Due Work screen. Unlike the flags
+  // above, these have no meaningful dry-run preview (they queue a real
+  // outbox email to a mailing list / transition applications), so `dryRun`
+  // is ignored for both and they only ever run when explicitly requested.
+  runConsultationBatch: z.boolean().default(false),
+  runEcReviewBatch: z.boolean().default(false),
 });
 
 export const internalCalendarRsvpIngestSchema = z
@@ -866,6 +874,8 @@ export const adminUserUpdateSchema = z
     jobTitle: z.string().trim().max(200).nullable().optional(),
     biography: z.string().trim().max(5000).nullable().optional(),
     links: linksSchema.nullable().optional(),
+    /** users.is_ec_member (migration 0038) — pure designation, no permission bundle. */
+    isEcMember: z.boolean().optional(),
   })
   .refine((v) => Object.values(v).some((x) => x !== undefined), {
     message: "At least one field must be provided",

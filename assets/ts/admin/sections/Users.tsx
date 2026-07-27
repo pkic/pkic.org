@@ -40,6 +40,7 @@ interface UserDetail {
   links?: Array<string | { label?: string | null; url?: string | null }>;
   role: string;
   active: boolean;
+  isEcMember?: boolean;
   headshot_r2_key: string | null;
   headshot_updated_at: string | null;
   headshotUrl: string | null;
@@ -58,6 +59,13 @@ const ROLE_COLOR: Record<string, string> = { admin: "danger", user: "secondary",
 // individual categories (H5/H6/H7) are granted directly on this user.
 // ────────────────────────────────────────────────────────
 
+// Individual (org-less H5/H6/H7) categories are picked directly here.
+// Org-tied categories are no longer picked here at all — attaching someone
+// to an organization now always inherits that organization's category
+// (migration 0040), so this form just needs "which organization", not
+// "which category".
+const GRANT_MODE_ORG_TIED = "__org_tied__";
+
 function GrantMembershipForm({
   user,
   onGranted,
@@ -67,15 +75,16 @@ function GrantMembershipForm({
   onGranted: () => void;
   onCancel: () => void;
 }) {
-  const [category, setCategory] = useState<string>("F");
+  const [mode, setMode] = useState<string>(GRANT_MODE_ORG_TIED);
   const [orgQuery, setOrgQuery] = useState("");
   const [orgResults, setOrgResults] = useState<AdminOrganizationSummary[]>([]);
   const [selectedOrgId, setSelectedOrgId] = useState("");
+  const [selectedOrgCategory, setSelectedOrgCategory] = useState<string | null | undefined>(undefined);
   const [searching, setSearching] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category);
+  const isIndividual = mode !== GRANT_MODE_ORG_TIED;
   const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
 
   async function searchOrgs() {
@@ -92,10 +101,28 @@ function GrantMembershipForm({
     }
   }
 
+  async function pickOrg(orgId: string) {
+    setSelectedOrgId(orgId);
+    setSelectedOrgCategory(undefined);
+    if (!orgId) return;
+    try {
+      const data = await api<{ organization: { membershipCategory: string | null } }>(
+        `/api/v1/admin/organizations/${orgId}`,
+      );
+      setSelectedOrgCategory(data.organization.membershipCategory);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    }
+  }
+
   async function handleSubmit(e: Event) {
     e.preventDefault();
     if (!isIndividual && !selectedOrgId) {
-      setError("Pick an organization for this category.");
+      setError("Pick an organization.");
+      return;
+    }
+    if (!isIndividual && !selectedOrgCategory) {
+      setError("This organization has no membership category set yet — set it in Organizations first.");
       return;
     }
     setSaving(true);
@@ -104,7 +131,7 @@ function GrantMembershipForm({
       if (isIndividual) {
         await api(`/api/v1/admin/users/${user.id}/membership`, {
           method: "POST",
-          body: JSON.stringify({ membershipCategory: category }),
+          body: JSON.stringify({ membershipCategory: mode }),
         });
       } else {
         await api(`/api/v1/admin/organizations/${selectedOrgId}/members`, {
@@ -112,7 +139,6 @@ function GrantMembershipForm({
           body: JSON.stringify({
             name: displayName,
             email: user.email,
-            membershipCategory: category,
             ...(user.job_title ? { jobTitle: user.job_title } : {}),
           }),
         });
@@ -135,10 +161,11 @@ function GrantMembershipForm({
           <label class="form-label small text-muted mb-1">Category</label>
           <select
             class="form-select form-select-sm"
-            value={category}
-            onChange={(e) => setCategory((e.target as HTMLSelectElement).value)}
+            value={mode}
+            onChange={(e) => setMode((e.target as HTMLSelectElement).value)}
           >
-            {MEMBERSHIP_CATEGORIES.map((c) => (
+            <option value={GRANT_MODE_ORG_TIED}>Organization-tied (set by org)</option>
+            {MEMBERSHIP_CATEGORIES.filter((c) => INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(c)).map((c) => (
               <option key={c} value={c}>
                 {c}
               </option>
@@ -171,7 +198,7 @@ function GrantMembershipForm({
               <select
                 class="form-select form-select-sm"
                 value={selectedOrgId}
-                onChange={(e) => setSelectedOrgId((e.target as HTMLSelectElement).value)}
+                onChange={(e) => void pickOrg((e.target as HTMLSelectElement).value)}
               >
                 <option value="">— Pick —</option>
                 {orgResults.map((o) => (
@@ -180,6 +207,13 @@ function GrantMembershipForm({
                   </option>
                 ))}
               </select>
+              {selectedOrgId && selectedOrgCategory !== undefined && (
+                <div class="form-text">
+                  {selectedOrgCategory
+                    ? `Category: ${selectedOrgCategory}`
+                    : "No category set on this organization yet."}
+                </div>
+              )}
             </div>
           </>
         )}
@@ -266,18 +300,27 @@ function MembershipPanel({ user, onChanged }: { user: UserDetail; onChanged: () 
                 <tr>
                   <th class="text-muted small adm-user-info-label">Category</th>
                   <td>
-                    <select
-                      class="form-select form-select-sm d-inline-block w-auto"
-                      value={membership.membershipCategory}
-                      disabled={busy}
-                      onChange={(e) => void patchMember({ membershipCategory: (e.target as HTMLSelectElement).value })}
-                    >
-                      {MEMBERSHIP_CATEGORIES.map((c) => (
-                        <option key={c} value={c}>
-                          {c}
-                        </option>
-                      ))}
-                    </select>
+                    {membership.organizationId ? (
+                      // Org-tied category is set once on the organization
+                      // (migration 0040) and mirrored here — edit it from
+                      // the Organizations section instead.
+                      <span class="badge text-bg-success mono">{membership.membershipCategory}</span>
+                    ) : (
+                      <select
+                        class="form-select form-select-sm d-inline-block w-auto"
+                        value={membership.membershipCategory}
+                        disabled={busy}
+                        onChange={(e) =>
+                          void patchMember({ membershipCategory: (e.target as HTMLSelectElement).value })
+                        }
+                      >
+                        {MEMBERSHIP_CATEGORIES.filter((c) => INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(c)).map((c) => (
+                          <option key={c} value={c}>
+                            {c}
+                          </option>
+                        ))}
+                      </select>
+                    )}
                   </td>
                 </tr>
                 <tr>
@@ -527,6 +570,7 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
     links: string[];
     role: string;
     active: boolean;
+    isEcMember: boolean;
   } | null>(null);
   const load = useCallback(async () => {
     setLoading(true);
@@ -586,6 +630,7 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
       links: normalizeProfileLinks(user.links),
       role: user.role,
       active: user.active,
+      isEcMember: user.isEcMember ?? false,
     });
     setEditError("");
     setEditing(true);
@@ -609,6 +654,7 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
           links: editLinksRef.current?.getLinks() ?? editForm.links,
           role: editForm.role,
           active: editForm.active,
+          isEcMember: editForm.isEcMember,
         }),
       });
       toast("User updated", "success");
@@ -714,6 +760,16 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
                             <span class="badge text-bg-success">Yes</span>
                           ) : (
                             <span class="badge text-bg-danger">No</span>
+                          )}
+                        </td>
+                      </tr>
+                      <tr>
+                        <th class="text-muted small adm-user-info-label">Executive Council</th>
+                        <td>
+                          {user.isEcMember ? (
+                            <span class="badge text-bg-success">Yes</span>
+                          ) : (
+                            <span class="text-muted">No</span>
                           )}
                         </td>
                       </tr>
@@ -857,6 +913,23 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
                           </label>
                         </div>
                       </div>
+                      <div class="col-sm-6">
+                        <div class="form-check mt-2">
+                          <input
+                            class="form-check-input"
+                            type="checkbox"
+                            id="edit-ec-member"
+                            checked={editForm.isEcMember}
+                            onChange={(e) =>
+                              setEditForm((f) => f && { ...f, isEcMember: (e.target as HTMLInputElement).checked })
+                            }
+                            disabled={editSaving}
+                          />
+                          <label class="form-check-label small" for="edit-ec-member">
+                            Executive Council member
+                          </label>
+                        </div>
+                      </div>
                     </div>
                     <hr class="my-3" />
                     {editError && <div class="alert alert-danger small py-2 mb-2">{editError}</div>}
@@ -934,11 +1007,7 @@ function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
       columns={[
         {
           header: "Email",
-          cell: (user) => (
-            <a href={`mailto:${user.email}`} class="text-decoration-none" onClick={(e) => e.stopPropagation()}>
-              {user.email}
-            </a>
-          ),
+          cell: (user) => <span>{user.email}</span>,
           className: "mono adm-user-email",
         },
         {
@@ -963,6 +1032,20 @@ function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
             ) : (
               <span class="text-muted">—</span>
             ),
+        },
+        {
+          header: "Links",
+          cell: (user) => {
+            const count = normalizeProfileLinks(user.links).length;
+            return count > 0 ? (
+              <span class="badge text-bg-info" title={`${count} profile link${count === 1 ? "" : "s"}`}>
+                {count}
+              </span>
+            ) : (
+              <span class="text-muted small">—</span>
+            );
+          },
+          className: "text-center",
         },
         {
           header: "Role",

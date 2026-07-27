@@ -99,19 +99,38 @@ export async function createAdminMember(
       const now = nowIso();
       await run(
         db,
-        `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, created_at, updated_at)
-         VALUES (?, ?, ?, NULL, ?, ?, ?, ?)`,
+        `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, membership_category, created_at, updated_at)
+         VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
         [
           organizationId,
           input.organizationName,
           normalizedOrgName,
           input.description ?? null,
           input.website ?? null,
+          input.membershipCategory,
           now,
           now,
         ],
       );
     }
+  }
+
+  if (!isIndividual && organizationId) {
+    // Category is an organization-level fact (migration 0040). Keep it (and
+    // every existing org-tied representative's member_type mirror) in sync
+    // with what was just submitted — matters when this call reuses an
+    // existing organization rather than creating a new one.
+    const now = nowIso();
+    await run(db, "UPDATE organizations SET membership_category = ?, updated_at = ? WHERE id = ?", [
+      input.membershipCategory,
+      now,
+      organizationId,
+    ]);
+    await run(db, "UPDATE members SET member_type = ?, updated_at = ? WHERE organization_id = ?", [
+      input.membershipCategory,
+      now,
+      organizationId,
+    ]);
   }
 
   const members: AdminMemberSummary[] = [];

@@ -8,6 +8,7 @@ import {
   runEcReviewBatch,
   runMembershipDueWork,
 } from "./_lib/services/membership-scheduled-jobs";
+import { runSponsorshipDueWork } from "./_lib/services/sponsorship-scheduled-jobs";
 import api_Router from "./api/router";
 import donate_Router from "./donate/router";
 import r_Router from "./r/router";
@@ -93,11 +94,15 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
       // the same 15-minute trigger — see membership-scheduled-jobs.ts's own
       // note on why this isn't woven into runScheduledDueWork's pass loop.
       const membershipDueWork = await runMembershipDueWork(env.DB, env);
+      // Sponsorship renewal reminders/auto-lapse (PRD §4.13) — same "sibling
+      // call on the 15-minute trigger" pattern as membershipDueWork above.
+      const sponsorshipDueWork = await runSponsorshipDueWork(env.DB, env);
 
       logInfo("SCHEDULED_REMINDERS_COMPLETED", {
         cron: controller.cron,
         dueWork,
         membershipDueWork,
+        sponsorshipDueWork,
       });
       return;
     }

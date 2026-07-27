@@ -20,6 +20,21 @@ import {
 } from "./working-groups";
 import type { DatabaseLike } from "../types";
 
+/**
+ * Current holder of a chair/vice-chair designation — resolved from
+ * `user_roles` (role `role-wg_chair`/`role-wg_vice_chair`,
+ * context_type='working_group', context_id=<wg id>), not from the dead
+ * `working_groups.chair_user_id` column. `userRoleId` is the `user_roles.id`
+ * needed to revoke the assignment via the existing
+ * DELETE /api/v1/admin/users/:userId/roles/:userRoleId endpoint.
+ */
+export interface ChairInfo {
+  userRoleId: string;
+  userId: string;
+  name: string;
+  email: string;
+}
+
 export interface AdminWorkingGroupSummary {
   id: string;
   name: string;
@@ -28,7 +43,10 @@ export interface AdminWorkingGroupSummary {
   mailingListEmail: string | null;
   minEndorsersForBallot: number;
   active: boolean;
+  /** @deprecated Never written after row creation — use chair below. */
   chairUserId: string | null;
+  chair: ChairInfo | null;
+  viceChair: ChairInfo | null;
   memberCount: number;
   createdAt: string;
   updatedAt: string;
@@ -58,6 +76,32 @@ interface WorkingGroupSummaryRow {
   created_at: string;
   updated_at: string;
   member_count: number;
+  chair_user_role_id: string | null;
+  chair_user_id_resolved: string | null;
+  chair_first_name: string | null;
+  chair_last_name: string | null;
+  chair_email: string | null;
+  vice_chair_user_role_id: string | null;
+  vice_chair_user_id: string | null;
+  vice_chair_first_name: string | null;
+  vice_chair_last_name: string | null;
+  vice_chair_email: string | null;
+}
+
+function toChairInfo(
+  userRoleId: string | null,
+  userId: string | null,
+  firstName: string | null,
+  lastName: string | null,
+  email: string | null,
+): ChairInfo | null {
+  if (!userRoleId || !userId) return null;
+  return {
+    userRoleId,
+    userId,
+    name: [firstName, lastName].filter(Boolean).join(" ") || email || "Unknown",
+    email: email ?? "",
+  };
 }
 
 function toSummary(row: WorkingGroupSummaryRow): AdminWorkingGroupSummary {
@@ -70,18 +114,62 @@ function toSummary(row: WorkingGroupSummaryRow): AdminWorkingGroupSummary {
     minEndorsersForBallot: row.min_endorsers_for_ballot,
     active: row.active === 1,
     chairUserId: row.chair_user_id,
+    chair: toChairInfo(
+      row.chair_user_role_id,
+      row.chair_user_id_resolved,
+      row.chair_first_name,
+      row.chair_last_name,
+      row.chair_email,
+    ),
+    viceChair: toChairInfo(
+      row.vice_chair_user_role_id,
+      row.vice_chair_user_id,
+      row.vice_chair_first_name,
+      row.vice_chair_last_name,
+      row.vice_chair_email,
+    ),
     memberCount: row.member_count,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
 }
 
+// Resolves the current chair/vice-chair per WG from user_roles (not the
+// dead working_groups.chair_user_id column) via role-wg_chair/
+// role-wg_vice_chair, context_type='working_group'. A ROW_NUMBER() window
+// picks the most-recently-created active (non-revoked, non-expired)
+// assignment per WG so a stray double-assignment can't multiply rows in
+// the outer query.
+const ACTIVE_USER_ROLE_FILTER = `
+  ur.revoked_at IS NULL
+  AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+`;
+
+function chairSubquery(roleId: string): string {
+  return `
+    SELECT wg_id, user_role_id, user_id, first_name, last_name, email FROM (
+      SELECT ur.context_id AS wg_id, ur.id AS user_role_id, u.id AS user_id, u.first_name, u.last_name, u.email,
+             ROW_NUMBER() OVER (PARTITION BY ur.context_id ORDER BY ur.created_at DESC) AS rn
+      FROM user_roles ur
+      JOIN users u ON u.id = ur.user_id
+      WHERE ur.context_type = 'working_group' AND ur.role_id = '${roleId}' AND ${ACTIVE_USER_ROLE_FILTER}
+    ) WHERE rn = 1
+  `;
+}
+
 const SUMMARY_SELECT = `
   SELECT wg.id, wg.name, wg.slug, wg.description, wg.mailing_list_email, wg.min_endorsers_for_ballot,
          wg.active, wg.chair_user_id, wg.created_at, wg.updated_at,
          (SELECT COUNT(*) FROM working_group_members wgm
-           WHERE wgm.working_group_id = wg.id AND wgm.left_at IS NULL) AS member_count
+           WHERE wgm.working_group_id = wg.id AND wgm.left_at IS NULL) AS member_count,
+         chair.user_role_id AS chair_user_role_id, chair.user_id AS chair_user_id_resolved,
+         chair.first_name AS chair_first_name, chair.last_name AS chair_last_name, chair.email AS chair_email,
+         vice_chair.user_role_id AS vice_chair_user_role_id, vice_chair.user_id AS vice_chair_user_id,
+         vice_chair.first_name AS vice_chair_first_name, vice_chair.last_name AS vice_chair_last_name,
+         vice_chair.email AS vice_chair_email
   FROM working_groups wg
+  LEFT JOIN (${chairSubquery("role-wg_chair")}) chair ON chair.wg_id = wg.id
+  LEFT JOIN (${chairSubquery("role-wg_vice_chair")}) vice_chair ON vice_chair.wg_id = wg.id
 `;
 
 export async function listAdminWorkingGroups(db: DatabaseLike): Promise<AdminWorkingGroupSummary[]> {
@@ -195,6 +283,8 @@ export async function createWorkingGroup(
     minEndorsersForBallot: input.minEndorsersForBallot ?? 0,
     active: true,
     chairUserId: null,
+    chair: null,
+    viceChair: null,
     memberCount: 0,
     createdAt: now,
     updatedAt: now,

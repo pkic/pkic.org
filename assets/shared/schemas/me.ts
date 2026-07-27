@@ -5,6 +5,14 @@
  */
 import { z } from "zod";
 
+export const myOrganizationRepresentativeSchema = z.object({
+  userId: z.uuid(),
+  name: z.string().nullable(),
+  email: z.string(),
+  isPrimaryContact: z.boolean(),
+  isSecondaryContact: z.boolean(),
+});
+
 export const myProfileSchema = z.object({
   userId: z.uuid(),
   email: z.string(),
@@ -20,6 +28,13 @@ export const myProfileSchema = z.object({
   memberSince: z.string(),
   showOnOrgProfile: z.boolean(),
   canEditOrganizationName: z.boolean(),
+  // Member portal (self-service coworker enrollment): true when this member
+  // is their organization's primary or secondary contact. Always false for
+  // org-less (H5/H6/H7) members.
+  isOrgContact: z.boolean(),
+  // Full representative roster for the caller's organization, or null when
+  // the member has no organization.
+  organizationRepresentatives: z.array(myOrganizationRepresentativeSchema).nullable(),
 });
 
 export const myProfileGetRouteSchema = {
@@ -144,6 +159,179 @@ export const myWorkingGroupLeaveRouteSchema = {
   },
 };
 
+export const addCoworkerSchema = z.object({
+  name: z.string().trim().min(1).max(160),
+  email: z.string().email(),
+});
+
+export const addCoworkerRouteSchema = {
+  tags: ["Me"],
+  summary: "Enroll a coworker as a representative of my organization (self-service)",
+  description:
+    "Only the organization's primary or secondary contact may call this. The new member's category is inherited from the organization's own membership_category.",
+  request: {
+    body: { content: { "application/json": { schema: addCoworkerSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Coworker enrolled.",
+      content: {
+        "application/json": {
+          schema: z.object({
+            memberId: z.string(),
+            userId: z.string(),
+            name: z.string(),
+            email: z.string(),
+          }),
+        },
+      },
+    },
+    "403": { description: "Caller is not an org contact, or has no organization." },
+    "409": { description: "Email already holds an active membership, or the org has no membership category set." },
+  },
+};
+
+// ── Organization profile & content moderation (PRD §4.11) ────────────────
+
+export const myOrganizationProfileSchema = z.object({
+  id: z.uuid(),
+  name: z.string(),
+  description: z.string().nullable(),
+  website: z.string().nullable(),
+  contentMarkdown: z.string().nullable(),
+  slogan: z.string().nullable(),
+  logoUrl: z.string().nullable(),
+  blogUrl: z.string().nullable(),
+  blogFeedUrl: z.string().nullable(),
+  pressUrl: z.string().nullable(),
+  pressFeedUrl: z.string().nullable(),
+  careersUrl: z.string().nullable(),
+  socialX: z.string().nullable(),
+  socialLinkedin: z.string().nullable(),
+  socialFacebook: z.string().nullable(),
+  socialInstagram: z.string().nullable(),
+  socialYoutube: z.string().nullable(),
+  isOrgContact: z.boolean(),
+  isPrimaryContact: z.boolean(),
+  pendingSecondaryContactUserId: z.uuid().nullable(),
+  pendingReview: z.record(z.string(), z.unknown()).nullable(),
+});
+
+export const myOrganizationProfileGetRouteSchema = {
+  tags: ["Me"],
+  summary: "View my organization's current live profile (PRD §4.11)",
+  responses: {
+    "200": {
+      description: "My organization's profile.",
+      content: { "application/json": { schema: myOrganizationProfileSchema } },
+    },
+    "403": { description: "Caller has no organization." },
+  },
+};
+
+export const myOrganizationContentChangeSchema = z.object({
+  slogan: z.string().trim().max(300).nullable().optional(),
+  description: z.string().trim().max(2000).nullable().optional(),
+  contentMarkdown: z.string().trim().max(20000).nullable().optional(),
+  website: z.url().nullable().optional(),
+  blogUrl: z.url().nullable().optional(),
+  blogFeedUrl: z.url().nullable().optional(),
+  pressUrl: z.url().nullable().optional(),
+  pressFeedUrl: z.url().nullable().optional(),
+  careersUrl: z.url().nullable().optional(),
+  socialX: z.url().nullable().optional(),
+  socialLinkedin: z.url().nullable().optional(),
+  socialFacebook: z.url().nullable().optional(),
+  socialInstagram: z.url().nullable().optional(),
+  socialYoutube: z.url().nullable().optional(),
+});
+
+export const myOrganizationContentChangeRouteSchema = {
+  tags: ["Me"],
+  summary: "Submit an organization content change for staff review (PRD §4.11)",
+  description:
+    "Only the org's primary or secondary contact may call this. Queues the change in the moderation queue — the live profile is unchanged until a staff admin approves it. Only one pending submission per organization at a time.",
+  request: {
+    body: { content: { "application/json": { schema: myOrganizationContentChangeSchema } }, required: true },
+  },
+  responses: {
+    "200": { description: "Submitted for review." },
+    "403": { description: "Caller is not an org contact, or has no organization." },
+    "409": { description: "A submission is already pending review." },
+    "422": { description: "No editable fields were submitted." },
+  },
+};
+
+export const myOrganizationReviewSchema = z.object({
+  id: z.uuid(),
+  organizationId: z.uuid(),
+  submittedByUserId: z.uuid(),
+  proposedChanges: z.record(z.string(), z.unknown()),
+  hasLogoChange: z.boolean(),
+  status: z.string(),
+  reviewerUserId: z.uuid().nullable(),
+  reviewerNote: z.string().nullable(),
+  submittedAt: z.string(),
+  reviewedAt: z.string().nullable(),
+});
+
+export const myOrganizationReviewsListRouteSchema = {
+  tags: ["Me"],
+  summary: "Status of my organization's pending/past content submissions (PRD §4.11)",
+  responses: {
+    "200": {
+      description: "My organization's review history.",
+      content: { "application/json": { schema: z.object({ reviews: z.array(myOrganizationReviewSchema) }) } },
+    },
+    "403": { description: "Caller has no organization." },
+  },
+};
+
+export const myOrganizationReviewWithdrawRouteSchema = {
+  tags: ["Me"],
+  summary: "Withdraw a pending organization content submission (PRD §4.11)",
+  request: { params: z.object({ id: z.uuid() }) },
+  responses: {
+    "200": { description: "Withdrawn." },
+    "404": { description: "Review not found." },
+    "409": { description: "Only a pending review can be withdrawn." },
+  },
+};
+
+export const myOrganizationLogoUploadRouteSchema = {
+  tags: ["Me"],
+  summary: "Propose a new organization logo (PRD §4.11)",
+  description:
+    "multipart/form-data with a single 'file' field. Held in R2 staging and folds into the org's single pending content review until a staff admin approves it.",
+  responses: {
+    "200": { description: "Staged." },
+    "403": { description: "Caller is not an org contact, or has no organization." },
+    "413": { description: "File too large." },
+    "415": { description: "Unsupported file type." },
+  },
+};
+
+export const mySecondaryContactNominateSchema = z.object({
+  userId: z.uuid().nullable(),
+});
+
+export const mySecondaryContactNominateRouteSchema = {
+  tags: ["Me"],
+  summary: "Nominate a secondary contact for my organization (PRD §4.11)",
+  description:
+    "Only the primary contact may call this. Held as a pending nomination (organizations.pending_secondary_contact_user_id) until a staff admin confirms it. Pass userId: null to withdraw a pending nomination.",
+  request: {
+    body: { content: { "application/json": { schema: mySecondaryContactNominateSchema } }, required: true },
+  },
+  responses: {
+    "200": { description: "Nomination recorded." },
+    "403": { description: "Only the primary contact may nominate a secondary contact." },
+    "422": {
+      description: "Nominee is not an active member of the same organization, or is already the primary contact.",
+    },
+  },
+};
+
 export const myHeadshotUploadRouteSchema = {
   tags: ["Me"],
   summary: "Upload my headshot (PRD §4.10)",
@@ -152,5 +340,23 @@ export const myHeadshotUploadRouteSchema = {
     "200": { description: "Uploaded." },
     "413": { description: "File too large." },
     "415": { description: "Unsupported file type." },
+  },
+};
+
+// ── Organization sponsorship view (PRD §4.13, Phase 4E) ────────────────────
+
+export const myOrganizationSponsorshipSchema = z.object({
+  tier: z.string().nullable(),
+  startDate: z.string().nullable(),
+});
+
+export const myOrganizationSponsorshipGetRouteSchema = {
+  tags: ["Me"],
+  summary: "View my organization's active consortium sponsorship tier + start date",
+  responses: {
+    "200": {
+      description: "Current sponsorship, or nulls if the organization is not currently a sponsor.",
+      content: { "application/json": { schema: myOrganizationSponsorshipSchema } },
+    },
   },
 };

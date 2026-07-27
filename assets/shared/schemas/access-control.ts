@@ -11,7 +11,16 @@ function trimmedString(min: number, max: number): z.ZodString {
 }
 
 export const accessGrantIdParamsSchema = z.object({ id: z.uuid() });
-export const roleIdParamsSchema = z.object({ id: z.uuid() });
+// Role ids are NOT always UUIDs — custom roles get a real uuid() (see
+// roles/index.ts's RolesCreate), but every built-in/system role ships with
+// a fixed human-readable id (role-admin, role-wg_chair, role-forum_chair,
+// ...; see migrations 0035/0040). z.uuid() here previously rejected every
+// attempt to reference a system role by id (assign it via POST .../roles,
+// or look up its holders via GET .../roles/:id/assignments) with a 400
+// before the handler ever ran — discovered while wiring up WG vice-chair
+// and forum chair/vice-chair assignment (Fix 2/3), which exclusively
+// assign system roles.
+export const roleIdParamsSchema = z.object({ id: trimmedString(1, 80) });
 export const userIdRolesParamsSchema = z.object({ userId: z.uuid() });
 export const userRoleIdParamsSchema = z.object({ userId: z.uuid(), userRoleId: z.uuid() });
 
@@ -127,9 +136,39 @@ export const roleDeleteRouteSchema = {
   },
 };
 
+export const roleAssignmentSchema = z.object({
+  userRoleId: z.uuid(),
+  userId: z.uuid(),
+  name: z.string(),
+  email: z.string(),
+  contextType: z.string().nullable(),
+  contextId: z.string().nullable(),
+  expiresAt: z.string().nullable(),
+  createdAt: z.string(),
+});
+
+export const roleAssignmentsListRouteSchema = {
+  tags: ["Access Control"],
+  summary: "List every active holder of a role",
+  description:
+    "Reverse lookup of user_roles by role — who currently holds this role, and in which context. Powers admin " +
+    "screens that need to show a role's current holder(s) (e.g. the forum chair) without already knowing the user.",
+  request: { params: roleIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Active assignments of this role.",
+      content: { "application/json": { schema: z.object({ assignments: z.array(roleAssignmentSchema) }) } },
+    },
+    "404": { description: "Role not found." },
+  },
+};
+
 export const userRoleAssignSchema = z
   .object({
-    roleId: z.uuid(),
+    // Not always a UUID — see roleIdParamsSchema's comment above; system
+    // roles (role-wg_chair, role-forum_chair, ...) must be assignable here
+    // too, not just custom roles.
+    roleId: trimmedString(1, 80),
     contextType: contextTypeSchema.nullable().optional(),
     contextId: trimmedString(1, 80).nullable().optional(),
     expiresAt: z.iso.datetime().nullable().optional(),

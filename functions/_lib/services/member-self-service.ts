@@ -16,6 +16,14 @@ import {
 } from "./working-groups";
 import type { AuthMember, DatabaseLike } from "../types";
 
+export interface MyOrganizationRepresentative {
+  userId: string;
+  name: string | null;
+  email: string;
+  isPrimaryContact: boolean;
+  isSecondaryContact: boolean;
+}
+
 export interface MyProfile {
   userId: string;
   email: string;
@@ -31,6 +39,10 @@ export interface MyProfile {
   memberSince: string;
   showOnOrgProfile: boolean;
   canEditOrganizationName: boolean;
+  /** True when this member is their organization's primary or secondary contact. */
+  isOrgContact: boolean;
+  /** Full representative roster for the caller's organization; null when org-less. */
+  organizationRepresentatives: MyOrganizationRepresentative[] | null;
 }
 
 interface MyProfileRow {
@@ -47,6 +59,22 @@ interface MyProfileRow {
   show_on_org_profile: number;
   member_created_at: string;
   org_name: string | null;
+  primary_contact_user_id: string | null;
+  secondary_contact_user_id: string | null;
+}
+
+interface OrganizationRepresentativeRow {
+  user_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  preferred_name: string | null;
+  email: string;
+}
+
+function representativeDisplayName(row: OrganizationRepresentativeRow): string | null {
+  if (row.preferred_name) return row.preferred_name;
+  const full = [row.first_name, row.last_name].filter(Boolean).join(" ").trim();
+  return full || null;
 }
 
 function normalizeLinks(linksJson: string | null): string[] {
@@ -57,8 +85,14 @@ function normalizeLinks(linksJson: string | null): string[] {
     .filter(Boolean);
 }
 
-function toProfile(row: MyProfileRow, member: AuthMember): MyProfile {
+function toProfile(
+  row: MyProfileRow,
+  member: AuthMember,
+  organizationRepresentatives: MyOrganizationRepresentative[] | null,
+): MyProfile {
   const isIndividual = row.organization_id === null;
+  const isOrgContact =
+    !isIndividual && (member.userId === row.primary_contact_user_id || member.userId === row.secondary_contact_user_id);
   return {
     userId: member.userId,
     email: row.email,
@@ -76,6 +110,8 @@ function toProfile(row: MyProfileRow, member: AuthMember): MyProfile {
     // §4.10: organization is locked to membership for org-tied categories;
     // H5/H6/H7 (org-less) may set a free-text organization name.
     canEditOrganizationName: isIndividual,
+    isOrgContact,
+    organizationRepresentatives,
   };
 }
 
@@ -84,7 +120,7 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
     db,
     `SELECT u.email, u.first_name, u.last_name, u.preferred_name, u.job_title, u.biography, u.links_json,
             u.organization_name, m.member_type, m.organization_id, m.show_on_org_profile, m.created_at AS member_created_at,
-            o.name AS org_name
+            o.name AS org_name, o.primary_contact_user_id, o.secondary_contact_user_id
      FROM users u
      JOIN members m ON m.user_id = u.id
      LEFT JOIN organizations o ON o.id = m.organization_id
@@ -94,7 +130,28 @@ export async function getMyProfile(db: DatabaseLike, member: AuthMember): Promis
   if (!row) {
     throw new AppError(404, "NOT_FOUND", "Profile not found");
   }
-  return toProfile(row, member);
+
+  let organizationRepresentatives: MyOrganizationRepresentative[] | null = null;
+  if (row.organization_id) {
+    const repRows = await all<OrganizationRepresentativeRow>(
+      db,
+      `SELECT u.id AS user_id, u.first_name, u.last_name, u.preferred_name, u.email
+       FROM members m
+       JOIN users u ON u.id = m.user_id
+       WHERE m.organization_id = ? AND m.status = 'active'
+       ORDER BY u.first_name, u.last_name`,
+      [row.organization_id],
+    );
+    organizationRepresentatives = repRows.map((r) => ({
+      userId: r.user_id,
+      name: representativeDisplayName(r),
+      email: r.email,
+      isPrimaryContact: r.user_id === row.primary_contact_user_id,
+      isSecondaryContact: r.user_id === row.secondary_contact_user_id,
+    }));
+  }
+
+  return toProfile(row, member, organizationRepresentatives);
 }
 
 export interface MyProfileUpdateInput {

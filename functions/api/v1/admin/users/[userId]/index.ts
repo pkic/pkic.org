@@ -19,6 +19,7 @@ interface UserRow {
   email: string;
   role: string;
   active: number;
+  is_ec_member: number;
   pii_redacted_at: string | null;
 }
 
@@ -34,6 +35,7 @@ interface UserDetailRow {
   links_json: string | null;
   role: string;
   active: number;
+  is_ec_member: number;
   headshot_r2_key: string | null;
   headshot_updated_at: string | null;
   created_at: string;
@@ -66,7 +68,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const user = await first<UserDetailRow>(
     requestDb(c),
     `SELECT id, email, first_name, last_name, preferred_name,
-            organization_name, job_title, biography, links_json, role, active,
+            organization_name, job_title, biography, links_json, role, active, is_ec_member,
             headshot_r2_key, headshot_updated_at,
             created_at, updated_at, pii_redacted_at
      FROM users WHERE id = ?`,
@@ -120,6 +122,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     user: {
       ...user,
       active: Boolean(user.active),
+      isEcMember: Boolean(user.is_ec_member),
       links: user.links_json ? JSON.parse(user.links_json) : [],
       headshotUrl,
       membership,
@@ -146,7 +149,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
 
   const user = await first<UserRow>(
     requestDb(c),
-    "SELECT id, email, role, active, pii_redacted_at FROM users WHERE id = ?",
+    "SELECT id, email, role, active, is_ec_member, pii_redacted_at FROM users WHERE id = ?",
     [userId],
   );
 
@@ -156,6 +159,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
 
   const newRole = body.role ?? user.role;
   const newActive = body.active ?? Boolean(user.active);
+  const newIsEcMember = body.isEcMember ?? Boolean(user.is_ec_member);
 
   // Email change — check uniqueness before any mutations
   let newEmail = user.email;
@@ -217,8 +221,8 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
 
   await run(
     requestDb(c),
-    "UPDATE users SET email = ?, normalized_email = ?, role = ?, active = ?, updated_at = ? WHERE id = ?",
-    [newEmail, normalizeEmail(newEmail), newRole, newActive ? 1 : 0, nowIso(), user.id],
+    "UPDATE users SET email = ?, normalized_email = ?, role = ?, active = ?, is_ec_member = ?, updated_at = ? WHERE id = ?",
+    [newEmail, normalizeEmail(newEmail), newRole, newActive ? 1 : 0, newIsEcMember ? 1 : 0, nowIso(), user.id],
   );
 
   const changes: Record<string, unknown> = {};
@@ -230,6 +234,9 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
   }
   if (body.active !== undefined && body.active !== Boolean(user.active)) {
     changes.active = { from: Boolean(user.active), to: newActive };
+  }
+  if (body.isEcMember !== undefined && body.isEcMember !== Boolean(user.is_ec_member)) {
+    changes.isEcMember = { from: Boolean(user.is_ec_member), to: newIsEcMember };
   }
   if (hasPiiUpdates && currentDetail) {
     for (const col of safeKeys) {
@@ -247,7 +254,7 @@ export async function onRequestPatch(c: AdminContext): Promise<Response> {
 
   return json({
     success: true,
-    user: { id: user.id, email: newEmail, role: newRole, active: newActive },
+    user: { id: user.id, email: newEmail, role: newRole, active: newActive, isEcMember: newIsEcMember },
   });
 }
 

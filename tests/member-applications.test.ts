@@ -91,6 +91,47 @@ describe("POST /api/v1/members/applications", () => {
     expect(body.error.code).toBe("DUPLICATE_APPLICATION");
   });
 
+  it("does not 409 when the applicant changes the email domain before submitting", async () => {
+    // Regression test for a reported bug: a user filling out the join form
+    // changes the email's domain before submitting and (allegedly) still
+    // gets DUPLICATE_APPLICATION even though no organization or application
+    // exists yet for the new domain. Investigation (manual reproduction via
+    // `npm run dev` against both a fresh D1 instance and a production-backup
+    // snapshot) found no code defect: emailDomain() is derived fresh from
+    // the request body on every call, hasActiveApplicationForDomain only
+    // matches an *exact* domain already present in member_applications, and
+    // hasConflictingOrganizationDomain only matches organizations that
+    // actually have that domain in organization_domains_json. Two
+    // submissions for two different, never-before-seen domains — even from
+    // the same applicant/organization name — must both succeed.
+    const testEnv = makeEnv();
+    const first = await callEndpoint(
+      createApplication,
+      createContext(
+        testEnv,
+        postRequest("https://pkic.org/api/v1/members/applications", {
+          ...validPayload,
+          applicantEmail: "dana@first-domain.test",
+        }),
+        {},
+      ),
+    );
+    expect(first.status).toBe(201);
+
+    const second = await callEndpoint(
+      createApplication,
+      createContext(
+        testEnv,
+        postRequest("https://pkic.org/api/v1/members/applications", {
+          ...validPayload,
+          applicantEmail: "dana@second-domain.test",
+        }),
+        {},
+      ),
+    );
+    expect(second.status).toBe(201);
+  });
+
   it("does not duplicate-check individual (org-less) categories", async () => {
     const testEnv = makeEnv();
     const payload = {

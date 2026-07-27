@@ -34,7 +34,6 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
     {
       memberId: representative.memberId,
       email: representative.email,
-      membershipCategory: representative.membershipCategory,
     },
   );
 

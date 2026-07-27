@@ -31,6 +31,13 @@ export const workingGroupUpdateSchema = z.object({
 
 export const workingGroupMemberAddSchema = z.object({ userId: z.uuid() });
 
+export const chairInfoSchema = z.object({
+  userRoleId: z.uuid(),
+  userId: z.uuid(),
+  name: z.string(),
+  email: z.string(),
+});
+
 export const adminWorkingGroupSummarySchema = z.object({
   id: z.uuid(),
   name: z.string(),
@@ -39,7 +46,10 @@ export const adminWorkingGroupSummarySchema = z.object({
   mailingListEmail: z.string().nullable(),
   minEndorsersForBallot: z.number(),
   active: z.boolean(),
+  /** @deprecated Never written after row creation — see chair/viceChair. */
   chairUserId: z.string().nullable(),
+  chair: chairInfoSchema.nullable(),
+  viceChair: chairInfoSchema.nullable(),
   memberCount: z.number(),
   createdAt: z.string(),
   updatedAt: z.string(),

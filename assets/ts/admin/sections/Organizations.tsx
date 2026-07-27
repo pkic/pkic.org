@@ -21,6 +21,11 @@ import {
 } from "../../../shared/schemas/admin-members";
 import { ORG_TIED_MEMBERSHIP_CATEGORIES, MEMBER_STATUSES } from "../../../shared/schemas/admin-organizations";
 
+// Kept for the §6 "Add organization" (create) flow only — category is
+// picked once there. Once an organization exists, its category lives at
+// organizations.membership_category and is edited via the org profile form
+// below, not per-representative.
+
 // ────────────────────────────────────────────────────────
 // Add organization (or org-less individual) — §6 Interim Admin Tool
 // ────────────────────────────────────────────────────────
@@ -293,10 +298,13 @@ function AddOrganizationForm({ onCreated, onCancel }: { onCreated: () => void; o
 
 function AddRepresentativeForm({
   organizationId,
+  membershipCategory,
   onAdded,
   onCancel,
 }: {
   organizationId: string;
+  /** The organization's current category (organizations.membership_category) — every new rep inherits it. */
+  membershipCategory: string | null;
   onAdded: () => void;
   onCancel: () => void;
 }) {
@@ -304,7 +312,6 @@ function AddRepresentativeForm({
   const [email, setEmail] = useState("");
   const [jobTitle, setJobTitle] = useState("");
   const [linkedin, setLinkedin] = useState("");
-  const [membershipCategory, setMembershipCategory] = useState<string>(ORG_TIED_MEMBERSHIP_CATEGORIES[0]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -318,7 +325,6 @@ function AddRepresentativeForm({
         body: JSON.stringify({
           name: name.trim(),
           email: email.trim(),
-          membershipCategory,
           ...(jobTitle.trim() ? { jobTitle: jobTitle.trim() } : {}),
           ...(linkedin.trim() ? { linkedin: linkedin.trim() } : {}),
         }),
@@ -334,9 +340,17 @@ function AddRepresentativeForm({
     }
   }
 
+  if (!membershipCategory) {
+    return (
+      <div class="small text-danger">
+        Set this organization's membership category (in the Profile section above) before adding representatives.
+      </div>
+    );
+  }
+
   return (
     <form onSubmit={handleSubmit} class="row g-2 align-items-end">
-      <div class="col-md-2">
+      <div class="col-md-3">
         <label class="form-label small text-muted mb-1">Name</label>
         <input
           class="form-control form-control-sm"
@@ -376,19 +390,9 @@ function AddRepresentativeForm({
           placeholder="https://linkedin.com/in/..."
         />
       </div>
-      <div class="col-md-2">
+      <div class="col-md-1">
         <label class="form-label small text-muted mb-1">Category</label>
-        <select
-          class="form-select form-select-sm"
-          value={membershipCategory}
-          onChange={(e) => setMembershipCategory((e.target as HTMLSelectElement).value)}
-        >
-          {ORG_TIED_MEMBERSHIP_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
+        <div class="mono small pt-1">{membershipCategory}</div>
       </div>
       <div class="col-md-1 d-flex gap-1">
         <button type="submit" class="btn btn-sm btn-success" disabled={saving}>
@@ -448,20 +452,6 @@ function RepresentativeRow({ rep, onChanged }: { rep: AdminOrganizationRepresent
         <br />
         <span class="mono text-muted small">{rep.email}</span>
         {rep.jobTitle && <div class="small text-muted">{rep.jobTitle}</div>}
-      </td>
-      <td>
-        <select
-          class="form-select form-select-sm"
-          value={rep.membershipCategory}
-          disabled={busy}
-          onChange={(e) => patch({ membershipCategory: (e.target as HTMLSelectElement).value })}
-        >
-          {MEMBERSHIP_CATEGORIES.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
-        </select>
       </td>
       <td>
         <select
@@ -535,6 +525,9 @@ function OrganizationProfileForm({
     initial.contentMarkdown = org.contentMarkdown ?? "";
     return initial;
   });
+  const [membershipCategory, setMembershipCategory] = useState<string>(
+    org.membershipCategory ?? ORG_TIED_MEMBERSHIP_CATEGORIES[0],
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -543,7 +536,7 @@ function OrganizationProfileForm({
     setSaving(true);
     setError("");
     try {
-      const body: Record<string, string | null> = {};
+      const body: Record<string, string | null> = { membershipCategory };
       for (const [, field] of PROFILE_TEXT_FIELDS) {
         body[field] = form[field].trim() ? form[field].trim() : null;
       }
@@ -565,6 +558,22 @@ function OrganizationProfileForm({
   return (
     <form onSubmit={handleSubmit}>
       <div class="row g-2 mb-2">
+        <div class="col-md-4">
+          <label class="form-label small mb-1">Membership category</label>
+          <select
+            class="form-select form-select-sm"
+            value={membershipCategory}
+            onChange={(e) => setMembershipCategory((e.target as HTMLSelectElement).value)}
+            disabled={saving}
+          >
+            {ORG_TIED_MEMBERSHIP_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+          <div class="form-text">Changing this updates every representative's category to match.</div>
+        </div>
         {PROFILE_TEXT_FIELDS.map(([label, field]) => (
           <div key={field} class="col-md-4">
             <label class="form-label small mb-1">{label}</label>
@@ -779,6 +788,16 @@ function OrganizationDetailView({ organizationId, onBack }: { organizationId: st
               ) : (
                 <table class="table table-sm table-borderless mb-0">
                   <tbody>
+                    <tr>
+                      <th class="text-muted small adm-user-info-label">Membership category</th>
+                      <td>
+                        {org.membershipCategory ? (
+                          <span class="badge text-bg-success mono">{org.membershipCategory}</span>
+                        ) : (
+                          <span class="text-danger fst-italic">Not set</span>
+                        )}
+                      </td>
+                    </tr>
                     {(
                       [
                         ["Website", org.website],
@@ -855,6 +874,7 @@ function OrganizationDetailView({ organizationId, onBack }: { organizationId: st
           <div class="card-body border-bottom p-3">
             <AddRepresentativeForm
               organizationId={organizationId}
+              membershipCategory={org.membershipCategory}
               onAdded={() => {
                 setShowAddRep(false);
                 void load();
@@ -868,7 +888,6 @@ function OrganizationDetailView({ organizationId, onBack }: { organizationId: st
             <thead class="table-dark">
               <tr>
                 <th>Name</th>
-                <th>Category</th>
                 <th>Status</th>
                 <th class="text-center">On profile</th>
                 <th>Contact role</th>
@@ -878,7 +897,7 @@ function OrganizationDetailView({ organizationId, onBack }: { organizationId: st
             <tbody>
               {org.representatives.length === 0 ? (
                 <tr>
-                  <td colspan={6} class="text-center text-muted fst-italic py-3">
+                  <td colspan={5} class="text-center text-muted fst-italic py-3">
                     No representatives
                   </td>
                 </tr>
