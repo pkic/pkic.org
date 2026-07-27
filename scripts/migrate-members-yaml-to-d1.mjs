@@ -24,10 +24,15 @@
  *     (`POST /api/v1/admin/members`)
  *   - touch `sponsor.level` / `sponsor.sponsoring.*` (Step 3e, separate)
  *   - upload logos/photos to R2 unless `--upload-logos` is passed (slow, and
- *     orthogonal to the core org/user/member import) — covers both org
- *     logos (`organizations.logo_r2_key`) and org-less individual (H5/H6/H7)
- *     photos (`users.headshot_r2_key`), both sourced from the same
- *     `assets/images/members/<slug>/` directory the old Hugo templates read
+ *     orthogonal to the core org/user/member import) — covers org logos
+ *     (`organizations.logo_r2_key`), org-less individual (H5/H6/H7) photos,
+ *     and per-representative photos (all three land on `users.headshot_r2_key`
+ *     except the org logo), all sourced from the same
+ *     `assets/images/members/<slug>/` directory the old Hugo templates read —
+ *     the org's own `<slug>.*` file is the logo, every other image file in
+ *     that directory is a representative's photo keyed by their urlized name
+ *     (or explicit YAML `id`), matching the old `single.html`'s per-rep image
+ *     lookup
  *
  * Usage:
  *   node scripts/migrate-members-yaml-to-d1.mjs --local
@@ -267,6 +272,34 @@ function findLogoFile(slug) {
   // Prefer an exact `<slug>.<ext>` match if present, else the first file.
   const exact = candidates.find((f) => path.basename(f, path.extname(f)) === slug);
   return path.join(dir, exact ?? candidates[0]);
+}
+
+/** Mirrors Hugo's `urlize`: lowercase, strip diacritics, non-alphanumerics -> hyphens. */
+function urlizeName(name) {
+  return String(name)
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "") // combining diacritical marks left behind by NFD
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/**
+ * Per-representative photo, sourced from the same `assets/images/members/<orgSlug>/`
+ * directory as the org logo — the old Hugo `single.html` looked these up at
+ * `/images/members/<orgSlug>/<repId-or-urlized-name>.*` (falling back to the
+ * urlized representative name when no explicit `id` was set on the YAML
+ * `representatives[]` entry). Distinct from `findLogoFile`, which only ever
+ * matches the org's own `<orgSlug>.*` file.
+ */
+function findRepPhotoFile(orgSlug, rep) {
+  const dir = path.join(LOGO_DIR, orgSlug);
+  if (!fs.existsSync(dir)) return null;
+  const repSlug = String(rep.id ?? urlizeName(rep.name));
+  if (!repSlug) return null;
+  const candidates = fs.readdirSync(dir).filter((f) => /\.(svg|png|jpg|jpeg)$/i.test(f));
+  const exact = candidates.find((f) => path.basename(f, path.extname(f)) === repSlug);
+  return exact ? path.join(dir, exact) : null;
 }
 
 // ── Reconciliation ───────────────────────────────────────────────────────
@@ -534,6 +567,19 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
       const { email } = candidates[i];
       const { firstName, lastName } = splitName(rep.name);
       const links = { linkedin: rep.social?.linkedin || undefined, x: rep.social?.x || undefined };
+
+      // Representative photos live in the same `assets/images/members/<orgSlug>/`
+      // directory as the org logo, one file per person (see findRepPhotoFile) —
+      // distinct from the org's own `<orgSlug>.*` logo file.
+      let repHeadshotR2Key = null;
+      if (uploadLogos) {
+        const photoFile = findRepPhotoFile(slug, rep);
+        if (photoFile) {
+          repHeadshotR2Key = `member-photos/${slug}/${path.basename(photoFile)}`;
+          logoUploads.push({ slug, filePath: photoFile, r2Key: repHeadshotR2Key });
+        }
+      }
+
       const normalizedEmail = upsertUser({
         email,
         firstName,
@@ -541,6 +587,7 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
         jobTitle: rep.role ?? null,
         biography: rep.description ?? null,
         linksJson: Object.values(links).some(Boolean) ? JSON.stringify(links) : null,
+        headshotR2Key: repHeadshotR2Key,
       });
       claimedEmails.add(normalizedEmail);
       insertMemberIfAbsent({ normalizedEmail, normalizedOrgName, memberType, showOnOrgProfile: true });
@@ -552,7 +599,14 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
     // become anonymous, opted-out member rows per §6 Step 2 item 4.
     for (let i = pairedCount; i < candidates.length; i += 1) {
       const { email } = candidates[i];
-      const normalizedEmail = upsertUser({ email, firstName: null, lastName: null, jobTitle: null, biography: null, linksJson: null });
+      const normalizedEmail = upsertUser({
+        email,
+        firstName: null,
+        lastName: null,
+        jobTitle: null,
+        biography: null,
+        linksJson: null,
+      });
       claimedEmails.add(normalizedEmail);
       insertMemberIfAbsent({ normalizedEmail, normalizedOrgName, memberType, showOnOrgProfile: false });
       contactEmails.push(normalizedEmail);
@@ -636,9 +690,13 @@ function renderMarkdownReport(report) {
   lines.push(`- Organizations/individuals with at least one domain-matched email: ${report.totals.matchedOrgs}`);
   lines.push(`- Unmatched (no domain match — needs the Interim Admin Tool): ${report.totals.unmatched.length}`);
   lines.push(`- Bare roster users (no attributable YAML org): ${report.bareRosterUsers.length}`);
-  lines.push(`- WG-only roster users (subscribed to a WG list but absent from pkic.csv): ${report.wgOnlyRosterUsers.length}`);
+  lines.push(
+    `- WG-only roster users (subscribed to a WG list but absent from pkic.csv): ${report.wgOnlyRosterUsers.length}`,
+  );
   lines.push(`- Missing membership category (\`memberType\` blank in YAML): ${report.totals.missingCategory.length}`);
-  lines.push(`- Ambiguous representative/email pairing (needs staff confirmation): ${report.totals.ambiguousPairing.length}`);
+  lines.push(
+    `- Ambiguous representative/email pairing (needs staff confirmation): ${report.totals.ambiguousPairing.length}`,
+  );
   lines.push("");
   lines.push("## Working group roster membership counts");
   for (const [slug, count] of Object.entries(report.workingGroupCounts)) {

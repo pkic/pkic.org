@@ -285,6 +285,34 @@ describe("GET /api/v1/members/:id", () => {
     expect(body.representatives[0]).toMatchObject({ name: "Rep Person", jobTitle: "CTO", bio: "Leads engineering." });
   });
 
+  it("surfaces a representative's own photoUrl when their headshot_r2_key is set", async () => {
+    const organizationId = crypto.randomUUID();
+    const repUserId = crypto.randomUUID();
+    await seedOrgMember({
+      userId: repUserId,
+      organizationId,
+      organizationName: "Photo Org",
+      status: "active",
+    });
+    await env.DB.prepare(`UPDATE users SET headshot_r2_key = ? WHERE id = ?`)
+      .bind("member-photos/photo-org/rep-person.jpg", repUserId)
+      .run();
+
+    const response = await callEndpoint(
+      getMember,
+      createContext(env, getRequest(`https://pkic.org/api/v1/members/${organizationId}`), { id: organizationId }),
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      representatives: Array<{ name: string; photoUrl: string | null }>;
+    };
+    expect(body.representatives).toHaveLength(1);
+    const repMemberRow = await env.DB.prepare(`SELECT id FROM members WHERE user_id = ?`).bind(repUserId).first<{
+      id: string;
+    }>();
+    expect(body.representatives[0].photoUrl).toBe(`/api/v1/members/${repMemberRow!.id}/logo`);
+  });
+
   it("returns the individual member's own bio/job title, with no representatives list", async () => {
     const userId = crypto.randomUUID();
     await seedIndividualMember({ userId, status: "active", tier: "H6" });
@@ -388,6 +416,44 @@ describe("GET /api/v1/members/:id/logo", () => {
     expect(response.headers.get("content-type")).toBe("image/jpeg");
     const buf = new Uint8Array(await response.arrayBuffer());
     expect(Array.from(buf)).toEqual([5, 6, 7, 8]);
+  });
+
+  it("serves an organization representative's photo keyed by their own members.id", async () => {
+    const organizationId = crypto.randomUUID();
+    const repUserId = crypto.randomUUID();
+    await seedOrgMember({
+      userId: repUserId,
+      organizationId,
+      organizationName: "Rep Photo Org",
+      status: "active",
+    });
+    const r2Key = `member-photos/rep-photo-org/rep-person.jpg`;
+    await env.DB.prepare(`UPDATE users SET headshot_r2_key = ? WHERE id = ?`).bind(r2Key, repUserId).run();
+    const bytes = new Uint8Array([9, 9, 9]);
+    await env.ASSETS_BUCKET!.put(r2Key, bytes);
+
+    const repMemberRow = await env.DB.prepare(`SELECT id FROM members WHERE user_id = ?`).bind(repUserId).first<{
+      id: string;
+    }>();
+
+    // The organization's own id must not resolve to the representative's photo.
+    const orgLogoResponse = await callEndpoint(
+      getMemberLogo,
+      createContext(env, getRequest(`https://pkic.org/api/v1/members/${organizationId}/logo`), {
+        id: organizationId,
+      }),
+    );
+    expect(orgLogoResponse.status).toBe(404);
+
+    const response = await callEndpoint(
+      getMemberLogo,
+      createContext(env, getRequest(`https://pkic.org/api/v1/members/${repMemberRow!.id}/logo`), {
+        id: repMemberRow!.id,
+      }),
+    );
+    expect(response.status).toBe(200);
+    const buf = new Uint8Array(await response.arrayBuffer());
+    expect(Array.from(buf)).toEqual([9, 9, 9]);
   });
 });
 

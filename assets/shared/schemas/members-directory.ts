@@ -47,6 +47,7 @@ export const publicMemberRepresentativeSchema = z.object({
   jobTitle: z.string().nullable(),
   bio: z.string().nullable(),
   linkedin: z.string().nullable(),
+  photoUrl: z.string().nullable(),
 });
 
 export const publicMemberSocialSchema = z.object({

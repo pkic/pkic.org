@@ -47,6 +47,7 @@ export interface PublicMemberRepresentative {
   jobTitle: string | null;
   bio: string | null;
   linkedin: string | null;
+  photoUrl: string | null;
 }
 
 export interface PublicMemberDetail extends PublicMemberSummary {
@@ -173,14 +174,16 @@ export async function listPublicMembers(
 
 async function loadRepresentatives(db: DatabaseLike, organizationId: string): Promise<PublicMemberRepresentative[]> {
   const rows = await all<{
+    member_id: string;
     first_name: string | null;
     last_name: string | null;
     job_title: string | null;
     biography: string | null;
     links_json: string | null;
+    headshot_r2_key: string | null;
   }>(
     db,
-    `SELECT u.first_name, u.last_name, u.job_title, u.biography, u.links_json
+    `SELECT m.id AS member_id, u.first_name, u.last_name, u.job_title, u.biography, u.links_json, u.headshot_r2_key
      FROM members m
      JOIN users u ON u.id = m.user_id
      WHERE m.organization_id = ? AND m.status = 'active' AND m.show_on_org_profile = 1
@@ -195,6 +198,7 @@ async function loadRepresentatives(db: DatabaseLike, organizationId: string): Pr
       jobTitle: r.job_title,
       bio: r.biography,
       linkedin: links.linkedin ?? null,
+      photoUrl: r.headshot_r2_key ? `/api/v1/members/${r.member_id}/logo` : null,
     };
   });
 }
@@ -255,11 +259,15 @@ export async function getPublicMemberById(db: DatabaseLike, id: string): Promise
 }
 
 /**
- * `id` matches the directory `id` field: an organization id for org-tied
- * members, or the `members.id` row itself for org-less individuals
- * (H5/H6/H7) — see `toSummary`. Individuals have no `organizations` row to
- * key a logo off of, so their photo lives on their own `users.headshot_r2_key`
- * instead (the same column self-service headshot uploads use).
+ * `id` matches the directory `id` field for organizations and org-less
+ * individuals (H5/H6/H7) — see `toSummary` — but is also called with a
+ * representative's own `members.id` (see `loadRepresentatives`'s
+ * `photoUrl`), since an org-tied representative has no `organizations` row
+ * of their own to key a logo off of. In every non-organization case the
+ * photo lives on `users.headshot_r2_key` (the same column self-service
+ * headshot uploads use), so the second query intentionally has no
+ * `organization_id IS NULL` restriction — it resolves individuals and
+ * representatives alike.
  */
 export async function getMemberLogoR2Key(db: DatabaseLike, id: string): Promise<string | null> {
   const orgRow = await first<{ logo_r2_key: string | null }>(db, `SELECT logo_r2_key FROM organizations WHERE id = ?`, [
@@ -272,7 +280,7 @@ export async function getMemberLogoR2Key(db: DatabaseLike, id: string): Promise<
     `SELECT u.headshot_r2_key AS headshot_r2_key
      FROM members m
      JOIN users u ON u.id = m.user_id
-     WHERE m.id = ? AND m.organization_id IS NULL`,
+     WHERE m.id = ?`,
     [id],
   );
   return memberRow?.headshot_r2_key ?? null;

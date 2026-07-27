@@ -23,6 +23,7 @@ interface Representative {
   jobTitle: string | null;
   bio: string | null;
   linkedin: string | null;
+  photoUrl: string | null;
 }
 
 interface MemberDetail {
@@ -92,12 +93,16 @@ function RepresentativeCard({ rep }: { rep: Representative }) {
         {rep.bio && <Markdown markdown={rep.bio} />}
       </div>
       <div class="col-lg-3 order-lg-1">
-        <div
-          class={`standalone-initials initial-color-${rep.name.length % 6}`}
-          style="width:100px;height:100px;font-size:1.5rem;"
-        >
-          {initialsFor(rep.name)}
-        </div>
+        {rep.photoUrl ? (
+          <img class="img-thumbnail" alt={rep.name} title={rep.name} src={rep.photoUrl} />
+        ) : (
+          <div
+            class={`standalone-initials initial-color-${rep.name.length % 6}`}
+            style="width:100px;height:100px;font-size:1.5rem;"
+          >
+            {initialsFor(rep.name)}
+          </div>
+        )}
       </div>
     </div>
   );
