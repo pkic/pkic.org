@@ -9,6 +9,8 @@ import { onRequestGet as AdminUsersUserIdGet_l } from "./index";
 import { onRequestPatch as AdminUsersUserIdPatch_l } from "./index";
 import { UserMembershipGrant } from "./membership";
 import roles_Router from "./roles/router";
+import emails_Router from "./emails/router";
+import { UserMerge } from "./merge";
 import type { RequestDbContext } from "../../../../../_lib/db/context";
 
 const app = new Hono<RequestDbContext>();
@@ -22,6 +24,8 @@ openapi.delete("/headshot", AdminUsersUserIdHeadshotDelete);
 app.get("/", AdminUsersUserIdGet_l);
 app.patch("/", AdminUsersUserIdPatch_l);
 openapi.post("/membership", UserMembershipGrant);
+openapi.post("/merge", UserMerge);
 openapi.route("/roles", roles_Router);
+openapi.route("/emails", emails_Router);
 
 export default openapi;

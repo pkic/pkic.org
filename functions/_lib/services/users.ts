@@ -18,8 +18,28 @@ export interface UserRecord {
   data_json: string | null;
 }
 
+/**
+ * Matches a `users` row by its primary email OR by any secondary email
+ * recorded in `user_emails` (admin-managed, e.g. from the user-merge tool
+ * or manually added aliases) -- so admin find-or-create flows (adding a
+ * representative, the Interim Admin Tool) recognize a person by any known
+ * address instead of creating a duplicate `users` row. Login lookups
+ * (magic-link request/verify in `_lib/auth/admin.ts`/`_lib/auth/member.ts`)
+ * deliberately do NOT go through this helper -- secondary emails are
+ * admin/display/search only and must not grant login via an alias.
+ */
+async function findExistingUserByAnyEmail(db: DatabaseLike, normalizedEmail: string): Promise<UserRecord | null> {
+  const direct = await first<UserRecord>(db, "SELECT * FROM users WHERE normalized_email = ?", [normalizedEmail]);
+  if (direct) return direct;
+  return first<UserRecord>(
+    db,
+    `SELECT u.* FROM users u JOIN user_emails ue ON ue.user_id = u.id WHERE ue.normalized_email = ?`,
+    [normalizedEmail],
+  );
+}
+
 export async function findUserByEmail(db: DatabaseLike, email: string): Promise<UserRecord | null> {
-  return first<UserRecord>(db, "SELECT * FROM users WHERE normalized_email = ?", [normalizeEmail(email)]);
+  return findExistingUserByAnyEmail(db, normalizeEmail(email));
 }
 
 /**
@@ -49,7 +69,7 @@ export async function findOrCreateUser(
   },
 ): Promise<UserRecord> {
   const normalized = normalizeEmail(payload.email);
-  const existing = await first<UserRecord>(db, "SELECT * FROM users WHERE normalized_email = ?", [normalized]);
+  const existing = await findExistingUserByAnyEmail(db, normalized);
 
   if (!existing) {
     const user: UserRecord = {

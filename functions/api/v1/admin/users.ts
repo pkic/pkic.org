@@ -49,9 +49,11 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   }
 
   if (search) {
-    conditions.push("(u.email LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ?)");
+    conditions.push(
+      "(u.email LIKE ? OR u.first_name LIKE ? OR u.last_name LIKE ? OR EXISTS (SELECT 1 FROM user_emails ue WHERE ue.user_id = u.id AND ue.email LIKE ?))",
+    );
     const like = `%${search}%`;
-    params.push(like, like, like);
+    params.push(like, like, like, like);
   }
 
   const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
