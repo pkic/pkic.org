@@ -1,0 +1,41 @@
+/**
+ * Mirrors the server-side PERMISSIONS list (functions/_lib/auth/permissions.ts,
+ * PRD §2.1) for building selects/checkboxes in the Access Control UI. The
+ * server is the source of truth — an unknown value is rejected server-side
+ * (isPermission) regardless of what this list contains.
+ */
+export const PERMISSIONS = [
+  "membership:read",
+  "membership:write",
+  "membership:approve",
+  "events:read",
+  "events:write",
+  "events:manage",
+  "working-groups:read",
+  "working-groups:write",
+  "email-templates:read",
+  "email-templates:write",
+  "donations:read",
+  "donations:sync",
+  "users:read",
+  "users:write",
+  "users:anonymize",
+  "audit:read",
+  "access:grant",
+  "access:revoke",
+  "organizations:read",
+  "organizations:write",
+  "organizations:content-review",
+  "sponsorships:read",
+  "sponsorships:write",
+  "votes:create",
+  "votes:manage",
+  "proposals:read",
+  "proposals:score",
+  "proposals:manage",
+  "agenda:read",
+  "agenda:write",
+  "sponsor-portal:attendee-data",
+  "admin:read",
+  "admin:write",
+] as const;

@@ -1,4 +1,5 @@
 export interface EventSummary {
+  id: string;
   slug: string;
   name: string;
   timezone: string;
@@ -149,8 +150,64 @@ export interface EventPermission {
   user_id: string | null;
   permission: string;
   granted_by_id: string;
+  expires_at: string | null;
   created_at: string;
   granter_email: string | null;
+}
+
+// ── Access control (PRD §2.4) ─────────────────────────────────────────────────
+
+export interface Role {
+  id: string;
+  name: string;
+  description: string | null;
+  isSystemRole: boolean;
+  permissions: string[];
+  createdAt: string;
+}
+
+export interface AccessGrant {
+  id: string;
+  userId: string;
+  permission: string;
+  contextType: string | null;
+  contextId: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface UserRoleAssignment {
+  id: string;
+  userId: string;
+  roleId: string;
+  roleName: string;
+  contextType: string | null;
+  contextId: string | null;
+  expiresAt: string | null;
+  createdAt: string;
+}
+
+export interface WorkingGroupSummary {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+  active: boolean;
+}
+
+export interface WorkingGroupDetail extends WorkingGroupSummary {
+  mailingListEmail: string | null;
+  members: Array<{ name: string; organizationName: string | null }>;
+}
+
+// ── Passkeys (PRD §3.5) ────────────────────────────────────────────────────────
+
+export interface Passkey {
+  id: string;
+  deviceName: string | null;
+  aaguid: string | null;
+  lastUsedAt: string | null;
+  createdAt: string;
 }
 
 export interface ProposalSummary {

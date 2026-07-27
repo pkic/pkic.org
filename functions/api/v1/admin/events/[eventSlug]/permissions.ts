@@ -42,6 +42,7 @@ interface PermissionRow {
   user_id: string | null;
   role_id: string;
   granted_by_id: string | null;
+  expires_at: string | null;
   created_at: string;
   granter_email: string | null;
 }
@@ -58,7 +59,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const rows = await all<PermissionRow>(
     requestDb(c),
     `SELECT ur.id, ur.user_email, ur.user_id, ur.role_id,
-            ur.granted_by_user_id AS granted_by_id, ur.created_at,
+            ur.granted_by_user_id AS granted_by_id, ur.expires_at, ur.created_at,
             u.email AS granter_email
      FROM user_roles ur
      LEFT JOIN users u ON u.id = ur.granted_by_user_id
@@ -74,6 +75,7 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     user_id: row.user_id,
     permission: ROLE_ID_TO_PERMISSION[row.role_id],
     granted_by_id: row.granted_by_id,
+    expires_at: row.expires_at,
     created_at: row.created_at,
     granter_email: row.granter_email,
   }));
@@ -108,20 +110,33 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
 
   const id = uuid();
   const now = nowIso();
+  const expiresAt = body.expiresAt ?? null;
 
   await run(
     requestDb(c),
-    `INSERT INTO user_roles (id, user_id, user_email, role_id, context_type, context_id, granted_by_user_id, created_at)
-     VALUES (?, ?, ?, ?, 'event', ?, ?, ?)`,
-    [id, userRow?.id ?? null, normalizedEmail, roleId, event.id, admin.id, now],
+    `INSERT INTO user_roles (id, user_id, user_email, role_id, context_type, context_id, granted_by_user_id, expires_at, created_at)
+     VALUES (?, ?, ?, ?, 'event', ?, ?, ?, ?)`,
+    [id, userRow?.id ?? null, normalizedEmail, roleId, event.id, admin.id, expiresAt, now],
   );
 
   await writeAuditLog(requestDb(c), "admin", admin.id, "event_permission_granted", "event", event.id, {
     email: normalizedEmail,
     permission: body.permission,
+    expiresAt,
   });
 
-  return json({ permission: { id, user_email: normalizedEmail, permission: body.permission, created_at: now } }, 201);
+  return json(
+    {
+      permission: {
+        id,
+        user_email: normalizedEmail,
+        permission: body.permission,
+        expires_at: expiresAt,
+        created_at: now,
+      },
+    },
+    201,
+  );
 }
 
 export async function onRequest(c: AdminContext): Promise<Response> {

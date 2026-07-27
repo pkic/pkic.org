@@ -12,6 +12,8 @@ import { Email } from "../sections/Email";
 import { DueWork } from "../sections/DueWork";
 import { Templates } from "../sections/Templates";
 import { Users } from "../sections/Users";
+import { AccessControl } from "../sections/access-control";
+import { AccountSettings } from "../sections/AccountSettings";
 import { Members } from "../sections/Members";
 import { Applications } from "../sections/Applications";
 import { MembershipSettings } from "../sections/MembershipSettings";
@@ -232,10 +234,26 @@ export function AdminShell() {
               )}
             />
             <Route
+              path="/access-control"
+              component={() => (
+                <SectionWrapper title="Access Control">
+                  <AccessControl />
+                </SectionWrapper>
+              )}
+            />
+            <Route
               path="/auditlog"
               component={() => (
                 <SectionWrapper title="Audit Log">
                   <AuditLog />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/account"
+              component={() => (
+                <SectionWrapper title="Account Settings">
+                  <AccountSettings />
                 </SectionWrapper>
               )}
             />
