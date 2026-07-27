@@ -127,7 +127,21 @@ export const NAV_ITEMS: NavItem[] = [
     ],
   },
   { path: "/users", sec: "users", label: "Users", icon: "users" },
-  { path: "/organizations", sec: "organizations", label: "Organizations", icon: "organizations" },
+  {
+    path: "/organizations",
+    sec: "organizations",
+    label: "Organizations",
+    icon: "organizations",
+    children: [
+      {
+        path: "/organizations/content-reviews",
+        sec: "organizations-content-reviews",
+        label: "Content Review",
+        icon: "organizations",
+      },
+    ],
+  },
+  { path: "/mailing-lists", sec: "mailing-lists", label: "Mailing Lists", icon: "email" },
   { path: "/access-control", sec: "access-control", label: "Access Control", icon: "accesscontrol" },
   { path: "/auditlog", sec: "auditlog", label: "Audit Log", icon: "auditlog" },
   { path: "/account", sec: "account", label: "Account Settings", icon: "account" },

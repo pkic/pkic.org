@@ -281,6 +281,128 @@ export const memberDeleteRouteSchema = {
   },
 };
 
+// ── Secondary contact nomination confirmation (§4.11) ──────────────────────
+
+export const confirmSecondaryContactRouteSchema = {
+  tags: ["Organizations"],
+  summary: "Confirm a pending secondary contact nomination",
+  description:
+    "Confirms the nomination held in organizations.pending_secondary_contact_user_id (submitted by the primary contact via PATCH /api/v1/me/organization/secondary-contact), promoting it to secondary_contact_user_id.",
+  request: { params: organizationIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Confirmed.",
+      content: {
+        "application/json": {
+          schema: z.object({ organizationId: z.uuid(), secondaryContactUserId: z.uuid() }),
+        },
+      },
+    },
+    "404": { description: "Organization not found." },
+    "409": { description: "No pending nomination." },
+  },
+};
+
+// ── Organization content moderation queue (§4.11) ──────────────────────────
+
+export const contentReviewSummarySchema = z.object({
+  id: z.uuid(),
+  organizationId: z.uuid(),
+  submittedByUserId: z.uuid(),
+  proposedChanges: z.record(z.string(), z.unknown()),
+  hasLogoChange: z.boolean(),
+  status: z.string(),
+  reviewerUserId: z.uuid().nullable(),
+  reviewerNote: z.string().nullable(),
+  submittedAt: z.string(),
+  reviewedAt: z.string().nullable(),
+  organizationName: z.string(),
+  submitterName: z.string(),
+  submitterEmail: z.string(),
+});
+
+export const contentReviewsListQuerySchema = z.object({
+  status: z.enum(["pending", "approved", "rejected", "withdrawn"]).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional(),
+  offset: z.coerce.number().int().min(0).optional(),
+});
+
+export const contentReviewsListRouteSchema = {
+  tags: ["Organizations"],
+  summary: "List organization content moderation submissions",
+  description: "Defaults to status=pending — the moderation queue.",
+  request: { query: contentReviewsListQuerySchema },
+  responses: {
+    "200": {
+      description: "Reviews list.",
+      content: {
+        "application/json": {
+          schema: z.object({
+            reviews: z.array(contentReviewSummarySchema),
+            page: z.object({ limit: z.number(), offset: z.number(), total: z.number(), hasMore: z.boolean() }),
+          }),
+        },
+      },
+    },
+  },
+};
+
+export const contentReviewDiffEntrySchema = z.object({
+  field: z.string(),
+  current: z.unknown(),
+  proposed: z.unknown(),
+});
+
+export const contentReviewDetailSchema = contentReviewSummarySchema.extend({
+  diff: z.array(contentReviewDiffEntrySchema),
+  logoStagingR2Key: z.string().nullable(),
+  currentLogoR2Key: z.string().nullable(),
+});
+
+export const contentReviewIdParamsSchema = z.object({ id: z.uuid() });
+
+export const contentReviewGetRouteSchema = {
+  tags: ["Organizations"],
+  summary: "Review detail with a side-by-side diff",
+  request: { params: contentReviewIdParamsSchema },
+  responses: {
+    "200": {
+      description: "Review detail.",
+      content: { "application/json": { schema: z.object({ review: contentReviewDetailSchema }) } },
+    },
+    "404": { description: "Review not found." },
+  },
+};
+
+export const contentReviewApproveRouteSchema = {
+  tags: ["Organizations"],
+  summary: "Approve a content submission — applies the changes live",
+  request: { params: contentReviewIdParamsSchema },
+  responses: {
+    "200": { description: "Approved." },
+    "404": { description: "Review not found." },
+    "409": { description: "Only a pending review can be approved." },
+  },
+};
+
+export const contentReviewRejectSchema = z.object({
+  reviewerNote: trimmedString(1, 2000),
+});
+
+export const contentReviewRejectRouteSchema = {
+  tags: ["Organizations"],
+  summary: "Reject a content submission",
+  request: {
+    params: contentReviewIdParamsSchema,
+    body: { content: { "application/json": { schema: contentReviewRejectSchema } }, required: true },
+  },
+  responses: {
+    "200": { description: "Rejected." },
+    "404": { description: "Review not found." },
+    "409": { description: "Only a pending review can be rejected." },
+  },
+};
+
 // ── Grant an individual (org-less, H5/H6/H7) membership to an existing user ─
 
 export const userIdParamsSchema = z.object({ userId: z.uuid() });

@@ -148,3 +148,35 @@ export function requirePermission(actor: AuthAdmin, permission: string, context?
     throw new AppError(403, "PERMISSION_REQUIRED", `Missing required permission: ${permission}${scope}`);
   }
 }
+
+interface EmailRow {
+  email: string;
+}
+
+/**
+ * Every user who can act on `permission` — role='admin' (always, matching
+ * hasPermission's bypass) plus every user_roles/permission_grants holder,
+ * global grants only (no context filtering — used for email fanout, e.g.
+ * "Staff admins with organizations:content-review permission" per §4.11).
+ */
+export async function findUsersWithPermission(db: DatabaseLike, permission: string): Promise<string[]> {
+  const rows = await all<EmailRow>(
+    db,
+    `SELECT DISTINCT email FROM users WHERE role = 'admin'
+     UNION
+     SELECT DISTINCT u.email FROM users u
+       JOIN user_roles ur ON ur.user_id = u.id
+       JOIN role_permissions rp ON rp.role_id = ur.role_id
+     WHERE rp.permission = ?
+       AND ur.revoked_at IS NULL
+       AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+     UNION
+     SELECT DISTINCT u.email FROM users u
+       JOIN permission_grants pg ON pg.user_id = u.id
+     WHERE pg.permission = ?
+       AND pg.revoked_at IS NULL
+       AND (pg.expires_at IS NULL OR pg.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    [permission, permission],
+  );
+  return rows.map((row) => row.email);
+}

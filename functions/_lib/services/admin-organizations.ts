@@ -481,6 +481,16 @@ export async function updateAdminMember(db: DatabaseLike, memberId: string, inpu
     await run(db, `UPDATE members SET ${setClauses.join(", ")} WHERE id = ?`, values);
   }
 
+  // §4.11: "If the nominated user's membership lapses before confirmation,
+  // the pending nomination is automatically cleared."
+  if (input.status !== undefined && input.status !== "active" && member.organization_id) {
+    await run(
+      db,
+      "UPDATE organizations SET pending_secondary_contact_user_id = NULL WHERE id = ? AND pending_secondary_contact_user_id = ?",
+      [member.organization_id, member.user_id],
+    );
+  }
+
   return {
     id: memberId,
     userId: member.user_id,
@@ -523,6 +533,34 @@ export async function grantIndividualMembership(db: DatabaseLike, userId: string
   };
 }
 
+// ── Secondary contact nomination confirmation (§4.11) ───────────────────
+
+export interface ConfirmSecondaryContactResult {
+  organizationId: string;
+  secondaryContactUserId: string;
+}
+
+export async function confirmSecondaryContact(db: DatabaseLike, organizationId: string): Promise<ConfirmSecondaryContactResult> {
+  const org = await first<{ id: string; pending_secondary_contact_user_id: string | null }>(
+    db,
+    "SELECT id, pending_secondary_contact_user_id FROM organizations WHERE id = ?",
+    [organizationId],
+  );
+  if (!org) throw new AppError(404, "NOT_FOUND", "Organization not found");
+  if (!org.pending_secondary_contact_user_id) {
+    throw new AppError(409, "NO_PENDING_NOMINATION", "This organization has no pending secondary contact nomination");
+  }
+
+  const now = nowIso();
+  await run(
+    db,
+    "UPDATE organizations SET secondary_contact_user_id = ?, pending_secondary_contact_user_id = NULL, updated_at = ? WHERE id = ?",
+    [org.pending_secondary_contact_user_id, now, organizationId],
+  );
+
+  return { organizationId, secondaryContactUserId: org.pending_secondary_contact_user_id };
+}
+
 export async function removeAdminMember(db: DatabaseLike, memberId: string): Promise<MemberRow> {
   const member = await first<MemberRow>(
     db,
@@ -544,6 +582,12 @@ export async function removeAdminMember(db: DatabaseLike, memberId: string): Pro
       db,
       "UPDATE organizations SET secondary_contact_user_id = NULL, updated_at = ? WHERE id = ? AND secondary_contact_user_id = ?",
       [now, member.organization_id, member.user_id],
+    );
+    // §4.11: clear a pending secondary-contact nomination for a rep who's just been removed entirely.
+    await run(
+      db,
+      "UPDATE organizations SET pending_secondary_contact_user_id = NULL WHERE id = ? AND pending_secondary_contact_user_id = ?",
+      [member.organization_id, member.user_id],
     );
   }
 

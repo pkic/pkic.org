@@ -18,7 +18,21 @@ interface TableNameRow {
 // scheduled jobs, the admin settings endpoint) expects this row to always
 // exist; wiping it on every resetDb() would require every such test to
 // re-seed it itself.
-const EXCLUDED_TABLES = new Set(["d1_migrations", "roles", "role_permissions", "membership_settings"]);
+// `mailing_lists` (PRD §4.14, migration 0041) is the same class of system
+// reference data — its 9 rows are seeded once by the migration, and
+// membership-onboarding.ts's approveApplication now reads the all_members/
+// consultation rows at runtime (resolveAutoSyncListEmails) instead of the
+// hardcoded constants it used to have. Wiping it on every resetDb() would
+// silently stop every pre-existing approval-flow test from enqueueing
+// Google Groups sync for pkic@/consultation@, the same failure mode
+// membership_settings' exclusion already guards against.
+const EXCLUDED_TABLES = new Set([
+  "d1_migrations",
+  "roles",
+  "role_permissions",
+  "membership_settings",
+  "mailing_lists",
+]);
 
 async function listResettableTables(): Promise<string[]> {
   const { results } = await env.DB.prepare(

@@ -15,6 +15,8 @@ import { Users } from "../sections/Users";
 import { AccessControl } from "../sections/access-control";
 import { AccountSettings } from "../sections/AccountSettings";
 import { Organizations } from "../sections/Organizations";
+import { OrganizationContentReviews } from "../sections/OrganizationContentReviews";
+import { MailingLists } from "../sections/MailingLists";
 import { Applications } from "../sections/Applications";
 import { MembershipSettings } from "../sections/MembershipSettings";
 import { EventList } from "../sections/events/EventList";
@@ -206,6 +208,22 @@ export function AdminShell() {
               component={() => (
                 <SectionWrapper title="Organizations">
                   <Organizations />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/organizations/content-reviews"
+              component={() => (
+                <SectionWrapper title="Organizations — Content Review">
+                  <OrganizationContentReviews />
+                </SectionWrapper>
+              )}
+            />
+            <Route
+              path="/mailing-lists"
+              component={() => (
+                <SectionWrapper title="Mailing Lists">
+                  <MailingLists />
                 </SectionWrapper>
               )}
             />

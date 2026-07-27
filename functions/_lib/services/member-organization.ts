@@ -118,3 +118,53 @@ export async function addCoworker(
     email: user.email,
   };
 }
+
+/**
+ * Primary contact nominates (or withdraws a nomination for) a secondary
+ * contact (§4.11). Held in `organizations.pending_secondary_contact_user_id`
+ * until a staff admin confirms it via
+ * `POST /api/v1/admin/organizations/:id/confirm-secondary-contact` — the
+ * primary contact cannot promote someone directly.
+ */
+export async function nominateSecondaryContact(
+  db: DatabaseLike,
+  member: AuthMember,
+  nomineeUserId: string | null,
+): Promise<{ pendingSecondaryContactUserId: string | null }> {
+  if (!member.organizationId) {
+    throw new AppError(403, "NO_ORGANIZATION", "Your membership is not tied to an organization");
+  }
+
+  const org = await first<OrganizationContactRow>(
+    db,
+    "SELECT id, membership_category, primary_contact_user_id, secondary_contact_user_id FROM organizations WHERE id = ?",
+    [member.organizationId],
+  );
+  if (!org || org.primary_contact_user_id !== member.userId) {
+    throw new AppError(403, "NOT_PRIMARY_CONTACT", "Only your organization's primary contact can nominate a secondary contact");
+  }
+
+  if (nomineeUserId === null) {
+    await run(db, "UPDATE organizations SET pending_secondary_contact_user_id = NULL WHERE id = ?", [org.id]);
+    return { pendingSecondaryContactUserId: null };
+  }
+
+  if (nomineeUserId === member.userId) {
+    throw new AppError(422, "SELF_NOMINATION", "You cannot nominate yourself as secondary contact — you are already the primary contact");
+  }
+
+  const nomineeMember = await first<{ id: string; status: string }>(
+    db,
+    "SELECT id, status FROM members WHERE user_id = ? AND organization_id = ?",
+    [nomineeUserId, org.id],
+  );
+  if (!nomineeMember || nomineeMember.status !== "active") {
+    throw new AppError(422, "NOT_ELIGIBLE", "The nominee must be an active member of your organization");
+  }
+
+  await run(db, "UPDATE organizations SET pending_secondary_contact_user_id = ? WHERE id = ?", [
+    nomineeUserId,
+    org.id,
+  ]);
+  return { pendingSecondaryContactUserId: nomineeUserId };
+}

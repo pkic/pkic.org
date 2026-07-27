@@ -24,14 +24,12 @@ import {
   getMemberApplicationById,
   parseApplicationAnswers,
   INDIVIDUAL_MEMBERSHIP_CATEGORIES,
-  VOTING_CATEGORIES,
 } from "./member-applications";
 import { provisionOrganizationAndMembers } from "./member-provisioning";
 import { enqueueGoogleGroupsSync } from "./google-groups";
+import { resolveAutoSyncListEmails } from "./mailing-lists";
 import type { DatabaseLike } from "../types";
 
-const PKIC_ALL_MEMBERS_LIST = "pkic@lists.pkic.org";
-const CONSULTATION_LIST = "consultation@lists.pkic.org";
 const CA_WORKING_GROUP_SLUG = "ca";
 const CA_ONLY_CATEGORY = "A";
 
@@ -69,7 +67,6 @@ export async function approveApplication(
   }
 
   const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(application.membership_category);
-  const isVotingCategory = VOTING_CATEGORIES.has(application.membership_category);
   const requestedWorkingGroupSlugs = applicationWorkingGroupSlugs(application.answers_json);
   // CA WG constraint (§4.7/§4.9): only category A may be added to ca@.
   const workingGroupSlugs = requestedWorkingGroupSlugs.filter(
@@ -120,18 +117,15 @@ export async function approveApplication(
 
   // Google Groups enqueue (§4.7, §0 — real API client is in google-groups.ts;
   // this only writes queue rows, safe to call regardless of whether the live
-  // integration is configured).
-  await enqueueGoogleGroupsSync(db, {
-    userId: member.userId,
-    googleGroupEmail: PKIC_ALL_MEMBERS_LIST,
-    action: "add_to_list",
-  });
-  if (isVotingCategory) {
-    await enqueueGoogleGroupsSync(db, {
-      userId: member.userId,
-      googleGroupEmail: CONSULTATION_LIST,
-      action: "add_to_list",
-    });
+  // integration is configured). §4.14: which lists to add depends on the
+  // staff-managed mailing_lists config, not a hardcoded constant/category
+  // check — resolveAutoSyncListEmails reads it at runtime. (This happens to
+  // still resolve to "pkic@ always, consultation@ only for A-G" out of the
+  // box, since that's how migration 0041 seeded auto_sync_categories_json —
+  // but it's now data, not code.)
+  const autoSyncListEmails = await resolveAutoSyncListEmails(db, application.membership_category);
+  for (const googleGroupEmail of autoSyncListEmails) {
+    await enqueueGoogleGroupsSync(db, { userId: member.userId, googleGroupEmail, action: "add_to_list" });
   }
 
   const workingGroupNames: string[] = [];

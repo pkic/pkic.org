@@ -741,6 +741,48 @@ export interface AdminOrganizationDetail extends AdminOrganizationSummary {
   representatives: AdminOrganizationRepresentative[];
 }
 
+// PRD §4.11 (Phase 4C) — organization content moderation queue
+export interface OrganizationContentReviewSummary {
+  id: string;
+  organizationId: string;
+  submittedByUserId: string;
+  proposedChanges: Record<string, unknown>;
+  hasLogoChange: boolean;
+  status: string;
+  reviewerUserId: string | null;
+  reviewerNote: string | null;
+  submittedAt: string;
+  reviewedAt: string | null;
+  organizationName: string;
+  submitterName: string;
+  submitterEmail: string;
+}
+
+export interface OrganizationContentReviewDiffEntry {
+  field: string;
+  current: unknown;
+  proposed: unknown;
+}
+
+export interface OrganizationContentReviewDetail extends OrganizationContentReviewSummary {
+  diff: OrganizationContentReviewDiffEntry[];
+  logoStagingR2Key: string | null;
+  currentLogoR2Key: string | null;
+}
+
+// PRD §4.14 (Phase 4C) — managed mailing list configuration
+export interface MailingList {
+  id: string;
+  email: string;
+  label: string;
+  listType: "all_members" | "consultation" | "ec" | "working_group" | "custom";
+  workingGroupId: string | null;
+  autoSyncCategories: string[] | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 // PRD §6 Interim Admin Tool — GET/POST /api/v1/admin/members
 export interface AdminMemberSummary {
   id: string;
