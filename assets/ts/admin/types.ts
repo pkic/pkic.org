@@ -471,6 +471,14 @@ export interface AdminDueWorkRow {
 
 // ── Users ─────────────────────────────────────────────────────────────────────
 
+export interface AdminUserMembership {
+  memberId: string;
+  membershipCategory: string;
+  status: string;
+  organizationId: string | null;
+  organizationName: string | null;
+}
+
 export interface AdminUser {
   id: string;
   email: string;
@@ -480,6 +488,7 @@ export interface AdminUser {
   role: string;
   active: number;
   created_at: string;
+  membership: AdminUserMembership | null;
 }
 
 // ── Email templates ───────────────────────────────────────────────────────────
@@ -631,6 +640,52 @@ export interface EventStatsResponse {
     byProvider: Record<string, number>;
     actionsTaken: Record<string, number>;
   };
+}
+
+// Admin Organizations — GET /api/v1/admin/organizations[/:id]
+export interface AdminOrganizationSummary {
+  id: string;
+  name: string;
+  website: string | null;
+  description: string | null;
+  slogan: string | null;
+  logoUrl: string | null;
+  memberCount: number;
+  primaryContactName: string | null;
+  primaryContactEmail: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminOrganizationRepresentative {
+  memberId: string;
+  userId: string;
+  name: string;
+  email: string;
+  jobTitle: string | null;
+  membershipCategory: string;
+  status: string;
+  showOnOrgProfile: boolean;
+  isPrimaryContact: boolean;
+  isSecondaryContact: boolean;
+  createdAt: string;
+}
+
+export interface AdminOrganizationDetail extends AdminOrganizationSummary {
+  contentMarkdown: string | null;
+  blogUrl: string | null;
+  blogFeedUrl: string | null;
+  pressUrl: string | null;
+  pressFeedUrl: string | null;
+  careersUrl: string | null;
+  socialX: string | null;
+  socialLinkedin: string | null;
+  socialFacebook: string | null;
+  socialInstagram: string | null;
+  socialYoutube: string | null;
+  primaryContactUserId: string | null;
+  secondaryContactUserId: string | null;
+  representatives: AdminOrganizationRepresentative[];
 }
 
 // PRD §6 Interim Admin Tool — GET/POST /api/v1/admin/members

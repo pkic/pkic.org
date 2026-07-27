@@ -4,15 +4,28 @@ import { ErrorAlert } from "../../components/ErrorAlert";
 import { ApiDataTable, type ApiTableActions } from "../../components/Table";
 import { api } from "../api";
 import { fmt, toast } from "../ui";
-import type { AdminUser } from "../types";
+import type { AdminUser, AdminOrganizationSummary } from "../types";
 import { confirmHeadshotUsage } from "../../shared/headshot/controller";
 import { AdminHeadshotManager, ADMIN_HEADSHOT_DISCLAIMER } from "../../shared/headshot/AdminHeadshotManager";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../../components/ProfileLinksInput";
 import { normalizeProfileLinks } from "./profile-links";
+import { MEMBERSHIP_CATEGORIES, INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../shared/schemas/admin-members";
+import { MEMBER_STATUSES } from "../../../shared/schemas/admin-organizations";
 
 // ────────────────────────────────────────────────────────
 // Types
 // ────────────────────────────────────────────────────────
+
+interface UserMembership {
+  memberId: string;
+  membershipCategory: string;
+  status: string;
+  showOnOrgProfile: boolean;
+  organizationId: string | null;
+  organizationName: string | null;
+  createdAt: string;
+  workingGroups: Array<{ id: string; name: string; slug: string }>;
+}
 
 interface UserDetail {
   id: string;
@@ -32,9 +45,294 @@ interface UserDetail {
   created_at: string;
   updated_at: string;
   pii_redacted_at: string | null;
+  membership: UserMembership | null;
 }
 
 const ROLE_COLOR: Record<string, string> = { admin: "danger", user: "secondary", guest: "light" };
+
+// ────────────────────────────────────────────────────────
+// Membership panel — folds the old standalone "Members" section into the
+// user's own detail view. Org-tied categories are granted by attaching the
+// user as a representative of an organization (search-and-pick); org-less
+// individual categories (H5/H6/H7) are granted directly on this user.
+// ────────────────────────────────────────────────────────
+
+function GrantMembershipForm({
+  user,
+  onGranted,
+  onCancel,
+}: {
+  user: UserDetail;
+  onGranted: () => void;
+  onCancel: () => void;
+}) {
+  const [category, setCategory] = useState<string>("F");
+  const [orgQuery, setOrgQuery] = useState("");
+  const [orgResults, setOrgResults] = useState<AdminOrganizationSummary[]>([]);
+  const [selectedOrgId, setSelectedOrgId] = useState("");
+  const [searching, setSearching] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+
+  const isIndividual = INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(category);
+  const displayName = [user.first_name, user.last_name].filter(Boolean).join(" ") || user.email;
+
+  async function searchOrgs() {
+    setSearching(true);
+    try {
+      const data = await api<{ organizations: AdminOrganizationSummary[] }>(
+        `/api/v1/admin/organizations?limit=10${orgQuery.trim() ? `&q=${encodeURIComponent(orgQuery.trim())}` : ""}`,
+      );
+      setOrgResults(data.organizations);
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  async function handleSubmit(e: Event) {
+    e.preventDefault();
+    if (!isIndividual && !selectedOrgId) {
+      setError("Pick an organization for this category.");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    try {
+      if (isIndividual) {
+        await api(`/api/v1/admin/users/${user.id}/membership`, {
+          method: "POST",
+          body: JSON.stringify({ membershipCategory: category }),
+        });
+      } else {
+        await api(`/api/v1/admin/organizations/${selectedOrgId}/members`, {
+          method: "POST",
+          body: JSON.stringify({
+            name: displayName,
+            email: user.email,
+            membershipCategory: category,
+            ...(user.job_title ? { jobTitle: user.job_title } : {}),
+          }),
+        });
+      }
+      toast("Membership granted", "success");
+      onGranted();
+    } catch (err) {
+      const msg = (err as Error).message;
+      setError(msg);
+      toast(msg, "error");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form onSubmit={handleSubmit}>
+      <div class="row g-2 align-items-end">
+        <div class="col-md-3">
+          <label class="form-label small text-muted mb-1">Category</label>
+          <select
+            class="form-select form-select-sm"
+            value={category}
+            onChange={(e) => setCategory((e.target as HTMLSelectElement).value)}
+          >
+            {MEMBERSHIP_CATEGORIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+        {!isIndividual && (
+          <>
+            <div class="col-md-4">
+              <label class="form-label small text-muted mb-1">Find organization</label>
+              <div class="d-flex gap-1">
+                <input
+                  class="form-control form-control-sm"
+                  value={orgQuery}
+                  onInput={(e) => setOrgQuery((e.target as HTMLInputElement).value)}
+                  placeholder="Organization name"
+                />
+                <button
+                  type="button"
+                  class="btn btn-sm btn-outline-secondary"
+                  disabled={searching}
+                  onClick={searchOrgs}
+                >
+                  Search
+                </button>
+              </div>
+            </div>
+            <div class="col-md-3">
+              <label class="form-label small text-muted mb-1">Organization</label>
+              <select
+                class="form-select form-select-sm"
+                value={selectedOrgId}
+                onChange={(e) => setSelectedOrgId((e.target as HTMLSelectElement).value)}
+              >
+                <option value="">— Pick —</option>
+                {orgResults.map((o) => (
+                  <option key={o.id} value={o.id}>
+                    {o.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </>
+        )}
+        <div class="col-md-2">
+          <button type="submit" class="btn btn-sm btn-success" disabled={saving}>
+            Grant
+          </button>{" "}
+          <button type="button" class="btn btn-sm btn-outline-secondary" onClick={onCancel} disabled={saving}>
+            Cancel
+          </button>
+        </div>
+      </div>
+      {error && <div class="small text-danger mt-2">{error}</div>}
+    </form>
+  );
+}
+
+function MembershipPanel({ user, onChanged }: { user: UserDetail; onChanged: () => Promise<void> | void }) {
+  const [showGrantForm, setShowGrantForm] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const membership = user.membership;
+
+  async function patchMember(body: Record<string, unknown>) {
+    if (!membership) return;
+    setBusy(true);
+    try {
+      await api(`/api/v1/admin/members/${membership.memberId}`, { method: "PATCH", body: JSON.stringify(body) });
+      toast("Membership updated", "success");
+      await onChanged();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function removeMembership() {
+    if (!membership) return;
+    if (!confirm("Remove this person's membership? Their user account is not deleted.")) return;
+    setBusy(true);
+    try {
+      await api(`/api/v1/admin/members/${membership.memberId}`, { method: "DELETE" });
+      toast("Membership removed", "success");
+      await onChanged();
+    } catch (e) {
+      toast((e as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div class="card border-0 shadow-sm mt-4">
+      <div class="card-header bg-white fw-semibold">Membership</div>
+      <div class="card-body p-3">
+        {!membership ? (
+          <>
+            {!showGrantForm ? (
+              <div class="d-flex align-items-center gap-2">
+                <span class="text-muted fst-italic">Not a member.</span>
+                <button class="btn btn-sm btn-outline-success" onClick={() => setShowGrantForm(true)}>
+                  Grant membership
+                </button>
+              </div>
+            ) : (
+              <GrantMembershipForm
+                user={user}
+                onGranted={() => {
+                  setShowGrantForm(false);
+                  void onChanged();
+                }}
+                onCancel={() => setShowGrantForm(false)}
+              />
+            )}
+          </>
+        ) : (
+          <div>
+            <table class="table table-sm table-borderless mb-2">
+              <tbody>
+                <tr>
+                  <th class="text-muted small adm-user-info-label">Organization</th>
+                  <td>{membership.organizationName ?? <span class="fst-italic text-muted">Individual member</span>}</td>
+                </tr>
+                <tr>
+                  <th class="text-muted small adm-user-info-label">Category</th>
+                  <td>
+                    <select
+                      class="form-select form-select-sm d-inline-block w-auto"
+                      value={membership.membershipCategory}
+                      disabled={busy}
+                      onChange={(e) => void patchMember({ membershipCategory: (e.target as HTMLSelectElement).value })}
+                    >
+                      {MEMBERSHIP_CATEGORIES.map((c) => (
+                        <option key={c} value={c}>
+                          {c}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+                <tr>
+                  <th class="text-muted small adm-user-info-label">Status</th>
+                  <td>
+                    <select
+                      class="form-select form-select-sm d-inline-block w-auto"
+                      value={membership.status}
+                      disabled={busy}
+                      onChange={(e) => void patchMember({ status: (e.target as HTMLSelectElement).value })}
+                    >
+                      {MEMBER_STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </td>
+                </tr>
+                {membership.organizationId && (
+                  <tr>
+                    <th class="text-muted small adm-user-info-label">Show on org profile</th>
+                    <td>
+                      <input
+                        type="checkbox"
+                        class="form-check-input"
+                        checked={membership.showOnOrgProfile}
+                        disabled={busy}
+                        onChange={(e) => void patchMember({ showOnOrgProfile: (e.target as HTMLInputElement).checked })}
+                      />
+                    </td>
+                  </tr>
+                )}
+                <tr>
+                  <th class="text-muted small adm-user-info-label">Working groups</th>
+                  <td>
+                    {membership.workingGroups.length > 0
+                      ? membership.workingGroups.map((wg) => wg.name).join(", ")
+                      : "—"}
+                  </td>
+                </tr>
+                <tr>
+                  <th class="text-muted small adm-user-info-label">Member since</th>
+                  <td>{fmt(membership.createdAt)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <button class="btn btn-sm btn-outline-danger" disabled={busy} onClick={removeMembership}>
+              Remove membership
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 // ────────────────────────────────────────────────────────
 // User detail component
@@ -412,6 +710,7 @@ function UserDetailView({ userId, onBack }: { userId: string; onBack: () => void
           </div>
         </div>
       </div>
+      <MembershipPanel user={user} onChanged={load} />
     </div>
   );
 }
@@ -477,6 +776,23 @@ function UserList({ onViewUser }: { onViewUser: (id: string) => void }) {
           className: "fw-semibold",
         },
         { header: "Organisation", cell: (user) => user.organization_name ?? "—", className: "small text-muted" },
+        {
+          header: "Membership",
+          cell: (user) =>
+            user.membership ? (
+              <>
+                <span class="badge text-bg-success mono">{user.membership.membershipCategory}</span>
+                {user.membership.organizationName && (
+                  <>
+                    {" "}
+                    <span class="small text-muted">{user.membership.organizationName}</span>
+                  </>
+                )}
+              </>
+            ) : (
+              <span class="text-muted">—</span>
+            ),
+        },
         {
           header: "Role",
           cell: (user) => <span class={`badge text-bg-${ROLE_COLOR[user.role] ?? "secondary"}`}>{user.role}</span>,

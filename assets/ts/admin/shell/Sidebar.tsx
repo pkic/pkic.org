@@ -65,6 +65,12 @@ const icons = {
       <path d="M1 5v-.5a.5.5 0 0 1 1 0V5h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1zm0 3v-.5a.5.5 0 0 1 1 0V8h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1zm0 3v-.5a.5.5 0 0 1 1 0v.5h.5a.5.5 0 0 1 0 1h-2a.5.5 0 0 1 0-1z" />
     </svg>
   ),
+  organizations: (
+    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
+      <path d="M4 2.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5m0 3a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5M4.5 8a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1zm0 3a.5.5 0 0 0 0 1h3a.5.5 0 0 0 0-1z" />
+      <path d="M2 1a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v14h1.5a.5.5 0 0 1 0 1h-15a.5.5 0 0 1 0-1H2zm10 13V1H3v13z" />
+    </svg>
+  ),
   accesscontrol: (
     <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" viewBox="0 0 16 16">
       <path d="M5.338 1.59a61 61 0 0 0-2.837.856.48.48 0 0 0-.328.39c-.554 4.157.726 7.19 2.253 9.188a10.7 10.7 0 0 0 2.287 2.233c.346.244.652.42.893.533.12.06.218.098.293.118a1 1 0 0 0 .101.025 1 1 0 0 0 .1-.025c.075-.02.174-.057.294-.118.24-.113.547-.29.893-.533a10.7 10.7 0 0 0 2.287-2.233c1.527-1.997 2.807-5.031 2.253-9.188a.48.48 0 0 0-.328-.39c-.651-.213-1.75-.56-2.837-.855C9.552 1.29 8.531 1 8 1c-.531 0-1.552.29-2.662.59Zm-.443 1.284c1.078-.292 2.04-.545 2.605-.545.565 0 1.527.253 2.605.545a61 61 0 0 1 2.588.795c.13 3.696-.994 6.31-2.324 8.08a9.7 9.7 0 0 1-2.06 2.024c-.301.213-.556.363-.746.462l-.063.032-.063-.032a8.4 8.4 0 0 1-.746-.462 9.7 9.7 0 0 1-2.06-2.024C3.501 9.925 2.377 7.31 2.507 3.615a61 61 0 0 1 2.588-.795Z" />
@@ -117,11 +123,11 @@ export const NAV_ITEMS: NavItem[] = [
     icon: "users",
     children: [
       { path: "/membership/applications", sec: "membership-applications", label: "Applications", icon: "forms" },
-      { path: "/membership/members", sec: "membership-members", label: "Members", icon: "users" },
       { path: "/membership/settings", sec: "membership-settings", label: "Settings", icon: "duework" },
     ],
   },
   { path: "/users", sec: "users", label: "Users", icon: "users" },
+  { path: "/organizations", sec: "organizations", label: "Organizations", icon: "organizations" },
   { path: "/access-control", sec: "access-control", label: "Access Control", icon: "accesscontrol" },
   { path: "/auditlog", sec: "auditlog", label: "Audit Log", icon: "auditlog" },
   { path: "/account", sec: "account", label: "Account Settings", icon: "account" },
@@ -205,7 +211,6 @@ function activeSectionFor(location: string): string {
   const top = location.replace(/^\//, "").split("/")[0];
   if (top === "email" && location.includes("/templates")) return "templates";
   if (top === "membership" && location.includes("/applications")) return "membership-applications";
-  if (top === "membership" && location.includes("/members")) return "membership-members";
   if (top === "membership" && location.includes("/settings")) return "membership-settings";
   return top;
 }

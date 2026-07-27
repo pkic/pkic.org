@@ -24,6 +24,11 @@ interface UserRow {
   role: string;
   active: number;
   created_at: string;
+  member_id: string | null;
+  member_type: string | null;
+  member_status: string | null;
+  member_organization_id: string | null;
+  member_organization_name: string | null;
 }
 
 export async function onRequestGet(c: AdminContext): Promise<Response> {
@@ -53,8 +58,12 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
 
   const users = await all<UserRow>(
     requestDb(c),
-    `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at
+    `SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name, u.role, u.active, u.created_at,
+            m.id AS member_id, m.member_type, m.status AS member_status,
+            m.organization_id AS member_organization_id, o.name AS member_organization_name
      FROM users u
+     LEFT JOIN members m ON m.user_id = u.id
+     LEFT JOIN organizations o ON o.id = m.organization_id
      ${where}
      ORDER BY u.role ASC, u.email ASC
      LIMIT ? OFFSET ?`,
@@ -72,7 +81,18 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
   const total = Number(totalRow?.total ?? 0);
 
   return json({
-    users: rows,
+    users: rows.map((row) => ({
+      ...row,
+      membership: row.member_id
+        ? {
+            memberId: row.member_id,
+            membershipCategory: row.member_type,
+            status: row.member_status,
+            organizationId: row.member_organization_id,
+            organizationName: row.member_organization_name,
+          }
+        : null,
+    })),
     page: { limit, offset, hasMore, total },
   });
 }

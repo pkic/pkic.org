@@ -7,7 +7,7 @@
 import { parseJsonBody, normalizeEmail } from "../../../../../_lib/validation";
 import { json } from "../../../../../_lib/http";
 import { requireAdminFromRequest } from "../../../../../_lib/auth/admin";
-import { first, run } from "../../../../../_lib/db/queries";
+import { all, first, run } from "../../../../../_lib/db/queries";
 import { nowIso } from "../../../../../_lib/utils/time";
 import { writeAuditLog } from "../../../../../_lib/services/audit";
 import { AppError } from "../../../../../_lib/errors";
@@ -43,6 +43,22 @@ interface UserDetailRow {
 
 // ── GET ─────────────────────────────────────────────────────────────────────
 
+interface MembershipRow {
+  id: string;
+  member_type: string;
+  status: string;
+  show_on_org_profile: number;
+  organization_id: string | null;
+  organization_name: string | null;
+  created_at: string;
+}
+
+interface WorkingGroupRow {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export async function onRequestGet(c: AdminContext): Promise<Response> {
   await requireAdminFromRequest(requestDb(c), c.req.raw, c.env);
   const userId = c.req.param("userId");
@@ -68,12 +84,45 @@ export async function onRequestGet(c: AdminContext): Promise<Response> {
     headshotUrl = `/api/v1/${user.headshot_r2_key}`;
   }
 
+  const memberRow = await first<MembershipRow>(
+    requestDb(c),
+    `SELECT m.id, m.member_type, m.status, m.show_on_org_profile, m.organization_id, o.name AS organization_name, m.created_at
+     FROM members m
+     LEFT JOIN organizations o ON o.id = m.organization_id
+     WHERE m.user_id = ?`,
+    [userId],
+  );
+
+  let membership = null;
+  if (memberRow) {
+    const workingGroups = await all<WorkingGroupRow>(
+      requestDb(c),
+      `SELECT wg.id, wg.name, wg.slug
+       FROM working_group_members wgm
+       JOIN working_groups wg ON wg.id = wgm.working_group_id
+       WHERE wgm.user_id = ? AND wgm.left_at IS NULL
+       ORDER BY wg.name ASC`,
+      [userId],
+    );
+    membership = {
+      memberId: memberRow.id,
+      membershipCategory: memberRow.member_type,
+      status: memberRow.status,
+      showOnOrgProfile: memberRow.show_on_org_profile === 1,
+      organizationId: memberRow.organization_id,
+      organizationName: memberRow.organization_name,
+      createdAt: memberRow.created_at,
+      workingGroups,
+    };
+  }
+
   return json({
     user: {
       ...user,
       active: Boolean(user.active),
       links: user.links_json ? JSON.parse(user.links_json) : [],
       headshotUrl,
+      membership,
     },
   });
 }

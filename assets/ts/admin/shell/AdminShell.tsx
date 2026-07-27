@@ -14,7 +14,7 @@ import { Templates } from "../sections/Templates";
 import { Users } from "../sections/Users";
 import { AccessControl } from "../sections/access-control";
 import { AccountSettings } from "../sections/AccountSettings";
-import { Members } from "../sections/Members";
+import { Organizations } from "../sections/Organizations";
 import { Applications } from "../sections/Applications";
 import { MembershipSettings } from "../sections/MembershipSettings";
 import { EventList } from "../sections/events/EventList";
@@ -202,18 +202,18 @@ export function AdminShell() {
               )}
             />
             <Route
-              path="/membership"
+              path="/organizations"
               component={() => (
-                <SectionWrapper title="Membership">
-                  <Members />
+                <SectionWrapper title="Organizations">
+                  <Organizations />
                 </SectionWrapper>
               )}
             />
             <Route
-              path="/membership/members"
+              path="/membership"
               component={() => (
-                <SectionWrapper title="Membership — Members">
-                  <Members />
+                <SectionWrapper title="Membership — Applications">
+                  <Applications />
                 </SectionWrapper>
               )}
             />
