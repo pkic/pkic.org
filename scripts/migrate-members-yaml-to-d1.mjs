@@ -284,6 +284,82 @@ function urlizeName(name) {
     .replace(/^-+|-+$/g, "");
 }
 
+// Short tokens (van, der, von, de, la, ...) are dropped before name/email
+// matching — they're common enough across unrelated candidates in the same
+// org that counting them as a match produces false positives more often
+// than real signal.
+const NAME_MATCH_MIN_TOKEN_LENGTH = 4;
+
+function nameTokens(fullName) {
+  return String(fullName)
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter((token) => token.length >= NAME_MATCH_MIN_TOKEN_LENGTH);
+}
+
+function emailLocalAlnum(email) {
+  const at = String(email).lastIndexOf("@");
+  const local = at === -1 ? String(email) : String(email).slice(0, at);
+  return local
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+}
+
+/**
+ * Pairs YAML `representatives[]` entries with domain-matched roster emails
+ * by name, instead of blindly zipping listed order against join-date order
+ * (which silently attaches one representative's bio/role to a different
+ * person's email whenever the YAML list order and the roster join order
+ * don't happen to match — see prd.md's yaml-to-d1 migration bug writeup).
+ *
+ * Each representative's name tokens are checked as substrings of each
+ * candidate email's local part; confident matches (score > 0) are assigned
+ * greedily, highest-scoring first. Anything a name match can't resolve
+ * falls back to the original join-order positional pairing, same
+ * "best effort, flagged for staff confirmation" behavior as before this
+ * matched on names at all.
+ *
+ * Returns an array parallel to `reps`: the matched candidate's index into
+ * `candidates`, or null if every candidate is already claimed.
+ */
+function matchRepsToCandidates(reps, candidates) {
+  const repTokens = reps.map((r) => nameTokens(r.name));
+  const candidateLocals = candidates.map((c) => emailLocalAlnum(c.email));
+
+  const scored = [];
+  for (let ri = 0; ri < reps.length; ri += 1) {
+    for (let ci = 0; ci < candidates.length; ci += 1) {
+      const score = repTokens[ri].reduce((n, token) => n + (candidateLocals[ci].includes(token) ? 1 : 0), 0);
+      if (score > 0) scored.push({ ri, ci, score });
+    }
+  }
+  scored.sort((a, b) => b.score - a.score);
+
+  const assignment = new Array(reps.length).fill(null);
+  const usedCandidates = new Set();
+  for (const { ri, ci } of scored) {
+    if (assignment[ri] !== null || usedCandidates.has(ci)) continue;
+    assignment[ri] = ci;
+    usedCandidates.add(ci);
+  }
+
+  let nextCandidate = 0;
+  for (let ri = 0; ri < reps.length; ri += 1) {
+    if (assignment[ri] !== null) continue;
+    while (nextCandidate < candidates.length && usedCandidates.has(nextCandidate)) nextCandidate += 1;
+    if (nextCandidate >= candidates.length) continue;
+    assignment[ri] = nextCandidate;
+    usedCandidates.add(nextCandidate);
+    nextCandidate += 1;
+  }
+
+  return assignment;
+}
+
 /**
  * Per-representative photo, sourced from the same `assets/images/members/<orgSlug>/`
  * directory as the org logo — the old Hugo `single.html` looked these up at
@@ -539,6 +615,9 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
       continue;
     }
 
+    const assignment = matchRepsToCandidates(reps, candidates); // parallel to reps: candidate index or null
+    const unpairedReps = reps.filter((_, i) => assignment[i] === null);
+
     if (reps.length > 1 && candidates.length > 1) {
       report.totals.ambiguousPairing.push({
         file: filename,
@@ -547,7 +626,7 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
         candidateEmails: candidates.map((c) => c.email),
       });
     }
-    if (reps.length > candidates.length) {
+    if (unpairedReps.length > 0) {
       report.totals.ambiguousPairing.push({
         file: filename,
         name,
@@ -555,16 +634,18 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
         // Full detail (not just names), so staff finishing these via the
         // Interim Admin Tool have LinkedIn/role/bio in hand without going
         // back to the YAML — this data was previously dropped silently.
-        unpaired: reps.slice(candidates.length).map(repSummary),
+        unpaired: unpairedReps.map(repSummary),
       });
     }
 
-    const pairedCount = Math.min(reps.length, candidates.length);
     const contactEmails = [];
+    const matchedCandidateIndices = new Set();
 
-    for (let i = 0; i < pairedCount; i += 1) {
+    for (let i = 0; i < reps.length; i += 1) {
+      if (assignment[i] === null) continue;
       const rep = reps[i];
-      const { email } = candidates[i];
+      const { email } = candidates[assignment[i]];
+      matchedCandidateIndices.add(assignment[i]);
       const { firstName, lastName } = splitName(rep.name);
       const links = { linkedin: rep.social?.linkedin || undefined, x: rep.social?.x || undefined };
 
@@ -594,10 +675,11 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
       contactEmails.push(normalizedEmail);
     }
 
-    // Domain-matched emails beyond the named representatives (or, for
-    // orgs with no `representatives` field at all, every matched email)
-    // become anonymous, opted-out member rows per §6 Step 2 item 4.
-    for (let i = pairedCount; i < candidates.length; i += 1) {
+    // Domain-matched emails not paired to any named representative (or,
+    // for orgs with no `representatives` field at all, every matched
+    // email) become anonymous, opted-out member rows per §6 Step 2 item 4.
+    for (let i = 0; i < candidates.length; i += 1) {
+      if (matchedCandidateIndices.has(i)) continue;
       const { email } = candidates[i];
       const normalizedEmail = upsertUser({
         email,

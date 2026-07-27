@@ -6,6 +6,7 @@ import { createAdminSession } from "./helpers/auth";
 import { resetDb } from "./helpers/reset-db";
 import { onRequestPatch as patchUser } from "../functions/api/v1/admin/users/[userId]/index";
 import { onRequestPost as anonymizeUser } from "../functions/api/v1/admin/users/[userId]/anonymize";
+import app from "../functions/router";
 
 let adminToken: string;
 
@@ -121,6 +122,35 @@ describe("admin user deactivation", () => {
     )[0];
     expect(row.biography).toBe("Admin maintained speaker biography.");
     expect(JSON.parse(row.links_json ?? "[]")).toEqual(["https://example.test/profile", "https://github.com/profile"]);
+  });
+
+  it("persists profile edits through the full router pipeline (regression: a stale duplicate PATCH route previously shadowed this handler)", async () => {
+    await setup();
+    const userId = await seedUser(env.DB, "router-profile@example.test");
+
+    const response = await app.fetch(
+      adminRequest(`/api/v1/admin/users/${userId}`, "PATCH", {
+        firstName: "Router",
+        lastName: "Tested",
+        jobTitle: "QA Lead",
+        biography: "Persisted via the real HTTP router, not a direct handler call.",
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    const row = (
+      await queryAll<{ first_name: string | null; last_name: string | null; job_title: string | null; biography: string | null }>(
+        env.DB,
+        "SELECT first_name, last_name, job_title, biography FROM users WHERE id = ?",
+        [userId],
+      )
+    )[0];
+    expect(row.first_name).toBe("Router");
+    expect(row.last_name).toBe("Tested");
+    expect(row.job_title).toBe("QA Lead");
+    expect(row.biography).toBe("Persisted via the real HTTP router, not a direct handler call.");
   });
 
   it("refuses to deactivate the calling admin's own account", async () => {
