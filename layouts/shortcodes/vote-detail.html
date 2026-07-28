@@ -1,0 +1,10 @@
+{{/*
+  vote-detail.html — mount point for the public vote detail page (PRD §4.8,
+  §11 UI-6). Reads `?slug=` client-side and fetches GET /api/v1/votes/:slug.
+*/}}
+<div
+  data-vote-detail
+  data-module="member-flows/vote-detail-page"
+  data-api-base="/api/v1"
+  data-index-href="{{ .Get "indexHref" | default "/votes/" }}"
+></div>

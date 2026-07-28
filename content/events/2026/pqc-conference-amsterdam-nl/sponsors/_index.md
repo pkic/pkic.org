@@ -40,11 +40,17 @@ cards:
     text: "Plenary sessions are live-streamed internationally. Conference recordings and coverage reach an audience far beyond the attendees in the venue — making the conference a sustained brand presence, not a three-day event."
 {{< /cards >}}
 
+## Sponsor Now
+
+Ready to secure your spot? Select a tier below to pay by card via Stripe — your sponsorship is confirmed once our team reviews the payment.
+
+{{< event-sponsor-checkout slug="pqc-conference-amsterdam-nl" >}}
+
+Prefer to discuss options first, ask about a consortium-level tier, or pay by invoice? Use our [general sponsor interest form](/sponsors/sponsor/) instead.
+
 ## Current sponsors
 
 {{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
 
 > **Sponsorship packages are limited by tier.** Once the highest tiers are fully allocated, those levels close. If your organisation needs to be in the room, review availability before the packages you need are no longer on offer.
 {.callout-warning}
-
-{{< button label="View sponsorship opportunities" link="/sponsors/" type="primary" >}}

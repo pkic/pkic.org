@@ -1,0 +1,64 @@
+{{/*
+  event-sponsor-checkout.html — "Sponsor Now" self-service Stripe Checkout
+  widget (PRD §1.3 Path B, §11 UI-6). Scoped to event sponsorship tiers only
+  (Leader/Inspirator/Innovator/Ambassador) — see
+  functions/_lib/services/sponsorship.ts EVENT_SPONSOR_TIER_PRICES_USD_CENTS.
+
+  Parameters:
+    slug — the event's public slug (required; resolved server-side to the
+           internal events.id by POST /api/v1/sponsorship/checkout)
+*/}}
+{{- $slug := .Get "slug" -}}
+<div data-event-sponsor-checkout data-module="member-flows/event-sponsor-page" data-api-base="/api/v1" data-event-slug="{{ $slug }}">
+  <div data-flow-status class="alert visually-hidden" role="alert" aria-live="polite"></div>
+
+  <form id="sponsorCheckoutForm" class="row g-3 my-2 needs-validation" novalidate>
+    <div class="col-12">
+      <label class="form-label">Sponsorship tier</label>
+      <div class="row g-2" data-tier-options>
+        <div class="col-sm-6 col-lg-3">
+          <input type="radio" class="btn-check" name="tier" id="tier-Ambassador" value="Ambassador" required autocomplete="off" />
+          <label class="btn btn-outline-secondary w-100 h-100" for="tier-Ambassador">Ambassador<br /><span class="small">$5,000</span></label>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <input type="radio" class="btn-check" name="tier" id="tier-Innovator" value="Innovator" required autocomplete="off" />
+          <label class="btn btn-outline-secondary w-100 h-100" for="tier-Innovator">Innovator<br /><span class="small">$10,000</span></label>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <input type="radio" class="btn-check" name="tier" id="tier-Inspirator" value="Inspirator" required autocomplete="off" />
+          <label class="btn btn-outline-secondary w-100 h-100" for="tier-Inspirator">Inspirator<br /><span class="small">$20,000</span></label>
+        </div>
+        <div class="col-sm-6 col-lg-3">
+          <input type="radio" class="btn-check" name="tier" id="tier-Leader" value="Leader" required autocomplete="off" />
+          <label class="btn btn-outline-secondary w-100 h-100" for="tier-Leader">Leader<br /><span class="small">$35,000</span></label>
+        </div>
+      </div>
+      <div data-field-error="tier" class="invalid-feedback d-block"></div>
+    </div>
+
+    <div class="col-lg-6">
+      <label for="sponsorFirstName" class="form-label">First Name</label>
+      <input type="text" class="form-control" id="sponsorFirstName" name="firstName" required />
+    </div>
+    <div class="col-lg-6">
+      <label for="sponsorLastName" class="form-label">Last Name</label>
+      <input type="text" class="form-control" id="sponsorLastName" name="lastName" required />
+      <div data-field-error="contactName" class="invalid-feedback d-block"></div>
+    </div>
+    <div class="col-12">
+      <label for="sponsorEmail" class="form-label">Email</label>
+      <input type="email" class="form-control" id="sponsorEmail" name="email" required />
+      <div data-field-error="contactEmail" class="invalid-feedback d-block"></div>
+    </div>
+    <div class="col-12">
+      <label for="sponsorOrganizationName" class="form-label">Organization Name <span class="text-muted small">(optional)</span></label>
+      <input type="text" class="form-control" id="sponsorOrganizationName" name="organizationName" />
+      <div data-field-error="organizationName" class="invalid-feedback d-block"></div>
+    </div>
+
+    <div class="col-12">
+      <button type="submit" class="btn btn-success">Sponsor Now &rarr;</button>
+      <p class="text-muted small mt-2 mb-0">You&rsquo;ll be redirected to Stripe to complete payment securely. Access is granted once our team confirms your sponsorship.</p>
+    </div>
+  </form>
+</div>
