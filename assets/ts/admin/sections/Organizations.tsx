@@ -528,6 +528,7 @@ function OrganizationProfileForm({
   const [membershipCategory, setMembershipCategory] = useState<string>(
     org.membershipCategory ?? ORG_TIED_MEMBERSHIP_CATEGORIES[0],
   );
+  const [memberSince, setMemberSince] = useState(org.memberSince.slice(0, 10));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
@@ -536,7 +537,7 @@ function OrganizationProfileForm({
     setSaving(true);
     setError("");
     try {
-      const body: Record<string, string | null> = { membershipCategory };
+      const body: Record<string, string | null> = { membershipCategory, memberSince: memberSince || null };
       for (const [, field] of PROFILE_TEXT_FIELDS) {
         body[field] = form[field].trim() ? form[field].trim() : null;
       }
@@ -573,6 +574,16 @@ function OrganizationProfileForm({
             ))}
           </select>
           <div class="form-text">Changing this updates every representative's category to match.</div>
+        </div>
+        <div class="col-md-4">
+          <label class="form-label small mb-1">Member since</label>
+          <input
+            type="date"
+            class="form-control form-control-sm"
+            value={memberSince}
+            onInput={(e) => setMemberSince((e.target as HTMLInputElement).value)}
+            disabled={saving}
+          />
         </div>
         {PROFILE_TEXT_FIELDS.map(([label, field]) => (
           <div key={field} class="col-md-4">
@@ -813,6 +824,10 @@ function OrganizationDetailView({ organizationId, onBack }: { organizationId: st
                         <td>{value || "—"}</td>
                       </tr>
                     ))}
+                    <tr>
+                      <th class="text-muted small adm-user-info-label">Member since</th>
+                      <td>{fmt(org.memberSince)}</td>
+                    </tr>
                     <tr>
                       <th class="text-muted small adm-user-info-label">Created</th>
                       <td>{fmt(org.createdAt)}</td>

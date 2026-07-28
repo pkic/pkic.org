@@ -98,22 +98,31 @@ describe("Interim Admin Tool — POST/GET /api/v1/admin/members", () => {
     expect(body.organizationId).toBeTruthy();
     expect(body.members).toHaveLength(1);
 
-    const orgRows = await queryAll<{ name: string; primary_contact_user_id: string }>(
+    const orgRows = await queryAll<{ name: string; primary_contact_user_id: string; member_since: string }>(
       env.DB,
-      "SELECT name, primary_contact_user_id FROM organizations WHERE id = ?",
+      "SELECT name, primary_contact_user_id, member_since FROM organizations WHERE id = ?",
       body.organizationId,
     );
     expect(orgRows[0].name).toBe("Acme Corp");
     expect(orgRows[0].primary_contact_user_id).toBe(body.members[0].userId);
+    // Regression guard: createAdminMember used to accept `memberSince` in the
+    // request but never write it anywhere (migration 0046 added the column).
+    expect(orgRows[0].member_since).toBe("2026-01-15");
 
-    const memberRows = await queryAll<{ member_type: string; status: string; show_on_org_profile: number }>(
+    const memberRows = await queryAll<{
+      member_type: string;
+      status: string;
+      show_on_org_profile: number;
+      member_since: string;
+    }>(
       env.DB,
-      "SELECT member_type, status, show_on_org_profile FROM members WHERE id = ?",
+      "SELECT member_type, status, show_on_org_profile, member_since FROM members WHERE id = ?",
       body.members[0].id,
     );
     expect(memberRows[0].member_type).toBe("F");
     expect(memberRows[0].status).toBe("active");
     expect(memberRows[0].show_on_org_profile).toBe(1);
+    expect(memberRows[0].member_since).toBe("2026-01-15");
 
     const wgRows = await queryAll(
       env.DB,

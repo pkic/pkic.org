@@ -78,6 +78,7 @@ interface DirectoryRow {
   org_website: string | null;
   org_slogan: string | null;
   org_logo_r2_key: string | null;
+  org_member_since: string | null;
   first_name: string | null;
   last_name: string | null;
   job_title: string | null;
@@ -86,6 +87,7 @@ interface DirectoryRow {
   headshot_r2_key: string | null;
   member_type: string;
   tier: string | null;
+  member_since: string | null;
   created_at: string;
 }
 
@@ -113,16 +115,20 @@ function toSummary(row: DirectoryRow): PublicMemberSummary {
     description: row.org_description ?? orgData.description ?? (isIndividual ? row.biography : null) ?? null,
     slogan: row.org_slogan ?? orgData.slogan ?? null,
     logoUrl,
-    memberSince: row.created_at,
+    // Org-tied members share the organization's own join date; org-less
+    // individuals carry their own on the members row. Both fall back to the
+    // row's creation time for records that predate migration 0046 (or a
+    // creation path that didn't supply a real one).
+    memberSince: (row.organization_id ? row.org_member_since : row.member_since) ?? row.created_at,
   };
 }
 
 const DIRECTORY_SELECT = `
   SELECT m.id AS member_id, m.organization_id, o.name AS org_name, o.data_json AS org_data_json,
          o.description AS org_description, o.website AS org_website, o.slogan AS org_slogan,
-         o.logo_r2_key AS org_logo_r2_key,
+         o.logo_r2_key AS org_logo_r2_key, o.member_since AS org_member_since,
          u.first_name, u.last_name, u.job_title, u.biography, u.links_json, u.headshot_r2_key,
-         m.member_type, m.tier, m.created_at
+         m.member_type, m.tier, m.member_since, m.created_at
   FROM members m
   LEFT JOIN organizations o ON o.id = m.organization_id
   LEFT JOIN users u ON u.id = m.user_id

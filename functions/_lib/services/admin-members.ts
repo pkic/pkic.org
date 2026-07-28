@@ -99,8 +99,8 @@ export async function createAdminMember(
       const now = nowIso();
       await run(
         db,
-        `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, membership_category, created_at, updated_at)
-         VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?)`,
+        `INSERT INTO organizations (id, name, normalized_name, data_json, description, website, membership_category, member_since, created_at, updated_at)
+         VALUES (?, ?, ?, NULL, ?, ?, ?, ?, ?, ?)`,
         [
           organizationId,
           input.organizationName,
@@ -108,6 +108,7 @@ export async function createAdminMember(
           input.description ?? null,
           input.website ?? null,
           input.membershipCategory,
+          input.memberSince,
           now,
           now,
         ],
@@ -123,6 +124,13 @@ export async function createAdminMember(
     const now = nowIso();
     await run(db, "UPDATE organizations SET membership_category = ?, updated_at = ? WHERE id = ?", [
       input.membershipCategory,
+      now,
+      organizationId,
+    ]);
+    // Don't clobber an already-set member_since (e.g. from the §6 migration
+    // script) just because this submission reuses an existing organization.
+    await run(db, "UPDATE organizations SET member_since = ?, updated_at = ? WHERE id = ? AND member_since IS NULL", [
+      input.memberSince,
       now,
       organizationId,
     ]);
@@ -150,9 +158,9 @@ export async function createAdminMember(
     const memberId = uuid();
     await run(
       db,
-      `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile)
-       VALUES (?, ?, ?, ?, 'active', NULL, NULL, ?, ?, 1)`,
-      [memberId, input.membershipCategory, user.id, organizationId, now, now],
+      `INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile, member_since)
+       VALUES (?, ?, ?, ?, 'active', NULL, NULL, ?, ?, 1, ?)`,
+      [memberId, input.membershipCategory, user.id, organizationId, now, now, input.memberSince],
     );
 
     if (organizationId && index === 0) {

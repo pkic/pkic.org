@@ -101,6 +101,40 @@ describe("Admin Organizations — org-level membership category (migration 0040,
     expect(body.organization.representatives[0]).not.toHaveProperty("membershipCategory");
   });
 
+  it("creating an organization via the Interim Admin Tool sets member_since (migration 0046, regression guard)", async () => {
+    const { organizationId } = await createOrg();
+
+    const orgRows = await queryAll<{ member_since: string | null }>(
+      env.DB,
+      "SELECT member_since FROM organizations WHERE id = ?",
+      organizationId,
+    );
+    expect(orgRows[0].member_since).toBe("2026-01-15");
+
+    const response = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`);
+    const body = (await response.json()) as { organization: { memberSince: string } };
+    expect(body.organization.memberSince).toBe("2026-01-15");
+  });
+
+  it("PATCH org memberSince updates the stored value", async () => {
+    const { organizationId } = await createOrg();
+
+    const response = await call(adminToken, `/api/v1/admin/organizations/${organizationId}`, {
+      method: "PATCH",
+      body: JSON.stringify({ memberSince: "2020-03-01" }),
+    });
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { organization: { memberSince: string } };
+    expect(body.organization.memberSince).toBe("2020-03-01");
+
+    const orgRows = await queryAll<{ member_since: string }>(
+      env.DB,
+      "SELECT member_since FROM organizations WHERE id = ?",
+      organizationId,
+    );
+    expect(orgRows[0].member_since).toBe("2020-03-01");
+  });
+
   it("PATCH org membershipCategory cascades to every existing org-tied representative's member_type", async () => {
     const { organizationId, memberId } = await createOrg();
 

@@ -42,6 +42,7 @@ export const adminOrganizationSummarySchema = z.object({
   description: z.string().nullable(),
   slogan: z.string().nullable(),
   logoUrl: z.string().nullable(),
+  memberSince: z.string(),
   memberCount: z.number(),
   primaryContactName: z.string().nullable(),
   primaryContactEmail: z.string().nullable(),
@@ -135,6 +136,7 @@ export const organizationUpdateSchema = z.object({
   // sync — member_type is a mirror for org-tied members, not an
   // independent value.
   membershipCategory: orgTiedMembershipCategorySchema.optional(),
+  memberSince: z.iso.date().nullable().optional(),
   description: trimmedString(0, 2000).nullable().optional(),
   website: z.url().nullable().optional(),
   contentMarkdown: trimmedString(0, 20000).nullable().optional(),

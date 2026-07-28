@@ -7,32 +7,45 @@
  * generates idempotent SQL that:
  *
  *   - upserts one `organizations` row per org-tied YAML file (categories
- *     A-G, H1-H4, H8), populating the §0.6 content columns
+ *     A-G, H1-H4, H8), populating the §0.6 content columns plus
+ *     `member_since` (migration 0046) from the YAML `memberSince` key
  *   - upserts one `users` + `members` row per representative whose email
  *     could be matched against the `pkic.csv` roster by organization
  *     domain (Step 2)
+ *   - upserts one `users` + `members` row for **every** org-less individual
+ *     (H5/H6/H7) YAML file, even when no roster email matches its domain —
+ *     an individual with no reconcilable email still gets a real row, keyed
+ *     on a deterministic, non-deliverable `.invalid`-TLD placeholder email
+ *     (`unmatched-<slug>@members.invalid`, same "sentinel email" pattern
+ *     `user-merge.ts` already uses for anonymized accounts) so the person,
+ *     their bio/role, and their photo show up immediately; flagged
+ *     `needsEmail: true` in the report so staff can attach a real email via
+ *     Users → Edit later. Org-tied representatives with no matched email are
+ *     unaffected by this — they still go through the Interim Admin Tool, per
+ *     the "no reliable email to key a users row on" reasoning below.
  *   - upserts a bare `users` row (no organization) for any roster email
  *     that can't be attributed to any YAML organization at all (Step 3)
  *   - upserts `working_group_members` rows for every user created above,
  *     from the six per-WG roster CSVs, not the YAML `workingGroups:` field
  *     (Step 3b)
+ *   - by default, also uploads every logo/photo found under
+ *     `assets/images/members/<slug>/` to R2 (pass `--skip-logos` to opt out)
+ *   - rewrites Hugo shortcodes (`{{< youtube ID >}}`, `{{< vimeo ID >}}`,
+ *     `{{< video link="URL" ... >}}`) found in YAML `content` into plain
+ *     URLs before writing `organizations.content_markdown`, so they render
+ *     as links instead of literal, unresolved shortcode text
  *
  * What this script deliberately does NOT do (see prd.md §6 for why):
- *   - create `organizations`/`users`/`members` rows for the ~44 orgs/
- *     individuals with no domain match at all — see the "unmatched" report
- *     section; these are finished one at a time via the Interim Admin Tool
- *     (`POST /api/v1/admin/members`)
+ *   - create `organizations`/`users`/`members` rows for org-tied
+ *     representatives with no domain-matched email at all — see the
+ *     "unmatched" report section; these are finished one at a time via the
+ *     Interim Admin Tool (`POST /api/v1/admin/members`). (Org-less
+ *     individuals in the same situation *do* get a row now, via the
+ *     sentinel-email path described above — the distinction is that an
+ *     individual's own YAML file **is** their whole record, where an
+ *     org-tied representative's record is meaningless without knowing which
+ *     real person at the organization it belongs to.)
  *   - touch `sponsor.level` / `sponsor.sponsoring.*` (Step 3e, separate)
- *   - upload logos/photos to R2 unless `--upload-logos` is passed (slow, and
- *     orthogonal to the core org/user/member import) — covers org logos
- *     (`organizations.logo_r2_key`), org-less individual (H5/H6/H7) photos,
- *     and per-representative photos (all three land on `users.headshot_r2_key`
- *     except the org logo), all sourced from the same
- *     `assets/images/members/<slug>/` directory the old Hugo templates read —
- *     the org's own `<slug>.*` file is the logo, every other image file in
- *     that directory is a representative's photo keyed by their urlized name
- *     (or explicit YAML `id`), matching the old `single.html`'s per-rep image
- *     lookup
  *
  * Usage:
  *   node scripts/migrate-members-yaml-to-d1.mjs --local
@@ -50,7 +63,7 @@
  * Other flags:
  *   --persist-to <path>          forwarded to `wrangler d1 execute`
  *   --dry-run                    skip execution; only write the .sql + report
- *   --upload-logos                also `wrangler r2 object put` each org's logo
+ *   --skip-logos                  don't upload logos/photos to R2 (on by default)
  *   --logo-bucket <name>          R2 bucket for logo uploads (default: pkic-assets)
  *   --out <dir>                    report output directory (default: ignore/)
  */
@@ -95,7 +108,7 @@ function parseArgs(argv) {
     database: "DB",
     persistTo: null,
     dryRun: false,
-    uploadLogos: false,
+    uploadLogos: true,
     logoBucket: "pkic-assets",
     outDir: path.join(ROOT, "ignore"),
   };
@@ -114,7 +127,10 @@ function parseArgs(argv) {
       parsed.persistTo = next;
       i += 1;
     } else if (arg === "--dry-run") parsed.dryRun = true;
+    // --upload-logos is now the default; kept as an accepted no-op flag so
+    // existing invocations (docs, muscle memory) don't break.
     else if (arg === "--upload-logos") parsed.uploadLogos = true;
+    else if (arg === "--skip-logos") parsed.uploadLogos = false;
     else if (arg === "--logo-bucket" && next) {
       parsed.logoBucket = next;
       i += 1;
@@ -164,6 +180,35 @@ function normalizeOrgName(name) {
 function emailDomain(email) {
   const at = email.lastIndexOf("@");
   return at === -1 ? "" : email.slice(at + 1).toLowerCase();
+}
+
+// `.invalid` is reserved by RFC 2606 as never resolvable/deliverable —
+// matches the sentinel-email convention `user-merge.ts`'s `mergeUsers`
+// already established for anonymized accounts (`merged-<id>@deleted.invalid`).
+// Deterministic (keyed on the YAML slug, not a random id) so re-running the
+// migration upserts the same placeholder row instead of creating a new one
+// each time.
+function sentinelEmailForSlug(slug) {
+  return `unmatched-${slug}@members.invalid`;
+}
+
+/**
+ * Rewrites Hugo shortcodes found in YAML `content` fields into plain URLs,
+ * since `organizations.content_markdown` is rendered as Markdown, not Hugo
+ * template syntax — a literal `{{< youtube ID >}}` would otherwise show up
+ * as unresolved shortcode text on an organization's profile page instead of
+ * a link. Only the three shortcodes actually present in data/members/*.yaml
+ * are handled (checked 2026-07-28): `youtube`, `vimeo`, `video`.
+ */
+function convertHugoShortcodes(content) {
+  if (!content) return content;
+  return String(content)
+    .replace(/\{\{<\s*youtube\s+([\w-]+)\s*>\}\}/gi, (_, id) => `https://www.youtube.com/watch?v=${id}`)
+    .replace(/\{\{<\s*vimeo\s+(\d+)\s*>\}\}/gi, (_, id) => `https://vimeo.com/${id}`)
+    .replace(/\{\{<\s*video\s+([^>]*)>\}\}/gi, (_, attrs) => {
+      const match = attrs.match(/link\s*=\s*"([^"]+)"/);
+      return match ? match[1] : "";
+    });
 }
 
 function splitName(fullName) {
@@ -432,7 +477,15 @@ function buildMigration({ uploadLogos, logoBucket, cli }) {
   const createdUserEmails = new Set(); // every email we insert a `users` row for
   const report = {
     generatedAt: new Date().toISOString(),
-    totals: { yamlFiles: yamlRecords.length, matchedOrgs: 0, unmatched: [], missingCategory: [], ambiguousPairing: [] },
+    totals: {
+      yamlFiles: yamlRecords.length,
+      matchedOrgs: 0,
+      sentinelIndividuals: 0,
+      unmatched: [],
+      missingCategory: [],
+      ambiguousPairing: [],
+    },
+    needsEmailIndividuals: [],
     bareRosterUsers: [],
     wgOnlyRosterUsers: [],
     workingGroupCounts: Object.fromEntries(Object.keys(WORKING_GROUP_CSVS).map((k) => [k, 0])),
@@ -446,17 +499,18 @@ function buildMigration({ uploadLogos, logoBucket, cli }) {
     const blog = doc.blog ?? {};
     const press = doc.press ?? {};
     const careers = doc.careers ?? {};
+    const contentMarkdown = convertHugoShortcodes(doc.content);
 
     statements.push(`
 INSERT INTO organizations (
   id, name, normalized_name, data_json,
-  description, website, content_markdown, slogan, logo_r2_key,
+  description, website, content_markdown, slogan, logo_r2_key, member_since,
   blog_url, blog_feed_url, press_url, press_feed_url, careers_url,
   social_x, social_linkedin, social_facebook, social_instagram, social_youtube,
   created_at, updated_at
 ) VALUES (
   ${sqlString(randomUUID())}, ${sqlString(name)}, ${sqlString(normalizedName)}, NULL,
-  ${toSqlNullableText(doc.description)}, ${toSqlNullableText(doc.website)}, ${toSqlNullableText(doc.content)}, ${toSqlNullableText(doc.slogan)}, ${toSqlNullableText(logoR2Key)},
+  ${toSqlNullableText(doc.description)}, ${toSqlNullableText(doc.website)}, ${toSqlNullableText(contentMarkdown)}, ${toSqlNullableText(doc.slogan)}, ${toSqlNullableText(logoR2Key)}, ${toSqlNullableText(doc.memberSince)},
   ${toSqlNullableText(blog.url)}, ${toSqlNullableText(blog.feed)}, ${toSqlNullableText(press.url)}, ${toSqlNullableText(press.feed)}, ${toSqlNullableText(careers.url)},
   ${toSqlNullableText(social.x)}, ${toSqlNullableText(social.linkedin)}, ${toSqlNullableText(social.facebook)}, ${toSqlNullableText(social.instagram)}, ${toSqlNullableText(social.youtube)},
   datetime('now'), datetime('now')
@@ -468,6 +522,7 @@ ON CONFLICT(normalized_name) DO UPDATE SET
   content_markdown = excluded.content_markdown,
   slogan = excluded.slogan,
   logo_r2_key = COALESCE(excluded.logo_r2_key, organizations.logo_r2_key),
+  member_since = COALESCE(organizations.member_since, excluded.member_since),
   blog_url = excluded.blog_url,
   blog_feed_url = excluded.blog_feed_url,
   press_url = excluded.press_url,
@@ -510,17 +565,17 @@ ON CONFLICT(normalized_email) DO UPDATE SET
     return normalized;
   }
 
-  function insertMemberIfAbsent({ normalizedEmail, normalizedOrgName, memberType, showOnOrgProfile }) {
+  function insertMemberIfAbsent({ normalizedEmail, normalizedOrgName, memberType, showOnOrgProfile, memberSince }) {
     const orgIdExpr = normalizedOrgName
       ? `(SELECT id FROM organizations WHERE normalized_name = ${sqlString(normalizedOrgName)})`
       : "NULL";
     statements.push(`
 INSERT OR IGNORE INTO members (
-  id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile
+  id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at, show_on_org_profile, member_since
 ) VALUES (
   ${sqlString(randomUUID())}, ${sqlString(memberType || "UNKNOWN")},
   (SELECT id FROM users WHERE normalized_email = ${sqlString(normalizedEmail)}),
-  ${orgIdExpr}, 'active', NULL, NULL, datetime('now'), datetime('now'), ${showOnOrgProfile ? 1 : 0}
+  ${orgIdExpr}, 'active', NULL, NULL, datetime('now'), datetime('now'), ${showOnOrgProfile ? 1 : 0}, ${toSqlNullableText(memberSince)}
 );
 `);
   }
@@ -548,16 +603,27 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
 
     if (isIndividual) {
       // §0.1: individuals have no organization row at all.
-      if (candidates.length === 0) {
-        report.totals.unmatched.push({
+      //
+      // Unlike org-tied representatives (where an unmatched email means "we
+      // don't know which real person this is" and the row is left for the
+      // Interim Admin Tool), an org-less individual's YAML file *is* their
+      // whole record — every field needed to create them is already known
+      // except a deliverable email. So an individual with no domain-matched
+      // roster email still gets a real row, keyed on a deterministic
+      // sentinel `.invalid` placeholder email (see sentinelEmailForSlug),
+      // flagged `needsEmail: true` for staff to attach a real address later.
+      const needsEmail = candidates.length === 0;
+      const email = needsEmail ? sentinelEmailForSlug(slug) : candidates[0].email;
+
+      if (needsEmail) {
+        report.needsEmailIndividuals.push({
           file: filename,
           name,
           memberType,
-          representatives: reps.map(repSummary),
+          sentinelEmail: email,
           reason: domains.length ? "no roster subscriber at this domain" : "no domain to match against",
           workingGroupsHint: doc.workingGroups ?? [],
         });
-        continue;
       }
 
       // Individuals use the same per-slug image directory as org logos
@@ -575,7 +641,6 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
       }
 
       const rep = reps[0] ?? { name, role: null, social: {}, description: null };
-      const { email } = candidates[0];
       const { firstName, lastName } = splitName(rep.name ?? name);
       const links = { linkedin: rep.social?.linkedin || undefined, x: rep.social?.x || undefined };
       const normalizedEmail = upsertUser({
@@ -588,8 +653,15 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
         headshotR2Key,
       });
       claimedEmails.add(normalizedEmail);
-      insertMemberIfAbsent({ normalizedEmail, normalizedOrgName: null, memberType, showOnOrgProfile: true });
-      report.totals.matchedOrgs += 1;
+      insertMemberIfAbsent({
+        normalizedEmail,
+        normalizedOrgName: null,
+        memberType,
+        showOnOrgProfile: true,
+        memberSince: doc.memberSince,
+      });
+      if (needsEmail) report.totals.sentinelIndividuals += 1;
+      else report.totals.matchedOrgs += 1;
       continue;
     }
 
@@ -673,7 +745,13 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
         headshotR2Key: repHeadshotR2Key,
       });
       claimedEmails.add(normalizedEmail);
-      insertMemberIfAbsent({ normalizedEmail, normalizedOrgName, memberType, showOnOrgProfile: true });
+      insertMemberIfAbsent({
+        normalizedEmail,
+        normalizedOrgName,
+        memberType,
+        showOnOrgProfile: true,
+        memberSince: doc.memberSince,
+      });
       contactEmails.push(normalizedEmail);
     }
 
@@ -692,7 +770,13 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
         linksJson: null,
       });
       claimedEmails.add(normalizedEmail);
-      insertMemberIfAbsent({ normalizedEmail, normalizedOrgName, memberType, showOnOrgProfile: false });
+      insertMemberIfAbsent({
+        normalizedEmail,
+        normalizedOrgName,
+        memberType,
+        showOnOrgProfile: false,
+        memberSince: doc.memberSince,
+      });
       contactEmails.push(normalizedEmail);
     }
 
@@ -704,10 +788,21 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
 
   // ── Step 3: bare users for roster emails not attributable to any org ────
 
+  // For every email that couldn't be reconciled to a YAML representative,
+  // record which working-group roster CSV(s) it appears in — this is exactly
+  // the manual-reconciliation signal staff need (an email with no name/org
+  // attached, but a known set of WGs it belongs to) and previously wasn't
+  // captured anywhere.
+  function wgSlugsForEmail(email) {
+    return Object.entries(wgRosters)
+      .filter(([, roster]) => roster.has(email))
+      .map(([slug]) => slug);
+  }
+
   for (const [email] of pkicRoster.entries()) {
     if (claimedEmails.has(email)) continue;
     upsertUser({ email, firstName: null, lastName: null, jobTitle: null, biography: null, linksJson: null });
-    report.bareRosterUsers.push(email);
+    report.bareRosterUsers.push({ email, workingGroups: wgSlugsForEmail(email) });
   }
 
   // Finding (this migration, not in the original §6 text): a meaningful
@@ -725,7 +820,7 @@ WHERE normalized_name = ${sqlString(normalizedOrgName)} AND ${column} IS NULL;
     for (const [email] of roster.entries()) {
       if (claimedEmails.has(email) || createdUserEmails.has(email)) continue;
       upsertUser({ email, firstName: null, lastName: null, jobTitle: null, biography: null, linksJson: null });
-      report.wgOnlyRosterUsers.push(email);
+      report.wgOnlyRosterUsers.push({ email, workingGroups: wgSlugsForEmail(email) });
     }
   }
 
@@ -772,7 +867,12 @@ function renderMarkdownReport(report) {
   lines.push("");
   lines.push(`- YAML files processed: ${report.totals.yamlFiles}`);
   lines.push(`- Organizations/individuals with at least one domain-matched email: ${report.totals.matchedOrgs}`);
-  lines.push(`- Unmatched (no domain match — needs the Interim Admin Tool): ${report.totals.unmatched.length}`);
+  lines.push(
+    `- Org-less individuals created with a placeholder email (needs a real email attached via Users → Edit): ${report.totals.sentinelIndividuals}`,
+  );
+  lines.push(
+    `- Unmatched org-tied representatives (no domain match at all — needs the Interim Admin Tool): ${report.totals.unmatched.length}`,
+  );
   lines.push(`- Bare roster users (no attributable YAML org): ${report.bareRosterUsers.length}`);
   lines.push(
     `- WG-only roster users (subscribed to a WG list but absent from pkic.csv): ${report.wgOnlyRosterUsers.length}`,
@@ -794,6 +894,15 @@ function renderMarkdownReport(report) {
     );
   }
   lines.push("");
+  lines.push(
+    "## Org-less individuals created with a placeholder email — attach a real email via Users → Edit",
+  );
+  for (const item of report.needsEmailIndividuals) {
+    lines.push(
+      `- **${item.name}** (\`${item.file}\`, category ${item.memberType || "unknown"}) — created as \`${item.sentinelEmail}\`. ${item.reason}${item.workingGroupsHint?.length ? `. WG hint: ${item.workingGroupsHint.join(", ")}` : ""}`,
+    );
+  }
+  lines.push("");
   lines.push("## Missing membership category — staff must set before launch");
   for (const item of report.totals.missingCategory) {
     lines.push(`- ${item.name} (\`${item.file}\`)`);
@@ -810,14 +919,16 @@ function renderMarkdownReport(report) {
     }
   }
   lines.push("");
-  lines.push("## Bare roster users (no YAML organization match)");
-  for (const email of report.bareRosterUsers) {
-    lines.push(`- ${email}`);
+  lines.push(
+    "## Bare roster users (no YAML organization match) — working groups shown are where staff can look to reconcile identity manually",
+  );
+  for (const { email, workingGroups } of report.bareRosterUsers) {
+    lines.push(`- ${email}${workingGroups.length ? ` — WGs: ${workingGroups.join(", ")}` : " — no WG membership"}`);
   }
   lines.push("");
   lines.push("## WG-only roster users (not in pkic.csv at all)");
-  for (const email of report.wgOnlyRosterUsers) {
-    lines.push(`- ${email}`);
+  for (const { email, workingGroups } of report.wgOnlyRosterUsers) {
+    lines.push(`- ${email}${workingGroups.length ? ` — WGs: ${workingGroups.join(", ")}` : ""}`);
   }
   return lines.join("\n");
 }
@@ -885,7 +996,7 @@ function main() {
   console.log(`Wrote SQL to ${sqlOutPath}`);
   console.log(`Wrote report to ${mdOutPath} (${jsonOutPath})`);
   console.log(
-    `${report.totals.matchedOrgs} matched, ${report.totals.unmatched.length} unmatched, ${report.bareRosterUsers.length} bare roster users`,
+    `${report.totals.matchedOrgs} matched, ${report.totals.sentinelIndividuals} individuals created with a placeholder email, ${report.totals.unmatched.length} unmatched, ${report.bareRosterUsers.length} bare roster users`,
   );
 
   if (cli.dryRun) {

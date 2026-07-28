@@ -36,6 +36,7 @@ interface OrgSummaryRow {
   description: string | null;
   slogan: string | null;
   logo_r2_key: string | null;
+  member_since: string | null;
   created_at: string;
   updated_at: string;
   member_count: number;
@@ -45,7 +46,7 @@ interface OrgSummaryRow {
 }
 
 const ORG_SUMMARY_SELECT = `
-  SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, o.created_at, o.updated_at,
+  SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, o.member_since, o.created_at, o.updated_at,
          (SELECT COUNT(*) FROM members m WHERE m.organization_id = o.id) AS member_count,
          pu.first_name AS primary_contact_first_name, pu.last_name AS primary_contact_last_name,
          pu.email AS primary_contact_email
@@ -62,6 +63,10 @@ function toOrgSummary(row: OrgSummaryRow) {
     description: row.description,
     slogan: row.slogan,
     logoUrl: logoUrlFor(row.id, row.logo_r2_key),
+    // Falls back to the row's own creation time for organizations created
+    // before migration 0046 added this column (or via a path that never set
+    // it) — matches the same fallback members-directory.ts/member-self-service.ts use.
+    memberSince: row.member_since ?? row.created_at,
     memberCount: row.member_count,
     primaryContactName: primaryContactName || null,
     primaryContactEmail: row.primary_contact_email,
@@ -123,7 +128,7 @@ interface RepresentativeRow {
 async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<OrgDetailRow | null> {
   return first<OrgDetailRow>(
     db,
-    `SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, o.created_at, o.updated_at,
+    `SELECT o.id, o.name, o.website, o.description, o.slogan, o.logo_r2_key, o.member_since, o.created_at, o.updated_at,
             o.membership_category,
             o.content_markdown, o.blog_url, o.blog_feed_url, o.press_url, o.press_feed_url, o.careers_url,
             o.social_x, o.social_linkedin, o.social_facebook, o.social_instagram, o.social_youtube,
@@ -195,6 +200,7 @@ export async function getAdminOrganization(db: DatabaseLike, id: string) {
 const UPDATABLE_COLUMNS: Record<string, string> = {
   name: "name",
   membershipCategory: "membership_category",
+  memberSince: "member_since",
   description: "description",
   website: "website",
   contentMarkdown: "content_markdown",
@@ -220,6 +226,7 @@ export interface OrganizationUpdateInput {
    * the org's actual category.
    */
   membershipCategory?: string;
+  memberSince?: string | null;
   description?: string | null;
   website?: string | null;
   contentMarkdown?: string | null;

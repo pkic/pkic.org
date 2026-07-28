@@ -703,6 +703,7 @@ export interface AdminOrganizationSummary {
   description: string | null;
   slogan: string | null;
   logoUrl: string | null;
+  memberSince: string;
   memberCount: number;
   primaryContactName: string | null;
   primaryContactEmail: string | null;
